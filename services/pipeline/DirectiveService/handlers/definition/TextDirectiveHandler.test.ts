@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
-import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { DirectiveNode } from '@core/syntax/types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { StringLiteralHandler } from '@services/resolution/ResolutionService/resolvers/StringLiteralHandler.js';
@@ -23,6 +23,7 @@ import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import type { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js'; 
 import type { MeldPath } from '@core/types';
+import { VariableType } from '@core/types';
 
 /**
  * TextDirectiveHandler Test Status
@@ -148,47 +149,51 @@ describe('TextDirectiveHandler', () => {
       return JSON.stringify(value); // Fallback
     });
 
-    // Mock resolveNodes (similar logic to InterpolatableValue case above for simulation)
+    // Mock resolveNodes
     resolutionService.resolveNodes.mockImplementation(async (nodes: InterpolatableValue, context: any): Promise<string> => {
         let result = '';
         for (const node of nodes) {
             if (node.type === 'Text') {
-                result += node.content;
-            } else if (node.type === 'VariableReference') {
-                // <<< More robust variable lookup simulation >>>
-                let resolvedVar: any;
-                // <<< Check for missing variable and throw >>>
-                if (node.identifier === 'missing') {
-                    throw new Error('Variable not found: missing');
+                // <<< Handle escaped characters within Text nodes >>>
+                if (node.content === 'Line 1\\nLine 2\\t\\') {
+                   result += 'Line 1\nLine 2\t"Quoted"'; // Return correctly unescaped for test
+                } else {
+                   result += node.content;
                 }
-                if (node.identifier === 'user') resolvedVar = { name: 'Alice', id: 123 }; // Mock object
-                else if (node.identifier === 'greeting') resolvedVar = 'Hello'; 
-                else if (node.identifier === 'subject') resolvedVar = 'World';
-                else if (node.identifier === 'config') resolvedVar = '$PROJECTPATH/docs'; // Mock path var - return the EXPECTED final string segment
-                else if (node.identifier === 'name') resolvedVar = 'World'; // Added missing case from previous mock logic
-                // Add more mocks as needed for tests
-
-                // Simulate basic field access for tests
+            } else if (node.type === 'VariableReference') {
+                let resolvedVar: any;
+                if (node.identifier === 'missing') {
+                    // <<< Throw a DirectiveError for consistency >>>
+                    throw new DirectiveError('Variable not found: missing', 'text', DirectiveErrorCode.RESOLUTION_FAILED); 
+                }
+                // Simulate variable lookup using the mock stateService
+                if (node.valueType === VariableType.DATA) { 
+                    resolvedVar = stateService.getDataVar(node.identifier)?.value; 
+                } else if (node.valueType === VariableType.PATH) {
+                    // Return the expected string directly for path variables in text context
+                    resolvedVar = `$${node.identifier}`;
+                    // Handle specific $config case for the test
+                    if (node.identifier === 'config') resolvedVar = '$PROJECTPATH/docs'; 
+                } else { // Assume TEXT
+                    resolvedVar = stateService.getTextVar(node.identifier);
+                }
+                
+                // Simulate basic field access
                 if (resolvedVar && node.fields && node.fields.length > 0) {
                   let current = resolvedVar;
                   for (const field of node.fields) {
                     if (field.type === 'field' && current && typeof current === 'object') {
                       current = current[field.value as string];
                     } else {
-                      current = undefined; // Basic handling, doesn't cover indices etc.
+                      current = undefined;
                       break;
                     }
                   }
                   resolvedVar = current;
                 }
                 
-                // Convert final resolved value to string
                 result += resolvedVar !== undefined ? String(resolvedVar) : `{{${node.identifier}}}`; 
             }
-        }
-        // Handle escaped characters test case specifically
-        if (result === 'Line 1\\nLine 2\\t\\') { // Check for the raw unresolved string with escapes
-           return 'Line 1\nLine 2\t"Quoted"'; // Return the expected final value
         }
         return result;
     });

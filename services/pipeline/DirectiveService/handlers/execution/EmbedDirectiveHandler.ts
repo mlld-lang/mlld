@@ -84,7 +84,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     @inject('IFileSystemService') private fileSystemService: IFileSystemService,
     @inject('IPathService') private pathService: IPathService,
     @inject('IInterpreterServiceClientFactory') private interpreterServiceClientFactory: InterpreterServiceClientFactory,
-    @inject('ILogger') private logger: ILogger
+    @inject('ILogger') private logger: any
   ) {
   }
 
@@ -188,13 +188,15 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       let content: string = ''; 
 
       // <<< Add Logging >>>
-      process.stdout.write(`\n>>> EMBED HANDLER - Before Switch <<<\n`);
-      process.stdout.write(`Subtype: ${node.directive?.subtype}\n`);
-      process.stdout.write(`Has Content Prop: ${node.directive ? 'content' in node.directive : 'N/A'}\n`);
-      process.stdout.write(`Has Path Prop: ${node.directive ? 'path' in node.directive : 'N/A'}\n`);
-      process.stdout.write(`Directive Object: ${JSON.stringify(node.directive)}\n`);
-      process.stdout.write(`>>> END <<<\n\n`);
-      
+      this.logger.debug('>>> EMBED HANDLER - Checking Node Structure Before Switch <<<', {
+        nodeExists: !!node,
+        directiveExists: !!node?.directive,
+        subtype: node?.directive?.subtype,
+        locationExists: !!node?.location,
+        locationValue: node?.location, 
+        directiveObject: node?.directive 
+      });
+
       // Determine content based on directive subtype
       switch (directiveData.subtype) {
         case 'embedPath':
@@ -206,7 +208,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               `Missing path property for embedPath subtype.`,
               this.kind,
               DirectiveErrorCode.VALIDATION_FAILED,
-              { location: node.location }
+              { location: node?.location }
             );
           }
 
@@ -226,7 +228,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               `Error resolving embed path: ${error instanceof Error ? error.message : String(error)}`,
               this.kind,
               DirectiveErrorCode.RESOLUTION_FAILED,
-              { location: node.location, cause: error instanceof Error ? error : undefined }
+              { location: node?.location, cause: error instanceof Error ? error : undefined }
             );
           }
 
@@ -256,7 +258,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               ? error.message
               : `Error reading embed source file: ${resolvedPath.validatedPath}: ${error instanceof Error ? error.message : String(error)}`;
 
-            throw new DirectiveError(message, this.kind, errorCode, { location: node.location, cause: error instanceof Error ? error : undefined });
+            throw new DirectiveError(message, this.kind, errorCode, { location: node?.location, cause: error instanceof Error ? error : undefined });
           }
           break;
 
@@ -269,7 +271,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               `Missing path property for embedVariable subtype.`,
               this.kind,
               DirectiveErrorCode.VALIDATION_FAILED,
-              { location: node.location }
+              { location: node?.location }
             );
           }
           
@@ -296,7 +298,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               `Error resolving embed variable/path: ${error instanceof Error ? error.message : String(error)}`,
               this.kind,
               DirectiveErrorCode.RESOLUTION_FAILED,
-              { location: node.location, cause: error instanceof Error ? error : undefined }
+              { location: node?.location, cause: error instanceof Error ? error : undefined }
             );
           }
           break;
@@ -315,7 +317,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               `Missing or invalid content array for embedTemplate subtype.`,
               this.kind,
               DirectiveErrorCode.VALIDATION_FAILED,
-              { location: node.location }
+              { location: node?.location }
             );
           }
 
@@ -329,7 +331,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               `Error resolving embed template: ${error instanceof Error ? error.message : String(error)}`,
               this.kind,
               DirectiveErrorCode.RESOLUTION_FAILED,
-              { location: node.location, cause: error instanceof Error ? error : undefined }
+              { location: node?.location, cause: error instanceof Error ? error : undefined }
             );
           }
           break;
@@ -339,7 +341,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             `Unsupported embed subtype: ${directiveData.subtype}`,
             this.kind,
             DirectiveErrorCode.VALIDATION_FAILED,
-            { location: node.location }
+            { location: node?.location }
           );
       }
 
@@ -365,7 +367,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             `Error extracting section "${section}": ${error instanceof Error ? error.message : String(error)}`,
             this.kind,
             DirectiveErrorCode.EXECUTION_FAILED,
-            { location: node.location, cause: error instanceof Error ? error : undefined }
+            { location: node?.location, cause: error instanceof Error ? error : undefined }
           );
         }
       }
@@ -377,10 +379,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         // TODO: Find appropriate service/utility for heading adjustment
         // <<< Log the logger object >>>
         process.stdout.write(`>>> EMBED HANDLER - Logger object: ${typeof this.logger}, Warn is mock: ${vi.isMockFunction(this.logger?.warn)}\n`);
-        this.logger.warn(`Heading level adjustment specified (+${headingLevel}) but not currently supported by ResolutionService. Content unchanged.`, { location: node.location });
+        this.logger.warn(`Heading level adjustment specified (+${headingLevel}) but not currently supported by ResolutionService. Content unchanged.`, { location: node?.location });
         // Validate the option format here if needed
         if (typeof headingLevel !== 'number' || !Number.isInteger(headingLevel) || headingLevel < 1) {
-          this.logger.warn(`Invalid headingLevel option: ${headingLevel}. Must be a positive integer.`, { location: node.location });
+          this.logger.warn(`Invalid headingLevel option: ${headingLevel}. Must be a positive integer.`, { location: node?.location });
         }
       }
 
@@ -388,7 +390,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       const underHeader = options.underHeader;
       if (underHeader) {
         // TODO: Find appropriate service/utility for header wrapping
-        this.logger.warn(`Under-header wrapping specified ("${underHeader}") but not currently supported by ResolutionService. Content unchanged.`, { location: node.location });
+        this.logger.warn(`Under-header wrapping specified ("${underHeader}") but not currently supported by ResolutionService. Content unchanged.`, { location: node?.location });
       }
 
       // Create the replacement node

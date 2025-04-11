@@ -32,6 +32,12 @@ import {
 } from '@tests/utils/mocks/serviceMocks.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import { PathService } from '@services/fs/PathService/PathService.js';
 
 /**
  * EmbedDirectiveHandler Transformation Test Status
@@ -65,36 +71,33 @@ describe('EmbedDirectiveHandler Transformation', () => {
   let pathService: ReturnType<typeof createPathServiceMock>;
   let interpreterServiceClientFactory: ReturnType<typeof mockDeep<InterpreterServiceClientFactory>>;
   let interpreterServiceClient: ReturnType<typeof mockDeep<IInterpreterServiceClient>>;
-  let logger: ReturnType<typeof mockDeep<any>>;
+  let logger: ReturnType<typeof mockDeep<ILogger>>;
   let parserService: ReturnType<typeof mockDeep<IParserService>>;
   let clonedState: any;
 
   beforeEach(async () => {
     contextDI = TestContextDI.create({ isolatedContainer: true });
     
-    logger = mockDeep<any>();
-    circularityService = mockDeep<ICircularityService>();
-    interpreterServiceClient = mockDeep<IInterpreterServiceClient>();
-    interpreterServiceClientFactory = mockDeep<InterpreterServiceClientFactory>();
-    parserService = mockDeep<IParserService>();
-
     stateService = createStateServiceMock();
     resolutionService = createResolutionServiceMock();
     validationService = createValidationServiceMock();
     fileSystemService = createFileSystemServiceMock();
     pathService = createPathServiceMock();
-    
-    contextDI.registerMock('ILogger', logger);
-    contextDI.registerMock('ICircularityService', circularityService);
-    contextDI.registerMock('InterpreterServiceClientFactory', interpreterServiceClientFactory);
-    contextDI.registerMock('IParserService', parserService);
+
+    circularityService = mockDeep<ICircularityService>();
+    logger = mockDeep<ILogger>();
+    interpreterServiceClient = mockDeep<IInterpreterServiceClient>();
+    interpreterServiceClientFactory = mockDeep<InterpreterServiceClientFactory>();
+    parserService = mockDeep<IParserService>();
+
+    contextDI.registerMock<IStateService>('IStateService', stateService);
+    contextDI.registerMock<IFileSystemService>('IFileSystemService', fileSystemService);
+    contextDI.registerMock<ICircularityService>('ICircularityService', circularityService);
+    contextDI.registerMock<ILogger>('ILogger', logger);
+    contextDI.registerMock<InterpreterServiceClientFactory>('InterpreterServiceClientFactory', interpreterServiceClientFactory);
+    contextDI.registerMock<IParserService>('IParserService', parserService);
+
     interpreterServiceClientFactory.createClient.mockReturnValue(interpreterServiceClient);
-    
-    contextDI.registerMock('IStateService', stateService);
-    contextDI.registerMock('IResolutionService', resolutionService);
-    contextDI.registerMock('IValidationService', validationService);
-    contextDI.registerMock('IFileSystemService', fileSystemService);
-    contextDI.registerMock('IPathService', pathService);
     
     clonedState = { ...stateService };
     stateService.clone.mockReturnValue(clonedState);
@@ -112,7 +115,17 @@ describe('EmbedDirectiveHandler Transformation', () => {
     );
 
     await contextDI.initialize();
-    handler = await contextDI.resolve(EmbedDirectiveHandler);
+    // Instantiate handler directly
+    handler = new EmbedDirectiveHandler(
+      validationService,
+      resolutionService,
+      stateService,
+      circularityService,
+      fileSystemService,
+      pathService,
+      interpreterServiceClientFactory,
+      logger
+    );
     
     context = { 
       currentFilePath: 'test.meld', 
@@ -127,29 +140,19 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
   describe('transformation behavior', () => {
     it('should return replacement node with file contents when transformation enabled', async () => {
-      const example = embedDirectiveExamples.atomic.simpleEmbed;
-      const mockPath = { raw: 'doc.md' };
-      const node = {
-        type: 'Directive',
-        subtype: 'embedPath',
-        path: mockPath,
-        options: {},
-        directive: { kind: 'embed' },
-        location: createLocation(1, 1, 0, 1)
-      } as DirectiveNode;
-
-      const resolvedPath = createMeldPath('/path/to/doc.md');
-      resolutionService.resolvePath.mockResolvedValue(resolvedPath);
-      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
-      vi.mocked(fileSystemService.readFile).mockResolvedValue('Test content');
-      vi.mocked(parserService.parse).mockResolvedValue([]);
+      const node = createEmbedDirective(
+        'test.md',
+        undefined,
+        createLocation(1,1)
+      );
+      vi.mocked(fileSystemService.readFile).mockResolvedValue('Embedded content');
 
       const result = await handler.execute(node, context);
 
       expect(result.replacement).toBeDefined();
       expect(result.replacement).toEqual({
         type: 'Text',
-        content: 'Test content',
+        content: 'Embedded content',
         location: node.location,
         formattingMetadata: {
           isFromDirective: true,
@@ -161,31 +164,19 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle section extraction in transformation', async () => {
-      const example = embedDirectiveExamples.atomic.withSection;
-      const mockPath = { raw: 'sections.md' };
-      const sectionName = 'Section Two';
-      const node = {
-        type: 'Directive',
-        subtype: 'embedPath',
-        path: mockPath,
-        options: { section: sectionName },
-        directive: { kind: 'embed' },
-        location: createLocation(1, 1, 0, 1)
-      } as DirectiveNode;
-
-      const resolvedPath = createMeldPath('/path/to/sections.md');
-      const rawContent = '# Content';
-      const extractedContent = `Extracted: ${sectionName} from ${rawContent.substring(0, 10)}...`;
-      resolutionService.resolvePath.mockResolvedValue(resolvedPath);
-      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
-      vi.mocked(fileSystemService.readFile).mockResolvedValue(rawContent);
+      const node = createEmbedDirective(
+        'test.md',
+        'Section 1',
+        createLocation(1,1)
+      );
+      vi.mocked(fileSystemService.readFile).mockResolvedValue('# Title\n## Section 1\nContent 1\n## Section 2\nContent 2');
 
       const result = await handler.execute(node, context);
 
       expect(result.replacement).toBeDefined();
       expect(result.replacement).toEqual({
         type: 'Text',
-        content: extractedContent,
+        content: 'Content 1',
         location: node.location,
         formattingMetadata: {
           isFromDirective: true,
@@ -196,30 +187,20 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle heading level in transformation', async () => {
-      const mockPath = { raw: 'doc.md' };
-      const node = {
-        type: 'Directive',
-        subtype: 'embedPath',
-        path: mockPath,
-        options: {
-          headingLevel: 2
-        },
-        directive: { kind: 'embed' },
-        location: createLocation(1, 1, 0, 1)
-      } as DirectiveNode;
-
-      const resolvedPath = createMeldPath('/path/to/doc.md');
-      const rawContent = 'Test content';
-      resolutionService.resolvePath.mockResolvedValue(resolvedPath);
-      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
-      vi.mocked(fileSystemService.readFile).mockResolvedValue(rawContent);
+      const node = createEmbedDirective(
+        'test.md',
+        undefined,
+        createLocation(1,1),
+        { headingLevel: 2 }
+      );
+      vi.mocked(fileSystemService.readFile).mockResolvedValue('# Title\n## Heading 2\nContent for H2');
 
       const result = await handler.execute(node, context);
 
       expect(result.replacement).toBeDefined();
       expect(result.replacement).toEqual({
         type: 'Text',
-        content: rawContent,
+        content: 'Content for H2',
         location: node.location,
         formattingMetadata: {
           isFromDirective: true,
@@ -230,28 +211,20 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle under header in transformation', async () => {
-      const mockPath = { raw: 'doc.md' };
-      const node = {
-        type: 'Directive',
-        subtype: 'embedPath',
-        path: mockPath,
-        options: { underHeader: 'My Header' },
-        directive: { kind: 'embed' },
-        location: createLocation(1, 1, 0, 1)
-      } as DirectiveNode;
-
-      const resolvedPath = createMeldPath('/path/to/doc.md');
-      const rawContent = 'Test content';
-      resolutionService.resolvePath.mockResolvedValue(resolvedPath);
-      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
-      vi.mocked(fileSystemService.readFile).mockResolvedValue(rawContent);
+      const node = createEmbedDirective(
+        'test.md',
+        undefined,
+        createLocation(1,1),
+        { underHeader: 'Target Header' }
+      );
+      vi.mocked(fileSystemService.readFile).mockResolvedValue('# Title\n## Target Header\nContent under header');
 
       const result = await handler.execute(node, context);
 
       expect(result.replacement).toBeDefined();
       expect(result.replacement).toEqual({
         type: 'Text',
-        content: rawContent,
+        content: 'Content under header',
         location: node.location,
         formattingMetadata: {
           isFromDirective: true,
@@ -263,12 +236,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
     it('should handle variable interpolation in path during transformation', async () => {
       const node = createEmbedDirective(
-        { path: '{{filePath}}' } as any,
+        '{{filePath}}',
         undefined,
-        'embedPath'
+        createLocation(1,1)
       );
-      node.directive.subtype = 'embedPath';
-
       stateService.getTextVar.mockReturnValue({ type:'text', value: 'resolved/path.md' } as any);
       resolutionService.resolveInContext.mockImplementation(async (val: any): Promise<any> => {
         if (typeof val === 'string' && val === '{{filePath}}') return 'resolved/path.md';
@@ -304,9 +275,13 @@ describe('EmbedDirectiveHandler Transformation', () => {
         }
       };
       
-      const node = createEmbedDirective(variablePath.raw, undefined, 'embedPath');
-      node.subtype = 'embedVariable';
-      node.path = variablePath;
+      const node = createEmbedDirective(
+        variablePath.raw,
+        undefined,
+        createLocation(1, 1)
+      );
+      node.directive.subtype = 'embedVariable';
+      node.directive.path = variablePath;
 
       const resolvedContent = 'This is a test bio.';
       resolutionService.resolveInContext.mockResolvedValue(resolvedContent);
@@ -343,9 +318,13 @@ describe('EmbedDirectiveHandler Transformation', () => {
         }
       };
       
-      const node = createEmbedDirective(variablePath.raw, undefined, 'embedPath');
-      node.subtype = 'embedVariable';
-      node.path = variablePath;
+      const node = createEmbedDirective(
+        variablePath.raw,
+        undefined,
+        createLocation(1, 1)
+      );
+      node.directive.subtype = 'embedVariable';
+      node.directive.path = variablePath;
 
       const resolvedContent = 'You are a senior architect skilled in TypeScript.';
       resolutionService.resolveInContext.mockResolvedValue(resolvedContent);
@@ -371,13 +350,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
     it('should preserve error handling during transformation', async () => {
       const node = createEmbedDirective(
-        { path: 'nonexistent.md' } as any,
+        'nonexistent.md',
         undefined,
-        'embedPath'
+        createLocation(1,1)
       );
-      node.directive.subtype = 'embedPath';
-
-      resolutionService.resolvePath.mockResolvedValue(createMeldPath('nonexistent.md', unsafeCreateValidatedResourcePath('/project/root/nonexistent.md')));
       fileSystemService.exists.mockResolvedValue(false);
       
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
@@ -406,12 +382,11 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
     it('should properly transform variable-based embed directive with field access', async () => {
       const node = createEmbedDirective(
-        { path: '{{vars.myPath.nested}}' } as any,
+        '{{vars.myPath.nested}}',
         undefined,
-        'embedPath'
+        createLocation(1,1)
       );
-       node.directive.subtype = 'embedPath';
-
+      
       stateService.getDataVar.mockReturnValue({ type:'data', value: { myPath: { nested: 'actual/file.md' } } } as any);
       resolutionService.resolveInContext.mockResolvedValue('actual/file.md');
       resolutionService.resolvePath.mockResolvedValue(createMeldPath('actual/file.md', unsafeCreateValidatedResourcePath('/project/root/actual/file.md')));
@@ -430,12 +405,11 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
     it('should properly transform variable-based embed directive with object field access', async () => {
       const node = createEmbedDirective(
-        { path: '{{contact.email}}' } as any,
+        '{{contact.email}}',
         undefined,
-        'embedPath'
+        createLocation(1,1)
       );
-       node.directive.subtype = 'embedPath';
-
+      
       stateService.getDataVar.mockReturnValue({ type:'data', value: { email: 'user@example.com' } } as any);
       resolutionService.resolveInContext.mockResolvedValue('user@example.com');
       resolutionService.resolvePath.mockResolvedValue(createMeldPath('user@example.com', unsafeCreateValidatedResourcePath('/project/root/user@example.com')));
@@ -454,12 +428,11 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
     it('should throw EXECUTION_FAILED if interpreter client is not available', async () => {
       const node = createEmbedDirective(
-        { path: 'any.md' } as any,
+        'any.md',
         undefined,
-        'embedPath'
+        createLocation(1,1)
       );
-       node.directive.subtype = 'embedPath';
-
+      
       interpreterServiceClientFactory.createClient.mockImplementation(() => {
         throw new Error('Factory cannot create client');
       });
