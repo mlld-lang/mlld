@@ -9,26 +9,17 @@ import { directiveLogger as logger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
+// Import necessary types for path state
+import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, StructuredPath as AstStructuredPath } from '@core/types'; 
 
-// Updated to match meld-ast 1.6.1 structure exactly
-interface StructuredPath {
-  raw: string;
-  normalized?: string;
-  structured: {
-    base: string;
-    segments: string[];
-    variables?: {
-      text?: string[];
-      path?: string[];
-      special?: string[];
-    };
-  };
-}
+// Remove local StructuredPath interface, use imported AstStructuredPath
+// interface StructuredPath { ... }
 
+// Update PathDirective interface to use imported AstStructuredPath
 interface PathDirective extends DirectiveData {
   kind: 'path';
   identifier: string;
-  path: StructuredPath;
+  path: AstStructuredPath;
 }
 
 /**
@@ -65,215 +56,71 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       // Create a new state for modifications
       const newState = context.state.clone();
       
-      // Initialize special path variables with safer checks
-      // Only try to set them if methods exist to avoid test failures
-      try {
-        // Use safer checks for all methods to make tests more resilient
-        const canSetProjectPath = 
-          typeof newState.setPathVar === 'function' && 
-          (typeof newState.getPathVar !== 'function' || newState.getPathVar('PROJECTPATH') === undefined);
-        
-        if (canSetProjectPath) {
-          // Try to get from this.stateService first as a fallback
-          let projectPath = process.cwd();
-          try {
-            if (typeof this.stateService.getPathVar === 'function') {
-              const statePath = this.stateService.getPathVar('PROJECTPATH');
-              if (statePath) {
-                projectPath = statePath;
-              }
-            }
-          } catch (e) {
-            logger.debug('Error getting PROJECTPATH from state service', { error: e });
-          }
-          
-          logger.debug('Setting PROJECTPATH', { projectPath });
-          newState.setPathVar('PROJECTPATH', projectPath);
-        }
-        
-        const canSetHomePath = 
-          typeof newState.setPathVar === 'function' && 
-          (typeof newState.getPathVar !== 'function' || newState.getPathVar('HOMEPATH') === undefined);
-        
-        if (canSetHomePath) {
-          // Try to get from this.stateService first as a fallback
-          let homePath = process.env.HOME || process.env.USERPROFILE || '/home';
-          try {
-            if (typeof this.stateService.getPathVar === 'function') {
-              const statePath = this.stateService.getPathVar('HOMEPATH');
-              if (statePath) {
-                homePath = statePath;
-              }
-            }
-          } catch (e) {
-            logger.debug('Error getting HOMEPATH from state service', { error: e });
-          }
-          
-          logger.debug('Setting HOMEPATH', { homePath });
-          newState.setPathVar('HOMEPATH', homePath);
-        }
-      } catch (e) {
-        logger.debug('Error setting special path variables', { error: e });
-      }
+      // REMOVED logic for setting PROJECTPATH/HOMEPATH manually
 
       // 1. Validate directive structure
       await this.validationService.validate(node);
 
-      // 2. Get identifier and path from directive
+      // 2. Get identifier and path object from directive
       const { directive } = node;
+      const { identifier, path: pathObject } = directive as PathDirective; // Use PathDirective type
       
-      // Debug the actual properties available on the directive
-      logger.debug('*** DIRECTIVE PROPERTIES ***', {
-        properties: Object.keys(directive),
-        fullDirective: JSON.stringify(directive, null, 2)
-      });
-      
-      // Support both 'identifier' and 'id' field names for backward compatibility
-      const identifier = directive.identifier || (directive as any).id;
-      
-      // Handle both structured paths and raw string paths for compatibility
-      let pathValue: string | StructuredPath;
-      
-      if ('path' in directive && directive.path) {
-        // Handle structured path object
-        if (typeof directive.path === 'object' && 'raw' in directive.path) {
-          // Pass the entire structured path object to resolveInContext
-          pathValue = directive.path;
-        } else {
-          // Handle direct value
-          pathValue = String(directive.path);
-        }
-      } else if ('value' in directive) {
-        // Handle legacy path value
-        pathValue = String(directive.value);
-      } else {
-        throw new DirectiveError(
-          'Path directive requires a path value',
-          this.kind,
-          DirectiveErrorCode.VALIDATION_FAILED,
-          { 
-            node,
-            context
-          }
-        );
-      }
-
-      // Log path information
-      logger.debug('Path directive details', {
-        identifier,
-        pathValue: typeof pathValue === 'object' ? JSON.stringify(pathValue) : pathValue,
-        directiveProperties: Object.keys(directive),
-        pathType: typeof pathValue,
-        nodeType: node.type,
-        directiveKind: directive.kind
-      });
-
-      // 3. Check for required fields 
       if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
-        throw new DirectiveError(
-          'Path directive requires a valid identifier',
-          this.kind,
-          DirectiveErrorCode.VALIDATION_FAILED,
-          { 
-            node,
-            context
-          }
-        );
+        throw new DirectiveError('Path directive requires a valid identifier', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node, context });
+      }
+      if (!pathObject) {
+        throw new DirectiveError('Path directive requires a path object', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node, context });
       }
 
-      // Create resolution context - make sure the state has getPathVar if needed
+      // Create resolution context
+      // Path directives might define paths used later, context needs state
       const resolutionContext = ResolutionContextFactory.forPathDirective(
         context.currentFilePath,
-        typeof newState.getPathVar === 'function' ? newState : undefined
+        newState // Pass the current state being modified
       );
 
-      // Log the resolution context and inputs
-      logger.debug('*** ResolutionService.resolveInContext', {
-        value: pathValue,
-        allowedVariableTypes: resolutionContext.allowedVariableTypes,
-        pathValidation: resolutionContext.pathValidation,
-        stateExists: !!resolutionContext.state,
-        pathValueType: typeof pathValue,
-        isStructured: typeof pathValue === 'object' && pathValue !== null
-      });
-
-      // Resolve the path value
-      let resolvedValue;
+      // 3. Resolve the path object (handles internal interpolation)
+      let resolvedPathString: string;
       try {
-        // If the path starts with a special variable, add it to state directly
-        const hasSpecialVar = typeof pathValue === 'string' && 
-          (pathValue.startsWith('$PROJECTPATH/') || 
-           pathValue.startsWith('$./') || 
-           pathValue.startsWith('$HOMEPATH/') || 
-           pathValue.startsWith('$~/'));
-        
-        if (hasSpecialVar && typeof pathValue === 'string') {
-          logger.debug('Path contains special variable, storing as-is:', pathValue);
-          resolvedValue = pathValue;
-        } else {
-          try {
-            resolvedValue = await this.resolutionService.resolveInContext(
-              pathValue,
+          resolvedPathString = await this.resolutionService.resolveInContext(
+              pathObject, 
               resolutionContext
-            );
-          } catch (resolveError) {
-            // If resolution fails but we have a string with quotes, try to use it directly
-            if (typeof pathValue === 'string' && 
-                (pathValue.startsWith('"') && pathValue.endsWith('"'))) {
-              logger.debug('Resolution failed but using quoted string value directly:', pathValue);
-              // Remove quotes
-              resolvedValue = pathValue.substring(1, pathValue.length - 1);
-            } else {
-              // Re-throw if we can't handle it
-              throw resolveError;
-            }
-          }
-        }
-        
-        logger.debug('Path directive resolved value', {
-          identifier,
-          pathValue: typeof pathValue === 'object' ? JSON.stringify(pathValue) : pathValue,
-          resolvedValue
-        });
+          );
       } catch (error: unknown) {
-        // Special handling for paths with $PROJECTPATH or $HOMEPATH
-        // If the path starts with a special variable, store it as-is
-        if (typeof pathValue === 'string' && 
-            (pathValue.startsWith('$PROJECTPATH/') || 
-             pathValue.startsWith('$HOMEPATH/') ||
-             pathValue.startsWith('$~/') ||
-             pathValue.startsWith('$./'))
-           ) {
-          logger.debug('Storing special path variable as-is', {
-            identifier,
-            pathValue
-          });
-          resolvedValue = pathValue;
-        } else {
-          // Re-throw the error for other cases
-          throw new DirectiveError(
-            `Failed to resolve path: ${error instanceof Error ? error.message : String(error)}`,
+           throw new DirectiveError(
+            `Failed to resolve path value: ${error instanceof Error ? error.message : String(error)}`,
             this.kind,
             DirectiveErrorCode.RESOLUTION_FAILED,
-            { 
-              node,
-              context,
-              cause: error instanceof Error ? error : undefined
-            }
+            { node, context, cause: error instanceof Error ? error : undefined }
           );
-        }
       }
-
-      // Store the path value
-      newState.setPathVar(identifier, resolvedValue);
       
-      // CRITICAL: Path variables should NOT be mirrored as text variables
-      // This ensures proper separation between variable types for security purposes
-      // Path variables should only be accessible via $path syntax, not {{path}} syntax
+      logger.debug('Path directive resolved path string', { identifier, pathObject, resolvedPathString });
+
+      // 4. Validate the resolved path string
+      let validatedMeldPath: MeldPath;
+      try {
+          validatedMeldPath = await this.resolutionService.resolvePath(resolvedPathString, resolutionContext);
+      } catch (error: unknown) {
+          throw new DirectiveError(
+            `Path validation failed for resolved path "${resolvedPathString}": ${error instanceof Error ? error.message : String(error)}`,
+            this.kind,
+            DirectiveErrorCode.VALIDATION_FAILED, // Validation happens in resolvePath now
+            { node, context, cause: error instanceof Error ? error : undefined }
+          );
+      }
+      
+      // 5. Store the validated path *state* (IFilesystemPathState or IUrlPathState)
+      // The value property of MeldPath holds the appropriate state object.
+      if (!validatedMeldPath.value) {
+           // This shouldn't happen if validation succeeded, but check defensively
+           throw new DirectiveError('Validated path object is missing internal state', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node, context });
+      }
+      newState.setPathVar(identifier, validatedMeldPath.value);
 
       logger.debug('Path directive processed successfully', {
         identifier,
-        resolvedValue,
+        storedValue: validatedMeldPath.value,
         location: node.location
       });
 

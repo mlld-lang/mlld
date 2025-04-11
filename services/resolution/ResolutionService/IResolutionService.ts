@@ -1,20 +1,17 @@
 import type { MeldNode } from '@core/ast/ast/astTypes.js';
-import type { 
-  ResolutionContext, 
-  JsonValue, 
-  FieldAccessError,
-  Result,
-  FieldAccess
-} from '@core/types.js';
+import type { ResolutionContext } from '@core/types/resolution.js';
+import type { JsonValue, Result } from '@core/types';
 import type { MeldPath, StructuredPath } from '@core/types/paths.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
-import type { MeldResolutionError, PathValidationError } from '@core/types.js';
-import type { Field } from '@core/syntax/types/shared-types.js';
-import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
+import type { FieldAccessError } from '@core/errors/FieldAccessError.js';
 import { MeldError } from '@core/errors/index.js';
+import type { MeldResolutionError, PathValidationError } from '@core/errors';
 import { Field as AstField } from '@core/syntax/types/shared-types.js';
-import type { InterpolatableValue } from '@core/syntax/types/ast';
+import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
+import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
+
+export type { ResolutionContext, FormattingContext } from '@core/types/resolution.js';
 
 /**
  * Service responsible for resolving variables, commands, and paths in Meld content.
@@ -137,15 +134,15 @@ interface IResolutionService {
   resolveNodes(nodes: InterpolatableValue, context: ResolutionContext): Promise<string>;
 
   /**
-   * Resolve any value based on the provided context rules.
+   * Resolves any value based on the provided context rules.
    * This is a general-purpose resolution method that routes based on allowed types in context.
    * 
-   * @param value - The string or structured path representation to resolve
+   * @param value - The string, structured path representation, or pre-parsed node array to resolve
    * @param context - The resolution context defining allowed types and rules
    * @returns The resolved value as a string
    * @throws {MeldResolutionError} If resolution fails and context.strict is true
    */
-  resolveInContext(value: string | StructuredPath, context: ResolutionContext): Promise<string>;
+  resolveInContext(value: string | StructuredPath | InterpolatableValue, context: ResolutionContext): Promise<string>;
 
   /**
    * Resolves a field access path against a given base value.
@@ -157,7 +154,7 @@ interface IResolutionService {
    */
   resolveFieldAccess(
     baseValue: unknown,
-    fieldPath: Field[],
+    fieldPath: AstField[],
     context: ResolutionContext
   ): Promise<Result<unknown, FieldAccessError>>;
 
@@ -227,7 +224,7 @@ interface IResolutionService {
 }
 
 export type { IResolutionService };
-export { VariableResolutionTracker, ResolutionTrackingConfig };
-export { MeldResolutionError, PathValidationError, FieldAccessError };
+export type { VariableResolutionTracker, ResolutionTrackingConfig };
+export type { MeldResolutionError, PathValidationError, FieldAccessError };
 
 import type { StateServiceLike } from '@core/shared-service-types.js'; 
