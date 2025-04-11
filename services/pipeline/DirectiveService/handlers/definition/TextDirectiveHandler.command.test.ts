@@ -16,6 +16,7 @@ import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import { VariableType } from '@core/types/variables.js';
 import { StringLiteralHandler } from '@services/resolution/ResolutionService/resolvers/StringLiteralHandler.js';
 import { StringConcatenationHandler } from '@services/resolution/ResolutionService/resolvers/StringConcatenationHandler.js';
+import { parse } from '@core/ast'; // Import the parser
 
 /**
  * TextDirectiveHandler Command Test Status
@@ -40,6 +41,24 @@ const createTextDirectiveNode = (identifier: string, text: string): DirectiveNod
       value: text
     }
   };
+};
+
+// <<< Add local helper to parse directive strings >>>
+const createNodeFromString = async (code: string): Promise<DirectiveNode> => {
+  try {
+    const result = await parse(code, {
+      trackLocations: true,
+      validateNodes: true,
+      structuredPaths: true // Enable if needed for path resolution within commands
+    });
+    if (!result.ast || result.ast.length === 0 || result.ast[0].type !== 'Directive') {
+      throw new Error(`Could not parse directive from code: ${code}`);
+    }
+    return result.ast[0] as DirectiveNode;
+  } catch (error) {
+    console.error(`Error parsing directive string: ${code}`, error);
+    throw error;
+  }
 };
 
 describe('TextDirectiveHandler - Command Execution', () => {
@@ -137,7 +156,8 @@ describe('TextDirectiveHandler - Command Execution', () => {
 
   it('should execute command and store its output', async () => {
     // Arrange
-    const node = createRunDirective('command_output', 'echo "test"');
+    // Use the new helper with the full directive string
+    const node = await createNodeFromString('@text command_output = @run echo "test"');
     
     const testContext = {
       state: stateService,
@@ -154,15 +174,9 @@ describe('TextDirectiveHandler - Command Execution', () => {
   
   it('should handle variable references in command input', async () => {
     // Arrange
-    const step1Node = createRunDirective('step1', 'echo "Command 1 output"');
-    
-    // For the second node, create the InterpolatableValue manually for the mock
-    const step2CommandNodes: InterpolatableValue = [
-      createTextNode('echo "Command 1 referenced: '),
-      createVariableReferenceNode('step1', VariableType.TEXT),
-      createTextNode('"')
-    ];
-    const step2Node = createRunDirective('step2', step2CommandNodes);
+    // Use the new helper for both steps
+    const step1Node = await createNodeFromString('@text step1 = @run echo "Command 1 output"');
+    const step2Node = await createNodeFromString('@text step2 = @run echo "Command 1 referenced: {{step1}}"');
     
     const testContext = {
       state: stateService,
@@ -194,7 +208,8 @@ describe('TextDirectiveHandler - Command Execution', () => {
   
   it('should handle special characters in command outputs', async () => {
     // Arrange
-    const node = createRunDirective('special', 'echo "Output with \'single\' and \\"double\\" quotes"');
+    // Use the new helper
+    const node = await createNodeFromString('@text special = @run echo "Output with \'single\' and \\"double\\" quotes"');
     
     const testContext = {
       state: stateService,
@@ -211,7 +226,8 @@ describe('TextDirectiveHandler - Command Execution', () => {
   
   it('should handle multi-line command outputs', async () => {
     // Arrange
-    const node = createRunDirective('multiline', 'echo -e "Line 1\\nLine 2\\nLine 3"');
+    // Use the new helper
+    const node = await createNodeFromString('@text multiline = @run echo -e "Line 1\\nLine 2\\nLine 3"');
     
     const testContext = {
       state: stateService,
@@ -227,12 +243,10 @@ describe('TextDirectiveHandler - Command Execution', () => {
   });
   
   it('should handle nested variable references across multiple levels', async () => {
-    // Arrange - Create nodes for each level
-    const level1Node = createRunDirective('level1', 'echo "Level 1 output"');
-    const level2CommandNodes: InterpolatableValue = [ createTextNode('echo "Level 2 references '), createVariableReferenceNode('level1', VariableType.TEXT), createTextNode('"')];
-    const level2Node = createRunDirective('level2', level2CommandNodes);
-    const level3CommandNodes: InterpolatableValue = [ createTextNode('echo "Level 3 references '), createVariableReferenceNode('level2', VariableType.TEXT), createTextNode('"')];
-    const level3Node = createRunDirective('level3', level3CommandNodes);
+    // Arrange - Create nodes for each level using the helper
+    const level1Node = await createNodeFromString('@text level1 = @run echo "Level 1 output"');
+    const level2Node = await createNodeFromString('@text level2 = @run echo "Level 2 references {{level1}}"');
+    const level3Node = await createNodeFromString('@text level3 = @run echo "Level 3 references {{level2}}"');
     
     const testContext = {
       state: stateService,
