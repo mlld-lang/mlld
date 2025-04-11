@@ -296,4 +296,84 @@ describe('VariableReferenceResolver', () => {
     });
 
   }); 
+
+  // --- Tests for Recursive Resolution ---
+  describe('recursive resolution', () => {
+    let recursiveTextVar: TextVariable; // Variable whose value IS an InterpolatableValue
+    let innerVarNode: VariableReferenceNode;
+    let textNode1: TextNode;
+    let textNode2: TextNode;
+    let interpolatableValue: Array<TextNode | VariableReferenceNode>;
+
+    beforeEach(() => {
+      // Define the structure for the recursive variable
+      textNode1 = { type: 'Text', content: 'Outer ', location: { start: { line: 1, column: 1 }, end: { line: 1, column: 7 } } };
+      innerVarNode = createVariableReferenceNode('greeting', VariableType.TEXT); // References 'Hello World'
+      textNode2 = { type: 'Text', content: ' Inner', location: { start: { line: 1, column: 8 }, end: { line: 1, column: 14 } } };
+      interpolatableValue = [textNode1, innerVarNode, textNode2];
+      
+      // Create the variable whose value is this array
+      // We store it as TextVariable, but its value has the structure
+      recursiveTextVar = { 
+          name: 'recursiveTextVar', 
+          type: VariableType.TEXT, // Type is TEXT, but value holds nodes
+          value: interpolatableValue as any // Use 'any' cast as TextVariable expects string
+      };
+
+      // Mock stateService.getVariable to return this variable
+      stateService.getVariable.mockImplementation((name: string): MeldVariable | undefined => {
+        if (name === 'recursiveTextVar') return recursiveTextVar;
+        if (name === 'greeting') return mockGreetingVar; // Ensure inner var is resolvable
+        // Delegate to other mocks if needed, or return undefined
+        return undefined; 
+      });
+      
+      // Mock stateService.getTextVar as well if needed by inner resolution mock
+      stateService.getTextVar.mockImplementation((name: string): TextVariable | undefined => {
+         if (name === 'greeting') return mockGreetingVar;
+         return undefined;
+      });
+      
+      // Mock the resolutionService.resolveNodes method
+      // It should be called with the interpolatableValue array
+      resolutionService.resolveNodes.mockResolvedValue('Outer Hello World Inner');
+    });
+
+    it('should call resolutionService.resolveNodes for interpolatable variable values', async () => {
+      const node = createVariableReferenceNode('recursiveTextVar', VariableType.TEXT);
+      
+      const result = await resolver.resolve(node, context);
+      
+      // Expect the final string returned by the mocked resolveNodes
+      expect(result).toBe('Outer Hello World Inner');
+      
+      // Verify getVariable was called for the outer variable
+      expect(stateService.getVariable).toHaveBeenCalledWith('recursiveTextVar');
+      
+      // Verify resolutionService.resolveNodes was called with the correct array and context
+      expect(resolutionService.resolveNodes).toHaveBeenCalledTimes(1);
+      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(
+        interpolatableValue, 
+        expect.objectContaining({ depth: context.depth + 1 }) // Check context depth increased
+      );
+    });
+
+    it('should throw MeldResolutionError if resolutionService is missing during recursion', async () => {
+      // Create a resolver instance specifically without the resolutionService
+      const resolverWithoutService = new VariableReferenceResolver(stateService, pathService as IPathService, undefined, parserService);
+      
+      const node = createVariableReferenceNode('recursiveTextVar', VariableType.TEXT);
+      
+      await expectToThrowWithConfig(async () => {
+        await resolverWithoutService.resolve(node, context);
+      }, {
+        type: 'MeldResolutionError',
+        code: 'E_SERVICE_UNAVAILABLE',
+        messageContains: 'Cannot recursively resolve variable: ResolutionService instance is missing'
+      });
+    });
+
+  });
+  // --- End Recursive Resolution Tests ---
+
 }); 

@@ -23,6 +23,18 @@ import type { IPathService } from '@services/fs/PathService/IPathService';
 import {
   Field as AstField
 } from '@core/syntax/types/shared-types';
+import type { InterpolatableValue } from '@core/syntax/types/ast';
+
+/**
+ * Type guard to check if a value is an InterpolatableValue array.
+ * Checks if it's an array and if the first element (if any) looks like a TextNode or VariableReferenceNode.
+ */
+function isInterpolatableValueArray(value: unknown): value is InterpolatableValue {
+  return Array.isArray(value) && 
+         (value.length === 0 || 
+          (value[0] && typeof value[0] === 'object' && ('type' in value[0]) && 
+           (value[0].type === 'Text' || value[0].type === 'VariableReference')));
+}
 
 /**
  * Handles resolution of variable references based on VariableReferenceNode AST.
@@ -158,6 +170,20 @@ export class VariableReferenceResolver {
               severity: ErrorSeverity.Recoverable, 
               details: { variableName: node.identifier }
           });
+      }
+
+      // --- >>> NEW CHECK FOR INTERPOLATABLE VALUE <<< ---
+      if (isInterpolatableValueArray(variable.value)) {
+          // Ensure ResolutionService instance is available for recursion
+          if (!this.resolutionService) {
+              throw new MeldResolutionError('Cannot recursively resolve variable: ResolutionService instance is missing.', {
+                  code: 'E_SERVICE_UNAVAILABLE',
+                  details: { variableName: node.identifier }
+              });
+          }
+          logger.debug(`Variable '${node.identifier}' contains an InterpolatableValue array. Performing recursive resolution.`);
+          // Recursively call ResolutionService.resolveNodes
+          return await this.resolutionService.resolveNodes(variable.value, newContext);
       }
 
       // --- Path Variable Handling --- 
