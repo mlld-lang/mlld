@@ -293,15 +293,20 @@ export function createEmbedDirective(
   if (subtype) {
     determinedSubtype = subtype;
     if (subtype === 'embedTemplate') {
-      if (!isInterpolatableValueArray(pathOrContent)) throw new Error('embedTemplate requires InterpolatableValue array');
+      if (!isInterpolatableValueArray(pathOrContent)) {
+        throw new Error(`Explicit subtype 'embedTemplate' requires InterpolatableValue array for pathOrContent`);
+      }
       contentProperty = pathOrContent;
     } else {
       if (typeof pathOrContent === 'object' && 'raw' in pathOrContent) {
         pathProperty = pathOrContent;
       } else if (typeof pathOrContent === 'string') {
-        pathProperty = { raw: pathOrContent, structured: { segments: pathOrContent.split('/').filter(Boolean), base: '.'} };
+        pathProperty = { 
+          raw: pathOrContent, 
+          structured: { segments: pathOrContent.split('/').filter(Boolean), base: '.'} 
+        };
       } else {
-         throw new Error('Invalid pathOrContent for embedPath/embedVariable');
+         throw new Error(`Explicit subtype '${subtype}' requires string or AstStructuredPath for pathOrContent`);
       }
     }
   } else {
@@ -320,7 +325,7 @@ export function createEmbedDirective(
          pathProperty = { raw: pathOrContent, structured: { segments: pathOrContent.split('/').filter(Boolean), base: '.'} };
       }
     } else {
-       throw new Error('Invalid input for createEmbedDirective pathOrContent');
+       throw new Error('Invalid input type for createEmbedDirective pathOrContent');
     }
   }
 
@@ -330,8 +335,10 @@ export function createEmbedDirective(
     ...(determinedSubtype === 'embedTemplate' ? { content: contentProperty } : { path: pathProperty }),
     ...(section && { section }),
     ...(namesProperty && { names: namesProperty }),
-    ...(options?.headingLevel && { headingLevel: options.headingLevel }),
-    ...(options?.underHeader && { underHeader: options.underHeader })
+    options: {
+       ...(options?.headingLevel && { headingLevel: options.headingLevel }),
+       ...(options?.underHeader && { underHeader: options.underHeader })
+    }
   };
   
   return {

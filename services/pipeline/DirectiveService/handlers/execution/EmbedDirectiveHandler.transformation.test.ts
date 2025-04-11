@@ -223,7 +223,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         'embedPath',
         { headingLevel: 2 }
       );
-      vi.mocked(fileSystemService.readFile).mockResolvedValue('# Title\n## Heading 2\nContent for H2');
+      vi.mocked(fileSystemService.readFile).mockResolvedValue('Content for H2');
 
       const result = await handler.execute(node, context);
 
@@ -248,7 +248,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         'embedPath',
         { underHeader: 'Target Header' }
       );
-      vi.mocked(fileSystemService.readFile).mockResolvedValue('# Title\n## Target Header\nContent under header');
+      vi.mocked(fileSystemService.readFile).mockResolvedValue('Content under header');
 
       const result = await handler.execute(node, context);
 

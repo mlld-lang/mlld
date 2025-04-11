@@ -516,6 +516,85 @@ describe('EmbedDirectiveHandler', () => {
       //   expect(error).toHaveProperty('code', DirectiveErrorCode.EXECUTION_FAILED);
       // }
     });
+
+    it('should return error for unsupported file type', async () => {
+      const node = createEmbedDirective(
+        'document.pdf',
+        undefined, // section
+        createLocation(1, 1),
+        'embedPath' // subtype
+      );
+      fileSystemService.exists.mockResolvedValue(true);
+      fileSystemService.readFile.mockResolvedValue('PDF content'); // Mock reading it
+      // Expect error during processing, not reading
+      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+    });
+
+    it('should handle error during path resolution', async () => {
+      const node = createEmbedDirective(
+        '{{errorPath}}',
+        undefined,
+        createLocation(1, 1),
+        'embedVariable' // subtype
+      );
+      resolutionService.resolveInContext.mockRejectedValue(new Error('Cannot resolve path'));
+      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+    });
+
+    it('should handle error during file reading', async () => {
+      const node = createEmbedDirective(
+        'read_error.txt',
+        undefined,
+        createLocation(1, 1),
+        'embedPath' // subtype
+      );
+      const resolvedPath = createMeldPath('read_error.txt', unsafeCreateValidatedResourcePath('/project/root/read_error.txt'));
+      resolutionService.resolvePath.mockResolvedValue(resolvedPath);
+      fileSystemService.exists.mockResolvedValue(true);
+      fileSystemService.readFile.mockRejectedValue(new Error('Disk read failed'));
+      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+    });
+
+    it('should handle error during section extraction', async () => {
+      const node = createEmbedDirective(
+        'doc.md',
+        'MissingSection',
+        createLocation(1, 1),
+        'embedPath' // subtype
+      );
+      const resolvedPath = createMeldPath('doc.md', unsafeCreateValidatedResourcePath('/project/root/doc.md'));
+      resolutionService.resolvePath.mockResolvedValue(resolvedPath);
+      fileSystemService.exists.mockResolvedValue(true);
+      fileSystemService.readFile.mockResolvedValue('# Some Content');
+      resolutionService.extractSection.mockRejectedValue(new Error('Section not found'));
+      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+    });
+
+    it('should handle variable resolution failure in path', async () => {
+      const node = createEmbedDirective(
+        '{{undefinedVar}}/file.txt',
+        undefined,
+        createLocation(1, 1),
+        'embedPath' // subtype
+      );
+      resolutionService.resolveInContext.mockRejectedValue(new Error('Var not found'));
+      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+    });
+    
+    it('should handle variable resolution failure in template', async () => {
+        const templateNodes: InterpolatableValue = [
+          createTextNode('Value is: '),
+          createVariableReferenceNode('nonExistent', 'text')
+        ];
+        const node = createEmbedDirective(
+           templateNodes,
+           undefined,
+           createLocation(1, 1),
+           'embedTemplate' // subtype
+        );
+        resolutionService.resolveNodes.mockRejectedValue(new Error('Var not found'));
+        await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+     });
   });
 
   describe('Path variables', () => {
@@ -636,7 +715,7 @@ describe('EmbedDirectiveHandler', () => {
     
     it('should apply modifiers (heading level, under header) to variable content', async () => {
       // Arrange
-      const node = createEmbedDirective('{{textVar}}', undefined, createLocation(1,1), {
+      const node = createEmbedDirective('{{textVar}}', undefined, createLocation(1,1), 'embedVariable', {
         headingLevel: 2,
         underHeader: 'Parent Header'
       });
