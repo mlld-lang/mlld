@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 
 // --- Corrected Core Type Imports ---
-import type { JsonValue, Result } from '@core/types.js';
-import { MeldError } from '@core/types.js'; // Keep MeldError if needed
-import type { ResolutionContext, PathResolutionContext } from '@core/types/resolution.js'; 
+import type { JsonValue, Result } from '@core/types';
+import { MeldError } from '@core/types'; // Keep MeldError if needed
+import type { ResolutionContext, PathResolutionContext } from '@core/types/resolution'; 
 import {
     VariableType, 
     type MeldVariable, 
@@ -19,11 +19,11 @@ import {
     ValidatedResourcePath,
     unsafeCreateValidatedResourcePath,
     type IFilesystemPathState // Keep if needed
-} from '@core/types/paths.js';
+} from '@core/types/paths';
 // Removed incorrect/conflicting imports from @core/types/index.js
 
 // --- Other Imports ---
-import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
+import type { VariableReferenceNode, TextNode } from '@core/ast/ast/astTypes.js';
 import { MeldResolutionError, FieldAccessError, VariableResolutionError } from '@core/errors/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';

@@ -423,7 +423,7 @@ export class VariableReferenceResolver {
              failedAtIndex: i, 
              failedKey: field.value
          };
-         return Promise.reject(new FieldAccessError(errorMsg, errorDetails));
+         return failure(new FieldAccessError(errorMsg, errorDetails));
       }
 
       if (field.type === 'field') { 
@@ -445,7 +445,7 @@ export class VariableReferenceResolver {
                 failedAtIndex: i, 
                 failedKey: key // The key that failed
             };
-            return Promise.reject(new FieldAccessError(errorMsg, errorDetails));
+            return failure(new FieldAccessError(errorMsg, errorDetails));
           }
         } else {
           // Log type issue
@@ -456,7 +456,7 @@ export class VariableReferenceResolver {
               failedAtIndex: i, 
               failedKey: key // The key that failed
           };
-          return Promise.reject(new FieldAccessError(`Cannot access property '${key}' on non-object or array`, errorDetails));
+          return failure(new FieldAccessError(`Cannot access property '${key}' on non-object or array`, errorDetails));
         }
       } else if (field.type === 'index') {
         const index = Number(field.value);
@@ -469,7 +469,7 @@ export class VariableReferenceResolver {
                 failedAtIndex: i, 
                 failedKey: field.value
             };
-            return Promise.reject(new FieldAccessError(`Invalid array index '${field.value}'`, errorDetails));
+            return failure(new FieldAccessError(`Invalid array index '${field.value}'`, errorDetails));
         }
         if (Array.isArray(current)) {
           logger.debug(`[ACCESS FIELDS] Checking index '${index}' on array`, { length: current.length }); // Log array length
@@ -484,7 +484,7 @@ export class VariableReferenceResolver {
                 failedAtIndex: i, 
                 failedKey: index
             };
-            return Promise.reject(new FieldAccessError(`Index '${index}' out of bounds for array of length ${current.length}`, errorDetails));
+            return failure(new FieldAccessError(`Index '${index}' out of bounds for array of length ${current.length}`, errorDetails));
           }
         } else {
           logger.warn(`[ACCESS FIELDS] Error: Cannot access index '${index}' on non-array value`, { currentType: typeof current }); // Log warning
@@ -494,7 +494,7 @@ export class VariableReferenceResolver {
               failedAtIndex: i, 
               failedKey: index
           };
-          return Promise.reject(new FieldAccessError(`Cannot access index '${index}' on non-array value`, errorDetails));
+          return failure(new FieldAccessError(`Cannot access index '${index}' on non-array value`, errorDetails));
         }
       } else {
           const unknownType = (field as any).type;
@@ -504,7 +504,7 @@ export class VariableReferenceResolver {
               failedAtIndex: i, 
               failedKey: 'unknown'
           };
-          return Promise.reject(new FieldAccessError(`Unknown field access type: '${unknownType}'`, errorDetails));
+          return failure(new FieldAccessError(`Unknown field access type: '${unknownType}'`, errorDetails));
       }
     }
     // Use process.stdout.write for debug logging

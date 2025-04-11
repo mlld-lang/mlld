@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeEach, vi, fail, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { 
   createTextNode,
   createVariableReferenceNode
 } from '@tests/utils/testFactories.js';
-import type { ResolutionContext, IStateService, IParserService, IResolutionService, MeldNode } from '@core/types.js';
+import type { ResolutionContext } from '@core/types/resolution';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { MeldNode } from '@core/ast/ast/astTypes.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { VariableNodeFactory } from '@core/syntax/types/factories/index.js';
 import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
@@ -12,7 +16,7 @@ import { TestContextDI } from '@tests/utils/di/index.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { VariableType, TextVariable, DataVariable, MeldVariable, JsonValue } from '@core/types/index.js';
 import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
-import { expectToThrowWithConfig } from '@tests/utils/errorTestUtils.js';
+import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
 import { FieldAccessError } from '@core/errors/FieldAccessError.js';
 
 describe('VariableReferenceResolver Edge Cases', () => {
@@ -183,14 +187,18 @@ describe('VariableReferenceResolver Edge Cases', () => {
     // Revert to try/catch to allow for multiple message checks
     try {
         await resolver.resolve(node, resolutionContext);
-        fail('Should have thrown FieldAccessError');
+        throw new Error('Test failed: Expected FieldAccessError was not thrown'); 
     } catch (error) {
-        expect(error).toBeInstanceOf(FieldAccessError); // Check type
-        // Check each part of the message individually
-        expect(error.message).toContain('Field \'email\''); 
-        expect(error.message).toContain('not found in object');
-        expect(error.message).toContain('Available keys:');
-        expect(error.message).toContain('name');
+        if (error instanceof Error) {
+            expect(error.constructor.name).toBe('FieldAccessError'); // Check type using constructor name
+            // Check each part of the message individually
+            expect(error.message).toContain('Field \'email\''); 
+            expect(error.message).toContain('not found in object');
+            expect(error.message).toContain('Available keys:');
+            expect(error.message).toContain('name');
+        } else {
+            throw new Error('Caught exception was not an instance of Error');
+        }
     }
 
     // Verify getVariable was called before the error

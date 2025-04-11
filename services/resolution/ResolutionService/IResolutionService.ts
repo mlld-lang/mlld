@@ -12,6 +12,9 @@ import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/util
 import type { MeldResolutionError, PathValidationError } from '@core/types.js';
 import type { Field } from '@core/syntax/types/shared-types.js';
 import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
+import { MeldError } from '@core/errors/index.js';
+import { Field as AstField } from '@core/syntax/types/shared-types.js';
+import type { InterpolatableValue } from '@core/syntax/types/ast';
 
 /**
  * Service responsible for resolving variables, commands, and paths in Meld content.
@@ -126,6 +129,12 @@ interface IResolutionService {
    * @throws {MeldResolutionError} If variable resolution within text fails and context.strict is true
    */
   resolveContent(nodes: MeldNode[], context: ResolutionContext): Promise<string>;
+
+  /**
+   * Resolves an array of AST nodes (only TextNode and VariableReferenceNode) into a single string.
+   * Handles TextNodes and delegates VariableReferenceNodes to the appropriate resolver.
+   */
+  resolveNodes(nodes: InterpolatableValue, context: ResolutionContext): Promise<string>;
 
   /**
    * Resolve any value based on the provided context rules.
