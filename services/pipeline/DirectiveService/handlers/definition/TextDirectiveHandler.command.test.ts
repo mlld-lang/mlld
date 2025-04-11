@@ -157,7 +157,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
   it('should execute command and store its output', async () => {
     // Arrange
     // Use the new helper with the full directive string
-    const node = await createNodeFromString('@text command_output = @run echo "test"');
+    const node = await createNodeFromString('@text command_output = @run [echo "test"]');
     
     const testContext = {
       state: stateService,
@@ -175,8 +175,8 @@ describe('TextDirectiveHandler - Command Execution', () => {
   it('should handle variable references in command input', async () => {
     // Arrange
     // Use the new helper for both steps
-    const step1Node = await createNodeFromString('@text step1 = @run echo "Command 1 output"');
-    const step2Node = await createNodeFromString('@text step2 = @run echo "Command 1 referenced: {{step1}}"');
+    const step1Node = await createNodeFromString('@text step1 = @run [echo "Command 1 output"]');
+    const step2Node = await createNodeFromString('@text step2 = @run [echo "Command 1 referenced: {{step1}}"]');
     
     const testContext = {
       state: stateService,
@@ -209,7 +209,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
   it('should handle special characters in command outputs', async () => {
     // Arrange
     // Use the new helper
-    const node = await createNodeFromString('@text special = @run echo "Output with \'single\' and \\"double\\" quotes"');
+    const node = await createNodeFromString('@text special = @run [echo "Output with \'single\' and \\"double\\" quotes"]');
     
     const testContext = {
       state: stateService,
@@ -227,7 +227,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
   it('should handle multi-line command outputs', async () => {
     // Arrange
     // Use the new helper
-    const node = await createNodeFromString('@text multiline = @run echo -e "Line 1\\nLine 2\\nLine 3"');
+    const node = await createNodeFromString('@text multiline = @run [echo -e "Line 1\\nLine 2\\nLine 3"]');
     
     const testContext = {
       state: stateService,
@@ -244,9 +244,9 @@ describe('TextDirectiveHandler - Command Execution', () => {
   
   it('should handle nested variable references across multiple levels', async () => {
     // Arrange - Create nodes for each level using the helper
-    const level1Node = await createNodeFromString('@text level1 = @run echo "Level 1 output"');
-    const level2Node = await createNodeFromString('@text level2 = @run echo "Level 2 references {{level1}}"');
-    const level3Node = await createNodeFromString('@text level3 = @run echo "Level 3 references {{level2}}"');
+    const level1Node = await createNodeFromString('@text level1 = @run [echo "Level 1 output"]');
+    const level2Node = await createNodeFromString('@text level2 = @run [echo "Level 2 references {{level1}}"]');
+    const level3Node = await createNodeFromString('@text level3 = @run [echo "Level 3 references {{level2}}"]');
     
     const testContext = {
       state: stateService,
