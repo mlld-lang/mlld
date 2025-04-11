@@ -327,7 +327,8 @@ describe('EmbedDirectiveHandler', () => {
       circularityService,
       fileSystemService,
       pathService, 
-      interpreterServiceClientFactory
+      interpreterServiceClientFactory,
+      mockLogger
     );
   });
 
@@ -547,10 +548,15 @@ describe('EmbedDirectiveHandler', () => {
       // Execute the directive
       await handler.execute(node, context);
       
-      // Verify path resolution using the user-defined path variable
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedPathString, expect.any(Object)); // Expect resolved string
-      expect(fileSystemService.exists).toHaveBeenCalled();
-      expect(fileSystemService.readFile).toHaveBeenCalled();
+      // Verify resolveInContext was called with the variable path string
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith('$docsPath/file.txt', expect.any(Object));
+
+      // Verify resolvePath is NOT called for embedVariable subtype
+      expect(resolutionService.resolvePath).not.toHaveBeenCalled(); 
+      
+      // Verify file system was NOT called
+      expect(fileSystemService.exists).not.toHaveBeenCalled();
+      expect(fileSystemService.readFile).not.toHaveBeenCalled();
       
       // We don't need to verify logger calls, as the functionality is what matters
     });

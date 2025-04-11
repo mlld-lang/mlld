@@ -74,7 +74,6 @@ export interface ILogger {
 export class EmbedDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'embed';
   private interpreterServiceClient?: IInterpreterServiceClient;
-  private logger: ILogger = embedLogger;
 
   constructor(
     @inject('IValidationService') private validationService: IValidationService,
@@ -83,7 +82,8 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     @inject('ICircularityService') private circularityService: ICircularityService,
     @inject('IFileSystemService') private fileSystemService: IFileSystemService,
     @inject('IPathService') private pathService: IPathService,
-    @inject('IInterpreterServiceClientFactory') private interpreterServiceClientFactory: InterpreterServiceClientFactory
+    @inject('IInterpreterServiceClientFactory') private interpreterServiceClientFactory: InterpreterServiceClientFactory,
+    @inject('ILogger') private logger: ILogger
   ) {
   }
 
