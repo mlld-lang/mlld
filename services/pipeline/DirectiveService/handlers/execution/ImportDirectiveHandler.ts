@@ -123,7 +123,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // Use the context state directly
       targetState = context.state;
 
-      // 3. Resolve the PathValueObject using ResolutionService.resolvePath
+      // 3. Resolve the PathValueObject
       const resolutionContext = ResolutionContextFactory.create(
         targetState,
         context.currentFilePath
@@ -131,14 +131,20 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       let resolvedPath: MeldPath;
       try {
-        // Let resolvePath handle strings, variables, interpolation, etc.
-        resolvedPath = await this.resolutionService.resolvePath(pathObject.raw, context.resolutionContext);
-        resolvedIdentifier = resolvedPath.validatedPath; // Get the final string path
-        // Determine if it's a URL based on the resolved MeldPath type
+        // Resolve the path object using resolveInContext first
+        const valueToResolve = pathObject.interpolatedValue ?? pathObject.raw;
+        const resolvedPathString = await this.resolutionService.resolveInContext(valueToResolve, resolutionContext);
+        
+        // Validate the resolved string to get MeldPath object
+        resolvedPath = await this.resolutionService.resolvePath(resolvedPathString, resolutionContext);
+        
+        // Use the validated path string as the identifier
+        resolvedIdentifier = resolvedPath.validatedPath; 
+        
         isURLImport = resolvedPath.contentType === 'url'; 
         logger.debug(`Resolved import path`, { input: pathObject.raw, resolved: resolvedIdentifier, isURL: isURLImport });
       } catch (error) {
-          // Wrap resolution errors
+          // Wrap resolution/validation errors
           throw new DirectiveError(
             `Failed to resolve import path \"${pathObject.raw}\": ${error instanceof Error ? error.message : String(error)}`,
             this.kind,
