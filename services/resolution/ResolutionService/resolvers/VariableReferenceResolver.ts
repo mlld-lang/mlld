@@ -305,6 +305,23 @@ export class VariableReferenceResolver {
             this.resolutionTracker?.trackResolutionAttempt(name, `variable-type-mismatch`, false);
             return undefined; // Treat as not found if type doesn't match hint
         }
+        // <<< Add check for allowed variable types >>>
+        if (context.allowedVariableTypes && !context.allowedVariableTypes.includes(variable.type)) {
+            logger.warn(`Variable '${name}' found, but type ${variable.type} is not allowed in this context.`);
+            this.resolutionTracker?.trackResolutionAttempt(name, `variable-type-disallowed`, false);
+            // Throw error here, as validateResolution expects a throw in strict mode
+            throw new VariableResolutionError(
+                `Variable type '${variable.type}' for '${name}' is not allowed in this context.`,
+                {
+                    code: 'E_VAR_TYPE_DISALLOWED',
+                    details: { 
+                        variableName: name, 
+                        foundType: variable.type, 
+                        allowedTypes: context.allowedVariableTypes 
+                    }
+                }
+            );
+        }
         // Type matches hint (or no hint was given)
         this.resolutionTracker?.trackResolutionAttempt(name, `${variable.type}-variable`, true, variable.value);
         logger.debug(`Found ${variable.type} variable '${name}'.`);
@@ -353,7 +370,7 @@ export class VariableReferenceResolver {
                 return failure(new FieldAccessError(errorMsg, errorDetails));
               }
             } else {
-              const errorMsg = `Cannot access property '${key}' on non-object or array`;
+              const errorMsg = `Cannot access property '${key}' on non-object value (type: ${typeof current})`;
               const errorDetails: FieldAccessErrorDetails = { baseValue: current, fieldAccessChain: fields, failedAtIndex: i, failedKey: key };
               return failure(new FieldAccessError(errorMsg, errorDetails));
             }
@@ -373,7 +390,7 @@ export class VariableReferenceResolver {
                 return failure(new FieldAccessError(errorMsg, errorDetails));
               }
             } else {
-              const errorMsg = `Cannot access index '${index}' on non-array value`;
+              const errorMsg = `Cannot access index '${index}' on non-array value (type: ${typeof current})`;
               const errorDetails: FieldAccessErrorDetails = { baseValue: current, fieldAccessChain: fields, failedAtIndex: i, failedKey: index };
               return failure(new FieldAccessError(errorMsg, errorDetails));
             }
