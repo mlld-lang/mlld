@@ -258,6 +258,7 @@ export function createEmbedDirective(
   if (isInterpolatableValueArray(pathOrContent)) {
     subtype = 'embedTemplate';
     contentProperty = pathOrContent;
+    pathProperty = undefined;
   } else if (typeof pathOrContent === 'object' && 'raw' in pathOrContent) {
     // It's an AstStructuredPath object (likely from path directive test usage)
     subtype = 'embedPath'; // Assume path if object is given
@@ -289,8 +290,7 @@ export function createEmbedDirective(
   const directiveData: EmbedDirectiveData = {
     kind: 'embed',
     subtype: subtype,
-    ...(pathProperty && { path: pathProperty }),
-    ...(contentProperty && { content: contentProperty }),
+    ...(subtype === 'embedTemplate' ? { content: contentProperty } : { path: pathProperty }),
     ...(section && { section }),
     ...(namesProperty && { names: namesProperty }),
     ...(options?.headingLevel && { headerLevel: options.headingLevel }),
@@ -298,6 +298,11 @@ export function createEmbedDirective(
     // Keep standard options, ignore fuzzy/format unless part of EmbedDirectiveData
   };
   
+  // <<< Add Logging >>>
+  if (subtype === 'embedTemplate') {
+      console.log('>>> FACTORY createEmbedDirective (Template Subtype) directiveData:', JSON.stringify(directiveData, null, 2));
+  }
+
   return {
     type: 'Directive',
     directive: directiveData,

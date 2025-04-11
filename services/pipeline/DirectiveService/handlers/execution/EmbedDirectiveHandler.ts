@@ -186,6 +186,15 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
       let content: string = ''; 
 
+      // <<< Add Logging >>>
+      this.logger.debug('Before subtype switch', { 
+          directiveExists: !!node.directive, 
+          subtype: node.directive?.subtype,
+          hasContent: node.directive ? 'content' in node.directive : 'N/A',
+          contentType: typeof node.directive?.content,
+          hasPath: node.directive ? 'path' in node.directive : 'N/A' 
+      });
+
       // Determine content based on directive subtype
       switch (directiveData.subtype) {
         case 'embedPath':
@@ -205,7 +214,8 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           try {
             this.logger.debug(`Resolving embed path`, { pathObject: embedPathObject });
             // 1. Resolve the path object - prioritize interpolatedValue if present
-            const valueToResolve = embedPathObject.interpolatedValue ?? embedPathObject.raw;
+            const valueToResolve: string | InterpolatableValue = embedPathObject.interpolatedValue ?? embedPathObject.raw;
+            // Pass string or InterpolatableValue to resolveInContext
             const resolvedPathString = await this.resolutionService.resolveInContext(valueToResolve, resolutionContext);
             // 2. Validate the resolved string
             resolvedPath = await this.resolutionService.resolvePath(resolvedPathString, resolutionContext);
@@ -293,8 +303,19 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
         case 'embedTemplate':
           this.logger.debug('Handling embedTemplate subtype');
+          this.logger.debug('Inspecting embedNode.directive:', JSON.stringify(node.directive, null, 2));
+          
           const templateContent = directiveData.content;
 
+          this.logger.debug('Extracted template content from node:', { 
+              contentExists: !!templateContent, 
+              isArray: Array.isArray(templateContent),
+              type: typeof templateContent,
+              contentPreview: JSON.stringify(templateContent)?.substring(0, 100)
+          });
+          
+          this.logger.debug('Value of templateContent RIGHT BEFORE check:', templateContent);
+          
           if (!templateContent || !isInterpolatableValueArray(templateContent)) {
             throw new DirectiveError(
               `Missing or invalid content array for embedTemplate subtype.`,
