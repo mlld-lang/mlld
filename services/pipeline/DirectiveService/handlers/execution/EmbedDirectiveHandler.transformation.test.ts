@@ -137,7 +137,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
     
     resolutionService.extractSection.mockImplementation(async (content, section) => {
-      const regex = new RegExp(`(^|\n)#+\s*${section}\s*\n([\s\S]*?)(?:\n#+\s|$)`, 'm');
+      const regex = new RegExp(`(^|\\n)#+\\s*${section}\\s*\\n([\\s\\S]*?)(?=\\n#+|$)`, 'm');
       const match = content.match(regex);
       return match ? match[2].trim() : '';
     });

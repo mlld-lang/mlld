@@ -272,6 +272,9 @@ describe('TextDirectiveHandler Integration', () => {
       
       // Verify error contains some context (check the wrapped error's context property)
       const collectedError = errorCollector.getAllErrors()[0];
+      console.log('Collected Error:', JSON.stringify(collectedError, null, 2));
+      console.log('Collected Error Context:', JSON.stringify(collectedError.context, null, 2));
+      
       expect(collectedError.context).toBeDefined(); 
       expect((collectedError.context as any).node).toBeDefined(); // Access nested node
       expect((collectedError.context as any).node.location.start.line).toBe(5); // Check line on nested node

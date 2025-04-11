@@ -184,14 +184,14 @@ export class TextDirectiveHandler implements IDirectiveHandler {
                 'Failed to resolve command for @text directive', 
                 this.kind, 
                 DirectiveErrorCode.RESOLUTION_FAILED, 
-                { node, context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED] }
+                { node, context: context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED] }
             );
           } else if (error instanceof Error) {
             throw new DirectiveError(
                 `Failed to execute command for @text directive: ${error.message}`,
                 this.kind, 
                 DirectiveErrorCode.EXECUTION_FAILED,
-                { node, context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED] }
+                { node, context: context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED] }
             );
           }
           throw error;
@@ -240,14 +240,14 @@ export class TextDirectiveHandler implements IDirectiveHandler {
                 'Failed to resolve @embed source for @text directive',
                 this.kind, 
                 DirectiveErrorCode.RESOLUTION_FAILED, 
-                { node, context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED] }
+                { node, context: context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED] }
             );
           } else if (error instanceof Error) {
             throw new DirectiveError(
                 `Failed to read/process embed source for @text directive: ${error.message}`,
                 this.kind, 
                 DirectiveErrorCode.EXECUTION_FAILED,
-                { node, context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED] }
+                { node, context: context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED] }
             );
           }
           throw error;
