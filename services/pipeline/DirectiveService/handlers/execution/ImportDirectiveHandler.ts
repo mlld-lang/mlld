@@ -1,4 +1,5 @@
-import { DirectiveNode, MeldNode, TextNode, VariableReferenceNode, VariableType } from '@core/syntax/types/index.js';
+import type { DirectiveNode, MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types/index.js';
+import { VariableType } from '@core/types/variables.js';
 import type {
   ImportDirectiveData
 } from '@core/syntax/types/index.js';
@@ -616,13 +617,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
              createdAt: Date.now(),
              modifiedAt: Date.now(),
            };
-            const newVar: CommandVariable = {
-             type: VariableType.COMMAND,
-             name: targetName,
-             value: commandVar.value,
-             metadata: metadata
-            };
-           targetState.setCommand(targetName, newVar.value, newVar.metadata);
+           targetState.setCommand(targetName, commandVar, metadata);
            logger.debug(`Imported command: ${name} as ${targetName}`);
            variableFound = true;
            continue;
