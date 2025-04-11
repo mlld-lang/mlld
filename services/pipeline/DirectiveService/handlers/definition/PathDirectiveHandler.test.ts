@@ -15,6 +15,8 @@ import {
   createResolutionServiceMock,
   createDirectiveErrorMock
 } from '@tests/utils/mocks/serviceMocks.js';
+// Import path types
+import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, unsafeCreateValidatedResourcePath } from '@core/types';
 
 /**
  * PathDirectiveHandler Test Status
@@ -35,6 +37,29 @@ import {
  *   truly invalid syntax before the handler gets to process it, making it difficult
  *   to test validation error handling with actual invalid syntax examples.
  */
+
+// Helper to create mock MeldPath objects for tests
+const createMockMeldPath = (resolvedPathString: string): MeldPath => {
+  const isUrl = resolvedPathString.startsWith('http');
+  const state: IFilesystemPathState | IUrlPathState = isUrl ? {
+    contentType: PathContentType.URL,
+    originalValue: resolvedPathString, // Use resolved as original for mock simplicity
+    validatedPath: unsafeCreateValidatedResourcePath(resolvedPathString), // Assume validation ok
+    isValidSyntax: true,
+  } : {
+    contentType: PathContentType.FILESYSTEM,
+    originalValue: resolvedPathString,
+    validatedPath: unsafeCreateValidatedResourcePath(resolvedPathString),
+    isAbsolute: resolvedPathString.startsWith('/'),
+    isSecure: true,
+    isValidSyntax: true,
+    exists: true, // Assume exists for mock simplicity
+  };
+  return { 
+    ...state, 
+    value: state // Add the value property containing the state itself
+  } as MeldPath;
+};
 
 describe('PathDirectiveHandler', () => {
   let handler: PathDirectiveHandler;
@@ -63,6 +88,12 @@ describe('PathDirectiveHandler', () => {
     // Configure mock behaviors
     stateService.clone.mockReturnValue(clonedState);
     
+    // <<< Add Mock for resolvePath >>>
+    resolutionService.resolvePath.mockImplementation(async (resolvedString: string, context: any): Promise<MeldPath> => {
+        // Use the helper to return a mock MeldPath object
+        return createMockMeldPath(resolvedString);
+    });
+
     // Create PathDirectiveHandler instance
     handler = new PathDirectiveHandler(
       validationService,
@@ -102,7 +133,8 @@ describe('PathDirectiveHandler', () => {
         }),
         expect.any(Object)
       );
-      expect(clonedState.setPathVar).toHaveBeenCalledWith('docs', pathValue);
+      const expectedState = createMockMeldPath(pathValue).value; // Get the state object
+      expect(clonedState.setPathVar).toHaveBeenCalledWith('docs', expectedState);
       expect(result).toBe(clonedState);
     });
 
@@ -133,7 +165,8 @@ describe('PathDirectiveHandler', () => {
         }),
         expect.any(Object)
       );
-      expect(clonedState.setPathVar).toHaveBeenCalledWith('customPath', resolvedPath);
+      const expectedStateCustom = createMockMeldPath(resolvedPath).value; // Get the state object
+      expect(clonedState.setPathVar).toHaveBeenCalledWith('customPath', expectedStateCustom);
       expect(result).toBe(clonedState);
     });
 
@@ -158,7 +191,8 @@ describe('PathDirectiveHandler', () => {
         }),
         expect.any(Object)
       );
-      expect(clonedState.setPathVar).toHaveBeenCalledWith('config', pathValue);
+      const expectedStateConfig = createMockMeldPath(pathValue).value; // Get the state object
+      expect(clonedState.setPathVar).toHaveBeenCalledWith('config', expectedStateConfig);
       expect(result).toBe(clonedState);
     });
   });

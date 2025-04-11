@@ -10,7 +10,7 @@ import { StringLiteralHandler } from '@services/resolution/ResolutionService/res
 import { StringConcatenationHandler } from '@services/resolution/ResolutionService/resolvers/StringConcatenationHandler.js';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { ErrorSeverity, FieldAccessError, PathValidationError, MeldResolutionError } from '@core/errors';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
@@ -178,14 +178,14 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           });
 
         } catch (error) {
-          if (error instanceof ResolutionError || error instanceof FieldAccessError) { // Catch resolution errors
+          if (error instanceof MeldResolutionError || error instanceof FieldAccessError) {
             throw new DirectiveError(
                 'Failed to resolve command for @text directive', 
                 this.kind, 
                 DirectiveErrorCode.RESOLUTION_FAILED, 
                 { node, context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED] }
             );
-          } else if (error instanceof Error) { // Catch execution errors
+          } else if (error instanceof Error) {
             throw new DirectiveError(
                 `Failed to execute command for @text directive: ${error.message}`,
                 this.kind, 
@@ -193,7 +193,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
                 { node, context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED] }
             );
           }
-          throw error; // Rethrow unexpected errors
+          throw error;
         }
       }
       // Handle @text with @embed value
@@ -234,14 +234,14 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           });
           
         } catch (error) {
-          if (error instanceof ResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) { // Catch resolution/path errors
+          if (error instanceof MeldResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) {
             throw new DirectiveError(
                 'Failed to resolve @embed source for @text directive',
                 this.kind, 
                 DirectiveErrorCode.RESOLUTION_FAILED, 
                 { node, context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED] }
             );
-          } else if (error instanceof Error) { // Catch FS errors
+          } else if (error instanceof Error) {
             throw new DirectiveError(
                 `Failed to read/process embed source for @text directive: ${error.message}`,
                 this.kind, 
@@ -270,7 +270,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         try {
           resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
         } catch (error) {
-          if (error instanceof ResolutionError) {
+          if (error instanceof MeldResolutionError || error instanceof FieldAccessError) {
             throw new DirectiveError(
               'Failed to resolve value in text directive',
               this.kind,

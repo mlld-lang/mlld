@@ -22,6 +22,9 @@ import {
   createTestText,
   createTestCodeFence
 } from '@tests/utils/nodeFactories.js';
+import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
+import type { InterpolatableValue, StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
+import type { EmbedDirectiveData } from '@core/syntax/types/directives.js';
 
 const DEFAULT_POSITION: Position = { line: 1, column: 1 };
 const DEFAULT_LOCATION: Location = {
@@ -199,45 +202,105 @@ export function createPathDirective(
   return createTestDirective('path', identifier, value, location);
 }
 
-// Create a run directive node for testing
+// Create a run directive node for testing (Matching refactored handler expectations)
 export function createRunDirective(
-  command: string,
-  location?: Location
+  identifier: string, // Identifier for the @text directive using this
+  command: string | InterpolatableValue,
+  location?: Location,
+  subtype: 'runCommand' | 'runCode' | 'runCodeParams' | 'runDefined' = 'runCommand' 
 ): DirectiveNode {
+  let commandValue: InterpolatableValue;
+  if (typeof command === 'string') {
+    // If given a string, wrap it in a TextNode array
+    commandValue = [createTextNode(command, location)]; 
+  } else {
+    commandValue = command;
+  }
+
+  // Create the structure expected by the handler for @text x = @run [...]
+  // The outer node is @text, its value has source:'run' and a run object
   return {
     type: 'Directive',
-    directive: {
-      kind: 'run',
-      identifier: 'run',
-      value: `[${command}]`,
-      command
-    },
-    location: location || DEFAULT_LOCATION
+    location: location || DEFAULT_LOCATION,
+    directive: { 
+      kind: 'text', // Outer directive is @text
+      identifier: identifier,
+      source: 'run',
+      // The 'run' property contains the details of the @run command
+      run: { 
+          subtype: subtype, // Subtype of the run command itself
+          command: commandValue // Command content (InterpolatableValue)
+          // Add language/parameters here if testing runCode/runCodeParams
+      },
+      value: null // The top-level value for @text is null when source is run/embed
+    }
   };
 }
 
 // Create an embed directive node for testing
 export function createEmbedDirective(
-  path: string,
+  pathOrContent: string | InterpolatableValue | AstStructuredPath, // Path string, variable string like '{{var}}', template nodes, or path object
   section?: string,
   location?: Location,
-  options?: {
+  options?: { 
+    names?: string[];
     headingLevel?: number;
     underHeader?: string;
-    fuzzy?: number;
-    format?: string;
+    fuzzy?: number; // Note: 'fuzzy' is not a standard option, usually handled in extractSection
+    format?: string; // Note: 'format' is not a standard option
   }
 ): DirectiveNode {
-  const value = section ? `[${path} # ${section}]` : `[${path}]`;
+  let subtype: 'embedPath' | 'embedVariable' | 'embedTemplate';
+  let pathProperty: AstStructuredPath | undefined = undefined;
+  let contentProperty: InterpolatableValue | undefined = undefined;
+  let namesProperty = options?.names;
+
+  if (isInterpolatableValueArray(pathOrContent)) {
+    subtype = 'embedTemplate';
+    contentProperty = pathOrContent;
+  } else if (typeof pathOrContent === 'object' && 'raw' in pathOrContent) {
+    // It's an AstStructuredPath object (likely from path directive test usage)
+    subtype = 'embedPath'; // Assume path if object is given
+    pathProperty = pathOrContent;
+  } else if (typeof pathOrContent === 'string') {
+    // Determine subtype based on string content
+    if (pathOrContent.startsWith('{{') || pathOrContent.startsWith('$')) {
+       subtype = 'embedVariable';
+       // Create a simplified AstStructuredPath for variable reference
+       pathProperty = { 
+         raw: pathOrContent, 
+         structured: { segments: [], base: '.' } // Basic structure needed
+         // The parser would add more detail here (isVariableReference, etc.)
+       };
+    } else {
+       subtype = 'embedPath';
+       // Assume it's a simple path string, create basic AstStructuredPath
+       pathProperty = { 
+          raw: pathOrContent, 
+          structured: { segments: pathOrContent.split('/').filter(Boolean), base: '.'} 
+          // The parser would create a more detailed structure
+       };
+    }
+  } else {
+     throw new Error('Invalid input for createEmbedDirective pathOrContent');
+  }
+
+  // Construct the directive data
+  const directiveData: EmbedDirectiveData = {
+    kind: 'embed',
+    subtype: subtype,
+    ...(pathProperty && { path: pathProperty }),
+    ...(contentProperty && { content: contentProperty }),
+    ...(section && { section }),
+    ...(namesProperty && { names: namesProperty }),
+    ...(options?.headingLevel && { headerLevel: options.headingLevel }),
+    ...(options?.underHeader && { underHeader: options.underHeader })
+    // Keep standard options, ignore fuzzy/format unless part of EmbedDirectiveData
+  };
+  
   return {
     type: 'Directive',
-    directive: {
-      kind: 'embed',
-      path,
-      value,
-      section,
-      ...options
-    },
+    directive: directiveData,
     location: location || DEFAULT_LOCATION
   };
 }

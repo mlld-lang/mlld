@@ -27,7 +27,7 @@ import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { MeldResolutionError, FieldAccessError, PathValidationError, MeldError } from '@core/errors';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { StateServiceLike } from '@core/shared-service-types.js';
-import type { InterpolatableValue, VariableReferenceNode } from '@core/syntax/types/nodes.js'; // Assume InterpolatableValue here
+import type { InterpolatableValue, VariableReferenceNode, StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js'; // <<< Ensure AstStructuredPath is imported here
 
 /**
  * Handler for @data directives

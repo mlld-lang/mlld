@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
+import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { DirectiveNode } from '@core/syntax/types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
@@ -10,6 +11,11 @@ import {
   createResolutionServiceMock,
   createFileSystemServiceMock
 } from '@tests/utils/mocks/serviceMocks.js';
+import { createRunDirective, createTextNode, createVariableReferenceNode } from '@tests/utils/testFactories.js';
+import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
+import { VariableType } from '@core/types/variables.js';
+import { StringLiteralHandler } from '@services/resolution/ResolutionService/resolvers/StringLiteralHandler.js';
+import { StringConcatenationHandler } from '@services/resolution/ResolutionService/resolvers/StringConcatenationHandler.js';
 
 /**
  * TextDirectiveHandler Command Test Status
@@ -21,24 +27,6 @@ import {
  * - TestContextDI for container management
  * - Standardized mock factories with vitest-mock-extended
  */
-
-/**
- * Helper function to create a directive node specifically with a @run command
- */
-const createRunDirectiveNode = (identifier: string, command: string): DirectiveNode => {
-  return {
-    type: 'Directive',
-    directive: {
-      kind: 'text',
-      identifier,
-      value: `@run [${command}]`,
-      source: 'run',
-      run: {
-        command: command
-      }
-    }
-  };
-};
 
 /**
  * Helper function to create a standard text directive node
@@ -94,7 +82,21 @@ describe('TextDirectiveHandler - Command Execution', () => {
     
     stateService.clone.mockReturnValue(clonedState);
     
-    resolutionService.resolveInContext.mockImplementation(value => Promise.resolve(value));
+    // resolutionService.resolveNodes.mockResolvedValue('echo "test"'); // <<< Remove simplified mock
+
+    // <<< Restore detailed mock for resolveNodes >>>
+    resolutionService.resolveNodes.mockImplementation(async (nodes: InterpolatableValue, context: any): Promise<string> => {
+        let commandString = '';
+        for (const node of nodes) {
+            if (node.type === 'Text') {
+                commandString += node.content;
+            } else if (node.type === 'VariableReference') {
+                const varValue = stateService.getTextVar(node.identifier);
+                commandString += varValue ?? ''; 
+            }
+        }
+        return commandString; 
+    });
 
     // Mock file system service for command execution
     fileSystemService.executeCommand.mockImplementation((command: string) => {
@@ -135,7 +137,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
 
   it('should execute command and store its output', async () => {
     // Arrange
-    const node = createRunDirectiveNode('command_output', 'echo "test"');
+    const node = createRunDirective('command_output', 'echo "test"');
     
     const testContext = {
       state: stateService,
@@ -152,10 +154,15 @@ describe('TextDirectiveHandler - Command Execution', () => {
   
   it('should handle variable references in command input', async () => {
     // Arrange
-    const step1Node = createRunDirectiveNode('step1', 'echo "Command 1 output"');
+    const step1Node = createRunDirective('step1', 'echo "Command 1 output"');
     
-    // For the second node, we need to simulate the resolution of variables in the command
-    const step2Node = createRunDirectiveNode('step2', 'echo "Command 1 referenced: {{step1}}"');
+    // For the second node, create the InterpolatableValue manually for the mock
+    const step2CommandNodes: InterpolatableValue = [
+      createTextNode('echo "Command 1 referenced: '),
+      createVariableReferenceNode('step1', VariableType.TEXT),
+      createTextNode('"')
+    ];
+    const step2Node = createRunDirective('step2', step2CommandNodes);
     
     const testContext = {
       state: stateService,
@@ -167,12 +174,13 @@ describe('TextDirectiveHandler - Command Execution', () => {
     await handler.execute(step1Node, testContext);
     
     // Mock the resolutionService to handle the variable reference in the second command
-    resolutionService.resolveInContext.mockImplementation((value) => {
-      if (value === 'echo "Command 1 referenced: {{step1}}"') {
-        return Promise.resolve('echo "Command 1 referenced: Command 1 output"');
-      }
-      return Promise.resolve(value);
-    });
+    // This mock might be redundant now if resolveNodes handles it, but keep for safety?
+    // resolutionService.resolveInContext.mockImplementation((value) => { // <<< Remove or adjust
+    //   if (value === 'echo "Command 1 referenced: {{step1}}"') {
+    //     return Promise.resolve('echo "Command 1 referenced: Command 1 output"');
+    //   }
+    //   return Promise.resolve(value);
+    // });
     
     await handler.execute(step2Node, testContext);
     
@@ -186,7 +194,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
   
   it('should handle special characters in command outputs', async () => {
     // Arrange
-    const node = createRunDirectiveNode('special', 'echo "Output with \'single\' and \\"double\\" quotes"');
+    const node = createRunDirective('special', 'echo "Output with \'single\' and \\"double\\" quotes"');
     
     const testContext = {
       state: stateService,
@@ -203,7 +211,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
   
   it('should handle multi-line command outputs', async () => {
     // Arrange
-    const node = createRunDirectiveNode('multiline', 'echo -e "Line 1\\nLine 2\\nLine 3"');
+    const node = createRunDirective('multiline', 'echo -e "Line 1\\nLine 2\\nLine 3"');
     
     const testContext = {
       state: stateService,
@@ -220,9 +228,11 @@ describe('TextDirectiveHandler - Command Execution', () => {
   
   it('should handle nested variable references across multiple levels', async () => {
     // Arrange - Create nodes for each level
-    const level1Node = createRunDirectiveNode('level1', 'echo "Level 1 output"');
-    const level2Node = createRunDirectiveNode('level2', 'echo "Level 2 references {{level1}}"');
-    const level3Node = createRunDirectiveNode('level3', 'echo "Level 3 references {{level2}}"');
+    const level1Node = createRunDirective('level1', 'echo "Level 1 output"');
+    const level2CommandNodes: InterpolatableValue = [ createTextNode('echo "Level 2 references '), createVariableReferenceNode('level1', VariableType.TEXT), createTextNode('"')];
+    const level2Node = createRunDirective('level2', level2CommandNodes);
+    const level3CommandNodes: InterpolatableValue = [ createTextNode('echo "Level 3 references '), createVariableReferenceNode('level2', VariableType.TEXT), createTextNode('"')];
+    const level3Node = createRunDirective('level3', level3CommandNodes);
     
     const testContext = {
       state: stateService,

@@ -321,6 +321,30 @@ describe('ParserService', () => {
         { type: 'field', value: 'name' }
       ]);
     });
+
+    it('should parse a simple text directive', async () => {
+      const content = '@text greeting = "Hello"';
+      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 25 } };
+      const mockTextValueLocation = { start: { line: 1, column: 19 }, end: { line: 1, column: 24 } };
+      
+      const mockResult = [
+        {
+          type: 'Directive',
+          location: mockLocation,
+          directive: {
+            kind: 'text',
+            identifier: 'greeting',
+            source: 'literal', 
+            value: [
+              { type: 'Text', content: 'Hello', location: mockTextValueLocation }
+            ]
+          }
+        }
+      ];
+
+      const result = await service.parse(content);
+      expect(result).toEqual(mockResult);
+    });
   });
 
   describe('parseWithLocations', () => {
