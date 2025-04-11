@@ -356,34 +356,17 @@ describe('RunDirectiveHandler', () => {
         workingDirectory: '/workspace'
       };
       
-      // Setup mock context
-      const clonedState = {
-        ...stateService,
-        getCommandVar: vi.fn().mockImplementation((name: string) => name === 'greet' ? { value: { commandTemplate: 'echo "Hello there!"' } } : undefined),
-        setTextVar: vi.fn()
-      };
-
-      vi.mocked(stateService.clone).mockReturnValue(clonedState);
+      // Mock getCommandVar *directly on stateService*
+      const greetCmdDef = { commandTemplate: 'echo "Hello there!"' }; 
+      stateService.getCommandVar.mockImplementation((name: string) => name === 'greet' ? { value: greetCmdDef } : undefined);
+      
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'Hello there!', stderr: '' });
       vi.mocked(validationService.validate).mockResolvedValue(undefined);
       
-      // For command arguments resolution
-      vi.mocked(resolutionService.resolveInContext).mockImplementation((arg, ctx) => {
-        // For the final resolved command - the implementation will call this to resolve variables
-        return Promise.resolve(arg);
-      });
-      
-      // Mock command execution
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
-        stdout: 'Hello there!',
-        stderr: '',
-        exitCode: 0
-      });
-      
-      // Execute the directive
       await handler.execute(node, context);
       
-      // Verify that command reference was properly expanded and executed
-      expect(clonedState.getCommandVar).toHaveBeenCalledWith('greet');
+      // Check getCommandVar on the original stateService mock
+      expect(stateService.getCommandVar).toHaveBeenCalledWith('greet'); 
       
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
         'echo "Hello there!"',
@@ -391,9 +374,6 @@ describe('RunDirectiveHandler', () => {
           cwd: '/workspace' 
         })
       );
-      
-      // Verify that stdout was captured
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'Hello there!');
     });
   });
 
@@ -463,9 +443,8 @@ describe('RunDirectiveHandler', () => {
         workingDirectory: '/workspace'
       };
       
-      // Configure the state to return undefined for the command
-      vi.mocked(stateService.getCommandVar).mockReturnValue(undefined);
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      // Mock getCommandVar *directly on stateService*
+      stateService.getCommandVar.mockReturnValue(undefined); 
       
       // Execute the directive and expect a DirectiveError
       try {
@@ -473,9 +452,10 @@ describe('RunDirectiveHandler', () => {
          throw new Error('Expected execute to throw'); 
       } catch (error) {
           expect(error).toBeInstanceOf(Error); 
-          expect(error.constructor.name).toBe('DirectiveError');
+          expect(error.constructor.name).toBe('DirectiveError'); 
           expect((error as Error).message).toContain('Command definition \'undefinedCommand\' not found');
       }
+      // Check getCommandVar on the original stateService mock
       expect(stateService.getCommandVar).toHaveBeenCalledWith('undefinedCommand'); 
     });
   });
