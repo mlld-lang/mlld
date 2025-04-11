@@ -170,7 +170,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const node = createEmbedDirective(
         'test.md',
         undefined,
-        createLocation(1,1)
+        createLocation(1,1),
+        'embedPath'
       );
       vi.mocked(fileSystemService.readFile).mockResolvedValue('Embedded content');
 
@@ -194,7 +195,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const node = createEmbedDirective(
         'test.md',
         'Section 1',
-        createLocation(1,1)
+        createLocation(1,1),
+        'embedPath'
       );
       vi.mocked(fileSystemService.readFile).mockResolvedValue('# Title\n## Section 1\nContent 1\n## Section 2\nContent 2');
 
@@ -218,6 +220,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         'test.md',
         undefined,
         createLocation(1,1),
+        'embedPath',
         { headingLevel: 2 }
       );
       vi.mocked(fileSystemService.readFile).mockResolvedValue('# Title\n## Heading 2\nContent for H2');
@@ -242,6 +245,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         'test.md',
         undefined,
         createLocation(1,1),
+        'embedPath',
         { underHeader: 'Target Header' }
       );
       vi.mocked(fileSystemService.readFile).mockResolvedValue('# Title\n## Target Header\nContent under header');
@@ -265,7 +269,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const node = createEmbedDirective(
         '{{filePath}}',
         undefined,
-        createLocation(1,1)
+        createLocation(1,1),
+        'embedPath'
       );
       stateService.getTextVar.mockReturnValue({ type:'text', value: 'resolved/path.md' } as any);
       resolutionService.resolveInContext.mockImplementation(async (val: any): Promise<any> => {
@@ -305,7 +310,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const node = createEmbedDirective(
         variablePath.raw,
         undefined,
-        createLocation(1, 1)
+        createLocation(1, 1),
+        'embedVariable'
       );
       node.directive.subtype = 'embedVariable';
       node.directive.path = variablePath;
@@ -348,7 +354,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const node = createEmbedDirective(
         variablePath.raw,
         undefined,
-        createLocation(1, 1)
+        createLocation(1, 1),
+        'embedVariable'
       );
       node.directive.subtype = 'embedVariable';
       node.directive.path = variablePath;
@@ -379,7 +386,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const node = createEmbedDirective(
         'nonexistent.md',
         undefined,
-        createLocation(1,1)
+        createLocation(1,1),
+        'embedPath'
       );
       fileSystemService.exists.mockResolvedValue(false);
       
@@ -411,7 +419,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const node = createEmbedDirective(
         '{{vars.myPath.nested}}',
         undefined,
-        createLocation(1,1)
+        createLocation(1,1),
+        'embedPath'
       );
       
       stateService.getDataVar.mockReturnValue({ type:'data', value: { myPath: { nested: 'actual/file.md' } } } as any);
@@ -434,7 +443,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const node = createEmbedDirective(
         '{{contact.email}}',
         undefined,
-        createLocation(1,1)
+        createLocation(1,1),
+        'embedPath'
       );
       
       stateService.getDataVar.mockReturnValue({ type:'data', value: { email: 'user@example.com' } } as any);
@@ -457,7 +467,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const node = createEmbedDirective(
         'any.md',
         undefined,
-        createLocation(1,1)
+        createLocation(1,1),
+        'embedPath'
       );
       
       interpreterServiceClientFactory.createClient.mockImplementation(() => {
