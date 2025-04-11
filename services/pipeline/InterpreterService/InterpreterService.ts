@@ -10,6 +10,7 @@ import { Service } from '@core/ServiceProvider.js';
 import { inject, injectable, delay, container } from 'tsyringe';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
@@ -41,7 +42,8 @@ function getErrorMessage(error: unknown): string {
   description: 'Service for interpreting Meld AST nodes and executing directives',
   dependencies: [
     { token: 'DirectiveServiceClientFactory', name: 'directiveServiceClientFactory' },
-    { token: 'IStateService', name: 'stateService' }
+    { token: 'IStateService', name: 'stateService' },
+    { token: 'IResolutionService', name: 'resolutionService' }
   ]
 })
 export class InterpreterService implements IInterpreterService, InterpreterServiceLike {
@@ -53,23 +55,28 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
   private stateVariableCopier = new StateVariableCopier();
   private initializationPromise: Promise<void> | null = null;
   private factoryInitialized: boolean = false;
+  private resolutionService?: IResolutionService;
 
   /**
    * Creates a new InterpreterService
    * 
    * @param directiveServiceClientFactory - Factory for creating directive service clients
    * @param stateService - Service for state management
+   * @param resolutionService - Service for text resolution
    */
   constructor(
     @inject('DirectiveServiceClientFactory') directiveServiceClientFactory?: DirectiveServiceClientFactory,
-    @inject('IStateService') stateService?: StateServiceLike
+    @inject('IStateService') stateService?: StateServiceLike,
+    @inject('IResolutionService') resolutionService?: IResolutionService
   ) {
     this.directiveClientFactory = directiveServiceClientFactory;
     this.stateService = stateService;
+    this.resolutionService = resolutionService;
     
     logger.debug('InterpreterService constructor', {
       hasDirectiveFactory: !!this.directiveClientFactory,
-      hasStateService: !!this.stateService
+      hasStateService: !!this.stateService,
+      hasResolutionService: !!this.resolutionService
     });
     
     // If we have dependencies, initialize
@@ -328,6 +335,42 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
         }
       }
 
+      // <<< START: Final Resolution Pass >>>
+      if (this.resolutionService && currentState.getTransformedNodes) {
+        logger.debug('Performing final resolution pass on text nodes...');
+        const finalNodes = currentState.getTransformedNodes(); // Get potentially transformed nodes
+        const finalResolutionContext = ResolutionContextFactory.create(currentState, opts.filePath);
+        
+        for (let i = 0; i < finalNodes.length; i++) {
+          const node = finalNodes[i];
+          if (node.type === 'Text' && node.content.includes('{{')) {
+            try {
+              const originalContent = node.content;
+              logger.debug(`Resolving content for TextNode at index ${i}:`, originalContent);
+              // Use resolveText for simplicity, assuming no further parsing needed
+              const resolvedContent = await this.resolutionService.resolveText(originalContent, finalResolutionContext);
+              if (resolvedContent !== originalContent) {
+                 logger.debug(`Resolved content:`, resolvedContent);
+                 // Modify the node content directly IN THE ARRAY (or create new node)
+                 // Creating a new node is safer to avoid mutation issues
+                 finalNodes[i] = { ...node, content: resolvedContent }; 
+              }
+            } catch (resolutionError) {
+              logger.warn(`Error during final text resolution pass for node at index ${i}:`, { 
+                 error: resolutionError instanceof Error ? resolutionError.message : String(resolutionError)
+              });
+              // Decide how to handle errors: skip node, replace with error marker, or rethrow?
+              // For now, let's leave the original unresolved content.
+            }
+          }
+        }
+        // Update the state with the potentially modified nodes array
+        if (currentState.setTransformedNodes) {
+            currentState.setTransformedNodes(finalNodes);
+        }
+      }
+      // <<< END: Final Resolution Pass >>>
+
       // Merge state back to parent if requested
       if (opts.initialState && opts.mergeState) {
         opts.initialState.mergeChildState(currentState);
@@ -401,28 +444,9 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
       // Process based on node type
       switch (node.type) {
         case 'Text':
-          // <<< Resolve variables within TextNode content >>>
-          let resolvedContent = (node as TextNode).content;
-          if (this.resolutionService) { // Check if resolutionService exists
-             try {
-                // Create appropriate context for text resolution
-                const resolutionContext = ResolutionContextFactory.create(state, state.getCurrentFilePath());
-                resolvedContent = await this.resolutionService.resolveText(resolvedContent, resolutionContext);
-             } catch (resolutionError) {
-                logger.warn('Failed to resolve text content during interpretation', { 
-                  originalContent: (node as TextNode).content, 
-                  error: resolutionError 
-                });
-                // Keep original content if resolution fails?
-             }
-          }
-          // Create a new node with potentially resolved content
-          const resolvedTextNode: TextNode = { 
-              ...node, 
-              content: resolvedContent 
-          };
+          // Create new state for text node
           const textState = currentState.clone();
-          textState.addNode(resolvedTextNode); // Add the resolved node
+          textState.addNode(node);
           currentState = textState;
           break;
 

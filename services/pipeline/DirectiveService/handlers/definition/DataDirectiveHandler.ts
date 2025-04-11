@@ -195,9 +195,9 @@ export class DataDirectiveHandler implements IDirectiveHandler {
   ): Promise<JsonValue> {
     if (isInterpolatableValueArray(data)) {
       logger.debug('[resolveInterpolatableValuesInData] Resolving InterpolatableValue Array:', data);
-      const resolved = await this.resolutionService.resolveNodes(data, context);
-      logger.debug('[resolveInterpolatableValuesInData] Resolved to:', resolved);
-      return resolved as JsonValue;
+      const resolvedString = await this.resolutionService.resolveNodes(data, context);
+      logger.debug('[resolveInterpolatableValuesInData] Resolved to:', resolvedString);
+      return resolvedString;
     }
     if (Array.isArray(data)) {
       const resolvedArray: JsonValue[] = [];

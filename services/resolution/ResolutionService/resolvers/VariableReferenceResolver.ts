@@ -14,13 +14,12 @@ import { resolutionLogger as logger } from '@core/utils/logger';
 import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index';
 import { container, inject, injectable } from 'tsyringe';
 import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
-import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
-import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { MeldPath, PathValidationContext, PathPurpose, RawPath, NormalizedAbsoluteDirectoryPath } from '@core/types/paths.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import { MeldPath, PathValidationContext, PathPurpose, RawPath, NormalizedAbsoluteDirectoryPath } from '@core/types/paths';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 import {
   Field as AstField
 } from '@core/syntax/types/shared-types.js';
