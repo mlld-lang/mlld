@@ -261,34 +261,49 @@ describe('EmbedDirectiveHandler', () => {
     // Updated resolveInContext mock - using 'any' for value type
     resolutionService.resolveInContext.mockImplementation(async (value: any, context: any): Promise<string> => { 
       console.log('>>> MOCK resolveInContext received:', typeof value, JSON.stringify(value));
+      let resolved = ''; 
+      let processed = false; 
+      let rawValue = (typeof value === 'object' && value !== null && typeof value.raw === 'string') ? value.raw : undefined;
+      let stringValue = typeof value === 'string' ? value : undefined;
 
-      // Hardcoded return values for specific inputs of failing tests
-      if (value === './some/file.txt' || (typeof value === 'object' && value?.raw === './some/file.txt')) {
-          console.log('>>> MOCK resolveInContext MATCHED ./some/file.txt');
-          return '/path/to/some/file.txt';
+      // Prioritize exact matches needed for failing tests
+      if (value === './some/file.txt' || rawValue === './some/file.txt') {
+          resolved = '/path/to/some/file.txt';
+          processed = true;
+      } else if (stringValue?.startsWith('$docsPath') || rawValue?.startsWith('$docsPath')) {
+          resolved = '/path/to/docs/file.txt';
+          processed = true;
       } 
-      if (value === '$docsPath/file.txt' || (typeof value === 'object' && value?.raw === '$docsPath/file.txt')) {
-          console.log('>>> MOCK resolveInContext MATCHED $docsPath/file.txt');
-          return '/path/to/docs/file.txt';
-      } 
-      
-      // Handle other known test cases needed for passing tests
+      // Handle other known cases
       if (value === '{{textVar}}' || (typeof value === 'object' && value?.raw === '{{textVar}}')) {
-          return 'Resolved Text'; 
+          resolved = 'Resolved Text';
+          processed = true;
       } 
       if (value === '{{dataVar.user.name}}' || (typeof value === 'object' && value?.raw === '{{dataVar.user.name}}')) {
-          return 'Alice';
+          resolved = 'Alice';
+          processed = true;
       } 
       
       // Delegate InterpolatableValue arrays
       if (isInterpolatableValueArray(value)){
-          return await resolutionService.resolveNodes(value, context);
+          resolved = await resolutionService.resolveNodes(value, context);
+          processed = true;
       } 
       
-      // Fallback
-      const fallback = typeof value === 'string' ? value : JSON.stringify(value);
-      console.log('>>> MOCK resolveInContext FALLBACK returning:', fallback);
-      return fallback; 
+      // Fallback if not processed by any specific logic
+      if (!processed) {
+          // If it has a raw value we didn't handle, use that
+          if (rawValue !== undefined) {
+             resolved = rawValue;
+          } 
+          // Otherwise use original string or stringify
+          else {
+             resolved = typeof value === 'string' ? value : JSON.stringify(value);
+          }
+      }
+
+      console.log('>>> MOCK resolveInContext returning:', resolved);
+      return resolved;
     });
     // Mock resolvePath to return a valid MeldPath
 
