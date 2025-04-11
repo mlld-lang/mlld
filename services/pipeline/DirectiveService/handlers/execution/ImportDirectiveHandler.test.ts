@@ -18,7 +18,6 @@ import {
   expectToThrowWithConfig
 } from '@tests/utils/ErrorTestUtils';
 import { createLocation } from '@tests/utils/testFactories';
-import { createMockLogger } from '@tests/utils/mockLogger';
 import { importDirectiveExamples } from '@core/syntax/index';
 import { createNodeFromExample } from '@core/syntax/helpers/index';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
@@ -28,12 +27,10 @@ import {
   createResolutionServiceMock,
   createFileSystemServiceMock,
   createPathServiceMock,
-  createCircularityServiceMock,
 } from '@tests/utils/mocks/serviceMocks';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver';
-import { mockDeep } from 'vitest-mock-extended';
 
 /**
  * ImportDirectiveHandler Test Status
@@ -126,6 +123,18 @@ function createTestImportNode(options: {
   };
 }
 
+// Mock the actual logger module
+const mockLoggerObject = { // Define the mock object structure
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn()
+};
+vi.mock('@core/utils/logger', () => ({
+  directiveLogger: mockLoggerObject,
+  importLogger: mockLoggerObject
+}));
+
 describe('ImportDirectiveHandler', () => {
   let handler: ImportDirectiveHandler;
   let validationService: ReturnType<typeof createValidationServiceMock>;
@@ -133,35 +142,31 @@ describe('ImportDirectiveHandler', () => {
   let resolutionService: ReturnType<typeof createResolutionServiceMock>;
   let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
   let pathService: ReturnType<typeof createPathServiceMock>;
-  let parserService: ReturnType<typeof createParserServiceMock>;
-  let interpreterServiceClientFactory: ReturnType<typeof createInterpreterServiceClientFactoryMock>;
-  let interpreterServiceClient: ReturnType<typeof createInterpreterServiceClientMock>;
-  let circularityService: ReturnType<typeof createCircularityServiceMock>;
-  let urlContentResolver: ReturnType<typeof createURLContentResolverMock>;
+  let parserService: DeepMockProxy<IParserService>;
+  let interpreterServiceClientFactory: DeepMockProxy<InterpreterServiceClientFactory>;
+  let interpreterServiceClient: DeepMockProxy<IInterpreterServiceClient>;
+  let circularityService: DeepMockProxy<ICircularityService>;
+  let urlContentResolver: DeepMockProxy<IURLContentResolver>;
   let childState: ReturnType<typeof createStateServiceMock>;
   let context: TestContextDI;
-  let logger: ReturnType<typeof createMockLogger>;
 
   beforeEach(async () => {
     context = TestContextDI.createIsolated();
-    logger = createMockLogger();
 
-    // Create Mocks using standard factories
+    // Create Mocks using standard factories where available
     validationService = createValidationServiceMock();
     stateService = createStateServiceMock();
     resolutionService = createResolutionServiceMock();
     fileSystemService = createFileSystemServiceMock();
     pathService = createPathServiceMock();
-    interpreterServiceClient = createInterpreterServiceClientMock();
-    circularityService = createCircularityServiceMock();
-    urlContentResolver = createURLContentResolverMock();
     childState = createStateServiceMock();
 
-    // Manually create mocks for missing factories
+    // Manually create mocks for services/factories without dedicated mock creators
     parserService = mockDeep<IParserService>();
     interpreterServiceClientFactory = mockDeep<InterpreterServiceClientFactory>();
-    urlContentResolver = mockDeep<IURLContentResolver>();
     interpreterServiceClient = mockDeep<IInterpreterServiceClient>();
+    circularityService = mockDeep<ICircularityService>();
+    urlContentResolver = mockDeep<IURLContentResolver>();
 
     // Register All Mocks with TestContextDI
     context.registerMock('IValidationService', validationService);
@@ -173,9 +178,8 @@ describe('ImportDirectiveHandler', () => {
     context.registerMock('InterpreterServiceClientFactory', interpreterServiceClientFactory);
     context.registerMock('ICircularityService', circularityService);
     context.registerMock('IURLContentResolver', urlContentResolver);
-    context.registerLogger(logger);
 
-    // Configure default mock behaviors
+    // Configure default mock behaviors (ensure interpreterServiceClient is configured)
     stateService.createChildState.mockReturnValue(childState);
     interpreterServiceClientFactory.createClient.mockReturnValue(interpreterServiceClient);
     interpreterServiceClient.interpret.mockResolvedValue(childState);
