@@ -187,18 +187,17 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       let content: string = ''; 
 
       // <<< Add Logging >>>
-      this.logger.debug('Before subtype switch', { 
-          directiveExists: !!node.directive, 
-          subtype: node.directive?.subtype,
-          hasContent: node.directive ? 'content' in node.directive : 'N/A',
-          contentType: typeof node.directive?.content,
-          hasPath: node.directive ? 'path' in node.directive : 'N/A' 
-      });
-
+      process.stdout.write(`\n>>> EMBED HANDLER - Before Switch <<<\n`);
+      process.stdout.write(`Subtype: ${node.directive?.subtype}\n`);
+      process.stdout.write(`Has Content Prop: ${node.directive ? 'content' in node.directive : 'N/A'}\n`);
+      process.stdout.write(`Has Path Prop: ${node.directive ? 'path' in node.directive : 'N/A'}\n`);
+      process.stdout.write(`Directive Object: ${JSON.stringify(node.directive)}\n`);
+      process.stdout.write(`>>> END <<<\n\n`);
+      
       // Determine content based on directive subtype
       switch (directiveData.subtype) {
         case 'embedPath':
-          this.logger.debug('Handling embedPath subtype');
+          process.stdout.write('>>> EMBED HANDLER - Handling embedPath subtype <<<\n');
           const embedPathObject = directiveData.path as AstStructuredPath;
 
           if (!embedPathObject) { 
@@ -212,7 +211,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
           let resolvedPath: MeldPath;
           try {
-            this.logger.debug(`Resolving embed path`, { pathObject: embedPathObject });
+            process.stdout.write(`Resolving embed path\n`);
             // 1. Resolve the path object - prioritize interpolatedValue if present
             const valueToResolve: string | InterpolatableValue = embedPathObject.interpolatedValue ?? embedPathObject.raw;
             // Pass string or InterpolatableValue to resolveInContext
@@ -220,7 +219,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             // 2. Validate the resolved string
             resolvedPath = await this.resolutionService.resolvePath(resolvedPathString, resolutionContext);
             
-            this.logger.debug(`Resolved embed path to: ${resolvedPath.validatedPath}`);
+            process.stdout.write(`Resolved embed path to: ${resolvedPath.validatedPath}\n`);
           } catch (error) {
             throw new DirectiveError(
               `Error resolving embed path: ${error instanceof Error ? error.message : String(error)}`,
@@ -233,7 +232,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           // Read file content
           try {
             // Use validatedPath for logging string
-            this.logger.debug(`Attempting to read file: ${resolvedPath.validatedPath}`);
+            process.stdout.write(`Attempting to read file: ${resolvedPath.validatedPath}\n`);
             // Use validatedPath for exists check
             if (!(await this.fileSystemService.exists(resolvedPath.validatedPath))) {
               throw new MeldFileNotFoundError(
@@ -247,7 +246,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             // Use validatedPath for readFile
             content = await this.fileSystemService.readFile(resolvedPath.validatedPath);
             // Use validatedPath for logging
-            this.logger.debug(`Read file content successfully`, { path: resolvedPath.validatedPath, length: content.length });
+            process.stdout.write(`Read file content successfully\n`);
           } catch (error) {
             const errorCode = error instanceof MeldFileNotFoundError
               ? DirectiveErrorCode.FILE_NOT_FOUND
@@ -261,7 +260,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           break;
 
         case 'embedVariable':
-          this.logger.debug('Handling embedVariable subtype');
+          process.stdout.write('>>> EMBED HANDLER - Handling embedVariable subtype <<<\n');
           const variablePathObject = directiveData.path as AstStructuredPath;
 
           if (!variablePathObject) { 
@@ -274,7 +273,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           }
           
           try {
-            this.logger.debug(`Resolving embed variable/path`, { pathObject: variablePathObject });
+            process.stdout.write(`Resolving embed variable/path\n`);
             // Use resolveInContext, passing interpolatedValue or raw string
             const valueToResolveVar = variablePathObject.interpolatedValue ?? variablePathObject.raw;
             const resolvedValue = await this.resolutionService.resolveInContext(valueToResolveVar, resolutionContext);
@@ -290,7 +289,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             } else {
               content = resolvedValue;
             }
-            this.logger.debug(`Resolved embed variable content`, { length: content.length });
+            process.stdout.write(`Resolved embed variable content\n`);
           } catch (error) {
             throw new DirectiveError(
               `Error resolving embed variable/path: ${error instanceof Error ? error.message : String(error)}`,
@@ -302,19 +301,13 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           break;
 
         case 'embedTemplate':
-          this.logger.debug('Handling embedTemplate subtype');
-          this.logger.debug('Inspecting embedNode.directive:', JSON.stringify(node.directive, null, 2));
+          process.stdout.write('>>> EMBED HANDLER - Handling embedTemplate subtype <<<\n');
+          process.stdout.write(`Inspecting directive: ${JSON.stringify(directiveData)}\n`);
           
           const templateContent = directiveData.content;
 
-          this.logger.debug('Extracted template content from node:', { 
-              contentExists: !!templateContent, 
-              isArray: Array.isArray(templateContent),
-              type: typeof templateContent,
-              contentPreview: JSON.stringify(templateContent)?.substring(0, 100)
-          });
-          
-          this.logger.debug('Value of templateContent RIGHT BEFORE check:', templateContent);
+          process.stdout.write(`Extracted templateContent type: ${typeof templateContent}, isArray: ${Array.isArray(templateContent)}\n`);
+          process.stdout.write(`Value of templateContent before check: ${JSON.stringify(templateContent)}\n`);
           
           if (!templateContent || !isInterpolatableValueArray(templateContent)) {
             throw new DirectiveError(
@@ -326,10 +319,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           }
 
           try {
-            this.logger.debug(`Resolving embed template`, { contentNodes: templateContent.length });
+            process.stdout.write(`Attempting resolveNodes on templateContent (length: ${templateContent?.length ?? '?'})\n`);
             // Pass InterpolatableValue directly to resolveNodes
             content = await this.resolutionService.resolveNodes(templateContent, resolutionContext);
-            this.logger.debug(`Resolved embed template content`, { length: content.length });
+            process.stdout.write(`Resolved template content length: ${content.length}\n`);
           } catch (error) {
             throw new DirectiveError(
               `Error resolving embed template: ${error instanceof Error ? error.message : String(error)}`,
@@ -350,17 +343,22 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       }
 
       // Handle section extraction if specified
-      const options = directiveData.options || {};
-      const section = options.section;
-      if (section) {
-        this.logger.debug(`Extracting section: ${section}`);
+      const section = directiveData.section;
+
+      // <<< Add Logging >>>
+      process.stdout.write(`>>> EMBED HANDLER - Before Section Check <<<\n`);
+      process.stdout.write(`Section value: ${section}\n`);
+      process.stdout.write(`Content length after read: ${content?.length ?? 'undefined'}\n`);
+
+      if (section) { 
+        process.stdout.write(`Extracting section: ${section}\n`);
         try {
           content = await this.resolutionService.extractSection(
             content,
             section,
-            options.fuzzy === 'true' ? 0.8 : undefined
+            directiveData.options?.fuzzy === 'true' ? 0.8 : undefined
           );
-          this.logger.debug(`Section extracted successfully`, { section, length: content.length });
+          process.stdout.write(`Section extracted successfully\n`);
         } catch (error) {
           throw new DirectiveError(
             `Error extracting section "${section}": ${error instanceof Error ? error.message : String(error)}`,
@@ -372,6 +370,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       }
 
       // Handle heading level adjustment if specified
+      const options = directiveData.options || {};
       const headingLevel = options.headingLevel;
       if (headingLevel) {
         // TODO: Find appropriate service/utility for heading adjustment
