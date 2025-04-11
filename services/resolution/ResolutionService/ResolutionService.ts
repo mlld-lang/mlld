@@ -862,6 +862,16 @@ export class ResolutionService implements IResolutionService {
         // For now, assume raw value is sufficient if no interpolation needed.
         logger.debug(`resolveInContext: Returning raw value from non-interpolated StructuredPath: ${value.raw}`);
         return value.raw; 
+    } else if (Array.isArray(value) && isInterpolatableValueArray(value)) {
+        // Handle direct InterpolatableValue input
+        logger.debug(`resolveInContext: Resolving nodes from direct InterpolatableValue array`);
+        try {
+            return await this.resolveNodes(value, context);
+        } catch (error) {
+            logger.error('resolveInContext failed resolving direct InterpolatableValue array', { error });
+            if (context.strict) throw error;
+            return ''; // Return empty in non-strict mode
+        }
     } else {
        // Handle other cases or throw error?
        const errorMsg = 'resolveInContext received unsupported value type';

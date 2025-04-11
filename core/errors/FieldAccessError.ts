@@ -1,4 +1,5 @@
-import { MeldError, ErrorCode } from './MeldError.js';
+import { MeldError, ErrorSeverity } from './MeldError.js';
+import { ResolutionErrorCode } from './index';
 import type { Field as AstField } from '@core/syntax/types/shared-types.js';
 
 /**
@@ -21,8 +22,13 @@ export interface FieldAccessErrorDetails {
 export class FieldAccessError extends MeldError {
   public details: FieldAccessErrorDetails;
 
-  constructor(message: string, details: FieldAccessErrorDetails) {
-    super(ErrorCode.FIELD_ACCESS_ERROR, message, undefined, details);
+  constructor(message: string, details: FieldAccessErrorDetails, cause?: unknown) {
+    super(message, {
+        code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+        severity: ErrorSeverity.Recoverable,
+        details: details,
+        cause: cause
+    });
     this.name = 'FieldAccessError';
     this.details = details;
   }

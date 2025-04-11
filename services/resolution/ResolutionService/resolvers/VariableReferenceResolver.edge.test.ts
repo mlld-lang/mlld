@@ -90,15 +90,15 @@ describe('VariableReferenceResolver Edge Cases', () => {
 
     // Setup specific mocks for getDataVar for edge cases where it might be needed
     // (Though getVariable should be primary)
-    stateService.getDataVar.mockImplementation((name: string): JsonValue | undefined => {
+    stateService.getDataVar.mockImplementation((name: string): DataVariable | undefined => {
         if (name === 'data') {
              // Similar logic as getVariable - default to base
-             return mockDataVarBase.value;
+             return mockDataVarBase;
         }
         return undefined;
     });
-    stateService.getTextVar.mockImplementation((name: string): string | undefined => {
-        if (name === 'greeting') return mockGreetingVar.value;
+    stateService.getTextVar.mockImplementation((name: string): TextVariable | undefined => {
+        if (name === 'greeting') return mockGreetingVar;
         return undefined;
     });
 
@@ -114,7 +114,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
 
   it('should access nested array elements correctly', async () => {
     // Explicitly REDEFINE mock implementation for this test
-    stateService.getVariable.mockImplementation(async (name: string) => {
+    stateService.getVariable.mockImplementation((name: string): MeldVariable | undefined => {
         if (name === 'data') return mockDataVarItems;
         return undefined; // Default for other vars in this test
     });
@@ -139,7 +139,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     parserService.parse.mockRejectedValue(new Error('Parser service failed'));
     
     // Ensure getVariable handles the raw string input AND undefined
-    stateService.getVariable.mockImplementation(async (name: string) => {
+    stateService.getVariable.mockImplementation((name: string): MeldVariable | undefined => {
         console.log(`[DEBUG MOCK FALLBACK getVariable] Called with: ${name}`);
         if (name === '{{greeting}}') return mockGreetingVar;
         // Handle the case where resolve might call with undefined identifier on fallback
@@ -158,7 +158,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
 
   it('should handle data variables with field access through string concatenation', async () => {
     // Explicitly REDEFINE mock implementation for this test
-    stateService.getVariable.mockImplementation(async (name: string) => {
+    stateService.getVariable.mockImplementation((name: string): MeldVariable | undefined => {
         if (name === 'data') return mockDataVarKeys;
         return undefined; // Default for other vars in this test
     });
@@ -189,6 +189,21 @@ describe('VariableReferenceResolver Edge Cases', () => {
         await resolver.resolve(node, resolutionContext);
         throw new Error('Test failed: Expected FieldAccessError was not thrown'); 
     } catch (error) {
+        // Add type check for error before accessing properties
+        process.stdout.write(`\n>>> CAUGHT ERROR DETAILS (edge test) <<<\n`);
+        process.stdout.write(`instanceof Error: ${error instanceof Error}\n`);
+        process.stdout.write(`constructor.name: ${error?.constructor?.name}\n`);
+        const message = error instanceof Error ? error.message : String(error);
+        process.stdout.write(`message: ${message}\n`);
+        process.stdout.write(`instanceof FieldAccessError: ${error instanceof FieldAccessError}\n`);
+        try {
+            const serialized = JSON.stringify(error, Object.getOwnPropertyNames(error));
+            process.stdout.write(`serialized: ${serialized}\n`);
+        } catch (e) {
+            process.stdout.write(`serialization failed: ${e instanceof Error ? e.message : String(e)}\n`);
+        }
+        process.stdout.write(`>>> END ERROR DETAILS <<<\n\n`);
+        
         if (error instanceof Error) {
             expect(error.constructor.name).toBe('FieldAccessError'); // Check type using constructor name
             // Check each part of the message individually
@@ -229,7 +244,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     const mockOuterVar: TextVariable = { name: 'outer', type: VariableType.TEXT, value: 'Value is {{nested}}' };
 
     // Mock getVariable for this test
-    stateService.getVariable.mockImplementation(async (name: string) => {
+    stateService.getVariable.mockImplementation((name: string): MeldVariable | undefined => {
       if (name === 'outer') return mockOuterVar;
       if (name === 'nested') return undefined; // Ensure nested is not found directly
       return undefined;
@@ -237,11 +252,13 @@ describe('VariableReferenceResolver Edge Cases', () => {
 
     // Mock the resolution service for nested calls - simulate failure for 'nested'
     resolutionService.resolveInContext.mockImplementation(async (value, ctx) => {
-      if (typeof value === 'string' && value.includes('{{nested}}')) {
-        console.log(`[DEBUG MOCK resolveInContext] Simulating failure for: ${value}`);
+      // Ensure return is always Promise<string>
+      const stringValue = typeof value === 'string' ? value : value?.original ?? '';
+      if (stringValue.includes('{{nested}}')) {
+        console.log(`[DEBUG MOCK resolveInContext] Simulating failure for: ${stringValue}`);
         throw new VariableResolutionError('Variable not found: nested');
       }
-      return value; // Pass other values through
+      return stringValue; // Pass other values through as string
     });
     
     // Create the node for the outer variable

@@ -154,81 +154,99 @@ export class TextDirectiveHandler implements IDirectiveHandler {
 
       // Handle @text with @run value
       if (node.directive.source === 'run' && node.directive.run) {
-        // For @run source, execute the command
         try {
-          // First resolve any variables in the command string itself
-          const commandWithResolvedVars = await this.resolutionService.resolveInContext(
-            node.directive.run.command, 
-            resolutionContext
-          );
+          // Resolve variables in the command nodes directly
+          const commandNodes = node.directive.run.command; // This is InterpolatableValue
+          const resolvedCommandString = await this.resolutionService.resolveNodes(commandNodes, resolutionContext);
           
-          // We need to use the FileSystemService if available to directly execute the command
-          // Otherwise fall back to the resolution service
-          if (this.fileSystemService) {
-            // Execute the command directly using FileSystemService
-            const { stdout } = await this.fileSystemService.executeCommand(
-              commandWithResolvedVars,
-              { cwd: this.fileSystemService.getCwd() }
-            );
-            
-            // Use stdout as the direct resolved value
-            resolvedValue = stdout;
-            
-            logger.debug('Directly executed command for @text directive', {
-              originalCommand: node.directive.run.command,
-              resolvedCommand: commandWithResolvedVars,
-              output: resolvedValue
-            });
-          } else {
-            // Fall back to resolution service (though this will include the @run syntax)
-            resolvedValue = await this.resolutionService.resolveInContext(
-              `@run [${commandWithResolvedVars}]`, 
-              resolutionContext
-            );
-            
-            logger.debug('Resolved @run command in text directive via resolution service', {
-              originalCommand: node.directive.run.command,
-              resolvedCommand: commandWithResolvedVars,
-              output: resolvedValue
-            });
+          // Ensure FileSystemService is available
+          if (!this.fileSystemService) {
+            throw new DirectiveError('File system service is unavailable for @run execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node, context });
           }
+          
+          // Execute the resolved command string
+          const { stdout } = await this.fileSystemService.executeCommand(
+              resolvedCommandString,
+              { cwd: this.fileSystemService.getCwd() } // Use CWD from FileSystem
+          );
+          resolvedValue = stdout; // Use stdout as the value
+
+          logger.debug('Directly executed command for @text directive', {
+            originalCommandNodes: commandNodes,
+            resolvedCommand: resolvedCommandString,
+            output: resolvedValue
+          });
+
         } catch (error) {
-          if (error instanceof ResolutionError) {
+          if (error instanceof ResolutionError || error instanceof FieldAccessError) { // Catch resolution errors
             throw new DirectiveError(
-              'Failed to resolve @run command in text directive',
-              this.kind,
-              DirectiveErrorCode.RESOLUTION_FAILED,
-              {
-                node,
-                context,
-                cause: error,
-                location: node.location,
-                severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
-              }
+                'Failed to resolve command for @text directive', 
+                this.kind, 
+                DirectiveErrorCode.RESOLUTION_FAILED, 
+                { node, context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED] }
+            );
+          } else if (error instanceof Error) { // Catch execution errors
+            throw new DirectiveError(
+                `Failed to execute command for @text directive: ${error.message}`,
+                this.kind, 
+                DirectiveErrorCode.EXECUTION_FAILED,
+                { node, context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED] }
             );
           }
-          throw error;
+          throw error; // Rethrow unexpected errors
         }
       }
       // Handle @text with @embed value
       else if (node.directive.source === 'embed' && node.directive.embed) {
-        // For @embed source, resolve the embed
         try {
-          // Use the resolution service to resolve the embed
-          resolvedValue = await this.resolutionService.resolveInContext(`@embed [${node.directive.embed.path}${node.directive.embed.section ? ' # ' + node.directive.embed.section : ''}]`, resolutionContext);
+          // 1. Get the StructuredPath object for the embed source
+          const embedPathObject = node.directive.embed.path;
+          if (!embedPathObject) {
+             throw new DirectiveError('Missing path for @embed source in @text directive', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node, context });
+          }
+          
+          // 2. Resolve the path using resolveInContext
+          const resolvedEmbedPathString = await this.resolutionService.resolveInContext(embedPathObject, resolutionContext);
+          
+          // 3. Validate the resolved path string using the *new* resolvePath
+          const validatedMeldPath = await this.resolutionService.resolvePath(resolvedEmbedPathString, resolutionContext);
+          
+          // 4. Ensure FileSystemService is available to read the file
+          if (!this.fileSystemService) {
+            throw new DirectiveError('File system service is unavailable for @embed execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node, context });
+          }
+          
+          // 5. Read the file content
+          const fileContent = await this.fileSystemService.readFile(validatedMeldPath.validatedPath);
+          
+          // 6. Handle section extraction if needed
+          if (node.directive.embed.section) {
+             resolvedValue = await this.resolutionService.extractSection(fileContent, node.directive.embed.section);
+          } else {
+             resolvedValue = fileContent;
+          }
+          
+          logger.debug('Resolved @embed source for @text directive', {
+            embedPathObject,
+            resolvedPath: resolvedEmbedPathString,
+            section: node.directive.embed.section,
+            finalValueLength: resolvedValue.length
+          });
+          
         } catch (error) {
-          if (error instanceof ResolutionError) {
+          if (error instanceof ResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) { // Catch resolution/path errors
             throw new DirectiveError(
-              'Failed to resolve @embed in text directive',
-              this.kind,
-              DirectiveErrorCode.RESOLUTION_FAILED,
-              {
-                node,
-                context,
-                cause: error,
-                location: node.location,
-                severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
-              }
+                'Failed to resolve @embed source for @text directive',
+                this.kind, 
+                DirectiveErrorCode.RESOLUTION_FAILED, 
+                { node, context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED] }
+            );
+          } else if (error instanceof Error) { // Catch FS errors
+            throw new DirectiveError(
+                `Failed to read/process embed source for @text directive: ${error.message}`,
+                this.kind, 
+                DirectiveErrorCode.EXECUTION_FAILED,
+                { node, context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED] }
             );
           }
           throw error;
@@ -248,8 +266,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         });
 
         // SIMPLIFIED LOGIC: Always attempt to resolve the value using ResolutionService
-        // Remove checks for concatenation and string literals here.
-        // ResolutionService should handle variables, plain text, and potentially literals correctly.
+        // resolveInContext now handles strings, StructuredPath, and InterpolatableValue arrays.
         try {
           resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
         } catch (error) {

@@ -412,99 +412,112 @@ export class VariableReferenceResolver {
       const currentPathString = fields.slice(0, i + 1).map(f => f.type === 'index' ? `[${f.value}]` : `.${f.value}`).join('');
       logger.debug(`[ACCESS FIELDS] Accessing field: ${currentPathString}`, { currentValueType: typeof current });
 
-      // Use process.stdout.write for debug logging
-      process.stdout.write(`[DEBUG VariableReferenceResolver.accessFields] field.type = ${field.type}, field.value = ${JSON.stringify(field.value)}\n`);
-
-      if (current === undefined || current === null) {
-         const errorMsg = `Cannot access field '${field.value}' on null or undefined value at path ${currentPathString}`;
-         const errorDetails: FieldAccessErrorDetails = { 
-             baseValue,
-             fieldAccessChain: fields,
-             failedAtIndex: i, 
-             failedKey: field.value
-         };
-         return failure(new FieldAccessError(errorMsg, errorDetails));
-      }
-
-      if (field.type === 'field') { 
-        const key = String(field.value);
-        logger.debug(`[ACCESS FIELDS] Processing field type 'field'`, { key, currentType: typeof current }); // Log current type
-        if (typeof current === 'object' && current !== null && !Array.isArray(current)) {
-          // Log before checking property
-          logger.debug(`[ACCESS FIELDS] Checking property '${key}' on object`, { keys: Object.keys(current) });
-          if (Object.prototype.hasOwnProperty.call(current, key)) {
-            current = (current as Record<string, JsonValue>)[key];
-            logger.debug(`[ACCESS FIELDS] Property '${key}' found. New current value: ${JSON.stringify(current)}`); // Log new value
-          } else {
-            const availableKeys = Object.keys(current).join(', ') || '(none)';
-            const errorMsg = `Field '${key}' not found in object. Available keys: ${availableKeys}`;
-            logger.warn(`[ACCESS FIELDS] Error: ${errorMsg}`); // Log warning before failure
-            const errorDetails: FieldAccessErrorDetails = { 
-                baseValue: current, // The object being accessed
-                fieldAccessChain: fields,
-                failedAtIndex: i, 
-                failedKey: key // The key that failed
-            };
-            return failure(new FieldAccessError(errorMsg, errorDetails));
+      try {
+          // Use process.stdout.write for debug logging
+          process.stdout.write(`[DEBUG VariableReferenceResolver.accessFields] field.type = ${field.type}, field.value = ${JSON.stringify(field.value)}\n`);
+    
+          if (current === undefined || current === null) {
+             const errorMsg = `Cannot access field '${field.value}' on null or undefined value at path ${currentPathString}`;
+             const errorDetails: FieldAccessErrorDetails = { 
+                 baseValue,
+                 fieldAccessChain: fields,
+                 failedAtIndex: i, 
+                 failedKey: field.value
+             };
+             return failure(new FieldAccessError(errorMsg, errorDetails));
           }
-        } else {
-          // Log type issue
-          logger.warn(`[ACCESS FIELDS] Error: Cannot access property '${key}' on non-object/array`, { currentType: typeof current, isArray: Array.isArray(current) });
-          const errorDetails: FieldAccessErrorDetails = { 
-              baseValue: current, // The non-object value
-              fieldAccessChain: fields,
-              failedAtIndex: i, 
-              failedKey: key // The key that failed
-          };
-          return failure(new FieldAccessError(`Cannot access property '${key}' on non-object or array`, errorDetails));
-        }
-      } else if (field.type === 'index') {
-        const index = Number(field.value);
-        logger.debug(`[ACCESS FIELDS] Processing field type 'index'`, { index, currentType: typeof current }); // Log current type
-        if (isNaN(index) || !Number.isInteger(index)) {
-            logger.warn(`[ACCESS FIELDS] Error: Invalid array index '${field.value}'`);
-            const errorDetails: FieldAccessErrorDetails = { 
-                baseValue: current,
-                fieldAccessChain: fields,
-                failedAtIndex: i, 
-                failedKey: field.value
-            };
-            return failure(new FieldAccessError(`Invalid array index '${field.value}'`, errorDetails));
-        }
-        if (Array.isArray(current)) {
-          logger.debug(`[ACCESS FIELDS] Checking index '${index}' on array`, { length: current.length }); // Log array length
-          if (index >= 0 && index < current.length) {
-            current = current[index];
-            logger.debug(`[ACCESS FIELDS] Index '${index}' found. New current value: ${JSON.stringify(current)}`); // Log new value
+
+          if (field.type === 'field') { 
+            const key = String(field.value);
+            logger.debug(`[ACCESS FIELDS] Processing field type 'field'`, { key, currentType: typeof current }); // Log current type
+            if (typeof current === 'object' && current !== null && !Array.isArray(current)) {
+              // Log before checking property
+              logger.debug(`[ACCESS FIELDS] Checking property '${key}' on object`, { keys: Object.keys(current) });
+              if (Object.prototype.hasOwnProperty.call(current, key)) {
+                current = (current as Record<string, JsonValue>)[key];
+                logger.debug(`[ACCESS FIELDS] Property '${key}' found. New current value: ${JSON.stringify(current)}`); // Log new value
+              } else {
+                const availableKeys = Object.keys(current).join(', ') || '(none)';
+                const errorMsg = `Field '${key}' not found in object. Available keys: ${availableKeys}`;
+                logger.warn(`[ACCESS FIELDS] Error: ${errorMsg}`); // Log warning before failure
+                const errorDetails: FieldAccessErrorDetails = { 
+                    baseValue: current, // The object being accessed
+                    fieldAccessChain: fields,
+                    failedAtIndex: i, 
+                    failedKey: key // The key that failed
+                };
+                return failure(new FieldAccessError(errorMsg, errorDetails));
+              }
+            } else {
+              // Log type issue
+              logger.warn(`[ACCESS FIELDS] Error: Cannot access property '${key}' on non-object/array`, { currentType: typeof current, isArray: Array.isArray(current) });
+              const errorDetails: FieldAccessErrorDetails = { 
+                  baseValue: current, // The non-object value
+                  fieldAccessChain: fields,
+                  failedAtIndex: i, 
+                  failedKey: key // The key that failed
+              };
+              return failure(new FieldAccessError(`Cannot access property '${key}' on non-object or array`, errorDetails));
+            }
+          } else if (field.type === 'index') {
+            const index = Number(field.value);
+            logger.debug(`[ACCESS FIELDS] Processing field type 'index'`, { index, currentType: typeof current }); // Log current type
+            if (isNaN(index) || !Number.isInteger(index)) {
+                logger.warn(`[ACCESS FIELDS] Error: Invalid array index '${field.value}'`);
+                const errorDetails: FieldAccessErrorDetails = { 
+                    baseValue: current,
+                    fieldAccessChain: fields,
+                    failedAtIndex: i, 
+                    failedKey: field.value
+                };
+                return failure(new FieldAccessError(`Invalid array index '${field.value}'`, errorDetails));
+            }
+            if (Array.isArray(current)) {
+              logger.debug(`[ACCESS FIELDS] Checking index '${index}' on array`, { length: current.length }); // Log array length
+              if (index >= 0 && index < current.length) {
+                current = current[index];
+                logger.debug(`[ACCESS FIELDS] Index '${index}' found. New current value: ${JSON.stringify(current)}`); // Log new value
+              } else {
+                logger.warn(`[ACCESS FIELDS] Error: Index '${index}' out of bounds for array`, { length: current.length }); // Log warning
+                const errorDetails: FieldAccessErrorDetails = { 
+                    baseValue: current,
+                    fieldAccessChain: fields,
+                    failedAtIndex: i, 
+                    failedKey: index
+                };
+                return failure(new FieldAccessError(`Index '${index}' out of bounds for array of length ${current.length}`, errorDetails));
+              }
+            } else {
+              logger.warn(`[ACCESS FIELDS] Error: Cannot access index '${index}' on non-array value`, { currentType: typeof current }); // Log warning
+              const errorDetails: FieldAccessErrorDetails = { 
+                  baseValue: current,
+                  fieldAccessChain: fields,
+                  failedAtIndex: i, 
+                  failedKey: index
+              };
+              return failure(new FieldAccessError(`Cannot access index '${index}' on non-array value`, errorDetails));
+            }
           } else {
-            logger.warn(`[ACCESS FIELDS] Error: Index '${index}' out of bounds for array`, { length: current.length }); // Log warning
-            const errorDetails: FieldAccessErrorDetails = { 
-                baseValue: current,
-                fieldAccessChain: fields,
-                failedAtIndex: i, 
-                failedKey: index
-            };
-            return failure(new FieldAccessError(`Index '${index}' out of bounds for array of length ${current.length}`, errorDetails));
+              const unknownType = (field as any).type;
+              const errorDetails: FieldAccessErrorDetails = { 
+                  baseValue: current,
+                  fieldAccessChain: fields,
+                  failedAtIndex: i, 
+                  failedKey: 'unknown'
+              };
+              return failure(new FieldAccessError(`Unknown field access type: '${unknownType}'`, errorDetails));
           }
-        } else {
-          logger.warn(`[ACCESS FIELDS] Error: Cannot access index '${index}' on non-array value`, { currentType: typeof current }); // Log warning
-          const errorDetails: FieldAccessErrorDetails = { 
-              baseValue: current,
+      } catch (internalError) {
+          logger.error(`[ACCESS FIELDS] Unexpected internal error during field access`, { variableName, field: field, currentPathString, internalError });
+          const errorMsg = `Internal error accessing field '${field.value}'`;
+          const errorDetails: FieldAccessErrorDetails = {
+              baseValue,
               fieldAccessChain: fields,
-              failedAtIndex: i, 
-              failedKey: index
+              failedAtIndex: i,
+              failedKey: field.value
           };
-          return failure(new FieldAccessError(`Cannot access index '${index}' on non-array value`, errorDetails));
-        }
-      } else {
-          const unknownType = (field as any).type;
-          const errorDetails: FieldAccessErrorDetails = { 
-              baseValue: current,
-              fieldAccessChain: fields,
-              failedAtIndex: i, 
-              failedKey: 'unknown'
-          };
-          return failure(new FieldAccessError(`Unknown field access type: '${unknownType}'`, errorDetails));
+          // Wrap the internal error in a FieldAccessError and return failure
+          return failure(new FieldAccessError(errorMsg, errorDetails, internalError instanceof Error ? internalError : undefined));
       }
     }
     // Use process.stdout.write for debug logging
