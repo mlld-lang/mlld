@@ -1,18 +1,18 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 // Import SPECIFIC types needed from ResolutionService exports
 import type {
   IResolutionService,
-} from '@services/resolution/ResolutionService/IResolutionService.js';
-import { MeldResolutionError, VariableResolutionError, PathValidationError, FieldAccessError, MeldError } from '@core/errors/index.js';
+} from '@services/resolution/ResolutionService/IResolutionService';
+import { MeldResolutionError, VariableResolutionError, PathValidationError, FieldAccessError, MeldError } from '@core/errors/index';
 // Corrected import for ResolutionContext
-import type { ResolutionContext } from '@core/types/resolution.js'; 
+import type { ResolutionContext } from '@core/types/resolution'; 
 // Corrected import for isFilesystemPath
-import { isFilesystemPath } from '@core/types/guards.js'; 
+import { isFilesystemPath } from '@core/types/guards'; 
 import { 
   // Remove ResolutionContext from here
   VariableType, 
@@ -29,11 +29,11 @@ import {
   type IUrlPathState,
   type StructuredPath,
   // Remove isFilesystemPath from here
-} from '@core/types.js'; // Import core types
+} from '@core/types'; // Keep extensionless
 // Import the AST Field type correctly
-import type { Field as AstField } from '@core/syntax/types/shared-types.js';
+import type { Field as AstField } from '@core/syntax/types/shared-types';
 // Import AST types from their actual location
-import type { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types.js';
+import type { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types'; // Keep extensionless
 // Import path-related types from core/types
 import {
   MeldPath,
@@ -41,7 +41,7 @@ import {
   createMeldPath,
   unsafeCreateValidatedResourcePath,
   MeldResolvedFilesystemPath
-} from '@core/types.js';
+} from '@core/types'; // Keep extensionless
 
 // Import centralized syntax examples and helpers - KEEP THESE
 import { 
@@ -49,29 +49,29 @@ import {
   dataDirectiveExamples,
   defineDirectiveExamples,
   pathDirectiveExamples
-} from '@core/syntax/index.js';
+} from '@core/syntax/index';
 // Import run examples directly
-import runDirectiveExamplesModule from '@core/syntax/run.js';
-import { createExample, createInvalidExample, createNodeFromExample } from '@core/syntax.js'; // Adjusted import path
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import runDirectiveExamplesModule from '@core/syntax/run';
+import { createExample, createInvalidExample, createNodeFromExample } from '@core/syntax';
+import { TestContextDI } from '@tests/utils/di';
 // Import factory classes
-import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
-import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
-import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory';
+import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
 // Import AST factories
-import { TextNodeFactory, VariableNodeFactory } from '@core/syntax/types.js';
+import { TextNodeFactory, VariableNodeFactory } from '@core/syntax/types';
 // Import client interfaces
-import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
-import { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
-import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
-import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
+import { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient';
+import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient';
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
 // Import the Factory we need to use
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
 // Import error testing utility
-import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
+import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils';
 // Import CommandVariable and ICommandDefinition
-import { CommandVariable, ICommandDefinition, createCommandVariable } from '@core/types.js';
+import { CommandVariable, ICommandDefinition, createCommandVariable } from '@core/types';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;

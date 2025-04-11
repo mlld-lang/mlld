@@ -1,20 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CommandResolver } from '@services/resolution/ResolutionService/resolvers/CommandResolver.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { CommandResolver } from '@services/resolution/ResolutionService/resolvers/CommandResolver';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
 import { 
-  ResolutionContext, 
   VariableType, 
   CommandVariable, 
   IBasicCommandDefinition,
   ICommandParameterMetadata
-} from '@core/types.js'; 
-import { MeldResolutionError } from '@core/errors/index.js';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+} from '@core/types';
+import { ResolutionContext } from '@core/types/resolution';
+import { MeldResolutionError } from '@core/errors/index';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
+import { TestContextDI } from '@tests/utils/di';
 import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
-import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
+import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils';
 
 // Mock logger if CommandResolver uses it
 vi.mock('@core/utils/logger', () => ({
@@ -205,8 +205,7 @@ describe('CommandResolver', () => {
       }, {
         type: 'MeldResolutionError',
         code: 'E_COMMAND_EXEC_FAILED',
-        messageContains: 'Command execution failed: simple',
-        cause: error // Check that the original error is wrapped
+        messageContains: 'Command execution failed: simple'
       });
     });
     

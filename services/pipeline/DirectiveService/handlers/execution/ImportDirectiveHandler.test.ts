@@ -1,27 +1,27 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { mock, mockDeep } from 'vitest-mock-extended';
-import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { ICircularityService as ICircularityServiceType } from '@services/resolution/CircularityService/ICircularityService.js';
-import type { ImportDirectiveData } from '@core/syntax/types/directives.js';
-import type { MeldNode, DirectiveNode, StructuredPath, SourceLocation } from '@core/syntax/types/nodes.js';
-import { VariableOrigin, type TextVariable, type MeldVariable, type VariableMetadata } from '@core/types/variables.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
-import { MeldResolutionError, ResolutionErrorDetails } from '@core/errors/MeldResolutionError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
+import type { ImportDirectiveData } from '@core/syntax/types/directives';
+import type { MeldNode, DirectiveNode, StructuredPath, SourceLocation } from '@core/syntax/types/nodes';
+import { VariableOrigin, type TextVariable, type MeldVariable, type VariableMetadata } from '@core/types/variables';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError';
+import { MeldResolutionError, ResolutionErrorDetails } from '@core/errors/MeldResolutionError';
+import { ErrorSeverity } from '@core/errors/MeldError';
 import {
   expectToThrowWithConfig
-} from '@tests/utils/ErrorTestUtils.js';
-import { createLocation } from '@tests/utils/testFactories.js';
-import { createMockLogger } from '@tests/utils/mockLogger.js';
-import { importDirectiveExamples } from '@core/syntax/index.js';
-import { createNodeFromExample } from '@core/syntax/helpers/index.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+} from '@tests/utils/ErrorTestUtils';
+import { createLocation } from '@tests/utils/testFactories';
+import { createMockLogger } from '@tests/utils/mockLogger';
+import { importDirectiveExamples } from '@core/syntax/index';
+import { createNodeFromExample } from '@core/syntax/helpers/index';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import {
   createValidationServiceMock,
   createStateServiceMock,
@@ -29,10 +29,10 @@ import {
   createFileSystemServiceMock,
   createPathServiceMock,
   createCircularityServiceMock,
-} from '@tests/utils/mocks/serviceMocks.js';
-import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
-import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
-import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+} from '@tests/utils/mocks/serviceMocks';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
+import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient';
+import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver';
 import { mockDeep } from 'vitest-mock-extended';
 
 /**
