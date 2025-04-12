@@ -33,7 +33,7 @@ import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterS
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
 import type { MeldPath, PathPurpose, ValidatedResourcePath } from '@core/types/paths';
-import { createMeldPath, unsafeCreateValidatedResourcePath } from '@core/types/paths';
+import { createMeldPath, unsafeCreateValidatedResourcePath, PathContentType } from '@core/types/paths';
 import type { URLResponse } from '@services/fs/PathService/IURLCache';
 import type { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 
@@ -122,8 +122,8 @@ describe('ImportDirectiveHandler', () => {
     vi.mocked(childState.getCurrentFilePath).mockReturnValue('imported.meld');
     vi.mocked(stateService.getCurrentFilePath).mockReturnValue('/project/current.meld');
     vi.mocked(childState.getCurrentFilePath).mockReturnValue('/project/imported.meld');
-    vi.mocked(stateService.enableTransformation).mockReturnValue(false);
-    vi.mocked(childState.enableTransformation).mockReturnValue(false);
+    vi.mocked(stateService.isTransformationEnabled).mockReturnValue(false);
+    vi.mocked(childState.isTransformationEnabled).mockReturnValue(false);
 
     resolutionService.resolvePath.mockImplementation(async (pathInput: StructuredPath | string, context: ResolutionContext): Promise<MeldPath> => {
       const raw = typeof pathInput === 'string' ? pathInput : pathInput.raw;
@@ -245,9 +245,16 @@ describe('ImportDirectiveHandler', () => {
       const directiveContext: DirectiveContext = { currentFilePath: '/project/main.meld', state: stateService };
       const importLocation = createLocation(5, 1, undefined, undefined, '/project/main.meld');
       const mockDocsPathVariable: IPathVariable = {
+        name: 'docs',
         type: VariableType.PATH,
-        value: { type: 'filesystem', path: './local_docs' },
-        validatedPath: unsafeCreateValidatedResourcePath('/project/local_docs'),
+        value: {
+          contentType: PathContentType.FILESYSTEM,
+          originalValue: './local_docs',
+          isValidSyntax: true,
+          isSecure: true,
+          isAbsolute: false,
+          validatedPath: unsafeCreateValidatedResourcePath('/project/local_docs')
+        },
         metadata: {
             definedAt: createTestLocation(1, 1),
             origin: VariableOrigin.DIRECT_DEFINITION,
@@ -287,7 +294,7 @@ describe('ImportDirectiveHandler', () => {
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalResolvedPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalResolvedPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text imported = "Imported content"', { filePath: finalResolvedPath });
-      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[], expect.anything());
+      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[]);
       expect(stateService.setTextVar).toHaveBeenCalledWith('imported', expect.objectContaining({
         type: VariableType.TEXT,
         value: 'Imported content',
@@ -335,7 +342,7 @@ describe('ImportDirectiveHandler', () => {
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text greeting="Hello"\n@data info={ "val": 1 }');
-      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[], expect.anything());
+      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[]);
       expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
       expect(stateService.setDataVar).toHaveBeenCalledWith('info', { val: 1 });
       expect(circularityService.beginImport).toHaveBeenCalledWith(finalPath.replace(/\\/g, '/'));
@@ -371,7 +378,12 @@ describe('ImportDirectiveHandler', () => {
       const importedVar1: TextVariable = { name: 'var1', type: VariableType.TEXT, value: 'value1', metadata: { definedAt: createTestLocation(1, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
       const importedVar2: TextVariable = { name: 'var2', type: VariableType.TEXT, value: 'value2', metadata: { definedAt: createTestLocation(2, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
       const importedVar3: TextVariable = { name: 'var3', type: VariableType.TEXT, value: 'value3', metadata: { definedAt: createTestLocation(3, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
-      childState.getAllTextVars.mockReturnValue(new Map([['var1', importedVar1], ['var2', importedVar2], ['var3', importedVar3]]));
+      childState.getTextVar.mockImplementation((name) => {
+        if (name === 'var1') return importedVar1;
+        if (name === 'var2') return importedVar2;
+        if (name === 'var3') return importedVar3;
+        return undefined;
+      });
       (childState as any).getCurrentFilePath.mockReturnValue(finalPath);
       const result = await handler.execute(pathInput, directiveContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(importPathRaw, expect.objectContaining({ currentFilePath: '/project/test.meld' }));
@@ -379,7 +391,7 @@ describe('ImportDirectiveHandler', () => {
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text var1="value1"\n@text var2="value2"\n@text var3="value3"');
-      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[], expect.anything());
+      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[]);
       expect(stateService.setTextVar).toHaveBeenCalledTimes(2);
       expect(stateService.setTextVar).toHaveBeenCalledWith('var1', 'value1');
       expect(stateService.setTextVar).toHaveBeenCalledWith('aliasedVar2', 'value2');
@@ -515,7 +527,7 @@ describe('ImportDirectiveHandler', () => {
         }
       );
        expect(parserService.parse).toHaveBeenCalledWith('content');
-       expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[], expect.anything());
+       expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[]);
       expect(circularityService.endImport).toHaveBeenCalledWith(resolvedPathString.replace(/\\/g, '/'));
     });
   });

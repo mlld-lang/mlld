@@ -1219,25 +1219,39 @@ export class OutputService implements IOutputService {
           // Only proceed with transformation if we're supposed to transform variables
 
           // Process each variable reference
+          let finalTransformedContent = content;
           for (const match of matches as RegExpMatchArray[]) {
             const fullMatch = match[0]; // The entire match, e.g., {{variable}}
             const reference = match[1].trim(); // The variable reference, e.g., variable
             
             try {
-              // Placeholder: Default to original match if resolution fails later
-              const resolvedValue = fullMatch; 
+              let resolvedValue = fullMatch; // Default to original match if resolution fails
 
-              // TODO: Add calls to resolutionClient/resolutionService here later
+              // Resolve the variable using resolutionService
+              if (this.resolutionService && state) {
+                  // Create context for resolution
+                  const context: ResolutionContext = ResolutionContextFactory.forTextDirective(
+                    state,
+                    state.getCurrentFilePath() ?? undefined
+                  );
+                  // Use resolveVariable for potentially complex paths
+                  // TODO: Review if resolveInContext or resolveVariable is more appropriate here.
+                  //       resolveVariable might be better if `reference` includes field access.
+                  resolvedValue = await this.resolutionService.resolveVariable(reference, context);
+              } else {
+                  logger.warn('ResolutionService or State not available for variable resolution in nodeToMarkdown');
+              }
               
-              // Replace the variable reference while preserving formatting
-              transformedContent = transformedContent.replace(fullMatch, resolvedValue);
+              // Replace the variable reference 
+              // Use a temporary variable to avoid issues with replacing multiple identical placeholders
+              finalTransformedContent = finalTransformedContent.replace(fullMatch, resolvedValue);
               
               logger.debug('Replaced variable reference in Text node', {
                 reference,
                 resolvedValue,
                 fullMatch,
-                before: content,
-                after: transformedContent
+                // before: content, // Logging original content might be too verbose
+                after: finalTransformedContent
               });
             } catch (error) {
               // Handle errors during variable resolution
@@ -1246,12 +1260,12 @@ export class OutputService implements IOutputService {
                 reference,
                 error: error instanceof Error ? error.message : String(error)
               });
-              // Leave the variable reference unchanged on error
+              // Leave the variable reference unchanged on error (already handled by default value)
             }
+          } // End of for loop
             
-            // Apply proper newline handling for transformation mode
-            return this.handleNewlines(transformedContent, formattingContext);
-          }
+          // Apply proper newline handling AFTER the loop
+          return this.handleNewlines(finalTransformedContent, formattingContext);
         }
         
         // Check if the content contains variable references and ResolutionService is available
