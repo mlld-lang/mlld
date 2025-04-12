@@ -422,6 +422,13 @@ interface IStateService {
    * @returns true if the transformation should occur.
    */
   shouldTransform(type: string): boolean;
+
+  /**
+   * Enables or disables transformation.
+   * 
+   * @param enabled - Whether to enable transformation
+   */
+  enableTransformation?(enabled: boolean): void;
 }
 
 export type { TransformationOptions, IStateService, DataVariable }; 

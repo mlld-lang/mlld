@@ -121,14 +121,19 @@ export class StateFactory implements IStateFactory {
   }
 
   updateState(state: StateNode, updates: Partial<StateNode>): StateNode {
+    // Create new maps, copying from updates if present, otherwise from original state
+    const newTextMap = new Map(updates.variables?.text ?? state.variables.text);
+    const newDataMap = new Map(updates.variables?.data ?? state.variables.data);
+    const newPathMap = new Map(updates.variables?.path ?? state.variables.path);
+
     const updated: StateNode = {
       stateId: state.stateId,
-      variables: {
-        text: updates.variables?.text ?? new Map(state.variables.text),
-        data: updates.variables?.data ?? new Map(state.variables.data),
-        path: updates.variables?.path ?? new Map(state.variables.path)
+      variables: { // Use the newly created maps
+        text: newTextMap,
+        data: newDataMap,
+        path: newPathMap
       },
-      commands: updates.commands ?? new Map(state.commands),
+      commands: new Map(updates.commands ?? state.commands), // Also ensure new maps/sets here
       imports: new Set(updates.imports ?? state.imports),
       nodes: [...(updates.nodes ?? state.nodes)],
       transformedNodes: updates.transformedNodes !== undefined ? [...updates.transformedNodes] : state.transformedNodes,
@@ -144,6 +149,12 @@ export class StateFactory implements IStateFactory {
         operation: 'updateState',
         value: updated
       }
+    });
+
+    // Log the text variables within the returned node
+    logger.debug('[StateFactory.updateState] Returning updated node:', { 
+        stateId: updated.stateId,
+        updatedTextVars: Array.from(updated.variables.text.entries()).map(([k, v]) => ({ key: k, value: v.value }))
     });
 
     return updated;

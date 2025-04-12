@@ -417,7 +417,7 @@ export class ResolutionService implements IResolutionService {
     if (!this.variableReferenceResolver) {
         throw new Error('VariableReferenceResolver not initialized in resolveNodes');
     }
-    logger.debug(`resolveNodes called`, { nodeCount: nodes.length, contextFlags: context.flags });
+    logger.debug(`resolveNodes called`, { nodeCount: nodes.length, contextFlags: context.flags, inputNodes: JSON.stringify(nodes) });
     const resolvedParts: string[] = [];
     for (const node of nodes) {
       // Use process.stdout.write for debug logging
@@ -462,6 +462,7 @@ export class ResolutionService implements IResolutionService {
        }
     }
     
+    logger.debug('[resolveNodes] resolvedParts before join:', resolvedParts);
     const finalResult = resolvedParts.join('');
     logger.debug(`resolveNodes: Final resolved string: ${finalResult.substring(0,100)}`);
     return finalResult;

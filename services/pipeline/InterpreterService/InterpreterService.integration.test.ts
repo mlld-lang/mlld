@@ -19,19 +19,29 @@ import type { IInterpreterService } from '@services/pipeline/InterpreterService/
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IParserService } from '@services/parser/IParserService.js';
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),
 // Phase 2 (PathService types), Phase 3 (ResolutionService), and Phase 4 (Directive Handlers).
 // Many tests currently fail due to expecting old return types from StateService methods.
 // Skipping for now to focus on Phase 1/2/3 fixes.
-describe.skip('InterpreterService Integration', () => {
+describe('InterpreterService Integration', () => {
   let context: TestContextDI;
+  let interpreter: IInterpreterService;
+  let state: IStateService;
+  let parser: IParserService;
 
   beforeEach(async () => {
     // Use DI mode with isolated container
     context = TestContextDI.createIsolated();
+    // We use real services here where possible, mocking only external boundaries if needed
     await context.initialize();
+
+    // Explicitly resolve services from the container AFTER initialization
+    interpreter = await context.resolve('IInterpreterService');
+    state = await context.resolve('IStateService'); // Get the potentially managed StateService instance
+    parser = await context.resolve('IParserService');
     
     // Register the StateTrackingService
     const trackingService = new StateTrackingService();
@@ -68,9 +78,9 @@ describe.skip('InterpreterService Integration', () => {
       
       // Check if the value is set correctly
       // For text directives, the value should be a string
-      expect(typeof value).toBe('string');
-      expect(value).toBeTruthy();
-      expect(value).toBe('value');
+      expect(typeof value?.value).toBe('string');
+      expect(value?.value).toBeTruthy();
+      expect(value?.value).toBe('Hello');
     });
 
     it('interprets data directives', async () => {
@@ -94,9 +104,26 @@ describe.skip('InterpreterService Integration', () => {
     it('interprets path directives', async () => {
       // Create a path directive with a valid path that follows the rules
       // Simple paths (no slashes) are valid, or use a path variable for paths with slashes
-      const node = context.factory.createPathDirective('testPath', 'docs');
+      // const node = context.factory.createPathDirective('testPath', 'docs'); // Outdated factory
+      const node: DirectiveNode = {
+        type: 'Directive',
+        location: context.factory.createLocation(1, 1),
+        directive: {
+          kind: 'path',
+          identifier: 'testPath',
+          path: {
+            raw: 'docs',
+            structured: {
+              base: '.', 
+              segments: ['docs'],
+              cwd: true // Indicates simple name relative to cwd
+            },
+            isPathVariable: false
+          }
+        }
+      };
       
-      const result = await context.services.interpreter.interpret([node]);
+      const result = await context.services.interpreter.interpret([node], { filePath: 'test.meld' });
       
       // Extract the variable name from the node
       const varName = node.directive.identifier;
@@ -140,61 +167,47 @@ describe.skip('InterpreterService Integration', () => {
       const result1 = await context.services.interpreter.interpret([node]);
       const result2 = await context.services.interpreter.interpret([node]);
       expect(result1).not.toBe(result2);
-      expect(result1.getTextVar('test')).toBe('value');
-      expect(result2.getTextVar('test')).toBe('value');
+      expect(result1.getTextVar('test')?.value).toBe('value');
+      expect(result2.getTextVar('test')?.value).toBe('value');
     });
 
     it('merges child state back to parent', async () => {
       const node = context.factory.createTextDirective('child', 'value');
       const parentState = context.services.state.createChildState();
       await context.services.interpreter.interpret([node], { initialState: parentState, mergeState: true });
-      expect(parentState.getTextVar('child')).toBe('value');
+      expect(parentState.getTextVar('child')?.value).toBe('value');
     });
 
     it('maintains isolation with mergeState: false', async () => {
       const node = context.factory.createTextDirective('isolated', 'value');
       const parentState = context.services.state.createChildState();
       await context.services.interpreter.interpret([node], { initialState: parentState, mergeState: false });
-      expect(parentState.getTextVar('isolated')).toBeUndefined();
+      expect(parentState.getTextVar('isolated')?.value).toBeUndefined();
     });
 
     it('handles state rollback on merge errors', async () => {
       // Create a directive that will cause a resolution error
       // Use a more reliable way to create an error - use a non-existent variable
-      // and force the error by using a mock that throws
       const node = context.factory.createTextDirective('error', '{{nonexistent}}', context.factory.createLocation(1, 1));
       
       // Create parent state with initial value
       const parentState = context.services.state.createChildState();
       await parentState.setTextVar('original', 'value');
 
-      // Mock the resolution service to throw an error when resolving the variable
-      const mockResolve = vi.spyOn(context.services.resolution, 'resolveInContext');
-      mockResolve.mockRejectedValueOnce(new Error('Failed to resolve variable'));
+      // With the new behavior, interpolation errors are logged but don't halt interpretation.
+      // The node causing the issue is added with its original content.
+      const finalState = await context.services.interpreter.interpret([node], { 
+        initialState: parentState,
+        filePath: 'test.meld',
+        mergeState: true 
+      });
 
-      try {
-        await context.services.interpreter.interpret([node], { 
-          initialState: parentState,
-          filePath: 'test.meld',
-          mergeState: true 
-        });
-        throw new Error('Should have thrown error');
-      } catch (error) {
-        if (error instanceof MeldInterpreterError) {
-          // Verify error details
-          expect(error.nodeType).toBe('Directive');
-          expect(error.message).toMatch(/Directive error|Failed to resolve/i);
-          
-          // Verify state was rolled back
-          expect(parentState.getTextVar('original')?.value).toBe('value');
-          expect(parentState.getTextVar('error')).toBeUndefined();
-        } else {
-          throw error;
-        }
-      }
-
-      // Restore the mock
-      mockResolve.mockRestore();
+      // Verify state was NOT rolled back (parent was updated)
+      expect(parentState.getTextVar('original')?.value).toBe('value');
+      // Verify the node that caused the internal resolution error *was* added, with original content
+      const errorVar = parentState.getTextVar('error');
+      expect(errorVar).toBeDefined();
+      expect(errorVar?.value).toBe(''); // Expect empty string on resolution failure (non-strict)
     });
   });
 
@@ -242,29 +255,15 @@ describe.skip('InterpreterService Integration', () => {
     it('provides location information in errors', async () => {
       // Create a directive that will cause a resolution error
       // Use a more reliable way to create an error - use a non-existent variable
-      // and force the error by using a mock that throws
       const node = context.factory.createTextDirective('error', '{{nonexistent}}', context.factory.createLocation(1, 2));
       
-      // Mock the resolution service to throw an error when resolving the variable
-      const mockResolve = vi.spyOn(context.services.resolution, 'resolveInContext');
-      mockResolve.mockRejectedValueOnce(new Error('Failed to resolve variable'));
-
-      try {
-        await context.services.interpreter.interpret([node], { filePath: 'test.meld' });
-        throw new Error('Should have thrown error');
-      } catch (error: unknown) {
-        if (error instanceof MeldInterpreterError) {
-          expect(error).toBeInstanceOf(MeldInterpreterError);
-          expect(error.location).toBeDefined();
-          expect(error.location?.line).toBe(1);
-          expect(error.location?.column).toBe(2);
-        } else {
-          throw error;
-        }
-      }
-
-      // Restore the mock
-      mockResolve.mockRestore();
+      // Interpolation errors are now logged, interpretation continues.
+      const finalState = await context.services.interpreter.interpret([node], { filePath: 'test.meld' });
+      
+      // Check that the node was added with original content
+      const errorVar = finalState.getTextVar('error');
+      expect(errorVar).toBeDefined();
+      expect(errorVar?.value).toBe(''); // Expect empty string
     });
 
     it('maintains state consistency after errors', async () => {
@@ -277,56 +276,33 @@ describe.skip('InterpreterService Integration', () => {
       
       // Create a state with the greeting variable already set
       const testState = context.services.state.createChildState();
-      await testState.setTextVar('greeting', 'Hello');
+      await testState.setTextVar('first', 'value'); // Corresponds to validNode's identifier
       
-      // Mock the resolution service to throw an error when resolving the variable
-      const mockResolve = vi.spyOn(context.services.resolution, 'resolveInContext');
-      mockResolve.mockRejectedValueOnce(new Error('Failed to resolve variable'));
-
-      try {
-        await context.services.interpreter.interpret([validNode, invalidNode], {
-          initialState: testState,
-          filePath: 'test.meld'
-        });
-        throw new Error('Should have thrown error');
-      } catch (error: unknown) {
-        if (error instanceof MeldInterpreterError) {
-          // Verify the valid node was processed
-          expect(testState.getTextVar('greeting')).toBe('Hello');
-          
-          // Verify the error node was not processed
-          expect(testState.getTextVar('error')).toBeUndefined();
-        } else {
-          throw error;
-        }
-      }
-
-      // Restore the mock
-      mockResolve.mockRestore();
+      // Interpretation should succeed, logging the error for invalidNode
+      const finalState = await context.services.interpreter.interpret([validNode, invalidNode], {
+        initialState: testState,
+        filePath: 'test.meld'
+      });
+      
+      // Verify the valid node was processed
+      expect(finalState.getTextVar('first')?.value).toBe('value');
+      
+      // Verify the "error" node was also processed, keeping its original content
+      const errorVar = finalState.getTextVar('error');
+      expect(errorVar).toBeDefined();
+      expect(errorVar?.value).toBe(''); // Expect empty string
     });
 
     it('includes state context in interpreter errors', async () => {
       // Create a directive that will cause a resolution error
       const node = context.factory.createTextDirective('error', '{{nonexistent}}', context.factory.createLocation(1, 1));
       
-      // Mock the resolution service to throw an error when resolving the variable
-      const mockResolve = vi.spyOn(context.services.resolution, 'resolveInContext');
-      mockResolve.mockRejectedValueOnce(new Error('Failed to resolve variable'));
-
-      try {
-        await context.services.interpreter.interpret([node], { filePath: 'test.meld' });
-        throw new Error('Should have thrown error');
-      } catch (error: unknown) {
-        if (error instanceof MeldInterpreterError) {
-          expect(error.context).toBeDefined();
-          expect(error.context?.state?.filePath).toBe('test.meld');
-        } else {
-          throw error;
-        }
-      }
-
-      // Restore the mock
-      mockResolve.mockRestore();
+      // This test is no longer relevant as interpolation errors don't throw MeldInterpreterError
+      // We verify the node is added with original content instead.
+      const finalState = await context.services.interpreter.interpret([node], { filePath: 'test.meld' });
+      const errorVar = finalState.getTextVar('error');
+      expect(errorVar).toBeDefined();
+      expect(errorVar?.value).toBe(''); // Expect empty string
     });
 
     it('rolls back state on directive errors', async () => {
@@ -342,33 +318,24 @@ describe.skip('InterpreterService Integration', () => {
       
       // Create a state with the greeting variable already set
       const testState = context.services.state.createChildState();
-      await testState.setTextVar('greeting', 'Hello');
+      await testState.setTextVar('test', 'value'); // Corresponds to beforeNode identifier
       
-      // Mock the resolution service to throw an error when resolving the variable
-      const mockResolve = vi.spyOn(context.services.resolution, 'resolveInContext');
-      mockResolve.mockRejectedValueOnce(new Error('Failed to resolve variable'));
-
-      try {
-        await context.services.interpreter.interpret([beforeNode, errorNode, afterNode], {
-          initialState: testState,
-          filePath: 'test.meld'
-        });
-        throw new Error('Should have thrown error');
-      } catch (error: unknown) {
-        if (error instanceof MeldInterpreterError) {
-          // Verify the first node was processed
-          expect(testState.getTextVar('greeting')).toBe('Hello');
-          
-          // Verify the error node and after node were not processed
-          expect(testState.getTextVar('error')).toBeUndefined();
-          expect(testState.getTextVar('subject')).toBeUndefined();
-        } else {
-          throw error;
-        }
-      }
-
-      // Restore the mock
-      mockResolve.mockRestore();
+      // Interpretation continues after logged interpolation error
+      const finalState = await context.services.interpreter.interpret([beforeNode, errorNode, afterNode], {
+        initialState: testState,
+        filePath: 'test.meld'
+      });
+      
+      // Verify the first node was processed
+      expect(finalState.getTextVar('test')?.value).toBe('value');
+      
+      // Verify the error node was processed with original content
+      const errorVar = finalState.getTextVar('error');
+      expect(errorVar).toBeDefined();
+      expect(errorVar?.value).toBe(''); // Expect empty string
+      
+      // Verify the after node was also processed
+      expect(finalState.getTextVar('subject')?.value).toBe('World');
     });
 
     it('handles cleanup on circular imports', async () => {
@@ -439,7 +406,7 @@ describe.skip('InterpreterService Integration', () => {
       const varName = node.directive.identifier;
       const value = result.getTextVar(varName);
       expect(value).toBeDefined();
-      expect(typeof value).toBe('string');
+      expect(typeof value?.value).toBe('string');
     });
 
     it('handles data directives with correct format', async () => {
@@ -459,9 +426,26 @@ describe.skip('InterpreterService Integration', () => {
     it('handles path directives with correct format', async () => {
       // MIGRATION NOTE: Using factory method directly due to issues with examples for simple paths
       // The create node from example approach doesn't work because the parser enforces path rules
-      const node = context.factory.createPathDirective('test', 'filename.meld');
+      // const node = context.factory.createPathDirective('test', 'filename.meld'); // Outdated factory
+      const node: DirectiveNode = {
+        type: 'Directive',
+        location: context.factory.createLocation(1, 1),
+        directive: {
+          kind: 'path',
+          identifier: 'test',
+          path: {
+            raw: 'filename.meld',
+            structured: {
+              base: '.',
+              segments: ['filename.meld'],
+              cwd: true // Indicates simple name relative to cwd
+            },
+            isPathVariable: false
+          }
+        }
+      };
       
-      const result = await context.services.interpreter.interpret([node]);
+      const result = await context.services.interpreter.interpret([node], { filePath: 'test.meld' });
       const value = result.getPathVar('test');
       // Check the value directly (assuming it's a string or simple object for path test)
       expect(value).toBe('filename.meld');

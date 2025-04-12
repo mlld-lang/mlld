@@ -17,6 +17,7 @@ import { ParserServiceClientFactory } from '@services/pipeline/ParserService/fac
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { createTextNode, createDirectiveNode, createLocation, createCommandVariable } from '@tests/utils/testFactories.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { DirectiveResult } from '@services/pipeline/DirectiveService/interfaces/DirectiveTypes.js';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -537,7 +538,7 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
           const directiveNode = node as DirectiveNode;
           
           // Capture the original state for importing directives in transformation mode
-          const originalState = state;
+          // const originalState = state; // Keep track if needed, but context focuses on directive's state
           const isImportDirective = directiveNode.directive.kind === 'import';
           
           // Create formatting context for consistent newline handling across service boundaries
@@ -549,21 +550,42 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
             atLineEnd: false // Default assumption
           };
           
+          // Create the context for the handler, focusing on the state it should modify
+          const handlerContext: DirectiveContext = {
+            state: directiveState, // Pass the cloned state intended for the handler
+            _debug_stateId: directiveState.getStateId(), 
+            currentFilePath: currentState.getCurrentFilePath() ?? undefined,
+            // parentState: currentState, // Removed for simplification, handlers use context.state
+            formattingContext // Keep formatting context
+          };
+
           // Store the directive result to check for replacement nodes
-          // Temporarily removing await for debugging error catching
-          const directiveResult = /* await */ this.callDirectiveHandleDirective(directiveNode, {
-            state: directiveState,
-            parentState: currentState,
-            currentFilePath: state.getCurrentFilePath() ?? undefined,
-            formattingContext // Add formatting context for cross-service propagation
-          });
-          
-          // Update current state with the result
-          currentState = directiveResult;
-          
-          // Capture any updates to formatting context from the directive handler
-          if (directiveResult.getFormattingContext) {
-            const updatedContext = directiveResult.getFormattingContext();
+          const directiveResult = await this.callDirectiveHandleDirective(directiveNode, handlerContext);
+
+          // Check if the handler returned a DirectiveResult object
+          let resultState: StateServiceLike;
+          let replacementNode: MeldNode | undefined = undefined;
+
+          // Check if the result looks like a DirectiveResult object by checking keys
+          if (
+            directiveResult &&
+            typeof directiveResult === 'object' &&
+            'state' in directiveResult &&
+            'replacement' in directiveResult
+          ) {
+            resultState = directiveResult.state;
+            replacementNode = directiveResult.replacement;
+          } else {
+            // Assume it returned the StateServiceLike directly
+            resultState = directiveResult as StateServiceLike; // Need cast here
+          }
+
+          // Update current state with the result state from the handler/DirectiveResult
+          currentState = resultState;
+
+          // Capture any updates to formatting context from the directive handler (if available on resultState)
+          if ('getFormattingContext' in resultState && typeof resultState.getFormattingContext === 'function') {
+            const updatedContext = resultState.getFormattingContext();
             if (updatedContext) {
               logger.debug('Formatting context updated by directive', {
                 directiveKind: directiveNode.directive.kind,
@@ -575,49 +597,12 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
           
           // Check if the directive handler returned a replacement node
           // This happens when the handler implements the DirectiveResult interface
-          // with a replacement property
-          if (directiveResult && 'replacement' in directiveResult && 'state' in directiveResult) {
-            // We need to extract the replacement node and state from the result
-            const result = directiveResult as unknown as { 
-              replacement: MeldNode;
-              state: StateServiceLike;
-            };
-
-            const replacement = result.replacement;
-            const resultState = result.state;
-            
-            // Update current state with the result state
-            currentState = resultState;
-            
-            // Special handling for imports in transformation mode:
-            // Copy all variables from the imported file to the original state
-            if (isImportDirective && 
-                currentState.isTransformationEnabled && 
-                currentState.isTransformationEnabled()) {
-              try {
-                logger.debug('Import directive in transformation mode, copying variables to original state');
-                
-                // Use the state variable copier utility to copy all variables
-                this.stateVariableCopier.copyAllVariables(
-                  currentState as unknown as IStateService, 
-                  originalState as unknown as IStateService, 
-                  {
-                    skipExisting: false,
-                    trackContextBoundary: false, // No tracking service in the interpreter
-                    trackVariableCrossing: false
-                  }
-                );
-              } catch (e) {
-                logger.debug('Error copying variables from import to original state', { error: e });
-              }
-            }
-            
-            // If transformation is enabled and we have a replacement node,
-            // we need to apply it to the transformed nodes
+          if (replacementNode) {
+            // We need to apply the replacement node to the transformed nodes
             if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) {
               logger.debug('Applying replacement node from directive handler', {
                 originalType: node.type,
-                replacementType: replacement.type,
+                replacementType: replacementNode.type,
                 directiveKind: directiveNode.directive.kind,
                 isVarReference: directiveNode.directive.kind === 'embed' && 
                                typeof directiveNode.directive.path === 'object' &&
@@ -625,56 +610,31 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
                                'isVariableReference' in directiveNode.directive.path
               });
               
-              // Apply the transformation by replacing the directive node with the replacement
-              try {
-                // Ensure we have the transformed nodes array initialized
-                if (!currentState.getTransformedNodes || !currentState.getTransformedNodes()) {
-                  // Initialize transformed nodes if needed
-                  const originalNodes = currentState.getNodes();
-                  if (originalNodes && currentState.setTransformedNodes) {
-                    currentState.setTransformedNodes([...originalNodes]);
-                    logger.debug('Initialized transformed nodes array', {
-                      nodesCount: originalNodes.length
-                    });
-                  }
+              // Apply the transformation
+              currentState.transformNode(node, replacementNode as MeldNode);
+            }
+          }
+          
+          // Special handling for imports in transformation mode:
+          // Copy all variables from the imported file to the original state
+          if (isImportDirective && 
+              currentState.isTransformationEnabled && 
+              currentState.isTransformationEnabled()) {
+            try {
+              logger.debug('Import directive in transformation mode, copying variables to original state');
+              
+              // Use the state variable copier utility to copy all variables
+              this.stateVariableCopier.copyAllVariables(
+                currentState as unknown as IStateService, 
+                state as unknown as IStateService, 
+                {
+                  skipExisting: false,
+                  trackContextBoundary: false, // No tracking service in the interpreter
+                  trackVariableCrossing: false
                 }
-                
-                // Special handling for variable-based embed directives
-                if (directiveNode.directive.kind === 'embed' && 
-                    typeof directiveNode.directive.path === 'object' &&
-                    directiveNode.directive.path !== null &&
-                    'isVariableReference' in directiveNode.directive.path) {
-                  logger.debug('Processing variable-based embed transformation', {
-                    path: directiveNode.directive.path,
-                    hasReplacement: !!replacement
-                  });
-                  
-                  // Make sure all variables are copied properly
-                  try {
-                    this.stateVariableCopier.copyAllVariables(
-                      currentState as unknown as IStateService, 
-                      originalState as unknown as IStateService, 
-                      {
-                        skipExisting: false,
-                        trackContextBoundary: false,
-                        trackVariableCrossing: false
-                      }
-                    );
-                  } catch (e) {
-                    logger.debug('Error copying variables from variable-based embed to original state', { error: e });
-                  }
-                }
-                
-                // Apply the transformation
-                currentState.transformNode(node, replacement as MeldNode);
-                
-              } catch (transformError) {
-                logger.error('Error applying transformation', {
-                  error: transformError,
-                  directiveKind: directiveNode.directive.kind
-                });
-                // Continue execution despite transformation error
-              }
+              );
+            } catch (e) {
+              logger.debug('Error copying variables from import to original state', { error: e });
             }
           }
           

@@ -55,6 +55,12 @@ export class PathDirectiveHandler implements IDirectiveHandler {
 
       // Create a new state for modifications
       const newState = context.state.clone();
+      logger.debug('[PathDirectiveHandler] newState details:', {
+        type: typeof newState,
+        hasGetPathVar: typeof newState?.getPathVar === 'function',
+        hasGetCurrentFilePath: typeof newState?.getCurrentFilePath === 'function',
+        methods: typeof newState === 'object' && newState !== null ? Object.keys(newState) : 'N/A'
+      });
       
       // REMOVED logic for setting PROJECTPATH/HOMEPATH manually
 
@@ -76,7 +82,8 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       // Path directives might define paths used later, context needs state
       const resolutionContext = ResolutionContextFactory.forPathDirective(
         context.currentFilePath,
-        newState // Pass the current state being modified
+        newState, // Pass the current state being modified
+        context.currentFilePath // Explicitly pass currentFilePath again to ensure it's available for validation
       );
 
       // 3. Resolve the path object (handles internal interpolation)

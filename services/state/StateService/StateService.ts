@@ -270,7 +270,17 @@ export class StateService implements IStateService {
     // DEBUG REMOVED
     // console.log(`[StateService.updateState] Before factory.updateState for source: ${source}`);
     try {
-      this.currentState = this.stateFactory.updateState(this.currentState, updates);
+      const newStateNode = this.stateFactory.updateState(this.currentState, updates); // Get the new node
+      const oldStateId = this.currentState?.stateId;
+      this.currentState = newStateNode; // Assign the new node returned by the factory
+      // Log IMMEDIATELY after assignment
+      logger.debug('[StateService._updateState] After assigning newStateNode:', {
+        source: source,
+        oldStateId: oldStateId,
+        newStateId: this.currentState?.stateId, // Should be same as old unless factory changed it
+        newStateTextVarTestValue: this.currentState?.variables?.text?.get('test')?.value,
+        newStateTextVarChildValue: this.currentState?.variables?.text?.get('child')?.value
+      });
       // DEBUG REMOVED
       // console.log(`[StateService.updateState] After factory.updateState for source: ${source}`);
     } catch (error) {
@@ -292,6 +302,11 @@ export class StateService implements IStateService {
 
   // Text variables
   getTextVar(name: string): TextVariable | undefined {
+    logger.debug('[StateService.getTextVar] Reading variable:', {
+        identifier: name,
+        currentStateId: this.currentState?.stateId,
+        availableKeys: Array.from(this.currentState?.variables?.text?.keys() || [])
+    });
     return this.currentState.variables.text.get(name);
   }
 
@@ -301,6 +316,14 @@ export class StateService implements IStateService {
     const variable = createTextVariable(name, value, {
       origin: VariableOrigin.DIRECT_DEFINITION,
       ...metadata // Merge provided metadata, overwriting defaults if needed
+    });
+    // Log before update
+    logger.debug('[StateService.setTextVar] Updating variable:', { 
+        identifier: name, 
+        value: value, 
+        metadata: variable.metadata, 
+        currentStateId: this.currentState?.stateId, 
+        varsBefore: Array.from(this.currentState?.variables?.text?.keys() || []) 
     });
     // Create a new map, set the variable, and update state
     const text = new Map(this.currentState.variables.text);
@@ -314,6 +337,13 @@ export class StateService implements IStateService {
         text // Use the map with the new rich object
       }
     }, `setTextVar:${name}`);
+    // Log after update
+    logger.debug('[StateService.setTextVar] State after update:', { 
+        identifier: name, 
+        currentStateId: this.currentState?.stateId, 
+        varsAfter: Array.from(this.currentState?.variables?.text?.keys() || []), 
+        retrievedValue: this.currentState?.variables?.text?.get(name)?.value
+    });
     return variable; // Return the created object
   }
 
@@ -742,26 +772,23 @@ export class StateService implements IStateService {
     // Fix: Use the StateFactory to create the cloned StateNode
     const clonedNode = this.stateFactory.createClonedState(this.currentState);
 
-    // Fix: Create a new StateService instance using the constructor, 
+    // Fix: Create a new StateService instance using the constructor,
     // passing the factory and event service, but *not* a parent state.
     // This ensures the new service is properly initialized but independent.
     const clonedService = new StateService(
-      this.stateFactory, 
-      this.eventService, 
-      this.trackingServiceClientFactory
-      // No parentState argument here
+      this.stateFactory,
+      this.eventService,
+      this.trackingServiceClientFactory // Pass the factory
+      // No parent state passed here
     );
 
-    // Fix: Manually overwrite the internally created state with the cloned one.
-    // This is necessary because the constructor initializes its own state.
-    (clonedService as any).currentState = clonedNode; // Use 'as any' to set private property
-
-    // Copy transformation state
-    clonedService._isImmutable = this._isImmutable; // Clones should inherit immutability status
+    // Manually set the internal state and copy flags for the new instance
+    clonedService._setInternalStateNode(clonedNode);
+    clonedService._isImmutable = this._isImmutable;
     clonedService._transformationEnabled = this._transformationEnabled;
     clonedService._transformationOptions = { ...this._transformationOptions };
 
-    // Track clone operation if tracking is enabled
+    // Register cloned state with tracking service
     this.ensureFactoryInitialized();
     const originalId = this.getStateId();
     const cloneId = clonedService.getStateId(); // Get ID from the cloned service
@@ -818,7 +845,29 @@ export class StateService implements IStateService {
       }
     }
 
+    logger.debug('[StateService.clone] Cloned service details:', {
+      instanceHasMethod: typeof clonedService.getCurrentFilePath === 'function',
+      internalStateFilePath: clonedService.currentState?.filePath,
+      internalStateId: clonedService.currentState?.stateId
+    });
+    logger.debug('[StateService.clone] Verifying cloned service:', {
+      cloneId: clonedService.getStateId(),
+      filePath: clonedService.getCurrentFilePath(), // Directly call the method
+      hasGetTextVar: typeof clonedService.getTextVar === 'function',
+      hasGetCurrentFilePath: typeof clonedService.getCurrentFilePath === 'function',
+      instanceClassName: clonedService.constructor.name // Check if it's actually a StateService
+    });
     return clonedService;
+  }
+
+  /**
+   * Sets the internal state node directly. 
+   * Used internally by clone to initialize the cloned service.
+   * @param node The StateNode object to set.
+   */
+  private _setInternalStateNode(node: StateNode): void {
+    this.currentState = node;
+    // Optional: Re-initialize flags based on node if needed, but clone handles them explicitly now.
   }
 
   private checkMutable(): void {

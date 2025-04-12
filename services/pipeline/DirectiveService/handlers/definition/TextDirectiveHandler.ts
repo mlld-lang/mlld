@@ -1,4 +1,4 @@
-import { DirectiveNode } from '@core/syntax/types.js';
+import { DirectiveNode, DirectiveData } from '@core/syntax/types/index.js';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -114,7 +114,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
             { 
               node, 
               context,
-              severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+              cause: new Error('Invalid directive: missing required fields'),
+              location: node.location,
             }
           );
         }
@@ -135,7 +136,6 @@ export class TextDirectiveHandler implements IDirectiveHandler {
             context,
             cause: error instanceof Error ? error : new Error(errorMessage),
             location: node.location,
-            severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
           }
         );
       }
@@ -184,14 +184,14 @@ export class TextDirectiveHandler implements IDirectiveHandler {
                 'Failed to resolve command for @text directive', 
                 this.kind, 
                 DirectiveErrorCode.RESOLUTION_FAILED, 
-                { node, context: context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED] }
+                { node, context: context, cause: error, location: node.location }
             );
           } else if (error instanceof Error) {
             throw new DirectiveError(
                 `Failed to execute command for @text directive: ${error.message}`,
                 this.kind, 
                 DirectiveErrorCode.EXECUTION_FAILED,
-                { node, context: context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED] }
+                { node, context: context, cause: error, location: node.location }
             );
           }
           throw error;
@@ -240,14 +240,14 @@ export class TextDirectiveHandler implements IDirectiveHandler {
                 'Failed to resolve @embed source for @text directive',
                 this.kind, 
                 DirectiveErrorCode.RESOLUTION_FAILED, 
-                { node, context: context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED] }
+                { node, context: context, cause: error, location: node.location }
             );
           } else if (error instanceof Error) {
             throw new DirectiveError(
                 `Failed to read/process embed source for @text directive: ${error.message}`,
                 this.kind, 
                 DirectiveErrorCode.EXECUTION_FAILED,
-                { node, context: context, cause: error, location: node.location, severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED] }
+                { node, context: context, cause: error, location: node.location }
             );
           }
           throw error;
@@ -292,12 +292,9 @@ export class TextDirectiveHandler implements IDirectiveHandler {
               DirectiveErrorCode.RESOLUTION_FAILED,
               {
                 node,
+                context,
                 cause: error,
                 location: node.location,
-                severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED],
-                context: { 
-                   currentFilePath: context.currentFilePath,
-                }
               }
             );
           }
@@ -306,6 +303,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       }
 
       // 5. Set the resolved value in the new state
+      logger.debug('[TextDirectiveHandler] Setting variable:', { identifier, resolvedValue });
       newState.setTextVar(identifier, resolvedValue);
 
       return newState;
@@ -321,10 +319,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           node,
           cause: error instanceof Error ? error : undefined,
           location: node?.location,
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED],
-          context: { 
-              currentFilePath: context.currentFilePath 
-          }
+          context: context
       };
       
       throw new DirectiveError(
