@@ -154,7 +154,10 @@ export class VariableReferenceResolver {
       const variable = await this.getVariable(node, newContext);
       
       if (!variable) {
-          if (!newContext.strict) return '';
+          if (!newContext.strict) {
+             logger.warn(`[RESOLVE] Non-strict mode, variable '${node.identifier}' not found, returning empty string.`);
+             return '';
+          }
           throw new VariableResolutionError(`Variable not found: ${node.identifier}`, {
               code: 'E_VAR_NOT_FOUND',
               severity: ErrorSeverity.Recoverable, 
@@ -283,7 +286,7 @@ export class VariableReferenceResolver {
         
         // Suppress non-fatal errors in non-strict mode
         logger.warn(`[RESOLVE] Non-strict mode, suppressing error for ${node.identifier}, returning empty string.`);
-        return ''; 
+        return '';
     }
   }
   

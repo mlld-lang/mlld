@@ -104,7 +104,6 @@ export class TestDirectiveHandlerHelper {
       state,
       resolution
     );
-    textHandler.setFileSystemService(filesystem);
     service.registerHandler(textHandler);
     
     const dataHandler = new DataDirectiveHandler(

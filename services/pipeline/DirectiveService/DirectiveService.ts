@@ -235,102 +235,129 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    * This is public to allow tests to explicitly initialize handlers in both DI and non-DI modes
    */
   public registerDefaultHandlers(): void {
-    // Add debug logging to help diagnose DI issues
-    this.logger.debug('Registering default handlers', {
-      hasValidationService: !!this.validationService,
-      hasStateService: !!this.stateService,
-      hasResolutionService: !!this.resolutionService,
-      hasFileSystemService: !!this.fileSystemService,
-      stateTransformationEnabled: this.stateService?.isTransformationEnabled?.(),
-      state: this.stateService ? {
-        hasTrackingService: !!(this.stateService as any).trackingService,
-        hasEventService: !!(this.stateService as any).eventService
-      } : 'undefined'
-    });
+    // Add checks for required services before registering handlers that depend on them
+    if (!this.validationService || !this.stateService || !this.resolutionService) {
+        this.logger.warn('Skipping registration of definition handlers due to missing core services.');
+        // Skip definition handlers if core services missing
+    } else {
+        // Definition handlers (require Validation, State, Resolution)
+        try {
+          // Check for FileSystemService needed by TextDirectiveHandler
+          if (!this.fileSystemService) {
+            this.logger.warn('FileSystemService not available for TextDirectiveHandler injection');
+          }
+          const textHandler = new TextDirectiveHandler(
+            this.validationService,
+            this.stateService,
+            this.resolutionService,
+            // Pass potentially undefined FS service, handler should check if needed
+            this.fileSystemService 
+          );
+          this.registerHandler(textHandler);
 
-    try {
-      // Definition handlers
-      const textHandler = new TextDirectiveHandler(
-        this.validationService!,
-        this.stateService!,
-        this.resolutionService!
-      );
-      
-      // Set FileSystemService if available
-      if (this.fileSystemService) {
-        textHandler.setFileSystemService(this.fileSystemService);
-      }
-      
-      this.registerHandler(textHandler);
+          // Check for services needed by DataDirectiveHandler
+          if (!this.fileSystemService || !this.pathService) {
+            this.logger.warn('FileSystemService or PathService not available for DataDirectiveHandler injection');
+          }
+          const dataHandler = new DataDirectiveHandler(
+            this.validationService,
+            this.stateService,
+            this.resolutionService,
+            this.fileSystemService!, // Assert non-null if check passes, or handle optional
+            this.pathService! // Assert non-null if check passes, or handle optional
+          );
+          this.registerHandler(dataHandler);
+          
+          // Check for PathService needed by PathDirectiveHandler
+          if (!this.pathService) {
+             this.logger.warn('PathService not available for PathDirectiveHandler injection');
+          }
+          const pathHandler = new PathDirectiveHandler(
+            this.validationService,
+            this.stateService,
+            this.resolutionService,
+            this.pathService! // Assert non-null if check passes, or handle optional
+          );
+          this.registerHandler(pathHandler);
 
-      this.registerHandler(
-        new DataDirectiveHandler(
-          this.validationService!,
-          this.stateService!,
-          this.resolutionService!
-        )
-      );
-    } catch (error) {
-      this.logger.error('Error registering directive handlers', { error });
-      throw error;
+          const defineHandler = new DefineDirectiveHandler(
+            this.validationService,
+            this.stateService,
+            this.resolutionService
+          );
+          this.registerHandler(defineHandler);
+        } catch (error) {
+          this.logger.error('Error registering definition directive handlers', { error });
+        }
     }
 
-    this.registerHandler(
-      new PathDirectiveHandler(
-        this.validationService!,
-        this.stateService!,
-        this.resolutionService!
-      )
-    );
+    // Execution handlers (have additional dependencies)
+    if (!this.fileSystemService) {
+        this.logger.warn('Skipping registration of Run handler due to missing FileSystemService.');
+    } else {
+        try {
+            const runHandler = new RunDirectiveHandler(
+              this.validationService,
+              this.resolutionService,
+              this.stateService,
+              this.fileSystemService
+            );
+            this.registerHandler(runHandler);
+        } catch(error) {
+            this.logger.error('Error registering Run directive handler', { error });
+        }
+    }
 
-    this.registerHandler(
-      new DefineDirectiveHandler(
-        this.validationService!,
-        this.stateService!,
-        this.resolutionService!
-      )
-    );
+    if (!this.circularityService || !this.parserService || !this.pathService || !this.interpreterClientFactory) {
+        this.logger.warn('Skipping registration of Embed/Import handlers due to missing dependencies.');
+    } else {
+        try {
+            // Check for services needed by EmbedDirectiveHandler
+            if (!this.fileSystemService) {
+                this.logger.warn('Skipping Embed handler due to missing FileSystemService.');
+            } else {
+                const embedHandler = new EmbedDirectiveHandler(
+                  this.validationService!, // Assume already checked
+                  this.resolutionService!, // Assume already checked
+                  this.stateService!, // Assume already checked
+                  this.circularityService,
+                  this.fileSystemService, // Can be undefined, handler checks
+                  this.parserService,
+                  this.pathService as any, // Keep cast if needed
+                  this.interpreterClientFactory,
+                  this.logger
+                );
+                this.registerHandler(embedHandler);
+            }
+        } catch (error) {
+             this.logger.error('Error registering Embed directive handler', { error });
+        }
 
-    // Execution handlers
-    this.registerHandler(
-      new RunDirectiveHandler(
-        this.validationService!,
-        this.resolutionService!,
-        this.stateService!,
-        this.fileSystemService!
-      )
-    );
+        try {
+             // Check for services needed by ImportDirectiveHandler
+            if (!this.circularityService || !this.parserService || !this.pathService || !this.interpreterClientFactory) {
+                 this.logger.warn('Skipping Import handler due to missing dependencies.');
+            } else {
+                const importHandler = new ImportDirectiveHandler(
+                  this.validationService!, // Assume already checked
+                  this.resolutionService!, // Assume already checked
+                  this.stateService!, // Assume already checked
+                  this.fileSystemService, // Can be undefined
+                  this.parserService,
+                  this.pathService as any, // Keep cast if needed
+                  this.interpreterClientFactory,
+                  this.circularityService
+                );
+                this.registerHandler(importHandler);
+            }
+        } catch (error) {
+             this.logger.error('Error registering Import directive handler', { error });
+        }
+    }
 
-    // Create the EmbedDirectiveHandler
-    // Note: We need to cast pathService to any to avoid type errors with IPathService
-    this.registerHandler(
-      new EmbedDirectiveHandler(
-        this.validationService!,
-        this.resolutionService!,
-        this.stateService!,
-        this.circularityService!,
-        this.fileSystemService!,
-        this.parserService!,
-        this.pathService! as any,
-        this.interpreterClientFactory!,
-        this.logger
-      )
-    );
-
-    // Create the ImportDirectiveHandler
-    // Note: We need to cast pathService to any to avoid type errors with IPathService
-    this.registerHandler(
-      new ImportDirectiveHandler(
-        this.validationService!,
-        this.resolutionService!,
-        this.stateService!,
-        this.fileSystemService!,
-        this.parserService!,
-        this.pathService! as any,
-        this.interpreterClientFactory!,
-        this.circularityService!
-      )
-    );
+    this.logger.debug('Default handlers registration completed.', {
+      registeredHandlers: Array.from(this.handlers.keys())
+    });
   }
 
   /**

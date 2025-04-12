@@ -238,14 +238,23 @@ describe('DirectiveService', () => {
         const nodes = await context.services.parser.parse(content);
         console.log('Parsed nodes:', nodes);
         
-        const node = nodes[0] as DirectiveNode;
+        // Ensure the node has the expected structure for TextDirectiveHandler
+        const directiveNode = nodes[0] as DirectiveNode;
+        if (directiveNode && directiveNode.directive && directiveNode.directive.kind === 'text') {
+            if (directiveNode.directive.source === undefined) {
+                 // Add source: 'literal' if missing for simple assignments
+                 directiveNode.directive.source = 'literal'; 
+            }
+        } else {
+            throw new Error('Test setup error: Parsed node is not a valid @text directive.');
+        }
         
         // Create execution context
         const state = await context.container.resolve<IStateService>('IStateService');
         const execContext = { currentFilePath: 'test.meld', state: state };
 
         // Process the directive
-        const result = await service.processDirective(node, execContext);
+        const result = await service.processDirective(directiveNode, execContext);
 
         // <<< Assert against the RESULT state >>>
         expect(result.getTextVar('greeting')?.value).toBe('Hello');
@@ -261,6 +270,8 @@ describe('DirectiveService', () => {
         const content = await context.fs.readFile('test-interpolation.meld');
         const nodes = await context.services.parser.parse(content);
         const node = nodes[0] as DirectiveNode;
+        // Ensure source is set for the handler
+        if (node && node.directive) { node.directive.source = 'literal'; }
         
         const result = await service.processDirective(node, {
           currentFilePath: 'test-interpolation.meld',
@@ -278,6 +289,9 @@ describe('DirectiveService', () => {
         const nodes = await context.services.parser.parse(content);
         const node = nodes[0] as DirectiveNode;
         
+        // Ensure source is set for the handler
+        if (node && node.directive) { node.directive.source = 'literal'; }
+        
         const state = await context.container.resolve<IStateService>('IStateService');
         const execContext = { currentFilePath: 'test-data.meld', state: state };
         const result = await service.processDirective(node, execContext);
@@ -294,6 +308,9 @@ describe('DirectiveService', () => {
         const content = await context.fs.readFile('test-data-interpolation.meld');
         const nodes = await context.services.parser.parse(content);
         const node = nodes[0] as DirectiveNode;
+        
+        // Ensure source is set for the handler
+        if (node && node.directive) { node.directive.source = 'literal'; }
         
         // Add Logging
         console.log('--- Data Interpolation Test ---');

@@ -124,9 +124,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       // await this.validationService.validate(node); 
 
       // 3. Get identifier and RHS details from directive
-      const { identifier, value, source } = node.directive;
-      const embed = node.directive.embed as EmbedRHSStructure | undefined;
-      const run = node.directive.run as RunRHSStructure | undefined;
+      // Default source to 'literal' if not explicitly provided by parser for simple assignments
+      const { identifier, value, source = 'literal', embed, run } = node.directive;
       
       // 4. Handle different sources
       let resolvedValue: string;
@@ -138,19 +137,31 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       );
 
       if (source === 'literal') {
-          // Value should be InterpolatableValue array
-          if (!isInterpolatableValueArray(value)) {
-             throw new DirectiveError(`Invalid value type for @text source 'literal'. Expected InterpolatableValue array.`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
+          // Handle both raw strings (simple assignments) and InterpolatableValue arrays
+          if (typeof value === 'string') {
+              resolvedValue = value;
+          } else if (isInterpolatableValueArray(value)) {
+              resolvedValue = await this.resolutionService.resolveNodes(value, resolutionContext);
+          } else {
+             throw new DirectiveError(`Invalid value type for @text source 'literal'. Expected string or InterpolatableValue array.`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
           }
-          resolvedValue = await this.resolutionService.resolveNodes(value, resolutionContext);
-
       } else if (source === 'run' && run) {
+        // <<< Logging Start >>>
+        process.stdout.write(`[TextDirectiveHandler LOG] Entered source=run block\n`);
+        process.stdout.write(`[TextDirectiveHandler LOG] run object: ${JSON.stringify(run)}\n`);
+        // <<< Logging End >>>
         try {
           const commandInput = run.command;
           const runSubtype = run.subtype;
+          // <<< Logging Start >>>
+          process.stdout.write(`[TextDirectiveHandler LOG] runSubtype: ${runSubtype}\n`);
+          process.stdout.write(`[TextDirectiveHandler LOG] commandInput: ${JSON.stringify(commandInput)}\n`);
+          // <<< Logging End >>>
           if (!commandInput) throw new Error('Missing command input for @run source');
           
           let resolvedCommandString: string;
+
+          // Handle different run subtypes
           if (runSubtype === 'runDefined') {
              if (typeof commandInput !== 'object' || !('name' in commandInput)) {
                  throw new Error('Invalid command input structure for runDefined subtype');
@@ -170,17 +181,22 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           } else {
              throw new Error(`Unsupported run subtype '${runSubtype}' encountered in @text handler`);
           }
+          // <<< Logging Start >>>
+          process.stdout.write(`[TextDirectiveHandler LOG] Resolved command string: ${resolvedCommandString}\n`);
+          // <<< Logging End >>>
           
-          // Ensure FileSystemService is available (already injected)
           if (!this.fileSystemService) {
             throw new DirectiveError('File system service is unavailable for @run execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node: node as any, context });
           }
           
+          // <<< Logging Start >>>
+          process.stdout.write(`[TextDirectiveHandler LOG] Calling executeCommand with: ${resolvedCommandString}\n`);
+          // <<< Logging End >>>
           const { stdout } = await this.fileSystemService.executeCommand(
               resolvedCommandString,
               { cwd: this.fileSystemService.getCwd() } 
           );
-          resolvedValue = stdout.replace(/\n$/, ''); // Trim trailing newline
+          resolvedValue = stdout.replace(/\n$/, ''); // Assign stdout directly
 
           logger.debug('Executed command for @text directive', { resolvedCommand: resolvedCommandString, output: resolvedValue });
 
@@ -191,7 +207,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           } else if (error instanceof Error) {
             throw new DirectiveError(`Failed to execute command for @text directive: ${error.message}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node: node as any, context, cause: error });
           }
-          throw error; // Re-throw unexpected errors
+          throw error; 
         }
       } else if (source === 'embed' && embed) {
         try {
@@ -210,7 +226,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
               if (validatedMeldPath.contentType !== 'filesystem') {
                   throw new DirectiveError(`Cannot embed non-filesystem path: ${resolvedEmbedPathString}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
               }
-              if (!this.fileSystemService) { // Check injected service
+              if (!this.fileSystemService) { 
                 throw new DirectiveError('File system service is unavailable for @embed execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node: node as any, context });
               }
               fileContent = await this.fileSystemService.readFile(validatedMeldPath.validatedPath);
@@ -247,12 +263,12 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           } else if (error instanceof Error) {
             throw new DirectiveError(`Failed to read/process embed source for @text directive: ${error.message}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node: node as any, context, cause: error });
           }
-          throw error; // Re-throw unexpected errors
+          throw error; 
         }
       } else {
         // Fallback/error for invalid source or missing data
          throw new DirectiveError(
-              `Unsupported source type '${source}' or missing embed/run data for @text directive`,
+              `Unsupported source type '${source}' for @text directive`,
               this.kind, 
               DirectiveErrorCode.VALIDATION_FAILED, 
               { node: node as any, context }

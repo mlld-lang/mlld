@@ -457,6 +457,7 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
               try {
                 const parsedNodes = await this.parserClient.parseString(node.content, { filePath: state.getCurrentFilePath() });
                 const context = ResolutionContextFactory.create(state, state.getCurrentFilePath());
+                process.stdout.write(`[InterpreterService LOG] Context for resolveNodes: strict=${context.strict}, depth=${context.depth}\n`);
                 const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, context);
                 // Create a new node with resolved content
                 processedNode = { ...node, content: resolvedContent };
