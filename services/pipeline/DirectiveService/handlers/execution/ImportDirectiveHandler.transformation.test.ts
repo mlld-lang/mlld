@@ -12,12 +12,12 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import type { ICircularityService as ICircularityServiceType } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { createLocation } from '@tests/utils/locationFactory.js';
+import { createLocation, createTestText, createTestDirective, createTestCodeFence } from '@tests/utils/nodeFactories';
 import { expectToThrowDirectiveError } from '@tests/utils/errorTestUtils.js';
 import { createMockLogger } from '@tests/utils/logger.js';
 import { importDirectiveExamples } from '@core/syntax/index.js';
 import { createNodeFromExample } from '@core/syntax/helpers.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import {
   createValidationServiceMock,
   createStateServiceMock,
@@ -28,6 +28,7 @@ import {
   createInterpreterServiceClientFactoryMock,
   createInterpreterServiceClientMock
 } from '@tests/utils/mocks/serviceMocks.js';
+import { DirectiveKind, VariableType } from '@core/types/index';
 
 /**
  * ImportDirectiveHandler Transformation Test Status

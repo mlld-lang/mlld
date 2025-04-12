@@ -3,9 +3,9 @@ import type {
   DirectiveNode, 
   TextNode, 
   CodeFenceNode,
-  DirectiveKindString
-} from '@core/syntax/types.js';
-import type { Location, Position } from '@core/types.js';
+  DirectiveKind
+} from '@core/syntax/types';
+import type { Location, Position } from '@core/types';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -54,7 +54,7 @@ export function createLocation(
  * Create a test directive node
  */
 export function createTestDirective(
-  kind: DirectiveKindString,
+  kind: DirectiveKind,
   identifier: string,
   value: string,
   location: Location = DEFAULT_LOCATION
@@ -118,7 +118,7 @@ export function createTestLocation(
  * Create a properly typed DirectiveNode for testing
  */
 export function createDirectiveNode(
-  kind: DirectiveKindString,
+  kind: DirectiveKind,
   properties: Record<string, any> = {},
   location: Location = DEFAULT_LOCATION
 ): DirectiveNode {
