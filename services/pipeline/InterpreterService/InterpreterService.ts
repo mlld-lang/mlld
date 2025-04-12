@@ -441,9 +441,9 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
     try {
-      // Take a snapshot before processing
-      const preNodeState = state.clone();
-      let currentState = preNodeState;
+      // Take a snapshot before processing - REMOVED
+      // const preNodeState = state.clone(); 
+      let currentState = state; // Use incoming state directly
 
       // Process based on node type
       switch (node.type) {
@@ -524,8 +524,8 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
           break;
 
         case 'Directive':
-          // Process directive with cloned state to maintain immutability
-          const directiveState = currentState.clone();
+          // Process directive with cloned state to maintain immutability - MODIFIED
+          const directiveState = currentState.clone(); // Clone the loop's current state ONCE
           // Add the node first to maintain order
           directiveState.addNode(node);
           if (node.type !== 'Directive' || !('directive' in node) || !node.directive) {
@@ -552,9 +552,8 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
           
           // Create the context for the handler, focusing on the state it should modify
           const handlerContext: DirectiveContext = {
-            state: directiveState, // Pass the cloned state intended for the handler
-            _debug_stateId: directiveState.getStateId(), 
-            currentFilePath: currentState.getCurrentFilePath() ?? undefined,
+            state: directiveState, // Pass the clone
+            currentFilePath: currentState.getCurrentFilePath() ?? undefined, // Get path from original loop state
             // parentState: currentState, // Removed for simplification, handlers use context.state
             formattingContext // Keep formatting context
           };
@@ -648,6 +647,7 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
           );
       }
 
+      // Return the final state
       return currentState;
     } catch (error) {
       // Preserve MeldInterpreterError or wrap other errors

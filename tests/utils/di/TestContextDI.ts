@@ -350,7 +350,6 @@ export class TestContextDI extends TestContext {
     this.registerURLContentResolver();
     this.registerPathService();
     this.registerStateEventService();
-    this.registerStateService();
     this.registerParserService();
     this.registerResolutionService();
     this.registerValidationService();
@@ -360,6 +359,10 @@ export class TestContextDI extends TestContext {
     this.registerOutputService();
     this.registerDebugServices();
     this.registerFactories();
+
+    // Register REAL StateService and its dependencies
+    this.container.registerService(StateFactory, StateFactory);
+    this.container.registerService('IStateService', StateService);
   }
 
   /**
@@ -534,47 +537,6 @@ export class TestContextDI extends TestContext {
     };
     
     this.container.registerMock('IStateEventService', mockStateEventService);
-  }
-
-  /**
-   * Registers the StateService mock
-   */
-  private registerStateService(): void {
-    const mockStateService = {
-      getVariable: vi.fn(),
-      setVariable: vi.fn(),
-      hasVariable: vi.fn().mockReturnValue(false),
-      getDataVariable: vi.fn(),
-      setDataVariable: vi.fn(),
-      hasDataVariable: vi.fn().mockReturnValue(false),
-      getPathVariable: vi.fn(),
-      setPathVariable: vi.fn(),
-      hasPathVariable: vi.fn().mockReturnValue(false),
-      getCommand: vi.fn(),
-      setCommand: vi.fn(),
-      hasCommand: vi.fn().mockReturnValue(false),
-      getCommandRef: vi.fn(),
-      getOriginalNode: vi.fn(),
-      storeOriginalNode: vi.fn(),
-      getTransformedNode: vi.fn(),
-      storeTransformedNode: vi.fn(),
-      hasTransformedNode: vi.fn().mockReturnValue(false),
-      createChildState: vi.fn().mockImplementation(() => mockStateService),
-      getImmutable: vi.fn().mockReturnValue(false),
-      setImmutable: vi.fn(),
-      getParentState: vi.fn().mockReturnValue(null),
-      createTransformationState: vi.fn().mockImplementation(() => mockStateService),
-      isTransformationState: vi.fn().mockReturnValue(false),
-      getTransformationState: vi.fn().mockReturnValue(null),
-      getGlobalState: vi.fn().mockImplementation(() => mockStateService),
-      clone: vi.fn().mockImplementation(() => mockStateService),
-      merge: vi.fn(),
-      getEventService: vi.fn().mockReturnValue(null),
-      getStateClass: vi.fn().mockReturnValue('StateService'),
-      getStateID: vi.fn().mockReturnValue('test-state')
-    };
-    
-    this.container.registerMock('IStateService', mockStateService);
   }
 
   /**

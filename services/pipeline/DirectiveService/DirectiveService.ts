@@ -906,7 +906,17 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
         );
       }
 
-      // Execute the directive and handle both possible return types
+      // It calls the handler's execute method, passing the CONTEXT OBJECT RECEIVED DIRECTLY.
+      // It does NOT modify or re-wrap the context object itself.
+      // <<< ADD LOGGING HERE >>>
+      this.logger.debug('[DirectiveService.processDirective] Calling handler with context.state:', {
+          stateExists: !!context.state,
+          stateType: typeof context.state,
+          stateId: context.state?.getStateId ? context.state.getStateId() : 'N/A',
+          hasClone: typeof context.state?.clone === 'function',
+          hasGetCurrentFilePath: typeof context.state?.getCurrentFilePath === 'function'
+      });
+
       const result = await handler.execute(node, context);
       
       // If result is a DirectiveResult with formatting context, update context for propagation

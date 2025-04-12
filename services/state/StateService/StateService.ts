@@ -276,18 +276,7 @@ export class StateService implements IStateService {
       const oldRef = this.currentState; // Store old reference
       this.currentState = newStateNode; // Assign the new node returned by the factory
       // Log IMMEDIATELY after assignment
-      logger.debug('[StateService._updateState] After assigning newStateNode:', {
-        source: source,
-        oldStateId: oldStateId,
-        newStateId: this.currentState?.stateId, // Should be same as old unless factory changed it
-        newStateTextVarTestValue: this.currentState?.variables?.text?.get('test')?.value,
-        newStateTextVarChildValue: this.currentState?.variables?.text?.get('child')?.value,
-        refsAreEqual: oldRef === this.currentState, // Should be FALSE if factory returns new node
-        assignedNodeTextVarTest: newStateNode.variables?.text?.get('test')?.value, // Check value on node *before* assigning
-        stateAfterAssignTextVarTest: this.currentState?.variables?.text?.get('test')?.value // Check value *after* assigning
-      });
-      // DEBUG REMOVED
-      // console.log(`[StateService.updateState] After factory.updateState for source: ${source}`);
+      // Log IMMEDIATELY after assignment
     } catch (error) {
       // DEBUG REMOVED
       // console.error(`[StateService.updateState] Error during factory.updateState for source: ${source}`, error);
@@ -308,13 +297,22 @@ export class StateService implements IStateService {
 
   // Text variables
   getTextVar(name: string): TextVariable | undefined {
-    logger.debug('[StateService.getTextVar] Reading variable:', {
-        identifier: name,
-        currentStateId: this.currentState?.stateId,
-        availableKeys: Array.from(this.currentState?.variables?.text?.keys() || [])
-    });
-    const variableObject = this.currentState.variables.text.get(name);
-    return variableObject;
+    let foundVariable: TextVariable | undefined = undefined;
+    // Explicitly iterate and check the value during iteration
+    if (this.currentState?.variables?.text) {
+        for (const [key, variableObject] of this.currentState.variables.text.entries()) {
+            if (key === name) {
+                foundVariable = variableObject;
+                break;
+            }
+        }
+    }
+    
+    // Log the result of a direct Map.get() for comparison
+    const variableViaGet = this.currentState.variables.text.get(name); 
+    
+    // Return the variable found during iteration
+    return foundVariable; 
   }
 
   async setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<TextVariable> {

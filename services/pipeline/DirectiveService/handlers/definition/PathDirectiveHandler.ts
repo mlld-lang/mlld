@@ -1,4 +1,4 @@
-import { DirectiveNode, DirectiveData } from '@core/syntax/types.js';
+import { DirectiveNode, DirectiveData } from '@core/syntax/types/index.js';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -7,8 +7,9 @@ import { ResolutionContextFactory } from '@services/resolution/ResolutionService
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
-import { inject, injectable } from 'tsyringe';
+import { inject, injectable, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
+import type { StateServiceLike } from '@core/shared-service-types.js';
 // Import necessary types for path state
 import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, StructuredPath as AstStructuredPath } from '@core/types'; 
 
@@ -40,7 +41,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
     @inject('IResolutionService') private resolutionService: IResolutionService
   ) {}
 
-  async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
+  async execute(node: DirectiveNode, context: DirectiveContext): Promise<StateServiceLike> {
     logger.debug('Processing path directive', {
       location: node.location,
       context
@@ -53,9 +54,9 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         stateMethods: context.state ? Object.keys(context.state) : 'undefined'
       });
 
-      // Create a new state for modifications
-      const newState = context.state.clone();
-      
+      // Get the fresh state service instance (kept for context)
+      const freshStateService = container.resolve<IStateService>('IStateService');
+
       // 1. Validate directive structure
       await this.validationService.validate(node);
 
@@ -70,12 +71,11 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         throw new DirectiveError('Path directive requires a path object', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node, context });
       }
 
-      // Create resolution context
-      // Path directives might define paths used later, context needs state
+      // Create resolution context USING THE FRESH state
       const resolutionContext = ResolutionContextFactory.forPathDirective(
         context.currentFilePath,
-        newState, // Pass the current state being modified
-        context.currentFilePath // Explicitly pass currentFilePath again to ensure it's available for validation
+        freshStateService, // Use the fresh state for resolution context instead
+        context.currentFilePath 
       );
 
       // 3. Resolve the path object (handles internal interpolation)
@@ -110,12 +110,15 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       }
       
       // 5. Store the validated path *state* (IFilesystemPathState or IUrlPathState)
-      // The value property of MeldPath holds the appropriate state object.
+      // NOTE: Setting variable on freshStateService. This might be lost if
+      // StateService is not a singleton or if InterpreterService doesn't
+      // receive this specific instance back. This is primarily for DIAGNOSIS
+      // to see if the path error goes away.
       if (!validatedMeldPath.value) {
            // This shouldn't happen if validation succeeded, but check defensively
            throw new DirectiveError('Validated path object is missing internal state', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node, context });
       }
-      newState.setPathVar(identifier, validatedMeldPath.value);
+      await freshStateService.setPathVar(identifier, validatedMeldPath.value);
 
       logger.debug('Path directive processed successfully', {
         identifier,
@@ -123,7 +126,10 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         location: node.location
       });
 
-      return newState;
+      // Clone the potentially problematic context.state JUST for the return value.
+      // The important part is that the core logic used the 'freshStateService'.
+      const returnValueState = context.state.clone();
+      return returnValueState;
     } catch (error) {
       // Handle errors
       if (error instanceof DirectiveError) {

@@ -121,10 +121,23 @@ export class StateFactory implements IStateFactory {
   }
 
   updateState(state: StateNode, updates: Partial<StateNode>): StateNode {
-    // Create new maps, copying from updates if present, otherwise from original state
-    const newTextMap = new Map(updates.variables?.text ?? state.variables.text);
-    const newDataMap = new Map(updates.variables?.data ?? state.variables.data);
-    const newPathMap = new Map(updates.variables?.path ?? state.variables.path);
+    // Create new maps, deep cloning values during creation
+    const newTextMap = new Map(
+      Array.from(updates.variables?.text ?? state.variables.text,
+                 ([key, value]) => [key, cloneDeep(value)]) // Deep clone each value
+    );
+    const newDataMap = new Map(
+      Array.from(updates.variables?.data ?? state.variables.data,
+                 ([key, value]) => [key, cloneDeep(value)]) // Deep clone each value
+    );
+    const newPathMap = new Map(
+      Array.from(updates.variables?.path ?? state.variables.path,
+                 ([key, value]) => [key, cloneDeep(value)]) // Deep clone each value
+    );
+    const newCommandsMap = new Map(
+      Array.from(updates.commands ?? state.commands,
+                 ([key, value]) => [key, cloneDeep(value)]) // Deep clone each value
+    );
 
     const updated: StateNode = {
       stateId: state.stateId,
@@ -133,7 +146,7 @@ export class StateFactory implements IStateFactory {
         data: newDataMap,
         path: newPathMap
       },
-      commands: new Map(updates.commands ?? state.commands), // Also ensure new maps/sets here
+      commands: newCommandsMap, // Use new commands map
       imports: new Set(updates.imports ?? state.imports),
       nodes: [...(updates.nodes ?? state.nodes)],
       transformedNodes: updates.transformedNodes !== undefined ? [...updates.transformedNodes] : state.transformedNodes,
