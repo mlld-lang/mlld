@@ -59,8 +59,11 @@ describe('InterpreterService Unit', () => {
     });
     mockInitialState.getStateId.mockReturnValue('mockInitialState');
     mockInitialState.createChildState.mockReturnValue(workingMockState);
+    mockInitialState.clone.mockReturnValue(mockInitialState);
     workingMockState.getStateId.mockReturnValue('workingMockState');
     workingMockState.clone.mockReturnValue(workingMockState);
+    workingMockState.addNode.mockReturnValue(undefined);
+    workingMockState.getCurrentFilePath.mockReturnValue('/test/working.mld');
 
     context.registerMock('IDirectiveServiceClient', directiveClient);
     context.registerMock('IStateService', state);
@@ -108,7 +111,8 @@ describe('InterpreterService Unit', () => {
       const resultState = mockDeep<IStateService>();
       resultState.getStateId.mockReturnValue('working-clone-result');
       resultState.addNode.mockReturnValue(undefined);
-      directiveClient.handleDirective.mockResolvedValue({ state: resultState, getFormattingContext: () => undefined });
+      resultState.clone.mockReturnValue(resultState);
+      directiveClient.handleDirective.mockResolvedValue(resultState);
       
       const directiveCloneState = mockDeep<IStateService>();
       directiveCloneState.getStateId.mockReturnValue('directiveCloneState');
@@ -163,7 +167,8 @@ describe('InterpreterService Unit', () => {
       const directiveNode: DirectiveNode = { type: 'Directive', name: 'test', content: 'test content', directive: { kind: 'options' }, location: { start: { line: 1, column: 1 }, end: { line: 1, column: 12 } } };
       const options = { initialState: mockInitialState, mergeState: true, currentFilePath: 'test.meld' };
       const resultState = mockDeep<IStateService>();
-      directiveClient.handleDirective.mockResolvedValue({ state: resultState, getFormattingContext: () => undefined });
+      resultState.clone.mockReturnValue(resultState);
+      directiveClient.handleDirective.mockResolvedValue(resultState);
 
       await service.interpret([directiveNode], options);
       expect(directiveClient.handleDirective).toHaveBeenCalledWith(
@@ -182,7 +187,7 @@ describe('InterpreterService Unit', () => {
       directiveClient.handleDirective.mockImplementation(async (node, ctx) => {
         stateInHandler = ctx.state as DeepMockProxy<IStateService>;
         stateInHandler.getCommandVar.calledWith('test-command').mockReturnValue(commandVar);
-        return { state: resultState, getFormattingContext: () => undefined };
+        return resultState;
       });
 
       const directiveCloneState = mockDeep<IStateService>();
@@ -205,13 +210,25 @@ describe('InterpreterService Unit', () => {
       state.getCurrentFilePath.mockReturnValue('/initial/path.mld');
 
       const parsedInterpolatable: InterpolatableValue = [
-        { type: 'Text', content: 'Hello ', location: createLocation(1, 1) },
+        createTextNode('Hello ', createLocation(1, 1)),
         { type: 'VariableReference', identifier: 'name', valueType: 'text', isVariableReference: true, location: createLocation(1, 8) },
-        { type: 'Text', content: '!', location: createLocation(1, 14) }
+        createTextNode('!', createLocation(1, 14))
       ];
-      parserClient.parseString.calledWith('Hello {{name}}!', expect.anything()).mockResolvedValue(parsedInterpolatable);
+      parserClient.parseString.calledWith('Hello {{name}}!', expect.objectContaining({ filePath: '/initial/path.mld' }))
+        .mockImplementation(async (content, options) => {
+          console.log('[TEST DEBUG] parserClient.parseString called with:', content, options);
+          return parsedInterpolatable; 
+        });
 
-      resolutionService.resolveNodes.calledWith(parsedInterpolatable, expect.anything()).mockResolvedValue('Hello Alice!');
+      resolutionService.resolveNodes.calledWith(parsedInterpolatable, expect.anything())
+        .mockImplementation(async (nodes, context) => {
+          console.log('[TEST DEBUG] resolutionService.resolveNodes called with nodes:', JSON.stringify(nodes).substring(0,100));
+          return 'Hello Alice!';
+        });
+
+      state.addNode.mockImplementation((node) => {
+        console.log('[TEST DEBUG] state.addNode called with:', node);
+      });
 
       await service.interpret(nodes, { initialState, mergeState: false });
 
@@ -254,8 +271,11 @@ describe('InterpreterService Unit', () => {
     });
 
     it('does NOT merge state back if mergeState is false', async () => {
-      const textNode: TextNode = { type: 'Text', content: 'Test content' };
+      const textNode: TextNode = createTextNode('Test content');
       const internalWorking = mockDeep<IStateService>();
+      internalWorking.clone.mockReturnValue(internalWorking);
+      internalWorking.addNode.mockReturnValue(undefined);
+      internalWorking.getCurrentFilePath.mockReturnValue('internal-path');
       state.createChildState.mockReturnValue(internalWorking);
       
       await service.interpret([textNode], { initialState: mockInitialState, mergeState: false });
@@ -265,9 +285,12 @@ describe('InterpreterService Unit', () => {
     });
     
     it('creates state from internal service if mergeState is false', async () => {
-      const textNode: TextNode = { type: 'Text', content: 'Test content' };
+      const textNode: TextNode = createTextNode('Test content');
       const internalWorkingState = mockDeep<IStateService>();
       internalWorkingState.getStateId.mockReturnValue('forced-working');
+      internalWorkingState.clone.mockReturnValue(internalWorkingState);
+      internalWorkingState.addNode.mockReturnValue(undefined);
+      internalWorkingState.getCurrentFilePath.mockReturnValue('forced-working-path');
       state.createChildState.mockReturnValue(internalWorkingState);
       
       const result = await service.interpret([textNode], { initialState: mockInitialState, mergeState: false });
@@ -278,9 +301,12 @@ describe('InterpreterService Unit', () => {
     });
     
     it('creates state from internal service if no initial state provided', async () => {
-      const textNode: TextNode = { type: 'Text', content: 'Test content' };
+      const textNode: TextNode = createTextNode('Test content');
       const internalWorkingState = mockDeep<IStateService>();
       internalWorkingState.getStateId.mockReturnValue('forced-working-no-initial');
+      internalWorkingState.clone.mockReturnValue(internalWorkingState);
+      internalWorkingState.addNode.mockReturnValue(undefined);
+      internalWorkingState.getCurrentFilePath.mockReturnValue('forced-working-no-initial-path');
       state.createChildState.mockReturnValue(internalWorkingState);
 
       const result = await service.interpret([textNode], { /* no initialState */ });

@@ -14,6 +14,9 @@ import type { IResolutionService } from '@services/resolution/ResolutionService/
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { createTextNode, createDirectiveNode, createLocation, createCommandVariable } from '@tests/utils/testFactories.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -392,17 +395,10 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
 
       return currentState;
     } catch (error) {
-      // Wrap any unexpected errors
-      const wrappedError = error instanceof Error
-        ? error
-        : new MeldInterpreterError(
-            `Unexpected error during interpretation: ${String(error)}`,
-            'interpretation',
-            undefined,
-            { severity: ErrorSeverity.Fatal, cause: error instanceof Error ? error : undefined }
-          );
-      
-      throw wrappedError;
+      // Reverted outer catch block: Just re-throw any error caught here.
+      // Wrapping and location addition should happen in interpretNode.
+      // console.log("[TEST DEBUG] Outer catch block caught:", error);
+      throw error; 
     }
   }
 
@@ -554,7 +550,8 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
           };
           
           // Store the directive result to check for replacement nodes
-          const directiveResult = await this.callDirectiveHandleDirective(directiveNode, {
+          // Temporarily removing await for debugging error catching
+          const directiveResult = /* await */ this.callDirectiveHandleDirective(directiveNode, {
             state: directiveState,
             parentState: currentState,
             currentFilePath: state.getCurrentFilePath() ?? undefined,
@@ -695,19 +692,29 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
     } catch (error) {
       // Preserve MeldInterpreterError or wrap other errors
       if (error instanceof MeldInterpreterError) {
+        console.log("[TEST DEBUG] Re-throwing existing MeldInterpreterError:", JSON.stringify(error));
         throw error;
       }
+      // Wrap other errors, ensuring location is included
+      const errorLocation: ErrorSourceLocation | undefined = node.location ? {
+          line: node.location.start?.line,
+          column: node.location.start?.column,
+          filePath: state?.getCurrentFilePath() ?? undefined
+      } : undefined;
+      
+      console.log("[TEST DEBUG] interpretNode catch creating error with location:", JSON.stringify(errorLocation));
+
       throw new MeldInterpreterError(
         getErrorMessage(error),
-        node.type,
-        convertLocation(node.location),
+        node.type, // Use node type as code for context
+        errorLocation, // Pass constructed ErrorSourceLocation
         {
           cause: error instanceof Error ? error : undefined,
+          severity: ErrorSeverity.Recoverable, 
           context: {
             nodeType: node.type,
-            location: convertLocation(node.location),
             state: {
-              filePath: state.getCurrentFilePath() ?? undefined
+              filePath: state?.getCurrentFilePath() ?? undefined
             }
           }
         }
