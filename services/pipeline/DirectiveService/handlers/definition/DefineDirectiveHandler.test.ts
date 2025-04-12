@@ -6,6 +6,7 @@ import type { IValidationService } from '@services/resolution/ValidationService/
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { MeldResolutionError } from '@core/errors';
 import {
   createValidationServiceMock,
   createStateServiceMock,
@@ -15,8 +16,9 @@ import {
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { ICommandDefinition } from '@core/types/definitions.js';
 import type { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { DirectiveNode, DefineDirectiveData } from '@core/syntax/types.js'; // Ensure DefineDirectiveData is imported
+import type { DirectiveNode, DefineDirectiveData, InterpolatableValue } from '@core/syntax/types.js'; // Ensure DefineDirectiveData is imported
 import { expectToThrowWithConfig } from '@tests/utils/errorTestUtils.js'; // Import the utility
+import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 
 // NOTE: The createMockState helper is NOT used here, setup is simpler
 
@@ -57,71 +59,161 @@ describe('DefineDirectiveHandler', () => {
   });
 
   // Helper to ensure test nodes have the expected structure
-  const createValidDefineNode = (name: string, command: string, parameters: string[] = []): DirectiveNode => {
-      // Use the actual test factory if available and correct, otherwise build manually
-      // const nodeFromFactory = createDefineDirectiveNode({ name, command, parameters });
-      // return nodeFromFactory;
+  // Updated to reflect AST changes for @define with @run or literal values
+  const createValidDefineNode = (
+      name: string, 
+      // Value can be a command string (for @run) or an InterpolatableValue (for literal)
+      value: string | InterpolatableValue, 
+      parameters: string[] = [],
+      isRunSyntax: boolean = true // Default to assuming @define cmd = @run [...] syntax for old tests
+  ): DirectiveNode => {
       
-      // Manual creation ensuring structure:
+      let directiveData: Omit<DefineDirectiveData, 'kind'>;
+
+      if (isRunSyntax && typeof value === 'string') {
+          // Simulate @define cmd = @run [command_string]
+          directiveData = {
+              name: name,
+              // Structure mimicking RunRHSAst for runCommand
+              command: {
+                  subtype: 'runCommand', 
+                  // For basic tests, wrap the string command in a TextNode for InterpolatableValue
+                  command: [{ type: 'Text', content: value, location: createLocation(1,1) }], 
+                  isMultiLine: false 
+              },
+              value: undefined, // Explicitly undefined when using command syntax
+              parameters: parameters
+          };
+      } else if (!isRunSyntax && isInterpolatableValueArray(value)) {
+          // Simulate @define cmd = "interpolated {{value}}"
+          directiveData = {
+              name: name,
+              command: undefined, // Explicitly undefined when using literal value syntax
+              value: value,
+              parameters: parameters
+          };
+      } else {
+          // Handle other cases or throw error if structure is unexpected for the test
+          // For simplicity, assuming basic tests fall into the first case for now.
+          // If testing literal values, ensure isRunSyntax=false and value is InterpolatableValue
+          throw new Error(`Invalid combination of value type (${typeof value}) and isRunSyntax (${isRunSyntax}) in createValidDefineNode`);
+      }
+
       return {
           type: 'Directive',
           directive: {
               kind: 'define',
-              name: name, // Ensure name is always a string
-              command: { kind: 'run', command: command },
-              parameters: parameters
-          } as DefineDirectiveData,
-          location: createLocation(1,1) // Add location
+              ...directiveData
+          } as DefineDirectiveData, // Cast needed as we build dynamically
+          location: createLocation(1,1)
       };
   };
 
   describe('command definition', () => {
     it('should handle basic command definition without parameters', async () => {
-      const node = createValidDefineNode('cmd1', 'echo hello'); // Use helper
-      const result = await handler.execute(node, { state: stateService });
+      // Test @define cmd = @run [echo hello]
+      const node = createValidDefineNode('cmd1', 'echo hello'); 
+      const result = await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
       expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd1', expect.objectContaining({ command: 'echo hello', parameters: [] }));
+      // Expecting IBasicCommandDefinition
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd1', expect.objectContaining({
+          type: 'basic',
+          name: 'cmd1',
+          // commandTemplate should be the InterpolatableValue array from the mock AST
+          commandTemplate: expect.arrayContaining([expect.objectContaining({ type: 'Text', content: 'echo hello' })]),
+          parameters: expect.arrayContaining([]),
+          isMultiline: false
+      }));
       expect(result).toBe(clonedState);
     });
 
     it('should handle command definition with parameters', async () => {
-      const node = createValidDefineNode('cmd2', 'echo $p1 $p2', ['p1', 'p2']); // Use helper
-      const result = await handler.execute(node, { state: stateService });
+      // Test @define cmd(p1, p2) = @run [echo $p1 $p2]
+      const node = createValidDefineNode('cmd2', 'echo $p1 $p2', ['p1', 'p2']);
+      const result = await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
       expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd2', expect.objectContaining({ command: 'echo $p1 $p2', parameters: ['p1', 'p2'] }));
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd2', expect.objectContaining({
+          type: 'basic',
+          name: 'cmd2',
+          commandTemplate: expect.arrayContaining([expect.objectContaining({ type: 'Text', content: 'echo $p1 $p2' })]),
+          parameters: expect.arrayContaining([
+              expect.objectContaining({ name: 'p1', position: 1 }),
+              expect.objectContaining({ name: 'p2', position: 2 })
+          ]),
+          isMultiline: false
+      }));
       expect(result).toBe(clonedState);
     });
 
     it('should handle command definition with multiple parameters', async () => {
-      const node = createValidDefineNode('cmd3', 'echo $a $b $c', ['a', 'b', 'c']); // Use helper
-      const result = await handler.execute(node, { state: stateService });
+       // Test @define cmd(a, b, c) = @run [echo $a $b $c]
+      const node = createValidDefineNode('cmd3', 'echo $a $b $c', ['a', 'b', 'c']);
+      const result = await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
       expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd3', expect.objectContaining({ command: 'echo $a $b $c', parameters: ['a', 'b', 'c'] }));
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd3', expect.objectContaining({
+          type: 'basic',
+          name: 'cmd3',
+          commandTemplate: expect.arrayContaining([expect.objectContaining({ type: 'Text', content: 'echo $a $b $c' })]),
+          parameters: expect.arrayContaining([
+              expect.objectContaining({ name: 'a', position: 1 }),
+              expect.objectContaining({ name: 'b', position: 2 }),
+              expect.objectContaining({ name: 'c', position: 3 })
+          ]),
+          isMultiline: false
+      }));
       expect(result).toBe(clonedState);
     });
+    
+    // New test case for literal value definition
+    it('should handle command definition with literal value', async () => {
+        const literalValue: InterpolatableValue = [
+            { type: 'Text', content: 'echo literal ', location: createLocation(1,1) },
+            { type: 'VariableReference', identifier: 'var', valueType: 'text', isVariableReference: true, location: createLocation(1,15) }
+        ];
+        const node = createValidDefineNode('cmdLiteral', literalValue, [], false); // isRunSyntax = false
+
+        // Mock resolution for the literal value
+        resolutionService.resolveNodes.mockResolvedValueOnce('echo literal resolved_value');
+        
+        const result = await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
+        expect(stateService.clone).toHaveBeenCalled();
+        expect(resolutionService.resolveNodes).toHaveBeenCalledWith(literalValue, expect.any(Object));
+        expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdLiteral', expect.objectContaining({
+            type: 'basic',
+            name: 'cmdLiteral',
+            commandTemplate: 'echo literal resolved_value', // Expect the resolved string here
+            parameters: expect.arrayContaining([]),
+            isMultiline: false
+        }));
+        expect(result).toBe(clonedState);
+    });
+
   });
 
   describe('metadata handling', () => {
     it('should handle command risk metadata', async () => {
-      const node = createValidDefineNode('cmdRisk.risk.high', 'rm -rf /'); // Use helper
-      await handler.execute(node, { state: stateService });
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdRisk', expect.objectContaining({ metadata: { risk: 'high' } }));
+      const node = createValidDefineNode('cmdRisk.risk.high', 'rm -rf /'); 
+      await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
+      // Check that the metadata object contains riskLevel
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdRisk', expect.objectContaining({
+           riskLevel: 'high' 
+      }));
     });
 
     it('should handle command about metadata', async () => {
-       // Need to adjust parseIdentifier mock or test node name if parseIdentifier logic changed
-      const node = createValidDefineNode('cmdAbout.about.desc', 'ls'); // Use helper, ensure name format matches parseIdentifier logic
-       // Mock the private parseIdentifier if its logic is complex or changed
-       vi.spyOn(handler as any, 'parseIdentifier').mockReturnValueOnce({ name: 'cmdAbout', metadata: { about: 'This is a description' } }); 
-      await handler.execute(node, { state: stateService });
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdAbout', expect.objectContaining({ metadata: { about: 'This is a description' } }));
+      const node = createValidDefineNode('cmdAbout.about.A cool command', 'ls'); 
+      await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
+       // Check that the metadata object contains description
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdAbout', expect.objectContaining({
+           description: 'A cool command' 
+      }));
     });
   });
 
   describe('validation', () => {
     it('should validate command structure through ValidationService', async () => {
-      const node = createValidDefineNode('cmd4', 'test'); // Use helper
-      await handler.execute(node, { state: stateService });
+      const node = createValidDefineNode('cmd4', 'test');
+      await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
       expect(validationService.validate).toHaveBeenCalledWith(node);
     });
 
@@ -130,22 +222,26 @@ describe('DefineDirectiveHandler', () => {
 
   describe('state management', () => {
     it('should create new state for command storage', async () => {
-      const node = createValidDefineNode('cmd5', 'test'); // Use helper
-      await handler.execute(node, { state: stateService });
+      const node = createValidDefineNode('cmd5', 'test');
+      await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
       expect(stateService.clone).toHaveBeenCalled();
     });
 
     it('should store command in new state', async () => {
-      const node = createValidDefineNode('cmd6', 'echo test'); // Use helper
-      await handler.execute(node, { state: stateService });
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd6', expect.any(Object));
+      const node = createValidDefineNode('cmd6', 'echo test');
+      await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd6', expect.any(Object)); // Check it was called with the name
+      // Optionally, check the type of the stored definition
+      const storedDefinition = vi.mocked(clonedState.setCommandVar).mock.calls[0][1] as ICommandDefinition;
+      expect(storedDefinition.type).toBe('basic');
+      expect(storedDefinition.name).toBe('cmd6');
     });
   });
   
   describe('error handling', () => {
     it('should handle state errors', async () => {
       const node = createValidDefineNode('cmdError', 'test'); 
-      const executeContext = { state: stateService };
+      const executeContext = { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext;
       const stateError = new Error('State error');
 
       if(clonedState) {
@@ -162,19 +258,38 @@ describe('DefineDirectiveHandler', () => {
         {
           errorType: DirectiveError, // Expect the handler to wrap the error
           // code: DirectiveErrorCode.COMMAND_DEFINITION_FAILED, // Optional: Add if code is consistent
-          message: /State error|Failed to define command/i, // Check message contains original or wrapper message
+          message: /State error/i, // Check message contains original error message
           cause: stateError // Expect the original error to be the cause
         }
       );
-      
-      // Remove old assertions
-      // await expect(handler.execute(node, executeContext))
-      //       .rejects
-      //       .toThrow(DirectiveError); 
-      // await expect(handler.execute(node, executeContext))
-      //       .rejects
-      //       .toThrow(stateError); 
     });
+    
+    // Add test for literal value resolution error
+    it('should handle literal value resolution errors', async () => {
+        const literalValue: InterpolatableValue = [
+            { type: 'Text', content: 'echo literal ', location: createLocation(1,1) },
+            { type: 'VariableReference', identifier: 'unresolvable', valueType: 'text', isVariableReference: true, location: createLocation(1,15) }
+        ];
+        const node = createValidDefineNode('cmdResolveError', literalValue, [], false); // isRunSyntax = false
+        // Provide options object including the error code
+        const resolutionError = new MeldResolutionError('Variable not found', { code: 'VAR_NOT_FOUND' });
+
+        // Mock resolution service to throw
+        resolutionService.resolveNodes.mockRejectedValue(resolutionError);
+        
+        const executeContext = { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext;
+        
+        await expectToThrowWithConfig(
+            async () => await handler.execute(node, executeContext),
+            {
+                errorType: DirectiveError,
+                code: DirectiveErrorCode.RESOLUTION_FAILED,
+                message: /Failed to resolve literal value/i,
+                cause: resolutionError
+            }
+        );
+    });
+
   });
 
 });
