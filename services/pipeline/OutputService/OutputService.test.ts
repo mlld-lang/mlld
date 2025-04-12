@@ -128,7 +128,7 @@ describe('OutputService', () => {
       vi.mocked(state.getTransformedNodes).mockReturnValue([runNode]);
       
       output = await service.convert([runNode], state, 'markdown');
-      expect(output).toBe('[run directive output placeholder]\n\n');
+      expect(output).toBe('[run directive output placeholder]\n');
     });
 
     it('should include state variables when requested', async () => {
