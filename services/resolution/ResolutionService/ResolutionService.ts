@@ -420,8 +420,6 @@ export class ResolutionService implements IResolutionService {
     logger.debug(`resolveNodes called`, { nodeCount: nodes.length, contextFlags: context.flags, inputNodes: JSON.stringify(nodes) });
     const resolvedParts: string[] = [];
     for (const node of nodes) {
-      // Use process.stdout.write for debug logging
-      process.stdout.write(`[DEBUG ResolutionService.resolveNodes] Processing node: type=${node.type}\n`);
       if (node.type === 'Text') {
         resolvedParts.push((node as TextNode).content);
       } else if (node.type === 'VariableReference') {
@@ -433,17 +431,9 @@ export class ResolutionService implements IResolutionService {
             stateNameVar: context.state?.getTextVar('name')?.value // Check if name is there
         });
         try {
-          // Remove this potentially problematic log
-          // process.stdout.write(`[DEBUG ResolutionService.resolveNodes] Found VariableReferenceNode: ${JSON.stringify(node)}\n`);
-          
-          // Logging to check context (now happens before try)
-          // logger.info('[resolveNodes] Attempting to resolve VariableReferenceNode:', { ... });
-
           const resolvedValue = await this.variableReferenceResolver.resolve(node as VariableReferenceNode, context);
           // Add log AFTER await
           logger.debug(`[resolveNodes] Successfully resolved node ${node.identifier}, value starts: ${resolvedValue.substring(0, 30)}`);
-          // Use process.stdout.write for debug logging
-          process.stdout.write(`[DEBUG ResolutionService.resolveNodes] Resolved value for ${node.identifier}: ${resolvedValue.substring(0,100)}\n`);
           resolvedParts.push(resolvedValue);
         } catch (error) {
            logger.error(`resolveNodes: Error resolving individual node ${ (node as VariableReferenceNode).identifier }`, { error });
@@ -456,13 +446,10 @@ export class ResolutionService implements IResolutionService {
            }
          }
        } else {
-          // Use process.stdout.write for debug logging
-          process.stdout.write(`[DEBUG ResolutionService.resolveNodes] Skipping node type: ${node.type}\n`);
           logger.warn(`resolveNodes: Skipping unexpected node type during node resolution: ${node.type}`);
        }
     }
     
-    logger.debug('[resolveNodes] resolvedParts before join:', resolvedParts);
     const finalResult = resolvedParts.join('');
     logger.debug(`resolveNodes: Final resolved string: ${finalResult.substring(0,100)}`);
     return finalResult;

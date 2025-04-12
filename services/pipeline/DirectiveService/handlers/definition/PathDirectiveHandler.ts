@@ -55,15 +55,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
 
       // Create a new state for modifications
       const newState = context.state.clone();
-      logger.debug('[PathDirectiveHandler] newState details:', {
-        type: typeof newState,
-        hasGetPathVar: typeof newState?.getPathVar === 'function',
-        hasGetCurrentFilePath: typeof newState?.getCurrentFilePath === 'function',
-        methods: typeof newState === 'object' && newState !== null ? Object.keys(newState) : 'N/A'
-      });
       
-      // REMOVED logic for setting PROJECTPATH/HOMEPATH manually
-
       // 1. Validate directive structure
       await this.validationService.validate(node);
 

@@ -14,6 +14,7 @@ import { ErrorSeverity, FieldAccessError, PathValidationError, MeldResolutionErr
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
+import type { StateServiceLike } from '@core/shared-service-types.js';
 
 /**
  * Handler for @text directives
@@ -89,7 +90,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
     return true;
   }
 
-  public async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
+  async execute(node: DirectiveNode, context: DirectiveContext): Promise<StateServiceLike> {
     logger.debug('Processing text directive', {
       location: node.location,
       context: {
@@ -303,7 +304,6 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       }
 
       // 5. Set the resolved value in the new state
-      logger.debug('[TextDirectiveHandler] Setting variable:', { identifier, resolvedValue });
       newState.setTextVar(identifier, resolvedValue);
 
       return newState;

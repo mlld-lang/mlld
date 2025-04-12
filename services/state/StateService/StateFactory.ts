@@ -65,27 +65,27 @@ export class StateFactory implements IStateFactory {
   }
 
   mergeStates(parent: StateNode, child: StateNode): StateNode {
-    // Create new maps with parent values as base
-    const text = new Map(parent.variables.text);
-    const data = new Map(parent.variables.data);
-    const path = new Map(parent.variables.path);
-    const commands = new Map(parent.commands);
+    // Create NEW maps by deep cloning the parent's maps first
+    const text = cloneDeep(new Map(parent.variables.text));
+    const data = cloneDeep(new Map(parent.variables.data));
+    const path = cloneDeep(new Map(parent.variables.path));
+    const commands = cloneDeep(new Map(parent.commands));
 
-    // Merge child variables - last write wins
+    // Merge child variables - DEEP CLONE the child's value before setting
     for (const [key, value] of child.variables.text) {
-      text.set(key, value);
+      text.set(key, cloneDeep(value)); // Deep clone the variable object
     }
     for (const [key, value] of child.variables.data) {
-      data.set(key, value);
+      data.set(key, cloneDeep(value)); // Deep clone the variable object
     }
     for (const [key, value] of child.variables.path) {
-      path.set(key, value);
+      path.set(key, cloneDeep(value)); // Deep clone the variable object
     }
     for (const [key, value] of child.commands) {
-      commands.set(key, value);
+      commands.set(key, cloneDeep(value)); // Deep clone the variable object
     }
 
-    // Create new state with merged values
+    // Create new state with merged, deep-cloned values
     const merged: StateNode = {
       variables: {
         text,
@@ -151,12 +151,6 @@ export class StateFactory implements IStateFactory {
       }
     });
 
-    // Log the text variables within the returned node
-    logger.debug('[StateFactory.updateState] Returning updated node:', { 
-        stateId: updated.stateId,
-        updatedTextVars: Array.from(updated.variables.text.entries()).map(([k, v]) => ({ key: k, value: v.value }))
-    });
-
     return updated;
   }
 
@@ -167,6 +161,15 @@ export class StateFactory implements IStateFactory {
   createClonedState(originalState: StateNode, options?: StateNodeOptions): StateNode {
     // Use lodash.cloneDeep for a true deep copy
     const clonedState = cloneDeep(originalState);
+
+    // Explicitly deep clone the variable maps AGAIN to be absolutely sure
+    (clonedState as any).variables = {
+        text: cloneDeep(clonedState.variables.text),
+        data: cloneDeep(clonedState.variables.data),
+        path: cloneDeep(clonedState.variables.path)
+    };
+    (clonedState as any).commands = cloneDeep(clonedState.commands);
+    // nodes, imports, transformedNodes are usually shallow copied or handled ok by cloneDeep
 
     // Ensure the cloned state has a unique ID and no parent linkage
     clonedState.stateId = randomUUID();

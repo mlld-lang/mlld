@@ -154,6 +154,17 @@ interface IStateService {
   getCommandVar(name: string): CommandVariable | undefined;
 
   /**
+   * Sets a command variable.
+   * 
+   * @param name - The name of the command variable to set
+   * @param value - The command definition or a raw command string
+   * @param metadata - Optional metadata
+   * @returns The created CommandVariable object
+   * @throws {MeldStateError} If the state is immutable
+   */
+  setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<CommandVariable>;
+
+  /**
    * Gets all commands, including inherited ones from parent states.
    * 
    * @returns A map of all commands (name -> CommandVariable)
@@ -394,17 +405,6 @@ interface IStateService {
    * @returns The internal StateNode object.
    */
   // getInternalStateNode(): StateNode; // Commenting out if StateNode type import is issue
-
-  /**
-   * Sets a command variable.
-   * 
-   * @param name - The name of the command variable to set
-   * @param command - The command definition or a raw command string
-   * @param metadata - Optional metadata
-   * @returns The created CommandVariable object
-   * @throws {MeldStateError} If the state is immutable
-   */
-  setCommand(name: string, command: string | ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<CommandVariable>;
 
   /**
    * Gets a command definition by name (preferred over getCommandVar).

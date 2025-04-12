@@ -10,6 +10,17 @@
 import type { NodeType, BaseNode } from './syntax/types/shared-types.js';
 import type { MeldNode, DirectiveNode, TextNode } from './syntax/types/index.js';
 import type { ResolutionContextBase, DirectiveContextBase } from './shared/types.js';
+// Import the actual variable types
+import type {
+  TextVariable,
+  DataVariable,
+  IPathVariable,
+  CommandVariable,
+  JsonValue,
+  IFilesystemPathState,
+  IUrlPathState,
+  ICommandDefinition
+} from './types/index.js';
 
 /**
  * Common client factory interface
@@ -38,25 +49,25 @@ export interface ServiceOptions {
  */
 export interface StateServiceLike {
   /** Get a data variable by name */
-  getDataVar(name: string): unknown;
+  getDataVar(name: string): DataVariable | undefined;
   /** Get a text variable by name */
-  getTextVar(name: string): string | undefined;
+  getTextVar(name: string): TextVariable | undefined;
   /** Get a path variable by name */
-  getPathVar(name: string): string | undefined;
+  getPathVar(name: string): IPathVariable | undefined;
   /** Check if a variable with the given name and type exists */
-  hasVariable(type: string, name: string): boolean;
+  hasVariable(name: string, type?: VariableType): boolean;
   
   /** Get all text variables */
-  getAllTextVars(): Map<string, string>;
+  getAllTextVars(): Map<string, TextVariable>;
   /** Get all data variables */
-  getAllDataVars(): Map<string, unknown>;
+  getAllDataVars(): Map<string, DataVariable>;
   /** Get all path variables */
-  getAllPathVars(): Map<string, string>;
+  getAllPathVars(): Map<string, IPathVariable>;
   /** Get all commands */
-  getAllCommands(): Map<string, { command: string; options?: Record<string, unknown> }>;
+  getAllCommands(): Map<string, CommandVariable>;
   
   /** Enable transformation mode */
-  enableTransformation(options?: boolean | any): void;
+  enableTransformation?(enabled: boolean): void;
   /** Check if transformation is enabled */
   isTransformationEnabled(): boolean;
   /** Get transformation options */
@@ -83,19 +94,19 @@ export interface StateServiceLike {
   /** Add a node to the current document */
   addNode(node: any): void;
   /** Sets a text variable */
-  setTextVar(name: string, value: string): void;
+  setTextVar(name: string, value: string): Promise<TextVariable>;
   /** Sets a data variable */
-  setDataVar(name: string, value: unknown): void;
+  setDataVar(name: string, value: JsonValue): Promise<DataVariable>;
   /** Sets a path variable */
-  setPathVar(name: string, value: string): void;
+  setPathVar(name: string, value: IFilesystemPathState | IUrlPathState): Promise<IPathVariable>;
   /** Gets local text variables */
-  getLocalTextVars(): Map<string, string>;
+  getLocalTextVars(): Map<string, TextVariable>;
   /** Gets local data variables */
-  getLocalDataVars(): Map<string, unknown>;
+  getLocalDataVars(): Map<string, DataVariable>;
   /** Gets a command by name */
-  getCommand(name: string): { command: string; options?: Record<string, unknown> } | undefined;
+  getCommandVar(name: string): CommandVariable | undefined;
   /** Sets a command with optional options */
-  setCommand(name: string, command: string | { command: string; options?: Record<string, unknown> }): void;
+  setCommandVar(name: string, value: ICommandDefinition): Promise<CommandVariable>;
   /** Appends raw content to the document */
   appendContent(content: string): void;
   /** Checks if a specific transformation type is enabled */

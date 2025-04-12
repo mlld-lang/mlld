@@ -30,6 +30,7 @@ import {
   createCommandVariable
 } from '@core/types/index.js';
 import { VariableType } from '@core/types/index.js';
+import { cloneDeep } from 'lodash';
 
 // Helper function to get the container
 function getContainer() {
@@ -272,6 +273,7 @@ export class StateService implements IStateService {
     try {
       const newStateNode = this.stateFactory.updateState(this.currentState, updates); // Get the new node
       const oldStateId = this.currentState?.stateId;
+      const oldRef = this.currentState; // Store old reference
       this.currentState = newStateNode; // Assign the new node returned by the factory
       // Log IMMEDIATELY after assignment
       logger.debug('[StateService._updateState] After assigning newStateNode:', {
@@ -279,7 +281,10 @@ export class StateService implements IStateService {
         oldStateId: oldStateId,
         newStateId: this.currentState?.stateId, // Should be same as old unless factory changed it
         newStateTextVarTestValue: this.currentState?.variables?.text?.get('test')?.value,
-        newStateTextVarChildValue: this.currentState?.variables?.text?.get('child')?.value
+        newStateTextVarChildValue: this.currentState?.variables?.text?.get('child')?.value,
+        refsAreEqual: oldRef === this.currentState, // Should be FALSE if factory returns new node
+        assignedNodeTextVarTest: newStateNode.variables?.text?.get('test')?.value, // Check value on node *before* assigning
+        stateAfterAssignTextVarTest: this.currentState?.variables?.text?.get('test')?.value // Check value *after* assigning
       });
       // DEBUG REMOVED
       // console.log(`[StateService.updateState] After factory.updateState for source: ${source}`);
@@ -289,6 +294,7 @@ export class StateService implements IStateService {
       throw error; 
     }
 
+    // Restore event emission
     this.emitEvent({
       type: 'transform',
       stateId: this.getStateId() || 'unknown',
@@ -307,7 +313,8 @@ export class StateService implements IStateService {
         currentStateId: this.currentState?.stateId,
         availableKeys: Array.from(this.currentState?.variables?.text?.keys() || [])
     });
-    return this.currentState.variables.text.get(name);
+    const variableObject = this.currentState.variables.text.get(name);
+    return variableObject;
   }
 
   async setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<TextVariable> {
@@ -317,17 +324,9 @@ export class StateService implements IStateService {
       origin: VariableOrigin.DIRECT_DEFINITION,
       ...metadata // Merge provided metadata, overwriting defaults if needed
     });
-    // Log before update
-    logger.debug('[StateService.setTextVar] Updating variable:', { 
-        identifier: name, 
-        value: value, 
-        metadata: variable.metadata, 
-        currentStateId: this.currentState?.stateId, 
-        varsBefore: Array.from(this.currentState?.variables?.text?.keys() || []) 
-    });
     // Create a new map, set the variable, and update state
     const text = new Map(this.currentState.variables.text);
-    text.set(name, variable);
+    text.set(name, cloneDeep(variable)); // Explicitly cloneDeep the variable object itself
     // NOTE: updateState is now async, but setTextVar remains sync. 
     // This means the event emission might not complete before setTextVar returns.
     // This matches previous behavior but might need review if callers expect sync events.
@@ -337,13 +336,6 @@ export class StateService implements IStateService {
         text // Use the map with the new rich object
       }
     }, `setTextVar:${name}`);
-    // Log after update
-    logger.debug('[StateService.setTextVar] State after update:', { 
-        identifier: name, 
-        currentStateId: this.currentState?.stateId, 
-        varsAfter: Array.from(this.currentState?.variables?.text?.keys() || []), 
-        retrievedValue: this.currentState?.variables?.text?.get(name)?.value
-    });
     return variable; // Return the created object
   }
 
@@ -849,13 +841,6 @@ export class StateService implements IStateService {
       instanceHasMethod: typeof clonedService.getCurrentFilePath === 'function',
       internalStateFilePath: clonedService.currentState?.filePath,
       internalStateId: clonedService.currentState?.stateId
-    });
-    logger.debug('[StateService.clone] Verifying cloned service:', {
-      cloneId: clonedService.getStateId(),
-      filePath: clonedService.getCurrentFilePath(), // Directly call the method
-      hasGetTextVar: typeof clonedService.getTextVar === 'function',
-      hasGetCurrentFilePath: typeof clonedService.getCurrentFilePath === 'function',
-      instanceClassName: clonedService.constructor.name // Check if it's actually a StateService
     });
     return clonedService;
   }
