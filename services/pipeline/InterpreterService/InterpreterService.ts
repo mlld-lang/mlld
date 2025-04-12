@@ -62,7 +62,7 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
   private stateVariableCopier = new StateVariableCopier();
   private initializationPromise: Promise<void> | null = null;
   private factoryInitialized: boolean = false;
-  private resolutionService?: IResolutionService;
+  private resolutionService!: IResolutionService;
   private parserClientFactory?: ParserServiceClientFactory;
   private parserClient?: IParserServiceClient; // Added parserClient member
 
@@ -77,17 +77,19 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
   constructor(
     @inject('DirectiveServiceClientFactory') directiveServiceClientFactory?: DirectiveServiceClientFactory,
     @inject('IStateService') stateService?: StateServiceLike,
-    @inject('IResolutionService') resolutionService?: IResolutionService,
-    @inject('ParserServiceClientFactory') private parserClientFactory?: ParserServiceClientFactory
+    @inject('IResolutionService') resolutionService: IResolutionService,
+    @inject('ParserServiceClientFactory') parserClientFactory?: ParserServiceClientFactory
   ) {
     this.directiveClientFactory = directiveServiceClientFactory;
     this.stateService = stateService;
     this.resolutionService = resolutionService;
+    this.parserClientFactory = parserClientFactory;
     
     logger.debug('InterpreterService constructor', {
       hasDirectiveFactory: !!this.directiveClientFactory,
       hasStateService: !!this.stateService,
-      hasResolutionService: !!this.resolutionService
+      hasResolutionService: !!this.resolutionService,
+      hasParserFactory: !!this.parserClientFactory
     });
     
     // If we have dependencies, initialize
@@ -99,29 +101,12 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
         logger.debug('InterpreterService initialized via DI');
         resolve();
       });
+    } else {
+        // Handle cases where essential services might still be missing for manual init?
+        logger.warn('InterpreterService constructed with potentially missing core dependencies for DI init');
     }
 
     this.ensureFactoryInitialized();
-
-    if (process.env.DEBUG === 'true') {
-      // Initialize file system client factory
-      try {
-        this.fsClientFactory = container.resolve('FileSystemServiceClientFactory');
-        this.initializeFsClient();
-      } catch (error) {
-        // In test environment, we need to work even without factories
-        logger.debug(`FileSystemServiceClientFactory not available: ${(error as Error).message}`);
-      }
-
-      // Initialize parser client factory (moved inside ensureFactoryInitialized)
-      try {
-        this.parserClientFactory = container.resolve('ParserServiceClientFactory');
-        this.initializeParserClient(); // Call initialization here
-      } catch (error) {
-        // In test environment, we need to work even without factories
-        logger.debug(`ParserServiceClientFactory not available: ${(error as Error).message}`);
-      }
-    }
   }
 
   /**
@@ -159,12 +144,16 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
     }
 
     // Initialize parser client factory (moved inside ensureFactoryInitialized)
-    try {
-      this.parserClientFactory = container.resolve('ParserServiceClientFactory');
-      this.initializeParserClient(); // Call initialization here
-    } catch (error) {
-      // In test environment, we need to work even without factories
-      logger.debug(`ParserServiceClientFactory not available: ${(error as Error).message}`);
+    if (!this.parserClientFactory) {
+        try {
+          this.parserClientFactory = container.resolve('ParserServiceClientFactory');
+          this.initializeParserClient(); 
+        } catch (error) {
+          logger.debug(`ParserServiceClientFactory not available: ${(error as Error).message}`);
+        }
+    } else if (!this.parserClient) {
+        // If factory was injected but client not created yet
+        this.initializeParserClient();
     }
   }
 
@@ -766,19 +755,22 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
    */
   private initializeParserClient(): void {
     if (!this.parserClientFactory) {
-      // Log or throw, but ensure it doesn't break tests that don't provide it
-      logger.debug('ParserServiceClientFactory is not available for initialization.');
-      return; 
+      // If the factory wasn't injected (e.g., manual instantiation without it),
+      // try resolving it now. If it fails, parserClient remains undefined.
+      try {
+        this.parserClientFactory = container.resolve('ParserServiceClientFactory');
+      } catch (error) {
+         logger.warn('ParserServiceClientFactory not available, cannot create parser client.', { error });
+         return; // Exit if factory cannot be resolved
+      }
     }
     
     try {
       this.parserClient = this.parserClientFactory.createClient();
       logger.debug('Successfully created ParserServiceClient using factory');
     } catch (error) {
-      // Log or throw based on context (e.g., strict mode)
-      logger.warn(`Failed to create ParserServiceClient: ${(error as Error).message}`);
-      // Set to undefined to indicate failure?
-      this.parserClient = undefined;
+      logger.warn('Failed to create ParserServiceClient', { error });
+      this.parserClient = undefined; // Ensure client is undefined on error
     }
   }
 } 
