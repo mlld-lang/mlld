@@ -20,6 +20,7 @@ import { InterpreterService } from '@services/pipeline/InterpreterService/Interp
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IParserService } from '@services/parser/IParserService.js';
+import { logger } from '@core/utils/logger.js';
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),
@@ -167,7 +168,9 @@ describe('InterpreterService Integration', () => {
       const result1 = await context.services.interpreter.interpret([node]);
       const result2 = await context.services.interpreter.interpret([node]);
       expect(result1).not.toBe(result2);
+      logger.debug('[Test Check] Reading state for result1:', { stateId: result1.getStateId() });
       expect(result1.getTextVar('test')?.value).toBe('value');
+      logger.debug('[Test Check] Reading state for result2:', { stateId: result2.getStateId() });
       expect(result2.getTextVar('test')?.value).toBe('value');
     });
 
@@ -175,6 +178,7 @@ describe('InterpreterService Integration', () => {
       const node = context.factory.createTextDirective('child', 'value');
       const parentState = context.services.state.createChildState();
       await context.services.interpreter.interpret([node], { initialState: parentState, mergeState: true });
+      logger.debug('[Test Check] Reading state for parentState:', { stateId: parentState.getStateId() });
       expect(parentState.getTextVar('child')?.value).toBe('value');
     });
 

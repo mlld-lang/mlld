@@ -289,7 +289,7 @@ export class StateService implements IStateService {
       throw error; 
     }
 
-    await this.emitEvent({
+    this.emitEvent({
       type: 'transform',
       stateId: this.getStateId() || 'unknown',
       source,
