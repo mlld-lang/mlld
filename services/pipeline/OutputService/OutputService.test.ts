@@ -251,48 +251,34 @@ describe('OutputService', () => {
   
   describe('Direct Container Resolution and Field Access', () => {
     it('should handle field access with direct field access fallback', async () => {
-      // State setup remains the same (mock data variables etc.)
+      // State setup remains the same
       const mockState = mockDeep<IStateService>();
       vi.mocked(mockState.getDataVar).mockImplementation((name) => {
         if (name === 'user') {
-          // Return a simple object for the test
           return { type: 'data', value: { name: 'Claude', details: { role: 'AI Assistant' }, metrics: [10] } } as any;
         }
         return undefined;
       });
 
+      // Provide TextNode with PRE-RESOLVED content
       const textNode = createTextNode(
-        'User: {{user.name}}, Role: {{user.details.role}}, Capability: {{user.metrics.0}}',
+        'User: Claude, Role: AI Assistant, Capability: 10',
         createLocation(1, 1)
       );
       
-      // Set up transformation mode mocks on the *container-registered* state mock
+      // Mock transformed nodes setup
       vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
       vi.mocked(state.getTransformedNodes).mockReturnValue([textNode]);
-      // Also mock the state instance used directly in convert
       vi.mocked(mockState.isTransformationEnabled).mockReturnValue(true);
       vi.mocked(mockState.getTransformedNodes).mockReturnValue([textNode]);
       
-      // Mock the behavior of resolveVariable (the method actually called by OutputService)
-      resolutionService.resolveVariable.mockImplementation(async (varPath, context) => {
-        if (varPath === 'user.name') return 'Claude';
-        if (varPath === 'user.details.role') return 'AI Assistant';
-        if (varPath === 'user.metrics.0') return '10';
-        // If it's not one of the expected paths, throw or return empty based on strict mode
-        if (context?.strict) {
-           throw new VariableResolutionError(`Mock: Variable not found: ${varPath}`);
-        }
-        return ''; // Default empty for non-strict
-      });
-      
       // Call convert on the service resolved from the container
-      // Pass the specific mockState for this test, as convert takes it directly
       const output = await service.convert([textNode], mockState, 'markdown'); 
       
       // Clean the output for comparison
       const cleanOutput = output.trim().replace(/\s+/g, ' ');
       
-      // Assertions remain the same
+      // Assertions check against the pre-resolved content
       expect(cleanOutput).toContain('User: Claude');
       expect(cleanOutput).toContain('Role: AI Assistant');
       expect(cleanOutput).toContain('Capability: 10');

@@ -185,3 +185,75 @@ This phase focuses on refactoring downstream services and handlers to correctly 
 ## Priority
 
 **High.** Completing Phase 2 is essential. Refactoring `ResolutionService` and `VariableReferenceResolver` (Steps 2-6) is the immediate priority. 
+
+---
+
+**Phase 3: Resolve TextNode Content During Interpretation**
+
+*   **Goal:** Eliminate variable resolution logic (specifically the regex-based detection and substitution of `{{...}}`) from `OutputService`. Ensure that `TextNode` content is fully resolved *before* being stored in the final `StateService.transformedNodes` list, aligning with the principle that `OutputService` should only handle formatting of pre-resolved content.
+*   **Problem:** Currently, the core parser produces `TextNode` with raw `content` strings containing unresolved `{{...}}`. `OutputService` (in `nodeToMarkdown`/`nodeToXML`) uses regex to find `{{...}}` within this content and calls `ResolutionService.resolveVariable` just before formatting the final output. This violates the planned architecture.
+*   **Approach:** Modify the pipeline orchestration (`InterpreterService`) to handle the resolution of `TextNode` content *during the main node processing loop*. When `InterpreterService.interpretNode` processes a `TextNode`, it will check for `{{...}}` syntax. If found, it will:
+    1.  Use the `ParserServiceClient` (injected via factory) to parse the `TextNode.content` string into an `InterpolatableValue` array (`Array<TextNode | VariableReferenceNode>`).
+    2.  Use the existing injected `ResolutionService` to call `resolveNodes` on this array, obtaining the fully resolved string.
+    3.  Create a **new** `TextNode` using the resolved string content, preserving original location and metadata.
+    4.  Add this *new, resolved* `TextNode` to the `StateService` using `state.addNode()` (or potentially `state.transformNode()` if we consider this a transformation, though adding might be simpler).
+    `OutputService` will be simplified to treat `TextNode.content` as literal, already-resolved text.
+
+**Detailed Steps (Phase 3):**
+
+1.  **Inject `ParserServiceClientFactory` into `InterpreterService`:**
+    *   **File:** `services/pipeline/InterpreterService/InterpreterService.ts`
+    *   **Action:** Modify the constructor (`constructor(...)`) to inject `ParserServiceClientFactory` (similar to how `DirectiveServiceClientFactory` is injected). Store an instance of `IParserServiceClient` obtained from the factory in a private member variable (e.g., `this.parserClient`), initializing it in `initializeFromParams` or lazily in an `ensureParserClientInitialized` method (following the pattern for other clients). Add necessary imports for the factory and client interface.
+    *   **Rationale:** Provides `InterpreterService` with the capability to parse string fragments.
+
+2.  **Modify `InterpreterService.interpretNode` Logic for `TextNode`:**
+    *   **File:** `services/pipeline/InterpreterService/InterpreterService.ts`
+    *   **Action:** Locate the `case 'Text':` block within the `interpretNode` method.
+        *   Inside this case, *before* the existing `textState.addNode(node)` line, add a check: `if (node.content.includes('{{'))`.
+        *   **Inside the `if (node.content.includes('{{'))` block:**
+            *   Ensure the parser client is initialized (e.g., `this.ensureParserClientInitialized()`).
+            *   Call the parser client to parse the content: `const parsedNodes: InterpolatableValue = await this.parserClient.parseString(node.content, { filePath: state.getCurrentFilePath() });` (Use `parseString` based on the client interface).
+            *   Ensure `ResolutionService` is available (`this.resolutionService`).
+            *   Create the `ResolutionContext`: `const context = ResolutionContextFactory.create(state, state.getCurrentFilePath());` (Adjust factory call if needed).
+            *   Call `resolveNodes`: `const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, context);`
+            *   Create a *new* `TextNode`: `const resolvedNode: TextNode = { ...node, content: resolvedContent };` (This preserves location and any existing metadata).
+            *   **Replace** the original `node` variable with this `resolvedNode`: `node = resolvedNode;`
+            *   Add logging to indicate resolution occurred.
+        *   **After the `if` block:** Proceed with the existing logic `const textState = currentState.clone(); textState.addNode(node); currentState = textState;`. This now adds either the original node (if no `{{...}}` found) or the *newly created resolved node* to the state.
+    *   **Rationale:** Integrates `TextNode` resolution directly into the node processing flow, ensuring the state receives resolved content.
+
+3.  **Remove Final Resolution Pass from `InterpreterService.interpret`:**
+    *   **File:** `services/pipeline/InterpreterService/InterpreterService.ts`
+    *   **Action:** Delete the entire `// <<< START: Final Resolution Pass >>>` to `// <<< END: Final Resolution Pass >>>` block near the end of the `interpret` method. This block currently attempts a final pass using `resolveText`, which is now redundant and incorrect.
+    *   **Rationale:** Resolution is now handled node-by-node in `interpretNode`, making the final pass unnecessary.
+
+4.  **Simplify `OutputService` (`nodeToMarkdown` / `nodeToXML`):**
+    *   **File:** `services/pipeline/OutputService/OutputService.ts`
+    *   **Action:** Locate the `case 'Text':` blocks within `nodeToMarkdown` and `nodeToXML` (or their helpers like `processTextNode`).
+        *   **Remove** the entire logic block starting around `if (state.isTransformationEnabled() && content.includes('{{'))` that uses `variableRegex`, calls `resolutionService.resolveVariable`, and performs string replacement.
+        *   **Remove** any fallback logic that also attempts to parse/resolve `TextNode` content using `resolutionClient` or `resolutionService`.
+        *   Ensure the remaining logic simply takes `node.content` (which is now guaranteed to be pre-resolved) and applies the necessary formatting (like `handleNewlines`).
+    *   **Rationale:** `OutputService` no longer needs to resolve variables in `TextNode` content.
+
+5.  **Update `InterpreterService` Tests:**
+    *   **File:** `services/pipeline/InterpreterService/InterpreterService.unit.test.ts` (and potentially integration tests).
+    *   **Action:**
+        *   Update DI setup/mocks to provide `ParserServiceClientFactory` and `IParserServiceClient`.
+        *   Mock `parserClient.parseString` to return specific `InterpolatableValue` arrays for relevant test cases.
+        *   Mock `resolutionService.resolveNodes` to return expected resolved strings.
+        *   Adjust assertions for `state.addNode` (or mocks of it) to verify it's called with a `TextNode` containing the *expected resolved* content when the input node had variables.
+    *   **Rationale:** Tests the new `TextNode` resolution path within `InterpreterService`.
+
+6.  **Update `OutputService` Tests:**
+    *   **File:** `services/pipeline/OutputService/OutputService.test.ts`.
+    *   **Action:**
+        *   Remove mocks for `resolutionService.resolveVariable` (or similar) related to `TextNode` processing.
+        *   Update test inputs: Provide `TextNode`s with *pre-resolved* content in their `content` property for scenarios involving variables.
+        *   Verify the output matches the pre-resolved content string, correctly formatted.
+    *   **Rationale:** Reflects the simplified, format-only role of `OutputService` for `TextNode`s.
+
+7.  **Verification:**
+    *   Run all unit and integration tests (`npm test`).
+    *   Perform manual testing with documents containing variables in plain text blocks mixed with directives.
+
+**Priority:** **High**. This phase completes the core goal of the AST variable refactoring. 

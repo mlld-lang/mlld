@@ -12,6 +12,8 @@ import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveServi
 import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -43,7 +45,8 @@ function getErrorMessage(error: unknown): string {
   dependencies: [
     { token: 'DirectiveServiceClientFactory', name: 'directiveServiceClientFactory' },
     { token: 'IStateService', name: 'stateService' },
-    { token: 'IResolutionService', name: 'resolutionService' }
+    { token: 'IResolutionService', name: 'resolutionService' },
+    { token: 'ParserServiceClientFactory', name: 'parserClientFactory' }
   ]
 })
 export class InterpreterService implements IInterpreterService, InterpreterServiceLike {
@@ -56,6 +59,8 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
   private initializationPromise: Promise<void> | null = null;
   private factoryInitialized: boolean = false;
   private resolutionService?: IResolutionService;
+  private parserClientFactory?: ParserServiceClientFactory;
+  private parserClient?: IParserServiceClient; // Added parserClient member
 
   /**
    * Creates a new InterpreterService
@@ -63,11 +68,13 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
    * @param directiveServiceClientFactory - Factory for creating directive service clients
    * @param stateService - Service for state management
    * @param resolutionService - Service for text resolution
+   * @param parserClientFactory - Factory for creating parser service clients
    */
   constructor(
     @inject('DirectiveServiceClientFactory') directiveServiceClientFactory?: DirectiveServiceClientFactory,
     @inject('IStateService') stateService?: StateServiceLike,
-    @inject('IResolutionService') resolutionService?: IResolutionService
+    @inject('IResolutionService') resolutionService?: IResolutionService,
+    @inject('ParserServiceClientFactory') private parserClientFactory?: ParserServiceClientFactory
   ) {
     this.directiveClientFactory = directiveServiceClientFactory;
     this.stateService = stateService;
@@ -88,6 +95,28 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
         logger.debug('InterpreterService initialized via DI');
         resolve();
       });
+    }
+
+    this.ensureFactoryInitialized();
+
+    if (process.env.DEBUG === 'true') {
+      // Initialize file system client factory
+      try {
+        this.fsClientFactory = container.resolve('FileSystemServiceClientFactory');
+        this.initializeFsClient();
+      } catch (error) {
+        // In test environment, we need to work even without factories
+        logger.debug(`FileSystemServiceClientFactory not available: ${(error as Error).message}`);
+      }
+
+      // Initialize parser client factory (moved inside ensureFactoryInitialized)
+      try {
+        this.parserClientFactory = container.resolve('ParserServiceClientFactory');
+        this.initializeParserClient(); // Call initialization here
+      } catch (error) {
+        // In test environment, we need to work even without factories
+        logger.debug(`ParserServiceClientFactory not available: ${(error as Error).message}`);
+      }
     }
   }
 
@@ -123,6 +152,15 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
       this.initializeDirectiveClient();
     } catch (error) {
       logger.warn('Failed to resolve DirectiveServiceClientFactory', { error });
+    }
+
+    // Initialize parser client factory (moved inside ensureFactoryInitialized)
+    try {
+      this.parserClientFactory = container.resolve('ParserServiceClientFactory');
+      this.initializeParserClient(); // Call initialization here
+    } catch (error) {
+      // In test environment, we need to work even without factories
+      logger.debug(`ParserServiceClientFactory not available: ${(error as Error).message}`);
     }
   }
 
@@ -221,10 +259,15 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
    * In permissive mode, recoverable errors become warnings
    */
   private handleError(error: Error, options: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> & Pick<InterpreterOptions, 'errorHandler'>): void {
-    // If it's not a MeldError, wrap it
+    // If it's not a MeldError, wrap it in a generic MeldInterpreterError
     const meldError = error instanceof MeldError 
       ? error 
-      : MeldError.wrap(error);
+      : new MeldInterpreterError( // Create a new MeldInterpreterError
+          `Interpretation failed: ${error.message}`,
+          'interpretation', // Generic code
+          undefined, // No location known here
+          { severity: ErrorSeverity.Recoverable, cause: error } // Pass original error as cause
+        );
     
     logger.error('Error in InterpreterService', { error: meldError });
     
@@ -335,42 +378,6 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
         }
       }
 
-      // <<< START: Final Resolution Pass >>>
-      if (this.resolutionService && currentState.getTransformedNodes) {
-        logger.debug('Performing final resolution pass on text nodes...');
-        const finalNodes = currentState.getTransformedNodes(); // Get potentially transformed nodes
-        const finalResolutionContext = ResolutionContextFactory.create(currentState, opts.filePath);
-        
-        for (let i = 0; i < finalNodes.length; i++) {
-          const node = finalNodes[i];
-          if (node.type === 'Text' && node.content.includes('{{')) {
-            try {
-              const originalContent = node.content;
-              logger.debug(`Resolving content for TextNode at index ${i}:`, originalContent);
-              // Use resolveText for simplicity, assuming no further parsing needed
-              const resolvedContent = await this.resolutionService.resolveText(originalContent, finalResolutionContext);
-              if (resolvedContent !== originalContent) {
-                 logger.debug(`Resolved content:`, resolvedContent);
-                 // Modify the node content directly IN THE ARRAY (or create new node)
-                 // Creating a new node is safer to avoid mutation issues
-                 finalNodes[i] = { ...node, content: resolvedContent }; 
-              }
-            } catch (resolutionError) {
-              logger.warn(`Error during final text resolution pass for node at index ${i}:`, { 
-                 error: resolutionError instanceof Error ? resolutionError.message : String(resolutionError)
-              });
-              // Decide how to handle errors: skip node, replace with error marker, or rethrow?
-              // For now, let's leave the original unresolved content.
-            }
-          }
-        }
-        // Update the state with the potentially modified nodes array
-        if (currentState.setTransformedNodes) {
-            currentState.setTransformedNodes(finalNodes);
-        }
-      }
-      // <<< END: Final Resolution Pass >>>
-
       // Merge state back to parent if requested
       if (opts.initialState && opts.mergeState) {
         opts.initialState.mergeChildState(currentState);
@@ -444,9 +451,37 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
       // Process based on node type
       switch (node.type) {
         case 'Text':
-          // Create new state for text node
+          // Check if content needs resolution
+          let processedNode = node;
+          if (node.content.includes('{{')) {
+            logger.debug('TextNode content requires resolution', { content: node.content.substring(0, 50) });
+            this.ensureFactoryInitialized(); // Ensure parser client is ready
+            if (this.parserClient && this.resolutionService) {
+              try {
+                const parsedNodes = await this.parserClient.parseString(node.content, { filePath: state.getCurrentFilePath() });
+                const context = ResolutionContextFactory.create(state, state.getCurrentFilePath());
+                const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, context);
+                // Create a new node with resolved content
+                processedNode = { ...node, content: resolvedContent };
+                logger.debug('Successfully resolved TextNode content', { 
+                  originalLength: node.content.length, 
+                  resolvedLength: resolvedContent.length 
+                });
+              } catch (error) {
+                logger.error('Failed to resolve TextNode content during interpretation', {
+                   error: error instanceof Error ? error.message : String(error),
+                   content: node.content.substring(0, 100)
+                });
+                // If resolution fails, use the original node (processedNode remains node)
+              }
+            } else {
+              logger.warn('ParserClient or ResolutionService not available for TextNode resolution.');
+              // Use original node if services aren't available
+            }
+          }
+          // Create new state for the potentially resolved text node
           const textState = currentState.clone();
-          textState.addNode(node);
+          textState.addNode(processedNode);
           currentState = textState;
           break;
 
@@ -749,6 +784,27 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
           }
         }
       );
+    }
+  }
+
+  /**
+   * Initialize the ParserServiceClient using the factory
+   */
+  private initializeParserClient(): void {
+    if (!this.parserClientFactory) {
+      // Log or throw, but ensure it doesn't break tests that don't provide it
+      logger.debug('ParserServiceClientFactory is not available for initialization.');
+      return; 
+    }
+    
+    try {
+      this.parserClient = this.parserClientFactory.createClient();
+      logger.debug('Successfully created ParserServiceClient using factory');
+    } catch (error) {
+      // Log or throw based on context (e.g., strict mode)
+      logger.warn(`Failed to create ParserServiceClient: ${(error as Error).message}`);
+      // Set to undefined to indicate failure?
+      this.parserClient = undefined;
     }
   }
 } 
