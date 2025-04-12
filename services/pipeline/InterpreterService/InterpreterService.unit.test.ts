@@ -5,7 +5,7 @@ import type { MeldNode, TextNode, DirectiveNode } from '@core/syntax/types/index
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { createTextNode, createDirectiveNode, createLocation, createMockState, createCommandVariable } from '@tests/utils/testFactories.js';
+import { createTextNode, createDirectiveNode, createLocation, createCommandVariable } from '@tests/utils/testFactories.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import { IStateService } from '@services/state/StateService/IStateService.js';
@@ -49,12 +49,12 @@ describe('InterpreterService Unit', () => {
     state.getCurrentFilePath.mockReturnValue('/test/file.mld');
     state.isTransformationEnabled.mockReturnValue(true);
     state.createChildState.mockImplementation(() => {
-      const child = mockDeep<IStateService>();
+      const child = workingMockState ?? mockDeep<IStateService>();
       child.clone.mockReturnValue(child);
       child.addNode.mockReturnValue(undefined);
       child.getCurrentFilePath.mockReturnValue('/test/child.mld');
       child.isTransformationEnabled.mockReturnValue(true);
-      child.getStateId.mockReturnValue('mockChildState-' + Math.random());
+      child.getStateId?.mockReturnValue('mockChildState-' + Math.random());
       return child;
     });
     mockInitialState.getStateId.mockReturnValue('mockInitialState');
@@ -87,8 +87,8 @@ describe('InterpreterService Unit', () => {
 
     it('can be initialized after construction', () => {
       const newService = new InterpreterService();
-      const internalState = createMockState('internal-new');
-      newService.initialize(mockDirectiveService, internalState);
+      const internalState = mockDeep<IStateService>();
+      newService.initialize(mockDeep<DirectiveServiceLike>(), internalState);
       expect(newService).toBeDefined();
       expect(newService.interpret).toBeDefined();
     });
@@ -97,32 +97,39 @@ describe('InterpreterService Unit', () => {
   describe('node interpretation', () => {
     it('processes text nodes directly (adds node)', async () => {
       const textNode: TextNode = { type: 'Text', content: 'Test content', location: { start: { line: 1, column: 1 }, end: { line: 1, column: 12 } } };
+      state.createChildState.mockReturnValueOnce(workingMockState);
       await service.interpret([textNode], { initialState: mockInitialState, mergeState: true });
-      const relevantMock = Object.values(createdMocks).find(m => m.addNode.mock.calls.length > 0);
-      expect(relevantMock?.addNode).toHaveBeenCalledWith(textNode);
-      expect(relevantMock?.getStateId()).toMatch(/^working-clone/);
+      expect(workingMockState.addNode).toHaveBeenCalledWith(textNode);
+      expect(workingMockState.getStateId()).toMatch(/^workingMockState/);
     });
 
     it('processes directive nodes (calls handler with clone)', async () => {
       const directiveNode: DirectiveNode = { type: 'Directive', name: 'test', content: 'test content', directive: { kind: 'test' }, location: { start: { line: 1, column: 1 }, end: { line: 1, column: 12 } } };
       const resultState = mockDeep<IStateService>();
-      (resultState as any).getStateId = vi.fn().mockReturnValue('working-clone-result');
-      (resultState as any).addNode = vi.fn();
+      resultState.getStateId.mockReturnValue('working-clone-result');
+      resultState.addNode.mockReturnValue(undefined);
       directiveClient.handleDirective.mockResolvedValue({ state: resultState, getFormattingContext: () => undefined });
       
+      const directiveCloneState = mockDeep<IStateService>();
+      directiveCloneState.getStateId.mockReturnValue('directiveCloneState');
+      directiveCloneState.addNode.mockReturnValue(undefined);
+      workingMockState.clone.mockReturnValueOnce(directiveCloneState);
+
       await service.interpret([directiveNode], { initialState: mockInitialState, mergeState: true });
       
       expect(directiveClient.handleDirective).toHaveBeenCalledWith(
         directiveNode,
-        expect.objectContaining({ state: expect.any(Object) })
+        expect.objectContaining({ 
+          state: expect.objectContaining({ getStateId: expect.any(Function) }) 
+        })
       );
       const handlerContext = directiveClient.handleDirective.mock.calls[0][1];
-      expect(handlerContext.state.getStateId()).toMatch(/^working-clone/);
+      expect(handlerContext.state.getStateId()).toEqual('directiveCloneState');
     });
 
     it('throws MeldInterpreterError when directive service fails', async () => {
       const directiveNode: DirectiveNode = { type: 'Directive', name: 'test', content: 'test content', directive: { kind: 'fail' }, location: { start: { line: 1, column: 1 }, end: { line: 1, column: 12 } } };
-      mockDirectiveService.handleDirective = vi.fn().mockRejectedValue(new Error('Handler Test error')); 
+      directiveClient.handleDirective.mockRejectedValue(new Error('Handler Test error')); 
       await expect(service.interpret([directiveNode], { initialState: mockInitialState, mergeState: true })).rejects.toThrow(MeldInterpreterError);
     });
 
@@ -166,7 +173,8 @@ describe('InterpreterService Unit', () => {
     });
 
     it('handles command variables correctly', async () => {
-      const commandVar = createCommandVariable('test-command', { kind: 'basic', value: 'echo test' } as any);
+      const commandDef = { kind: 'basic', value: 'echo test' } as any;
+      const commandVar = createCommandVariable('test-command', commandDef);
       const directiveNode: DirectiveNode = { type: 'Directive', name: 'test', content: '${cmd:test-command}', directive: { kind: 'cmd' }, location: { start: { line: 1, column: 1 }, end: { line: 1, column: 12 } } };
       let stateInHandler: DeepMockProxy<IStateService> | undefined;
       
@@ -177,11 +185,13 @@ describe('InterpreterService Unit', () => {
         return { state: resultState, getFormattingContext: () => undefined };
       });
 
+      const directiveCloneState = mockDeep<IStateService>();
+      workingMockState.clone.mockReturnValueOnce(directiveCloneState);
+
       await service.interpret([directiveNode], { initialState: mockInitialState, mergeState: true });
 
       expect(directiveClient.handleDirective).toHaveBeenCalled();
-      expect(stateInHandler).toBeDefined();
-      expect(stateInHandler?.getCommandVar).toHaveBeenCalledWith('test-command');
+      expect(directiveCloneState.getCommandVar).toHaveBeenCalledWith('test-command');
     });
 
     it('processes text nodes with interpolation', async () => {
@@ -245,64 +255,67 @@ describe('InterpreterService Unit', () => {
 
     it('does NOT merge state back if mergeState is false', async () => {
       const textNode: TextNode = { type: 'Text', content: 'Test content' };
-      const internalWorking = createMockState('internal-working-no-merge');
-      internalWorking.clone = vi.fn().mockReturnValue(internalWorking);
-      internalMockStateService.createChildState = vi.fn().mockReturnValue(internalWorking);
+      const internalWorking = mockDeep<IStateService>();
+      state.createChildState.mockReturnValue(internalWorking);
+      
       await service.interpret([textNode], { initialState: mockInitialState, mergeState: false });
+      
       expect(mockInitialState.mergeChildState).not.toHaveBeenCalled();
-      expect(internalMockStateService.createChildState).toHaveBeenCalled();
+      expect(state.createChildState).toHaveBeenCalled();
     });
     
     it('creates state from internal service if mergeState is false', async () => {
       const textNode: TextNode = { type: 'Text', content: 'Test content' };
-      const internalWorkingState = createMockState('forced-working');
-      internalWorkingState.clone = vi.fn().mockReturnValue(internalWorkingState);
-      internalMockStateService.createChildState = vi.fn().mockReturnValue(internalWorkingState);
+      const internalWorkingState = mockDeep<IStateService>();
+      internalWorkingState.getStateId.mockReturnValue('forced-working');
+      state.createChildState.mockReturnValue(internalWorkingState);
+      
       const result = await service.interpret([textNode], { initialState: mockInitialState, mergeState: false });
-      expect(internalMockStateService.createChildState).toHaveBeenCalled();
+      
+      expect(state.createChildState).toHaveBeenCalled();
       expect(mockInitialState.createChildState).not.toHaveBeenCalled();
-      expect(result.getStateId()).toBe(internalWorkingState.getStateId());
+      expect(result.getStateId()).toBe('forced-working');
     });
     
     it('creates state from internal service if no initial state provided', async () => {
       const textNode: TextNode = { type: 'Text', content: 'Test content' };
-      const internalWorkingState = createMockState('forced-working-no-initial');
-      internalWorkingState.clone = vi.fn().mockReturnValue(internalWorkingState);
-      internalMockStateService.createChildState = vi.fn().mockReturnValue(internalWorkingState);
+      const internalWorkingState = mockDeep<IStateService>();
+      internalWorkingState.getStateId.mockReturnValue('forced-working-no-initial');
+      state.createChildState.mockReturnValue(internalWorkingState);
+
       const result = await service.interpret([textNode], { /* no initialState */ });
-      expect(internalMockStateService.createChildState).toHaveBeenCalled();
-      expect(result.getStateId()).toBe(internalWorkingState.getStateId());
+      
+      expect(state.createChildState).toHaveBeenCalled();
+      expect(result.getStateId()).toBe('forced-working-no-initial');
     });
   });
 
   describe('error handling', () => {
     it('does NOT wrap generic errors during state creation (initialState.createChildState)', async () => {
       const node: TextNode = { type: 'Text', content: 'Test content' };
-      const erroringInitialState = createMockState('error-initial');
       const creationError = new Error('Generic state creation error');
-      erroringInitialState.createChildState = vi.fn(() => { throw creationError; });
-      await expect(service.interpret([node], { initialState: erroringInitialState, mergeState: true }))
+      mockInitialState.createChildState.mockImplementation(() => { throw creationError; });
+      await expect(service.interpret([node], { initialState: mockInitialState, mergeState: true }))
             .rejects.toThrow(creationError);
     });
     
      it('preserves interpreter errors during state creation', async () => {
       const node: TextNode = { type: 'Text', content: 'Test content' };
-      const erroringInitialState = createMockState('error-initial-meld');
       const interpreterError = new MeldInterpreterError('State creation failed', 'STATE_ERROR');
-      erroringInitialState.createChildState = vi.fn(() => { throw interpreterError; });
-      await expect(service.interpret([node], { initialState: erroringInitialState, mergeState: true }))
+      mockInitialState.createChildState.mockImplementation(() => { throw interpreterError; });
+      await expect(service.interpret([node], { initialState: mockInitialState, mergeState: true }))
             .rejects.toThrow(interpreterError);
     });
     
      it('wraps errors during node processing (handler fails)', async () => {
       const node: DirectiveNode = { type: 'Directive', name: 'fail', content: '', directive: { kind: 'proc-fail' } };
       const processingError = new Error('Directive processing failed');
-      mockDirectiveService.handleDirective = vi.fn().mockImplementation(async () => { throw processingError; });
+      directiveClient.handleDirective.mockRejectedValue(processingError);
       await expect(service.interpret([node], { initialState: mockInitialState, mergeState: true }))
              .rejects.toThrow(MeldInterpreterError);
     });
 
-     it('extracts location from node for processing errors (handler fails)', async () => {
+    it('extracts location from node for processing errors (handler fails)', async () => {
       const node: DirectiveNode = { type: 'Directive', name: 'fail', content: '', directive: { kind: 'loc-fail' }, location: { start: { line: 5, column: 10 }, end: { line: 5, column: 20 } } };
       const processingError = new Error('Directive processing failed loc');
       directiveClient.handleDirective.mockRejectedValue(processingError);
@@ -341,7 +354,7 @@ describe('InterpreterService Unit', () => {
         { type: 'Text', content: 'test1' },
         { type: 'Directive', name: 'fail', content: 'failing', directive: { kind: 'partial-fail' } }
       ];
-      mockDirectiveService.handleDirective = vi.fn().mockRejectedValue(new Error('Partial fail error'));
+      directiveClient.handleDirective.mockRejectedValue(new Error('Partial fail error'));
       await expect(service.interpret(nodes, { initialState: mockInitialState, mergeState: true })).rejects.toThrow(MeldInterpreterError);
       expect(mockInitialState.createChildState).toHaveBeenCalled();
       expect(workingMockState.clone).toHaveBeenCalled();
@@ -357,25 +370,23 @@ describe('InterpreterService Unit', () => {
 
     it('processes node without location (adds node)', async () => {
       const node: TextNode = { type: 'Text', content: 'test' };
+      state.createChildState.mockReturnValueOnce(workingMockState);
       await service.interpret([node], { initialState: mockInitialState, mergeState: true });
-      const relevantMock = Object.values(createdMocks).find(m => m.addNode.mock.calls.length > 0 && m.getStateId().match(/^working-clone/));
-      expect(relevantMock?.addNode).toHaveBeenCalledWith(node);
+      expect(workingMockState.addNode).toHaveBeenCalledWith(node);
     });
 
     it('processes node with partial location (adds node)', async () => {
       const node: TextNode = { type: 'Text', content: 'test', location: { start: { line: 1, column: 1 } } };
+      state.createChildState.mockReturnValueOnce(workingMockState);
       await service.interpret([node], { initialState: mockInitialState, mergeState: true });
-      const relevantMock = Object.values(createdMocks).find(m => m.addNode.mock.calls.length > 0 && m.getStateId().match(/^working-clone/));
-      expect(relevantMock?.addNode).toHaveBeenCalledWith(node);
+      expect(workingMockState.addNode).toHaveBeenCalledWith(node);
     });
 
     it('throws wrapped error on command variable processing error (in handler)', async () => {
       const node: DirectiveNode = { type: 'Directive', name: 'test', content: '${cmd:invalid}', directive: { kind: 'cmd-fail' } };
       const cmdError = new Error('Command lookup failed');
       
-      mockDirectiveService.handleDirective = vi.fn().mockImplementationOnce(async (n, ctx) => {
-         throw cmdError; 
-      });
+      directiveClient.handleDirective.mockRejectedValue(cmdError); 
 
       await expect(service.interpret([node], { initialState: mockInitialState, mergeState: true }))
         .rejects.toThrow(MeldInterpreterError);
