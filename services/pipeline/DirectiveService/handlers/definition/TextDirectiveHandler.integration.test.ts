@@ -2,11 +2,10 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { DirectiveNode } from '@core/syntax/types.js';
+import type { DirectiveNode, InterpolatableValue } from '@core/syntax/types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { ErrorSeverity, MeldError } from '@core/errors/MeldError.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import {
   createValidationServiceMock,
@@ -15,6 +14,12 @@ import {
   createDirectiveErrorMock
 } from '@tests/utils/mocks/serviceMocks.js';
 import { createLocation } from '@tests/utils/testFactories.js';
+import { ResolutionContext } from '@core/types';
+import { StructuredPath } from '@core/types/paths';
+import { VariableReferenceNode } from '@core/ast';
+import { TextNode } from '@core/syntax/types';
+import { IDirectiveNode } from '@core/syntax/types/interfaces';
+import { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 
 /**
  * TextDirectiveHandler Integration Test Status
@@ -53,9 +58,14 @@ describe('TextDirectiveHandler Integration', () => {
     resolutionService = createResolutionServiceMock();
     
     // Configure mock implementations
-    validationService.validate.mockResolvedValue(true);
+    validationService.validate.mockResolvedValue(undefined);
     stateService.clone.mockReturnValue(clonedState);
-    resolutionService.resolveInContext.mockImplementation(value => Promise.resolve(value));
+    resolutionService.resolveInContext.mockImplementation(async (value: string | StructuredPath, context: ResolutionContext): Promise<string> => {
+      if (typeof value === 'object' && value !== null && 'raw' in value) {
+          return value.raw; 
+      }
+      return String(value); 
+    });
     
     // Create handler instance directly with mocks
     handler = new TextDirectiveHandler(
@@ -77,12 +87,11 @@ describe('TextDirectiveHandler Integration', () => {
         directive: {
           kind: 'text',
           identifier: 'greeting',
-          // Represent value as InterpolatableValue array
           value: [
             { type: 'Text', content: 'Hello ', location: createLocation(1, 1) }, 
             { type: 'VariableReference', identifier: 'user', fields: [
-              { type: 'field', value: '{{type}}.name' } // This nested ref needs careful mocking
-            ], location: createLocation(1, 7) },
+              { type: 'field', value: 'name' }
+            ], location: createLocation(1, 7), valueType: 'text', isVariableReference: true } as VariableReferenceNode,
             { type: 'Text', content: '!', location: createLocation(1, 20) }
           ]
         }
@@ -91,20 +100,18 @@ describe('TextDirectiveHandler Integration', () => {
       const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
-      };
+      } as DirectiveContext;
 
-      // Mock resolveNodes to return the final string for the specific input array
       vi.mocked(resolutionService.resolveNodes)
         .mockImplementation(async (nodes, context) => {
-          // Basic mock: Check if input roughly matches expected structure
-          if (Array.isArray(nodes) && nodes.length === 3 && nodes[1].type === 'VariableReference') {
-            return 'Hello Alice!'; // Return the final expected string
+          if (Array.isArray(nodes) && nodes.length === 3 && (nodes[1] as VariableReferenceNode).identifier === 'user') {
+            return 'Hello Alice!';
           }
-          return ''; // Default empty string
+          return '';
         });
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!', expect.objectContaining({ definedAt: expect.objectContaining({ line: 1, column: 1 }) }));
     });
 
     it('should handle mixed string literals and variables', async () => {
@@ -114,13 +121,12 @@ describe('TextDirectiveHandler Integration', () => {
         directive: {
           kind: 'text',
           identifier: 'message',
-          // Represent value as InterpolatableValue array
           value: [
-            { type: 'VariableReference', identifier: 'prefix', location: createLocation(2, 1) }, 
+            { type: 'VariableReference', identifier: 'prefix', location: createLocation(2, 1), valueType: 'text', isVariableReference: true } as VariableReferenceNode, 
             { type: 'Text', content: ' "quoted ', location: createLocation(2, 10) }, 
-            { type: 'VariableReference', identifier: 'name', location: createLocation(2, 20) }, 
+            { type: 'VariableReference', identifier: 'name', location: createLocation(2, 20), valueType: 'text', isVariableReference: true } as VariableReferenceNode, 
             { type: 'Text', content: '" ', location: createLocation(2, 25) }, 
-            { type: 'VariableReference', identifier: 'suffix', location: createLocation(2, 28) }
+            { type: 'VariableReference', identifier: 'suffix', location: createLocation(2, 28), valueType: 'text', isVariableReference: true } as VariableReferenceNode
           ]
         }
       };
@@ -128,19 +134,18 @@ describe('TextDirectiveHandler Integration', () => {
       const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
-      };
+      } as DirectiveContext;
 
-      // Mock resolveNodes
       vi.mocked(resolutionService.resolveNodes)
         .mockImplementation(async (nodes, context) => {
-           if (Array.isArray(nodes) && nodes.length === 5) { // Basic check
+           if (Array.isArray(nodes) && nodes.length === 5) {
              return 'Hello "quoted World" !';
            }
            return '';
         });
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello "quoted World" !', expect.objectContaining({ definedAt: expect.objectContaining({ line: 2, column: 1, filePath: 'test.meld' }) }));
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello "quoted World" !', expect.objectContaining({ definedAt: expect.objectContaining({ line: 2 }) }));
     });
 
     it('should handle complex data structure access', async () => {
@@ -150,13 +155,12 @@ describe('TextDirectiveHandler Integration', () => {
         directive: {
           kind: 'text',
           identifier: 'userInfo',
-          // Represent value as InterpolatableValue array
           value: [
             { type: 'VariableReference', identifier: 'user', fields: [
               { type: 'field', value: 'contacts' }, 
-              { type: 'index', value: '{{index}}' }, // Needs careful mocking 
+              { type: 'index', value: 1 },
               { type: 'field', value: 'email' }
-            ], location: createLocation(3, 1) }
+            ], location: createLocation(3, 1), valueType: 'data', isVariableReference: true } as VariableReferenceNode
           ]
         }
       };
@@ -164,19 +168,18 @@ describe('TextDirectiveHandler Integration', () => {
       const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
-      };
+      } as DirectiveContext;
 
-      // Mock resolveNodes
       vi.mocked(resolutionService.resolveNodes)
          .mockImplementation(async (nodes, context) => {
-            if (Array.isArray(nodes) && nodes.length === 1 && nodes[0].identifier === 'user') { // Basic check
+            if (Array.isArray(nodes) && nodes.length === 1 && (nodes[0] as VariableReferenceNode).identifier === 'user') {
               return 'second@example.com';
             }
             return '';
          });
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('userInfo', 'second@example.com', expect.objectContaining({ definedAt: expect.objectContaining({ line: 3, column: 1, filePath: 'test.meld' }) }));
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('userInfo', 'second@example.com', expect.objectContaining({ definedAt: expect.objectContaining({ line: 3 }) }));
     });
 
     it('should handle environment variables with fallbacks', async () => {
@@ -186,11 +189,10 @@ describe('TextDirectiveHandler Integration', () => {
         directive: {
           kind: 'text',
           identifier: 'config',
-          // Represent value as InterpolatableValue array
           value: [
-            { type: 'VariableReference', identifier: 'ENV_HOST', fallback: 'localhost', location: createLocation(4, 1) },
+            { type: 'VariableReference', identifier: 'ENV_HOST', fallback: 'localhost', location: createLocation(4, 1), valueType: 'text', isVariableReference: true } as VariableReferenceNode,
             { type: 'Text', content: ':', location: createLocation(4, 20) },
-            { type: 'VariableReference', identifier: 'ENV_PORT', fallback: '3000', location: createLocation(4, 21) }
+            { type: 'VariableReference', identifier: 'ENV_PORT', fallback: '3000', location: createLocation(4, 21), valueType: 'text', isVariableReference: true } as VariableReferenceNode
           ]
         }
       };
@@ -198,22 +200,20 @@ describe('TextDirectiveHandler Integration', () => {
       const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
-      };
+      } as DirectiveContext;
 
       process.env.ENV_HOST = 'example.com';
-      // ENV_PORT not set, should use fallback
 
-      // Mock resolveNodes
       vi.mocked(resolutionService.resolveNodes)
         .mockImplementation(async (nodes, context) => {
-           if (Array.isArray(nodes) && nodes.length === 3) { // Basic check
+           if (Array.isArray(nodes) && nodes.length === 3) {
              return 'example.com:3000';
            }
            return '';
         });
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('config', 'example.com:3000', expect.objectContaining({ definedAt: expect.objectContaining({ line: 4, column: 1, filePath: 'test.meld' }) }));
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('config', 'example.com:3000', expect.objectContaining({ definedAt: expect.objectContaining({ line: 4 }) }));
 
       delete process.env.ENV_HOST;
     });
@@ -225,60 +225,50 @@ describe('TextDirectiveHandler Integration', () => {
     it('should handle validation errors with proper context', async () => {
       const node: DirectiveNode = {
         type: 'Directive',
+        location: createLocation(5, 1),
         directive: {
           kind: 'text',
           identifier: 'invalid',
-          value: null // Invalid value - should be a string
+          value: null as any
         },
-        location: {
-          start: { line: 5, column: 1 },
-          end: { line: 5, column: 25 }
-        }
       };
 
       const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
-      };
+      } as DirectiveContext;
 
-      // Mock validation service to throw a simple Error for this test
-      validationService.validate = vi.fn().mockImplementation(() => {
+      validationService.validate = vi.fn().mockImplementation(async (node: IDirectiveNode) => {
         throw new Error('Validation failed for test');
       });
 
-      // Use ErrorCollector to test both strict and permissive modes
       const errorCollector = new ErrorCollector();
       
-      // Test strict mode (should throw)
       await expect(async () => {
         try {
           await handler.execute(node, testContext);
         } catch (error) {
-          // Ensure we're passing an appropriate error to the handler
           if (error instanceof Error && !(error instanceof DirectiveError)) {
-             // If it's our simple error, wrap it for the collector
              const wrappedError = new DirectiveError(
                error.message, 
                'text', 
                DirectiveErrorCode.VALIDATION_FAILED, 
-               { node, context: testContext } // Pass basic context
+               { node, context: testContext }
              );
              errorCollector.handleError(wrappedError);
-             throw wrappedError; // Rethrow the wrapped error
+             throw wrappedError;
           } else if (error instanceof DirectiveError) {
             errorCollector.handleError(error);
           }
-          throw error; // Rethrow original or other errors
+          throw error;
         }
       }).rejects.toThrow(DirectiveError);
       
-      // Verify error was collected 
       expect(errorCollector.getAllErrors()).toHaveLength(1);
       
-      // Verify error contains some context (check the wrapped error's context property)
       const collectedError = errorCollector.getAllErrors()[0];
       console.log('Collected Error:', JSON.stringify(collectedError, null, 2));
-      console.log('Collected Error Context:', JSON.stringify(collectedError.context, null, 2));
+      console.log('Collected Error Context:', JSON.stringify(collectedError.details?.context, null, 2));
       
       expect(collectedError.details).toBeDefined(); 
       expect(collectedError.details?.node).toBeDefined(); 

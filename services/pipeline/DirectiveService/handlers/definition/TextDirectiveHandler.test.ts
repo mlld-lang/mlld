@@ -5,6 +5,8 @@ import type { DirectiveNode } from '@core/syntax/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { StringLiteralHandler } from '@services/resolution/ResolutionService/resolvers/StringLiteralHandler.js';
 import { StringConcatenationHandler } from '@services/resolution/ResolutionService/resolvers/StringConcatenationHandler.js';
+import { parse } from '@core/ast'; // Import the parser
+import { createLocation } from '@tests/utils/testFactories.js'; // <<< Add import
 // Import the centralized syntax examples and helpers
 import { textDirectiveExamples } from '@core/syntax/index.js';
 import { ErrorSeverity, FieldAccessError, MeldResolutionError } from '@core/errors/index.js';
@@ -377,12 +379,12 @@ describe('TextDirectiveHandler', () => {
       const invalidExample = textDirectiveExamples.invalid.unclosedString;
       
       // Create a mock node directly instead of parsing invalid syntax
-      const node = {
+      const node: DirectiveNode = {
         type: 'Directive',
         directive: {
           kind: 'text',
           identifier: 'greeting',
-          value: '"unclosed string'
+          value: [{ type: 'Text', content: '"unclosed string', location: createLocation(1,1) }], 
         },
         location: {
           start: { line: 1, column: 1 },
