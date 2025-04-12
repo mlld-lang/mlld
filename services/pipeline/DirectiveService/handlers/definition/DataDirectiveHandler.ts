@@ -115,27 +115,34 @@ export class DataDirectiveHandler implements IDirectiveHandler {
         try {
           // Use the locally defined RunRHSStructure type
           const commandInput = run.command;
+          const runSubtype = run.subtype; // Get subtype
           if (!commandInput) throw new Error('Missing command input for @run source');
           
           let resolvedCommandString: string;
-          if (typeof commandInput === 'object' && 'name' in commandInput) {
-             // Handle runDefined subtype - requires resolving command definition
-             // This logic might need refinement based on how @define stores commands
+
+          // Handle different run subtypes
+          if (runSubtype === 'runDefined') {
+             if (typeof commandInput !== 'object' || !('name' in commandInput)) {
+                 throw new Error('Invalid command input structure for runDefined subtype');
+             }
              const cmdVar = context.state.getCommandVar(commandInput.name);
+             // Use type guard before accessing commandTemplate
              if (cmdVar && cmdVar.value && isBasicCommand(cmdVar.value)) { 
-                // TODO: Handle argument resolution if needed
+                // TODO: Handle argument resolution/substitution if defined commands support them via @data
                 resolvedCommandString = cmdVar.value.commandTemplate; 
              } else {
-                // Handle case where it's not a basic command or not found
-                const errorMsg = cmdVar ? `Command '${commandInput.name}' is not a basic command` : `Command definition '${commandInput.name}' not found`;
-                throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { node, context });
+                const errorMsg = cmdVar ? `Command '${commandInput.name}' is not a basic command suitable for @data/@run` : `Command definition '${commandInput.name}' not found`;
+                throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { node: node as any, context });
              }
-          } else {
-             // Handle runCommand, runCode, runCodeParams - expect InterpolatableValue
+          } else if (runSubtype === 'runCommand' || runSubtype === 'runCode' || runSubtype === 'runCodeParams') {
+             // These subtypes should provide InterpolatableValue according to AST
              if (!isInterpolatableValueArray(commandInput)) {
-                throw new Error('Expected InterpolatableValue for command input');
+                throw new Error(`Expected InterpolatableValue for command input with subtype '${runSubtype}'`);
              }
              resolvedCommandString = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
+          } else {
+             // Should not happen if parser is correct
+             throw new Error(`Unsupported run subtype '${runSubtype}' encountered in @data handler`);
           }
           
           const fsService = this.fileSystemService;
@@ -166,39 +173,57 @@ export class DataDirectiveHandler implements IDirectiveHandler {
         }
       } else if (source === 'embed' && embed) {
          try {
-          // Use the locally defined EmbedRHSStructure type
+          // Use the locally defined EmbedRHSStructure type and its subtype
           const embedSubtype = embed.subtype;
           let fileContent: string;
 
-          if (embedSubtype === 'embedPath' || embedSubtype === 'embedVariable') {
+          if (embedSubtype === 'embedPath') {
               const embedPathObject = embed.path;
               if (!embedPathObject) {
-                 throw new DirectiveError('Missing path for @embed path/variable source', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node, context });
+                 throw new DirectiveError('Missing path for @embed source (subtype: embedPath)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
               }
+              // Resolve path (potentially with interpolation)
               const valueToResolve = embedPathObject.interpolatedValue ?? embedPathObject.raw;
               const resolvedEmbedPathString = await this.resolutionService.resolveInContext(valueToResolve, resolutionContext);
               const validatedMeldPath = await this.resolutionService.resolvePath(resolvedEmbedPathString, resolutionContext);
               
+              // Check if path is filesystem before reading
+              if (validatedMeldPath.contentType !== 'filesystem') {
+                  throw new DirectiveError(`Cannot embed non-filesystem path: ${resolvedEmbedPathString}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
+              }
+
               const fsService = this.fileSystemService;
               if (!fsService) {
-                throw new DirectiveError('File system service is unavailable for @embed execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node, context });
+                throw new DirectiveError('File system service is unavailable for @embed execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node: node as any, context });
               }
               fileContent = await fsService.readFile(validatedMeldPath.validatedPath);
 
+          } else if (embedSubtype === 'embedVariable') {
+              const embedPathObject = embed.path; // Variable info is stored in path property for this subtype
+              if (!embedPathObject) {
+                 throw new DirectiveError('Missing variable reference for @embed source (subtype: embedVariable)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
+              }
+              // Resolve the variable reference (which might be {{textVar}} or $pathVar)
+              // Pass the raw string containing the variable to resolveInContext
+              fileContent = await this.resolutionService.resolveInContext(embedPathObject.raw, resolutionContext);
+
           } else if (embedSubtype === 'embedTemplate') {
               const templateContent = embed.content;
-              if (!templateContent) {
-                  throw new DirectiveError('Missing content for @embed template source', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node, context });
+              if (!templateContent || !isInterpolatableValueArray(templateContent)) { // Add guard
+                  throw new DirectiveError('Missing or invalid content for @embed source (subtype: embedTemplate)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
               }
               fileContent = await this.resolutionService.resolveNodes(templateContent, resolutionContext);
           } else {
-             throw new DirectiveError(`Unsupported embed subtype: ${embedSubtype}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node, context });
+             // Should not happen if parser/validation is correct
+             throw new DirectiveError(`Unsupported embed subtype: ${embedSubtype}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
           }
           
+          // Handle section extraction (applies mainly to embedPath)
           if (embed.section) {
              fileContent = await this.resolutionService.extractSection(fileContent, embed.section);
           }
 
+          // Parse the final content as JSON
           try {
             resolvedValue = JSON.parse(fileContent);
           } catch (parseError) {
