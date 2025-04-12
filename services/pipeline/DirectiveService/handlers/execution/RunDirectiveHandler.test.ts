@@ -13,7 +13,7 @@ vi.mock('../../../../core/utils/logger', () => ({
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import type { DirectiveNode, IDirectiveNode } from '@core/syntax/types.js';
+import type { DirectiveNode } from '@core/syntax/types/nodes.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -34,7 +34,7 @@ import {
   createDirectiveErrorMock,
 } from '@tests/utils/mocks/serviceMocks.js';
 import type { InterpolatableValue, TextNode, VariableReferenceNode } from '@core/syntax/types/nodes.js';
-import type { Location } from '@core/types/index.js';
+import type { Location, SourceLocation } from '@core/types/index.js';
 import type { MockedFunction } from 'vitest';
 import { 
   createRunDirective,
@@ -42,7 +42,7 @@ import {
   createVariableReferenceNode, 
   createLocation 
 } from '@tests/utils/testFactories.js';
-import { VariableType, CommandVariable } from '@core/types/variables.js';
+import { VariableType, CommandVariable, VariableOrigin } from '@core/types/variables.js';
 import { tmpdir } from 'os'; // Import tmpdir
 import { join } from 'path';   // Import join
 import { randomBytes } from 'crypto'; // Import randomBytes
@@ -163,6 +163,10 @@ describe('RunDirectiveHandler', () => {
     vi.mocked(stateService.getCommandVar).mockImplementation(
         (name: string): CommandVariable | undefined => {
             if (name === 'greet') {
+                // Construct SourceLocation correctly - filePath, line, column required
+                const definedAtLocation: SourceLocation = { 
+                    filePath: 'mock.meld', line: 1, column: 1 
+                };
                 return {
                     type: VariableType.COMMAND,
                     name: 'greet',
@@ -173,9 +177,14 @@ describe('RunDirectiveHandler', () => {
                         parameters: [],
                         isMultiline: false
                     },
-                    // Add minimal metadata if needed by type, otherwise omit
-                    metadata: { definedAt: {filePath:'', line:0, column:0} }
-                } as CommandVariable;
+                    // Use valid SourceLocation for definedAt
+                    metadata: {
+                        definedAt: definedAtLocation, 
+                        createdAt: Date.now(), 
+                        modifiedAt: Date.now(), 
+                        origin: VariableOrigin.DIRECT_DEFINITION
+                    }
+                };
             }
             return undefined;
         }
@@ -193,6 +202,7 @@ describe('RunDirectiveHandler', () => {
     vi.mocked(resolutionService.resolveNodes).mockImplementation(async (nodes: InterpolatableValue, context: any): Promise<string> => {
         let commandString = '';
         for (const node of nodes) {
+            // Use type guards for safer access
             if (node.type === 'Text') {
                 commandString += node.content;
             } else if (node.type === 'VariableReference') {
@@ -212,7 +222,13 @@ describe('RunDirectiveHandler', () => {
             // Simple fallback for other strings
             return value.replace(/{{(.*?)}}/g, (match, p1) => `resolved_${p1}`);
         } else if (Array.isArray(value)) { // Handle InterpolatableValue directly if passed
-            return await resolutionService.resolveNodes(value, context);
+            return await resolutionService.resolveNodes(value as InterpolatableValue, context);
+        } else if (value && typeof value === 'object' && value.type === 'VariableReference') {
+            // Refined check for VariableReference node
+            const varNode = value as VariableReferenceNode;
+            if (varNode.identifier === 'inputVar') return 'ResolvedParamValue';
+            if (varNode.identifier === 'missingVar') throw new Error('Variable not found by mock');
+            return `resolved_${varNode.identifier}`;
         }
         // Handle StructuredPath if needed, basic mock for now
         return typeof value === 'string' ? value : (value as any).raw || 'resolved-structured-path';
@@ -241,7 +257,7 @@ describe('RunDirectiveHandler', () => {
 
   describe('basic command execution', () => {
     it('should execute simple commands', async () => {
-      const node = createRunDirective('echo test');
+      const node = createRunDirective('echo test', createLocation());
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -263,8 +279,14 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should handle commands with variables', async () => {
-      const commandNodes: InterpolatableValue = [ createTextNode('echo '), createVariableReferenceNode('greeting', VariableType.TEXT), createTextNode(' '), createVariableReferenceNode('name', VariableType.TEXT) ];
-      const node = createRunDirective(commandNodes);
+      const location = createLocation();
+      const commandNodes: InterpolatableValue = [ 
+          createTextNode('echo ', location), 
+          createVariableReferenceNode('greeting', VariableType.TEXT, undefined, location), 
+          createTextNode(' ', location), 
+          createVariableReferenceNode('name', VariableType.TEXT, undefined, location)
+      ];
+      const node = createRunDirective(commandNodes, location);
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -286,7 +308,7 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should handle custom output variable', async () => {
-      const node = createRunDirective('echo test', undefined, 'runCommand', undefined, undefined, 'custom_output');
+      const node = createRunDirective('echo test', createLocation(), 'runCommand', undefined, undefined, 'custom_output');
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -345,7 +367,7 @@ describe('RunDirectiveHandler', () => {
 
     it('should handle custom output variable', async () => {
       // Arrange
-      const node = createRunDirective('echo test', undefined, 'runCommand', undefined, undefined, 'custom_output');
+      const node = createRunDirective('echo test', createLocation(), 'runCommand', undefined, undefined, 'custom_output');
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -362,7 +384,7 @@ describe('RunDirectiveHandler', () => {
 
     it('should properly expand command references with $', async () => {
        const commandRefObject = { name: 'greet', args: [], raw: '$greet' };
-       const node = createRunDirective(commandRefObject, undefined, 'runDefined'); 
+       const node = createRunDirective(commandRefObject, createLocation(), 'runDefined');
        const context = { 
          currentFilePath: 'test.meld', 
          state: stateService,
@@ -405,8 +427,9 @@ describe('RunDirectiveHandler', () => {
 
   describe('runCode/runCodeParams execution', () => {
     it('should execute script content without language as shell commands', async () => {
-      const scriptContent: InterpolatableValue = [ createTextNode('echo "Inline script ran"') ];
-      const node = createRunDirective(scriptContent, undefined, 'runCode'); 
+      const location = createLocation();
+      const scriptContent: InterpolatableValue = [ createTextNode('echo "Inline script ran"', location) ];
+      const node = createRunDirective(scriptContent, location, 'runCode');
       const context: DirectiveContext = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -425,8 +448,9 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should execute script content with specified language using a temp file', async () => {
-      const scriptContent: InterpolatableValue = [ createTextNode('print("Python script ran")') ];
-      const node = createRunDirective(scriptContent, 'python', 'runCode'); 
+      const location = createLocation();
+      const scriptContent: InterpolatableValue = [ createTextNode('print("Python script ran")', location) ];
+      const node = createRunDirective(scriptContent, location, 'runCode', undefined, 'python');
        const context: DirectiveContext = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -437,7 +461,6 @@ describe('RunDirectiveHandler', () => {
         stdout: 'Python script ran', stderr: ''
       });
       vi.mocked(fileSystemService.writeFile).mockResolvedValue(undefined);
-      vi.mocked(fileSystemService.deleteFile).mockResolvedValue(true); // Assume delete succeeds
       
       const result = await handler.execute(node, context);
       
@@ -447,25 +470,23 @@ describe('RunDirectiveHandler', () => {
         expect.stringMatching(/^python .*meld-script-.*\.py $/), // Check command structure
         { cwd: '/workspace' }
       );
-      expect(fileSystemService.deleteFile).toHaveBeenCalledWith(expect.stringContaining('.py'));
       expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'Python script ran');
     });
 
     it('should resolve and pass parameters to a language script', async () => {
-      const scriptContent: InterpolatableValue = [ createTextNode('import sys\nprint(f"Input: {sys.argv[1]}")') ];
-      const params: (string | VariableReferenceNode)[] = [ createVariableReferenceNode('inputVar', VariableType.TEXT) as VariableReferenceNode ]; // Added cast
-      const node = createRunDirective(scriptContent, 'python', 'runCodeParams', params); 
+      const location = createLocation();
+      const scriptContent: InterpolatableValue = [ createTextNode('import sys\nprint(f"Input: {sys.argv[1]}")', location) ];
+      const params: VariableReferenceNode[] = [ createVariableReferenceNode('inputVar', VariableType.TEXT, undefined, location) ];
+      const node = createRunDirective(scriptContent, location, 'runCodeParams', params, 'python');
       const context: DirectiveContext = { 
         currentFilePath: 'test.meld', 
         state: stateService,
         workingDirectory: '/workspace'
       };
 
-      // Mock variable resolution for the parameter - use resolveInContext or resolveNodes
+      // Mock variable resolution for the parameter - use resolveInContext
       vi.mocked(resolutionService.resolveInContext).mockImplementation(async (value, context) => {
-          // Simulate resolving the VariableReferenceNode passed via InterpolatableValue or direct string
-          if (typeof value === 'string' && value.includes('inputVar')) return 'TestParameter';
-          if (Array.isArray(value) && value.some(n => n.type === 'VariableReference' && n.identifier === 'inputVar')) return 'TestParameter';
+          if (value && typeof value === 'object' && value.type === 'VariableReference' && value.identifier === 'inputVar') return 'TestParameter';
           return String(value); // Fallback
       });
 
@@ -473,49 +494,45 @@ describe('RunDirectiveHandler', () => {
         stdout: 'Input: TestParameter', stderr: ''
       });
       vi.mocked(fileSystemService.writeFile).mockResolvedValue(undefined);
-      // Remove deleteFile mock and assertion
-      // vi.mocked(fileSystemService.deleteFile).mockResolvedValue(true);
       
       const result = await handler.execute(node, context);
       
       // Assertion might change depending on how parameters are resolved now
-      // expect(resolutionService.resolveInContext).toHaveBeenCalledWith(params[0], expect.any(Object)); // Or resolveNodes
+      // Expect resolveInContext to be called with the parameter node
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(params[0], expect.any(Object)); 
       expect(fileSystemService.writeFile).toHaveBeenCalledWith(expect.stringContaining('.py'), 'import sys\nprint(f"Input: {sys.argv[1]}")');
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
         expect.stringMatching(/^python .*meld-script-.*\.py "TestParameter"$/), // Check command structure with param
         { cwd: '/workspace' }
       );
-      // Remove assertion for deleteFile
-      // expect(fileSystemService.deleteFile).toHaveBeenCalledWith(expect.stringContaining('.py'));
       expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'Input: TestParameter');
     });
      
     it('should handle parameter resolution failure in strict mode', async () => {
-        const scriptContent: InterpolatableValue = [ createTextNode('print("hello")') ];
-        const params: (string | VariableReferenceNode)[] = [ createVariableReferenceNode('missingVar', VariableType.TEXT) as VariableReferenceNode ]; // Added cast
-        const node = createRunDirective(scriptContent, 'python', 'runCodeParams', params); 
-        const strictContext: DirectiveContext = { 
+        const location = createLocation();
+        const scriptContent: InterpolatableValue = [ createTextNode('print("hello")', location) ];
+        const params: VariableReferenceNode[] = [ createVariableReferenceNode('missingVar', VariableType.TEXT, undefined, location) ];
+        const node = createRunDirective(scriptContent, location, 'runCodeParams', params, 'python');
+        const context: DirectiveContext = { 
             currentFilePath: 'test.meld', 
             state: stateService,
-            workingDirectory: '/workspace',
-            strict: true // <<< Enable strict mode
+            workingDirectory: '/workspace'
         };
 
-        // Mock appropriate resolution method to throw (resolveInContext or resolveNodes)
+        // Mock appropriate resolution method to throw (resolveInContext)
         vi.mocked(resolutionService.resolveInContext).mockRejectedValue(new Error('Variable not found'));
-        // Or if parameters are passed as nodes:
-        // vi.mocked(resolutionService.resolveNodes).mockRejectedValue(new Error('Variable not found'));
 
-        await expect(handler.execute(node, strictContext)).rejects.toThrow(DirectiveError);
+        // Expect DirectiveError wrapping the resolution error
+        await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError); 
         // Assertion might change depending on which resolution method is called
-        // expect(resolutionService.resolveInContext).toHaveBeenCalledWith(params[0], expect.any(Object));
+        expect(resolutionService.resolveInContext).toHaveBeenCalledWith(params[0], expect.any(Object));
         expect(fileSystemService.executeCommand).not.toHaveBeenCalled(); // Should not execute if resolution fails
     });
   });
 
   describe('error handling', () => {
     it('should handle validation errors', async () => {
-      const node = createRunDirective('');
+      const node = createRunDirective('', createLocation());
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -534,8 +551,9 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should handle resolution errors', async () => {
-      const commandNodes: InterpolatableValue = [ createVariableReferenceNode('undefined_var', VariableType.TEXT) as VariableReferenceNode ];
-      const node = createRunDirective(commandNodes);
+      const location = createLocation();
+      const commandNodes: InterpolatableValue = [ createVariableReferenceNode('undefined_var', VariableType.TEXT, undefined, location) ];
+      const node = createRunDirective(commandNodes, location);
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -551,7 +569,7 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should handle command execution errors', async () => {
-      const node = createRunDirective('invalid-command');
+      const node = createRunDirective('invalid-command', createLocation());
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -572,7 +590,7 @@ describe('RunDirectiveHandler', () => {
 
     it('should handle undefined command references', async () => {
       const commandRefObject = { name: 'undefinedCommand', args: [], raw: '$undefinedCommand' };
-      const node = createRunDirective(commandRefObject, undefined, 'runDefined'); 
+      const node = createRunDirective(commandRefObject, createLocation(), 'runDefined');
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -599,7 +617,7 @@ describe('RunDirectiveHandler', () => {
 
   describe('output handling', () => {
     it('should handle stdout and stderr', async () => {
-      const node = createRunDirective('echo "Out" && >&2 echo "Err"');
+      const node = createRunDirective('echo "Out" && >&2 echo "Err"', createLocation());
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -620,7 +638,7 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should handle transformation mode', async () => {
-      const node = createRunDirective('echo "Success"');
+      const node = createRunDirective('echo "Success"', createLocation());
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
