@@ -128,7 +128,7 @@ export function validateMigration(oldState: IStateService, newState: StateNode, 
   // Validate text variables
   for (const [key, value] of oldState.getAllTextVars()) {
     const newValue = newState.variables.text.get(key);
-    if (newValue !== value) {
+    if (newValue?.value !== value) {
       warnings.push(`Text variable mismatch: ${key}`);
     }
   }
@@ -136,7 +136,7 @@ export function validateMigration(oldState: IStateService, newState: StateNode, 
   // Validate data variables
   for (const [key, value] of oldState.getAllDataVars()) {
     const newValue = newState.variables.data.get(key);
-    if (JSON.stringify(newValue) !== JSON.stringify(value)) {
+    if (JSON.stringify(newValue?.value) !== JSON.stringify(value)) {
       warnings.push(`Data variable mismatch: ${key}`);
     }
   }
@@ -144,7 +144,7 @@ export function validateMigration(oldState: IStateService, newState: StateNode, 
   // Validate path variables
   for (const [key, value] of oldState.getAllPathVars()) {
     const newValue = newState.variables.path.get(key);
-    if (newValue !== value) {
+    if (JSON.stringify(newValue?.value) !== JSON.stringify(value)) {
       warnings.push(`Path variable mismatch: ${key}`);
     }
   }
@@ -152,7 +152,7 @@ export function validateMigration(oldState: IStateService, newState: StateNode, 
   // Validate commands
   for (const [key, value] of oldState.getAllCommands()) {
     const newValue = newState.commands.get(key);
-    if (!newValue || JSON.stringify(newValue) !== JSON.stringify(value)) {
+    if (!newValue || JSON.stringify(newValue.value) !== JSON.stringify(value)) {
       warnings.push(`Command mismatch: ${key}`);
     }
   }

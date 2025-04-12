@@ -42,10 +42,6 @@ describe('State Migration', () => {
     context.registerMock<IStateService>('IStateService', mockState);
     
     oldState = await context.resolve<IStateService>('IStateService');
-
-    oldState.setTextVar('text', 'value');
-    oldState.setDataVar('data', { key: 'value' });
-    oldState.setPathVar('path', { raw: '/test/path' });
   });
 
   afterEach(async () => {
@@ -60,15 +56,20 @@ describe('State Migration', () => {
     it('should migrate empty state', () => {
       expect(result.success).toBe(true);
       expect(result.warnings).toHaveLength(0);
-      expect(result.state.variables.text.size).toBe(1);
-      expect(result.state.variables.data.size).toBe(1);
-      expect(result.state.variables.path.size).toBe(1);
+      expect(result.state.variables.text.size).toBe(0);
+      expect(result.state.variables.data.size).toBe(0);
+      expect(result.state.variables.path.size).toBe(0);
       expect(result.state.commands.size).toBe(0);
       expect(result.state.imports.size).toBe(0);
       expect(result.state.nodes.length).toBe(0);
     });
 
     it('should migrate state with variables', () => {
+      oldState.setTextVar('text', 'value');
+      oldState.setDataVar('data', { key: 'value' });
+      oldState.setPathVar('path', { raw: '/test/path' });
+      
+      result = migrateState(oldState);
       expect(result.state.variables.text.get('text')?.value).toBe('value');
 
       expect(result.state.variables.data.get('data')?.value).toEqual({ key: 'value' });

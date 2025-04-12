@@ -48,14 +48,8 @@ export class PathDirectiveHandler implements IDirectiveHandler {
     });
 
     try {
-      // Log state service information
-      logger.debug('State service details', {
-        stateExists: !!context.state,
-        stateMethods: context.state ? Object.keys(context.state) : 'undefined'
-      });
-
-      // Get the fresh state service instance (kept for context)
-      const freshStateService = container.resolve<IStateService>('IStateService');
+      // Create a new state for modifications
+      const newState = context.state.clone(); // Clone for return value modification
 
       // 1. Validate directive structure
       await this.validationService.validate(node);
@@ -71,10 +65,10 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         throw new DirectiveError('Path directive requires a path object', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node, context });
       }
 
-      // Create resolution context USING THE FRESH state
+      // Create resolution context USING THE CLONED newState
       const resolutionContext = ResolutionContextFactory.forPathDirective(
         context.currentFilePath,
-        freshStateService, // Use the fresh state for resolution context instead
+        newState, // <<< USE CLONED newState >>>
         context.currentFilePath 
       );
 
@@ -110,15 +104,11 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       }
       
       // 5. Store the validated path *state* (IFilesystemPathState or IUrlPathState)
-      // NOTE: Setting variable on freshStateService. This might be lost if
-      // StateService is not a singleton or if InterpreterService doesn't
-      // receive this specific instance back. This is primarily for DIAGNOSIS
-      // to see if the path error goes away.
       if (!validatedMeldPath.value) {
            // This shouldn't happen if validation succeeded, but check defensively
            throw new DirectiveError('Validated path object is missing internal state', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node, context });
       }
-      await freshStateService.setPathVar(identifier, validatedMeldPath.value);
+      await newState.setPathVar(identifier, validatedMeldPath.value); // Set on newState
 
       logger.debug('Path directive processed successfully', {
         identifier,
@@ -126,10 +116,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         location: node.location
       });
 
-      // Clone the potentially problematic context.state JUST for the return value.
-      // The important part is that the core logic used the 'freshStateService'.
-      const returnValueState = context.state.clone();
-      return returnValueState;
+      return newState; // Return the modified clone
     } catch (error) {
       // Handle errors
       if (error instanceof DirectiveError) {
