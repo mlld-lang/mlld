@@ -12,6 +12,7 @@ import { TestDirectiveHandlerHelper } from '@tests/utils/di/TestDirectiveHandler
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { IResolutionService } from '@services/pipeline/ResolutionService/IResolutionService.js';
 import { IStateService } from '@services/state/IStateService.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 // Main test suite for DirectiveService
 describe('DirectiveService', () => {
@@ -219,8 +220,19 @@ describe('DirectiveService', () => {
       const uninitializedService = new DirectiveService();
       const node = context.factory.createTextDirective('test', '"value"', context.factory.createLocation(1, 1));
       const execContext = { currentFilePath: 'test.meld', state: context.services.state };
+      
+      // Check for specific error type and code
       await expect(uninitializedService.processDirective(node, execContext))
-        .rejects.toThrowError(/DirectiveService must be initialized before use|Cannot read properties of undefined/);
+        .rejects.toThrowError(expect.any(DirectiveError)); // Check base type
+
+      // Optional: More specific checks if needed
+      try {
+        await uninitializedService.processDirective(node, execContext);
+      } catch (e) {
+        const error = e as DirectiveError;
+        expect(error.code).toBe(DirectiveErrorCode.HANDLER_NOT_FOUND);
+        expect(error.message).toContain(`No handler found for directive: ${node.directive.kind}`);
+      }
     });
   });
 

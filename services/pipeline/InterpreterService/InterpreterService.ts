@@ -448,19 +448,25 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
       // Process based on node type
       switch (node.type) {
         case 'Text':
-          // Check if content needs resolution
+          process.stdout.write(`[InterpreterService LOG] Processing TextNode. Content includes '{{': ${node.content.includes('{{')}\n`);
+          process.stdout.write(`[InterpreterService LOG] Checking services: parserClient=${!!this.parserClient}, resolutionService=${!!this.resolutionService}\n`);
+          
           let processedNode = node;
           if (node.content.includes('{{')) {
             logger.debug('TextNode content requires resolution', { content: node.content.substring(0, 50) });
             this.ensureFactoryInitialized(); // Ensure parser client is ready
             if (this.parserClient && this.resolutionService) {
+              process.stdout.write(`[InterpreterService LOG] Parser and Resolution services OK. Attempting parse/resolve.\n`);
               try {
                 const parsedNodes = await this.parserClient.parseString(node.content, { filePath: state.getCurrentFilePath() });
                 const context = ResolutionContextFactory.create(state, state.getCurrentFilePath());
-                process.stdout.write(`[InterpreterService LOG] Context for resolveNodes: strict=${context.strict}, depth=${context.depth}\n`);
-                const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, context);
+                const textResolutionContext = context.withFlags({ preserveUnresolved: false }); 
+                process.stdout.write(`[InterpreterService LOG] Context for resolveNodes: strict=${textResolutionContext.strict}, depth=${textResolutionContext.depth}, preserveUnresolved=${textResolutionContext.flags.preserveUnresolved}\n`);
+                const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, textResolutionContext);
                 // Create a new node with resolved content
                 processedNode = { ...node, content: resolvedContent };
+                process.stdout.write(`[InterpreterService LOG] Resolved content: '${resolvedContent}'\n`);
+                process.stdout.write(`[InterpreterService LOG] Processed node content: '${processedNode.content}'\n`);
                 logger.debug('Successfully resolved TextNode content', { 
                   originalLength: node.content.length, 
                   resolvedLength: resolvedContent.length 

@@ -89,6 +89,9 @@ export interface ResolutionFlags {
   
   /** Whether to process nested variables */
   processNestedVariables: boolean;
+  
+  /** Preserve unresolved variable tags {{tag}} instead of replacing with empty string in non-strict mode */
+  preserveUnresolved?: boolean;
 }
 
 /**

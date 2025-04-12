@@ -561,7 +561,12 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
 
   private ensureInitialized(): void {
     if (!this.initialized) {
-      throw new Error('DirectiveService must be initialized before use');
+      throw new DirectiveError(
+        'DirectiveService must be initialized before use',
+        'initialization',
+        DirectiveErrorCode.INVALID_CONTEXT,
+        { severity: ErrorSeverity.Fatal } 
+      );
     }
   }
 
@@ -911,13 +916,7 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    */
   public async processDirective(node: DirectiveNode, context: DirectiveContext): Promise<StateServiceLike> {
     // Add initialization check before any other processing
-    if (!this.initialized) {
-      throw new MeldDirectiveError(
-        'DirectiveService must be initialized before use',
-        'initialization',
-        { severity: ErrorSeverity.Fatal }
-      );
-    }
+    this.ensureInitialized();
 
     try {
       // Get the handler for this directive kind

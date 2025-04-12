@@ -284,7 +284,18 @@ export class VariableReferenceResolver {
              throw error;
         }
         
-        // Suppress non-fatal errors in non-strict mode
+        // <<< Check if we should return the original tag >>>
+        if (context.flags?.preserveUnresolved) { // Check for a flag (needs adding to ResolutionContext)
+            logger.warn(`[RESOLVE] Non-strict mode & preserveUnresolved=true, returning original tag for ${node.identifier}.`);
+            // Reconstruct the tag - this might need refinement based on AST details
+            let tag = `{{${node.identifier}}}`; 
+            if (node.fields && node.fields.length > 0) {
+                tag = `{{${node.identifier}${node.fields.map(f => f.type === 'index' ? `[${f.value}]` : `.${f.value}`).join('')}}}`; 
+            }
+            return tag;
+        }
+
+        // Suppress non-fatal errors in non-strict mode and return empty string
         logger.warn(`[RESOLVE] Non-strict mode, suppressing error for ${node.identifier}, returning empty string.`);
         return '';
     }

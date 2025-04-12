@@ -86,7 +86,8 @@ export class ResolutionContextFactory {
         allowRawContentResolution: false,
         isDirectiveHandler: false,
         isImportContext: false,
-        processNestedVariables: true
+        processNestedVariables: true,
+        preserveUnresolved: false
      };
   }
 
