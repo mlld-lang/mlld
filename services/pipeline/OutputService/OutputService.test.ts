@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { mockDeep, mockReset } from 'vitest-mock-extended';
+import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import type { MeldNode } from '@core/syntax/types.js';
@@ -23,6 +23,8 @@ import {
 import runDirectiveExamplesModule from '@core/syntax/run.js';
 import { createNodeFromExample } from '@core/syntax/helpers/index.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import { createResolutionServiceMock, createStateServiceMock } from '@tests/utils/mocks/serviceMocks';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -30,59 +32,42 @@ const runDirectiveExamples = runDirectiveExamplesModule;
 describe('OutputService', () => {
   let context: TestContextDI;
   let service: OutputService;
-  let state: IStateService;
-  let resolutionService: IResolutionService;
-  let mockVariableNodeFactory: any;
+  let state: DeepMockProxy<IStateService>;
+  let resolutionService: DeepMockProxy<IResolutionService>;
+  let mockVariableNodeFactory: DeepMockProxy<VariableNodeFactory>;
 
   beforeEach(async () => {
-    // Create isolated test context
+    // Use TestContextDI for setup
     context = TestContextDI.createIsolated();
     
-    // Create mock services using vitest-mock-extended
+    // Create standard mocks
     state = mockDeep<IStateService>();
     resolutionService = mockDeep<IResolutionService>();
+    mockVariableNodeFactory = mockDeep<VariableNodeFactory>();
     
-    // Create mock VariableNodeFactory
-    mockVariableNodeFactory = {
-      createVariableReferenceNode: vi.fn().mockImplementation((identifier, valueType, fields, format, location) => ({
-        type: 'VariableReference',
-        identifier,
-        valueType,
-        fields,
-        isVariableReference: true,
-        ...(format && { format }),
-        ...(location && { location })
-      })),
-      isVariableReferenceNode: vi.fn().mockImplementation((node) => {
-        return (
-          node?.type === 'VariableReference' &&
-          typeof node?.identifier === 'string' &&
-          typeof node?.valueType === 'string'
-        );
-      })
-    };
-    
-    // Reset mocks before each test
-    mockReset(state);
-    mockReset(resolutionService);
-    
-    // Register mocks with the context
+    // Register mocks in the container
     context.registerMock('IStateService', state);
     context.registerMock('IResolutionService', resolutionService);
-    context.registerMock(VariableNodeFactory, mockVariableNodeFactory);
+    context.registerMock('VariableNodeFactory', mockVariableNodeFactory);
+    // Mock the factory dependency as well, returning our mock resolutionService
+    const mockResolutionServiceClientFactory = mockDeep<ResolutionServiceClientFactory>();
+    const mockResolutionServiceClient = { resolveText: resolutionService.resolveText }; // Create a client-like object
+    mockResolutionServiceClientFactory.createClient.mockReturnValue(mockResolutionServiceClient as any);
+    context.registerMock('ResolutionServiceClientFactory', mockResolutionServiceClientFactory);
     
-    // We're using spies in individual tests
-    // No need for a global mock here
+    // Mock default behaviors
+    vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
+    vi.mocked(state.getTransformedNodes).mockReturnValue([]);
+    vi.mocked(state.shouldTransform).mockReturnValue(true);
     
-    // Initialize context
-    await context.initialize();
-    
-    // Resolve the service
-    service = await context.container.resolve(OutputService);
+    // Resolve the service instance from the container
+    await context.initialize(); 
+    service = await context.resolve(OutputService);
   });
 
   afterEach(async () => {
     await context?.cleanup();
+    vi.restoreAllMocks();
   });
 
   describe('Format Registration', () => {
@@ -270,91 +255,74 @@ describe('OutputService', () => {
   
   describe('Direct Container Resolution and Field Access', () => {
     it('should handle field access with direct field access fallback', async () => {
-      // Set up state with test data
+      // State setup remains the same (mock data variables etc.)
       const mockState = mockDeep<IStateService>();
       vi.mocked(mockState.getDataVar).mockImplementation((name) => {
         if (name === 'user') {
-          return {
-            name: 'Claude',
-            details: {
-              role: 'AI Assistant',
-              capabilities: ['code', 'conversation']
-            },
-            metrics: [10, 20, 30]
-          };
+          // Return a simple object for the test
+          return { type: 'data', value: { name: 'Claude', details: { role: 'AI Assistant' }, metrics: [10] } } as any;
         }
         return undefined;
       });
-      
-      // Create a test mock for resolutionService
-      const mockResolutionService = mockDeep<IResolutionService>();
-      
-      // Create a custom OutputService with our mocks
-      const outputService = new OutputService(mockState, mockResolutionService);
-      
-      // Use a simple TextNode for testing
+
       const textNode = createTextNode(
         'User: {{user.name}}, Role: {{user.details.role}}, Capability: {{user.metrics.0}}',
         createLocation(1, 1)
       );
       
-      // Set up for transformation mode
+      // Set up transformation mode mocks on the *container-registered* state mock
+      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
+      vi.mocked(state.getTransformedNodes).mockReturnValue([textNode]);
+      // Also mock the state instance used directly in convert
       vi.mocked(mockState.isTransformationEnabled).mockReturnValue(true);
       vi.mocked(mockState.getTransformedNodes).mockReturnValue([textNode]);
       
-      // Mock the behavior of resolveText for variable resolution
-      mockResolutionService.resolveText.mockImplementation(async (text) => {
-        return text
-          .replace('{{user.name}}', 'Claude')
-          .replace('{{user.details.role}}', 'AI Assistant')
-          .replace('{{user.metrics.0}}', '10');
+      // Mock the behavior of resolveText on the *container-registered* resolutionService mock
+      resolutionService.resolveText.mockImplementation(async (text) => {
+        // Simulate successful resolution for this test
+        let resolved = text;
+        resolved = resolved.replace('{{user.name}}', 'Claude');
+        resolved = resolved.replace('{{user.details.role}}', 'AI Assistant');
+        resolved = resolved.replace('{{user.metrics.0}}', '10');
+        return resolved;
       });
       
-      // Convert the node to markdown
-      const output = await outputService.convert([textNode], mockState, 'markdown');
+      // Call convert on the service resolved from the container
+      // Pass the specific mockState for this test, as convert takes it directly
+      const output = await service.convert([textNode], mockState, 'markdown'); 
       
       // Clean the output for comparison
       const cleanOutput = output.trim().replace(/\s+/g, ' ');
       
-      // We expect the output to contain the properly resolved field values
-      // Using more flexible matching because the specific whitespace format may vary
+      // Assertions remain the same
       expect(cleanOutput).toContain('User: Claude');
       expect(cleanOutput).toContain('Role: AI Assistant');
       expect(cleanOutput).toContain('Capability: 10');
     });
     
     it('should gracefully handle errors in field access', async () => {
-      // Set up state with test data that will cause field access errors
-      const mockState = mockDeep<IStateService>();
-      vi.mocked(mockState.getDataVar).mockImplementation((name) => {
-        if (name === 'user') {
-          return null; // Will cause field access errors
-        }
+      // Setup mocks within the DI context
+      const mockStateForError = mockDeep<IStateService>();
+      vi.mocked(mockStateForError.getDataVar).mockImplementation((name) => {
+        if (name === 'user') return null; // Causes error
         return undefined;
       });
+      vi.mocked(mockStateForError.isTransformationEnabled).mockReturnValue(true);
       
-      // Create a test mock for resolutionService that will also fail
-      const mockResolutionService = mockDeep<IResolutionService>();
-      mockResolutionService.resolveText.mockRejectedValue(new Error('Resolution error'));
+      // Mock resolutionService (in the container) to throw
+      resolutionService.resolveText.mockRejectedValue(new Error('Resolution error'));
       
-      // Create a custom OutputService with our mocks
-      const outputService = new OutputService(mockState, mockResolutionService);
-      
-      // Use a simple TextNode for testing with invalid field access
       const textNode = createTextNode(
-        'User: {{user.name}}, Role: {{user.details.role}}, Capability: {{user.metrics.0}}',
+        'User: {{user.name}}, Role: {{user.details.role}}',
         createLocation(1, 1)
       );
-      
-      // Set up for transformation mode
-      vi.mocked(mockState.isTransformationEnabled).mockReturnValue(true);
-      vi.mocked(mockState.getTransformedNodes).mockReturnValue([textNode]);
-      
-      // This should work even with the field access errors
-      const output = await outputService.convert([textNode], mockState, 'markdown');
+      vi.mocked(mockStateForError.getTransformedNodes).mockReturnValue([textNode]);
+
+      // Call convert using the service from the container, passing the specific error state
+      const output = await service.convert([textNode], mockStateForError, 'markdown');
       
       // Verify basic functionality still works
-      expect(output).toContain('User:'); // Will contain empty values but not crash
+      expect(output).toContain('User:'); 
     });
   
     it('should not duplicate code fence markers in markdown output (regression #10.2.4)', async () => {
