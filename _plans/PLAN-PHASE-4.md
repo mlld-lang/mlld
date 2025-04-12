@@ -40,7 +40,7 @@ No type refinements proposed for this phase.
 
 ### 2. `@embed` Handler
 
-*   **Action:** **(Completed - Handler refactored for subtypes and AST)** Refactor `EmbedDirectiveHandler.execute` to use the `node.subtype` ('embedPath', 'embedVariable', 'embedTemplate') provided by the parser (via `_EmbedRHS`). Use the pre-parsed AST structure (`node.path` for 'embedPath', `node.content` for 'embedTemplate', `node.path` containing variable info for 'embedVariable'). Parse these structures into strict `EmbedParams` if needed, although the AST structure might be directly usable.
+*   **Action:** **(Completed)** Refactor `EmbedDirectiveHandler.execute` to use the `node.subtype` ('embedPath', 'embedVariable', 'embedTemplate') provided by the parser (via `_EmbedRHS`). Use the pre-parsed AST structure (`node.path` for 'embedPath', `node.content` for 'embedTemplate', `node.path` containing variable info for 'embedVariable'). Parse these structures into strict `EmbedParams` if needed, although the AST structure might be directly usable.
 *   **Files:** `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.ts`
 *   **Details/Considerations:**
     *   **`subtype` logic (using `node.subtype` and associated fields):** **(Completed)**
@@ -68,14 +68,13 @@ No type refinements proposed for this phase.
     *   Interact with the (yet to be fully defined/refactored) command execution mechanism (e.g., a dedicated `CommandExecutorService` or shell execution utility). **(Completed - Uses `FileSystemService.executeCommand`)**
     *   **Non-destructive transformations:** Return `DirectiveResult` containing the `newState` and a `replacementNode` (a `TextNode` containing the command's `stdout`). **(Completed - Logic reviewed and seems correct)**
     *   **`SourceLocation` Tracking:** The `replacementNode`'s `location` should match the original `@run` directive (`node.location`). The `ExecutionResult` type could store metadata about the execution. **(Completed)**
-*   **Testing:**
-    *   Update `RunDirectiveHandler.test.ts`, `RunDirectiveHandler.transformation.test.ts`, `RunDirectiveHandler.integration.test.ts`.
-    *   Add tests for each `subtype` based on `node.subtype`. **(Needs Implementation for runCode/runCodeParams)**
-    *   Verify handler uses pre-parsed `node.command`, `node.language`, `node.parameters`.
+*   **Testing:** **(Skipped - Tests deferred to E2E)**
+    *   **Note:** Unit/integration tests (`RunDirectiveHandler.test.ts`, `.integration.test.ts`) were skipped due to persistent mock complexity (see Issue #33, @_plans/E2E-CHECKS-RUN.md).
+    *   Verification relies on E2E tests covering scenarios listed in `_plans/E2E-CHECKS-RUN.md`.
 
 ### 4. `@data` Handler
 
-*   **Action:** **(Mostly Complete)** Refactor `DataDirectiveHandler.execute` to use the pre-parsed RHS structure provided by the AST (`node.source`, `node.embed`, `node.run`, `node.value`). Calculate the value based on `node.source` and its corresponding AST object (`node.embed`, `node.run`, `node.call`, or `node.value`). Store the result using `StateService.setDataVar` with the strict `DataVariable` type.
+*   **Action:** **(In Progress)** Refactor `DataDirectiveHandler.execute` to use the pre-parsed RHS structure provided by the AST (`node.source`, `node.embed`, `node.run`, `node.value`). Calculate the value based on `node.source` and its corresponding AST object (`node.embed`, `node.run`, `node.call`, or `node.value`). Store the result using `StateService.setDataVar` with the strict `DataVariable` type.
 *   **Files:** `services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.ts`
 *   **Details/Considerations:**
     *   **RHS Handling (using `node.source`):** **(Completed)**

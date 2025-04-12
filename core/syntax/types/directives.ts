@@ -9,9 +9,7 @@ export type DirectiveKind =
   | 'define'
   | 'text'
   | 'path'
-  | 'data'
-  | 'api'
-  | 'call';
+  | 'data';
 
 /**
  * Risk level for commands

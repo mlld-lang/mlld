@@ -24,7 +24,7 @@ import type { IStateService as ClonedState } from '@services/state/StateService/
 export function createValidationServiceMock() {
   const service = mock<IValidationService>();
   // Default behaviors
-  service.validate.mockReturnValue(undefined);
+  service.validate.mockResolvedValue(undefined);
   return service;
 }
 
@@ -57,7 +57,7 @@ export function createStateServiceMock() {
   service.transformNode.mockReturnValue(undefined);
   service.isTransformationEnabled.mockReturnValue(false);
   service.setTransformationEnabled.mockReturnValue(undefined);
-  service.getTransformationOptions.mockReturnValue({});
+  service.getTransformationOptions.mockReturnValue({ enabled: false, preserveOriginal: true, transformNested: false });
   service.setTransformationOptions.mockReturnValue(undefined);
   service.addImport.mockReturnValue(undefined);
   service.removeImport.mockReturnValue(undefined);
@@ -81,7 +81,7 @@ export function createStateServiceMock() {
   // Mock methods added from StateServiceLike
   service.enableTransformation = vi.fn();
   service.getNodes.mockReturnValue([]); // Replaces getOriginalNodes if renamed
-  service.setCommand.mockResolvedValue({} as any);
+  service.setCommandVar.mockResolvedValue({} as any);
   service.getCommand.mockReturnValue(undefined);
   service.shouldTransform.mockReturnValue(false);
   service.getCommandOutput.mockReturnValue(undefined);
