@@ -211,6 +211,7 @@ export class VariableReferenceResolver {
              // Ensure field access is only attempted on data variables (or potentially objects from text vars)
              if (typeof baseValue === 'object' && baseValue !== null) {
                   const fieldAccessResult = await this.accessFields(baseValue as JsonValue, node.fields, node.identifier, newContext);
+                  logger.debug(`[resolve Field Access Result] Identifier: ${node.identifier}, Success: ${fieldAccessResult.success}, Result: ${JSON.stringify(fieldAccessResult)}`);
                   if (fieldAccessResult.success) {
                       finalResolvedValue = fieldAccessResult.value;
                   } else {
@@ -306,6 +307,7 @@ export class VariableReferenceResolver {
             return undefined; // Treat as not found if type doesn't match hint
         }
         // <<< Add check for allowed variable types >>>
+        logger.debug(`[getVariable Check Allowed] Variable: ${JSON.stringify(variable)}, Allowed: ${JSON.stringify(context.allowedVariableTypes)}`);
         if (context.allowedVariableTypes && !context.allowedVariableTypes.includes(variable.type)) {
             logger.warn(`Variable '${name}' found, but type ${variable.type} is not allowed in this context.`);
             this.resolutionTracker?.trackResolutionAttempt(name, `variable-type-disallowed`, false);
