@@ -1194,6 +1194,11 @@ export class OutputService implements IOutputService {
         
         // In transformation mode, directly replace variable references with their values
         if (state.isTransformationEnabled() && content.includes('{{')) {
+          // <<< DEBUG LOGGING START >>>
+          console.log(`[DEBUG OutputService] nodeToMarkdown: Found '{{' in content: "${content.substring(0, 50)}..."`);
+          console.log(`[DEBUG OutputService] nodeToMarkdown: this.resolutionService defined? ${!!this.resolutionService}`);
+          // <<< DEBUG LOGGING END >>>
+          
           const variableRegex = /\{\{([^{}]+)\}\}/g;
           let transformedContent = content;
           const matches = Array.from(content.matchAll(variableRegex));

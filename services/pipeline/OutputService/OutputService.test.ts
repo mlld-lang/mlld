@@ -25,6 +25,7 @@ import { createNodeFromExample } from '@core/syntax/helpers/index.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 import { createResolutionServiceMock, createStateServiceMock } from '@tests/utils/mocks/serviceMocks';
+import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -49,11 +50,6 @@ describe('OutputService', () => {
     context.registerMock('IStateService', state);
     context.registerMock('IResolutionService', resolutionService);
     context.registerMock('VariableNodeFactory', mockVariableNodeFactory);
-    // Mock the factory dependency as well, returning our mock resolutionService
-    const mockResolutionServiceClientFactory = mockDeep<ResolutionServiceClientFactory>();
-    const mockResolutionServiceClient = { resolveText: resolutionService.resolveText }; // Create a client-like object
-    mockResolutionServiceClientFactory.createClient.mockReturnValue(mockResolutionServiceClient as any);
-    context.registerMock('ResolutionServiceClientFactory', mockResolutionServiceClientFactory);
     
     // Mock default behaviors
     vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
@@ -277,14 +273,16 @@ describe('OutputService', () => {
       vi.mocked(mockState.isTransformationEnabled).mockReturnValue(true);
       vi.mocked(mockState.getTransformedNodes).mockReturnValue([textNode]);
       
-      // Mock the behavior of resolveText on the *container-registered* resolutionService mock
-      resolutionService.resolveText.mockImplementation(async (text) => {
-        // Simulate successful resolution for this test
-        let resolved = text;
-        resolved = resolved.replace('{{user.name}}', 'Claude');
-        resolved = resolved.replace('{{user.details.role}}', 'AI Assistant');
-        resolved = resolved.replace('{{user.metrics.0}}', '10');
-        return resolved;
+      // Mock the behavior of resolveVariable (the method actually called by OutputService)
+      resolutionService.resolveVariable.mockImplementation(async (varPath, context) => {
+        if (varPath === 'user.name') return 'Claude';
+        if (varPath === 'user.details.role') return 'AI Assistant';
+        if (varPath === 'user.metrics.0') return '10';
+        // If it's not one of the expected paths, throw or return empty based on strict mode
+        if (context?.strict) {
+           throw new VariableResolutionError(`Mock: Variable not found: ${varPath}`);
+        }
+        return ''; // Default empty for non-strict
       });
       
       // Call convert on the service resolved from the container
