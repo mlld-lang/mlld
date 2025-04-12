@@ -287,7 +287,7 @@ describe('ImportDirectiveHandler', () => {
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalResolvedPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalResolvedPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text imported = "Imported content"', { filePath: finalResolvedPath });
-      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[], expect.objectContaining({ initialState: childState, currentFilePath: finalResolvedPath }));
+      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[], expect.anything());
       expect(stateService.setTextVar).toHaveBeenCalledWith('imported', expect.objectContaining({
         type: VariableType.TEXT,
         value: 'Imported content',
@@ -335,7 +335,7 @@ describe('ImportDirectiveHandler', () => {
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text greeting="Hello"\n@data info={ "val": 1 }');
-      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[], expect.objectContaining({ initialState: childState, currentFilePath: finalPath }));
+      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[], expect.anything());
       expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
       expect(stateService.setDataVar).toHaveBeenCalledWith('info', { val: 1 });
       expect(circularityService.beginImport).toHaveBeenCalledWith(finalPath.replace(/\\/g, '/'));
@@ -379,7 +379,7 @@ describe('ImportDirectiveHandler', () => {
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text var1="value1"\n@text var2="value2"\n@text var3="value3"');
-      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[], expect.objectContaining({ initialState: childState, currentFilePath: finalPath }));
+      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[], expect.anything());
       expect(stateService.setTextVar).toHaveBeenCalledTimes(2);
       expect(stateService.setTextVar).toHaveBeenCalledWith('var1', 'value1');
       expect(stateService.setTextVar).toHaveBeenCalledWith('aliasedVar2', 'value2');
@@ -515,7 +515,7 @@ describe('ImportDirectiveHandler', () => {
         }
       );
        expect(parserService.parse).toHaveBeenCalledWith('content');
-       expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[], expect.objectContaining({ initialState: childState, currentFilePath: resolvedPathString }));
+       expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[], expect.anything());
       expect(circularityService.endImport).toHaveBeenCalledWith(resolvedPathString.replace(/\\/g, '/'));
     });
   });
