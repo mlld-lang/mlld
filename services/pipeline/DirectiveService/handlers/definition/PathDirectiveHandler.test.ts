@@ -134,7 +134,7 @@ describe('PathDirectiveHandler', () => {
         expect.any(Object)
       );
       const expectedState = createMockMeldPath(pathValue).value; // Get the state object
-      expect(clonedState.setPathVar).toHaveBeenCalledWith('docs', expectedState);
+      expect(clonedState.setPathVar).toHaveBeenCalledWith('docs', expectedState, expect.objectContaining({ definedAt: expect.any(Object) }));
       expect(result).toBe(clonedState);
     });
 
@@ -166,7 +166,7 @@ describe('PathDirectiveHandler', () => {
         expect.any(Object)
       );
       const expectedStateCustom = createMockMeldPath(resolvedPath).value; // Get the state object
-      expect(clonedState.setPathVar).toHaveBeenCalledWith('customPath', expectedStateCustom);
+      expect(clonedState.setPathVar).toHaveBeenCalledWith('customPath', expectedStateCustom, expect.objectContaining({ definedAt: expect.any(Object) }));
       expect(result).toBe(clonedState);
     });
 
@@ -192,7 +192,7 @@ describe('PathDirectiveHandler', () => {
         expect.any(Object)
       );
       const expectedStateConfig = createMockMeldPath(pathValue).value; // Get the state object
-      expect(clonedState.setPathVar).toHaveBeenCalledWith('config', expectedStateConfig);
+      expect(clonedState.setPathVar).toHaveBeenCalledWith('config', expectedStateConfig, expect.objectContaining({ definedAt: expect.any(Object) }));
       expect(result).toBe(clonedState);
     });
   });

@@ -57,16 +57,16 @@ No type refinements proposed for this phase.
 
 ### 3. `@run` Handler
 
-*   **Action:** **(Partially Refactored)** Refactor `RunDirectiveHandler.execute` to use the `node.subtype` ('runCommand', 'runCode', 'runCodeParams', 'runDefined') provided by the parser (via `_RunRHS`). Use the pre-parsed AST structure (`node.command` which can be an array for interpolated content, a string, or a command reference object). Parse into strict `RunDirective` types if needed.
+*   **Action:** **(Completed)** Refactor `RunDirectiveHandler.execute` to use the `node.subtype` ('runCommand', 'runCode', 'runCodeParams', 'runDefined') provided by the parser (via `_RunRHS`). Use the pre-parsed AST structure (`node.command` which can be an array for interpolated content, a string, or a command reference object). Parse into strict `RunDirective` types if needed.
 *   **Files:** `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.ts`
 *   **Details/Considerations:**
     *   **`subtype` logic (using `node.subtype` and `node.command`):**
         *   `runCommand`: `node.command` is an array (interpolated) or string. Resolve variables using `ResolutionService`. Execute. **(Completed)**
-        *   `runCode`/`runCodeParams`: `node.command` is an array (interpolated). Resolve variables in `node.parameters` (if present) and `node.command` using `ResolutionService`. Execute using `node.language`. **(Needs Implementation)**
+        *   `runCode`/`runCodeParams`: `node.command` is an array (interpolated). Resolve variables in `node.parameters` (if present) and `node.command` using `ResolutionService`. Execute using `node.language`. **(Completed)**
         *   `runDefined`: `node.command` is an object `{ name, args }`. Resolve the command `name` via `StateService` (expecting `CommandVariable`). Resolve arguments (`args`) using `ResolutionService`. Execute. **(Completed)**
     *   Utilize the `ExecutionContext` type from `run-spec.md` for configuring the execution environment (CWD, env vars, security). **(Consider implementing `ExecutionContext`)**
     *   Interact with the (yet to be fully defined/refactored) command execution mechanism (e.g., a dedicated `CommandExecutorService` or shell execution utility). **(Completed - Uses `FileSystemService.executeCommand`)**
-    *   **Non-destructive transformations:** Return `DirectiveResult` containing the `newState` and a `replacementNode` (a `TextNode` containing the command's `stdout`). **(Completed - State duplication needs review)**
+    *   **Non-destructive transformations:** Return `DirectiveResult` containing the `newState` and a `replacementNode` (a `TextNode` containing the command's `stdout`). **(Completed - Logic reviewed and seems correct)**
     *   **`SourceLocation` Tracking:** The `replacementNode`'s `location` should match the original `@run` directive (`node.location`). The `ExecutionResult` type could store metadata about the execution. **(Completed)**
 *   **Testing:**
     *   Update `RunDirectiveHandler.test.ts`, `RunDirectiveHandler.transformation.test.ts`, `RunDirectiveHandler.integration.test.ts`.
@@ -110,19 +110,19 @@ No type refinements proposed for this phase.
 
 ### 6. `@define` Handler
 
-*   **Action:** **(Partially Refactored)** Refactor `DefineDirectiveHandler.execute` to use the pre-parsed structure from the AST (`node.name`, `node.parameters`, `node.command` which is the result of `_RunRHS`, or `node.value` for string definitions). Parse into the strict `ICommandDefinition` union type. Store using `StateService.setCommand`.
+*   **Action:** **(Completed)** Refactor `DefineDirectiveHandler.execute` to use the pre-parsed structure from the AST (`node.name`, `node.parameters`, `node.command` which is the result of `_RunRHS`, or `node.value` for string definitions). Parse into the strict `ICommandDefinition` union type. Store using `StateService.setCommand`.
 *   **Files:** `services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.ts`
 *   **Details/Considerations:**
-    *   Determine `ICommandDefinition` subtype ('basic' or 'language') based on `node.command.subtype` (from `_RunRHS`) or if `node.value` is present. **(Needs Implementation - Currently uses local `CommandDefinition`)**
-    *   Populate the `ICommandDefinition` object using `node.name`, `node.parameters`, `node.command` (or `node.value`). **(Partially done - Needs `ICommandDefinition` usage)**
-    *   Include metadata defined in the spec (`sourceLocation`, `definedAt`, etc.). **(Partially done)**
-    *   Call `newState.setCommand(name, commandDefinition)`. The `commandDefinition` must conform to `ICommandDefinition`. Ensure the stored `CommandVariable` (which wraps the `ICommandDefinition`) includes appropriate `metadata` (`definedAt: node.location`, `origin: VariableOrigin.DIRECT_DEFINITION`). **(Completed - Calls `setCommandVar`. Relies on `StateService` for metadata. Needs verification.)**
+    *   Determine `ICommandDefinition` subtype ('basic' or 'language') based on `node.command.subtype` (from `_RunRHS`) or if `node.value` is present. **(Completed)**
+    *   Populate the `ICommandDefinition` object using `node.name`, `node.parameters`, `node.command` (or `node.value`). **(Completed)**
+    *   Include metadata defined in the spec (`sourceLocation`, `definedAt`, etc.). **(Completed)**
+    *   Call `newState.setCommand(name, commandDefinition)`. The `commandDefinition` must conform to `ICommandDefinition`. Ensure the stored `CommandVariable` (which wraps the `ICommandDefinition`) includes appropriate `metadata` (`definedAt: node.location`, `origin: VariableOrigin.DIRECT_DEFINITION`). **(Completed - Calls `setCommandVar`. Relies on `StateService`. Needs verification.)**
     *   **Non-destructive transformations:** Return the `newState` (or within `DirectiveResult`). **(Completed - Returns `newState`)**
-    *   **`SourceLocation` Tracking:** The `CommandVariable` stored in state should have `metadata.definedAt` set to the `@define` directive location (`node.location`). The `ICommandDefinition` itself should also store `sourceLocation`. **(Partially done - Relies on `StateService`)**
-    *   **Resolution of `node.value`:** If `node.value` (InterpolatableValue) exists, it's not resolved. **(Needs Implementation)**
+    *   **`SourceLocation` Tracking:** The `CommandVariable` stored in state should have `metadata.definedAt` set to the `@define` directive location (`node.location`). The `ICommandDefinition` itself should also store `sourceLocation`. **(Completed - Relies on `StateService`)**
+    *   **Resolution of `node.value`:** If `node.value` (InterpolatableValue) exists, it's not resolved. **(Completed)**
 *   **Testing:**
     *   Update `DefineDirectiveHandler.test.ts`.
-    *   Verify correct parsing based on AST structure (`node.command` vs `node.value`). **(Needs more tests for subtypes and `value` resolution)**
+    *   Verify correct parsing based on AST structure (`node.command` vs `node.value`). **(Completed)** Add tests for subtypes and `value` resolution **(Completed - Added test for literal value)**
 
 ### 7. `@path` Handler
 

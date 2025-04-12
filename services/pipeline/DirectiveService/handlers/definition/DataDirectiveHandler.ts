@@ -28,6 +28,8 @@ import { MeldResolutionError, FieldAccessError, PathValidationError, MeldError }
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { StateServiceLike } from '@core/shared-service-types.js';
 import type { InterpolatableValue, VariableReferenceNode, StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js'; // <<< Ensure AstStructuredPath is imported here
+import type { SourceLocation } from '@core/types/common.js'; // <<< Import SourceLocation
+import { VariableOrigin, VariableMetadata } from '@core/types/variables.js'; // <<< Import VariableOrigin AND VariableMetadata
 
 /**
  * Handler for @data directives
@@ -68,6 +70,11 @@ export class DataDirectiveHandler implements IDirectiveHandler {
 
     try {
       let resolvedValue: unknown;
+      const directiveSourceLocation: SourceLocation | undefined = node.location ? {
+        filePath: context.currentFilePath ?? 'unknown',
+        line: node.location.start.line,
+        column: node.location.start.column
+      } : undefined;
 
       if (source === 'literal') {
         // The 'value' property can be an array, object, or primitive.
@@ -164,7 +171,15 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       // Store the resolved value in a new state
       const newState = context.state.clone();
       logger.info('[DataDirectiveHandler] Setting data var:', { identifier, resolvedValue: JSON.stringify(resolvedValue) });
-      newState.setDataVar(identifier, resolvedValue as JsonValue);
+      
+      // <<< Construct metadata with definedAt >>>
+      const metadata: Partial<VariableMetadata> = {
+          origin: VariableOrigin.DIRECT_DEFINITION, // Default origin
+          definedAt: directiveSourceLocation
+      };
+      
+      // Pass metadata to setDataVar
+      newState.setDataVar(identifier, resolvedValue as JsonValue, metadata);
       return { state: newState, replacement: undefined }; 
 
     } catch (error) {

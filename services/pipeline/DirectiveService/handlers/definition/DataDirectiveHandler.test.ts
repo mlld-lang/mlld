@@ -190,7 +190,7 @@ describe('DataDirectiveHandler', () => {
       // Verify everything worked as expected
       expect(validationService.validate).toHaveBeenCalledWith(node);
       expect(stateService.clone).toHaveBeenCalled();
-      expect(setDataVarMock).toHaveBeenCalledWith('user', { name: '${username}', id: 123 });
+      expect(setDataVarMock).toHaveBeenCalledWith('user', { name: '${username}', id: 123 }, expect.objectContaining({ definedAt: expect.any(Object) }));
       expect(result.state).toBe(clonedState);
       expect(result.replacement).toBeUndefined();
       
@@ -227,7 +227,7 @@ describe('DataDirectiveHandler', () => {
           street: '123 Main St',
           city: 'Anytown'
         }
-      });
+      }, expect.objectContaining({ definedAt: expect.any(Object) }));
       expect(result.state).toBe(clonedState);
       expect(result.replacement).toBeUndefined();
     });
@@ -252,7 +252,7 @@ describe('DataDirectiveHandler', () => {
       const result = await handler.execute(node, directiveContext);
 
       expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setDataVar).toHaveBeenCalledWith('fruits', ['apple', 'banana', 'cherry']);
+      expect(clonedState.setDataVar).toHaveBeenCalledWith('fruits', ['apple', 'banana', 'cherry'], expect.objectContaining({ definedAt: expect.any(Object) }));
       expect(result.state).toBe(clonedState);
       expect(result.replacement).toBeUndefined();
     });
@@ -413,6 +413,7 @@ describe('DataDirectiveHandler', () => {
 
       const result = await handler.execute(node, directiveContext);
 
+      expect(resolutionService.resolveNodes).toHaveBeenCalled();
       expect(clonedState.setDataVar).toHaveBeenCalledWith('config', {
         app: {
           name: 'Meld',
@@ -420,7 +421,7 @@ describe('DataDirectiveHandler', () => {
           features: ['text', 'data', 'path']
         },
         env: 'test'
-      });
+      }, expect.objectContaining({ definedAt: expect.any(Object) }));
       expect(result.state).toBe(clonedState);
       expect(result.replacement).toBeUndefined();
     });
@@ -456,7 +457,7 @@ describe('DataDirectiveHandler', () => {
 
       expect(clonedState.setDataVar).toHaveBeenCalledWith('message', {
         text: 'Hello Alice!'
-      });
+      }, expect.objectContaining({ definedAt: expect.any(Object) }));
       expect(result.state).toBe(clonedState);
       expect(result.replacement).toBeUndefined();
     });
@@ -492,7 +493,7 @@ describe('DataDirectiveHandler', () => {
       expect(clonedState.setDataVar).toHaveBeenCalledWith('data', {
         array: [1, '2', 3],
         object: { key: '2' }
-      });
+      }, expect.objectContaining({ definedAt: expect.any(Object) }));
       expect(result.state).toBe(clonedState);
       expect(result.replacement).toBeUndefined();
     });

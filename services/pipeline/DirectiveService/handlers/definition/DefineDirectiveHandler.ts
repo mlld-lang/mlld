@@ -19,6 +19,7 @@ import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import { MeldResolutionError, FieldAccessError } from '@core/errors';
+import { VariableMetadata, VariableOrigin } from '@core/types/variables.js';
 
 @injectable()
 @Service({
@@ -47,7 +48,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
 
       // 3. Create the appropriate command definition object (IBasic or ILanguage)
       let commandDefinition: ICommandDefinition;
-      const sourceLocation: SourceLocation | undefined = node.location ? {
+      const directiveSourceLocation: SourceLocation | undefined = node.location ? {
          filePath: context.currentFilePath ?? 'unknown',
          line: node.location.start.line,
          column: node.location.start.column
@@ -60,6 +61,12 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
           // TODO: Add support for required/defaultValue if grammar allows
       }));
 
+      // Construct base metadata (origin will be set by StateService)
+      const baseMetadata: Partial<VariableMetadata> = {
+          definedAt: directiveSourceLocation
+          // Origin will be set to DIRECT_DEFINITION by StateService
+      };
+      
       if (value !== undefined) {
         // Defined using literal value (e.g., @define cmd = "echo {{var}}")
         // This is always a basic command.
@@ -84,7 +91,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
           parameters: mappedParameters,
           commandTemplate: resolvedCommandTemplate,
           isMultiline: false, // Literal strings are typically single line unless template literal was used
-          sourceLocation,
+          sourceLocation: directiveSourceLocation,
           definedAt: Date.now(),
           ...(nameMetadata.metadata && { ...nameMetadata.metadata }) // Spread parsed metadata (riskLevel, description)
         };
@@ -101,7 +108,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
               // Store the *unresolved* InterpolatableValue as the template
               commandTemplate: runData.command, 
               isMultiline: runData.isMultiLine ?? false,
-              sourceLocation,
+              sourceLocation: directiveSourceLocation,
               definedAt: Date.now(),
               ...(nameMetadata.metadata && { ...nameMetadata.metadata })
             };
@@ -115,7 +122,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
               // Store the *unresolved* InterpolatableValue as the code block
               codeBlock: runData.command, 
               languageParameters: runData.parameters?.map(p => typeof p === 'string' ? p : p.identifier), // Extract names
-              sourceLocation,
+              sourceLocation: directiveSourceLocation,
               definedAt: Date.now(),
               ...(nameMetadata.metadata && { ...nameMetadata.metadata })
             };
@@ -132,9 +139,8 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       const newState = context.state.clone();
 
       // 5. Store the ICommandDefinition using setCommandVar
-      // Note: setCommandVar takes the name and the definition object.
-      // The VariableMetadata (like origin) is handled internally by StateService.
-      newState.setCommandVar(commandDefinition.name, commandDefinition);
+      // Pass the baseMetadata containing definedAt
+      newState.setCommandVar(commandDefinition.name, commandDefinition, baseMetadata);
       logger.debug(`Stored command '${commandDefinition.name}'`, { definition: commandDefinition });
 
       return newState;

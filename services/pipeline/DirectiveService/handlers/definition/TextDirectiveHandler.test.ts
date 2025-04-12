@@ -226,7 +226,7 @@ describe('TextDirectiveHandler', () => {
 
       const result = await handler.execute(node, testContext);
       // The example uses 'greeting' as the identifier and "Hello" as the value
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello', expect.objectContaining({ definedAt: expect.any(Object) }));
     });
 
     it('should handle text assignment with escaped characters', async () => {
@@ -245,7 +245,7 @@ describe('TextDirectiveHandler', () => {
       };
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('escaped', 'Line 1\nLine 2\t"Quoted"');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('escaped', 'Line 1\nLine 2\t"Quoted"', expect.objectContaining({ definedAt: expect.any(Object) }));
     });
 
     it('should handle a template literal in text directive', async () => {
@@ -259,7 +259,7 @@ describe('TextDirectiveHandler', () => {
       };
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Template content');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Template content', expect.objectContaining({ definedAt: expect.any(Object) }));
     });
 
     it('should handle object property interpolation in text value', async () => {
@@ -279,7 +279,7 @@ describe('TextDirectiveHandler', () => {
       };
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello, Alice! Your ID is 123.');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello, Alice! Your ID is 123.', expect.objectContaining({ definedAt: expect.any(Object) }));
       
       // <<< No need to restore mock with mockImplementationOnce >>>
       // resolutionService.resolveInContext = mockResolveInContext;
@@ -302,7 +302,7 @@ describe('TextDirectiveHandler', () => {
       };
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('configText', 'Docs are at $PROJECTPATH/docs');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('configText', 'Docs are at $PROJECTPATH/docs', expect.objectContaining({ definedAt: expect.any(Object) }));
       
       // <<< No need to restore mock with mockImplementationOnce >>>
       // resolutionService.resolveInContext = mockResolveInContext;
@@ -350,7 +350,7 @@ describe('TextDirectiveHandler', () => {
       };
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello, World!');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello, World!', expect.objectContaining({ definedAt: expect.any(Object) }));
       
       // <<< No need to restore mock with mockImplementationOnce >>>
       // resolutionService.resolveInContext = mockResolveInContext;
@@ -368,7 +368,7 @@ describe('TextDirectiveHandler', () => {
 
       const result = await handler.execute(node, testContext);
       // The example uses 'greeting' as the identifier and "Hello" as the value
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello', expect.objectContaining({ definedAt: expect.any(Object) }));
     });
 
     it('should report error for unclosed string', async () => {

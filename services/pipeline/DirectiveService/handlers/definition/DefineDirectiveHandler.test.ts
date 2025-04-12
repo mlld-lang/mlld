@@ -115,15 +115,29 @@ describe('DefineDirectiveHandler', () => {
       const node = createValidDefineNode('cmd1', 'echo hello'); 
       const result = await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
       expect(stateService.clone).toHaveBeenCalled();
-      // Expecting IBasicCommandDefinition
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd1', expect.objectContaining({
-          type: 'basic',
-          name: 'cmd1',
-          // commandTemplate should be the InterpolatableValue array from the mock AST
-          commandTemplate: expect.arrayContaining([expect.objectContaining({ type: 'Text', content: 'echo hello' })]),
-          parameters: expect.arrayContaining([]),
-          isMultiline: false
-      }));
+      // Expecting IBasicCommandDefinition and metadata object
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd1', 
+          expect.objectContaining({
+              type: 'basic',
+              name: 'cmd1',
+              commandTemplate: expect.arrayContaining([expect.objectContaining({ type: 'Text', content: 'echo hello' })]),
+              parameters: expect.arrayContaining([]),
+              isMultiline: false,
+              sourceLocation: expect.objectContaining({ // Expect sourceLocation
+                  filePath: 'test.mld',
+                  line: 1, 
+                  column: 1
+              }),
+              definedAt: expect.any(Number) // Expect definedAt timestamp
+          }),
+          expect.objectContaining({ // Expect metadata object
+              definedAt: expect.objectContaining({ 
+                  filePath: 'test.mld',
+                  line: 1, 
+                  column: 1
+              })
+          })
+      );
       expect(result).toBe(clonedState);
     });
 
@@ -132,16 +146,23 @@ describe('DefineDirectiveHandler', () => {
       const node = createValidDefineNode('cmd2', 'echo $p1 $p2', ['p1', 'p2']);
       const result = await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
       expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd2', expect.objectContaining({
-          type: 'basic',
-          name: 'cmd2',
-          commandTemplate: expect.arrayContaining([expect.objectContaining({ type: 'Text', content: 'echo $p1 $p2' })]),
-          parameters: expect.arrayContaining([
-              expect.objectContaining({ name: 'p1', position: 1 }),
-              expect.objectContaining({ name: 'p2', position: 2 })
-          ]),
-          isMultiline: false
-      }));
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd2', 
+          expect.objectContaining({
+              type: 'basic',
+              name: 'cmd2',
+              commandTemplate: expect.arrayContaining([expect.objectContaining({ type: 'Text', content: 'echo $p1 $p2' })]),
+              parameters: expect.arrayContaining([
+                  expect.objectContaining({ name: 'p1', position: 1 }),
+                  expect.objectContaining({ name: 'p2', position: 2 })
+              ]),
+              isMultiline: false,
+              sourceLocation: expect.any(Object), // Check existence
+              definedAt: expect.any(Number) // Check existence
+          }),
+          expect.objectContaining({ // Expect metadata object
+              definedAt: expect.any(Object)
+          })
+      );
       expect(result).toBe(clonedState);
     });
 
@@ -150,17 +171,24 @@ describe('DefineDirectiveHandler', () => {
       const node = createValidDefineNode('cmd3', 'echo $a $b $c', ['a', 'b', 'c']);
       const result = await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
       expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd3', expect.objectContaining({
-          type: 'basic',
-          name: 'cmd3',
-          commandTemplate: expect.arrayContaining([expect.objectContaining({ type: 'Text', content: 'echo $a $b $c' })]),
-          parameters: expect.arrayContaining([
-              expect.objectContaining({ name: 'a', position: 1 }),
-              expect.objectContaining({ name: 'b', position: 2 }),
-              expect.objectContaining({ name: 'c', position: 3 })
-          ]),
-          isMultiline: false
-      }));
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd3', 
+          expect.objectContaining({
+              type: 'basic',
+              name: 'cmd3',
+              commandTemplate: expect.arrayContaining([expect.objectContaining({ type: 'Text', content: 'echo $a $b $c' })]),
+              parameters: expect.arrayContaining([
+                  expect.objectContaining({ name: 'a', position: 1 }),
+                  expect.objectContaining({ name: 'b', position: 2 }),
+                  expect.objectContaining({ name: 'c', position: 3 })
+              ]),
+              isMultiline: false,
+              sourceLocation: expect.any(Object), // Check existence
+              definedAt: expect.any(Number) // Check existence
+          }),
+          expect.objectContaining({ // Expect metadata object
+              definedAt: expect.any(Object)
+          })
+      );
       expect(result).toBe(clonedState);
     });
     
@@ -178,13 +206,20 @@ describe('DefineDirectiveHandler', () => {
         const result = await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
         expect(stateService.clone).toHaveBeenCalled();
         expect(resolutionService.resolveNodes).toHaveBeenCalledWith(literalValue, expect.any(Object));
-        expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdLiteral', expect.objectContaining({
-            type: 'basic',
-            name: 'cmdLiteral',
-            commandTemplate: 'echo literal resolved_value', // Expect the resolved string here
-            parameters: expect.arrayContaining([]),
-            isMultiline: false
-        }));
+        expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdLiteral', 
+            expect.objectContaining({
+                type: 'basic',
+                name: 'cmdLiteral',
+                commandTemplate: 'echo literal resolved_value', // Expect the resolved string here
+                parameters: expect.arrayContaining([]),
+                isMultiline: false,
+                sourceLocation: expect.any(Object), // Check existence
+                definedAt: expect.any(Number) // Check existence
+            }),
+            expect.objectContaining({ // Expect metadata object
+                definedAt: expect.any(Object)
+            })
+        );
         expect(result).toBe(clonedState);
     });
 
@@ -194,19 +229,33 @@ describe('DefineDirectiveHandler', () => {
     it('should handle command risk metadata', async () => {
       const node = createValidDefineNode('cmdRisk.risk.high', 'rm -rf /'); 
       await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
-      // Check that the metadata object contains riskLevel
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdRisk', expect.objectContaining({
-           riskLevel: 'high' 
-      }));
+      // Check that the command definition contains riskLevel
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdRisk', 
+           expect.objectContaining({
+               riskLevel: 'high', 
+               sourceLocation: expect.any(Object),
+               definedAt: expect.any(Number)
+           }),
+           expect.objectContaining({ // Expect metadata object
+               definedAt: expect.any(Object)
+           })
+      );
     });
 
     it('should handle command about metadata', async () => {
       const node = createValidDefineNode('cmdAbout.about.A cool command', 'ls'); 
       await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
-       // Check that the metadata object contains description
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdAbout', expect.objectContaining({
-           description: 'A cool command' 
-      }));
+       // Check that the command definition contains description
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdAbout', 
+           expect.objectContaining({
+               description: 'A cool command', 
+               sourceLocation: expect.any(Object),
+               definedAt: expect.any(Number)
+           }),
+           expect.objectContaining({ // Expect metadata object
+               definedAt: expect.any(Object)
+           })
+      );
     });
   });
 
@@ -230,11 +279,17 @@ describe('DefineDirectiveHandler', () => {
     it('should store command in new state', async () => {
       const node = createValidDefineNode('cmd6', 'echo test');
       await handler.execute(node, { state: stateService, currentFilePath: 'test.mld' } as DirectiveContext);
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd6', expect.any(Object)); // Check it was called with the name
+      // Check it was called with the name, the command def, and metadata
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd6', expect.any(Object), expect.any(Object)); 
       // Optionally, check the type of the stored definition
       const storedDefinition = vi.mocked(clonedState.setCommandVar).mock.calls[0][1] as ICommandDefinition;
       expect(storedDefinition.type).toBe('basic');
       expect(storedDefinition.name).toBe('cmd6');
+      expect(storedDefinition.sourceLocation).toBeDefined();
+      expect(storedDefinition.definedAt).toBeDefined();
+      // Check the metadata argument
+      const storedMetadata = vi.mocked(clonedState.setCommandVar).mock.calls[0][2] as Partial<VariableMetadata>;
+      expect(storedMetadata.definedAt).toBeDefined();
     });
   });
   

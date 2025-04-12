@@ -168,8 +168,8 @@ describe('TextDirectiveHandler - Command Execution', () => {
     await handler.execute(node, testContext);
     
     // Assert
-    expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo "test"', { cwd: '/Users/adam/dev/meld' });
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('command_output', 'test output');
+    expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo "test"', expect.any(Object));
+    expect(clonedState.setTextVar).toHaveBeenCalledWith('command_output', 'test output', expect.objectContaining({ definedAt: expect.any(Object) }));
   });
   
   it('should handle variable references in command input', async () => {
@@ -200,10 +200,10 @@ describe('TextDirectiveHandler - Command Execution', () => {
     
     // Assert
     expect(fileSystemService.executeCommand).toHaveBeenCalledTimes(2);
-    expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo "Command 1 output"', { cwd: '/Users/adam/dev/meld' });
-    expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo "Command 1 referenced: Command 1 output"', { cwd: '/Users/adam/dev/meld' });
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('step1', 'Command 1 output');
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('step2', 'Command 1 referenced output');
+    expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo "Command 1 output"', expect.any(Object));
+    expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo "Command 1 referenced: Command 1 output"', expect.any(Object));
+    expect(clonedState.setTextVar).toHaveBeenCalledWith('step1', 'Command 1 output', expect.objectContaining({ definedAt: expect.any(Object) }));
+    expect(clonedState.setTextVar).toHaveBeenCalledWith('step2', 'Command 1 referenced output', expect.objectContaining({ definedAt: expect.any(Object) }));
   });
   
   it('should handle special characters in command outputs', async () => {
@@ -292,8 +292,8 @@ describe('TextDirectiveHandler - Command Execution', () => {
     
     // Assert
     expect(fileSystemService.executeCommand).toHaveBeenCalledTimes(3);
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('level1', 'Level 1 output');
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('level2', 'Level 2 references Level 1 output');
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('level3', 'Level 3 references Level 2 references Level 1 output');
+    expect(clonedState.setTextVar).toHaveBeenCalledWith('level1', 'Level 1 output', expect.objectContaining({ definedAt: expect.any(Object) }));
+    expect(clonedState.setTextVar).toHaveBeenCalledWith('level2', 'Level 2 references Level 1 output', expect.objectContaining({ definedAt: expect.any(Object) }));
+    expect(clonedState.setTextVar).toHaveBeenCalledWith('level3', 'Level 3 references Level 2 references Level 1 output', expect.objectContaining({ definedAt: expect.any(Object) }));
   });
 }); 

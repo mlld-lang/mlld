@@ -15,6 +15,9 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { StateServiceLike } from '@core/shared-service-types.js';
+import type { VariableMetadata } from '@core/types/variables.js';
+import { VariableOrigin } from '@core/types/variables.js';
+import type { SourceLocation } from '@core/types/common.js';
 
 /**
  * Handler for @text directives
@@ -104,6 +107,11 @@ export class TextDirectiveHandler implements IDirectiveHandler {
     try {
       // 1. Create a new state for modifications
       const newState = context.state.clone();
+      const directiveSourceLocation: SourceLocation | undefined = node.location ? {
+        filePath: context.currentFilePath ?? 'unknown',
+        line: node.location.start.line,
+        column: node.location.start.column
+      } : undefined;
 
       // 2. Validate directive structure
       try {
@@ -147,11 +155,11 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       // 4. Handle different types of text directives
       let resolvedValue: string;
       
-      // <<< Use the injected stateService directly for the context >>>
+      // Create resolution context
       const resolutionContext = ResolutionContextFactory.forTextDirective(
-        this.stateService, // Use the injected service instance
+        context.state, // Use original state for resolution lookups
         context.currentFilePath
-     );
+      );
 
       // Handle @text with @run value
       if (node.directive.source === 'run' && node.directive.run) {
@@ -304,7 +312,12 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       }
 
       // 5. Set the resolved value in the new state
-      newState.setTextVar(identifier, resolvedValue);
+      const metadata: Partial<VariableMetadata> = {
+          origin: VariableOrigin.DIRECT_DEFINITION,
+          definedAt: directiveSourceLocation
+      };
+      
+      newState.setTextVar(identifier, resolvedValue, metadata);
 
       return newState;
     } catch (error) {

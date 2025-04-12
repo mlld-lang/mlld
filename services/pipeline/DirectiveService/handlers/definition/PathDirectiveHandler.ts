@@ -11,7 +11,9 @@ import { inject, injectable, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { StateServiceLike } from '@core/shared-service-types.js';
 // Import necessary types for path state
-import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, StructuredPath as AstStructuredPath } from '@core/types'; 
+import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, StructuredPath as AstStructuredPath, VariableMetadata } from '@core/types'; 
+import { VariableOrigin } from '@core/types/variables.js';
+import type { SourceLocation } from '@core/types/common.js';
 
 // Remove local StructuredPath interface, use imported AstStructuredPath
 // interface StructuredPath { ... }
@@ -50,6 +52,11 @@ export class PathDirectiveHandler implements IDirectiveHandler {
     try {
       // Create a new state for modifications
       const newState = context.state.clone(); // Clone for return value modification
+      const directiveSourceLocation: SourceLocation | undefined = node.location ? {
+        filePath: context.currentFilePath ?? 'unknown',
+        line: node.location.start.line,
+        column: node.location.start.column
+      } : undefined;
 
       // 1. Validate directive structure
       await this.validationService.validate(node);
@@ -108,7 +115,15 @@ export class PathDirectiveHandler implements IDirectiveHandler {
            // This shouldn't happen if validation succeeded, but check defensively
            throw new DirectiveError('Validated path object is missing internal state', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node, context });
       }
-      await newState.setPathVar(identifier, validatedMeldPath.value); // Set on newState
+      
+      // <<< Construct metadata with definedAt >>>
+      const metadata: Partial<VariableMetadata> = {
+          origin: VariableOrigin.DIRECT_DEFINITION,
+          definedAt: directiveSourceLocation
+      };
+      
+      // Pass metadata to setPathVar
+      await newState.setPathVar(identifier, validatedMeldPath.value, metadata); // Set on newState
 
       logger.debug('Path directive processed successfully', {
         identifier,

@@ -14,6 +14,7 @@ import {
   createResolutionServiceMock,
   createDirectiveErrorMock
 } from '@tests/utils/mocks/serviceMocks.js';
+import { createLocation } from '@tests/utils/testFactories.js';
 
 /**
  * TextDirectiveHandler Integration Test Status
@@ -72,16 +73,17 @@ describe('TextDirectiveHandler Integration', () => {
     it('should handle nested variable references', async () => {
       const node: DirectiveNode = {
         type: 'Directive',
+        location: createLocation(1, 1),
         directive: {
           kind: 'text',
           identifier: 'greeting',
           // Represent value as InterpolatableValue array
           value: [
-            { type: 'Text', content: 'Hello ' }, 
+            { type: 'Text', content: 'Hello ', location: createLocation(1, 1) }, 
             { type: 'VariableReference', identifier: 'user', fields: [
               { type: 'field', value: '{{type}}.name' } // This nested ref needs careful mocking
-            ]},
-            { type: 'Text', content: '!' }
+            ], location: createLocation(1, 7) },
+            { type: 'Text', content: '!', location: createLocation(1, 20) }
           ]
         }
       };
@@ -102,22 +104,23 @@ describe('TextDirectiveHandler Integration', () => {
         });
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!', expect.objectContaining({ definedAt: expect.any(Object) }));
     });
 
     it('should handle mixed string literals and variables', async () => {
       const node: DirectiveNode = {
         type: 'Directive',
+        location: createLocation(2, 1),
         directive: {
           kind: 'text',
           identifier: 'message',
           // Represent value as InterpolatableValue array
           value: [
-            { type: 'VariableReference', identifier: 'prefix' }, 
-            { type: 'Text', content: ' "quoted ' }, 
-            { type: 'VariableReference', identifier: 'name' }, 
-            { type: 'Text', content: '" ' }, 
-            { type: 'VariableReference', identifier: 'suffix' }
+            { type: 'VariableReference', identifier: 'prefix', location: createLocation(2, 1) }, 
+            { type: 'Text', content: ' "quoted ', location: createLocation(2, 10) }, 
+            { type: 'VariableReference', identifier: 'name', location: createLocation(2, 20) }, 
+            { type: 'Text', content: '" ', location: createLocation(2, 25) }, 
+            { type: 'VariableReference', identifier: 'suffix', location: createLocation(2, 28) }
           ]
         }
       };
@@ -137,12 +140,13 @@ describe('TextDirectiveHandler Integration', () => {
         });
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello "quoted World" !');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello "quoted World" !', expect.objectContaining({ definedAt: expect.objectContaining({ line: 2, column: 1, filePath: 'test.meld' }) }));
     });
 
     it('should handle complex data structure access', async () => {
       const node: DirectiveNode = {
         type: 'Directive',
+        location: createLocation(3, 1),
         directive: {
           kind: 'text',
           identifier: 'userInfo',
@@ -152,7 +156,7 @@ describe('TextDirectiveHandler Integration', () => {
               { type: 'field', value: 'contacts' }, 
               { type: 'index', value: '{{index}}' }, // Needs careful mocking 
               { type: 'field', value: 'email' }
-            ]}
+            ], location: createLocation(3, 1) }
           ]
         }
       };
@@ -172,20 +176,21 @@ describe('TextDirectiveHandler Integration', () => {
          });
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('userInfo', 'second@example.com');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('userInfo', 'second@example.com', expect.objectContaining({ definedAt: expect.objectContaining({ line: 3, column: 1, filePath: 'test.meld' }) }));
     });
 
     it('should handle environment variables with fallbacks', async () => {
       const node: DirectiveNode = {
         type: 'Directive',
+        location: createLocation(4, 1),
         directive: {
           kind: 'text',
           identifier: 'config',
           // Represent value as InterpolatableValue array
           value: [
-            { type: 'VariableReference', identifier: 'ENV_HOST', fallback: 'localhost' },
-            { type: 'Text', content: ':' },
-            { type: 'VariableReference', identifier: 'ENV_PORT', fallback: '3000' }
+            { type: 'VariableReference', identifier: 'ENV_HOST', fallback: 'localhost', location: createLocation(4, 1) },
+            { type: 'Text', content: ':', location: createLocation(4, 20) },
+            { type: 'VariableReference', identifier: 'ENV_PORT', fallback: '3000', location: createLocation(4, 21) }
           ]
         }
       };
@@ -208,7 +213,7 @@ describe('TextDirectiveHandler Integration', () => {
         });
 
       const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('config', 'example.com:3000');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('config', 'example.com:3000', expect.objectContaining({ definedAt: expect.objectContaining({ line: 4, column: 1, filePath: 'test.meld' }) }));
 
       delete process.env.ENV_HOST;
     });
