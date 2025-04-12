@@ -14,7 +14,7 @@ import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { createLocation, createTestText, createTestDirective, createTestCodeFence } from '@tests/utils/nodeFactories';
 import { expectToThrowDirectiveError } from '@tests/utils/errorTestUtils.js';
-import { createMockLogger } from '@tests/utils/logger.js';
+import { createMockLogger } from '@tests/utils/error/ErrorTestHarness.js';
 import { importDirectiveExamples } from '@core/syntax/index.js';
 import { createNodeFromExample } from '@core/syntax/helpers.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
