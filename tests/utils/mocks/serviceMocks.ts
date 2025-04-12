@@ -7,6 +7,7 @@
  */
 
 import { mock } from 'vitest-mock-extended';
+import { vi } from 'vitest';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -95,8 +96,40 @@ export function createStateServiceMock() {
  */
 export function createResolutionServiceMock() {
   const service = mock<IResolutionService>();
-  // Default behaviors
-  service.resolveVariable.mockReturnValue('resolved-value');
+  // Default behaviors based on IResolutionService
+  service.resolveText.mockResolvedValue('resolved-text');
+  service.resolveData.mockResolvedValue({ mock: 'data' }); // Resolve to a simple object
+  // Ensure MeldPath mock is reasonably structured
+  service.resolvePath.mockResolvedValue({
+    contentType: 'filesystem',
+    validatedPath: '/resolved/mock/path' as any, // Cast for branding
+    originalValue: '$mock/path',
+    value: { exists: true, isAbsolute: true, isSecure: true, isValidSyntax: true },
+    isURL: false,
+    isSimple: false,
+    raw: '$mock/path',
+    isAbsolute: true,
+    isRelative: false,
+    isFilesystem: true
+  } as any); // Cast to MeldPath
+  service.resolveCommand.mockResolvedValue('resolved-command-output');
+  service.resolveFile.mockResolvedValue('resolved-file-content');
+  service.resolveContent.mockResolvedValue('resolved-content');
+  service.resolveNodes.mockResolvedValue('resolved-nodes-string');
+  service.resolveInContext.mockResolvedValue('resolved-in-context');
+  // Correctly mock Result type for resolveFieldAccess
+  service.resolveFieldAccess.mockResolvedValue({ success: true, value: 'resolved-field-access' });
+  service.validateResolution.mockResolvedValue(undefined);
+  service.extractSection.mockResolvedValue('extracted-section');
+  service.detectCircularReferences.mockResolvedValue(undefined);
+  service.convertToFormattedString.mockResolvedValue('formatted-string');
+  // service.enableResolutionTracking // Typically not mocked unless testing tracking
+  // service.getResolutionTracker // Typically not mocked unless testing tracking
+
+  // Remove outdated mocks
+  // service.resolveVariable is outdated
+  // service.resolve is outdated (superseded by resolveInContext, resolveNodes etc.)
+
   return service;
 }
 
@@ -106,9 +139,26 @@ export function createResolutionServiceMock() {
  */
 export function createFileSystemServiceMock() {
   const service = mock<IFileSystemService>();
-  // Default behaviors
-  service.fileExists.mockResolvedValue(true);
-  service.readFile.mockResolvedValue('file-contents');
+  // Default behaviors based on IFileSystemService
+  service.readFile.mockResolvedValue('mock-file-content');
+  service.writeFile.mockResolvedValue(undefined);
+  service.exists.mockResolvedValue(true);
+  service.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false } as any); // Basic stats mock
+  service.isFile.mockResolvedValue(true);
+  service.readDir.mockResolvedValue(['file1.txt', 'subdir']);
+  service.ensureDir.mockResolvedValue(undefined);
+  service.isDirectory.mockResolvedValue(false);
+  // service.watch // Requires more complex mocking if needed
+  service.getCwd.mockReturnValue('/mock/workspace');
+  service.dirname.mockReturnValue('/mock/workspace');
+  service.executeCommand.mockResolvedValue({ stdout: 'mock command output', stderr: '' });
+  // service.setFileSystem // Usually not needed unless testing filesystem switching
+  // service.getFileSystem // Usually not needed unless testing filesystem switching
+  // service.mkdir is deprecated, ensureDir is mocked instead
+
+  // Remove outdated/incorrect mocks
+  // service.fileExists is replaced by exists
+  // service.deleteFile is not in IFileSystemService
   return service;
 }
 
@@ -118,9 +168,44 @@ export function createFileSystemServiceMock() {
  */
 export function createPathServiceMock() {
   const service = mock<IPathService>();
-  // Default behaviors
-  service.resolve.mockReturnValue('/resolved/path');
-  service.isAbsolute.mockReturnValue(true);
+  // Default behaviors based on IPathService
+  // service.initialize // Initialization logic typically not mocked
+  // service.enableTestMode // Control methods usually not mocked
+  // service.disableTestMode
+  service.isTestMode.mockReturnValue(false);
+  // service.setHomePath // Setter methods usually not mocked
+  // service.setProjectPath
+  service.getHomePath.mockReturnValue('/mock/home');
+  service.getProjectPath.mockReturnValue('/mock/project');
+  service.resolveProjectPath.mockResolvedValue('/mock/project');
+  // resolvePath returns a basic absolute path
+  service.resolvePath.mockReturnValue('/resolved/mock/path' as any); // Cast for branding
+  // validatePath returns a basic validated MeldPath
+  service.validatePath.mockResolvedValue({
+    contentType: 'filesystem',
+    validatedPath: '/validated/mock/path' as any,
+    originalValue: './mock/path',
+    value: { exists: true, isAbsolute: true, isSecure: true, isValidSyntax: true },
+    isURL: false,
+    isSimple: false,
+    raw: './mock/path',
+    isAbsolute: true,
+    isRelative: false,
+    isFilesystem: true
+  } as any); // Cast to MeldPath
+  service.joinPaths.mockImplementation((...paths: string[]) => paths.join('/')); // Simple join mock
+  service.dirname.mockImplementation((p: string) => p.substring(0, p.lastIndexOf('/') || p.length));
+  service.basename.mockImplementation((p: string) => p.substring(p.lastIndexOf('/') + 1));
+  // Explicitly assign a mock function for the optional method
+  service.normalizePath = vi.fn().mockImplementation((p: string) => p);
+  service.isURL.mockReturnValue(false);
+  service.validateURL.mockResolvedValue('https://mock.validated.url' as any); // Cast for branding
+  service.fetchURL.mockResolvedValue({ status: 200, content: 'mock url content' });
+
+  // Remove outdated mocks
+  // service.resolve is not present
+  // service.isAbsolute is not present
+
   return service;
 }
 
