@@ -11,6 +11,9 @@ import type { DirectiveService } from '@services/pipeline/DirectiveService/Direc
 import type { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import type { StateDebuggerService as DebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
 import type { TransformationOptions } from './state.js';
+import type { StateServiceLike } from '@core/shared-service-types';
+import type { ResolutionContext } from './resolution';
+import type { MeldNode } from '@core/syntax/types';
 
 /**
  * Represents a position in a file
@@ -110,3 +113,68 @@ export type Maybe<T> = T | null | undefined;
 // export * from './ast-types'; // Commented out - file might be missing
 
 // Add export for the new guards file 
+
+// --- NEW CONTEXT TYPE DEFINITIONS ---
+
+/**
+ * Context related to formatting output, particularly newline handling.
+ */
+export interface FormattingContext {
+  isOutputLiteral?: boolean; // True if output should be treated literally (e.g., transformation mode)
+  contextType?: 'inline' | 'block'; // Hints whether the context is inline text or a block element
+  nodeType?: string; // The type of the node being processed
+  atLineStart?: boolean; // True if the current processing point is at the start of a line
+  atLineEnd?: boolean; // True if the current processing point is at the end of a line
+  [key: string]: any; // Allow for additional properties
+}
+
+/**
+ * Context specific to the execution of @run directives.
+ * Based on _spec/types/run-spec.md
+ */
+export interface ExecutionContext {
+  /** The current working directory for the command execution. */
+  cwd: string;
+  /** Environment variables for the command execution. */
+  env?: Record<string, string>;
+  /** Optional timeout for the command execution in milliseconds. */
+  timeout?: number;
+  /** Optional shell to use for execution. */
+  shell?: string | boolean;
+  /** Input string to pipe to the command's stdin. */
+  stdin?: string;
+  /** Whether to capture stdout. Defaults to true. */
+  captureStdout?: boolean;
+  /** Whether to capture stderr. Defaults to true. */
+  captureStderr?: boolean;
+  /** Whether to stream output (stdout/stderr) during execution. */
+  streamOutput?: boolean;
+  /** Risk level associated with the command. */
+  riskLevel?: 'low' | 'medium' | 'high';
+  /** Optional description of the command's purpose. */
+  description?: string;
+}
+
+/**
+ * Combined context object passed to directive handlers during interpretation.
+ */
+export interface DirectiveProcessingContext {
+  /** The current state service instance for the directive to operate on. */
+  state: StateServiceLike;
+  /** The context for resolving variables within the directive. */
+  resolutionContext: ResolutionContext;
+  /** The context related to formatting (e.g., newline handling). */
+  formattingContext: FormattingContext;
+  /** The context specific to command execution (only present for @run directives). */
+  executionContext?: ExecutionContext;
+  /** The original directive node being processed. */
+  directiveNode: MeldNode; // Added to provide direct access to the node
+}
+
+// --- END NEW CONTEXT TYPE DEFINITIONS ---
+
+export type {
+  FormattingContext,
+  ExecutionContext,
+  DirectiveProcessingContext,
+} 

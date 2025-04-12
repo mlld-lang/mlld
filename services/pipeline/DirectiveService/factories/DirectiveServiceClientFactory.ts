@@ -1,66 +1,46 @@
-import { injectable, inject, container } from 'tsyringe';
+import { injectable, inject } from 'tsyringe';
+import type { IDirectiveService } from '../DirectiveService/IDirectiveService.js';
+import type { IDirectiveServiceClient } from '../interfaces/IDirectiveServiceClient.js';
+import type { IDirectiveServiceClientFactory } from './IDirectiveServiceClientFactory.js';
 import { Service } from '@core/ServiceProvider.js';
-import { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
-import { DirectiveServiceLike, ClientFactory } from '@core/shared-service-types.js';
-import { directiveLogger as logger } from '@core/utils/logger.js';
+import type { DirectiveProcessingContext } from '@core/types/index.js';
+import type { MeldNode, DirectiveNode } from '@core/syntax/types/index.js';
+import type { StateServiceLike } from '@core/shared-service-types.js';
+import type { DirectiveResult } from '../interfaces/DirectiveTypes.js';
 
 /**
- * Factory for creating directive service clients
- * This factory is used to break the circular dependency between DirectiveService and ResolutionService
+ * Factory for creating DirectiveServiceClient instances.
+ *
+ * This factory provides a concrete implementation for creating clients
+ * that interact with the DirectiveService. It resolves the actual
+ * DirectiveService instance from the DI container and uses it to
+ * implement the client interface methods.
  */
 @injectable()
 @Service({
-  description: 'Factory for creating directive service clients'
+  token: 'DirectiveServiceClientFactory',
+  description: 'Factory for creating DirectiveService clients'
 })
-export class DirectiveServiceClientFactory implements ClientFactory<IDirectiveServiceClient> {
-  private directiveService?: DirectiveServiceLike;
+export class DirectiveServiceClientFactory implements IDirectiveServiceClientFactory {
+  constructor(
+    @inject('IDirectiveService') private directiveService: IDirectiveService
+  ) {}
 
-  /**
-   * Creates a new DirectiveServiceClientFactory
-   * No longer directly depends on IDirectiveService to break circular dependency
-   */
-  constructor() {
-    // No direct dependency injection in constructor
-  }
-  
-  /**
-   * Lazily initializes the directive service when needed
-   * This breaks the circular dependency by deferring the resolution
-   */
-  private getDirectiveService(): DirectiveServiceLike {
-    if (!this.directiveService) {
-      logger.debug('Lazily initializing IDirectiveService');
-      this.directiveService = container.resolve<IDirectiveService>('IDirectiveService');
-    }
-    return this.directiveService;
-  }
-  
-  /**
-   * Creates a client for the directive service
-   * @returns A client that provides directive service functionality
-   */
   createClient(): IDirectiveServiceClient {
-    logger.debug('Creating DirectiveServiceClient');
-    
+    // Return an object implementing the IDirectiveServiceClient interface
     return {
-      supportsDirective: (kind) => {
-        return this.getDirectiveService().supportsDirective(kind);
+      supportsDirective: (kind: string): boolean => {
+        return this.directiveService.supportsDirective(kind);
       },
-      
-      getSupportedDirectives: () => {
-        // Cast to IDirectiveService to access the getSupportedDirectives method
-        // which is not part of the DirectiveServiceLike interface
-        const service = this.getDirectiveService() as IDirectiveService;
-        if (typeof service.getSupportedDirectives === 'function') {
-          return service.getSupportedDirectives();
-        }
-        // Fallback to empty array if method doesn't exist
-        return [];
+      // Updated handleDirective signature
+      handleDirective: (
+        node: DirectiveNode,
+        context: DirectiveProcessingContext
+      ): Promise<StateServiceLike | DirectiveResult> => {
+        return this.directiveService.handleDirective(node, context);
       },
-      
-      handleDirective: (node, context) => {
-        return this.getDirectiveService().handleDirective(node, context);
+      validateDirective: (node: DirectiveNode): Promise<void> => {
+        return this.directiveService.validateDirective(node);
       }
     };
   }
