@@ -95,38 +95,33 @@ describe('DataDirectiveHandler', () => {
 
     stateService.getCurrentFilePath.mockReturnValue('/test.meld');
 
-    // Register mocks before resolving handler
+    // Register mocks first
     testDIContext.registerMock('IValidationService', validationService);
     testDIContext.registerMock('IStateService', stateService);
     testDIContext.registerMock('IResolutionService', resolutionService);
-    testDIContext.registerMock('IFileSystemService', mock<IFileSystemService>());
-    testDIContext.registerMock('IPathService', mock<IPathService>());
+    testDIContext.registerMock<IFileSystemService>('IFileSystemService', mock<IFileSystemService>());
+    testDIContext.registerMock<IPathService>('IPathService', mock<IPathService>()); 
 
-    // Resolve handler from container
+    // Resolve handler AFTER registering mocks
     handler = await testDIContext.container.resolve(DataDirectiveHandler);
-
-    // Mock resolution logic
-    resolutionService.resolveNodes.mockImplementation(async (nodes: InterpolatableValue, context: any): Promise<string> => {
-      // Simplified mock
-      if (nodes.length === 1 && nodes[0].type === 'Text') return nodes[0].content;
-      if (nodes.length === 1 && nodes[0].type === 'VariableReference' && nodes[0].identifier === 'var') return '2';
-      return JSON.stringify(nodes); // Fallback
+    
+    // General mock resolution logic (can be overridden in tests)
+    resolutionService.resolveNodes.mockImplementation(async (nodes, ctx) => {
+      return nodes.map((n: any) => n.content || `{{${n.identifier}}}`).join('');
     });
-    resolutionService.resolveInContext.mockImplementation(async (value: any, context: any): Promise<string> => {
-      if (typeof value === 'string') return value.replace('${username}', 'Alice');
-      return JSON.stringify(value);
+    resolutionService.resolveInContext.mockImplementation(async (value, ctx) => {
+        if (typeof value === 'string') return value.replace('${username}', 'Alice');
+        return JSON.stringify(value);
     });
-
-    // Create mock contexts
-    const mockResolutionContext = mock<ResolutionContext>();
-    const mockFormattingContext = mock<FormattingContext>();
 
     // Create base processing context
+    const mockResolutionContext = mock<ResolutionContext>();
+    const mockFormattingContext = mock<FormattingContext>();
     mockProcessingContext = {
         state: stateService,
         resolutionContext: mockResolutionContext,
         formattingContext: mockFormattingContext,
-        directiveNode: undefined as any, // Placeholder
+        directiveNode: undefined as any, 
     };
   });
 
@@ -217,15 +212,18 @@ describe('DataDirectiveHandler', () => {
       });
       mockProcessingContext.directiveNode = node;
 
+      // Mock command resolution for this specific test
       resolutionService.resolveNodes.mockResolvedValueOnce('echo { key: "value", ');
+      
+      // Resolve the FS mock *within the test* and configure it
       const fsMock = testDIContext.resolveSync<IFileSystemService>('IFileSystemService'); 
       const mockCommandResult = { 
           stdout: '{ "key": "value", ', 
           stderr: '' 
       };
-      vi.mocked(fsMock.executeCommand).mockResolvedValue(mockCommandResult); // Use mockResolvedValue
+      vi.mocked(fsMock.executeCommand).mockResolvedValue(mockCommandResult);
 
-      // Execute and expect the specific JSON parsing error
+      // Execute and assert
       await expect(handler.execute(mockProcessingContext))
         .rejects
         .toThrow(DirectiveError); 
@@ -233,7 +231,7 @@ describe('DataDirectiveHandler', () => {
         .rejects
         .toThrow(/Failed to parse command output as JSON/);
         
-      // Optional: Verify executeCommand was called correctly
+      // Verify executeCommand was called
       expect(fsMock.executeCommand).toHaveBeenCalledWith('echo { key: "value", ', expect.anything());
     });
 

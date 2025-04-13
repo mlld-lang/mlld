@@ -60,8 +60,6 @@ export class InterpreterService implements IInterpreterService {
   private stateService?: IStateService;
   private initialized = false;
   private stateVariableCopier = new StateVariableCopier();
-  private initializationPromise: Promise<void> | null = null;
-  private factoryInitialized: boolean = false;
   private resolutionService!: IResolutionService;
   private parserClientFactory?: ParserServiceClientFactory;
   private parserClient?: IParserServiceClient;
@@ -93,17 +91,13 @@ export class InterpreterService implements IInterpreterService {
     });
     
     if (this.directiveClientFactory && this.stateService) {
-      this.initializationPromise = new Promise<void>((resolve) => {
-        this.initializeDirectiveClient();
-        this.initialized = true;
-        logger.debug('InterpreterService initialized via DI');
-        resolve();
-      });
+      this.initializeDirectiveClient();
+      this.initializeParserClient();
+      this.initialized = true;
+      logger.debug('InterpreterService initialized via DI');
     } else {
-        logger.warn('InterpreterService constructed with potentially missing core dependencies for DI init');
+      logger.warn('InterpreterService constructed with missing core dependencies. Manual initialization might be needed (deprecated).');
     }
-
-    this.ensureFactoryInitialized();
   }
 
   /**
@@ -111,12 +105,13 @@ export class InterpreterService implements IInterpreterService {
    */
   private initializeDirectiveClient(): void {
     if (!this.directiveClientFactory) {
+      logger.debug('Cannot initialize directive client: factory is missing.');
       return;
     }
     
     try {
       this.directiveClient = this.directiveClientFactory.createClient();
-      logger.debug('Successfully created DirectiveServiceClient using factory');
+      logger.debug('Successfully created DirectiveServiceClient using factory', { hasClient: !!this.directiveClient });
     } catch (error) {
       logger.warn('Failed to create DirectiveServiceClient', { error });
       this.directiveClient = undefined;
@@ -124,31 +119,19 @@ export class InterpreterService implements IInterpreterService {
   }
 
   /**
-   * Lazily initialize the DirectiveServiceClient factory
-   * This is called only when needed to avoid circular dependencies
+   * Initialize the parserClient using the factory
    */
-  private ensureFactoryInitialized(): void {
-    if (this.factoryInitialized) {
+  private initializeParserClient(): void {
+    if (!this.parserClientFactory) {
+      logger.debug('Cannot initialize parser client: factory is missing.');
       return;
     }
-    
-    this.factoryInitialized = true;
     try {
-      this.directiveClientFactory = container.resolve<DirectiveServiceClientFactory>('DirectiveServiceClientFactory');
-      this.initializeDirectiveClient();
+      this.parserClient = this.parserClientFactory.createClient();
+      logger.debug('Successfully created ParserServiceClient using factory', { hasClient: !!this.parserClient });
     } catch (error) {
-      logger.warn('Failed to resolve DirectiveServiceClientFactory', { error });
-    }
-
-    if (!this.parserClientFactory) {
-        try {
-          this.parserClientFactory = container.resolve('ParserServiceClientFactory');
-          this.initializeParserClient(); 
-        } catch (error) {
-          logger.debug(`ParserServiceClientFactory not available: ${(error as Error).message}`);
-        }
-    } else if (!this.parserClient) {
-        this.initializeParserClient();
+      logger.warn('Failed to create ParserServiceClient', { error });
+      this.parserClient = undefined;
     }
   }
 
@@ -159,9 +142,9 @@ export class InterpreterService implements IInterpreterService {
   private ensureInitialized(): void {
     if (!this.initialized) {
       throw new MeldInterpreterError(
-        'InterpreterService must be initialized before use',
+        'InterpreterService not initialized. Check for missing dependencies (DirectiveServiceClientFactory, IStateService).',
         'initialization',
-        undefined, // No location information
+        undefined,
         { severity: ErrorSeverity.Fatal }
       );
     }
@@ -173,8 +156,6 @@ export class InterpreterService implements IInterpreterService {
    * Updated to accept DirectiveProcessingContext
    */
   private async callDirectiveHandleDirective(node: DirectiveNode, context: DirectiveProcessingContext): Promise<StateServiceLike | DirectiveResult> {
-    this.ensureFactoryInitialized();
-    
     if (this.directiveClient && this.directiveClient.handleDirective) {
       try {
         return await this.directiveClient.handleDirective(node, context);
@@ -189,9 +170,9 @@ export class InterpreterService implements IInterpreterService {
     }
     
     throw new MeldInterpreterError(
-      'No directive service client available to handle directive',
+      'No directive service client available to handle directive. Initialization likely failed.',
       'directive_handling',
-      undefined,
+      convertLocation(node.location),
       { severity: ErrorSeverity.Fatal }
     );
   }
@@ -201,8 +182,6 @@ export class InterpreterService implements IInterpreterService {
    * Uses the client if available, falls back to direct service reference
    */
   private callDirectiveSupportsDirective(kind: string): boolean {
-    this.ensureFactoryInitialized();
-    
     if (this.directiveClient) {
       try {
         return this.directiveClient.supportsDirective(kind);
@@ -233,7 +212,6 @@ export class InterpreterService implements IInterpreterService {
   ): void {
     this.stateService = stateService;
     this.initialized = true;
-    this.initializationPromise = Promise.resolve();
     logger.warn('InterpreterService initialized manually (deprecated method)');
   }
 
@@ -428,7 +406,7 @@ export class InterpreterService implements IInterpreterService {
           let processedNode = node;
           if (node.content.includes('{{')) {
             logger.debug('TextNode content requires resolution', { content: node.content.substring(0, 50) });
-            this.ensureFactoryInitialized(); // Ensure parser client is ready
+            this.ensureInitialized(); // Ensure parser client is ready
             if (this.parserClient && this.resolutionService) {
               process.stdout.write(`[InterpreterService LOG] Parser and Resolution services OK. Attempting parse/resolve.\n`);
               try {
@@ -736,30 +714,6 @@ export class InterpreterService implements IInterpreterService {
           }
         }
       );
-    }
-  }
-
-  /**
-   * Initialize the ParserServiceClient using the factory
-   */
-  private initializeParserClient(): void {
-    if (!this.parserClientFactory) {
-      // If the factory wasn't injected (e.g., manual instantiation without it),
-      // try resolving it now. If it fails, parserClient remains undefined.
-      try {
-        this.parserClientFactory = container.resolve('ParserServiceClientFactory');
-      } catch (error) {
-         logger.warn('ParserServiceClientFactory not available, cannot create parser client.', { error });
-         return; // Exit if factory cannot be resolved
-      }
-    }
-    
-    try {
-      this.parserClient = this.parserClientFactory.createClient();
-      logger.debug('Successfully created ParserServiceClient using factory');
-    } catch (error) {
-      logger.warn('Failed to create ParserServiceClient', { error });
-      this.parserClient = undefined; // Ensure client is undefined on error
     }
   }
 } 

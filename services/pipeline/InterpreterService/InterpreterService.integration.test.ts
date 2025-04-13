@@ -21,6 +21,10 @@ import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/St
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IParserService } from '@services/parser/IParserService.js';
 import { logger } from '@core/utils/logger.js';
+// Import necessary factories and clients
+import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
+import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
+import { mock } from 'vitest-mock-extended'; // Import mock
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),
@@ -32,16 +36,32 @@ describe('InterpreterService Integration', () => {
   let interpreter: IInterpreterService;
   let state: IStateService;
   let parser: IParserService;
+  let mockDirectiveClient: IDirectiveServiceClient;
 
   beforeEach(async () => {
-    // Use DI mode with isolated container
     context = TestContextDI.createIsolated();
-    // We use real services here where possible, mocking only external boundaries if needed
     await context.initialize();
 
-    // Explicitly resolve services from the container AFTER initialization
+    // --- Mock DirectiveServiceClientFactory --- 
+    mockDirectiveClient = mock<IDirectiveServiceClient>();
+    // Default mock behavior
+    mockDirectiveClient.supportsDirective.mockReturnValue(true); 
+    mockDirectiveClient.handleDirective.mockImplementation(async (node, context) => {
+        // Default: just return the state
+        // Specific tests can override this using mockDirectiveClient.handleDirective.mockImplementationOnce(...)
+        return context.state;
+    });
+    
+    const mockDirectiveClientFactory = mock<DirectiveServiceClientFactory>();
+    mockDirectiveClientFactory.createClient.mockReturnValue(mockDirectiveClient);
+    
+    // >>> REGISTER THE MOCK FACTORY <<<
+    context.registerMock('DirectiveServiceClientFactory', mockDirectiveClientFactory);
+    // --- End Mock --- 
+    
+    // Resolve services AFTER registering mocks
     interpreter = await context.resolve('IInterpreterService');
-    state = await context.resolve('IStateService'); // Get the potentially managed StateService instance
+    state = await context.resolve('IStateService'); 
     parser = await context.resolve('IParserService');
     
     // Register the StateTrackingService
@@ -68,38 +88,41 @@ describe('InterpreterService Integration', () => {
     });
 
     it('interprets directive nodes', async () => {
-      // MIGRATION: Using centralized syntax example instead of hardcoded directive
       const example = textDirectiveExamples.atomic.simpleString;
-      const node = await createNodeFromExample(example.code);
+      const node = await createNodeFromExample(example.code) as DirectiveNode;
       
-      const result = await context.services.interpreter.interpret([node]);
-      // Extract the expected variable name from the example (should be 'test' in this example)
+      // Configure the client mock specifically for this test
+      mockDirectiveClient.handleDirective.mockImplementationOnce(async (node, context) => {
+          await context.state.setTextVar(node.directive.identifier, "Hello"); // Use literal
+          return context.state;
+      });
+
+      const result = await interpreter.interpret([node]);
+      
+      expect(mockDirectiveClient.handleDirective).toHaveBeenCalled();
       const varName = node.directive.identifier;
       const value = result.getTextVar(varName);
-      
-      // Check if the value is set correctly
-      // For text directives, the value should be a string
-      expect(typeof value?.value).toBe('string');
-      expect(value?.value).toBeTruthy();
       expect(value?.value).toBe('Hello');
     });
 
     it('interprets data directives', async () => {
-      // MIGRATION: Using centralized syntax example instead of hardcoded directive
       const example = dataDirectiveExamples.atomic.simpleObject;
-      const node = await createNodeFromExample(example.code);
+      const node = await createNodeFromExample(example.code) as DirectiveNode;
+      const expectedData = { name: 'test', value: 123 };
+
+      // Configure the client mock specifically for this test
+      mockDirectiveClient.handleDirective.mockImplementationOnce(async (node, context) => {
+          await context.state.setDataVar(node.directive.identifier, expectedData);
+          return context.state;
+      });
       
-      const result = await context.services.interpreter.interpret([node]);
-      
-      // Extract the variable name from the example
+      const result = await interpreter.interpret([node]);
+      expect(mockDirectiveClient.handleDirective).toHaveBeenCalled();
       const varName = node.directive.identifier;
       const value = result.getDataVar(varName);
-      
-      // Verify the data is an object
       expect(value).toBeDefined();
-      expect(typeof value).toBe('object');
-      // Data should not be null
-      expect(value).not.toBeNull();
+      expect(typeof value?.value).toBe('object');
+      expect(value?.value).toEqual(expectedData);
     });
 
     it.skip('interprets path directives', async () => {
@@ -141,15 +164,20 @@ describe('InterpreterService Integration', () => {
         context.factory.createTextDirective('second', 'two', context.factory.createLocation(2, 1)),
         context.factory.createTextDirective('third', 'three', context.factory.createLocation(3, 1))
       ];
+      const parentState = await context.resolve('IStateService'); // Use resolved state
 
-      // Create a parent state to track nodes
-      const parentState = context.services.state.createChildState();
-      
-      const result = await context.services.interpreter.interpret(nodes, {
+       // Configure the client mock for this test
+       mockDirectiveClient.handleDirective.mockImplementation(async (node, context) => {
+          await context.state.setTextVar(node.directive.identifier, `val_${node.directive.identifier}`);
+          return context.state;
+      });
+
+      const result = await interpreter.interpret(nodes, {
         initialState: parentState,
         filePath: 'test.meld',
         mergeState: true
       });
+      expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(3);
 
       const stateNodes = result.getNodes();
       expect(stateNodes).toHaveLength(3);

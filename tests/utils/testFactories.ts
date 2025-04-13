@@ -20,6 +20,9 @@ import { mock } from 'vitest-mock-extended';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { InterpolatableValue, StructuredPath as AstStructuredPath, VariableReferenceNode } from '@core/syntax/types/nodes.js';
 import { VariableOrigin } from '@core/types/variables.js';
+import type { TextVariable, DataVariable, IPathVariable, CommandVariable, VariableMetadata, VariableType } from '@core/types/variables.js';
+import type { JsonValue } from '@core/types';
+import type { ICommandDefinition } from '@core/types/define.js';
 
 const DEFAULT_POSITION: Position = { line: 1, column: 1 };
 const DEFAULT_LOCATION: Location = {
@@ -411,17 +414,21 @@ export function createDefineDirective(
 
 // Mock service creation functions
 export function createMockValidationService(): IValidationService {
+  // Use simplified mock<T>()
   return mock<IValidationService>();
 }
 
 export function createMockStateService(): IStateService {
+  // Use simplified mock<T>()
   return mock<IStateService>();
 }
 
 export function createMockResolutionService(): IResolutionService {
+  // Use simplified mock<T>()
   return mock<IResolutionService>();
 }
 
+// Keep other factories as they were (simplified)
 export function createMockFileSystemService(): IFileSystemService {
   return mock<IFileSystemService>();
 }

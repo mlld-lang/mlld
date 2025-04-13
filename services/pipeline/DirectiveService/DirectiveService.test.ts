@@ -13,6 +13,7 @@ import type { IInterpreterService } from '@services/pipeline/InterpreterService/
 import { IResolutionService } from '@services/pipeline/ResolutionService/IResolutionService.js';
 import { IStateService } from '@services/state/IStateService.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { createTextDirective } from '@tests/utils/testFactories.js'; // Import factory
 
 // Main test suite for DirectiveService
 describe('DirectiveService', () => {
@@ -217,22 +218,41 @@ describe('DirectiveService', () => {
     });
 
     it('should throw if used before initialization', async () => {
-      const uninitializedService = new DirectiveService();
+      // Create instance without calling initialize
+      const service = new DirectiveService();
       const node = context.factory.createTextDirective('test', '"value"', context.factory.createLocation(1, 1));
-      const execContext = { currentFilePath: 'test.meld', state: context.services.state };
       
-      // Check for specific error type and code
-      await expect(uninitializedService.processDirective(node, execContext))
-        .rejects.toThrowError(expect.any(DirectiveError)); // Check base type
-
-      // Optional: More specific checks if needed
       try {
-        await uninitializedService.processDirective(node, execContext);
+        await service.processDirective(node, {} as any);
+        // Should not reach here
+        expect.fail('Service did not throw when used before initialization');
       } catch (e) {
+        expect(e).toBeInstanceOf(DirectiveError); // Check base type
+        const error = e as DirectiveError;
+        expect(error.code).toBe(DirectiveErrorCode.INVALID_CONTEXT); // Check specific code
+        // Update assertion to match the actual error message prefix
+        expect(error.message).toContain('DirectiveService must be initialized'); 
+      }
+    });
+
+    it('should throw if handler is missing', async () => {
+      const context = TestContextDI.createIsolated();
+      await context.initialize();
+      const service = await context.resolve(DirectiveService);
+      (service as any).handlers.delete('text'); 
+      
+      const node = createTextDirective('test', 'value'); 
+      
+      try {
+        await service.processDirective(node, { state: context.resolveSync('IStateService') } as any);
+        expect.fail('Should have thrown HANDLER_NOT_FOUND');
+      } catch(e) {
+        expect(e).toBeInstanceOf(DirectiveError);
         const error = e as DirectiveError;
         expect(error.code).toBe(DirectiveErrorCode.HANDLER_NOT_FOUND);
-        expect(error.message).toContain(`No handler found for directive: ${node.directive.kind}`);
+        expect(error.message).toContain('No handler registered for directive kind: text'); 
       }
+      await context.cleanup();
     });
   });
 

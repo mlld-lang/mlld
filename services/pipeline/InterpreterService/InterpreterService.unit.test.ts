@@ -372,7 +372,8 @@ describe('InterpreterService Unit', () => {
     it('throws MeldInterpreterError when service is uninitialized', async () => {
       const uninitializedService = new InterpreterService(); 
       const node: TextNode = { type: 'Text', content: 'test' };
-      await expect(uninitializedService.interpret([node], { initialState: mockInitialState, mergeState: true })).rejects.toThrow(/InterpreterService must be initialized/);
+      await expect(uninitializedService.interpret([node], { initialState: mockInitialState, mergeState: true }))
+            .rejects.toThrow(/InterpreterService not initialized. Check for missing dependencies/);
     });
 
     it('clones working state even on partial failure (handler fails)', async () => {
