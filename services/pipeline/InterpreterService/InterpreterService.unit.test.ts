@@ -17,6 +17,7 @@ import { ParserServiceClientFactory } from '@services/pipeline/ParserService/fac
 import type { InterpolatableValue } from '@core/syntax/types/ast.js';
 import { createLocation as createNodeLocation } from '@tests/utils/nodeFactories';
 import { VariableType, type CommandVariable } from '@core/types/index.js';
+import { IPathService } from '@services/path/IPathService.js';
 
 describe('InterpreterService Unit', () => {
   let context: TestContextDI;
@@ -29,6 +30,7 @@ describe('InterpreterService Unit', () => {
   let parserClientFactory: DeepMockProxy<ParserServiceClientFactory>;
   let mockInitialState: DeepMockProxy<IStateService>;
   let workingMockState: DeepMockProxy<IStateService>;
+  let pathService: DeepMockProxy<IPathService>;
 
   beforeEach(async () => {
     context = TestContextDI.createIsolated();
@@ -41,6 +43,7 @@ describe('InterpreterService Unit', () => {
     parserClientFactory = mockDeep<ParserServiceClientFactory>();
     mockInitialState = mockDeep<IStateService>();
     workingMockState = mockDeep<IStateService>();
+    pathService = mockDeep<IPathService>();
 
     directiveClientFactory.createClient.mockReturnValue(directiveClient);
     parserClientFactory.createClient.mockReturnValue(parserClient);
@@ -65,12 +68,21 @@ describe('InterpreterService Unit', () => {
     workingMockState.addNode.mockReturnValue(undefined);
     workingMockState.getCurrentFilePath.mockReturnValue('/test/working.mld');
 
+    pathService.dirname.mockImplementation((filePath) => {
+      if (filePath.includes('/')) {
+        return filePath.substring(0, filePath.lastIndexOf('/'));
+      }
+      return '.';
+    });
+    pathService.dirname.calledWith('/test/working.mld').mockReturnValue('/test');
+
     context.registerMock('IDirectiveServiceClient', directiveClient);
     context.registerMock('IStateService', state);
     context.registerMock('IResolutionService', resolutionService);
     context.registerMock('DirectiveServiceClientFactory', directiveClientFactory);
     context.registerMock('ParserServiceClientFactory', parserClientFactory);
     context.registerMock('IParserServiceClient', parserClient);
+    context.registerMock('IPathService', pathService);
 
     await context.initialize();
 
@@ -423,5 +435,69 @@ describe('InterpreterService Unit', () => {
        const node: DirectiveNode = { type: 'Directive', name: 'test', content: 'no directive prop' } as DirectiveNode;
       await expect(service.interpret([node], { initialState: mockInitialState, mergeState: true })).rejects.toThrow(/Invalid directive node/);
     });
+  });
+
+  // <<< NEW TEST SUITE FOR PHASE 5 >>>
+  describe('Phase 5 Refactoring Verification', () => {
+
+    it('passes correctly structured context to directive handler', async () => {
+      const directiveNode = createDirectiveNode('run', { subtype: 'runCommand', command: 'echo hello' });
+      directiveClient.handleDirective.mockResolvedValue(workingMockState); 
+      
+      await service.interpret([directiveNode], { initialState: mockInitialState, mergeState: true });
+
+      expect(directiveClient.handleDirective).toHaveBeenCalledTimes(1);
+      const handlerCall = directiveClient.handleDirective.mock.calls[0];
+      const passedNode = handlerCall[0];
+      const passedContext = handlerCall[1];
+
+      expect(passedNode).toBe(directiveNode);
+      expect(passedContext).toBeDefined();
+      expect(passedContext.state).toBeDefined();
+      expect(passedContext.directiveNode).toBe(directiveNode);
+      
+      expect(passedContext.resolutionContext).toBeDefined();
+      expect(passedContext.resolutionContext.currentFilePath).toBe('/test/working.mld'); 
+      
+      expect(passedContext.formattingContext).toBeDefined();
+      expect(passedContext.formattingContext.contextType).toBe('block');
+      expect(passedContext.formattingContext.nodeType).toBe('Directive');
+      
+      expect(passedContext.executionContext).toBeDefined();
+      expect(passedContext.executionContext?.cwd).toBe('/test');
+    });
+
+    it('handles DirectiveResult with replacement node in transformation mode', async () => {
+      const directiveNode = createDirectiveNode('embed', { subtype: 'embedPath', path: 'file.md' });
+      const mockReplacementNode = createTextNode('Replaced Content', directiveNode.location);
+      const directiveResult = {
+        state: workingMockState,
+        replacement: mockReplacementNode
+      };
+      
+      workingMockState.isTransformationEnabled.mockReturnValue(true);
+      workingMockState.transformNode = vi.fn();
+      
+      directiveClient.handleDirective.mockResolvedValue(directiveResult);
+
+      const finalState = await service.interpret([directiveNode], { initialState: mockInitialState, mergeState: true });
+
+      expect(directiveClient.handleDirective).toHaveBeenCalledTimes(1);
+      expect(workingMockState.transformNode).toHaveBeenCalledWith(directiveNode, mockReplacementNode);
+      expect(finalState.getStateId()).toBe(workingMockState.getStateId()); 
+    });
+
+    it('handles direct IStateService return from directive handler', async () => {
+      const directiveNode = createDirectiveNode('text', { identifier: 'abc', value: 'def' });
+      directiveClient.handleDirective.mockResolvedValue(workingMockState);
+      workingMockState.transformNode = vi.fn();
+
+      const finalState = await service.interpret([directiveNode], { initialState: mockInitialState, mergeState: true });
+
+      expect(directiveClient.handleDirective).toHaveBeenCalledTimes(1);
+      expect(workingMockState.transformNode).not.toHaveBeenCalled();
+      expect(finalState.getStateId()).toBe(workingMockState.getStateId()); 
+    });
+
   });
 }); 

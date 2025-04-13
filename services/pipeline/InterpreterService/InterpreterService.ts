@@ -19,6 +19,7 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { DirectiveResult } from '@services/pipeline/DirectiveService/interfaces/DirectiveTypes.js';
 import type { DirectiveProcessingContext, ExecutionContext, FormattingContext } from '@core/types/index.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
+import type { IPathService } from '@services/path/IPathService.js';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -51,7 +52,8 @@ function getErrorMessage(error: unknown): string {
     { token: 'DirectiveServiceClientFactory', name: 'directiveServiceClientFactory' },
     { token: 'IStateService', name: 'stateService' },
     { token: 'IResolutionService', name: 'resolutionService' },
-    { token: 'ParserServiceClientFactory', name: 'parserClientFactory' }
+    { token: 'ParserServiceClientFactory', name: 'parserClientFactory' },
+    { token: 'IPathService', name: 'pathService' }
   ]
 })
 export class InterpreterService implements IInterpreterService {
@@ -63,6 +65,7 @@ export class InterpreterService implements IInterpreterService {
   private resolutionService!: IResolutionService;
   private parserClientFactory?: ParserServiceClientFactory;
   private parserClient?: IParserServiceClient;
+  private pathService!: IPathService;
 
   /**
    * Creates a new InterpreterService
@@ -71,32 +74,36 @@ export class InterpreterService implements IInterpreterService {
    * @param stateService - Service for state management
    * @param resolutionService - Service for text resolution
    * @param parserClientFactory - Factory for creating parser service clients
+   * @param pathService - Service for path operations
    */
   constructor(
     @inject('DirectiveServiceClientFactory') directiveServiceClientFactory?: DirectiveServiceClientFactory,
     @inject('IStateService') stateService?: IStateService,
     @inject('IResolutionService') resolutionService: IResolutionService,
-    @inject('ParserServiceClientFactory') parserClientFactory?: ParserServiceClientFactory
+    @inject('ParserServiceClientFactory') parserClientFactory?: ParserServiceClientFactory,
+    @inject('IPathService') pathService: IPathService
   ) {
     this.directiveClientFactory = directiveServiceClientFactory;
     this.stateService = stateService;
     this.resolutionService = resolutionService;
     this.parserClientFactory = parserClientFactory;
+    this.pathService = pathService;
     
     logger.debug('InterpreterService constructor', {
       hasDirectiveFactory: !!this.directiveClientFactory,
       hasStateService: !!this.stateService,
       hasResolutionService: !!this.resolutionService,
-      hasParserFactory: !!this.parserClientFactory
+      hasParserFactory: !!this.parserClientFactory,
+      hasPathService: !!this.pathService
     });
     
-    if (this.directiveClientFactory && this.stateService) {
+    if (this.directiveClientFactory && this.stateService && this.pathService) {
       this.initializeDirectiveClient();
       this.initializeParserClient();
       this.initialized = true;
       logger.debug('InterpreterService initialized via DI');
     } else {
-      logger.warn('InterpreterService constructed with missing core dependencies. Manual initialization might be needed (deprecated).');
+      logger.warn('InterpreterService constructed with missing core dependencies (DirectiveClientFactory, StateService, PathService). Manual initialization might be needed (deprecated).');
     }
   }
 
@@ -511,7 +518,7 @@ export class InterpreterService implements IInterpreterService {
           if (directiveNode.directive.kind === 'run') {
             // Populate based on directiveNode properties or defaults
             executionContext = {
-              cwd: directiveState.getCurrentFilePath() ? this.resolutionService.dirname(directiveState.getCurrentFilePath()!) : process.cwd(),
+              cwd: directiveState.getCurrentFilePath() ? this.pathService.dirname(directiveState.getCurrentFilePath()!) : process.cwd(),
               // ... other ExecutionContext fields based on directive options or defaults
             };
           }
@@ -530,16 +537,15 @@ export class InterpreterService implements IInterpreterService {
 
           let resultState: IStateService;
           let replacementNode: MeldNode | undefined = undefined;
-
+          
           if (
             directiveResult &&
             typeof directiveResult === 'object' &&
-            'state' in directiveResult &&
-            directiveResult.state
+            'replacement' in directiveResult
           ) {
-            resultState = directiveResult.state;
-            replacementNode = directiveResult.replacement;
-          } else if (directiveResult && typeof directiveResult === 'object' && 'getNodes' in directiveResult) {
+            resultState = (directiveResult as DirectiveResult).state; 
+            replacementNode = (directiveResult as DirectiveResult).replacement;
+          } else if (directiveResult && typeof directiveResult === 'object') {
             resultState = directiveResult as IStateService;
           } else {
              throw new MeldInterpreterError(
