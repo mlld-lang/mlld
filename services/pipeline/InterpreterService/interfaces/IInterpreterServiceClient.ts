@@ -1,5 +1,7 @@
 import type { MeldNode } from '@core/syntax/types/index.js';
 import type { StateServiceLike, InterpreterOptionsBase } from '@core/shared-service-types.js';
+import type { InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 /**
  * Client interface for InterpreterService functionality needed by DirectiveService

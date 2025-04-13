@@ -2,6 +2,7 @@ import type { DirectiveNode } from '@core/syntax/types/index.js';
 import type { StateServiceLike } from '@core/shared-service-types.js';
 import type { DirectiveResult } from './DirectiveTypes.js';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 /**
  * Client interface for DirectiveService functionality needed by other services
@@ -30,12 +31,12 @@ export interface IDirectiveServiceClient {
    * This is an additional method needed by the InterpreterService
    * @param node The directive node to process
    * @param context The context for processing the directive
-   * @returns A promise that resolves to the updated state
+   * @returns A promise resolving to the updated state or directive result
    */
   handleDirective(
     node: DirectiveNode,
     context: DirectiveProcessingContext
-  ): Promise<StateServiceLike | DirectiveResult>;
+  ): Promise<IStateService | DirectiveResult>;
 
   /**
    * Validates a directive node.

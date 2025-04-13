@@ -68,9 +68,9 @@ export class MeldLLMXMLError extends Error {
     { token: 'IResolutionService', name: 'resolutionService' }
   ]
 })
-export class DirectiveService implements IDirectiveService, DirectiveServiceLike {
+export class DirectiveService implements IDirectiveService {
   private validationService!: ValidationServiceLike;
-  private stateService!: StateServiceLike;
+  private stateService!: IStateService;
   private fileSystemService!: FileSystemLike;
   private parserService!: ParserServiceLike;
   private interpreterService?: InterpreterServiceLike; // Legacy reference
@@ -103,7 +103,7 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    */
   constructor(
     @inject('IValidationService') validationService?: ValidationServiceLike,
-    @inject('IStateService') stateService?: StateServiceLike,
+    @inject('IStateService') stateService?: IStateService,
     @inject('IPathService') private pathService?: IPathService,
     @inject('IFileSystemService') fileSystemService?: FileSystemLike,
     @inject('IParserService') parserService?: ParserServiceLike,
@@ -151,7 +151,7 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    */
   private initializeFromParams(
     validationService?: ValidationServiceLike,
-    stateService?: StateServiceLike,
+    stateService?: IStateService,
     pathService?: PathServiceLike,
     fileSystemService?: FileSystemLike,
     parserService?: ParserServiceLike,
@@ -201,7 +201,7 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    */
   initialize(
     validationService: ValidationServiceLike,
-    stateService: StateServiceLike,
+    stateService: IStateService,
     pathService: PathServiceLike,
     fileSystemService: FileSystemLike,
     parserService: ParserServiceLike,
@@ -376,103 +376,362 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
   /**
    * Handle a directive node
    */
-  public async handleDirective(node: DirectiveNode, context: DirectiveContext): Promise<StateServiceLike> {
-    // This might need to adapt the old context to the new one before calling internal logic
-    // For now, assume processDirective is the main path used by tests/InterpreterService
-    return this.processDirective(node, context);
+  public async handleDirective(node: DirectiveNode, context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
+    this.ensureInitialized();
+    this.ensureFactoryInitialized(); // Ensure Resolution Client Factory is ready
+    
+    const kind = node.directive?.kind;
+    if (!kind) {
+      throw new DirectiveError('Directive node is missing kind', 'unknown', DirectiveErrorCode.VALIDATION_FAILED, { node });
+    }
+
+    const handler = this.handlers.get(kind);
+    if (!handler) {
+      throw new DirectiveError(`No handler registered for directive kind: ${kind}`, kind, DirectiveErrorCode.HANDLER_NOT_FOUND, { node, location: node.location });
+    }
+
+    try {
+      // --- Create DirectiveProcessingContext --- 
+      const state = context.state?.clone() || this.stateService!.createChildState();
+      const currentFilePath = context.currentFilePath ?? state.getCurrentFilePath() ?? undefined;
+      const resolutionContext = ResolutionContextFactory.create(state, currentFilePath);
+      const formattingContext: FormattingContext = { 
+         isOutputLiteral: state.isTransformationEnabled(),
+         contextType: 'block', 
+         nodeType: node.type,
+         atLineStart: true, // Default assumptions
+         atLineEnd: false
+      };
+      let executionContext: ExecutionContext | undefined;
+      if (kind === 'run' && this.pathService && currentFilePath) {
+         executionContext = { cwd: this.pathService.dirname(currentFilePath) };
+      } else if (kind === 'run') {
+         executionContext = { cwd: process.cwd() }; // Fallback CWD
+      }
+      
+      const processingContext: DirectiveProcessingContext = {
+          state: state as IStateService, 
+          resolutionContext: resolutionContext,
+          formattingContext: formattingContext,
+          executionContext: executionContext,
+          directiveNode: node
+      };
+      // --- End Context Creation ---
+
+      this.logger.debug(`Executing handler for directive: ${kind}`);
+      
+      const result = await handler.execute(processingContext);
+      
+      // Handle result
+      if (result && typeof result === 'object') {
+        if ('replacement' in result && 'state' in result && result.state) {
+          // It's a DirectiveResult, ensure state is IStateService
+          if (!this.isStateService(result.state)) {
+             throw new MeldDirectiveError('Invalid state object returned in DirectiveResult', kind, { code: DirectiveErrorCode.INTERNAL_ERROR });
+          }
+          return result as DirectiveResult;
+        } else if (this.isStateService(result)) {
+          // It's an IStateService
+          return result as IStateService;
+        } else {
+          throw new MeldDirectiveError('Invalid result type returned by directive handler', kind, { code: DirectiveErrorCode.INTERNAL_ERROR });
+        }
+      } else {
+        throw new MeldDirectiveError('Invalid or null result returned by directive handler', kind, { code: DirectiveErrorCode.INTERNAL_ERROR });
+      }
+
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown directive processing error';
+        const code = (error instanceof DirectiveError) ? error.code : DirectiveErrorCode.EXECUTION_FAILED;
+        const severity = (error instanceof MeldError) ? error.severity : ErrorSeverity.Fatal;
+        const simplifiedContext = { currentFilePath: context.currentFilePath ?? this.stateService?.getCurrentFilePath() ?? undefined };
+
+        throw new DirectiveError(
+          message,
+          kind,
+          code,
+          {
+            node: node,
+            context: simplifiedContext,
+            location: node.location,
+            severity: severity,
+            cause: error instanceof Error ? error : undefined
+          }
+        );
+    }
+  }
+
+  /**
+   * Lazily initialize the ResolutionServiceClientForDirective factory
+   * This is called only when needed to avoid circular dependencies
+   */
+  private ensureFactoryInitialized(): void {
+    if (this.factoryInitialized) {
+      return;
+    }
+    
+    this.factoryInitialized = true;
+    
+    try {
+      this.resolutionClientFactory = container.resolve('ResolutionServiceClientForDirectiveFactory');
+      this.initializeResolutionClient();
+    } catch (error) {
+      // Factory not available, will use direct reference
+      this.logger.debug('ResolutionServiceClientForDirectiveFactory not available, using direct reference for resolution operations');
+    }
+  }
+  
+  /**
+   * Initialize the ResolutionServiceClientForDirective using the factory
+   */
+  private initializeResolutionClient(): void {
+    if (!this.resolutionClientFactory) {
+      return;
+    }
+    
+    try {
+      this.resolutionClient = this.resolutionClientFactory.createClient();
+      this.logger.debug('Successfully created ResolutionServiceClientForDirective using factory');
+    } catch (error) {
+      this.logger.warn('Failed to create ResolutionServiceClientForDirective, falling back to direct reference', { error });
+      this.resolutionClient = undefined;
+    }
+  }
+
+  /**
+   * Resolve text using the resolution service
+   * @private
+   */
+  private async resolveText(text: string, context: DirectiveContext): Promise<string> {
+    this.ensureFactoryInitialized();
+    
+    if (this.resolutionClient) {
+      try {
+        return await this.resolutionClient.resolveInContext(text, context.resolutionContext || {
+          currentFilePath: context.currentFilePath,
+          workingDirectory: context.workingDirectory
+        } as ResolutionContext);
+      } catch (error) {
+        directiveLogger.warn('Error using resolutionClient.resolveInContext', { error });
+      }
+    }
+    
+    // Fallback to direct resolution service
+    return this.resolutionService.resolveInContext(text, {
+      currentFilePath: context.currentFilePath,
+      workingDirectory: context.workingDirectory
+    } as ResolutionContext);
+  }
+
+  /**
+   * Resolve data using the resolution service
+   * @private
+   */
+  private async resolveData(ref: string, context: DirectiveContext): Promise<any> {
+    this.ensureFactoryInitialized();
+    
+    if (this.resolutionClient) {
+      try {
+        return await this.resolutionClient.resolveData(ref, context.resolutionContext || {
+          currentFilePath: context.currentFilePath,
+          workingDirectory: context.workingDirectory
+        });
+      } catch (error) {
+        directiveLogger.warn('Error using resolutionClient.resolveData', { error });
+      }
+    }
+    
+    // Fallback to direct resolution service
+    return this.resolutionService.resolveData(ref, {
+      currentFilePath: context.currentFilePath,
+      workingDirectory: context.workingDirectory
+    });
+  }
+
+  /**
+   * Resolve path using the resolution service
+   * @private
+   */
+  private async resolvePath(path: string, context: DirectiveContext): Promise<string> {
+    this.ensureFactoryInitialized();
+    
+    if (this.resolutionClient) {
+      try {
+        return await this.resolutionClient.resolvePath(path, context.resolutionContext || {
+          currentFilePath: context.currentFilePath,
+          workingDirectory: context.workingDirectory
+        });
+      } catch (error) {
+        directiveLogger.warn('Error using resolutionClient.resolvePath', { error });
+      }
+    }
+    
+    // Fallback to direct resolution service
+    return this.resolutionService.resolvePath(path, {
+      currentFilePath: context.currentFilePath,
+      workingDirectory: context.workingDirectory
+    });
+  }
+
+  /**
+   * Initialize the interpreterClient using the factory
+   */
+  private initializeInterpreterClient(): void {
+    if (!this.interpreterClientFactory) {
+      return;
+    }
+    
+    try {
+      this.interpreterClient = this.interpreterClientFactory.createClient();
+      this.logger.debug('Successfully created InterpreterServiceClient using factory');
+    } catch (error) {
+      this.logger.warn('Failed to create InterpreterServiceClient', { error });
+      this.interpreterClient = undefined;
+    }
+  }
+  
+  /**
+   * Lazily initialize the InterpreterServiceClient factory
+   * This is called only when needed to avoid circular dependencies
+   */
+  private ensureInterpreterFactoryInitialized(): void {
+    if (this.interpreterFactoryInitialized) {
+      return;
+    }
+    
+    this.interpreterFactoryInitialized = true;
+    
+    try {
+      this.interpreterClientFactory = container.resolve('InterpreterServiceClientFactory');
+      this.initializeInterpreterClient();
+    } catch (error) {
+      // Factory not available, will use direct service
+      this.logger.debug('InterpreterServiceClientFactory not available, will use direct service if available');
+    }
+  }
+  
+  /**
+   * Calls the interpret method on the interpreter service
+   * Uses the client if available, falls back to direct service reference
+   */
+  private async callInterpreterInterpret(nodes: any[], options?: any): Promise<IStateService> {
+    // Ensure factory is initialized
+    this.ensureInterpreterFactoryInitialized();
+    
+    // Try to use the client from factory first
+    if (this.interpreterClient) {
+      try {
+        return await this.interpreterClient.interpret(nodes, options) as IStateService;
+      } catch (error) {
+        this.logger.warn('Error using interpreterClient.interpret, falling back to direct service', { error });
+      }
+    }
+    
+    // Fall back to direct service reference
+    if (this.interpreterService) {
+      return await this.interpreterService.interpret(nodes, options) as IStateService;
+    }
+    
+    throw new Error('No interpreter service available');
+  }
+  
+  /**
+   * Calls the createChildContext method on the interpreter service
+   * Uses the client if available, falls back to direct service reference
+   */
+  private async callInterpreterCreateChildContext(parentState: IStateService, filePath?: string, options?: any): Promise<IStateService> {
+    this.ensureInterpreterFactoryInitialized();
+    if (!this.interpreterClient) {
+      throw new MeldError('InterpreterServiceClient not available for createChildContext');
+    }
+    // Assert return type
+    return await this.interpreterClient.createChildContext(parentState, filePath, options) as IStateService;
   }
 
   /**
    * Process multiple directives in sequence
+   * @returns The final state after processing all directives
    */
-  async processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<StateServiceLike> {
-    let currentState = parentContext?.state?.clone() || this.stateService!.createChildState();
-    
-    // Inherit or create initial formatting context
-    let currentFormattingContext = parentContext?.formattingContext ? { ...parentContext.formattingContext } : {
-      isOutputLiteral: currentState.isTransformationEnabled(),
-      contextType: 'block' as 'inline' | 'block',
-      nodeType: 'Text'
-    };
+  async processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<IStateService> {
+    this.ensureInitialized();
+    // Initialize with IStateService
+    let currentState: IStateService = parentContext?.state?.clone() as IStateService || this.stateService!.createChildState();
 
     for (const node of nodes) {
-      // Create a new context with the current state as both parent and state
-      // This ensures that subsequent directives can see variables defined by previous directives
-      const nodeContext = {
-        currentFilePath: parentContext?.currentFilePath || '',
-        parentState: currentState,
-        state: currentState.clone(),
-        formattingContext: {
-          ...currentFormattingContext,
-          nodeType: node.type,
-          parentContext: currentFormattingContext
-        }
-      } as DirectiveContext;
+      const currentFilePath = parentContext?.currentFilePath ?? currentState.getCurrentFilePath() ?? undefined;
+      const parentState = currentState;
+      const workingDirectory = currentFilePath ? this.pathService.dirname(currentFilePath) : process.cwd();
 
-      // Process directive and get the updated state
-      const result = await this.processDirective(node, nodeContext);
-      
-      // Update formatting context for the next directive
-      // This ensures consistent newline handling between directives
-      if (nodeContext.formattingContext) {
-        currentFormattingContext = nodeContext.formattingContext;
+      // Create state for this specific node processing
+      const nodeState: IStateService = parentState.createChildState();
+      if (currentFilePath) {
+        nodeState.setCurrentFilePath(currentFilePath);
       }
-      
-      // If transformation is enabled, we don't merge states since the directive
-      // will be replaced with a text node and its state will be handled separately
-      if (!currentState.isTransformationEnabled?.()) {
-        // Update currentState directly with the result so next directives have access to it
-        currentState = result;
-      } else {
-        // Even if transformation is enabled, we need to make sure variables defined in one directive
-        // are available to subsequent directives
-        if (result !== nodeContext.state) {
-          // Only apply the new state if it actually changed (as a result of directive execution)
-          currentState = result;
+
+      // Create contexts
+      const resolutionContext = ResolutionContextFactory.create(nodeState, currentFilePath);
+      const formattingContext: FormattingContext = {
+        isOutputLiteral: nodeState.isTransformationEnabled?.() || false,
+        contextType: 'block', 
+        nodeType: node.type,
+        atLineStart: true, // Default assumption
+        atLineEnd: false // Default assumption
+      };
+      // Create execution context if needed (e.g., for @run)
+      let executionContext: ExecutionContext | undefined = undefined;
+      if (node.directive.kind === 'run') {
+        executionContext = {
+          cwd: workingDirectory,
+          // ... other fields
+        };
+      }
+
+      // Assemble the DirectiveProcessingContext
+      const nodeProcessingContext: DirectiveProcessingContext = {
+        state: nodeState,
+        resolutionContext: resolutionContext,
+        formattingContext: formattingContext,
+        executionContext: executionContext,
+        directiveNode: node,
+      };
+
+      try {
+        // Process directive and get the updated state or result
+        const result = await this.handleDirective(node, nodeProcessingContext);
+
+        let updatedState: IStateService;
+        if ('replacement' in result && 'state' in result) {
+           updatedState = result.state as IStateService; // Assert type
+           // Handle replacement node if needed (maybe add to a list for Interpreter)
+        } else {
+           updatedState = result as IStateService; // Assert type
         }
+
+        // Merge the updated state back into the current loop state
+        currentState.mergeChildState(updatedState);
+
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown directive processing error';
+        const code = (error instanceof DirectiveError) ? error.code : DirectiveErrorCode.EXECUTION_FAILED;
+        const severity = (error instanceof MeldError) ? error.severity : ErrorSeverity.Fatal;
+        const simplifiedContext = { currentFilePath: currentFilePath };
+
+        throw new DirectiveError(
+          message,
+          node.directive.kind,
+          code,
+          {
+            node: node,
+            context: simplifiedContext,
+            location: node.location,
+            severity: severity,
+            cause: error instanceof Error ? error : undefined
+          }
+        );
       }
     }
 
     return currentState;
-  }
-
-  /**
-   * Create execution context for a directive
-   */
-  private createContext(node: DirectiveNode, parentContext?: DirectiveContext): DirectiveProcessingContext {
-    // Get state (clone or new)
-    const state = parentContext?.state?.clone() || this.stateService!.createChildState();
-    // Create ResolutionContext
-    const resolutionContext = ResolutionContextFactory.create(state, parentContext?.currentFilePath ?? state.getCurrentFilePath() ?? undefined);
-    // Create FormattingContext
-    const formattingContext: FormattingContext = { 
-       isOutputLiteral: state.isTransformationEnabled(),
-       contextType: 'block', 
-       nodeType: node.type 
-    };
-    // Create ExecutionContext if needed
-    let executionContext: ExecutionContext | undefined;
-    if (node.directive.kind === 'run' && this.pathService && parentContext?.currentFilePath) {
-       executionContext = { cwd: this.pathService.dirname(parentContext.currentFilePath) };
-    } else if (node.directive.kind === 'run') {
-       executionContext = { cwd: process.cwd() }; // Fallback CWD
-    }
-    // Assemble
-    return {
-        state,
-        resolutionContext,
-        formattingContext,
-        executionContext,
-        directiveNode: node
-    };
-  }
-
-  /**
-   * Update the interpreter service reference
-   */
-  updateInterpreterService(interpreterService: InterpreterServiceLike): void {
-    this.interpreterService = interpreterService;
-    this.logger.debug('Updated interpreter service reference');
   }
 
   /**
@@ -907,281 +1166,10 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
   }
 
   /**
-   * Process a directive node, validating and executing it
-   * Values in the directive will already be interpolated by meld-ast
-   * @returns The updated state after directive execution
-   * @throws {MeldDirectiveError} If directive processing fails
+   * Utility type guard to check if an object conforms to IStateService.
+   * Needs to be robust enough to distinguish from DirectiveResult etc.
    */
-  public async processDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<StateServiceLike> {
-    this.ensureInitialized();
-    this.ensureFactoryInitialized(); // Ensure Resolution Client Factory is ready
-    
-    const kind = node.directive?.kind;
-    if (!kind) {
-      throw new DirectiveError('Directive node is missing kind', 'unknown', DirectiveErrorCode.VALIDATION_FAILED, { node });
-    }
-
-    const handler = this.handlers.get(kind);
-    if (!handler) {
-      throw new DirectiveError(`No handler registered for directive kind: ${kind}`, kind, DirectiveErrorCode.HANDLER_NOT_FOUND, { node, location: node.location });
-    }
-
-    try {
-      // --- Create DirectiveProcessingContext --- 
-      const state = parentContext?.state?.clone() || this.stateService!.createChildState();
-      const currentFilePath = parentContext?.currentFilePath ?? state.getCurrentFilePath() ?? undefined;
-      const resolutionContext = ResolutionContextFactory.create(state, currentFilePath);
-      const formattingContext: FormattingContext = { 
-         isOutputLiteral: state.isTransformationEnabled?.() || false,
-         contextType: 'block', 
-         nodeType: node.type,
-         atLineStart: true, // Default assumptions
-         atLineEnd: false
-      };
-      let executionContext: ExecutionContext | undefined;
-      if (kind === 'run' && this.pathService && currentFilePath) {
-         executionContext = { cwd: this.pathService.dirname(currentFilePath) };
-      } else if (kind === 'run') {
-         executionContext = { cwd: process.cwd() };
-      }
-      
-      const processingContext: DirectiveProcessingContext = {
-          state: state as IStateService, 
-          resolutionContext: resolutionContext,
-          formattingContext: formattingContext,
-          executionContext: executionContext,
-          directiveNode: node
-      };
-      // --- End Context Creation ---
-
-      this.logger.debug(`Executing handler for directive: ${kind}`);
-      
-      const result = await handler.execute(processingContext);
-      
-      // Handle result
-      if (result && typeof result === 'object' && 'state' in result) {
-         return result.state as StateServiceLike;
-      } else {
-         return result as StateServiceLike;
-      }
-
-    } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown directive processing error';
-        const code = (error instanceof DirectiveError) ? error.code : DirectiveErrorCode.EXECUTION_FAILED;
-        const severity = (error instanceof MeldError) ? error.severity : ErrorSeverity.Fatal;
-        const simplifiedContext = { currentFilePath: parentContext?.currentFilePath ?? this.stateService?.getCurrentFilePath() ?? undefined };
-
-        throw new DirectiveError(
-          message,
-          kind,
-          code,
-          {
-            node: node,
-            context: simplifiedContext,
-            location: node.location,
-            severity: severity,
-            cause: error instanceof Error ? error : undefined
-          }
-        );
-    }
-  }
-
-  /**
-   * Lazily initialize the ResolutionServiceClientForDirective factory
-   * This is called only when needed to avoid circular dependencies
-   */
-  private ensureFactoryInitialized(): void {
-    if (this.factoryInitialized) {
-      return;
-    }
-    
-    this.factoryInitialized = true;
-    
-    try {
-      this.resolutionClientFactory = container.resolve('ResolutionServiceClientForDirectiveFactory');
-      this.initializeResolutionClient();
-    } catch (error) {
-      // Factory not available, will use direct reference
-      this.logger.debug('ResolutionServiceClientForDirectiveFactory not available, using direct reference for resolution operations');
-    }
-  }
-  
-  /**
-   * Initialize the ResolutionServiceClientForDirective using the factory
-   */
-  private initializeResolutionClient(): void {
-    if (!this.resolutionClientFactory) {
-      return;
-    }
-    
-    try {
-      this.resolutionClient = this.resolutionClientFactory.createClient();
-      this.logger.debug('Successfully created ResolutionServiceClientForDirective using factory');
-    } catch (error) {
-      this.logger.warn('Failed to create ResolutionServiceClientForDirective, falling back to direct reference', { error });
-      this.resolutionClient = undefined;
-    }
-  }
-
-  /**
-   * Resolve text using the resolution service
-   * @private
-   */
-  private async resolveText(text: string, context: DirectiveContext): Promise<string> {
-    this.ensureFactoryInitialized();
-    
-    if (this.resolutionClient) {
-      try {
-        return await this.resolutionClient.resolveInContext(text, context.resolutionContext || {
-          currentFilePath: context.currentFilePath,
-          workingDirectory: context.workingDirectory
-        } as ResolutionContext);
-      } catch (error) {
-        directiveLogger.warn('Error using resolutionClient.resolveInContext', { error });
-      }
-    }
-    
-    // Fallback to direct resolution service
-    return this.resolutionService.resolveInContext(text, {
-      currentFilePath: context.currentFilePath,
-      workingDirectory: context.workingDirectory
-    } as ResolutionContext);
-  }
-
-  /**
-   * Resolve data using the resolution service
-   * @private
-   */
-  private async resolveData(ref: string, context: DirectiveContext): Promise<any> {
-    this.ensureFactoryInitialized();
-    
-    if (this.resolutionClient) {
-      try {
-        return await this.resolutionClient.resolveData(ref, context.resolutionContext || {
-          currentFilePath: context.currentFilePath,
-          workingDirectory: context.workingDirectory
-        });
-      } catch (error) {
-        directiveLogger.warn('Error using resolutionClient.resolveData', { error });
-      }
-    }
-    
-    // Fallback to direct resolution service
-    return this.resolutionService.resolveData(ref, {
-      currentFilePath: context.currentFilePath,
-      workingDirectory: context.workingDirectory
-    });
-  }
-
-  /**
-   * Resolve path using the resolution service
-   * @private
-   */
-  private async resolvePath(path: string, context: DirectiveContext): Promise<string> {
-    this.ensureFactoryInitialized();
-    
-    if (this.resolutionClient) {
-      try {
-        return await this.resolutionClient.resolvePath(path, context.resolutionContext || {
-          currentFilePath: context.currentFilePath,
-          workingDirectory: context.workingDirectory
-        });
-      } catch (error) {
-        directiveLogger.warn('Error using resolutionClient.resolvePath', { error });
-      }
-    }
-    
-    // Fallback to direct resolution service
-    return this.resolutionService.resolvePath(path, {
-      currentFilePath: context.currentFilePath,
-      workingDirectory: context.workingDirectory
-    });
-  }
-
-  /**
-   * Initialize the interpreterClient using the factory
-   */
-  private initializeInterpreterClient(): void {
-    if (!this.interpreterClientFactory) {
-      return;
-    }
-    
-    try {
-      this.interpreterClient = this.interpreterClientFactory.createClient();
-      this.logger.debug('Successfully created InterpreterServiceClient using factory');
-    } catch (error) {
-      this.logger.warn('Failed to create InterpreterServiceClient', { error });
-      this.interpreterClient = undefined;
-    }
-  }
-  
-  /**
-   * Lazily initialize the InterpreterServiceClient factory
-   * This is called only when needed to avoid circular dependencies
-   */
-  private ensureInterpreterFactoryInitialized(): void {
-    if (this.interpreterFactoryInitialized) {
-      return;
-    }
-    
-    this.interpreterFactoryInitialized = true;
-    
-    try {
-      this.interpreterClientFactory = container.resolve('InterpreterServiceClientFactory');
-      this.initializeInterpreterClient();
-    } catch (error) {
-      // Factory not available, will use direct service
-      this.logger.debug('InterpreterServiceClientFactory not available, will use direct service if available');
-    }
-  }
-  
-  /**
-   * Calls the interpret method on the interpreter service
-   * Uses the client if available, falls back to direct service reference
-   */
-  private async callInterpreterInterpret(nodes: any[], options?: any): Promise<StateServiceLike> {
-    // Ensure factory is initialized
-    this.ensureInterpreterFactoryInitialized();
-    
-    // Try to use the client from factory first
-    if (this.interpreterClient) {
-      try {
-        return await this.interpreterClient.interpret(nodes, options);
-      } catch (error) {
-        this.logger.warn('Error using interpreterClient.interpret, falling back to direct service', { error });
-      }
-    }
-    
-    // Fall back to direct service reference
-    if (this.interpreterService) {
-      return await this.interpreterService.interpret(nodes, options);
-    }
-    
-    throw new Error('No interpreter service available');
-  }
-  
-  /**
-   * Calls the createChildContext method on the interpreter service
-   * Uses the client if available, falls back to direct service reference
-   */
-  private async callInterpreterCreateChildContext(parentState: StateServiceLike, filePath?: string, options?: any): Promise<StateServiceLike> {
-    // Ensure factory is initialized
-    this.ensureInterpreterFactoryInitialized();
-    
-    // Try to use the client from factory first
-    if (this.interpreterClient) {
-      try {
-        return await this.interpreterClient.createChildContext(parentState, filePath, options);
-      } catch (error) {
-        this.logger.warn('Error using interpreterClient.createChildContext, falling back to direct service', { error });
-      }
-    }
-    
-    // Fall back to direct service reference
-    if (this.interpreterService) {
-      return await this.interpreterService.createChildContext(parentState, filePath, options);
-    }
-    
-    throw new Error('No interpreter service available');
+  private isStateService(obj: any): obj is IStateService {
+    return obj && typeof obj === 'object' && typeof obj.clone === 'function' && typeof obj.getVariable === 'function' && !('replacement' in obj);
   }
 } 

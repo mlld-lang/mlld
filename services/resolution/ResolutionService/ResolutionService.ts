@@ -45,8 +45,8 @@ import { inject, singleton, container } from 'tsyringe';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index';
 import { Service } from '@core/ServiceProvider';
-import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
-import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import { IVariableReferenceResolverClient } from './interfaces/IVariableReferenceResolverClient';
 import { VariableReferenceResolverClientFactory } from './factories/VariableReferenceResolverClientFactory';
 import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient';
@@ -58,7 +58,7 @@ import { VariableResolutionErrorFactory } from './resolvers/error-factory';
 import { isTextVariable, isPathVariable, isCommandVariable, isDataVariable, isFilesystemPath } from '@core/types/guards';
 // Import and alias the AST Field type
 import { Field as AstField } from '@core/syntax/types/shared-types';
-import { InterpolatableValue } from '@core/syntax/types/ast';
+import { InterpolatableValue } from '@core/syntax/types/ast.js';
 import type {
   AbsolutePath,
   RelativePath,
@@ -67,7 +67,13 @@ import type {
 } from '@core/types/paths.js';
 import {
   createAbsolutePath,
+  isAbsolutePath,
+  isRelativePath,
+  isUrlPath,
+  createRawPath,
+  isValidatedResourcePath
 } from '@core/types/paths.js';
+import { PathResolver } from '@services/fs/PathService/PathResolver.js';
 
 /**
  * Internal type for heading nodes in the ResolutionService
@@ -895,18 +901,42 @@ export class ResolutionService implements IResolutionService {
   /**
    * Validate that resolution is allowed in the given context
    */
-  async validateResolution(value: string | StructuredPath, context: ResolutionContext): Promise<void> {
-    // Fix 3: Change value.raw to value.original
-    logger.debug(`validateResolution called`, { value: typeof value === 'string' ? value : value.original, contextFlags: context.flags, allowedTypes: context.allowedVariableTypes });
-    // Fix: Use the passed context directly, only making it strict.
-    // Do NOT override allowedVariableTypes here; the test provides the context with specific restrictions.
-    const strictContext = context.withStrictMode(true); 
+  async validateResolution(pathInput: string, validationContext: PathValidationContext): Promise<MeldPath> {
     try {
-        await this.resolveInContext(value, strictContext);
+      const validated = await this.pathService.validatePath(pathInput, validationContext);
+      return validated;
     } catch (error) {
-        logger.warn('validateResolution failed', { error });
-            throw error;
+      if (error instanceof PathValidationError) {
+        // Wrap PathValidationError in MeldResolutionError
+        throw new MeldResolutionError(
+          `Path validation failed during resolution: ${error.message}`,
+          {
+            code: ResolutionErrorCode.PATH_VALIDATION_FAILED,
+            severity: ErrorSeverity.Fatal,
+            details: {
+              pathString: pathInput, // Ensure pathString is used
+              validationContext: validationContext,
+            },
+            cause: error,
+            sourceLocation: (validationContext as any)?.location
           }
+        );
+      } else {
+        throw new MeldResolutionError(
+          `Unexpected error during path validation: ${getErrorMessage(error)}`,
+          {
+            code: ResolutionErrorCode.UNEXPECTED_ERROR,
+            severity: ErrorSeverity.Fatal,
+            details: {
+              pathString: pathInput, // Ensure pathString is used
+              validationContext: validationContext,
+            },
+            cause: error,
+            sourceLocation: (validationContext as any)?.location
+          }
+        );
+      }
+    }
   }
 
   /**

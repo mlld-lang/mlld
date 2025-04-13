@@ -1,6 +1,7 @@
-import type { MeldNode } from '@core/syntax/types/index.js';
-import type { DirectiveServiceLike, StateServiceLike } from '@core/shared-service-types.js';
+import type { MeldNode, SourceLocation } from '@core/syntax/types/index.js';
+import type { DirectiveServiceLike } from '@core/shared-service-types.js';
 import type { MeldError } from '@core/errors/MeldError.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 /**
  * Error handler function type for handling Meld errors during interpretation.
@@ -12,14 +13,11 @@ interface ErrorHandler {
 }
 
 /**
- * Options for configuring the interpreter behavior.
+ * Options for interpreting Meld documents
  */
-interface InterpreterOptions {
-  /**
-   * Initial state to use for interpretation.
-   * If not provided, a new state will be created.
-   */
-  initialState?: StateServiceLike;
+export interface InterpreterOptions {
+  /** Optional initial state to start interpretation from */
+  initialState?: IStateService;
 
   /**
    * Current file path for error reporting and path resolution.
@@ -66,7 +64,7 @@ interface InterpreterOptions {
  * state transitions, and transformation tracking.
  * 
  * Dependencies:
- * - DirectiveServiceLike: For processing directive nodes
+ * - DirectiveServiceLike: For handling individual directives
  * - StateServiceLike: For maintaining state during interpretation
  */
 interface IInterpreterService {
@@ -81,20 +79,17 @@ interface IInterpreterService {
    * Initialize the InterpreterService with required dependencies.
    * 
    * @param directiveService - Service for handling directives
-   * @param stateService - Service for maintaining state
+   * @param stateService - The state service to use
    */
-  initialize(
-    directiveService: DirectiveServiceLike,
-    stateService: StateServiceLike
-  ): void;
+  initialize(directiveService: DirectiveServiceLike, stateService: IStateService): void;
 
   /**
    * Interpret a sequence of Meld nodes.
    * Processes each node in order, updating state as necessary.
    * 
    * @param nodes - The nodes to interpret
-   * @param options - Optional configuration options
-   * @returns The final state after interpretation
+   * @param options - Optional interpretation parameters
+   * @returns A promise resolving to the final state after interpretation
    * @throws {MeldInterpreterError} If interpretation fails
    * 
    * @example
@@ -107,50 +102,36 @@ interface IInterpreterService {
    * });
    * ```
    */
-  interpret(
-    nodes: MeldNode[],
-    options?: InterpreterOptions
-  ): Promise<StateServiceLike>;
+  interpret(nodes: MeldNode[], options?: InterpreterOptions): Promise<IStateService>;
 
   /**
-   * Interpret a single Meld node.
-   * 
+   * Interpret a single Meld node in the context of an existing state.
+   *
    * @param node - The node to interpret
-   * @param state - The current state
-   * @param options - Optional configuration options
-   * @returns The state after interpretation
-   * @throws {MeldInterpreterError} If interpretation fails
+   * @param state - The current state context
+   * @param options - Optional interpretation parameters
+   * @returns A promise resolving to the updated state after interpreting the node
    */
   interpretNode(
     node: MeldNode,
-    state: StateServiceLike,
+    state: IStateService,
     options?: InterpreterOptions
-  ): Promise<StateServiceLike>;
+  ): Promise<IStateService>;
 
   /**
-   * Create a new interpreter context with a child state.
-   * Useful for nested interpretation (import/embed).
-   * 
-   * @param parentState - The parent state to inherit from
+   * Create a child interpretation context (state) from a parent state.
+   * Used for handling nested processing like imports or embeds.
+   *
+   * @param parentState - The parent state service
    * @param filePath - Optional file path for the child context
-   * @param options - Optional configuration options
-   * @returns A child state initialized for interpretation
-   * 
-   * @example
-   * ```ts
-   * // Create a child context for processing an imported file
-   * const childState = await interpreterService.createChildContext(
-   *   parentState,
-   *   'imported.meld',
-   *   { importFilter: ['greeting', 'username'] }
-   * );
-   * ```
+   * @param options - Optional interpretation options for the child context
+   * @returns A promise resolving to the newly created child state service
    */
   createChildContext(
-    parentState: StateServiceLike,
+    parentState: IStateService,
     filePath?: string,
     options?: InterpreterOptions
-  ): Promise<StateServiceLike>;
+  ): Promise<IStateService>;
 } 
 
 export type { ErrorHandler, InterpreterOptions, IInterpreterService }; 

@@ -1,9 +1,11 @@
 import { injectable, inject, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 import { InterpreterServiceLike, ClientFactory } from '@core/shared-service-types.js';
 import { interpreterLogger as logger } from '@core/utils/logger.js';
+import type { MeldNode } from '@core/syntax/types/index.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 /**
  * Factory for creating interpreter service clients
@@ -55,11 +57,26 @@ export class InterpreterServiceClientFactory implements ClientFactory<IInterpret
     logger.debug('Creating InterpreterServiceClient');
     
     return {
-      createChildContext: (parentState, filePath, options) => 
-        this.getInterpreterService().createChildContext(parentState, filePath, options),
-      
-      interpret: (nodes, options) =>
-        this.getInterpreterService().interpret(nodes, options)
+      interpret: (
+        nodes: MeldNode[],
+        options?: InterpreterOptions
+      ): Promise<IStateService> => {
+        return this.getInterpreterService().interpret(nodes, options);
+      },
+      interpretNode: (
+        node: MeldNode,
+        state: IStateService,
+        options?: InterpreterOptions
+      ): Promise<IStateService> => {
+        return this.getInterpreterService().interpretNode(node, state, options);
+      },
+      createChildContext: (
+        parentState: IStateService,
+        filePath?: string,
+        options?: InterpreterOptions
+      ): Promise<IStateService> => {
+        return this.getInterpreterService().createChildContext(parentState, filePath, options);
+      },
     };
   }
 } 

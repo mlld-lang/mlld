@@ -164,7 +164,7 @@ export class InterpreterService implements IInterpreterService {
   private async callDirectiveHandleDirective(node: DirectiveNode, context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
     if (this.directiveClient && this.directiveClient.handleDirective) {
       try {
-        return await this.directiveClient.handleDirective(node, context);
+        return await this.directiveClient.handleDirective(node, context) as IStateService | DirectiveResult;
       } catch (error) {
         throw new MeldInterpreterError(
           `Failed to handle directive '${node.directive.kind}' via client: ${getErrorMessage(error)}`,
@@ -313,7 +313,7 @@ export class InterpreterService implements IInterpreterService {
       }
 
       // Take a snapshot of initial state for rollback
-      initialSnapshot = currentState.clone();
+      initialSnapshot = currentState.clone() as IStateService;
       lastGoodState = initialSnapshot;
 
       logger.debug('Starting interpretation', {
@@ -325,20 +325,21 @@ export class InterpreterService implements IInterpreterService {
       for (const node of nodes) {
         try {
           currentState = await this.interpretNode(node, currentState, opts);
-          lastGoodState = currentState.clone();
+          lastGoodState = currentState.clone() as IStateService;
         } catch (error) {
           try {
             this.handleError(error instanceof Error ? error : new Error(String(error)), opts);
-            currentState = lastGoodState.clone();
+            currentState = lastGoodState.clone() as IStateService;
           } catch (fatalError) {
             // If we get here, the error was fatal and should be propagated
             // Restore to initial state before rethrowing
             if (opts.initialState && opts.mergeState) {
               // Only attempt to merge back if we have a parent and mergeState is true
               if (typeof opts.initialState.mergeChildState === 'function') {
-                (opts.initialState as IStateService).mergeChildState(initialSnapshot);
+                 // Ensure initialSnapshot is treated as IStateService here
+                 (opts.initialState as IStateService).mergeChildState(initialSnapshot as IStateService);
               } else {
-                logger.warn('Initial state does not support mergeChildState', { initialState: opts.initialState });
+                  logger.warn('Initial state does not support mergeChildState', { initialState: opts.initialState });
               }
             }
             throw fatalError;
@@ -554,7 +555,7 @@ export class InterpreterService implements IInterpreterService {
             typeof directiveResult === 'object' &&
             'replacement' in directiveResult
           ) {
-            resultState = (directiveResult as DirectiveResult).state; 
+            resultState = (directiveResult as DirectiveResult).state as IStateService;
             replacementNode = (directiveResult as DirectiveResult).replacement;
           } else if (directiveResult && typeof directiveResult === 'object') {
             resultState = directiveResult as IStateService;
@@ -599,8 +600,15 @@ export class InterpreterService implements IInterpreterService {
                                directiveNode.directive.path !== null &&
                                'isVariableReference' in directiveNode.directive.path
               });
-
-              currentState.transformNode(node as DirectiveNode, replacementNode as MeldNode);
+              
+              // Find index of original node to replace
+              const nodes = currentState.getTransformedNodes(); 
+              const index = nodes.findIndex(n => n === node);
+              if (index !== -1) {
+                 currentState.transformNode(index, replacementNode as MeldNode | MeldNode[]);
+              } else {
+                 logger.warn('Original node not found in transformed nodes for replacement', { node });
+              }
             }
           }
           

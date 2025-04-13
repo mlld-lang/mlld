@@ -1,5 +1,5 @@
-import { StateServiceLike } from '@core/shared-service-types.js';
-import { MeldNode } from '@core/syntax/types/index.js';
+import type { MeldNode } from '@core/syntax/types/index.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 /**
  * The result of executing a directive
@@ -9,7 +9,7 @@ export interface DirectiveResult {
   /**
    * The updated state after processing the directive
    */
-  state: StateServiceLike;
+  state: IStateService;
   
   /**
    * In transformation mode, this is the replacement node that the directive's node should be transformed into

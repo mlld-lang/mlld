@@ -1,4 +1,4 @@
-import type { DirectiveNode } from '@core/syntax/types/index.js';
+import { DirectiveNode, SourceLocation } from '@core/syntax/types/index.js';
 import type { DirectiveContextBase } from '@core/shared/types.js';
 import type { 
   StateServiceLike, 
@@ -8,11 +8,11 @@ import type {
   ParserServiceLike,
   CircularityServiceLike,
   ResolutionServiceLike,
-  DirectiveServiceLike,
 } from '@core/shared-service-types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
+import type { ResolutionContext } from '@core/types/resolution.js';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
+import type { DirectiveResult } from './interfaces/DirectiveTypes.js';
 
 /**
  * @deprecated Use DirectiveProcessingContext instead.
@@ -84,11 +84,10 @@ export interface IDirectiveHandler {
  * - PathServiceLike: For path resolution in file-related directives
  * - FileSystemLike: For file operations in import and other directives
  * - ParserServiceLike: For parsing content in imports and fragments
- * - InterpreterServiceClientFactory: For nested interpretation in imports
  * - CircularityServiceLike: For detecting circular imports and references
  * - ResolutionServiceLike: For variable resolution in directive content
  */
-export interface IDirectiveService extends DirectiveServiceLike {
+export interface IDirectiveService {
   /**
    * Initialize the DirectiveService with required dependencies
    * 
@@ -128,8 +127,8 @@ export interface IDirectiveService extends DirectiveServiceLike {
    */
   handleDirective(
     node: DirectiveNode,
-    context: DirectiveContext
-  ): Promise<StateServiceLike>;
+    context: DirectiveProcessingContext
+  ): Promise<IStateService | DirectiveResult>;
 
   /**
    * Register a new directive handler
@@ -188,7 +187,7 @@ export interface IDirectiveService extends DirectiveServiceLike {
    * const state = await directiveService.processDirective(node);
    * ```
    */
-  processDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<StateServiceLike>;
+  processDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<IStateService>;
 
   /**
    * Process multiple directive nodes in sequence
@@ -198,7 +197,7 @@ export interface IDirectiveService extends DirectiveServiceLike {
    * @returns The final state after processing all directives
    * @throws {MeldDirectiveError} If any directive processing fails
    */
-  processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<StateServiceLike>;
+  processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<IStateService>;
 
   /**
    * Check if a directive kind is supported

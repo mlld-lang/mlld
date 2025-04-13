@@ -279,3 +279,5 @@ export const isUrlPath = (path: any): path is UrlPath =>
 /** Type guard to check if a value is a NormalizedAbsoluteDirectoryPath */
 export const isNormalizedAbsoluteDirectoryPath = (path: any): path is NormalizedAbsoluteDirectoryPath =>
     typeof path === 'string'; // Simplified for runtime, rely on compile-time 
+
+export const createAbsolutePath = (path: string): AbsolutePath => path as AbsolutePath; 
