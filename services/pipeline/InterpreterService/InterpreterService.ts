@@ -155,7 +155,7 @@ export class InterpreterService implements IInterpreterService {
    * Uses the client if available, falls back to direct service reference
    * Updated to accept DirectiveProcessingContext
    */
-  private async callDirectiveHandleDirective(node: DirectiveNode, context: DirectiveProcessingContext): Promise<StateServiceLike | DirectiveResult> {
+  private async callDirectiveHandleDirective(node: DirectiveNode, context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
     if (this.directiveClient && this.directiveClient.handleDirective) {
       try {
         return await this.directiveClient.handleDirective(node, context);
@@ -535,13 +535,18 @@ export class InterpreterService implements IInterpreterService {
             directiveResult &&
             typeof directiveResult === 'object' &&
             'state' in directiveResult &&
-            directiveResult.state &&
-            'replacement' in directiveResult
+            directiveResult.state
           ) {
-            resultState = directiveResult.state as IStateService;
+            resultState = directiveResult.state;
             replacementNode = directiveResult.replacement;
-          } else {
+          } else if (directiveResult && typeof directiveResult === 'object' && 'getNodes' in directiveResult) {
             resultState = directiveResult as IStateService;
+          } else {
+             throw new MeldInterpreterError(
+               `Directive handler for '${directiveNode.directive.kind}' returned an unexpected type.`,
+               'directive_result_error',
+               convertLocation(directiveNode.location)
+             );
           }
 
           if (!resultState) {

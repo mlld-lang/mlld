@@ -36,15 +36,15 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { MeldResolutionError, FieldAccessError, PathValidationError, MeldError } from '@core/errors';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
-import type { StateServiceLike } from '@core/shared-service-types.js';
+import type { DirectiveProcessingContext } from '@core/types/index.js';
 // Import command definition types and type guard
 import { ICommandDefinition, isBasicCommand } from '@core/types/define.js'; 
-// Import new context type
-import type { DirectiveProcessingContext } from '@core/types/index.js';
-import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, StructuredPath as AstStructuredPath, VariableMetadata } from '@core/types'; 
+// <<< Remove duplicate imports >>>
+// import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, StructuredPath as AstStructuredPath, VariableMetadata } from '@core/types'; 
 
 // Define local interfaces mirroring expected AST structure for type safety
 // Based on docs/dev/AST.md
+/* // <<< REMOVE LOCAL INTERFACES >>>
 interface EmbedRHSStructure {
     subtype: 'embedPath' | 'embedVariable' | 'embedTemplate';
     path?: AstStructuredPath;
@@ -61,6 +61,7 @@ interface RunRHSStructure {
     parameters?: Array<VariableReferenceNode | string>;
     // Add other relevant fields like underHeader if needed
 }
+*/
 
 /**
  * Handler for @data directives
@@ -81,39 +82,50 @@ export class DataDirectiveHandler implements IDirectiveHandler {
   ) {}
 
   // Update execute signature
-  public async execute(context: DirectiveProcessingContext): Promise<DirectiveResult | IStateService> {
-    // Extract from context
+  public async execute(context: DirectiveProcessingContext): Promise<DirectiveResult> {
     const state = context.state;
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
     const currentFilePath = state.getCurrentFilePath();
 
+    const directive = node.directive; 
+    const identifier = directive.identifier;
+    const source = directive.source;
+    const value = directive.value; // May be literal or InterpolatableValue
+    const embed = directive.embed; // Type should come from AST types
+    const run = directive.run; // Type should come from AST types
+
     logger.debug('Processing data directive', {
       location: node.location,
-      directive: node.directive
+      identifier,
+      source,
+      hasValue: value !== undefined,
+      hasEmbed: embed !== undefined,
+      hasRun: run !== undefined
     });
 
-    // await this.validationService.validate(node);
+    // await this.validationService.validate(node); // Keep commented
 
-    const { identifier, value, source } = node.directive as any; // Use any temporarily
-    const embed = node.directive.embed as EmbedRHSStructure | undefined;
-    const run = node.directive.run as RunRHSStructure | undefined;
-    logger.info('[DataDirectiveHandler] Processing:', { identifier, value: JSON.stringify(value), source });
-
-    // Use resolution context from context
-    // const resolutionContext = ResolutionContextFactory.forDataDirective(...);
+    logger.info('[DataDirectiveHandler] Processing:', { identifier, source });
 
     try {
       let resolvedValue: unknown;
-      const directiveSourceLocation: CoreSourceLocation | undefined = node.location?.start ? {
-        filePath: currentFilePath ?? 'unknown', 
-        line: node.location.start.line,
-        column: node.location.start.column,
-      } : undefined;
+      
+      // <<< Only create location if currentFilePath is defined >>>
+      const directiveSourceLocation: CoreSourceLocation | undefined =
+          node.location?.start && currentFilePath ? {
+              filePath: currentFilePath, // Guaranteed string here
+              line: node.location.start.line,
+              column: node.location.start.column,
+          } : undefined; // Leave undefined if path is missing
 
       if (source === 'literal') {
+        // Value should exist for literal source
+        if (value === undefined) {
+             throw new DirectiveError('Missing value for @data directive with source=\"literal\"' , this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: currentFilePath ?? undefined } });
+        }
         resolvedValue = await this.resolveInterpolatableValuesInData(value, resolutionContext);
-      } else if (source === 'run' && run) {
+      } else if (source === 'run' && run) { // Check if run structure exists
         try {
           const commandInput = run.command;
           const runSubtype = run.subtype;
@@ -165,7 +177,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
             const message = (code === DirectiveErrorCode.RESOLUTION_FAILED) ? 'Failed to resolve command for @data directive' : `Failed to execute command for @data directive: ${error instanceof Error ? error.message : 'Unknown'}`;
             throw new DirectiveError(message, this.kind, code, { node: node, context: { currentFilePath: currentFilePath ?? undefined }, cause: error instanceof Error ? error : undefined });
         }
-      } else if (source === 'embed' && embed) {
+      } else if (source === 'embed' && embed) { // Check if embed structure exists
          try {
           const embedSubtype = embed.subtype;
           let fileContent: string;
@@ -228,30 +240,31 @@ export class DataDirectiveHandler implements IDirectiveHandler {
             throw new DirectiveError(message, this.kind, code, { node: node, context: { currentFilePath: currentFilePath ?? undefined }, cause: error instanceof Error ? error : undefined });
         }
       } else {
+         // Handle cases where source is set but the corresponding structure is missing
+         const missingStructure = source === 'embed' ? 'embed' : source === 'run' ? 'run' : 'value';
          throw new DirectiveError(
-              `Unsupported source type '${source}' or missing embed/run data for @data directive`,
+              `Invalid @data directive: source is '${source}' but corresponding '${missingStructure}' property is missing.`,
               this.kind, 
               DirectiveErrorCode.VALIDATION_FAILED, 
               { node: node, context: { currentFilePath: currentFilePath ?? undefined } }
           );
       }
 
-      // Use state from context
-      // No need to clone: const newState = context.state.clone();
       logger.info('[DataDirectiveHandler] Setting data var:', { identifier, resolvedValue: JSON.stringify(resolvedValue) });
       
       const metadata: Partial<VariableMetadata> = {
           origin: VariableOrigin.DIRECT_DEFINITION, 
-          definedAt: directiveSourceLocation // Removed cast
+          definedAt: directiveSourceLocation // Assign potentially undefined location
       };
       
+      // <<< Revert to 3 arguments for setDataVar >>>
       await state.setDataVar(identifier, resolvedValue as JsonValue, metadata);
-      // Return DirectiveResult as per original style
+      
+      // <<< Return state directly without casting >>>
       return { state: state, replacement: undefined }; 
 
     } catch (error) {
       if (error instanceof DirectiveError) {
-        if (!error.context) error.context = { currentFilePath: currentFilePath ?? undefined };
         throw error;
       } 
       throw new DirectiveError(
