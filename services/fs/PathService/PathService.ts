@@ -50,8 +50,8 @@ import {
   createRawPath
 } from '@core/types/paths.js';
 import { ErrorSeverity } from '@core/errors/index.js';
-import type { Position } from '@core/types.js';
-import type { IFileSystemClient } from '@services/fs/FileSystemService/IFileSystemClient.js';
+import type { Position } from '@core/types/location.js';
+import type { IFileSystemClient } from '@services/fs/FileSystemService/interfaces/IFileSystemClient.js';
 
 /**
  * Service for validating and normalizing paths
@@ -361,7 +361,7 @@ export class PathService implements IPathService {
     }
 
     // **Handle URLs - Throw error, this method is only for filesystem paths**
-    if (this.isURL(rawInputPath)) {
+    if (this.isURL(createRawPath(rawInputPath))) {
       throw new PathValidationError(
         PathErrorMessages.EXPECTED_FILESYSTEM_PATH,
         {
@@ -376,12 +376,12 @@ export class PathService implements IPathService {
 
     // Handle special path variables first
     if (rawInputPath.startsWith('$~') || rawInputPath.startsWith('$HOMEPATH')) {
-      resolvedString = this.resolveHomePath(rawInputPath);
+      resolvedString = this.resolveHomePath(createRawPath(rawInputPath));
     } else if (rawInputPath.startsWith('$.') || rawInputPath.startsWith('$PROJECTPATH')) {
-      resolvedString = this.resolveProjPath(rawInputPath);
+      resolvedString = this.resolveProjPath(createRawPath(rawInputPath));
     } else if (this.hasPathVariables(rawInputPath)) {
        // Resolve other magic variables like $USERPROFILE (less common)
-      resolvedString = this.resolveMagicPath(rawInputPath);
+      resolvedString = this.resolveMagicPath(createRawPath(rawInputPath));
     } else if (baseDir && !path.isAbsolute(rawInputPath)) {
       // If baseDir is provided and path is relative, resolve against baseDir
       // Need to normalize the baseDir first before joining
@@ -410,88 +410,75 @@ export class PathService implements IPathService {
   /**
    * Resolve a home path ($~ or $HOMEPATH)
    */
-  resolveHomePath(pathString: RawPath): string { // Input is RawPath
-    if (!pathString) return '';
-    
-    if (pathString === '$~' || pathString === '$HOMEPATH') {
-      return this.homePath;
+  resolveHomePath(pathString: RawPath): string {
+    const home = this.getHomePath();
+    let relPath: string;
+    if (pathString === '$HOMEPATH') {
+      relPath = '';
+    } else {
+      // Use substring based on the prefix length
+      const prefix = pathString.startsWith('$HOMEPATH') ? '$HOMEPATH' : '$~';
+      relPath = pathString.substring(prefix.length);
+      // Remove leading separator if present
+      if (relPath.startsWith('/') || relPath.startsWith('\\')) {
+        relPath = relPath.substring(1);
+      }
     }
-    
-    // Replace $~ with the actual home path
-    if (pathString.startsWith('$~/')) {
-      return path.join(this.homePath, pathString.substring(3));
-    }
-    
-    if (pathString.startsWith('$HOMEPATH/')) {
-      return path.join(this.homePath, pathString.substring(10));
-    }
-    
-    // This case should ideally not be hit if called correctly, but normalize as fallback
-    return this.normalizePath(pathString);
+    // Join with platform specific separator, then normalize
+    return this.normalizePath(path.join(home, relPath));
   }
 
   /**
    * Resolve a project path ($. or $PROJECTPATH)
    */
-  resolveProjPath(pathString: RawPath): string { // Input is RawPath
-    if (!pathString) return '';
-    
-    if (pathString === '$.' || pathString === '$PROJECTPATH') {
-      return this.projectPath;
+  resolveProjPath(pathString: RawPath): string {
+    let relPath: string;
+    if (pathString === '$PROJECTPATH') {
+      relPath = '';
+    } else {
+      // Use substring based on the prefix length
+      const prefix = pathString.startsWith('$PROJECTPATH') ? '$PROJECTPATH' : '$.';
+      relPath = pathString.substring(prefix.length);
+      // Remove leading separator if present
+      if (relPath.startsWith('/') || relPath.startsWith('\\')) {
+        relPath = relPath.substring(1);
+      }
     }
-    
-    // Replace $. with the actual project path
-    if (pathString.startsWith('$./')) {
-      return path.join(this.projectPath, pathString.substring(3));
-    }
-    
-    if (pathString.startsWith('$PROJECTPATH/')) {
-      return path.join(this.projectPath, pathString.substring(13));
-    }
-    
-    // This case should ideally not be hit if called correctly, but normalize as fallback
-    return this.normalizePath(pathString);
+    // Join with platform specific separator, then normalize
+    return this.normalizePath(path.join(this.projectPath, relPath));
   }
 
   /**
    * Resolve Meld path variables like $PROJECTPATH, $USERPROFILE
    */
-  resolveMagicPath(pathString: RawPath): string { // Input is RawPath
-    if (!pathString) {
-      return '';
+  resolveMagicPath(pathString: RawPath): string {
+    // Handle HOMEPATH/USERPROFILE variations
+    if (pathString.startsWith('$HOMEPATH') || pathString.startsWith('$USERPROFILE')) {
+      const home = this.getHomePath();
+      const prefix = pathString.startsWith('$HOMEPATH') ? '$HOMEPATH' : '$USERPROFILE';
+      const relPath = pathString.substring(prefix.length);
+      return this.normalizePath(path.join(home, relPath.startsWith('/') || relPath.startsWith('\\') ? relPath.substring(1) : relPath));
     }
-    
-    let resolved = pathString as string;
-    
-    // Replace $PROJECTPATH with the actual project path
-    if (resolved.includes('$PROJECTPATH')) {
-      if (!this.projectPathResolved) {
-        this.projectPath = this.projectPathResolver.getProjectPath();
-        this.projectPathResolved = true;
-      }
-      
-      resolved = resolved.replace(/\$PROJECTPATH/g, this.projectPath);
+    // Handle PROJECTPATH variations
+    if (pathString.startsWith('$PROJECTPATH')) {
+      const proj = this.projectPath;
+      const relPath = pathString.substring('$PROJECTPATH'.length);
+      return this.normalizePath(path.join(proj, relPath.startsWith('/') || relPath.startsWith('\\') ? relPath.substring(1) : relPath));
     }
-    
-    // Replace $USERPROFILE (alternate home directory syntax)
-    if (resolved.includes('$USERPROFILE')) {
-      resolved = resolved.replace(/\$USERPROFILE/g, this.homePath);
+    // Handle tilde variations
+    if (pathString === '~' || pathString.startsWith('~/')) {
+      const home = this.getHomePath();
+      const relPath = pathString.startsWith('~/') ? pathString.substring(1) : '';
+      return this.normalizePath(path.join(home, relPath.startsWith('/') || relPath.startsWith('\\') ? relPath.substring(1) : relPath));
     }
-    
-    // Replace $HOMEPATH with the home path
-    if (resolved.includes('$HOMEPATH')) {
-      resolved = resolved.replace(/\$HOMEPATH/g, this.homePath);
+    // Handle dollar-dot variations
+    if (pathString.startsWith('$.')) {
+      const proj = this.projectPath;
+      const relPath = pathString.substring(1);
+      return this.normalizePath(path.join(proj, relPath.startsWith('/') || relPath.startsWith('\\') ? relPath.substring(1) : relPath));
     }
-    
-    // Replace ~ (home directory shorthand)
-    if (resolved === '~') {
-      resolved = this.homePath;
-    } else if (resolved.startsWith('~/')) {
-      resolved = path.join(this.homePath, resolved.substring(2));
-    }
-    
-    // Normalize the final result
-    return this.normalizePath(resolved);
+    // If no magic variables are found, just normalize
+    return this.normalizePath(pathString);
   }
 
   /**
@@ -590,7 +577,7 @@ export class PathService implements IPathService {
     }
 
     // **Handle URLs - Throw error, this method is only for filesystem paths**
-    if (this.isURL(rawInputPath)) {
+    if (this.isURL(createRawPath(rawInputPath))) {
       throw new PathValidationError(
         PathErrorMessages.EXPECTED_FILESYSTEM_PATH,
         {
@@ -909,8 +896,8 @@ export class PathService implements IPathService {
    * Check if a string potentially represents a URL.
    * Note: Does not validate the URL, just checks format.
    */
-  isURL(path: RawPath): boolean { // Accept RawPath
-    if (!path || typeof path !== 'string') {
+  isURL(path: RawPath): boolean {
+    if (!path) {
       return false;
     }
     // Basic check for common URL schemes
@@ -926,7 +913,23 @@ export class PathService implements IPathService {
    * @throws {URLValidationError} If URL is invalid
    * @throws {URLSecurityError} If URL is blocked by security policy
    */
-  async validateURL(url: RawPath, options?: URLValidationOptions): Promise<UrlPath> { // Return UrlPath
+  async validateURL(url: RawPath, options?: URLValidationOptions): Promise<UrlPath> {
+    if (!this.isURL(url)) {
+      throw new PathValidationError('Expected a URL, but received a file path.', { 
+        code: PathErrorCode.E_PATH_EXPECTED_URL,
+        severity: ErrorSeverity.Fatal,
+        path: url
+      });
+    }
+
+    if (url.includes('\0')) {
+      throw new PathValidationError(PathErrorMessages.NULL_BYTE, { 
+        code: PathErrorCode.E_PATH_NULL_BYTE, 
+        severity: ErrorSeverity.Fatal,
+        details: { pathString: url }
+      });
+    }
+
     if (!this.urlContentResolver) {
       const msg = 'URL validation requires IURLContentResolver, but it was not provided.';
       logger.error(msg);
@@ -957,7 +960,7 @@ export class PathService implements IPathService {
    * @throws {URLFetchError} If fetch fails
    * @throws {URLSecurityError} If URL is blocked or response too large
    */
-  async fetchURL(url: UrlPath, options?: URLFetchOptions): Promise<URLResponse> { // Input is UrlPath
+  async fetchURL(url: UrlPath, options?: URLFetchOptions): Promise<URLResponse> {
     if (!this.urlContentResolver) {
       const msg = 'URL fetching requires IURLContentResolver, but it was not provided.';
       logger.error(msg);
