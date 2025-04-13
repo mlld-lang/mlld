@@ -132,7 +132,7 @@ export class FileSystemService implements IFileSystemService {
       // Use the path client if available
       if (this.pathClient) {
         try {
-          return this.pathClient.resolvePath(pathString);
+          return this.pathClient.resolvePath(createRawPath(pathString));
         } catch (error) {
           logger.warn('Error using pathClient.resolvePath, falling back to pathOps', { 
             error: error instanceof Error ? error.message : String(error), 
