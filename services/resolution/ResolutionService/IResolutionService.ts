@@ -1,16 +1,13 @@
-import type { MeldNode } from '@core/ast/ast/astTypes.js';
-import type { ResolutionContext } from '@core/types/resolution.js';
-import type { JsonValue, Result } from '@core/types';
-import type { MeldPath, StructuredPath } from '@core/types/paths.js';
+import type { MeldNode, Location, VariableReferenceNode, InterpolatableValue, StructuredPath } from '@core/syntax/types/index.js';
+import type { MeldVariable, VariableType } from '@core/types/variables.js';
+import { ResolutionContext, ResolutionOptions, Field } from '@core/types/resolution.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
-import type { FieldAccessError } from '@core/errors/FieldAccessError.js';
-import { MeldError } from '@core/errors/index.js';
-import type { MeldResolutionError, PathValidationError } from '@core/errors';
+import type { PathValidationContext, MeldPath } from '@core/types/paths.js';
+import { Result } from '@core/types/result.js';
+import { FieldAccessError } from '@core/errors/FieldAccessError.js';
+import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import { Field as AstField } from '@core/syntax/types/shared-types.js';
-import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
-import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
-import type { PathValidationContext } from '@core/types/paths.js';
+import type { JsonValue } from '@core/types/common.js';
 
 export type { ResolutionContext, FormattingContext } from '@core/types/resolution.js';
 
@@ -157,7 +154,7 @@ interface IResolutionService {
     baseValue: unknown,
     fieldPath: AstField[],
     context: ResolutionContext
-  ): Promise<Result<unknown, FieldAccessError>>;
+  ): Promise<Result<JsonValue, FieldAccessError>>;
 
   /**
    * Validate that a value can be resolved successfully within the given context.
@@ -167,7 +164,7 @@ interface IResolutionService {
    * @param context - The resolution context defining rules and state
    * @throws {MeldResolutionError | PathValidationError} If validation fails based on context rules
    */
-  validateResolution(value: string | StructuredPath, context: ResolutionContext): Promise<void>;
+  validateResolution(pathInput: string, validationContext: PathValidationContext): Promise<MeldPath>;
 
   /**
    * Extract a section from content based on its heading text.
@@ -222,16 +219,6 @@ interface IResolutionService {
    * @returns The VariableResolutionTracker instance or undefined
    */
   getResolutionTracker(): VariableResolutionTracker | undefined;
-
-  /**
-   * Validates a path after resolution.
-   *
-   * @param pathInput - The original path string input.
-   * @param validationContext - The context for path validation.
-   * @returns The validated MeldPath object.
-   * @throws {MeldResolutionError} If path validation fails.
-   */
-  validateResolution(pathInput: string, validationContext: PathValidationContext): Promise<MeldPath>;
 }
 
 export type { IResolutionService };

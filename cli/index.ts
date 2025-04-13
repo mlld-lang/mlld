@@ -1,40 +1,41 @@
 import 'reflect-metadata';
 import '@core/di-config';
-
-// CLI initialization
-
-import { main as apiMain } from '@api/index';
-import { version } from '@core/version';
-import { cliLogger as logger } from '@core/utils/logger';
-import { loggingConfig } from '@core/config/logging';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
-import { createInterface } from 'readline';
-import { initCommand } from './commands/init';
-import { ProcessOptions } from '@core/types/index';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
-import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as fs from 'fs/promises';
 import { watch } from 'fs/promises';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
-import { debugResolutionCommand } from './commands/debug-resolution';
-import { debugContextCommand } from './commands/debug-context';
-import { debugTransformCommand } from './commands/debug-transform';
-import chalk from 'chalk';
 import { existsSync } from 'fs';
-import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
+import { createInterface } from 'readline';
+import { parseArgs, ParseResult } from './argsParser';
+import { displayHelp } from './helpDisplay';
+import { confirmOverwrite } from './fileUtils';
+import { initCommand } from './commands/initCommand';
+import { debugResolutionCommand } from './commands/debugResolutionCommand';
+import { debugContextCommand } from './commands/debugContextCommand';
+import { debugTransformCommand } from './commands/debugTransformCommand';
+import { logger, cliLogger } from '@core/utils/logger';
+import { loggingConfig } from '@core/config/logging';
+import chalk from 'chalk';
+import { version } from '@core/version';
+import { container } from 'tsyringe';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
+import { type ProcessOptions, MeldError, ErrorSeverity, type Location } from '@core/types/index';
+import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
-import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService';
-import { resolveService } from '@core/ServiceProvider';
-import { unsafeCreateNormalizedAbsoluteDirectoryPath, PathValidationContext, NormalizedAbsoluteDirectoryPath } from '@core/types/paths';
-import type { Position, Location } from '@core/types/index';
-import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
+import { loggingConfig as loggingConfigCore } from '@core/config/logging';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
 import { PathValidationError, PathErrorCode } from '@services/fs/PathService/errors/PathValidationError';
 import type { ValidatedResourcePath } from '@core/types/paths';
 import { createRawPath } from '@core/types/paths';
-import Meld from '@api/index';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
-import type { IPathService } from '@services/fs/PathService/IPathService';
-import { container } from 'tsyringe';
+import { resolveService } from '@core/ServiceProvider';
+import { unsafeCreateNormalizedAbsoluteDirectoryPath, PathValidationContext, NormalizedAbsoluteDirectoryPath } from '@core/types/paths';
+import type { Position } from '@core/types/index';
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
+import { IPathService } from '@services/fs/PathService/IPathService';
+import { IParserService } from '@services/pipeline/ParserService/IParserService';
+import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
+import { IStateService } from '@services/state/StateService/IStateService';
+import { IOutputService } from '@services/pipeline/OutputService/IOutputService';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -465,22 +466,11 @@ function findAvailableIncrementalFilename(filePath: string): string {
  * Convert CLI options to API options
  */
 function cliToApiOptions(cliOptions: CLIOptions): ProcessOptions {
-  // Always use transformation mode
-  const options: ProcessOptions = {
+  return {
     format: normalizeFormat(cliOptions.format),
     debug: cliOptions.debug,
-    // Always transform by default
-    transformation: true,
-    fs: cliOptions.custom ? undefined : new NodeFileSystem(), // Allow custom filesystem in test mode
-    pretty: cliOptions.pretty
+    pretty: cliOptions.pretty,
   };
-  
-  // Add strict property to options for backward compatibility with tests
-  if (cliOptions.strict !== undefined) {
-    (options as any).strict = cliOptions.strict;
-  }
-  
-  return options;
 }
 
 /**
@@ -517,10 +507,10 @@ async function watchFiles(options: CLIOptions): Promise<void> {
 async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: ProcessOptions): Promise<void> {
   const { input, output, format, stdout, debug } = cliOptions;
   let outputPath = output;
-  const normalizedFormat = normalizeFormat(format); // Normalize format before use
+  const normalizedFormat = normalizeFormat(format); // Use normalized format
 
   if (!stdout && !outputPath) {
-    outputPath = input.replace(/\.mld$/, '.' + getOutputExtension(normalizedFormat)); // Use normalized format
+    outputPath = input.replace(/\.mld$/, '.' + getOutputExtension(normalizedFormat));
   }
 
   if (outputPath && outputPath === input) {
@@ -529,8 +519,11 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
   }
 
   try {
-    // Resolve services from container using string tokens
-    const meld = container.resolve<Meld>('Meld'); // Use token 'Meld' (assuming registered)
+    // Resolve necessary services from the container
+    const parserService = container.resolve<IParserService>('IParserService');
+    const stateService = container.resolve<IStateService>('IStateService');
+    const interpreterService = container.resolve<IInterpreterService>('IInterpreterService');
+    const outputService = container.resolve<IOutputService>('IOutputService');
     const fsService = container.resolve<IFileSystemService>('IFileSystemService');
     const pathService = container.resolve<IPathService>('IPathService');
 
@@ -539,9 +532,20 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       console.log('API Options:', apiOptions);
       console.log('Output Path:', outputPath);
     }
-    
-    const result = await meld.process(input, apiOptions);
 
+    // Core processing logic using resolved services
+    const content = await fsService.readFile(input as ValidatedResourcePath); // Keep cast for now
+    const ast = await parserService.parse(content);
+    stateService.setCurrentFilePath(input);
+    const resultState = await interpreterService.interpret(ast, {
+      filePath: input,
+      strict: cliOptions.strict ?? true,
+      initialState: stateService
+    });
+    const nodesToProcess = resultState.getTransformedNodes();
+    const result = await outputService.convert(nodesToProcess, resultState, normalizedFormat);
+
+    // Output handling (remains mostly the same)
     if (stdout) {
       console.log(result);
     } else if (outputPath) {
@@ -551,10 +555,10 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
         const dirPath = path.dirname(finalPath);
         const validationContext: PathValidationContext = {
           workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath(process.cwd()),
-          allowExternalPaths: true, // Allow reading potentially outside project
+          allowExternalPaths: true,
           rules: { allowAbsolute: true, allowRelative: true, allowParentTraversal: true, mustExist: false }
         };
-        
+
         // Validate directory path
         const validatedDirPath = await pathService.validatePath(dirPath, validationContext);
         // Validate file path
@@ -570,9 +574,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       }
     }
   } catch (error: any) {
-    // Use the centralized error handler
     await handleError(error, cliOptions);
-    // Re-throw for testing or further handling if needed
     throw error;
   }
 }
@@ -650,7 +652,7 @@ console.error = function(...args: any[]) {
 
 // Moved handleError definition before main
 async function handleError(error: any, options: CLIOptions): Promise<void> {
-  const isMeldError = error instanceof MeldError;
+  const isMeldError = error instanceof MeldError; // Ensure MeldError is used as value
   const severity = isMeldError ? error.severity : ErrorSeverity.Fatal;
 
   const displayErrorWithSourceContext = async (error: MeldError) => {
@@ -817,8 +819,8 @@ export async function main(customArgs?: string[]): Promise<void> {
     if (cliOptions.debug) {
       // Set environment variable for child processes and imported modules
       process.env.DEBUG = 'true';
-      logger.level = 'trace';
-      // Set log level for all service loggers
+      logger.level = 'trace'; // Use the imported logger directly
+      // Set log level for all service loggers using the imported config
       Object.values(loggingConfig.services).forEach(serviceConfig => {
         (serviceConfig as any).level = 'debug';
       });
@@ -831,7 +833,7 @@ export async function main(customArgs?: string[]): Promise<void> {
       logger.level = 'error';
       process.env.DEBUG = ''; // Explicitly disable DEBUG
       
-      // Set all service loggers to only show errors
+      // Set all service loggers to only show errors using the imported config
       Object.values(loggingConfig.services).forEach(serviceConfig => {
         (serviceConfig as any).level = 'error';
       });

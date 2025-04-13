@@ -282,7 +282,7 @@ export class PathService implements IPathService {
    */
   private normalizeProjectPath(pathString: string): string {
     // Replace $PROJECTPATH with the actual project path
-    const resolved = this.resolveMagicPath(pathString);
+    const resolved = this.resolveMagicPath(createRawPath(pathString));
     
     // Normalize slashes and resolve dots
     return this.normalizePath(resolved);
@@ -361,7 +361,7 @@ export class PathService implements IPathService {
     // **Handle URLs - Throw error, this method is only for filesystem paths**
     if (this.isURL(createRawPath(rawInputPath))) {
       throw new PathValidationError(
-        PathErrorMessages.EXPECTED_FILESYSTEM_PATH,
+        PathErrorMessages.INVALID_PATH,
         {
           code: PathErrorCode.E_PATH_EXPECTED_FS,
           path: rawInputPath
@@ -542,11 +542,10 @@ export class PathService implements IPathService {
     if (this.isURL(createRawPath(rawPathString))) {
       // If the input string looks like a URL, we should generally reject it in validatePath,
       // as this function is for filesystem paths. Callers should use validateURL directly.
-      // The previous logic tried to call validateURL, which isn't the purpose of this function.
       throw new PathValidationError(
-        PathErrorMessages.EXPECTED_FILESYSTEM_PATH,
+        PathErrorMessages.INVALID_PATH,
         { code: PathErrorCode.E_PATH_EXPECTED_FS, path: rawPathString },
-        location // Pass location separately
+        location
       );
     }
 
@@ -556,7 +555,7 @@ export class PathService implements IPathService {
     if (typeof filePath === 'string') {
       // Create pathObj for string input
       const baseDir = context.workingDirectory;
-      const resolved = this.resolvePath(createRawPath(rawPathString), baseDir as RawPath); 
+      const resolved = this.resolvePath(createRawPath(rawPathString), createRawPath(baseDir)); 
       pathObj = { 
           contentType: PathContentType.FILESYSTEM, 
           originalValue: rawPathString, 
@@ -584,7 +583,7 @@ export class PathService implements IPathService {
     if (!fsPathObj.validatedPath) {
         // Resolve again if validatedPath is missing (shouldn't happen ideally)
         logger.warn('MeldResolvedFilesystemPath missing validatedPath, re-resolving');
-        fsPathObj.validatedPath = this.resolvePath(createRawPath(fsPathObj.originalValue), context.workingDirectory as RawPath);
+        fsPathObj.validatedPath = this.resolvePath(createRawPath(fsPathObj.originalValue), createRawPath(context.workingDirectory));
         fsPathObj.isAbsolute = isAbsolutePath(fsPathObj.validatedPath);
     }
 
@@ -617,7 +616,7 @@ export class PathService implements IPathService {
     // Security checks
     fsPathObj.isSecure = this.checkSecurityBoundaries(absolutePathToCheck, context);
     if (!fsPathObj.isSecure) {
-      throw new PathValidationError(PathErrorMessages.OUTSIDE_PROJECT_ROOT, { 
+      throw new PathValidationError(PathErrorMessages.OUTSIDE_BASE_DIR, { 
         code: PathErrorCode.E_PATH_OUTSIDE_ROOT, 
         path: absolutePathToCheck, 
       }, location); 
@@ -654,7 +653,7 @@ export class PathService implements IPathService {
     } catch (error: unknown) {
       if (error instanceof PathValidationError) throw error; 
       const cause = error instanceof Error ? error : new Error(String(error)); 
-      throw new PathValidationError(PathErrorMessages.INTERNAL_ERROR, {
+      throw new PathValidationError(PathErrorMessages.INVALID_PATH, {
         code: PathErrorCode.E_INTERNAL,
         path: absolutePathToCheck,
         cause: cause,
@@ -672,10 +671,10 @@ export class PathService implements IPathService {
     const projPath = this.projectPathResolver.getProjectPath();
 
     if (!absolutePath.startsWith(projPath + path.sep) && absolutePath !== projPath) {
-      throw new PathValidationError(PathErrorMessages.OUTSIDE_PROJECT_ROOT, {
+      throw new PathValidationError(PathErrorMessages.OUTSIDE_BASE_DIR, {
         code: PathErrorCode.E_PATH_OUTSIDE_ROOT,
         path: absolutePath,
-      }, (context as any).location);
+      }, location);
     }
     return true;
   }
@@ -697,11 +696,11 @@ export class PathService implements IPathService {
     } catch (error) {
         const pathString = isAbsolutePath(resolvedPath) ? resolvedPath : path.resolve(context.workingDirectory, resolvedPath);
         logger.error('Error checking path existence/type', { path: pathString, error }); 
-        throw new PathValidationError(PathErrorMessages.INTERNAL_ERROR, {
+        throw new PathValidationError(PathErrorMessages.INVALID_PATH, {
           code: PathErrorCode.E_INTERNAL,
           path: pathString, 
           cause: error instanceof Error ? error : new Error(String(error)),
-      }, (context as any).location);
+      }, location);
     }
   }
 
@@ -839,18 +838,17 @@ export class PathService implements IPathService {
    */
   async validateURL(url: RawPath, options?: URLValidationOptions): Promise<UrlPath> {
     const urlString = url;
-    const location = options?.location;
     if (!this.isURL(url)) {
-      throw new PathValidationError(PathErrorMessages.EXPECTED_FILESYSTEM_PATH, { 
+      throw new PathValidationError(PathErrorMessages.INVALID_PATH, { 
         code: PathErrorCode.E_PATH_EXPECTED_FS, 
         path: urlString,
-      }, location); 
+      }, undefined);
     }
     if (options?.allowedProtocols && !options.allowedProtocols.some(p => urlString.startsWith(`${p}:`))) {
       throw new PathValidationError('URL protocol not allowed', {
         code: PathErrorCode.E_URL_PROTOCOL_NOT_ALLOWED, 
         path: urlString,
-      }, location); 
+      }, undefined);
     }
     if (this.urlContentResolver) {
       try {
@@ -861,8 +859,8 @@ export class PathService implements IPathService {
          const causeMessage = cause.message ? `: ${cause.message}` : ''; 
          throw new PathValidationError(
              `URL validation failed via resolver${causeMessage}`, 
-             { code: PathErrorCode.E_URL_VALIDATION_FAILED, path: urlString, cause: cause }, 
-             location
+             { code: PathErrorCode.E_URL_VALIDATION_FAILED, path: urlString, cause: cause },
+             undefined
          );
       }
     }

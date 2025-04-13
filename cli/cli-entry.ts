@@ -1,3 +1,7 @@
+/**
+ * Main entry point for the Meld CLI application.
+ * Sets up dependencies and invokes the main CLI logic.
+ */
 import 'reflect-metadata';
 import { main } from './index.js';
 

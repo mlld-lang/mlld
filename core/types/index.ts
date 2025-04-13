@@ -173,8 +173,11 @@ export interface DirectiveProcessingContext {
 
 // --- END NEW CONTEXT TYPE DEFINITIONS ---
 
+// Remove duplicate export block for these types
+/*
 export type {
   FormattingContext,
   ExecutionContext,
   DirectiveProcessingContext,
-} 
+}
+*/ 
