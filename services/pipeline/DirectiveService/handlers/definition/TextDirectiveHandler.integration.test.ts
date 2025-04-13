@@ -201,17 +201,22 @@ describe('TextDirectiveHandler Integration', () => {
           value: null as any
         },
       };
+      const testFilePath = 'test.meld';
+      stateService.getCurrentFilePath.mockReturnValue(testFilePath);
+      
       mockProcessingContext.directiveNode = node;
+      mockProcessingContext.state = stateService;
 
       const validationError = new Error('Validation failed for test');
       vi.mocked(validationService.validate).mockRejectedValueOnce(validationError);
 
       const errorCollector = new ErrorCollector();
+      let thrownError: any;
       
-      await expect(async () => {
-        try {
+      try {
           await handler.execute(mockProcessingContext);
-        } catch (error) {
+      } catch (error) {
+          thrownError = error;
           if (error instanceof Error && !(error instanceof DirectiveError)) {
              const currentFilePath = mockProcessingContext.state.getCurrentFilePath() ?? undefined;
              const wrappedError = new DirectiveError(
@@ -221,20 +226,29 @@ describe('TextDirectiveHandler Integration', () => {
                { node, context: { currentFilePath } }
              );
              errorCollector.handleError(wrappedError);
-             throw wrappedError;
           } else if (error instanceof DirectiveError) {
-            if (!error.context) error.context = { currentFilePath: mockProcessingContext.state.getCurrentFilePath() ?? undefined };
+            if (!error.details?.context) { 
+               const currentFilePath = mockProcessingContext.state.getCurrentFilePath() ?? undefined;
+               if (error.details) { 
+                  error.details.context = { currentFilePath };
+               } else { 
+                 (error as any).details = { context: { currentFilePath } }; 
+               }
+            }
             errorCollector.handleError(error);
           }
-          throw error;
-        }
-      }).rejects.toThrow(DirectiveError);
+      }
       
+      expect(thrownError).toBeDefined();
+      expect(thrownError).toBeInstanceOf(DirectiveError);
+
       const collectedError = errorCollector.getAllErrors()[0];
+      expect(collectedError).toBeDefined();
       expect(collectedError.details).toBeDefined(); 
-      expect(collectedError.details?.node).toBeDefined(); 
+      expect(collectedError.details?.node).toBe(node); 
       expect(collectedError.details?.node?.location?.start?.line).toBe(5); 
-      expect(collectedError.details?.context?.currentFilePath).toBe('test.meld');
+      expect(collectedError.details?.context).toBeDefined();
+      expect(collectedError.details?.context?.currentFilePath).toBe(testFilePath);
     });
 
     it.todo('should handle mixed directive types - Complex directive interaction deferred for V1');

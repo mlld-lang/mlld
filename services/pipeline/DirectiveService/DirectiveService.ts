@@ -24,6 +24,10 @@ import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 import { DirectiveResult } from './interfaces/DirectiveTypes.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import type { DirectiveProcessingContext, ExecutionContext, FormattingContext } from '@core/types/index.js';
+import type { ResolutionContext } from '@core/types/resolution.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 // Import all handlers
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
@@ -435,38 +439,6 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
     }
 
     return currentState;
-  }
-
-  /**
-   * Create execution context for a directive
-   */
-  private createContext(node: DirectiveNode, parentContext?: DirectiveContext): DirectiveContext {
-    // Create a new state or clone parent state
-    const state = parentContext?.state?.clone() || this.stateService!.createChildState();
-    
-    // Create a new resolution context or inherit from parent
-    const resolutionContext = parentContext?.resolutionContext || {};
-    
-    // Set the default formatting context based on node type
-    const formattingContext = {
-      isOutputLiteral: state.isTransformationEnabled?.() || false,
-      contextType: 'block' as 'inline' | 'block',
-      nodeType: node.type,
-      parentContext: parentContext?.formattingContext
-    };
-    
-    // Determine working directory - use parent's or default to current directory
-    const workingDirectory = parentContext?.workingDirectory || this.fileSystemService?.getCwd() || process.cwd();
-    
-    // Return the complete context
-    return {
-      state,
-      parentState: parentContext?.state,
-      currentFilePath: parentContext?.currentFilePath || this.stateService?.getCurrentFilePath() || '',
-      workingDirectory,
-      resolutionContext,
-      formattingContext
-    } as DirectiveContext;
   }
 
   /**
@@ -909,89 +881,102 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
   }
 
   /**
-   * Process a directive node, validating and executing it
-   * Values in the directive will already be interpolated by meld-ast
-   * @returns The updated state after directive execution
-   * @throws {MeldDirectiveError} If directive processing fails
+   * Process a single directive node, validating and executing it.
+   * This is the core method called internally and potentially by tests.
    */
-  public async processDirective(node: DirectiveNode, context: DirectiveContext): Promise<StateServiceLike> {
-    // Add initialization check before any other processing
+  public async processDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<IStateService> {
     this.ensureInitialized();
+    this.logger.debug('Processing directive', { kind: node.directive?.kind, location: node.location });
+
+    const handler = this.handlers.get(node.directive.kind);
+    if (!handler) {
+      throw new DirectiveError(`No handler registered for directive kind: ${node.directive.kind}`, 'unknown', DirectiveErrorCode.HANDLER_NOT_FOUND, { node });
+    }
+
+    // --- Create DirectiveProcessingContext --- 
+    // Use parent state if available, otherwise create a fresh one
+    // Ensure state conforms to IStateService
+    const state: IStateService = parentContext?.state?.clone() || this.stateService!.createChildState();
+    if (parentContext?.currentFilePath) {
+      state.setCurrentFilePath(parentContext.currentFilePath); // Propagate file path
+    }
+
+    // Create ResolutionContext using the *current* directive's state
+    const resolutionContext = ResolutionContextFactory.create(state, state.getCurrentFilePath() ?? undefined);
+    
+    // Create FormattingContext
+    const formattingContext: FormattingContext = {
+      isOutputLiteral: state.isTransformationEnabled?.() || false,
+      contextType: 'block', 
+      nodeType: node.type,
+      parentContext: parentContext?.formattingContext // Inherit from parent if exists
+    };
+    
+    // Create ExecutionContext if needed
+    let executionContext: ExecutionContext | undefined = undefined;
+    if (node.directive.kind === 'run') {
+      // Assuming fileSystemService and resolutionService are available (injected)
+      const cwd = state.getCurrentFilePath() ? this.resolutionService!.dirname(state.getCurrentFilePath()!) : (this.fileSystemService?.getCwd() ?? process.cwd());
+      executionContext = { cwd }; // Add other fields as needed
+    }
+
+    // Assemble the processing context
+    const processingContext: DirectiveProcessingContext = {
+      state,
+      resolutionContext,
+      formattingContext,
+      executionContext,
+      directiveNode: node
+    };
+    // --- End Context Creation ---
 
     try {
-      // Get the handler for this directive kind
-      const { kind } = node.directive;
-      const handler = this.handlers.get(kind);
+      // Validate first
+      await this.validateDirective(node);
+      
+      // Execute using the correct context
+      const result = await handler.execute(processingContext);
 
-      if (!handler) {
-        throw new DirectiveError(
-          `No handler found for directive: ${kind}`,
-          kind,
-          DirectiveErrorCode.HANDLER_NOT_FOUND,
-          { node }
-        );
+      // Extract the state from the result (which could be state or DirectiveResult)
+      const resultState = getStateFromResult(result);
+      
+      // If transformation produced a replacement, handle it (logic might move to Interpreter)
+      if (result && typeof result === 'object' && 'replacement' in result && result.replacement) {
+         this.logger.debug('Handler returned replacement node', { kind: node.directive.kind });
+         // The InterpreterService should ideally handle adding/transforming nodes
+         // based on the DirectiveResult. DirectiveService primarily returns the state.
       }
+      
+      return resultState; // Return the final state from the handler
 
-      // It calls the handler's execute method, passing the CONTEXT OBJECT RECEIVED DIRECTLY.
-      // It does NOT modify or re-wrap the context object itself.
-      // <<< ADD LOGGING HERE >>>
-      this.logger.debug('[DirectiveService.processDirective] Calling handler with context.state:', {
-          stateExists: !!context.state,
-          stateType: typeof context.state,
-          stateId: context.state?.getStateId ? context.state.getStateId() : 'N/A',
-          hasClone: typeof context.state?.clone === 'function',
-          hasGetCurrentFilePath: typeof context.state?.getCurrentFilePath === 'function'
+    } catch (error) {
+      this.logger.error(`Error processing directive '${node.directive?.kind}'`, { 
+         error: error instanceof Error ? error.message : String(error),
+         stack: error instanceof Error ? error.stack : undefined,
+         location: node.location
       });
 
-      const result = await handler.execute(node, context);
-      
-      // If result is a DirectiveResult with formatting context, update context for propagation
-      if ('state' in result) {
-        // If the directive returned a formatting context, update the context
-        if ((result as DirectiveResult).formattingContext && context.formattingContext) {
-          Object.assign(context.formattingContext, (result as DirectiveResult).formattingContext);
-        }
-        return result.state;
+      if (error instanceof MeldDirectiveError || error instanceof DirectiveError) {
+         // Ensure context details are attached if missing
+         if (!error.details?.context) {
+             const simplifiedContext = { currentFilePath: state.getCurrentFilePath() ?? undefined };
+             if (error.details) {
+                 error.details.context = simplifiedContext;
+             } else {
+                 (error as any).details = { context: simplifiedContext };
+             }
+         }
+         throw error; // Re-throw Meld errors
       }
-      
-      // Otherwise, result is already an IStateService
-      return result;
-    } catch (error) {
-      // If it's already a DirectiveError or MeldDirectiveError, just rethrow
-      if (error instanceof DirectiveError || error instanceof MeldDirectiveError) {
-        throw error;
-      }
-
-      // Simplify error messages for common cases
-      let message = error instanceof Error ? error.message : String(error);
-      let code = DirectiveErrorCode.EXECUTION_FAILED;
-      let severity = ErrorSeverity.Recoverable;
-      
-      if (message.includes('file not found') || message.includes('no such file')) {
-        message = `Referenced file not found: ${node.directive.path || node.directive.value}`;
-        code = DirectiveErrorCode.FILE_NOT_FOUND;
-        severity = DirectiveErrorSeverity[code];
-      } else if (message.includes('circular import') || message.includes('circular reference')) {
-        message = 'Circular import detected';
-        code = DirectiveErrorCode.CIRCULAR_REFERENCE;
-        severity = DirectiveErrorSeverity[code];
-      } else if (message.includes('parameter count') || message.includes('wrong number of parameters')) {
-        message = 'Invalid parameter count';
-        code = DirectiveErrorCode.VALIDATION_FAILED;
-        severity = DirectiveErrorSeverity[code];
-      } else if (message.includes('invalid path') || message.includes('path validation failed')) {
-        message = 'Invalid path';
-        code = DirectiveErrorCode.VALIDATION_FAILED;
-        severity = DirectiveErrorSeverity[code];
-      }
-
+       
+      // Wrap other errors
       throw new DirectiveError(
-        message,
+        error instanceof Error ? error.message : 'Unknown error executing directive',
         node.directive?.kind || 'unknown',
-        code,
+        DirectiveErrorCode.EXECUTION_FAILED,
         { 
-          node, 
-          context,
+          node,
+          context: { currentFilePath: state.getCurrentFilePath() ?? undefined },
           cause: error instanceof Error ? error : undefined 
         }
       );
@@ -1196,4 +1181,12 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
     
     throw new Error('No interpreter service available');
   }
+}
+
+// Helper to extract state (should be defined or imported)
+function getStateFromResult(result: DirectiveResult | IStateService): IStateService {
+    if (result && typeof result === 'object' && 'state' in result && result.state) {
+        return result.state as IStateService;
+    }
+    return result as IStateService;
 } 

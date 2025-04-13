@@ -219,19 +219,22 @@ describe('DataDirectiveHandler', () => {
 
       resolutionService.resolveNodes.mockResolvedValueOnce('echo { key: "value", ');
       const fsMock = testDIContext.resolveSync<IFileSystemService>('IFileSystemService'); 
-      // Ensure the mock returns the object structure expected by the handler
-      vi.mocked(fsMock.executeCommand).mockResolvedValueOnce({ 
-          stdout: '{ "key": "value", ', // The invalid JSON output
+      const mockCommandResult = { 
+          stdout: '{ "key": "value", ', 
           stderr: '' 
-      });
+      };
+      vi.mocked(fsMock.executeCommand).mockResolvedValue(mockCommandResult); // Use mockResolvedValue
 
+      // Execute and expect the specific JSON parsing error
       await expect(handler.execute(mockProcessingContext))
         .rejects
-        .toThrow(DirectiveError);
-      // Now this assertion should pass
+        .toThrow(DirectiveError); 
       await expect(handler.execute(mockProcessingContext))
         .rejects
         .toThrow(/Failed to parse command output as JSON/);
+        
+      // Optional: Verify executeCommand was called correctly
+      expect(fsMock.executeCommand).toHaveBeenCalledWith('echo { key: "value", ', expect.anything());
     });
 
     it('should handle resolution errors', async () => {
