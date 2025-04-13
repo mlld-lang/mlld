@@ -141,7 +141,7 @@ User info: {{user.name}} ({{user.id}})
       try {
         // Enable transformation
         const stateService = context.services.state;
-        stateService.enableTransformation(true);
+        stateService.setTransformationEnabled(true);
         
         const result = await main('test.meld', {
           fs: context.services.filesystem,
@@ -187,7 +187,7 @@ First feature: {{config.app.features.0}}
       try {
         // Enable transformation
         const stateService = context.services.state;
-        stateService.enableTransformation(true);
+        stateService.setTransformationEnabled(true);
         
         const result = await main('test.meld', {
           fs: context.services.filesystem,
