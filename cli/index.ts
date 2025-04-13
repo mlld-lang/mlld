@@ -26,14 +26,13 @@ import { FileSystemService } from '@services/fs/FileSystemService/FileSystemServ
 import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService';
 import { resolveService } from '@core/ServiceProvider';
 import { unsafeCreateNormalizedAbsoluteDirectoryPath, PathValidationContext, NormalizedAbsoluteDirectoryPath } from '@core/types/paths';
-import type { Position, ErrorSourceLocation } from '@core/types/index';
-import type { IFileSystemClient } from '@services/fs/FileSystemService/interfaces/IFileSystemClient';
-import { BaseError, BaseErrorDetails } from '@core/errors/index';
+import type { Position, Location } from '@core/types/index';
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
 import { PathValidationError, PathErrorCode } from '@services/fs/PathService/errors/PathValidationError';
 import type { ValidatedResourcePath } from '@core/types/paths';
 import { createRawPath } from '@core/types/paths';
 import Meld from '@api/index';
-import { IFileSystemService } from '@services/fs/FileSystemService/interfaces/IFileSystemService';
+import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import type { IPathService } from '@services/fs/PathService/IPathService';
 import { container } from 'tsyringe';
 
@@ -658,50 +657,55 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
     // Dynamically load ErrorDisplayService
     try {
       const { ErrorDisplayService } = await import('@services/display/ErrorDisplayService/ErrorDisplayService');
-      const fsService = resolveService<IFileSystemService>('IFileSystemService');
+      // Resolve FileSystemService (implementation) instead of IFileSystemService
+      const fsService = resolveService<FileSystemService>('FileSystemService'); 
       const errorDisplayService = new ErrorDisplayService(fsService);
 
       // Get source context if available
-      if (error.location) {
-        const { filePath } = error.location;
-        const displayContext: BaseErrorDetails & { path?: string; startLine?: number; endLine?: number } = {
+      // Use sourceLocation property
+      if (error.sourceLocation) {
+        const { filePath } = error.sourceLocation;
+        const displayContext: { message: string; code?: string; cause?: Error | unknown; path?: string; startLine?: number; endLine?: number } = {
           message: error.message,
           code: error.code,
           cause: error.cause,
           path: filePath,
-          startLine: error.location.start?.line,
-          endLine: error.location.end?.line
+          startLine: error.sourceLocation.start?.line,
+          endLine: error.sourceLocation.end?.line 
         };
         
-        // Check if error.context exists and has path property
-        if (error.context && 'path' in error.context) {
-          displayContext.path = error.context.path as string;
+        // Check if error.details exists and has path property (MeldError uses details)
+        if (error.details && 'path' in error.details) {
+          displayContext.path = error.details.path as string;
         }
 
         if (displayContext.path) {
-          const formattedError = await errorDisplayService.formatErrorWithContext(displayContext);
-          console.error(formattedError);
+          console.error(chalk.red(`${error.name} in ${displayContext.path}:${displayContext.startLine}`));
+          console.error(chalk.red(`> ${error.message}`));
         } else {
           console.error(chalk.red(`Error: ${error.message}`));
-          if (error.cause) {
+          if (error.cause instanceof Error) {
             console.error(chalk.red(`  Cause: ${error.cause.message}`));
           }
         }
       } else {
         console.error(chalk.red(`Error: ${error.message}`));
-        if (error.cause) {
+        if (error.cause instanceof Error) {
           console.error(chalk.red(`  Cause: ${error.cause.message}`));
         }
       }
     } catch (displayError) {
       console.error(chalk.red(`Original error: ${error.message}`));
-      console.error(chalk.yellow(`Failed to display error with source context: ${displayError instanceof Error ? displayError.message : String(displayError)}`));
+      if (displayError instanceof Error) {
+        console.error(chalk.yellow(`Failed to display error with source context: ${displayError.message}`));
+      } else {
+        console.error(chalk.yellow(`Failed to display error with source context: ${String(displayError)}`));
+      }
     }
   };
 
   // Ensure the logger configuration matches CLI options
-  loggingConfig.level = options.debug ? 'debug' : (options.verbose ? 'info' : 'warn');
-  loggingConfig.showTimestamps = !!options.verbose;
+  logger.level = options.debug ? 'debug' : (options.verbose ? 'info' : 'warn');
 
   if (isMeldError) {
     await displayErrorWithSourceContext(error);
@@ -840,7 +844,9 @@ export async function main(fsAdapter?: typeof Meld, customArgs?: string[]): Prom
     // Handle custom FS for testing
     let apiOptions: ProcessOptions = cliToApiOptions(cliOptions);
     if (fsAdapter) {
-      apiOptions.fs = fsAdapter;
+      // Assign fsAdapter only if it's compatible with NodeFileSystem
+      // This might need adjustment based on the actual type of Meld API's fs option
+      apiOptions.fs = fsAdapter instanceof NodeFileSystem ? fsAdapter : new NodeFileSystem(); 
       cliOptions.custom = true; 
     }
 

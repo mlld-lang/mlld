@@ -14,12 +14,12 @@ import { ResolutionContextFactory } from '@services/resolution/ResolutionService
 import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { createTextNode, createDirectiveNode, createLocation, createCommandVariable } from '@tests/utils/testFactories.js';
+import { createTextNode, createDirectiveNode, createLocation } from '@tests/utils/testFactories.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { DirectiveResult } from '@services/pipeline/DirectiveService/interfaces/DirectiveTypes.js';
 import type { DirectiveProcessingContext, ExecutionContext, FormattingContext } from '@core/types/index.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
-import type { IPathService } from '@services/path/IPathService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -70,40 +70,44 @@ export class InterpreterService implements IInterpreterService {
   /**
    * Creates a new InterpreterService
    * 
-   * @param directiveServiceClientFactory - Factory for creating directive service clients
-   * @param stateService - Service for state management
-   * @param resolutionService - Service for text resolution
-   * @param parserClientFactory - Factory for creating parser service clients
-   * @param pathService - Service for path operations
+   * @param resolutionService - Service for text resolution (Required)
+   * @param pathService - Service for path operations (Required)
+   * @param directiveServiceClientFactory - Factory for creating directive service clients (Optional)
+   * @param stateService - Service for state management (Optional)
+   * @param parserClientFactory - Factory for creating parser service clients (Optional)
    */
   constructor(
+    // Required parameters first
+    @inject('IResolutionService') resolutionService: IResolutionService,
+    @inject('IPathService') pathService: IPathService,
+    // Optional parameters last
     @inject('DirectiveServiceClientFactory') directiveServiceClientFactory?: DirectiveServiceClientFactory,
     @inject('IStateService') stateService?: IStateService,
-    @inject('IResolutionService') resolutionService: IResolutionService,
-    @inject('ParserServiceClientFactory') parserClientFactory?: ParserServiceClientFactory,
-    @inject('IPathService') pathService: IPathService
+    @inject('ParserServiceClientFactory') parserClientFactory?: ParserServiceClientFactory
   ) {
+    // Assign properties based on the new order
+    this.resolutionService = resolutionService;
+    this.pathService = pathService;
     this.directiveClientFactory = directiveServiceClientFactory;
     this.stateService = stateService;
-    this.resolutionService = resolutionService;
     this.parserClientFactory = parserClientFactory;
-    this.pathService = pathService;
     
     logger.debug('InterpreterService constructor', {
+      hasResolutionService: !!this.resolutionService,
+      hasPathService: !!this.pathService,
       hasDirectiveFactory: !!this.directiveClientFactory,
       hasStateService: !!this.stateService,
-      hasResolutionService: !!this.resolutionService,
       hasParserFactory: !!this.parserClientFactory,
-      hasPathService: !!this.pathService
     });
     
-    if (this.directiveClientFactory && this.stateService && this.pathService) {
+    // Updated initialization check
+    if (this.directiveClientFactory && this.stateService) { 
       this.initializeDirectiveClient();
       this.initializeParserClient();
       this.initialized = true;
       logger.debug('InterpreterService initialized via DI');
     } else {
-      logger.warn('InterpreterService constructed with missing core dependencies (DirectiveClientFactory, StateService, PathService). Manual initialization might be needed (deprecated).');
+      logger.warn('InterpreterService constructed with missing optional dependencies (DirectiveClientFactory, StateService, ParserClientFactory). Manual initialization might be needed (deprecated).');
     }
   }
 

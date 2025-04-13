@@ -2,7 +2,7 @@ import type { IPathService, URLValidationOptions } from '@services/fs/PathServic
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
-import type { Location } from '@core/types';
+import type { Location } from '@core/types/location';
 import * as path from 'path';
 import * as os from 'os';
 import type { MeldNode } from '@core/syntax/types/index';
@@ -353,7 +353,7 @@ export class PathService implements IPathService {
       });
     }
 
-    const rawInputPath = typeof filePath === 'string' ? filePath : filePath.original;
+    const rawInputPath = isRawPath(filePath) ? filePath : filePath.original;
 
     if (!rawInputPath) {
       // Return empty RelativePath for empty input.
@@ -366,7 +366,6 @@ export class PathService implements IPathService {
         PathErrorMessages.EXPECTED_FILESYSTEM_PATH,
         {
           code: PathErrorCode.E_PATH_EXPECTED_FS,
-          severity: ErrorSeverity.Fatal,
           path: rawInputPath
         }
       );
@@ -398,7 +397,6 @@ export class PathService implements IPathService {
     }
 
     // Determine if the resolved path is absolute or relative and create branded type
-    // path.isAbsolute works reliably after normalization
     if (path.isAbsolute(resolvedString)) {
        return unsafeCreateAbsolutePath(resolvedString);
     } else {
@@ -485,53 +483,22 @@ export class PathService implements IPathService {
    * Get the structured representation of a path
    */
   getStructuredPath(pathString: string): StructuredPath {
+    const raw = pathString;
     const normalized = this.normalizePath(pathString);
-    
-    return {
-      raw: pathString,
-      structured: {
-        segments: normalized.split('/').filter(Boolean),
-        variables: {
-          special: this.extractSpecialVariables(pathString),
-          path: []
-        },
-        cwd: pathString.startsWith('./') || pathString.startsWith('../') || !path.isAbsolute(pathString)
-      },
-      normalized
-    };
-  }
+    const base = path.isAbsolute(normalized) ? path.parse(normalized).root : '.';
+    const segments = normalized.substring(base.length).split('/').filter(Boolean);
+    const isUrl = this.isURL(createRawPath(pathString));
 
-  /**
-   * Extract special variables from a path string
-   */
-  private extractSpecialVariables(pathString: string): string[] {
-    const variables: string[] = [];
-    
-    if (pathString.includes('$PROJECTPATH')) {
-      variables.push('$PROJECTPATH');
-    }
-    
-    if (pathString.includes('$USERPROFILE')) {
-      variables.push('$USERPROFILE');
-    }
-    
-    if (pathString.includes('$HOMEPATH')) {
-      variables.push('$HOMEPATH');
-    }
-    
-    if (pathString.startsWith('~') || pathString.includes('~/')) {
-      variables.push('~');
-    }
-    
-    if (pathString.startsWith('$.')) {
-      variables.push('$.');
-    }
-    
-    if (pathString.startsWith('$~')) {
-      variables.push('$~');
-    }
-    
-    return variables;
+    return {
+      original: raw,
+      normalized: normalized,
+      isAbsolute: path.isAbsolute(normalized),
+      segments: segments,
+      isNormalized: !this.hasDotSegments(normalized),
+      isDirectory: normalized.endsWith('/'),
+      variables: {},
+      pathVariableRefs: []
+    };
   }
 
   /**
@@ -545,206 +512,163 @@ export class PathService implements IPathService {
    * @throws {PathValidationError} If validation fails or input is a URL.
    */
   async validatePath(
-    filePath: string | MeldPath, // Input is string or MeldPath
+    filePath: string | MeldPath, 
     context: PathValidationContext
-  ): Promise<MeldPath> { // Return MeldPath
+  ): Promise<MeldPath> { 
+    let pathObj: MeldPath;
+    let rawPathString: string;
+    const location = context.location;
 
-    // Determine the raw input path string
-    const rawInputPath = typeof filePath === 'string' ? filePath : filePath.originalValue;
-    let resolvedPath: AbsolutePath | RelativePath; // Internal resolved path string
-    let fileExists: boolean | undefined = undefined;
-    let isDir: boolean | undefined = undefined;
-
-    // Debug logging
-    if (process.env.DEBUG_PATH_VALIDATION === 'true') {
-      logger.debug(`[PathService][debug] validatePath called with:`, {
-        rawInputPath,
-        context,
-        testMode: this.testMode
-      });
+    if (typeof filePath === 'string') {
+      rawPathString = filePath;
+      if (this.isURL(createRawPath(rawPathString))) {
+        const urlOptions: URLValidationOptions = { /* construct from context if needed */ };
+        pathObj = await this.validateURL(createRawPath(rawPathString), urlOptions); 
+      } else {
+        const baseDir = context.workingDirectory;
+        const resolved = this.resolvePath(createRawPath(rawPathString), baseDir); 
+        pathObj = { 
+            contentType: PathContentType.FILESYSTEM, 
+            originalValue: rawPathString, 
+            validatedPath: resolved,
+            isAbsolute: isAbsolutePath(resolved),
+            isValidSyntax: true,
+            exists: undefined,
+            isSecure: true 
+        };
+      }
+    } else {
+      pathObj = filePath;
+      rawPathString = pathObj.originalValue;
     }
 
-    // 1. Basic non-empty check
-    if (!rawInputPath) {
-      throw new PathValidationError(
-        PathErrorMessages.EMPTY_PATH,
-        {
-          code: PathErrorCode.E_PATH_EMPTY,
-          severity: ErrorSeverity.Fatal,
-          path: rawInputPath
-        }
-      );
+    // --- Initial Syntax Checks ---
+    if (pathObj.contentType === PathContentType.FILESYSTEM) {
+      if (rawPathString.includes('\0')) {
+        throw new PathValidationError(PathErrorMessages.NULL_BYTE, {
+          code: PathErrorCode.E_PATH_NULL_BYTE, 
+          path: rawPathString,
+        }, location);
+      }
+    }
+    
+    if (isUrlPath(pathObj)) {
+      return pathObj;
     }
 
-    // **Handle URLs - Throw error, this method is only for filesystem paths**
-    if (this.isURL(createRawPath(rawInputPath))) {
-      throw new PathValidationError(
-        PathErrorMessages.EXPECTED_FILESYSTEM_PATH,
-        {
-          code: PathErrorCode.E_PATH_EXPECTED_FS,
-          severity: ErrorSeverity.Fatal,
-          path: rawInputPath
-        }
-      );
+    // --- Filesystem Path Validation --- 
+    let absolutePathToCheck: AbsolutePath;
+    if (isAbsolutePath(pathObj)) {
+        absolutePathToCheck = pathObj;
+    } else if (isRelativePath(pathObj)) {
+        absolutePathToCheck = unsafeCreateAbsolutePath(path.resolve(context.workingDirectory, pathObj));
+    } else {
+      throw new PathValidationError(PathErrorMessages.INVALID_PATH, {
+          code: PathErrorCode.E_PATH_INVALID,
+          path: rawPathString,
+      }, location);
+    }
+
+    const fsPathObj: MeldResolvedFilesystemPath = { 
+        contentType: PathContentType.FILESYSTEM, 
+        originalValue: rawPathString, 
+        validatedPath: absolutePathToCheck, 
+        isAbsolute: true, 
+        isValidSyntax: true, 
+        exists: undefined,
+        isSecure: true,
+    };
+
+    fsPathObj.isSecure = this.checkSecurityBoundaries(absolutePathToCheck, context);
+    if (!fsPathObj.isSecure) {
+      throw new PathValidationError(PathErrorMessages.OUTSIDE_PROJECT_ROOT, { 
+        code: PathErrorCode.E_PATH_OUTSIDE_ROOT, 
+        path: absolutePathToCheck, 
+        details: { projectRoot: this.projectPathResolver.projectPath }
+      }, location);
     }
 
     try {
-      // 3. Resolve the path string (handles variables, normalization)
-      // Use the original string if filePath is already a string, 
-      // otherwise use the validated path from MeldPath if provided (though validation should re-run)
-      const pathForResolver = typeof filePath === 'string' ? filePath : filePath.validatedPath as string;
-      resolvedPath = this.resolvePath(pathForResolver);
+      const { exists, isDirectory } = await this.checkExistenceAndType(absolutePathToCheck, context);
+      fsPathObj.exists = exists;
+      (fsPathObj as any).isDirectory = isDirectory;
 
-      // 4. Null byte check
-      if ((resolvedPath as string).includes('\0')) {
+      if (context.rules.mustExist && !exists) {
+        const isDirExpected = context.rules.mustBeDirectory;
         throw new PathValidationError(
-          PathErrorMessages.NULL_BYTE,
+          isDirExpected ? PathErrorMessages.PATH_NOT_FOUND : PathErrorMessages.FILE_NOT_FOUND,
           {
-            code: 'E_PATH_NULL_BYTE',
-            severity: ErrorSeverity.Fatal,
-            details: { pathString: rawInputPath }
-          }
-        );
+            code: isDirExpected ? PathErrorCode.E_PATH_NOT_FOUND : PathErrorCode.E_FILE_NOT_FOUND,
+            path: absolutePathToCheck,
+          }, location);
       }
 
-      // 5. Security / Boundary Checks
-      const isSecure = this.checkSecurityBoundaries(resolvedPath, context);
-      if (!isSecure) {
-          // Error is thrown inside checkSecurityBoundaries
-          // This path shouldn't be reached if !isSecure, but needed for type safety
-          throw new Error('Internal Error: Security check failed but did not throw.');
+      if (exists && context.rules.mustBeFile && isDirectory) { 
+        throw new PathValidationError(PathErrorMessages.NOT_A_FILE, {
+          code: PathErrorCode.E_PATH_NOT_A_FILE,
+          path: absolutePathToCheck,
+        }, location);
       }
 
-      // 6. Existence and Type Checks (if required by context.rules)
-      if (context.rules.mustExist || context.rules.mustBeFile || context.rules.mustBeDirectory) {
-        const { exists, isDirectory } = await this.checkExistenceAndType(resolvedPath, context);
-        fileExists = exists;
-        isDir = isDirectory;
+      if (exists && context.rules.mustBeDirectory && !isDirectory) { 
+        throw new PathValidationError(PathErrorMessages.NOT_A_DIRECTORY, {
+          code: PathErrorCode.E_PATH_NOT_A_DIRECTORY,
+          path: absolutePathToCheck,
+        }, location);
       }
-
-      // 7. Path is valid, construct and return the MeldResolvedFilesystemPath object
-      const isResolvedAbsolute = isAbsolutePath(resolvedPath);
-      const validatedMeldPath: MeldResolvedFilesystemPath = {
-          contentType: PathContentType.FILESYSTEM,
-          originalValue: rawInputPath,
-          validatedPath: resolvedPath, // This is AbsolutePath or RelativePath
-          isAbsolute: isResolvedAbsolute,
-          exists: fileExists,
-          isSecure: true // Passed security checks
-      };
-      return validatedMeldPath;
-
-    } catch (error) {
-      // Re-throw known PathValidationErrors, wrap others
-      if (error instanceof PathValidationError) {
-        throw error;
-      }
-      if (error instanceof MeldError) {
-         throw error;
-      }
-
-      // Wrap unexpected errors
-      const errorDetails: PathValidationErrorDetails = {
-        pathString: rawInputPath,
-        cause: error instanceof Error ? error : new Error(String(error))
-      };
-
-      throw new PathValidationError(
-        `Validation failed for path "${rawInputPath}": ${(error as Error).message}`,
-        {
-          code: 'E_PATH_INVALID', // Generic code
-          severity: ErrorSeverity.Fatal,
-          details: errorDetails,
-          cause: error // Pass the original cause
-        }
-      );
+    } catch (error: unknown) {
+      if (error instanceof PathValidationError) throw error; 
+      const cause = error instanceof Error ? error : new Error(String(error)); 
+      throw new PathValidationError(PathErrorMessages.INTERNAL_ERROR, {
+        code: PathErrorCode.E_INTERNAL,
+        path: absolutePathToCheck,
+        cause: cause,
+      }, location);
     }
+
+    return fsPathObj;
   }
   
-  // Helper for security checks
   private checkSecurityBoundaries(resolvedPath: AbsolutePath | RelativePath, context: PathValidationContext): boolean {
-    if (!context.allowExternalPaths && isAbsolutePath(resolvedPath)) {
-        const projectRootDirString = context.projectRoot ? (context.projectRoot as string) : this.projectPath;
-        const allowedDirStrings = [
-            ...(context.allowedRoots ?? []).map(p => p as string),
-            projectRootDirString
-        ];
-        const isWithinAllowedDir = allowedDirStrings.some(allowedDir =>
-            (resolvedPath as string).startsWith(allowedDir)
-        );
-        if (!isWithinAllowedDir) {
-            throw new PathValidationError(
-                PathErrorMessages.OUTSIDE_PROJECT_ROOT,
-                {
-                    code: 'E_PATH_OUTSIDE_ROOT',
-                    severity: ErrorSeverity.Fatal,
-                    details: {
-                        pathString: resolvedPath as string, // Use resolved path here?
-                        resolvedPath: resolvedPath as string,
-                        allowedRoots: allowedDirStrings
-                    }
-                }
-            );
-        }
+    if (context.rules.allowExternalPaths) {
+      return true;
     }
-    // Add other rule checks here (allowAbsolute, allowRelative, allowParentTraversal, etc.)
-    // For now, return true if boundary checks pass
+    const absolutePath = isAbsolutePath(resolvedPath) ? resolvedPath : path.resolve(context.workingDirectory, resolvedPath);
+    const projPath = this.projectPathResolver.projectPath;
+
+    if (!absolutePath.startsWith(projPath + path.sep) && absolutePath !== projPath) {
+      throw new PathValidationError(PathErrorMessages.OUTSIDE_PROJECT_ROOT, {
+        code: PathErrorCode.E_PATH_OUTSIDE_ROOT,
+        path: absolutePath,
+        details: { projectRoot: projPath }
+      }, context.location);
+    }
     return true;
   }
   
-  // Helper for existence and type checks
   private async checkExistenceAndType(resolvedPath: AbsolutePath | RelativePath, context: PathValidationContext): Promise<{ exists: boolean; isDirectory?: boolean }> {
-      this.ensureFactoryInitialized();
-      if (!this.fsClient) {
-         const errorMsg = 'Cannot check path existence/type: FileSystemServiceClient is not available.';
-         logger.error(errorMsg, { path: resolvedPath as string });
-         throw new PathValidationError(errorMsg, {
-             code: 'E_INTERNAL',
-             severity: ErrorSeverity.Fatal,
-             details: { pathString: resolvedPath as string }
-         });
-      }
-
-      const exists = await this.fsClient.exists(resolvedPath as string);
-
-      if (context.rules.mustExist && !exists) {
-        throw new PathValidationError(
-          PathErrorMessages.FILE_NOT_FOUND,
-          {
-            code: 'E_FILE_NOT_FOUND',
-            severity: ErrorSeverity.Fatal,
-            details: { pathString: resolvedPath as string }
-          }
-        );
-      }
-
-      let isDirectory: boolean | undefined = undefined;
-      if (exists && (context.rules.mustBeFile || context.rules.mustBeDirectory)) {
-         isDirectory = await this.fsClient.isDirectory(resolvedPath as string);
-
-         if (context.rules.mustBeFile && isDirectory) {
-             throw new PathValidationError(
-                 PathErrorMessages.NOT_A_FILE,
-                 {
-                   code: 'E_PATH_NOT_A_FILE',
-                   severity: ErrorSeverity.Fatal,
-                   details: { pathString: resolvedPath as string }
-                 }
-             );
-         }
-
-         if (context.rules.mustBeDirectory && !isDirectory) {
-             throw new PathValidationError(
-                 PathErrorMessages.NOT_A_DIRECTORY,
-                 {
-                   code: 'E_PATH_NOT_A_DIRECTORY',
-                   severity: ErrorSeverity.Fatal,
-                   details: { pathString: resolvedPath as string }
-                 }
-             );
-         }
-      }
-      return { exists, isDirectory };
+    this.ensureFactoryInitialized();
+    if (!this.fsClient) {
+      logger.warn('FileSystemServiceClient not available for existence check');
+      return { exists: false };
+    }
+    try {
+        const pathString = isAbsolutePath(resolvedPath) ? resolvedPath : path.resolve(context.workingDirectory, resolvedPath);
+        const exists = await this.fsClient.exists(pathString); 
+        let isDirectory: boolean | undefined = undefined;
+        if (exists) {
+            isDirectory = await this.fsClient.isDirectory(pathString); 
+        }
+        return { exists, isDirectory };
+    } catch (error) {
+        const pathString = isAbsolutePath(resolvedPath) ? resolvedPath : path.resolve(context.workingDirectory, resolvedPath);
+        logger.error('Error checking path existence/type', { path: pathString, error }); 
+        throw new PathValidationError(PathErrorMessages.INTERNAL_ERROR, {
+          code: PathErrorCode.E_INTERNAL,
+          path: pathString, 
+          cause: error instanceof Error ? error : new Error(String(error)),
+      }, context.location);
+    }
   }
 
   /**
@@ -752,26 +676,11 @@ export class PathService implements IPathService {
    * This is a convenience method for tests
    */
   validateMeldPath(pathString: string, location?: Location): void {
-    // Skip validation in test mode
-    if (this.testMode) {
-      return;
-    }
-    
-    // No longer reject paths with dot segments
-    // No longer reject raw absolute paths 
-    // No longer reject paths with slashes but no path variable
-    
-    // Only perform basic path safety checks like null byte detection
     if (pathString.includes('\0')) {
-      throw new PathValidationError(
-        PathErrorMessages.NULL_BYTE,
-        {
-          code: 'E_PATH_NULL_BYTE',
-          severity: ErrorSeverity.Fatal,
-          details: { pathString: pathString },
-          sourceLocation: location
-        }
-      );
+      throw new PathValidationError(PathErrorMessages.NULL_BYTE, {
+        code: PathErrorCode.E_PATH_NULL_BYTE, 
+        path: pathString,
+      }, location);
     }
   }
 
@@ -780,25 +689,15 @@ export class PathService implements IPathService {
    * @param filePath - The path to check
    * @returns True if the path exists, false otherwise
    */
-  async exists(filePath: string): Promise<boolean> {
-    // Ensure factory is initialized - only when needed
+  async exists(filePath: ValidatedResourcePath): Promise<boolean> { 
     this.ensureFactoryInitialized();
-    
-    // Try to use the filesystem client
-    if (this.fsClient) {
-      try {
-        return await this.fsClient.exists(filePath);
-      } catch (error) {
-        logger.warn('Error using fsClient.exists', { 
-          error, 
-          path: filePath 
-        });
-      }
+    if (!this.fsClient) return false; 
+    try {
+      return await this.fsClient.exists(filePath);
+    } catch (error) {
+      logger.error('Error checking existence', { path: filePath, error }); 
+      return false; 
     }
-    
-    // Last resort fallback - assume path exists
-    logger.warn('No filesystem service available, assuming path exists', { path: filePath });
-    return true;
   }
 
   /**
@@ -806,25 +705,15 @@ export class PathService implements IPathService {
    * @param dirPath - The path to check
    * @returns True if the path is a directory, false otherwise
    */
-  async isDirectory(dirPath: string): Promise<boolean> {
-    // Ensure factory is initialized - only when needed
+  async isDirectory(dirPath: ValidatedResourcePath): Promise<boolean> { 
     this.ensureFactoryInitialized();
-    
-    // Try to use the filesystem client
-    if (this.fsClient) {
-      try {
-        return await this.fsClient.isDirectory(dirPath);
-      } catch (error) {
-        logger.warn('Error using fsClient.isDirectory', { 
-          error, 
-          path: dirPath 
-        });
-      }
+    if (!this.fsClient) return false; 
+    try {
+      return await this.fsClient.isDirectory(dirPath);
+    } catch (error) {
+      logger.error('Error checking directory type', { path: dirPath, error }); 
+      return false;
     }
-    
-    // Last resort fallback - assume path is not a directory
-    logger.warn('No filesystem service available, assuming path is not a directory', { path: dirPath });
-    return false;
   }
 
   /**
@@ -897,11 +786,12 @@ export class PathService implements IPathService {
    * Note: Does not validate the URL, just checks format.
    */
   isURL(path: RawPath): boolean {
-    if (!path) {
+    try {
+      const url = new URL(path);
+      return ['http:', 'https:'].includes(url.protocol);
+    } catch (_) {
       return false;
     }
-    // Basic check for common URL schemes
-    return /^https?:\/\//i.test(path);
   }
 
   /**
@@ -914,41 +804,23 @@ export class PathService implements IPathService {
    * @throws {URLSecurityError} If URL is blocked by security policy
    */
   async validateURL(url: RawPath, options?: URLValidationOptions): Promise<UrlPath> {
+    const urlString = url;
     if (!this.isURL(url)) {
-      throw new PathValidationError('Expected a URL, but received a file path.', { 
-        code: PathErrorCode.E_PATH_EXPECTED_URL,
-        severity: ErrorSeverity.Fatal,
-        path: url
-      });
+      throw new PathValidationError(PathErrorMessages.EXPECTED_FILESYSTEM_PATH, {
+        code: PathErrorCode.E_PATH_EXPECTED_FS,
+        path: urlString,
+      }, options?.location);
     }
 
-    if (url.includes('\0')) {
-      throw new PathValidationError(PathErrorMessages.NULL_BYTE, { 
-        code: PathErrorCode.E_PATH_NULL_BYTE, 
-        severity: ErrorSeverity.Fatal,
-        details: { pathString: url }
-      });
+    if (options?.allowedProtocols && !options.allowedProtocols.some(p => urlString.startsWith(`${p}:`))) {
+      throw new PathValidationError('URL protocol not allowed', {
+        code: PathErrorCode.E_URL_PROTOCOL_NOT_ALLOWED,
+        path: urlString,
+        details: { allowed: options.allowedProtocols }, 
+      }, options?.location);
     }
 
-    if (!this.urlContentResolver) {
-      const msg = 'URL validation requires IURLContentResolver, but it was not provided.';
-      logger.error(msg);
-      throw new URLError(msg);
-    }
-    
-    try {
-      // Delegate actual validation to URLContentResolver
-      const validatedUrlString = await this.urlContentResolver.validateURL(url as string, options);
-      // If validation succeeds, create and return the branded type
-      return unsafeCreateUrlPath(validatedUrlString);
-    } catch (error) {
-      // Re-throw URL errors directly
-      if (error instanceof URLError) {
-        throw error;
-      }
-      // Wrap other errors
-      throw new URLError(`URL validation failed: ${(error as Error).message}`, { cause: error });
-    }
+    return unsafeCreateUrlPath(urlString);
   }
 
   /**
@@ -962,21 +834,20 @@ export class PathService implements IPathService {
    */
   async fetchURL(url: UrlPath, options?: URLFetchOptions): Promise<URLResponse> {
     if (!this.urlContentResolver) {
-      const msg = 'URL fetching requires IURLContentResolver, but it was not provided.';
-      logger.error(msg);
-      throw new URLError(msg); // Use URLError or a more specific FetchError?
+      throw new MeldError('URLContentResolver service is not available', { 
+          code: 'SERVICE_UNAVAILABLE', 
+          severity: ErrorSeverity.Fatal 
+        });
     }
-
     try {
-      // Delegate fetching to URLContentResolver, casting UrlPath back to string
-      return await this.urlContentResolver.fetchURL(url as string, options);
+      return await this.urlContentResolver.fetchURL(url, options); 
     } catch (error) {
-      // Re-throw URL errors directly
-      if (error instanceof URLError) {
-        throw error;
-      }
-      // Wrap other errors
-      throw new URLError(`URL fetch failed for "${url}": ${(error as Error).message}`, { cause: error });
+      const cause = error instanceof Error ? error : new Error(String(error));
+      throw new PathValidationError('Failed to fetch URL content', { 
+        code: PathErrorCode.E_URL_FETCH_FAILED,
+        path: url, 
+        cause: cause
+      });
     }
   }
 }
