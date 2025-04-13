@@ -1,31 +1,31 @@
-import type { IPathService, URLValidationOptions } from '@services/fs/PathService/IPathService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError.js';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import type { Location } from '@core/types.js';
+import type { IPathService, URLValidationOptions } from '@services/fs/PathService/IPathService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
+import type { Location } from '@core/types';
 import * as path from 'path';
 import * as os from 'os';
-import type { MeldNode } from '@core/syntax/types/index.js';
+import type { MeldNode } from '@core/syntax/types/index';
 import { 
   MeldError 
-} from '@core/errors/MeldError.js';
+} from '@core/errors/MeldError';
 import { 
   MeldFileNotFoundError 
-} from '@core/errors/MeldFileNotFoundError.js';
+} from '@core/errors/MeldFileNotFoundError';
 import { 
   PathErrorMessages 
-} from '@core/errors/messages/index.js';
-import { Service } from '@core/ServiceProvider.js';
+} from '@core/errors/messages/index';
+import { Service } from '@core/ServiceProvider';
 import { injectable, inject } from 'tsyringe';
 import { container } from 'tsyringe';
-import { pathLogger as logger } from '@core/utils/logger.js';
-import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
-import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURLCache.js';
+import { pathLogger as logger } from '@core/utils/logger';
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
+import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURLCache';
 import { 
   URLError 
-} from '@services/fs/PathService/errors/url/index.js';
-import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+} from '@services/fs/PathService/errors/url/index';
+import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver';
 import {
   AbsolutePath,
   RelativePath,
@@ -48,10 +48,10 @@ import {
   type AnyPath,
   type MeldResolvedFilesystemPath,
   createRawPath
-} from '@core/types/paths.js';
-import { ErrorSeverity } from '@core/errors/index.js';
-import type { Position } from '@core/types/location.js';
-import type { IFileSystemClient } from '@services/fs/FileSystemService/interfaces/IFileSystemClient.js';
+} from '@core/types/paths';
+import { ErrorSeverity } from '@core/errors/index';
+import type { Position } from '@core/types/location';
+import type { IFileSystemClient } from '@services/fs/FileSystemService/interfaces/IFileSystemClient';
 
 /**
  * Service for validating and normalizing paths

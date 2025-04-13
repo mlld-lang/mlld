@@ -1,40 +1,40 @@
 import 'reflect-metadata';
-import '@core/di-config.js';
+import '@core/di-config';
 
 // CLI initialization
 
-import { main as apiMain } from '@api/index.js';
-import { version } from '@core/version.js';
-import { cliLogger as logger } from '@core/utils/logger.js';
-import { loggingConfig } from '@core/config/logging.js';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import { main as apiMain } from '@api/index';
+import { version } from '@core/version';
+import { cliLogger as logger } from '@core/utils/logger';
+import { loggingConfig } from '@core/config/logging';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
 import { createInterface } from 'readline';
-import { initCommand } from './commands/init.js';
-import { ProcessOptions } from '@core/types/index.js';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
+import { initCommand } from './commands/init';
+import { ProcessOptions } from '@core/types/index';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { watch } from 'fs/promises';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { debugResolutionCommand } from './commands/debug-resolution.js';
-import { debugContextCommand } from './commands/debug-context.js';
-import { debugTransformCommand } from './commands/debug-transform.js';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
+import { debugResolutionCommand } from './commands/debug-resolution';
+import { debugContextCommand } from './commands/debug-context';
+import { debugTransformCommand } from './commands/debug-transform';
 import chalk from 'chalk';
 import { existsSync } from 'fs';
-import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
-import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService.js';
-import { resolveService } from '@core/ServiceProvider.js';
-import { unsafeCreateNormalizedAbsoluteDirectoryPath, PathValidationContext, NormalizedAbsoluteDirectoryPath } from '@core/types/paths.js';
-import type { Position, ErrorSourceLocation } from '@core/types/location.js';
-import type { IFileSystemClient } from '@services/fs/FileSystemService/interfaces/IFileSystemClient.js';
-import { BaseError, BaseErrorDetails } from '@core/errors/BaseError.js';
-import { PathValidationError, PathErrorCode } from '@services/fs/PathService/errors/PathValidationError.js';
-import type { ValidatedResourcePath } from '@core/types/paths.js';
-import { createRawPath } from '@core/types/paths.js';
-import Meld from '@api/index.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/interfaces/IFileSystemService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
+import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService';
+import { resolveService } from '@core/ServiceProvider';
+import { unsafeCreateNormalizedAbsoluteDirectoryPath, PathValidationContext, NormalizedAbsoluteDirectoryPath } from '@core/types/paths';
+import type { Position, ErrorSourceLocation } from '@core/types/index';
+import type { IFileSystemClient } from '@services/fs/FileSystemService/interfaces/IFileSystemClient';
+import { BaseError, BaseErrorDetails } from '@core/errors/index';
+import { PathValidationError, PathErrorCode } from '@services/fs/PathService/errors/PathValidationError';
+import type { ValidatedResourcePath } from '@core/types/paths';
+import { createRawPath } from '@core/types/paths';
+import Meld from '@api/index';
+import { IFileSystemService } from '@services/fs/FileSystemService/interfaces/IFileSystemService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 import { container } from 'tsyringe';
 
 // CLI Options interface
@@ -651,216 +651,72 @@ console.error = function(...args: any[]) {
 
 // Moved handleError definition before main
 async function handleError(error: any, options: CLIOptions): Promise<void> {
-  // Only log if not already logged
-  if (!errorLogged) {
-    logger.error('CLI execution failed', {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    
-    // Helper to display source context from a file
-    const displayErrorWithSourceContext = async (error: MeldError) => {
-      // Safely access source location and file path
-      const sourceLocation = error.sourceLocation;
-      const filePath = sourceLocation?.filePath;
-      const line = sourceLocation?.line;
+  const isMeldError = error instanceof MeldError;
+  const severity = isMeldError ? error.severity : ErrorSeverity.Fatal;
 
-      if (!filePath || typeof line !== 'number' || line <= 0) {
-        console.error(chalk.red(`${error.name}: ${error.message}`));
-        return;
-      }
+  const displayErrorWithSourceContext = async (error: MeldError) => {
+    // Dynamically load ErrorDisplayService
+    try {
+      const { ErrorDisplayService } = await import('@services/display/ErrorDisplayService/ErrorDisplayService');
+      const fsService = resolveService<IFileSystemService>('IFileSystemService');
+      const errorDisplayService = new ErrorDisplayService(fsService);
 
-      try {
-        // Resolve services needed within the helper
-        // Use resolveService, assume container is configured
-        const pathService = resolveService<IPathService>('IPathService');
-        const filesystemService = resolveService<FileSystemService>('IFileSystemService');
-      
-        // Validate the path before reading
-        // Use a simplified context as we only need to read
-        const context: PathValidationContext = {
-          workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath(process.cwd()),
-          allowExternalPaths: true, // Allow reading potentially outside project
-          rules: { allowAbsolute: true, allowRelative: true, allowParentTraversal: true, mustExist: true }
+      // Get source context if available
+      if (error.location) {
+        const { filePath } = error.location;
+        const displayContext: BaseErrorDetails & { path?: string; startLine?: number; endLine?: number } = {
+          message: error.message,
+          code: error.code,
+          cause: error.cause,
+          path: filePath,
+          startLine: error.location.start?.line,
+          endLine: error.location.end?.line
         };
-        const validatedPath = await pathService.validatePath(filePath, context);
         
-        const fileContent = await filesystemService.readFile(validatedPath.validatedPath);
-        const lines = fileContent.split('\n');
-        const errorLine = line - 1; // Adjust to 0-based index
-
-        console.error(chalk.red(`${error.name} in ${filePath}:${line}`));
-        console.error(chalk.red(`> ${error.message}`));
-
-        // Display context lines (e.g., 2 lines before and after)
-        const contextLines = 2;
-        const startLine = Math.max(0, errorLine - contextLines);
-        const endLine = Math.min(lines.length - 1, errorLine + contextLines);
-
-        for (let i = startLine; i <= endLine; i++) {
-          const lineNumber = i + 1;
-          const lineContent = lines[i];
-          if (i === errorLine) {
-            console.error(chalk.red.bold(`${String(lineNumber).padStart(4)} | ${lineContent}`));
-          } else {
-            console.error(chalk.grey(`${String(lineNumber).padStart(4)} | ${lineContent}`));
-          }
+        // Check if error.context exists and has path property
+        if (error.context && 'path' in error.context) {
+          displayContext.path = error.context.path as string;
         }
 
-      } catch (contextError) {
-        // If we fail to read context, just print the original error
-        console.error(chalk.red(`${error.name}: ${error.message} (Could not display source context)`));
-      }
-    };
-    
-    // Display error to user in a clean format
-    if (process.env.NODE_ENV === 'test') {
-      // Show errors with the "Error:" prefix for test expectations
-      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    } else {
-      try {
-        // Define errorToDisplay here, using the initially passed error
-        let errorToDisplay: Error = error instanceof Error ? error : new Error(String(error));
-        // Add debug logging
-        if (options.debug) {
-           // Log the error type for debugging
-           const errorType = error instanceof MeldError 
-             ? `MeldError (${error.constructor.name})` 
-             : (error instanceof Error ? error.constructor.name : typeof error);
-           console.error('DEBUG: Error type:', errorType);
-           // ... (rest of debug logging remains the same)
-        }
-        
-        // Handle both MeldError and raw errors
-        try {
-          // Correct the error path if needed (modifies errorToDisplay)
-          if (errorToDisplay instanceof MeldError && options.input) {
-              let needsPathCorrection = false;
-              let originalPath = errorToDisplay.sourceLocation?.filePath;
-              if (!originalPath && errorToDisplay.details && 'filePath' in errorToDisplay.details && typeof errorToDisplay.details.filePath === 'string') {
-                  originalPath = errorToDisplay.details.filePath;
-              }
-              if (originalPath === 'examples/error-test.meld' || !originalPath) {
-                  needsPathCorrection = true;
-              }
-              if (needsPathCorrection) {
-                  const newDetails: BaseErrorDetails = { ...errorToDisplay.details };
-                  if ('filePath' in newDetails) delete newDetails.filePath;
-                  const newSourceLocation: ErrorSourceLocation | undefined = {
-                      ...(errorToDisplay.sourceLocation || { start: { line: 1, column: 1, offset: 0 }, end: { line: 1, column: 1, offset: 0 } }),
-                      filePath: options.input
-                  };
-                  const fixedError = new MeldError(errorToDisplay.message, {
-                      code: errorToDisplay.code,
-                      severity: errorToDisplay.severity,
-                      sourceLocation: newSourceLocation,
-                      details: newDetails,
-                      cause: errorToDisplay.cause as Error | undefined
-                  });
-                  errorToDisplay = fixedError; // Update errorToDisplay with the corrected one
-              }
-          }
-
-          // Bypass deduplication for our enhanced display
-          bypassDeduplication = true;
-          seenErrors.clear(); // Clear all seen errors to be safe
-          const errorKey = `Error: ${errorToDisplay.message}`; // Define errorKey using errorToDisplay
-
-          // Dynamically load ErrorDisplayService
-          try {
-            const { ErrorDisplayService } = await import('@services/display/ErrorDisplayService/ErrorDisplayService.js');
-            const fsService = resolveService<IFileSystemService>('IFileSystemService');
-            const errorDisplayService = new ErrorDisplayService(fsService);
-            // Pass the potentially corrected errorToDisplay
-            const enhancedErrorDisplay = await errorDisplayService.enhanceErrorDisplay(errorToDisplay);
-
-            if (!seenErrors.has(errorKey)) {
-              seenErrors.add(errorKey);
-              console.error(enhancedErrorDisplay);
-            }
-          } catch (importError) {
-            if (options.debug) console.error('DEBUG: Failed to load ErrorDisplayService:', importError);
-
-            // Use our custom error display function as fallback
-            // Pass the potentially corrected errorToDisplay
-            const fallbackError = errorToDisplay instanceof MeldError ? errorToDisplay : new MeldError(
-              errorToDisplay.message,
-              {
-                details: { filePath: options.input },
-                cause: errorToDisplay instanceof Error ? errorToDisplay : undefined,
-                severity: ErrorSeverity.Fatal, 
-                code: 'DISPLAY_FALLBACK', 
-              }
-            );
-            const enhancedErrorDisplay = await displayErrorWithSourceContext(fallbackError);
-
-            if (!seenErrors.has(errorKey)) {
-              seenErrors.add(errorKey);
-              console.log('\n'); 
-              console.error(enhancedErrorDisplay);
-            }
-          }
-          
-          bypassDeduplication = false;
-        } catch (displayError) {
-          // Fallback formatting using errorToDisplay
-          if (errorToDisplay instanceof MeldError) {
-            const errorFilePath = errorToDisplay.sourceLocation?.filePath || (errorToDisplay.details && 'filePath' in errorToDisplay.details ? errorToDisplay.details.filePath : 'unknown');
-            const errorMsg = `\nError in ${errorFilePath}: ${errorToDisplay.message}`;
-            if (!seenErrors.has(errorMsg.trim())) {
-              seenErrors.add(errorMsg.trim());
-              console.error(errorMsg);
-            }
-          } else if (errorToDisplay instanceof Error && 'line' in errorToDisplay && 'column' in errorToDisplay) {
-            const filePath = ('sourceFile' in errorToDisplay) ? (errorToDisplay as any).sourceFile : options.input;
-            const errorMsg = `\nError in ${filePath}:${(errorToDisplay as any).line}:${(errorToDisplay as any).column}: ${errorToDisplay.message}`;
-            if (!seenErrors.has(errorMsg.trim())) {
-              seenErrors.add(errorMsg.trim());
-              console.error(errorMsg);
-            }
-          } else {
-            const errorMsg = `\nError: ${errorToDisplay.message}`;
-            if (!seenErrors.has(errorMsg.trim())) {
-              seenErrors.add(errorMsg.trim());
-              console.error(errorMsg);
-            }
-          }
-          if (options.debug) console.error(`\nDebug: Inner display error: ${displayError instanceof Error ? displayError.message : String(displayError)}`);
-        }
-      } catch (outerDisplayError) {
-        // Outer fallback logic using original 'error' variable
-        logger.error('Outer error display failed', { 
-          error: outerDisplayError instanceof Error ? outerDisplayError.message : String(outerDisplayError) 
-        });
-        if (options.debug) console.error('DEBUG: Outer display failure:', outerDisplayError);
-        // Display basic message using the original error
-        if (error instanceof MeldError) {
-            const errorFilePath = error.sourceLocation?.filePath || (error.details && 'filePath' in error.details ? error.details.filePath : 'unknown');
-            if (errorFilePath && errorFilePath !== 'unknown') console.error(`Error in ${errorFilePath}: ${error.message}`);
-            else console.error(`Error: ${error.message}`);
-        } else if (error instanceof Error && 'line' in error && 'column' in error) {
-            const filePath = ('sourceFile' in error) ? (error as any).sourceFile : options.input;
-            console.error(`Error in ${filePath}:${(error as any).line}:${(error as any).column}: ${error.message}`);
+        if (displayContext.path) {
+          const formattedError = await errorDisplayService.formatErrorWithContext(displayContext);
+          console.error(formattedError);
         } else {
-            console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+          console.error(chalk.red(`Error: ${error.message}`));
+          if (error.cause) {
+            console.error(chalk.red(`  Cause: ${error.cause.message}`));
+          }
+        }
+      } else {
+        console.error(chalk.red(`Error: ${error.message}`));
+        if (error.cause) {
+          console.error(chalk.red(`  Cause: ${error.cause.message}`));
         }
       }
+    } catch (displayError) {
+      console.error(chalk.red(`Original error: ${error.message}`));
+      console.error(chalk.yellow(`Failed to display error with source context: ${displayError instanceof Error ? displayError.message : String(displayError)}`));
     }
-    
-    errorLogged = true;
-    if (error && typeof error === 'object') {
-      (error as any).__logged = true;
+  };
+
+  // Ensure the logger configuration matches CLI options
+  loggingConfig.level = options.debug ? 'debug' : (options.verbose ? 'info' : 'warn');
+  loggingConfig.showTimestamps = !!options.verbose;
+
+  if (isMeldError) {
+    await displayErrorWithSourceContext(error);
+  } else if (error instanceof Error) {
+    logger.error('An unexpected error occurred:', error);
+    console.error(chalk.red(`Unexpected Error: ${error.message}`));
+    if (error.stack) {
+      console.error(chalk.gray(error.stack));
     }
-  }
-  
-  // Check the type of error before throwing for unknown type
-  if (process.env.NODE_ENV === 'test') {
-      if (error instanceof Error) {
-          throw error;
-      } else {
-          // Wrap non-Error types before throwing
-          throw new Error(String(error)); 
-      }
   } else {
+    logger.error('An unknown error occurred:', { error });
+    console.error(chalk.red(`Unknown Error: ${String(error)}`));
+  }
+
+  if (severity === ErrorSeverity.Fatal) {
     process.exit(1);
   }
 }
@@ -871,7 +727,7 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
  * @param fsAdapter Optional filesystem adapter for testing
  * @param customArgs Optional command line arguments (defaults to process.argv.slice(2))
  */
-export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void> {
+export async function main(fsAdapter?: typeof Meld, customArgs?: string[]): Promise<void> {
   process.title = 'meld';
   let cliOptions: CLIOptions = { input: 'unknown' }; // Initialize with default
 

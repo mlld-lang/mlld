@@ -3,27 +3,27 @@
  */
 
 // Export all error types from the errors directory
-export { MeldError, ErrorSeverity } from './MeldError.js';
-export { MeldParseError } from './MeldParseError.js';
-export { MeldResolutionError } from './MeldResolutionError.js';
-export { MeldInterpreterError } from './MeldInterpreterError.js';
-export { MeldImportError } from './MeldImportError.js';
-export { MeldFileSystemError } from './MeldFileSystemError.js';
-export { MeldFileNotFoundError } from './MeldFileNotFoundError.js';
-export { MeldOutputError } from './MeldOutputError.js';
-export { MeldDirectiveError } from './MeldDirectiveError.js';
-export { PathValidationError } from './PathValidationError.js';
-export { ServiceInitializationError } from './ServiceInitializationError.js'; 
+export { MeldError, ErrorSeverity } from './MeldError';
+export { MeldParseError } from './MeldParseError';
+export { MeldResolutionError } from './MeldResolutionError';
+export { MeldInterpreterError } from './MeldInterpreterError';
+export { MeldImportError } from './MeldImportError';
+export { MeldFileSystemError } from './MeldFileSystemError';
+export { MeldFileNotFoundError } from './MeldFileNotFoundError';
+export { MeldOutputError } from './MeldOutputError';
+export { MeldDirectiveError } from './MeldDirectiveError';
+export { PathValidationError } from './PathValidationError';
+export { ServiceInitializationError } from './ServiceInitializationError'; 
 
 // Export error message collections
-export * from './messages/index.js'; 
+export * from './messages/index'; 
 
 // Add exports for specific errors as they are created:
-export * from './FieldAccessError.js';
-export * from './VariableResolutionError.js';
-export * from './PathValidationError.js';
-export * from './MeldResolutionError.js';
-export * from './MeldFileNotFoundError.js';
+export * from './FieldAccessError';
+export * from './VariableResolutionError';
+export * from './PathValidationError';
+export * from './MeldResolutionError';
+export * from './MeldFileNotFoundError';
 // ... other specific errors 
 
 // Define and export shared error codes
