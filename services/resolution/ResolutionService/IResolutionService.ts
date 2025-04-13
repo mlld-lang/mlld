@@ -10,6 +10,7 @@ import type { MeldResolutionError, PathValidationError } from '@core/errors';
 import { Field as AstField } from '@core/syntax/types/shared-types.js';
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
+import type { PathValidationContext } from '@core/types/paths.js';
 
 export type { ResolutionContext, FormattingContext } from '@core/types/resolution.js';
 
@@ -221,6 +222,16 @@ interface IResolutionService {
    * @returns The VariableResolutionTracker instance or undefined
    */
   getResolutionTracker(): VariableResolutionTracker | undefined;
+
+  /**
+   * Validates a path after resolution.
+   *
+   * @param pathInput - The original path string input.
+   * @param validationContext - The context for path validation.
+   * @returns The validated MeldPath object.
+   * @throws {MeldResolutionError} If path validation fails.
+   */
+  validateResolution(pathInput: string, validationContext: PathValidationContext): Promise<MeldPath>;
 }
 
 export type { IResolutionService };

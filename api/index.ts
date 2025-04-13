@@ -487,3 +487,49 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     throw new Error(String(error));
   }
 }
+
+/**
+ * Meld API Entry Point
+ * 
+ * Exports the main Meld class and core services for programmatic usage.
+ */
+import 'reflect-metadata'; // Required for tsyringe
+import { container } from 'tsyringe';
+import { MeldError } from '@core/errors/MeldError.js';
+import { ServiceProvider } from '@core/ServiceProvider.js';
+// Removed Meld import to prevent DTS issues in CLI
+// import { Meld } from './Meld.js';
+import { configureDI } from '@core/di-config.js';
+import type { ProcessOptions } from '@core/types/processing.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+// ... other imports ...
+
+// Configure DI container
+configureDI();
+
+// Export core classes and types
+// Export MeldError directly
+export { MeldError };
+// Do not re-export Meld class itself to avoid DTS issues
+// export { Meld };
+
+// Export types
+export type { ProcessOptions };
+// ... other exports ...
+
+// Export a function to process content using the configured container
+export async function processMeld(content: string, options?: Partial<ProcessOptions>): Promise<string> {
+  // Resolve the Meld instance from the container
+  // Need to import Meld locally here for use, but not export it directly
+  const { Meld } = await import('./Meld.js');
+  const meldInstance = container.resolve(Meld);
+  return meldInstance.process(content, options);
+}
+
+// Export function to get service instances
+export function getService<T>(token: string | symbol): T {
+  return container.resolve<T>(token);
+}
+
+// Optional: Export a pre-configured instance (or factory)
+// export const meld = container.resolve(Meld);

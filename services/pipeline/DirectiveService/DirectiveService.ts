@@ -670,9 +670,9 @@ export class DirectiveService implements IDirectiveService {
 
       // Create contexts
       const resolutionContext = ResolutionContextFactory.create(nodeState, currentFilePath);
-      const formattingContext: FormattingContext = {
+    const formattingContext: FormattingContext = { 
         isOutputLiteral: nodeState.isTransformationEnabled?.() || false,
-        contextType: 'block', 
+       contextType: 'block', 
         nodeType: node.type,
         atLineStart: true, // Default assumption
         atLineEnd: false // Default assumption
