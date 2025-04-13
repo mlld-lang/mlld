@@ -14,7 +14,6 @@ import type { TransformationOptions } from './state.js';
 import type { StateServiceLike } from '@core/shared-service-types';
 import type { ResolutionContext } from './resolution';
 import type { MeldNode } from '@core/syntax/types';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 /**
  * Represents a position in a file
@@ -161,7 +160,7 @@ export interface ExecutionContext {
  */
 export interface DirectiveProcessingContext {
   /** The current state service instance for the directive to operate on. */
-  state: IStateService;
+  state: StateServiceLike;
   /** The context for resolving variables within the directive. */
   resolutionContext: ResolutionContext;
   /** The context related to formatting (e.g., newline handling). */
@@ -169,7 +168,7 @@ export interface DirectiveProcessingContext {
   /** The context specific to command execution (only present for @run directives). */
   executionContext?: ExecutionContext;
   /** The original directive node being processed. */
-  directiveNode: MeldNode;
+  directiveNode: MeldNode; // Added to provide direct access to the node
 }
 
 // --- END NEW CONTEXT TYPE DEFINITIONS ---
