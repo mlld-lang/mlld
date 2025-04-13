@@ -2,7 +2,7 @@ import type { MeldNode, SourceLocation, DirectiveNode } from '@core/syntax/types
 import { interpreterLogger as logger } from '@core/utils/logger.js';
 import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { MeldInterpreterError, InterpreterLocation } from '@core/errors/MeldInterpreterError.js';
+import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 import { Service } from '@core/ServiceProvider.js';
@@ -243,24 +243,21 @@ export class InterpreterService implements IInterpreterService {
    * In permissive mode, recoverable errors become warnings
    */
   private handleError(error: Error, options: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> & Pick<InterpreterOptions, 'errorHandler'>): void {
-    // If it's not a MeldError, wrap it in a generic MeldInterpreterError
     const meldError = error instanceof MeldError 
       ? error 
-      : new MeldInterpreterError( // Create a new MeldInterpreterError
+      : new MeldInterpreterError(
           `Interpretation failed: ${error.message}`,
-          'interpretation', // Generic code
-          undefined, // No location known here
-          { severity: ErrorSeverity.Recoverable, cause: error } // Pass original error as cause
+          'interpretation',
+          undefined,
+          { severity: ErrorSeverity.Recoverable, cause: error }
         );
     
     logger.error('Error in InterpreterService', { error: meldError });
     
-    // In strict mode, or if it's a fatal error, throw it
     if (options.strict || !meldError.canBeWarning()) {
       throw meldError;
     }
     
-    // In permissive mode with recoverable errors, use the error handler or log a warning
     if (options.errorHandler) {
       options.errorHandler(meldError);
     } else {
@@ -644,7 +641,7 @@ export class InterpreterService implements IInterpreterService {
         throw error;
       }
       // Wrap other errors, ensuring location is included
-      const errorLocation: ErrorSourceLocation | undefined = node.location ? {
+      const errorLocation: InterpreterLocation | undefined = node.location ? {
           line: node.location.start?.line,
           column: node.location.start?.column,
           filePath: state?.getCurrentFilePath() ?? undefined

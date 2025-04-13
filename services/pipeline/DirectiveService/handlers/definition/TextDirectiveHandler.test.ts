@@ -2,30 +2,26 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { DirectiveNode } from '@core/syntax/types/index.js';
+import type { InterpolatableValue, StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { StringLiteralHandler } from '@services/resolution/ResolutionService/resolvers/StringLiteralHandler.js';
 import { StringConcatenationHandler } from '@services/resolution/ResolutionService/resolvers/StringConcatenationHandler.js';
-import { parse } from '@core/ast'; // Import the parser
-import { createLocation } from '@tests/utils/testFactories.js'; // <<< Add import
-// Import the centralized syntax examples and helpers
+import { parse } from '@core/ast';
+import { createLocation } from '@tests/utils/testFactories.js';
 import { textDirectiveExamples } from '@core/syntax/index.js';
 import { ErrorSeverity, FieldAccessError, MeldResolutionError } from '@core/errors/index.js';
-// Import TestContextDI
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-// Import standardized mock factories
-import {
-  createValidationServiceMock,
-  createStateServiceMock,
-  createResolutionServiceMock,
-  createDirectiveErrorMock
+import { 
+  createValidationServiceMock, 
+  createStateServiceMock, 
+  createResolutionServiceMock, 
 } from '@tests/utils/mocks/serviceMocks.js';
-// Import the type guard used in mocks
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
-// Import necessary types for mocks
-import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
-import type { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js'; 
 import type { MeldPath } from '@core/types';
 import { VariableType } from '@core/types';
+import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
+import type { ResolutionContext } from '@core/types/resolution.js';
+import { mock } from 'vitest-mock-extended';
 
 /**
  * TextDirectiveHandler Test Status
@@ -63,26 +59,12 @@ describe('TextDirectiveHandler', () => {
   let stateService: ReturnType<typeof createStateServiceMock>;
   let validationService: ReturnType<typeof createValidationServiceMock>;
   let resolutionService: ReturnType<typeof createResolutionServiceMock>;
-  let context: TestContextDI;
-  let clonedState: any;
-  // Create real instances of the literal and concatenation handlers for testing
-  let realStringLiteralHandler: StringLiteralHandler;
-  let realStringConcatenationHandler: StringConcatenationHandler;
+  let testDIContext: TestContextDI;
+  let mockProcessingContext: DirectiveProcessingContext;
 
   beforeEach(async () => {
-    // Create context with isolated container
-    context = TestContextDI.createIsolated();
-    
-    // Initialize the context
-    await context.initialize();
-    
-    // Create cloned state that will be returned by stateService.clone()
-    clonedState = {
-      setTextVar: vi.fn(),
-      getTextVar: vi.fn(),
-      getDataVar: vi.fn(),
-      clone: vi.fn(),
-    };
+    testDIContext = TestContextDI.createIsolated();
+    await testDIContext.initialize();
     
     // Create mocks using standardized factories
     validationService = createValidationServiceMock();
@@ -91,302 +73,161 @@ describe('TextDirectiveHandler', () => {
     
     // Configure mock implementations
     validationService.validate.mockResolvedValue(undefined);
+    stateService.getCurrentFilePath.mockReturnValue('test.meld');
     
-    stateService.clone.mockReturnValue(clonedState);
-    
-    // Register mocks with the context
-    context.registerMock('IValidationService', validationService);
-    context.registerMock('IStateService', stateService);
-    context.registerMock('IResolutionService', resolutionService);
-    
-    // Create handler instance from container
-    handler = await context.container.resolve(TextDirectiveHandler);
-
-    // Initialize real handlers for testing
-    realStringLiteralHandler = new StringLiteralHandler();
-    realStringConcatenationHandler = new StringConcatenationHandler(resolutionService);
-    
-    // Set up resolution service mocks
-    // Mock resolveInContext to handle string, StructuredPath (based on raw), and InterpolatableValue
-    resolutionService.resolveInContext.mockImplementation(async (value: any, context: any): Promise<string> => {
-      if (typeof value === 'string') {
-          // Simulate simple string resolution (e.g., variable lookup)
-          if (value.includes('{{name}}')) return value.replace(/\{\{name\}\}/g, 'World');
-          if (value.includes('{{user.name}}')) return value.replace(/\{\{user\.name\}\}/g, 'Alice');
-          if (value.includes('{{ENV_HOME}}')) return value.replace(/\{\{ENV_HOME\}\}/g, '/home/user');
-          if (value.includes('{{missing}}')) throw new Error('Variable not found: missing');
-          // Handle literal strings passed directly (quotes might be present)
-          if (value.startsWith('"') && value.endsWith('"')) return value.slice(1, -1);
-          if (value.startsWith('\'') && value.endsWith('\'')) return value.slice(1, -1);
-          return value; // Return other strings as is
-      } else if (isInterpolatableValueArray(value)) {
-          // Simulate resolving an InterpolatableValue array
-          let result = '';
-          for (const node of value) {
-              if (node.type === 'Text') {
-                  result += node.content;
-              } else if (node.type === 'VariableReference') {
-                  if (node.identifier === 'name') result += 'World';
-                  else if (node.identifier === 'user' && node.fields?.[0]?.value === 'name') result += 'Alice'; // Basic field access simulation
-                  else result += `{{${node.identifier}}}`; // Placeholder for others
-              }
-          }
-          return result;
-      } else if (typeof value === 'object' && value !== null && 'raw' in value) { // Handle AstStructuredPath
-          // For tests, just resolve the raw string part if it contains variables
-          const raw = value.raw ?? '';
-          if (raw.includes('{{name}}')) return raw.replace(/\{\{name\}\}/g, 'World');
-          // Add more specific raw path resolutions if needed for tests
-          return raw; // Return raw value if no interpolation needed
-      }
-      return JSON.stringify(value); // Fallback
-    });
-
-    // Mock resolveNodes
+    // Mock resolutionService methods (simplified)
     resolutionService.resolveNodes.mockImplementation(async (nodes: InterpolatableValue, context: any): Promise<string> => {
         let result = '';
         for (const node of nodes) {
-            if (node.type === 'Text') {
-                result += node.content;
-            } else if (node.type === 'VariableReference') {
-                let resolvedVar: any;
-                // Simulate variable lookup
-                if (node.identifier === 'greeting') resolvedVar = 'Hello';
-                else if (node.identifier === 'subject') resolvedVar = 'World';
-                else if (node.identifier === 'user') resolvedVar = { name: 'Alice', id: 123 }; // Sample object for field access
-                else if (node.identifier === 'config') resolvedVar = '$PROJECTPATH/docs'; // Path variable
-                else if (node.identifier === 'missing') {
-                   // <<< Throw generic Error instead of MeldResolutionError >>>
-                   throw new Error('Variable not found: missing');
+            if (node.type === 'Text') result += node.content;
+            else if (node.type === 'VariableReference') {
+                if (node.identifier === 'name') result += 'World';
+                else if (node.identifier === 'user' && node.fields?.[0]?.value === 'name') result += 'Alice';
+                else if (node.identifier === 'greeting') result += 'Hello';
+                else if (node.identifier === 'subject') result += 'World';
+                else if (node.identifier === 'config') result += '$PROJECTPATH/docs';
+                else if (node.identifier === 'missing' || node.identifier === 'undefined_var') {
+                    throw new Error(`Variable not found: ${node.identifier}`);
                 }
-                else resolvedVar = `{{${node.identifier}}}`; // Placeholder
-                
-                // Simulate basic field access
-                if (resolvedVar && node.fields && node.fields.length > 0) {
-                  let current = resolvedVar;
-                  for (const field of node.fields) {
-                    if (field.type === 'field' && current && typeof current === 'object') {
-                      // Check if field exists before accessing
-                      if (field.value in current) {
-                        current = current[field.value as string];
-                      } else {
-                         // <<< Throw generic Error >>>
-                         throw new Error(`Field '${field.value}' not found`); 
-                      }
-                    } else {
-                      // Handle other field types (index) or non-object access if needed
-                       // <<< Throw generic Error >>>
-                      throw new Error(`Cannot access field '${field.value}' on non-object`); 
-                    }
-                  }
-                  resolvedVar = current;
-                }
-                
-                result += String(resolvedVar); // Ensure result is string
+                else result += `{{${node.identifier}}}`; 
             }
         }
         return result;
     });
-
-    // Mock resolvePath just to return a basic MeldPath object based on input string
-    resolutionService.resolvePath.mockImplementation(async (resolvedPathString: string, context: any): Promise<MeldPath> => {
-      // Basic mock: create a MeldPath-like object. Adjust if tests need more specifics.
-      return {
-        contentType: 'filesystem', // Assume filesystem for tests
-        originalValue: resolvedPathString, // Use resolved string as original for mock
-        validatedPath: resolvedPathString, // Assume validation passes
-        isAbsolute: resolvedPathString.startsWith('/'),
-        isSecure: true,
-        isValidSyntax: true,
-        value: { // Mock the internal state needed by PathDirectiveHandler
-           contentType: 'filesystem',
-           originalValue: resolvedPathString,
-           validatedPath: resolvedPathString,
-           isAbsolute: resolvedPathString.startsWith('/'),
-           isSecure: true,
-           isValidSyntax: true,
-        }
-      } as unknown as MeldPath; // Cast needed as mock is simplified
+    resolutionService.resolveInContext.mockImplementation(async (value: any, context: any): Promise<string> => {
+        // Simple mock: return raw value or resolved if variable
+        const raw = typeof value === 'object' && value !== null && 'raw' in value ? value.raw : String(value);
+        if (raw.includes('{{name}}')) return 'World'; // Example resolution
+        return raw;
     });
+    // Mock resolvePath if needed by specific tests (e.g., embed source=path)
+
+    // Create mock contexts
+    const mockResolutionContext = mock<ResolutionContext>();
+    const mockFormattingContext = mock<FormattingContext>();
+
+    // Create the base mock processing context
+    mockProcessingContext = {
+        state: stateService,
+        resolutionContext: mockResolutionContext,
+        formattingContext: mockFormattingContext,
+        directiveNode: undefined as any, // Placeholder
+    };
+
+    // Create handler instance from container
+    // Inject necessary services (FileSystemService is needed for @run/@embed)
+    testDIContext.registerMock('IValidationService', validationService);
+    testDIContext.registerMock('IResolutionService', resolutionService);
+    testDIContext.registerMock('IFileSystemService', mock()); // Add basic FS mock
+    handler = await testDIContext.container.resolve(TextDirectiveHandler);
   });
 
   afterEach(async () => {
-    // Clean up the context to prevent memory leaks
-    await context?.cleanup();
+    await testDIContext?.cleanup();
   });
 
   describe('execute', () => {
     it('should handle a simple text assignment with string literal', async () => {
-      // Arrange
       const example = textDirectiveExamples.atomic.simpleString;
       const node = await createNodeFromExample(example.code);
+      mockProcessingContext.directiveNode = node;
 
-      const testContext = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      const result = await handler.execute(node, testContext);
-      // The example uses 'greeting' as the identifier and "Hello" as the value
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello', expect.objectContaining({ definedAt: expect.any(Object) }));
+      const result = await handler.execute(mockProcessingContext);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(result).toBe(stateService);
     });
 
     it('should handle text assignment with escaped characters', async () => {
-      // Arrange
       const example = textDirectiveExamples.atomic.escapedCharacters;
       const node = await createNodeFromExample(example.code);
-      
-      // <<< Ensure mockImplementationOnce returns the unescaped string >>>
-      resolutionService.resolveNodes.mockImplementationOnce(async () => {
-        return 'Line 1\nLine 2\t"Quoted"'; // The actual string value after unescaping
-      });
+      mockProcessingContext.directiveNode = node;
 
-      const testContext = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
+      // The parser now handles unescaping, mock resolveNodes to return the direct value
+      resolutionService.resolveNodes.mockResolvedValueOnce('Line 1\nLine 2\t"Quoted"'); 
 
-      const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('escaped', 'Line 1\nLine 2\t"Quoted"', expect.objectContaining({ definedAt: expect.any(Object) }));
+      const result = await handler.execute(mockProcessingContext);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('escaped', 'Line 1\nLine 2\t"Quoted"', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(result).toBe(stateService);
     });
 
     it('should handle a template literal in text directive', async () => {
-      // Arrange
       const example = textDirectiveExamples.atomic.templateLiteral;
       const node = await createNodeFromExample(example.code);
+      mockProcessingContext.directiveNode = node;
+      
+      // Mock resolveNodes for template literal content
+      resolutionService.resolveNodes.mockResolvedValueOnce('Template content');
 
-      const testContext = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Template content', expect.objectContaining({ definedAt: expect.any(Object) }));
+      const result = await handler.execute(mockProcessingContext);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('message', 'Template content', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(result).toBe(stateService);
     });
 
     it('should handle object property interpolation in text value', async () => {
-      // Arrange
       const example = textDirectiveExamples.combinations.objectInterpolation;
-      
-      // <<< Use mockImplementationOnce >>>
-      resolutionService.resolveNodes.mockImplementationOnce(async () => {
-        return 'Hello, Alice! Your ID is 123.';
-      });
-      
-      const node = await createNodeFromExample(example.code.split('\n')[1]); // Get the second line with greeting directive
+      const node = await createNodeFromExample(example.code.split('\n')[1]);
+      mockProcessingContext.directiveNode = node;
 
-      const testContext = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello, Alice! Your ID is 123.', expect.objectContaining({ definedAt: expect.any(Object) }));
+      // Mock resolveNodes for this specific interpolation
+      resolutionService.resolveNodes.mockResolvedValueOnce('Hello, Alice!'); 
       
-      // <<< No need to restore mock with mockImplementationOnce >>>
-      // resolutionService.resolveInContext = mockResolveInContext;
+      const result = await handler.execute(mockProcessingContext);
+      // Corrected expected value based on mock
+      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello, Alice!', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(result).toBe(stateService);
     });
 
     it('should handle path referencing in text values', async () => {
-      // Arrange
       const example = textDirectiveExamples.combinations.pathReferencing;
-      
-      // <<< Use mockImplementationOnce >>>
-      resolutionService.resolveNodes.mockImplementationOnce(async () => {
-        return 'Docs are at $PROJECTPATH/docs';
-      });
-      
-      const node = await createNodeFromExample(example.code.split('\n')[5]); // Get the docsText line
+      const node = await createNodeFromExample(example.code.split('\n')[5]);
+      mockProcessingContext.directiveNode = node;
 
-      const testContext = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
+      // Mock resolveNodes for this specific interpolation
+      resolutionService.resolveNodes.mockResolvedValueOnce('Docs are at $PROJECTPATH/docs');
 
-      const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('configText', 'Docs are at $PROJECTPATH/docs', expect.objectContaining({ definedAt: expect.any(Object) }));
-      
-      // <<< No need to restore mock with mockImplementationOnce >>>
-      // resolutionService.resolveInContext = mockResolveInContext;
+      const result = await handler.execute(mockProcessingContext);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('configText', 'Docs are at $PROJECTPATH/docs', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(result).toBe(stateService);
     });
 
     it('should return error if text interpolation contains undefined variables', async () => {
-      // Arrange
       const example = textDirectiveExamples.invalid.undefinedVariable;
-      
-      // <<< Use mockImplementationOnce to throw the specific error >>>
-      resolutionService.resolveNodes.mockImplementationOnce(async () => {
-        // <<< Throw generic Error >>>
-        throw new Error('Variable not found: undefined_var');
-      });
-
       const node = await createNodeFromExample(example.code);
+      mockProcessingContext.directiveNode = node;
 
-      const testContext = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      await expect(handler.execute(node, testContext))
+      // Mock is already set up in beforeEach to throw for 'undefined_var'
+      await expect(handler.execute(mockProcessingContext))
         .rejects
-        .toThrow(DirectiveError); // Expect DirectiveError as it should be wrapped
-        
-      // <<< No need to restore mock with mockImplementationOnce >>>
-      // resolutionService.resolveInContext = mockResolveInContext;
+        .toThrow(DirectiveError); // Expect wrapped DirectiveError
+      await expect(handler.execute(mockProcessingContext))
+        .rejects
+        .toThrow(/Variable not found: undefined_var/);
     });
 
     it('should handle basic variable interpolation', async () => {
-      // Arrange
       const example = textDirectiveExamples.combinations.basicInterpolation;
-      
-      // <<< Use mockImplementationOnce >>>
-      resolutionService.resolveNodes.mockImplementationOnce(async () => {
-        return 'Hello, World!';
-      });
-      
-      const node = await createNodeFromExample(example.code.split('\n')[2]); // Get the third line with the message directive
+      const node = await createNodeFromExample(example.code.split('\n')[2]);
+      mockProcessingContext.directiveNode = node;
 
-      const testContext = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      const result = await handler.execute(node, testContext);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello, World!', expect.objectContaining({ definedAt: expect.any(Object) }));
-      
-      // <<< No need to restore mock with mockImplementationOnce >>>
-      // resolutionService.resolveInContext = mockResolveInContext;
+      // Mock is set up in beforeEach
+      const result = await handler.execute(mockProcessingContext);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('message', 'Hello, World!', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(result).toBe(stateService);
     });
 
     it('should register the node as a text directive in the registry', async () => {
-      // Arrange
+      // This test might be redundant now, as it just tests the basic flow
       const example = textDirectiveExamples.atomic.simpleString;
       const node = await createNodeFromExample(example.code);
+      mockProcessingContext.directiveNode = node;
 
-      const testContext = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      const result = await handler.execute(node, testContext);
-      // The example uses 'greeting' as the identifier and "Hello" as the value
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello', expect.objectContaining({ definedAt: expect.any(Object) }));
+      const result = await handler.execute(mockProcessingContext);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(result).toBe(stateService);
     });
 
-    // Skip this test due to validation being commented out (Issue #34)
     it.skip('should report error for unclosed string', async () => {
-      const node = createTextDirective('unclosed', '"abc');
-      const context = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      // Ensure our mock validation service rejects this
-      validationService.validate.mockRejectedValueOnce(new Error('Invalid string literal: unclosed string'));
-
-      await expect(handler.execute(node, context))
-        .rejects
-        .toThrow(DirectiveError);
+      // Skipped: Validation logic is external to the handler now
     });
   });
 

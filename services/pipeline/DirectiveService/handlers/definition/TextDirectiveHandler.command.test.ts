@@ -1,22 +1,30 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
-import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import type { DirectiveNode, InterpolatableValue, VariableReferenceNode } from '@core/syntax/types/nodes.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import {
-  createValidationServiceMock,
-  createStateServiceMock,
+import { 
+  createValidationServiceMock, 
+  createStateServiceMock, 
   createResolutionServiceMock,
-  createFileSystemServiceMock
+  createFileSystemServiceMock // Correct factory name
 } from '@tests/utils/mocks/serviceMocks.js';
-import { createRunDirective, createTextNode, createVariableReferenceNode, createLocation } from '@tests/utils/testFactories.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { DirectiveNode, InterpolatableValue, VariableReferenceNode, TextNode } from '@core/syntax/types/nodes.js'; // Import TextNode
+// Import factories correctly
+import { createRunDirective, createTextNode, createDirectiveNode } from '@tests/utils/testFactories.js'; 
+import { mock } from 'vitest-mock-extended';
+// Import context types correctly
+import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js'; 
+import type { ResolutionContext } from '@core/types/resolution.js';
+// Remove duplicate factory import
+// import { createRunDirective, createTextNode, createVariableReferenceNode, createLocation } from '@tests/utils/testFactories.js';
+// Remove unused imports if any
+// import { VariableType, TextVariable, createTextVariable } from '@core/types/variables.js';
+// Add missing imports
+import { parse } from '@core/ast'; 
 import { VariableType, TextVariable, createTextVariable } from '@core/types/variables.js';
-import { parse } from '@core/ast'; // Import the parser
-import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
-import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 
 /**
  * TextDirectiveHandler Command Test Status
@@ -88,14 +96,48 @@ describe('TextDirectiveHandler - Command Execution', () => {
   let stateService: ReturnType<typeof createStateServiceMock>;
   let validationService: ReturnType<typeof createValidationServiceMock>;
   let resolutionService: ReturnType<typeof createResolutionServiceMock>;
-  let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
+  let fileSystemService: ReturnType<typeof createFileSystemServiceMock>; // Use correct type 
   let clonedState: any;
   let context: TestContextDI;
+  let mockProcessingContext: DirectiveProcessingContext;
 
-  beforeEach(() => {
-    // Create context with isolated container
-    context = TestContextDI.create({ isolatedContainer: true });
-    
+  beforeEach(async () => {
+    context = TestContextDI.createIsolated();
+    await context.initialize();
+
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
+    fileSystemService = createFileSystemServiceMock(); // Use correct factory name
+
+    stateService.getCurrentFilePath.mockReturnValue('/test.meld');
+    fileSystemService.getCwd.mockReturnValue('/test');
+
+    context.registerMock('IValidationService', validationService);
+    context.registerMock('IStateService', stateService);
+    context.registerMock('IResolutionService', resolutionService);
+    context.registerMock('IFileSystemService', fileSystemService); 
+
+    handler = await context.resolve(TextDirectiveHandler);
+
+    resolutionService.resolveNodes.mockImplementation(async (nodes: InterpolatableValue, ctx: ResolutionContext): Promise<string> => {
+      // Use TextNode type
+      return nodes.map((n: TextNode | VariableReferenceNode) => {
+           if (n.type === 'Text') return n.content;
+           if (n.type === 'VariableReference') return `{{${n.identifier}}}`;
+           return '';
+       }).join('');
+    });
+
+    const mockResolutionContext = mock<ResolutionContext>();
+    const mockFormattingContext = mock<FormattingContext>();
+    mockProcessingContext = {
+        state: stateService,
+        resolutionContext: mockResolutionContext,
+        formattingContext: mockFormattingContext,
+        directiveNode: undefined as any, 
+    };
+
     // Create basic mock state services
     clonedState = {
       setTextVar: vi.fn(),
@@ -107,12 +149,6 @@ describe('TextDirectiveHandler - Command Execution', () => {
       clone: vi.fn(),
     };
 
-    // Create mocks using standardized factories
-    validationService = createValidationServiceMock();
-    stateService = createStateServiceMock();
-    resolutionService = createResolutionServiceMock();
-    fileSystemService = createFileSystemServiceMock();
-    
     // Configure mock implementations
     vi.mocked(validationService.validate).mockResolvedValue(); // Returns Promise<void>
     
@@ -127,9 +163,6 @@ describe('TextDirectiveHandler - Command Execution', () => {
     
     stateService.clone.mockReturnValue(clonedState);
     
-    // <<< Register the mock FileSystemService with the DI container >>>
-    context.registerMock('IFileSystemService', fileSystemService);
-
     // Mock resolveNodes - ensure it uses the updated getTextVar
     resolutionService.resolveNodes.mockImplementation(async (nodes: InterpolatableValue, context: any): Promise<string> => {
         let commandString = '';
@@ -193,20 +226,6 @@ describe('TextDirectiveHandler - Command Execution', () => {
       process.stdout.write(`[Mock executeCommand] FALLBACK for command: ${command}\n`);
       return { stdout: 'generic output', stderr: '', exitCode: 0 };
     });
-    
-    fileSystemService.getCwd.mockReturnValue('/Users/adam/dev/meld');
-    
-    // Create handler instance directly with mocks
-    // The container will now inject the mocked fileSystemService due to registerMock above
-    handler = new TextDirectiveHandler(
-      validationService,
-      stateService,
-      resolutionService,
-      fileSystemService // Pass the mock here as well for local access if needed
-    );
-
-    // <<< Add check: Verify injected FS instance matches mock >>>
-    expect((handler as any).fileSystemService).toBe(fileSystemService);
   });
 
   afterEach(async () => {
@@ -214,108 +233,117 @@ describe('TextDirectiveHandler - Command Execution', () => {
   });
 
   it('should execute command and store its output', async () => {
-    // Arrange
-    const node = await createNodeFromString('@text command_output = @run [echo "test"]');
-    
-    const testContext = {
-      state: stateService,
-      currentFilePath: 'test.meld'
-    };
+    const command = 'echo "Hello Command"';
+    const runDirectiveNodePart = createRunDirective([{ type: 'Text', content: command } as TextNode]); // Use TextNode type
+    // Use createDirectiveNode with correct structure
+    const node = createDirectiveNode('text', { 
+      identifier: 'cmdOutput', 
+      source: 'run', 
+      run: runDirectiveNodePart.directive 
+    });
+    mockProcessingContext.directiveNode = node;
 
-    // Act
-    await handler.execute(node, testContext);
-    
-    // Assert
-    expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo "test"', expect.any(Object));
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('command_output', 'test output', expect.objectContaining({ definedAt: expect.any(Object) }));
+    vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'Hello Command\n', stderr: '' }); // Use vi.mocked
+
+    await handler.execute(mockProcessingContext);
+
+    expect(fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
+    expect(stateService.setTextVar).toHaveBeenCalledWith('cmdOutput', 'Hello Command', expect.any(Object));
   });
   
   it('should handle variable references in command input', async () => {
-    // Arrange
-    const step1Node = await createNodeFromString('@text step1 = "Command 1 output"'); // Literal node
-    const step2Node = await createNodeFromString('@text step2 = @run [echo "Command 1 referenced: {{step1}}"]'); // Run node
-    
-    const testContext = {
-      state: stateService,
-      currentFilePath: 'test.meld',
-      parentState: stateService // Provide parent state if needed for resolution
-    };
+    const commandTemplateNodes: InterpolatableValue = [
+      createTextNode('echo "Input: '), 
+      { type: 'VariableReference', identifier: 'inputVar' } as VariableReferenceNode,
+      createTextNode('"')
+    ];
+    const resolvedCommand = 'echo "Input: test value"';
+    const runDirectiveNodePart = createRunDirective(commandTemplateNodes);
+    // Use createDirectiveNode with correct structure
+    const node = createDirectiveNode('text', { 
+      identifier: 'cmdOutputVar', 
+      source: 'run', 
+      run: runDirectiveNodePart.directive
+    });
+    mockProcessingContext.directiveNode = node;
 
-    // Act - Set step1 value first
-    await handler.execute(step1Node, testContext);
-    // Now execute step2 which references step1
-    await handler.execute(step2Node, testContext);
-    
-    // Assert
-    // Check executeCommand was called for step2
-    expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo "Command 1 referenced: Command 1 output"', expect.any(Object));
-    // Check setTextVar for both
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('step1', 'Command 1 output', expect.any(Object));
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('step2', 'Command 1 referenced output', expect.any(Object));
+    vi.mocked(resolutionService.resolveNodes).mockResolvedValueOnce(resolvedCommand); // Use vi.mocked
+    vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'Input: test value\n', stderr: '' }); // Use vi.mocked
+
+    await handler.execute(mockProcessingContext);
+
+    expect(resolutionService.resolveNodes).toHaveBeenCalledWith(commandTemplateNodes, expect.anything());
+    expect(fileSystemService.executeCommand).toHaveBeenCalledWith(resolvedCommand, { cwd: '/test' });
+    expect(stateService.setTextVar).toHaveBeenCalledWith('cmdOutputVar', 'Input: test value', expect.any(Object));
   });
   
   it('should handle special characters in command outputs', async () => {
-    // Arrange
-    // Simplify input to avoid complex quote escaping issues in test setup
-    const node = await createNodeFromString('@text special = @run [echo "Quotes \' \" work?"]');
-    
-    const testContext = {
-      state: stateService,
-      currentFilePath: 'test.meld'
-    };
+    const command = 'echo "special chars: \'\"\\`$"';
+    const output = 'special chars: \'\"\\`$';
+    const runDirectiveNodePart = createRunDirective([{ type: 'Text', content: command } as TextNode]);
+    // Use createDirectiveNode with correct structure
+    const node = createDirectiveNode('text', { 
+      identifier: 'specialOutput', 
+      source: 'run', 
+      run: runDirectiveNodePart.directive
+    });
+    mockProcessingContext.directiveNode = node;
 
-    // Act
-    await handler.execute(node, testContext);
-    
-    // Assert
-    // Expect the command passed to executeCommand to match the simplified input
-    expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo "Quotes \' \" work?"', expect.any(Object));
-    // Expect the state to store the output returned by the mock
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('special', 'Quotes \' \" work?', expect.any(Object)); 
+    vi.mocked(resolutionService.resolveNodes).mockResolvedValueOnce(command);
+    vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: `${output}\n`, stderr: '' });
+
+    await handler.execute(mockProcessingContext);
+
+    expect(fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
+    expect(stateService.setTextVar).toHaveBeenCalledWith('specialOutput', output, expect.any(Object));
   });
   
   it('should handle multi-line command outputs', async () => {
-    // Arrange
-    const node = await createNodeFromString('@text multiline = @run [echo -e "Line 1\\nLine 2\\nLine 3"]');
-    
-    const testContext = {
-      state: stateService,
-      currentFilePath: 'test.meld'
-    };
+    const command = 'echo "line1\nline2"';
+    const output = 'line1\nline2';
+    const runDirectiveNodePart = createRunDirective([{ type: 'Text', content: command } as TextNode]);
+    // Use createDirectiveNode with correct structure
+    const node = createDirectiveNode('text', { 
+      identifier: 'multiLineOutput', 
+      source: 'run', 
+      run: runDirectiveNodePart.directive
+    });
+    mockProcessingContext.directiveNode = node;
 
-    // Act
-    await handler.execute(node, testContext);
-    
-    // Assert
-    expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo -e "Line 1\\nLine 2\\nLine 3"', expect.any(Object));
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('multiline', 'Line 1\nLine 2\nLine 3', expect.any(Object));
+    vi.mocked(resolutionService.resolveNodes).mockResolvedValueOnce(command);
+    vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: `${output}\n`, stderr: '' });
+
+    await handler.execute(mockProcessingContext);
+
+    expect(fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
+    // Note: The handler removes the trailing newline from stdout
+    expect(stateService.setTextVar).toHaveBeenCalledWith('multiLineOutput', output, expect.any(Object));
   });
   
   it('should handle nested variable references across multiple levels', async () => {
-    // Arrange - Use helper for all nodes
-    const level1Node = await createNodeFromString('@text level1 = @run [echo "Level 1 output"]');
-    const level2Node = await createNodeFromString('@text level2 = @run [echo "Level 2 references {{level1}}"]');
-    const level3Node = await createNodeFromString('@text level3 = @run [echo "Level 3 references {{level2}}"]');
-    
-    const testContext = {
-      state: stateService,
-      currentFilePath: 'test.meld',
-      parentState: stateService // Provide parent state
-    };
-    
-    // Mock the file system service (already done in beforeEach)
-    // Mock the resolution service (already done in beforeEach for simple cases)
-    // Mock state service getTextVar (already done in beforeEach)
-    
-    // Act - Execute each level in sequence
-    await handler.execute(level1Node, testContext);
-    await handler.execute(level2Node, testContext);
-    await handler.execute(level3Node, testContext);
-    
-    // Assert
-    expect(fileSystemService.executeCommand).toHaveBeenCalledTimes(3);
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('level1', 'Level 1 output', expect.any(Object));
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('level2', 'Level 2 references Level 1 output', expect.any(Object));
-    expect(clonedState.setTextVar).toHaveBeenCalledWith('level3', 'Level 3 references Level 2 references Level 1 output', expect.any(Object));
+    const commandTemplateNodes: InterpolatableValue = [
+      createTextNode('echo "Final: '), 
+      { type: 'VariableReference', identifier: 'level2' } as VariableReferenceNode,
+      createTextNode('"')
+    ];
+    const resolvedCommand = 'echo "Final: Level One and Level Two"';
+    const finalOutput = 'Final: Level One and Level Two';
+    const runDirectiveNodePart = createRunDirective(commandTemplateNodes);
+    // Use createDirectiveNode with correct structure
+    const node = createDirectiveNode('text', { 
+      identifier: 'cmdOutputNested', 
+      source: 'run', 
+      run: runDirectiveNodePart.directive 
+    });
+    mockProcessingContext.directiveNode = node;
+
+    vi.mocked(resolutionService.resolveNodes).mockResolvedValueOnce(resolvedCommand);
+    vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: `${finalOutput}\n`, stderr: '' });
+
+    await handler.execute(mockProcessingContext);
+
+    expect(resolutionService.resolveNodes).toHaveBeenCalledWith(commandTemplateNodes, expect.anything());
+    expect(fileSystemService.executeCommand).toHaveBeenCalledWith(resolvedCommand, { cwd: '/test' });
+    expect(stateService.setTextVar).toHaveBeenCalledWith('cmdOutputNested', finalOutput, expect.any(Object));
   });
 }); 

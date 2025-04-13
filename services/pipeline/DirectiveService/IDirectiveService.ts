@@ -12,8 +12,10 @@ import type {
 } from '@core/shared-service-types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
+import type { DirectiveProcessingContext } from '@core/types/index.js';
 
 /**
+ * @deprecated Use DirectiveProcessingContext instead.
  * Context for directive execution
  * Extends the base context with state-specific fields
  */
@@ -55,15 +57,13 @@ export interface IDirectiveHandler {
   /**
    * Execute the directive
    * 
-   * @param node - The directive node to execute
-   * @param context - The execution context
+   * @param context - The processing context containing state, resolution context, node, etc.
    * @returns The updated state after directive execution, or a DirectiveResult containing both state and optional replacement node
    * @throws {MeldDirectiveError} If directive execution fails
    */
   execute(
-    node: DirectiveNode,
-    context: DirectiveContext
-  ): Promise<DirectiveResult | StateServiceLike>;
+    context: DirectiveProcessingContext
+  ): Promise<DirectiveResult | IStateService>;
 }
 
 /**
@@ -123,11 +123,8 @@ export interface IDirectiveService extends DirectiveServiceLike {
 
   /**
    * Handle a directive node
-   * 
-   * @param node - The directive node to handle
-   * @param context - The execution context
-   * @returns The updated state after directive execution
-   * @throws {MeldDirectiveError} If directive handling fails
+   * NOTE: This internal method still uses the old DirectiveContext for compatibility with registry
+   * The client interface uses the new DirectiveProcessingContext.
    */
   handleDirective(
     node: DirectiveNode,

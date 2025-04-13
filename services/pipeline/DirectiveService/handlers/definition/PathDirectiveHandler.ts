@@ -1,5 +1,5 @@
 import { DirectiveNode, DirectiveData } from '@core/syntax/types/index.js';
-import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -10,10 +10,12 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { inject, injectable, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { StateServiceLike } from '@core/shared-service-types.js';
-// Import necessary types for path state
 import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, StructuredPath as AstStructuredPath, VariableMetadata } from '@core/types'; 
 import { VariableOrigin } from '@core/types/variables.js';
 import type { SourceLocation } from '@core/types/common.js';
+import type { DirectiveProcessingContext } from '@core/types/index.js';
+import type { ResolutionContext } from '@core/types/resolution.js';
+import type { PathDirectiveData } from '@core/syntax/types/directives.js';
 
 // Remove local StructuredPath interface, use imported AstStructuredPath
 // interface StructuredPath { ... }
@@ -39,45 +41,42 @@ export class PathDirectiveHandler implements IDirectiveHandler {
 
   constructor(
     @inject('IValidationService') private validationService: IValidationService,
-    @inject('IStateService') private stateService: IStateService,
     @inject('IResolutionService') private resolutionService: IResolutionService
   ) {}
 
-  async execute(node: DirectiveNode, context: DirectiveContext): Promise<StateServiceLike> {
+  async execute(context: DirectiveProcessingContext): Promise<IStateService> {
+    const state = context.state;
+    const node = context.directiveNode as DirectiveNode;
+    const resolutionContext = context.resolutionContext;
+
     logger.debug('Processing path directive', {
       location: node.location,
-      // context // Avoid logging potentially large state object
+      filePath: state.getCurrentFilePath(),
     });
 
     try {
-      const newState = context.state.clone(); 
       const directiveSourceLocation: SourceLocation | undefined = node.location?.start ? {
-        filePath: context.currentFilePath ?? 'unknown',
+        filePath: state.getCurrentFilePath() ?? 'unknown',
         line: node.location.start.line,
         column: node.location.start.column
       } : undefined;
 
-      // 1. Validate directive structure
-      // Temporarily comment out validation due to potential DirectiveNode/IDirectiveNode type conflict (See Issue #34)
-      // await this.validationService.validate(node);
+      // 1. Re-enable validation directive structure (using the node from context)
+      await this.validationService.validate(node);
 
-      // 2. Get identifier and path object from directive
-      const { identifier, path: pathObject } = node.directive as { identifier: string, path: AstStructuredPath }; 
+      // 2. Get identifier and path object from directive node
+      const directive = node.directive as PathDirectiveData; 
+      const identifier = directive.identifier;
+      const pathObject = directive.path;
       
       if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
-        throw new DirectiveError('Path directive requires a valid identifier', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
+        throw new DirectiveError('Path directive requires a valid identifier', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: state.getCurrentFilePath() ?? undefined } });
       }
-      if (!pathObject) {
-        throw new DirectiveError('Path directive requires a path object', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
+      if (!pathObject || typeof pathObject !== 'object' || !pathObject.raw || !pathObject.structured) {
+        throw new DirectiveError('Path directive requires a valid path object with raw and structured properties', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: state.getCurrentFilePath() ?? undefined } });
       }
 
-      // Create resolution context using the ORIGINAL state for lookups
-      const resolutionContext = ResolutionContextFactory.forPathDirective(
-        context.state, // <<< USE ORIGINAL context.state >>>
-        context.currentFilePath 
-      );
-
-      // 3. Resolve the path object (handles internal interpolation)
+      // 3. Resolve the path object using the provided resolution context
       let resolvedPathString: string;
       try {
           // Pass the AstStructuredPath from the node directly
@@ -90,7 +89,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
             `Failed to resolve path value: ${error instanceof Error ? error.message : String(error)}`,
             this.kind,
             DirectiveErrorCode.RESOLUTION_FAILED,
-            { node: node as any, context, cause: error instanceof Error ? error : undefined }
+            { node: node, context, cause: error instanceof Error ? error : undefined }
           );
       }
       
@@ -106,22 +105,22 @@ export class PathDirectiveHandler implements IDirectiveHandler {
             `Path validation failed for resolved path "${resolvedPathString}": ${error instanceof Error ? error.message : String(error)}`,
             this.kind,
             DirectiveErrorCode.VALIDATION_FAILED, 
-            { node: node as any, context, cause: error instanceof Error ? error : undefined }
+            { node: node, context, cause: error instanceof Error ? error : undefined }
           );
       }
       
       // 5. Store the validated path *state* (IFilesystemPathState or IUrlPathState)
       if (!validatedMeldPath.value) {
-           throw new DirectiveError('Validated path object is missing internal state', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node: node as any, context });
+           throw new DirectiveError('Validated path object is missing internal state', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node: node, context });
       }
       
       const metadata: Partial<VariableMetadata> = {
           origin: VariableOrigin.DIRECT_DEFINITION,
-          definedAt: directiveSourceLocation as any // Workaround for Issue #34
+          definedAt: directiveSourceLocation
       };
       
-      // Pass the state object (value) from MeldPath to setPathVar
-      await newState.setPathVar(identifier, validatedMeldPath.value, metadata); 
+      // Use the state from the context
+      await state.setPathVar(identifier, validatedMeldPath.value, metadata); 
 
       logger.debug('Path directive processed successfully', {
         identifier,
@@ -129,10 +128,11 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         location: node.location
       });
 
-      return newState; // Return the modified clone
+      return state;
     } catch (error) {
       // Handle errors
       if (error instanceof DirectiveError) {
+        if (!error.context) error.context = { node: node, context };
         throw error;
       } 
       
@@ -142,7 +142,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
         {
-          node: node as any, // Add cast
+          node: node,
           context,
           cause: error instanceof Error ? error : undefined
         }

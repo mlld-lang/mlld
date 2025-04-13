@@ -38,13 +38,9 @@ export const DirectiveErrorSeverity: Record<DirectiveErrorCode, ErrorSeverity> =
 
 export interface DirectiveErrorDetails {
   node?: DirectiveNode;
-  context?: DirectiveContext;
+  context?: Partial<DirectiveContext>;
   cause?: Error;
   location?: Location;
-  details?: {
-    node?: DirectiveNode;
-    location?: Location;
-  };
 }
 
 /**
@@ -60,7 +56,6 @@ export class DirectiveError extends MeldDirectiveError {
     code: DirectiveErrorCode,
     details?: DirectiveErrorDetails
   ) {
-    // Convert Location to DirectiveLocation if available
     let directiveLocation: DirectiveLocation | undefined;
     const loc = details?.location ?? details?.node?.location;
     
@@ -72,10 +67,8 @@ export class DirectiveError extends MeldDirectiveError {
       };
     }
     
-    // Determine severity based on error code
     const severity = DirectiveErrorSeverity[code] || ErrorSeverity.Recoverable;
     
-    // Create options for MeldDirectiveError
     const options: MeldDirectiveErrorOptions = {
       location: directiveLocation,
       code,
@@ -90,7 +83,6 @@ export class DirectiveError extends MeldDirectiveError {
     this.code = code;
     this.details = details;
     
-    // Ensure proper prototype chain
     Object.setPrototypeOf(this, DirectiveError.prototype);
   }
 } 

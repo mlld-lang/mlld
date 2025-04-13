@@ -3,9 +3,9 @@ import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handle
 import { createPathDirective, createLocation } from '@tests/utils/testFactories.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { DirectiveNode } from '@services/node_modules/meld-spec/dist/types.js';
-import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { DirectiveNode } from '@core/syntax/types/nodes.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { pathDirectiveExamples } from '@core/syntax/index.js';
 import { createNodeFromExample } from '@core/syntax/helpers/index.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
@@ -13,10 +13,11 @@ import {
   createValidationServiceMock, 
   createStateServiceMock, 
   createResolutionServiceMock,
-  createDirectiveErrorMock
 } from '@tests/utils/mocks/serviceMocks.js';
-// Import path types
 import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, unsafeCreateValidatedResourcePath } from '@core/types';
+import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
+import { mock } from 'vitest-mock-extended';
+import { MeldError } from '@core/errors/MeldError.js';
 
 /**
  * PathDirectiveHandler Test Status
@@ -66,65 +67,57 @@ describe('PathDirectiveHandler', () => {
   let validationService: ReturnType<typeof createValidationServiceMock>;
   let stateService: ReturnType<typeof createStateServiceMock>;
   let resolutionService: ReturnType<typeof createResolutionServiceMock>;
-  let clonedState: any;
-  let context: TestContextDI;
+  let mockProcessingContext: DirectiveProcessingContext;
+  let testDIContext: TestContextDI;
 
   beforeEach(async () => {
-    // Create context with isolated container
-    context = TestContextDI.createIsolated();
-    await context.initialize();
+    testDIContext = TestContextDI.createIsolated();
+    await testDIContext.initialize();
     
-    // Create cloned state
-    clonedState = {
-      setPathVar: vi.fn(),
-      clone: vi.fn()
-    };
-
-    // Create mock services using standardized factories
     validationService = createValidationServiceMock();
     stateService = createStateServiceMock();
     resolutionService = createResolutionServiceMock();
     
-    // Configure mock behaviors
-    stateService.clone.mockReturnValue(clonedState);
+    stateService.getCurrentFilePath.mockReturnValue('test.meld');
     
-    // <<< Add Mock for resolvePath >>>
     resolutionService.resolvePath.mockImplementation(async (resolvedString: string, context: any): Promise<MeldPath> => {
-        // Use the helper to return a mock MeldPath object
         return createMockMeldPath(resolvedString);
     });
 
-    // Create PathDirectiveHandler instance
-    handler = new PathDirectiveHandler(
-      validationService,
-      stateService,
-      resolutionService
-    );
+    testDIContext.registerMock('IValidationService', validationService);
+    testDIContext.registerMock('IStateService', stateService);
+    testDIContext.registerMock('IResolutionService', resolutionService);
+
+    const mockResolutionContext = mock<ResolutionContext>();
+    const mockFormattingContext = mock<FormattingContext>();
+
+    mockProcessingContext = {
+        state: stateService,
+        resolutionContext: mockResolutionContext,
+        formattingContext: mockFormattingContext,
+        directiveNode: undefined as any,
+    };
+
+    handler = await testDIContext.container.resolve(PathDirectiveHandler);
   });
 
   afterEach(async () => {
-    await context?.cleanup();
+    await testDIContext?.cleanup();
   });
 
   describe('basic path handling', () => {
     it('should process simple paths', async () => {
-      // MIGRATION INSIGHTS:
-      // When using centralized examples, the handler now receives a structured path object
-      // instead of a simple string.
       const example = pathDirectiveExamples.atomic.projectPath;
-      const node = await createNodeFromExample(example.code);
-      const testContext = { currentFilePath: 'test.meld', state: stateService };
+      const node = await createNodeFromExample(example.code) as DirectiveNode;
+      mockProcessingContext.directiveNode = node;
 
-      // The path value is now a structured object
       const pathValue = '$PROJECTPATH/docs';
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce(pathValue);
+      resolutionService.resolveInContext.mockResolvedValueOnce(pathValue);
 
-      const result = await handler.execute(node, testContext);
+      const result = await handler.execute(mockProcessingContext);
 
-      // Comment out validation check due to Issue #34
-      // expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(stateService.clone).toHaveBeenCalled();
-      // Use expect.objectContaining instead of expect.any to match the structure
+      expect(validationService.validate).toHaveBeenCalledWith(node);
+      
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
         expect.objectContaining({
           structured: expect.objectContaining({
@@ -132,31 +125,27 @@ describe('PathDirectiveHandler', () => {
             segments: expect.arrayContaining(['docs'])
           })
         }),
-        expect.any(Object)
+        mockProcessingContext.resolutionContext
       );
-      const expectedState = createMockMeldPath(pathValue).value; // Get the state object
-      expect(clonedState.setPathVar).toHaveBeenCalledWith('docs', expectedState, expect.objectContaining({ definedAt: expect.any(Object) }));
-      expect(result).toBe(clonedState);
+      const expectedState = createMockMeldPath(pathValue).value;
+      expect(stateService.setPathVar).toHaveBeenCalledWith('docs', expectedState, expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(result).toBe(stateService);
     });
 
     it('should handle paths with variables', async () => {
-      // MIGRATION: Using the pathWithVariables example from combinations category
-      // Note: This contains two directives - a text variable definition and a path that uses it
       const exampleSet = pathDirectiveExamples.combinations.pathWithVariables;
-      // We specifically want the second line which is the path directive
       const exampleLines = exampleSet.code.split('\n');
-      const pathDirectiveLine = exampleLines[1]; // Get just the path directive line
-      
-      const node = await createNodeFromExample(pathDirectiveLine);
-      const testContext = { currentFilePath: 'test.meld', state: stateService };
+      const pathDirectiveLine = exampleLines[1];
+      const node = await createNodeFromExample(pathDirectiveLine) as DirectiveNode;
+      mockProcessingContext.directiveNode = node;
 
-      // Mock the resolution with the variable replaced
       const resolvedPath = '$PROJECTPATH/meld/docs';  
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce(resolvedPath);
+      resolutionService.resolveInContext.mockResolvedValueOnce(resolvedPath);
 
-      const result = await handler.execute(node, testContext);
+      const result = await handler.execute(mockProcessingContext);
 
-      expect(stateService.clone).toHaveBeenCalled();
+      expect(validationService.validate).toHaveBeenCalledWith(node);
+      
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
         expect.objectContaining({
           structured: expect.objectContaining({
@@ -164,25 +153,25 @@ describe('PathDirectiveHandler', () => {
             segments: expect.arrayContaining(['{{project}}', 'docs'])
           })
         }),
-        expect.any(Object)
+        mockProcessingContext.resolutionContext
       );
-      const expectedStateCustom = createMockMeldPath(resolvedPath).value; // Get the state object
-      expect(clonedState.setPathVar).toHaveBeenCalledWith('customPath', expectedStateCustom, expect.objectContaining({ definedAt: expect.any(Object) }));
-      expect(result).toBe(clonedState);
+      const expectedStateCustom = createMockMeldPath(resolvedPath).value;
+      expect(stateService.setPathVar).toHaveBeenCalledWith('customPath', expectedStateCustom, expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(result).toBe(stateService);
     });
 
     it('should handle relative paths', async () => {
-      // MIGRATION: Using the relativePath example from atomic category
       const example = pathDirectiveExamples.atomic.relativePath;
-      const node = await createNodeFromExample(example.code);
-      const testContext = { currentFilePath: 'test.meld', state: stateService };
+      const node = await createNodeFromExample(example.code) as DirectiveNode;
+      mockProcessingContext.directiveNode = node;
 
       const pathValue = '$./config';
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce(pathValue);
+      resolutionService.resolveInContext.mockResolvedValueOnce(pathValue);
 
-      const result = await handler.execute(node, testContext);
+      const result = await handler.execute(mockProcessingContext);
 
-      expect(stateService.clone).toHaveBeenCalled();
+      expect(validationService.validate).toHaveBeenCalledWith(node);
+      
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
         expect.objectContaining({
           structured: expect.objectContaining({
@@ -190,50 +179,54 @@ describe('PathDirectiveHandler', () => {
             segments: expect.arrayContaining(['config'])
           })
         }),
-        expect.any(Object)
+        mockProcessingContext.resolutionContext
       );
-      const expectedStateConfig = createMockMeldPath(pathValue).value; // Get the state object
-      expect(clonedState.setPathVar).toHaveBeenCalledWith('config', expectedStateConfig, expect.objectContaining({ definedAt: expect.any(Object) }));
-      expect(result).toBe(clonedState);
+      const expectedStateConfig = createMockMeldPath(pathValue).value;
+      expect(stateService.setPathVar).toHaveBeenCalledWith('config', expectedStateConfig, expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(result).toBe(stateService);
     });
   });
 
   describe('error handling', () => {
     it('should handle validation errors', async () => {
-      // Using createPathDirective for invalid cases since the parser will reject
-      // truly invalid paths before they reach the handler
-      const node = createPathDirective('invalidPath', '', createLocation(1, 1));
-      const testContext = { currentFilePath: 'test.meld', state: stateService };
+      const node = createPathDirective('validIdentifier', '/some/path', createLocation(1, 1)); 
+      mockProcessingContext.directiveNode = node;
 
-      vi.mocked(validationService.validate).mockImplementationOnce(() => {
-        throw new DirectiveError('Invalid path', 'path');
-      });
+      const validationError = new DirectiveError('Mock Validation Failed', 'path', DirectiveErrorCode.VALIDATION_FAILED);
+      vi.mocked(validationService.validate).mockRejectedValueOnce(validationError);
 
-      await expect(handler.execute(node, testContext)).rejects.toThrow(DirectiveError);
+      const executionPromise = handler.execute(mockProcessingContext);
+
+      await expect(executionPromise).rejects.toThrow(validationError);
+      expect(validationService.validate).toHaveBeenCalledWith(node);
     });
 
     it('should handle resolution errors', async () => {
       const node = createPathDirective('errorPath', '{{undefined}}', createLocation(1, 1));
-      const testContext = { currentFilePath: 'test.meld', state: stateService };
+      mockProcessingContext.directiveNode = node;
+      const originalError = new Error('Resolution error');
+      vi.mocked(resolutionService.resolveInContext).mockRejectedValueOnce(originalError);
 
-      vi.mocked(resolutionService.resolveInContext).mockRejectedValueOnce(
-        new Error('Resolution error')
-      );
+      const executionPromise = handler.execute(mockProcessingContext);
 
-      await expect(handler.execute(node, testContext)).rejects.toThrow(DirectiveError);
+      await expect(executionPromise).rejects.toThrow(DirectiveError);
+      await expect(executionPromise).rejects.toHaveProperty('code', DirectiveErrorCode.RESOLUTION_FAILED);
+      await expect(executionPromise).rejects.toHaveProperty('cause', originalError);
     });
 
     it('should handle state errors', async () => {
       const node = createPathDirective('errorPath', '/some/path', createLocation(1, 1));
-      const testContext = { currentFilePath: 'test.meld', state: stateService };
+      mockProcessingContext.directiveNode = node;
+      const originalError = new Error('State error');
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('/some/path');
-      vi.mocked(stateService.clone).mockReturnValue(clonedState);
-      vi.mocked(clonedState.setPathVar).mockImplementation(() => {
-        throw new Error('State error');
-      });
+      vi.mocked(stateService.setPathVar).mockRejectedValueOnce(originalError);
 
-      await expect(handler.execute(node, testContext)).rejects.toThrow(DirectiveError);
+      const executionPromise = handler.execute(mockProcessingContext);
+
+      await expect(executionPromise).rejects.toThrow(DirectiveError);
+      await expect(executionPromise).rejects.toHaveProperty('code', DirectiveErrorCode.EXECUTION_FAILED);
+      await expect(executionPromise).rejects.toHaveProperty('cause', originalError);
     });
   });
 }); 
