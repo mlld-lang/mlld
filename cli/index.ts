@@ -37,6 +37,7 @@ import { createRawPath } from '@core/types/paths.js';
 import { ServiceProvider } from '@core/ServiceProvider.js';
 import { Meld } from '@core/Meld.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/interfaces/IFileSystemService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -530,9 +531,10 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
   const container = serviceProvider.getContainer();
 
   try {
-    // Register core services - consider moving to a central config
-    // Assume necessary factories/services are registered elsewhere or use defaults
+    // Resolve services from container
     const meld = container.resolve(Meld);
+    const fsService = container.resolve<IFileSystemService>('IFileSystemService');
+    const pathService = container.resolve<IPathService>('IPathService');
 
     if (debug) {
       console.log('CLI Options:', cliOptions);
@@ -547,12 +549,22 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     } else if (outputPath) {
       const { outputPath: finalPath, shouldOverwrite } = await confirmOverwrite(outputPath);
       if (shouldOverwrite) {
-        // Assume fileSystemService is available via container or direct instantiation
-        const fsService = container.resolve<IFileSystemService>('IFileSystemService'); 
-        // Ensure the output directory exists
-        await fsService.ensureDir(path.dirname(finalPath) as ValidatedResourcePath);
-        // Write the file
-        await fsService.writeFile(finalPath as ValidatedResourcePath, result);
+        // Validate paths before using them with FileSystemService
+        const dirPath = path.dirname(finalPath);
+        const validationContext: PathValidationContext = {
+          workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath(process.cwd()),
+          rules: { allowAbsolute: true, allowRelative: true, allowParentTraversal: true, mustExist: false }
+        };
+        
+        // Validate directory path
+        const validatedDirPath = await pathService.validatePath(dirPath, validationContext);
+        // Validate file path
+        const validatedFilePath = await pathService.validatePath(finalPath, validationContext);
+
+        // Ensure the output directory exists using the validated path
+        await fsService.ensureDir(validatedDirPath.validatedPath as ValidatedResourcePath);
+        // Write the file using the validated path
+        await fsService.writeFile(validatedFilePath.validatedPath as ValidatedResourcePath, result);
         console.log(`Output written to ${finalPath}`);
       } else {
         console.log('Operation cancelled by user.');
