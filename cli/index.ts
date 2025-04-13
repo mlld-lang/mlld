@@ -27,6 +27,16 @@ import { ErrorDisplayService } from '@services/display/ErrorDisplayService/Error
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { resolveService } from '@core/ServiceProvider.js';
 import { unsafeCreateNormalizedAbsoluteDirectoryPath, PathValidationContext, NormalizedAbsoluteDirectoryPath } from '@core/types/paths.js';
+import { ErrorSeverity } from '@core/errors/index.js';
+import type { Position, ErrorSourceLocation } from '@core/types/location.js';
+import type { IFileSystemClient } from '@services/fs/FileSystemService/interfaces/IFileSystemClient.js';
+import { BaseError, BaseErrorDetails } from '@core/errors/BaseError.js';
+import { PathValidationError, PathErrorCode } from '@services/fs/PathService/errors/PathValidationError.js';
+import type { ValidatedResourcePath } from '@core/types/paths.js';
+import { createRawPath } from '@core/types/paths.js';
+import { ServiceProvider } from '@core/ServiceProvider.js';
+import { Meld } from '@core/Meld.js';
+import { IFileSystemService } from '@services/fs/FileSystemService/interfaces/IFileSystemService.js';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -504,174 +514,55 @@ async function watchFiles(options: CLIOptions): Promise<void> {
  * Process a file with specific API options
  */
 async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: ProcessOptions): Promise<void> {
+  const { input, output, format, stdout, debug } = cliOptions;
+  let outputPath = output;
+
+  if (!stdout && !outputPath) {
+    outputPath = input.replace(/\.mld$/, '.' + getOutputExtension(format || 'xml'));
+  }
+
+  if (outputPath && outputPath === input) {
+    console.error('Error: Input and output files cannot be the same.');
+    process.exit(1);
+  }
+
+  const serviceProvider = new ServiceProvider();
+  const container = serviceProvider.getContainer();
+
   try {
-    // Show source map debug info before processing if requested
-    if (cliOptions.debugSourceMaps || cliOptions.detailedSourceMaps) {
-      console.log(chalk.cyan('Source map debugging enabled for file:', cliOptions.input));
+    // Register core services - consider moving to a central config
+    // Assume necessary factories/services are registered elsewhere or use defaults
+    const meld = container.resolve(Meld);
+
+    if (debug) {
+      console.log('CLI Options:', cliOptions);
+      console.log('API Options:', apiOptions);
+      console.log('Output Path:', outputPath);
     }
     
-    // Process the file through the API with provided options
-    const result = await apiMain(cliOptions.input, apiOptions);
-    
-    // Show source map debug info after processing if requested
-    if (cliOptions.debugSourceMaps) {
-      try {
-        const { getSourceMapDebugInfo } = require('@core/utils/sourceMapUtils.js');
-        console.log(chalk.cyan('\nSource map debug information:'));
-        console.log(getSourceMapDebugInfo());
-      } catch (e) {
-        console.error('Failed to get source map debug info:', e);
-      }
-    }
-    
-    // Show detailed source map debug info if requested
-    if (cliOptions.detailedSourceMaps) {
-      try {
-        const { getDetailedSourceMapDebugInfo } = require('@core/utils/sourceMapUtils.js');
-        console.log(chalk.cyan('\nDetailed source map debug information:'));
-        console.log(getDetailedSourceMapDebugInfo());
-      } catch (e) {
-        console.error('Failed to get detailed source map debug info:', e);
-      }
-    }
-    
-    // Handle output based on CLI options
-    if (cliOptions.stdout) {
+    const result = await meld.process(input, apiOptions);
+
+    if (stdout) {
       console.log(result);
-      if (!cliOptions.debug) {
-        console.log('✅ Successfully processed Meld file');
+    } else if (outputPath) {
+      const { outputPath: finalPath, shouldOverwrite } = await confirmOverwrite(outputPath);
+      if (shouldOverwrite) {
+        // Assume fileSystemService is available via container or direct instantiation
+        const fsService = container.resolve<IFileSystemService>('IFileSystemService'); 
+        // Ensure the output directory exists
+        await fsService.ensureDir(path.dirname(finalPath) as ValidatedResourcePath);
+        // Write the file
+        await fsService.writeFile(finalPath as ValidatedResourcePath, result);
+        console.log(`Output written to ${finalPath}`);
       } else {
-        logger.info('Successfully wrote output to stdout');
-      }
-    } else {
-      // Handle output path
-      let outputPath = cliOptions.output;
-      
-      if (!outputPath) {
-        // If no output path specified, use input path with .o.{format} extension pattern
-        const inputPath = cliOptions.input;
-        const inputExt = path.extname(inputPath);
-        const outputExt = getOutputExtension(normalizeFormat(cliOptions.format));
-        
-        // Extract the base filename without extension
-        const basePath = inputPath.substring(0, inputPath.length - inputExt.length);
-        
-        // Always append .o.{format} for default behavior
-        outputPath = `${basePath}.o${outputExt}`;
-      } else if (!outputPath.includes('.')) {
-        // If output path has no extension, add default extension
-        outputPath += getOutputExtension(normalizeFormat(cliOptions.format));
-      }
-      
-      // In test mode with custom filesystem, we might need special handling
-      if (cliOptions.custom && apiOptions.fs) {
-        // Use the filesystem from API options if available
-        const fs = apiOptions.fs;
-        if (typeof fs.writeFile === 'function') {
-          // Check if file exists first
-          const fileExists = await fs.exists(outputPath);
-          if (fileExists) {
-            const { outputPath: confirmedPath, shouldOverwrite } = await confirmOverwrite(outputPath);
-            if (!shouldOverwrite) {
-              logger.info('Operation cancelled by user');
-              return;
-            }
-            // Update the output path with the confirmed path
-            outputPath = confirmedPath;
-          }
-          await fs.writeFile(outputPath, result);
-          logger.info('Successfully wrote output file using custom filesystem', { path: outputPath });
-          return;
-        }
-      }
-      
-      // Standard file system operations
-      const fileExists = await fs.access(outputPath).then(() => true).catch(() => false);
-      if (fileExists) {
-        const { outputPath: confirmedPath, shouldOverwrite } = await confirmOverwrite(outputPath);
-        if (!shouldOverwrite) {
-          logger.info('Operation cancelled by user');
-          return;
-        }
-        // Update the output path with the confirmed path
-        outputPath = confirmedPath;
-      }
-      
-      await fs.writeFile(outputPath, result);
-      
-      // Show a clean success message in normal mode
-      if (!cliOptions.debug) {
-        console.log(`✅ Successfully processed Meld file and wrote output to ${outputPath}`);
-      } else {
-        logger.info('Successfully wrote output file', { path: outputPath });
+        console.log('Operation cancelled by user.');
       }
     }
-  } catch (error) {
-    // Show source map debug info on error if requested
-    if (cliOptions.debugSourceMaps) {
-      try {
-        const { getSourceMapDebugInfo } = require('@core/utils/sourceMapUtils.js');
-        console.log(chalk.cyan('\nSource map debug information (on error):'));
-        console.log(getSourceMapDebugInfo());
-      } catch (e) {
-        console.error('Failed to get source map debug info:', e);
-      }
-    }
-    
-    // Show detailed source map debug info on error if requested
-    if (cliOptions.detailedSourceMaps) {
-      try {
-        const { getDetailedSourceMapDebugInfo } = require('@core/utils/sourceMapUtils.js');
-        console.log(chalk.cyan('\nDetailed source map debug information (on error):'));
-        console.log(getDetailedSourceMapDebugInfo());
-      } catch (e) {
-        console.error('Failed to get detailed source map debug info:', e);
-      }
-    }
-    
-    // Convert to MeldError if needed
-    const meldError = error instanceof MeldError 
-      ? error 
-      : new MeldError(error instanceof Error ? error.message : String(error), {
-          severity: ErrorSeverity.Fatal,
-          code: 'PROCESSING_ERROR'
-        });
-    
-    // Log the error for detailed debugging
-    logger.error('Error processing file', {
-      error: meldError.message,
-      code: meldError.code,
-      severity: meldError.severity
-    });
-    
-    // Format error message appropriately for tests vs. normal mode
-    if (process.env.NODE_ENV === 'test') {
-      console.error(`Error: ${meldError.message}`);
-    } else if (!cliOptions.debug) {
-      // Bypass deduplication for this formatted error
-      bypassDeduplication = true;
-      // For regular users, we want to show the source location if available
-      // Safely access filePath and sourceLocation from the error object
-      const sourceLocation = meldError.sourceLocation;
-      const filePath = sourceLocation?.filePath;
-      const details = meldError.details;
-      const contextPath = (details as any)?.context?.filePath; // Access context path via details if available
-      
-      if (filePath && sourceLocation?.line) {
-        console.error(`Error in ${filePath}:${sourceLocation.line}: ${meldError.message}`);
-      } else if (filePath) {
-        console.error(`Error in ${filePath}: ${meldError.message}`);
-      } else if (contextPath) {
-        console.error(`Error related to ${contextPath}: ${meldError.message}`);
-      } else {
-        console.error(`Error: ${meldError.message}`);
-      }
-      // Reset bypass flag
-      bypassDeduplication = false;
-    }
-    
-    // Rethrow for the main function to handle
-    throw meldError;
+  } catch (error: any) {
+    // Use the centralized error handler
+    await handleError(error, cliOptions);
+    // Re-throw for testing or further handling if needed
+    throw error;
   }
 }
 
@@ -966,26 +857,39 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
             
             // For MeldError types, log additional properties
             if (error instanceof MeldError) {
-              console.error('DEBUG: Error properties:');
+              console.error('DEBUG: MeldError properties:');
               console.error('  - message:', error.message);
               console.error('  - code:', error.code);
               console.error('  - severity:', error.severity);
-              console.error('  - filePath:', error.filePath);
-              
+              // Get filePath safely using type guards or sourceLocation
+              let filePath = error.sourceLocation?.filePath;
+              if (!filePath && error.details && 'filePath' in error.details && typeof error.details.filePath === 'string') {
+                  filePath = error.details.filePath;
+              }
+              console.error('  - filePath:', filePath || '(not found)');
+
               // Log specialized properties based on error type
               if ('directiveKind' in error) {
                 console.error('  - directiveKind:', (error as any).directiveKind);
               }
-              if ('location' in error) {
-                console.error('  - location:', JSON.stringify((error as any).location, null, 2));
+              if (error.sourceLocation) { // Check sourceLocation directly
+                console.error('  - location:', JSON.stringify(error.sourceLocation, null, 2));
               }
-              if ('details' in error) {
-                console.error('  - details:', JSON.stringify((error as any).details, null, 2));
+              if (error.details) { // Check details directly
+                console.error('  - details:', JSON.stringify(error.details, null, 2));
               }
-              
-              // Log context for debugging
-              console.error('  - context:', JSON.stringify(error.context, null, 2));
-              
+
+              // Log context for debugging - Check details object
+              let contextInfo = '(not found)';
+              if (error.details && 'context' in error.details) {
+                  try {
+                      contextInfo = JSON.stringify(error.details.context, null, 2);
+                  } catch (e) {
+                      contextInfo = '[Circular JSON or stringify error]';
+                  }
+              }
+              console.error('  - context:', contextInfo);
+
               if (error.stack) {
                 console.error('  - stack trace available');
               }
@@ -1012,227 +916,119 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
           // Handle both MeldError and raw errors that might come from meld-ast
           try {
             // Always use input file path if available to handle hardcoded paths
-            if (error instanceof MeldError && options.input && error.filePath === 'examples/error-test.meld') {
-              // Create a clone of the error with the correct file path
-              const fixedPathError = new MeldError(error.message, {
-                code: error.code,
-                severity: error.severity,
-                filePath: options.input,
-                context: error.context ? { ...error.context } : {},
-                cause: error.cause as Error | undefined
-              });
-              
-              // Copy special properties if they exist (like location)
-              for (const prop of ['location', 'details', 'directiveKind', 'originalError']) {
-                if (prop in error) {
-                  (fixedPathError as any)[prop] = (error as any)[prop];
+            let errorToDisplay: Error = error; // Use a new variable
+            if (error instanceof MeldError && options.input) {
+                let needsPathCorrection = false;
+                let originalPath = error.sourceLocation?.filePath;
+                if (!originalPath && error.details && 'filePath' in error.details && typeof error.details.filePath === 'string') {
+                    originalPath = error.details.filePath;
                 }
-              }
-              
-              // Use this error instead
-              error = fixedPathError;
-            }
-            
-            // Bypass deduplication for our enhanced display
-            bypassDeduplication = true;
-            
-            // Clear previous errors from the seen set that might conflict
-            seenErrors.clear(); // Clear all seen errors to be safe
-            
-            // Convert to a consistent format for deduplication
-            const errorKey = error instanceof Error ? `Error: ${error.message}` : `Error: ${String(error)}`;
-            
-            // In a real implementation, we would import and use the ErrorDisplayService directly
-            // Here we need to dynamically load it to avoid circular dependencies
-            try {
-              // Dynamic import of the ErrorDisplayService and file system
-              const { ErrorDisplayService } = await import('@services/display/ErrorDisplayService/ErrorDisplayService.js');
-              const { FileSystemService } = await import('@services/fs/FileSystemService/FileSystemService.js');
-              const { NodeFileSystem } = await import('@services/fs/FileSystemService/NodeFileSystem.js');
-              const { PathOperationsService } = await import('@services/fs/FileSystemService/PathOperationsService.js');
-              
-              // Create the required services
-              const nodeFs = fsAdapter || new NodeFileSystem();
-              const pathOps = new PathOperationsService();
-              const fsService = new FileSystemService(pathOps, nodeFs);
-              
-              // Create a new instance of the ErrorDisplayService with the file system
-              const errorDisplayService = new ErrorDisplayService(fsService);
-              
-              // Debug logging for file path issues
-              if (options.debug) {
-                console.error('DEBUG: Input file path:', options.input);
-                
-                // Cast error to MeldError for type safety
-                const meldError = error as MeldError;
-                
-                console.error('DEBUG: Error sourceLocation filePath:', meldError.sourceLocation?.filePath);
-                if (meldError.details?.sourceLocation) {
-                  console.error('DEBUG: Error details.sourceLocation.filePath:', meldError.details.sourceLocation.filePath);
-                }
-                if (meldError.details?.errorFilePath) {
-                  console.error('DEBUG: Error details.errorFilePath:', meldError.details.errorFilePath);
-                }
-                if (meldError.details?.location?.filePath) {
-                  console.error('DEBUG: Error details.location.filePath:', meldError.details.location.filePath);
+                // Check if the path needs correction (e.g., was a default or example path)
+                if (originalPath === 'examples/error-test.meld' || !originalPath) { // Add more conditions if needed
+                    needsPathCorrection = true;
                 }
 
-                // Check if file exists at the input path
-                try {
-                  fsService.exists(options.input).then(exists => {
-                    console.error('DEBUG: Input file exists:', exists);
-                  });
-                } catch (err) {
-                  console.error('DEBUG: Error checking if file exists:', err);
+                if (needsPathCorrection) {
+                    // Create a clone of the error with the correct file path
+                    const newDetails: BaseErrorDetails = { ...error.details };
+                    // Remove potentially incorrect filePath from details if it exists
+                    if ('filePath' in newDetails) {
+                        delete newDetails.filePath;
+                    }
+
+                    const newSourceLocation: ErrorSourceLocation | undefined = {
+                        ...(error.sourceLocation || { start: { line: 1, column: 1, offset: 0 }, end: { line: 1, column: 1, offset: 0 } }), // Default location if none exists
+                        filePath: options.input
+                    };
+
+                    const fixedError = new MeldError(error.message, {
+                        code: error.code,
+                        severity: error.severity,
+                        sourceLocation: newSourceLocation,
+                        details: newDetails,
+                        cause: error.cause as Error | undefined
+                    });
+
+                    // Copy other relevant properties if necessary (less safe, use sparingly)
+                    // for (const prop of ['directiveKind', 'originalError']) {
+                    //   if (prop in error && !(prop in fixedError)) {
+                    //     (fixedError as any)[prop] = (error as any)[prop];
+                    //   }
+                    // }
+
+                    errorToDisplay = fixedError; // Use the corrected error for display
                 }
-              }
-              
-              // Fix file path issues - if sourceLocation is missing, create a new error with the correct path
-              // Cast error to MeldError for type safety
-              let meldError = error as MeldError;
-              
-              if (!meldError.sourceLocation?.filePath && options.input) {
-                // Start with a clean details object
-                const newDetails: BaseErrorDetails = {};
-                
-                // Copy the original details if available
-                if (meldError.details) {
-                  Object.assign(newDetails, meldError.details);
-                }
-                
-                // Create a new error with the correct source location
-                const fixedError = new MeldError(meldError.message, {
-                  code: meldError.code,
-                  severity: meldError.severity,
-                  details: newDetails,
-                  sourceLocation: {
-                    filePath: options.input,
-                    ...meldError.sourceLocation
-                  },
-                  cause: meldError.cause
-                });
-                
-                // Use this error instead
-                error = fixedError;
-              }
-              
-              // Use the enhanced error display service which now handles nested errors correctly
-              const enhancedErrorDisplay = await errorDisplayService.enhanceErrorDisplay(error);
-              
-              // Check if we've seen this error before
-              if (!seenErrors.has(errorKey)) {
-                // This is a new error, add it to our set
-                seenErrors.add(errorKey);
-                
-                // The service will now display just the filepath and source context
-                console.error(enhancedErrorDisplay);
-              }
-            } catch (importError) {
-              // If dynamic import fails, fall back to our simple display function
-              if (options.debug) {
-                console.error('DEBUG: Failed to load ErrorDisplayService:', importError);
-              }
-              
-              // Use our custom error display function as fallback
-              const enhancedErrorDisplay = await displayErrorWithSourceContext(error instanceof MeldError ? error : new MeldError(
-                error instanceof Error ? error.message : String(error),
-                {
-                  filePath: options.input,
-                  cause: error instanceof Error ? error : undefined,
-                  context: {
-                    // Copy line/column from meld-ast errors if available
-                    sourceLocation: (typeof error === 'object' && error !== null && 'line' in error && 'column' in error) ? {
-                      filePath: (typeof error === 'object' && error !== null && 'sourceFile' in error && typeof (error as any).sourceFile === 'string') 
-                        ? (error as any).sourceFile 
-                        : options.input,
-                      line: (error as any).line,
-                      column: (error as any).column
-                    } : undefined
-                  }
-                }
-              ));
-              
-              // Check if we've seen this error before
-              if (!seenErrors.has(errorKey)) {
-                // This is a new error, add it to our set
-                seenErrors.add(errorKey);
-                
-                // Display the enhanced error with a blank line for separation
-                console.log('\n'); 
-                console.error(enhancedErrorDisplay);
-              }
             }
-            
-            // Reset the bypass flag
-            bypassDeduplication = false;
-          } catch (displayError) {
-            // If the enhanced display fails, fall back to basic formatting
-            if (error instanceof MeldError) {
-              const errorMsg = `\nError in ${error.filePath || 'unknown'}: ${error.message}`;
-              
-              // Check if we've seen this error before
-              if (!seenErrors.has(errorMsg.trim())) {
-                seenErrors.add(errorMsg.trim());
-                console.error(errorMsg);
-              }
-            } else if (error instanceof Error) {
-              // Check for meld-ast error properties
-              if ('line' in error && 'column' in error) {
-                const filePath = ('sourceFile' in error) ? (error as any).sourceFile : options.input;
-                const errorMsg = `\nError in ${filePath}:${(error as any).line}:${(error as any).column}: ${error.message}`;
-                
-                // Check if we've seen this error before
-                if (!seenErrors.has(errorMsg.trim())) {
-                  seenErrors.add(errorMsg.trim());
-                  console.error(errorMsg);
-                }
-              } else {
-                const errorMsg = `\nError: ${error.message}`;
-                
-                // Check if we've seen this error before
-                if (!seenErrors.has(errorMsg.trim())) {
-                  seenErrors.add(errorMsg.trim());
-                  console.error(errorMsg);
-                }
-              }
-            } else {
-              const errorMsg = `\nError: ${String(error)}`;
-              
-              // Check if we've seen this error before
-              if (!seenErrors.has(errorMsg.trim())) {
-                seenErrors.add(errorMsg.trim());
-                console.error(errorMsg);
-              }
-            }
-            
+
+            // Bypass deduplication for our enhanced display
+            bypassDeduplication = true;
+          } catch (importError) {
+            // If dynamic import fails, fall back to our simple display function
             if (options.debug) {
-              console.error(`\nDebug: Display error: ${displayError instanceof Error ? displayError.message : String(displayError)}`);
+              console.error('DEBUG: Failed to load ErrorDisplayService:', importError);
+            }
+
+            // Use our custom error display function as fallback
+            const fallbackError = errorToDisplay instanceof MeldError ? errorToDisplay : new MeldError(
+              errorToDisplay instanceof Error ? errorToDisplay.message : String(errorToDisplay),
+              {
+                // Attempt to provide filePath in details for fallback
+                details: { filePath: options.input },
+                cause: errorToDisplay instanceof Error ? errorToDisplay : undefined,
+                // severity: ErrorSeverity.Fatal, // Optional: Set severity if needed
+                // code: 'DISPLAY_FALLBACK', // Optional: Set code if needed
+                // context: { ... } // Avoid adding complex context here
+              }
+            );
+            const enhancedErrorDisplay = await displayErrorWithSourceContext(fallbackError);
+
+            // Check if we've seen this error before
+            if (!seenErrors.has(errorKey)) {
+              // This is a new error, add it to our set
+              seenErrors.add(errorKey);
+              
+              // Display the enhanced error with a blank line for separation
+              console.log('\n'); 
+              console.error(enhancedErrorDisplay);
             }
           }
+          
+          // Reset the bypass flag
+          bypassDeduplication = false;
         } catch (displayError) {
-          // Fallback if enhanced display fails
-          logger.error('Error display failed', { 
-            error: displayError instanceof Error ? displayError.message : String(displayError) 
-          });
-          
-          // Add more debugging for display errors
-          if (options.debug) {
-            console.error('DEBUG: Error display failure:', displayError);
+          // If the enhanced display fails, fall back to basic formatting
+          if (errorToDisplay instanceof MeldError) {
+            // Get filePath safely
+            const errorFilePath = errorToDisplay.sourceLocation?.filePath || (errorToDisplay.details && 'filePath' in errorToDisplay.details ? errorToDisplay.details.filePath : 'unknown');
+            const errorMsg = `\nError in ${errorFilePath}: ${errorToDisplay.message}`;
+            
+            // Check if we've seen this error before
+            if (!seenErrors.has(errorMsg.trim())) {
+              seenErrors.add(errorMsg.trim());
+              console.error(errorMsg);
+            }
+          } else if (errorToDisplay instanceof Error && 'line' in errorToDisplay && 'column' in errorToDisplay) {
+            // Check for meld-ast error properties
+            const filePath = ('sourceFile' in errorToDisplay) ? (errorToDisplay as any).sourceFile : options.input;
+            const errorMsg = `\nError in ${filePath}:${(errorToDisplay as any).line}:${(errorToDisplay as any).column}: ${errorToDisplay.message}`;
+            
+            // Check if we've seen this error before
+            if (!seenErrors.has(errorMsg.trim())) {
+              seenErrors.add(errorMsg.trim());
+              console.error(errorMsg);
+            }
+          } else {
+            const errorMsg = `\nError: ${errorToDisplay instanceof Error ? errorToDisplay.message : String(errorToDisplay)}`;
+            
+            // Check if we've seen this error before
+            if (!seenErrors.has(errorMsg.trim())) {
+              seenErrors.add(errorMsg.trim());
+              console.error(errorMsg);
+            }
           }
           
-          // Display a basic error message as fallback
-          if (error instanceof MeldError) {
-            if (error.filePath) {
-              console.error(`Error in ${error.filePath}: ${error.message}`);
-            } else {
-              console.error(`Error: ${error.message}`);
-            }
-          } else if (error instanceof Error && 'line' in error && 'column' in error) {
-            // Handle raw meld-ast errors
-            const filePath = ('sourceFile' in error) ? (error as any).sourceFile : options.input;
-            console.error(`Error in ${filePath}:${(error as any).line}:${(error as any).column}: ${error.message}`);
-          } else {
-            console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+          if (options.debug) {
+            console.error(`\nDebug: Display error: ${displayError instanceof Error ? displayError.message : String(displayError)}`);
           }
         }
       }
