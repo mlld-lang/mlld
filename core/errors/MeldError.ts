@@ -31,6 +31,17 @@ export interface BaseErrorDetails {
 }
 
 /**
+ * Options for creating a MeldError instance.
+ */
+export interface MeldErrorOptions {
+  code: string;
+  severity: ErrorSeverity;
+  details?: BaseErrorDetails;
+  sourceLocation?: ErrorSourceLocation;
+  cause?: unknown;
+}
+
+/**
  * Base class for all custom Meld errors.
  * Provides structure for error codes, severity, details, and source location.
  */

@@ -2,7 +2,7 @@ import type { IPathService, URLValidationOptions } from '@services/fs/PathServic
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import type { Location, Position } from '@core/types.js';
+import type { Location } from '@core/types.js';
 import * as path from 'path';
 import * as os from 'os';
 import type { MeldNode } from '@core/syntax/types/index.js';
@@ -46,11 +46,12 @@ import {
   PathContentType,
   type MeldPath,
   type AnyPath,
+  type MeldResolvedFilesystemPath,
   createRawPath
 } from '@core/types/paths.js';
 import { ErrorSeverity } from '@core/errors/index.js';
-import { type Position } from '@core/types.js';
-import { type IFileSystemClient } from '../FileSystemService/IFileSystemClient.js';
+import type { Position } from '@core/types.js';
+import type { IFileSystemClient } from '@services/fs/FileSystemService/IFileSystemClient.js';
 
 /**
  * Service for validating and normalizing paths
@@ -119,6 +120,8 @@ export class PathService implements IPathService {
       // Don't throw an error in test mode
       if (process.env.NODE_ENV !== 'test' && !this.testMode) {
         throw new MeldError('FileSystemServiceClientFactory not available - factory pattern required', { 
+          code: 'FACTORY_NOT_AVAILABLE',
+          severity: ErrorSeverity.Fatal,
           cause: error instanceof Error ? error : new Error(String(error)) 
         });
       }
@@ -329,7 +332,7 @@ export class PathService implements IPathService {
   }
 
   /**
-   * Resolve a path to its absolute or relative validated form according to Meld's path rules:
+   * Resolves a path to an absolute or relative validated form according to Meld's path rules:
    * - Simple paths are resolved relative to baseDir or cwd
    * - $. paths are resolved relative to project root
    * - $~ paths are resolved relative to home directory
@@ -362,9 +365,9 @@ export class PathService implements IPathService {
       throw new PathValidationError(
         PathErrorMessages.EXPECTED_FILESYSTEM_PATH,
         {
-          code: 'E_PATH_EXPECTED_FS',
+          code: PathErrorCode.E_PATH_EXPECTED_FS,
           severity: ErrorSeverity.Fatal,
-          details: { pathString: rawInputPath }
+          path: rawInputPath
         }
       );
     }
@@ -579,21 +582,21 @@ export class PathService implements IPathService {
       throw new PathValidationError(
         PathErrorMessages.EMPTY_PATH,
         {
-          code: 'E_PATH_EMPTY',
+          code: PathErrorCode.E_PATH_EMPTY,
           severity: ErrorSeverity.Fatal,
-          details: { pathString: rawInputPath }
+          path: rawInputPath
         }
       );
     }
 
-    // 2. Ensure it's not a URL
+    // **Handle URLs - Throw error, this method is only for filesystem paths**
     if (this.isURL(rawInputPath)) {
       throw new PathValidationError(
         PathErrorMessages.EXPECTED_FILESYSTEM_PATH,
         {
-          code: 'E_PATH_EXPECTED_FS',
+          code: PathErrorCode.E_PATH_EXPECTED_FS,
           severity: ErrorSeverity.Fatal,
-          details: { pathString: rawInputPath }
+          path: rawInputPath
         }
       );
     }

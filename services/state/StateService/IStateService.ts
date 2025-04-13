@@ -14,7 +14,8 @@ import type {
   TransformationOptions,
   IFilesystemPathState,
   IUrlPathState,
-  ICommandDefinition
+  ICommandDefinition,
+  MeldPath
 } from '@core/types/index.js';
 
 /**

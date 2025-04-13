@@ -19,7 +19,8 @@ import type {
   JsonValue,
   IFilesystemPathState,
   IUrlPathState,
-  ICommandDefinition
+  ICommandDefinition,
+  MeldPath
 } from './types/index.js';
 
 /**
@@ -198,11 +199,11 @@ export interface FileSystemLike {
  */
 export interface PathServiceLike {
   /** Validate a path */
-  validatePath(path: string | StructuredPath, options?: any): Promise<string>;
+  validatePath(filePath: string | MeldPath, context: PathValidationContext): Promise<MeldPath>;
   /** Resolve a path */
-  resolvePath(path: string | StructuredPath, baseDir?: string): string;
+  resolvePath(filePath: RawPath | StructuredPath, baseDir?: RawPath): ValidatedResourcePath;
   /** Join path segments */
-  joinPaths(...paths: string[]): string;
+  joinPaths(...paths: string[]): RawPath;
 }
 
 /**

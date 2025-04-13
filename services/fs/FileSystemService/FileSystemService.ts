@@ -4,7 +4,7 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { MeldError } from '@core/errors/MeldError.js';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -14,7 +14,8 @@ import { Service } from '@core/ServiceProvider.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
 import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
-import type { ValidatedResourcePath } from '@core/types/paths.js';
+import type { ValidatedResourcePath, RawPath } from '@core/types/paths.js';
+import { createRawPath } from '@core/types/paths.js';
 
 const execAsync = promisify(exec);
 
@@ -80,16 +81,21 @@ export class FileSystemService implements IFileSystemService {
         logger.debug('Successfully created PathServiceClient using factory');
       } catch (error) {
         logger.warn('Failed to create PathServiceClient', { error });
-        // For test environments, don't throw to allow tests to work
         if (process.env.NODE_ENV !== 'test') {
-          throw new MeldError('Failed to create PathServiceClient - factory pattern required', { cause: error as Error });
+          throw new MeldFileSystemError('Failed to create PathServiceClient - factory pattern required', { 
+            cause: error as Error,
+            code: 'DI_FACTORY_ERROR',
+            severity: ErrorSeverity.Fatal 
+          });
         }
       }
     } else {
       logger.warn('PathServiceClientFactory not available or invalid - factory pattern required');
-      // For test environments, don't throw to allow tests to work
       if (process.env.NODE_ENV !== 'test') {
-        throw new MeldError('PathServiceClientFactory not available - factory pattern required');
+        throw new MeldFileSystemError('PathServiceClientFactory not available - factory pattern required', {
+          code: 'DI_FACTORY_MISSING',
+          severity: ErrorSeverity.Fatal
+        });
       }
     }
   }
@@ -119,22 +125,24 @@ export class FileSystemService implements IFileSystemService {
    * @param filePath - Path to resolve
    * @returns The resolved absolute path
    */
-  resolvePath(filePath: string): string {
+  resolvePath(filePath: string | ValidatedResourcePath): string {
     try {
+      const pathString = typeof filePath === 'string' ? filePath : filePath as string;
+      
       // Use the path client if available
       if (this.pathClient) {
         try {
-          return this.pathClient.resolvePath(filePath);
+          return this.pathClient.resolvePath(pathString);
         } catch (error) {
           logger.warn('Error using pathClient.resolvePath, falling back to pathOps', { 
             error: error instanceof Error ? error.message : String(error), 
-            filePath 
+            filePath: pathString 
           });
         }
       }
       
       // Fall back to path operations service
-      return this.pathOps.resolvePath(filePath);
+      return this.pathOps.resolvePath(createRawPath(pathString)) as string;
     } catch (error) {
       logger.warn('Error resolving path', {
         path: filePath,
@@ -142,7 +150,7 @@ export class FileSystemService implements IFileSystemService {
       });
       
       // Last resort fallback
-      return filePath;
+      return typeof filePath === 'string' ? filePath : filePath as string;
     }
   }
 
@@ -171,8 +179,10 @@ export class FileSystemService implements IFileSystemService {
       }
       logger.error('Error reading file', { ...context, error: err });
       throw new MeldFileSystemError(`Error reading file: ${pathString}`, { 
-        cause: err,
-        filePath: pathString
+        cause: err, 
+        code: 'FS_READ_ERROR',
+        severity: ErrorSeverity.Fatal,
+        details: { path: pathString }
       });
     }
   }
@@ -194,9 +204,11 @@ export class FileSystemService implements IFileSystemService {
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to write file', { ...context, error: err });
-      throw new MeldError(`Failed to write file: ${pathString}`, {
+      throw new MeldFileSystemError(`Failed to write file: ${pathString}`, {
         cause: err,
-        filePath: pathString
+        code: 'FS_WRITE_ERROR',
+        severity: ErrorSeverity.Fatal,
+        details: { path: pathString }
       });
     }
   }
@@ -268,9 +280,11 @@ export class FileSystemService implements IFileSystemService {
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to get file stats', { ...context, error: err });
-      throw new MeldError(`Failed to get file stats: ${pathString}`, {
+      throw new MeldFileSystemError(`Failed to get file stats: ${pathString}`, {
         cause: err,
-        filePath: pathString
+        code: 'FS_STAT_ERROR',
+        severity: ErrorSeverity.Warning,
+        details: { path: pathString }
       });
     }
   }
@@ -292,9 +306,11 @@ export class FileSystemService implements IFileSystemService {
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to read directory', { ...context, error: err });
-      throw new MeldError(`Failed to read directory: ${pathString}`, {
+      throw new MeldFileSystemError(`Failed to read directory: ${pathString}`, {
         cause: err,
-        filePath: pathString
+        code: 'FS_READDIR_ERROR',
+        severity: ErrorSeverity.Fatal,
+        details: { path: pathString }
       });
     }
   }
@@ -314,9 +330,11 @@ export class FileSystemService implements IFileSystemService {
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to ensure directory exists', { ...context, error: err });
-      throw new MeldError(`Failed to ensure directory exists: ${pathString}`, {
+      throw new MeldFileSystemError(`Failed to ensure directory exists: ${pathString}`, {
         cause: err,
-        filePath: pathString
+        code: 'FS_MKDIR_ERROR',
+        severity: ErrorSeverity.Fatal,
+        details: { path: pathString }
       });
     }
   }
@@ -337,9 +355,11 @@ export class FileSystemService implements IFileSystemService {
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to check if path is directory', { ...context, error: err });
-      throw new MeldError(`Failed to check if path is directory: ${pathString}`, {
+      throw new MeldFileSystemError(`Failed to check if path is directory: ${pathString}`, {
         cause: err,
-        filePath: pathString
+        code: 'FS_STAT_ERROR', 
+        severity: ErrorSeverity.Warning,
+        details: { path: pathString }
       });
     }
   }
@@ -360,9 +380,11 @@ export class FileSystemService implements IFileSystemService {
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to check if path is file', { ...context, error: err });
-      throw new MeldError(`Failed to check if path is file: ${pathString}`, {
+      throw new MeldFileSystemError(`Failed to check if path is file: ${pathString}`, {
         cause: err,
-        filePath: pathString
+        code: 'FS_STAT_ERROR',
+        severity: ErrorSeverity.Warning,
+        details: { path: pathString }
       });
     }
   }
@@ -377,23 +399,23 @@ export class FileSystemService implements IFileSystemService {
   }
 
   watch(path: ValidatedResourcePath, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }> {
-    const pathString = path as string;
-    
     const context: FileOperationContext = {
       operation: 'watch',
-      path: pathString,
+      path: path as string,
       details: { options }
     };
 
     try {
       logger.debug('Starting file watch', context);
-      return this.fs.watch(pathString, options);
+      return this.fs.watch(path as ValidatedResourcePath, options);
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to watch file', { ...context, error: err });
-      throw new MeldError(`Failed to watch file: ${pathString}`, {
+      throw new MeldFileSystemError(`Failed to watch file: ${path as string}`, { 
         cause: err,
-        filePath: pathString
+        code: 'FS_WATCH_ERROR',
+        severity: ErrorSeverity.Fatal,
+        details: { path: path as string }
       });
     }
   }
@@ -415,7 +437,9 @@ export class FileSystemService implements IFileSystemService {
       logger.error('Failed to execute command', { ...context, error: err });
       throw new MeldFileSystemError(`Failed to execute command: ${command}`, {
         cause: err,
-        command
+        command,
+        code: 'FS_EXEC_ERROR',
+        severity: ErrorSeverity.Fatal
       });
     }
   }
@@ -430,8 +454,8 @@ export class FileSystemService implements IFileSystemService {
    * @returns A promise that resolves when the directory is created
    * @throws {MeldFileSystemError} If the directory cannot be created
    */
-  async mkdir(dirPath: string, options?: { recursive?: boolean }): Promise<void> {
+  async mkdir(dirPath: ValidatedResourcePath, options?: { recursive?: boolean }): Promise<void> {
     logger.warn('FileSystemService.mkdir is deprecated. Use ensureDir instead.');
-    return this.ensureDir(dirPath);
+    return this.ensureDir(dirPath as ValidatedResourcePath);
   }
 } 

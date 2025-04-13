@@ -4,6 +4,8 @@ export interface MeldFileSystemErrorOptions extends MeldErrorOptions {
   command?: string;
   cwd?: string;
   severity?: ErrorSeverity;
+  code?: string;
+  cause?: unknown;
 }
 
 /**

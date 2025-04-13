@@ -7,6 +7,8 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { directiveLogger } from '@core/utils/logger.js';
+import { PathValidationContext, NormalizedAbsoluteDirectoryPath, PathValidationRules, MeldResolvedFilesystemPath, IFilesystemPathState } from '@core/types/paths.js';
+import { unsafeCreateNormalizedAbsoluteDirectoryPath } from '@core/types/paths.js';
 
 // Core services (implementation classes - keep as regular exports)
 export * from '@services/pipeline/InterpreterService/InterpreterService.js';
@@ -92,7 +94,20 @@ type RequiredServices = {
   debug?: StateDebuggerService;
 };
 
-export function createDefaultServices(options: ProcessOptions): Services & RequiredServices {
+// Helper function to create IFilesystemPathState from MeldResolvedFilesystemPath
+function createFilesystemStateFromMeldPath(meldPath: MeldResolvedFilesystemPath): IFilesystemPathState {
+  return {
+    contentType: meldPath.contentType,
+    originalValue: meldPath.originalValue,
+    isValidSyntax: meldPath.isValidSyntax,
+    isSecure: meldPath.isSecure,
+    exists: meldPath.exists,
+    isAbsolute: meldPath.isAbsolute,
+    validatedPath: meldPath.validatedPath
+  };
+}
+
+export async function createDefaultServices(options: ProcessOptions): Promise<Services & RequiredServices> {
   // DI is always used now
   
   // If a custom filesystem is provided, register it with the container
@@ -117,9 +132,30 @@ export function createDefaultServices(options: ProcessOptions): Services & Requi
   const interpreter = resolveService<InterpreterService>('InterpreterService');
   const output = resolveService<OutputService>('OutputService');
   
-  // Initialize special path variables
-  state.setPathVar('PROJECTPATH', process.cwd());
-  state.setPathVar('HOMEPATH', process.env.HOME || process.env.USERPROFILE || '/home');
+  // Create a default validation context for setting initial path variables
+  const defaultValidationRules: PathValidationRules = {
+    allowAbsolute: true,
+    allowRelative: true,
+    allowParentTraversal: false, // Typically false for safety by default
+    mustExist: false
+  };
+  const validationContext: PathValidationContext = {
+    workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath(process.cwd()),
+    allowExternalPaths: true, // Assuming external paths are okay for default setup
+    rules: defaultValidationRules
+  };
+  
+  // Initialize special path variables using validatePath
+  const projectPathStateMeld = await path.validatePath(process.cwd(), validationContext);
+  const homePathString = process.env.HOME || process.env.USERPROFILE || '/home';
+  const homePathStateMeld = await path.validatePath(homePathString, validationContext);
+  
+  // Convert MeldPath results to IFilesystemPathState
+  const projectPathState = createFilesystemStateFromMeldPath(projectPathStateMeld as MeldResolvedFilesystemPath);
+  const homePathState = createFilesystemStateFromMeldPath(homePathStateMeld as MeldResolvedFilesystemPath);
+
+  await state.setPathVar('PROJECTPATH', projectPathState);
+  await state.setPathVar('HOMEPATH', homePathState);
 
   // Create debug service if requested
   let debug: StateDebuggerService | undefined = undefined;
@@ -185,7 +221,7 @@ export function createDefaultServices(options: ProcessOptions): Services & Requi
 
 export async function main(filePath: string, options: ProcessOptions = {}): Promise<string> {
   // Create default services
-  const defaultServices = createDefaultServices(options);
+  const defaultServices = await createDefaultServices(options);
 
   // Merge with provided services and ensure proper initialization
   const services = options.services ? { ...defaultServices, ...options.services } as Services & RequiredServices : defaultServices;
@@ -290,8 +326,22 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   }
 
   try {
-    // Read the file
-    const content = await services.filesystem.readFile(filePath);
+    // Validate the input file path before reading
+    const readRules: PathValidationRules = {
+      allowAbsolute: true,
+      allowRelative: true,
+      allowParentTraversal: true, // Allow traversal when resolving the main input file
+      mustExist: true
+    };
+    const readContext: PathValidationContext = {
+      workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath(process.cwd()), // Assuming relative paths are relative to cwd 
+      allowExternalPaths: true, // Allow reading from outside project potentially
+      rules: readRules
+    };
+    const validatedFilePath = await services.path.validatePath(filePath, readContext);
+    
+    // Read the file using the validated path string
+    const content = await services.filesystem.readFile(validatedFilePath.validatedPath);
     
     // Parse the content
     const ast = await services.parser.parse(content);
@@ -380,7 +430,8 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
         // Copy text variables
         const textVars = resultState.getAllTextVars();
         textVars.forEach((value, key) => {
-          services.state.setTextVar(key, value);
+          // Pass the primitive value from the variable object
+          services.state.setTextVar(key, value.value);
         });
         
         // Copy data variables
@@ -388,7 +439,8 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
             typeof services.state.setDataVar === 'function') {
           const dataVars = resultState.getAllDataVars();
           dataVars.forEach((value, key) => {
-            services.state.setDataVar(key, value);
+            // Pass the primitive value from the variable object
+            services.state.setDataVar(key, value.value);
           });
         }
         
@@ -397,16 +449,18 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
             typeof services.state.setPathVar === 'function') {
           const pathVars = resultState.getAllPathVars();
           pathVars.forEach((value, key) => {
-            services.state.setPathVar(key, value);
+            // Pass the path state object from the variable object
+            services.state.setPathVar(key, value.value);
           });
         }
         
         // Copy commands
         if (typeof resultState.getAllCommands === 'function' && 
-            typeof services.state.setCommand === 'function') {
+            typeof services.state.setCommandVar === 'function') {
           const commands = resultState.getAllCommands();
           commands.forEach((value, key) => {
-            services.state.setCommand(key, value);
+            // Pass the command definition from the variable object
+            services.state.setCommandVar(key, value.value);
           });
         }
       }

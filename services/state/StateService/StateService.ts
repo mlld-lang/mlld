@@ -21,6 +21,7 @@ import type {
   IUrlPathState,
   ICommandDefinition,
   MeldVariable,
+  MeldPath,
 } from '@core/types/index.js';
 import { 
   VariableOrigin,
@@ -384,8 +385,8 @@ export class StateService implements IStateService {
 
   async setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): Promise<IPathVariable> {
     this.checkMutable();
-    // Create the rich variable object
-    const variable = createPathVariable(name, value, {
+    // Create the rich variable object using the factory
+    const variable = createPathVariable(name, value, { 
       origin: VariableOrigin.DIRECT_DEFINITION,
       ...metadata
     });
@@ -426,6 +427,17 @@ export class StateService implements IStateService {
 
   getAllCommands(): Map<string, CommandVariable> {
     return new Map(this.currentState.commands);
+  }
+
+  /**
+   * Gets a command definition by name (preferred over getCommandVar).
+   * 
+   * @param name - The command name.
+   * @returns The command definition or undefined.
+   */
+  getCommand(name: string): ICommandDefinition | undefined {
+    const commandVar = this.getCommandVar(name);
+    return commandVar?.value;
   }
 
   // Nodes

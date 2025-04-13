@@ -71,7 +71,6 @@ export class MeldLLMXMLError extends Error {
 export class DirectiveService implements IDirectiveService, DirectiveServiceLike {
   private validationService!: ValidationServiceLike;
   private stateService!: StateServiceLike;
-  private pathService!: PathServiceLike;
   private fileSystemService!: FileSystemLike;
   private parserService!: ParserServiceLike;
   private interpreterService?: InterpreterServiceLike; // Legacy reference

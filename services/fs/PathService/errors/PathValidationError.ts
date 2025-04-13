@@ -6,21 +6,21 @@ import type { Location } from '@core/types/index.js';
  */
 export enum PathErrorCode {
   // Basic validation
-  INVALID_PATH = 'INVALID_PATH',
-  EMPTY_PATH = 'EMPTY_PATH',
-  NULL_BYTE = 'NULL_BYTE',
-  FILE_NOT_FOUND = 'FILE_NOT_FOUND',
-  PATH_NOT_FOUND = 'PATH_NOT_FOUND',
+  E_PATH_EMPTY = 'E_PATH_EMPTY',
+  E_PATH_NULL_BYTE = 'E_PATH_NULL_BYTE',
+  E_FILE_NOT_FOUND = 'E_FILE_NOT_FOUND',
+  E_PATH_NOT_FOUND = 'E_PATH_NOT_FOUND',
   
   // File type validation
-  NOT_A_FILE = 'NOT_A_FILE',
-  NOT_A_DIRECTORY = 'NOT_A_DIRECTORY',
+  E_PATH_NOT_A_FILE = 'E_PATH_NOT_A_FILE',
+  E_PATH_NOT_A_DIRECTORY = 'E_PATH_NOT_A_DIRECTORY',
 
   // Meld-specific path rules
-  CONTAINS_DOT_SEGMENTS = 'CONTAINS_DOT_SEGMENTS',     // Path contains . or .. segments
-  INVALID_PATH_FORMAT = 'INVALID_PATH_FORMAT',         // Path with slashes doesn't use $. or $~
-  RAW_ABSOLUTE_PATH = 'RAW_ABSOLUTE_PATH',            // Path is absolute but doesn't use $. or $~
-  OUTSIDE_BASE_DIR = 'OUTSIDE_BASE_DIR'
+  E_PATH_CONTAINS_DOT_SEGMENTS = 'E_PATH_CONTAINS_DOT_SEGMENTS',     // Path contains . or .. segments
+  E_PATH_INVALID_FORMAT = 'E_PATH_INVALID_FORMAT',         // Path with slashes doesn't use $. or $~
+  E_PATH_RAW_ABSOLUTE = 'E_PATH_RAW_ABSOLUTE',            // Path is absolute but doesn't use $. or $~
+  E_PATH_OUTSIDE_ROOT = 'E_PATH_OUTSIDE_ROOT',            // Path is outside allowed root directories
+  E_PATH_EXPECTED_FS = 'E_PATH_EXPECTED_FS'               // Expected filesystem path but got URL
 }
 
 /**

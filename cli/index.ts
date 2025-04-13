@@ -11,7 +11,7 @@ import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js'
 import { createInterface } from 'readline';
 import { initCommand } from './commands/init.js';
 import { ProcessOptions } from '@core/types/index.js';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
+import { MeldError, ErrorSeverity, type BaseErrorDetails, type ErrorSourceLocation } from '@core/errors/MeldError.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { watch } from 'fs/promises';
@@ -21,6 +21,12 @@ import { debugContextCommand } from './commands/debug-context.js';
 import { debugTransformCommand } from './commands/debug-transform.js';
 import chalk from 'chalk';
 import { existsSync } from 'fs';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService.js';
+import { PathService } from '@services/fs/PathService/PathService.js';
+import { resolveService } from '@core/ServiceProvider.js';
+import { unsafeCreateNormalizedAbsoluteDirectoryPath, PathValidationContext, NormalizedAbsoluteDirectoryPath, createValidatedResourcePath, type ValidatedResourcePath } from '@core/types/paths.js';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -642,15 +648,26 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     if (process.env.NODE_ENV === 'test') {
       console.error(`Error: ${meldError.message}`);
     } else if (!cliOptions.debug) {
+      // Bypass deduplication for this formatted error
+      bypassDeduplication = true;
       // For regular users, we want to show the source location if available
-      if (meldError.filePath && meldError.context?.sourceLocation) {
-        const sourceLocation = meldError.context.sourceLocation;
-        console.error(`Error in ${sourceLocation.filePath}:${sourceLocation.line}: ${meldError.message}`);
-      } else if (meldError.filePath) {
-        console.error(`Error in ${meldError.filePath}: ${meldError.message}`);
+      // Safely access filePath and sourceLocation from the error object
+      const sourceLocation = meldError.sourceLocation;
+      const filePath = sourceLocation?.filePath;
+      const details = meldError.details;
+      const contextPath = (details as any)?.context?.filePath; // Access context path via details if available
+      
+      if (filePath && sourceLocation?.line) {
+        console.error(`Error in ${filePath}:${sourceLocation.line}: ${meldError.message}`);
+      } else if (filePath) {
+        console.error(`Error in ${filePath}: ${meldError.message}`);
+      } else if (contextPath) {
+        console.error(`Error related to ${contextPath}: ${meldError.message}`);
       } else {
         console.error(`Error: ${meldError.message}`);
       }
+      // Reset bypass flag
+      bypassDeduplication = false;
     }
     
     // Rethrow for the main function to handle
@@ -878,111 +895,57 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
         error: error instanceof Error ? error.message : String(error)
       });
       
-      // Create a simple error display function instead of using the service
+      // Helper to display source context from a file
       const displayErrorWithSourceContext = async (error: MeldError) => {
-        if (!error.filePath) {
-          return chalk.red.bold(`Error: ${error.message}`);
+        // Safely access source location and file path
+        const sourceLocation = error.sourceLocation;
+        const filePath = sourceLocation?.filePath;
+        const line = sourceLocation?.line;
+
+        if (!filePath || typeof line !== 'number' || line <= 0) {
+          console.error(chalk.red(`${error.name}: ${error.message}`));
+          return;
         }
-        
-        // Debug the actual file path being searched
-        if (options.debug) {
-          console.error(`DEBUG: Searching for source file: ${error.filePath}`);
-        }
-        
+
         try {
-          // Get file path and location
-          let filePath = error.filePath;
-          let line = 1;
-          let column = 1;
+          // Resolve services needed within the helper
+          const pathService = resolveService<PathService>('IPathService');
+          const filesystemService = resolveService<FileSystemService>('IFileSystemService');
+        
+          // Validate the path before reading
+          // Use a simplified context as we only need to read
+          const context: PathValidationContext = {
+            workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath(process.cwd()),
+            allowExternalPaths: true, // Allow reading potentially outside project
+            rules: { allowAbsolute: true, allowRelative: true, allowParentTraversal: true, mustExist: true }
+          };
+          const validatedPath = await pathService.validatePath(filePath, context);
           
-          // Extract location from error
-          if ((error as any).location?.start) {
-            line = (error as any).location.start.line;
-            column = (error as any).location.start.column;
-          } else if (error.context?.sourceLocation) {
-            line = error.context.sourceLocation.line;
-            column = error.context.sourceLocation.column;
-          }
-          
-          // Fix for hard-coded 'examples/error-test.meld' paths in error objects
-          if (filePath === 'examples/error-test.meld' && options.input) {
-            if (options.debug) {
-              console.error(`DEBUG: Replacing hardcoded path with input file: ${options.input}`);
+          const fileContent = await filesystemService.readFile(validatedPath.validatedPath);
+          const lines = fileContent.split('\n');
+          const errorLine = line - 1; // Adjust to 0-based index
+
+          console.error(chalk.red(`${error.name} in ${filePath}:${line}`));
+          console.error(chalk.red(`> ${error.message}`));
+
+          // Display context lines (e.g., 2 lines before and after)
+          const contextLines = 2;
+          const startLine = Math.max(0, errorLine - contextLines);
+          const endLine = Math.min(lines.length - 1, errorLine + contextLines);
+
+          for (let i = startLine; i <= endLine; i++) {
+            const lineNumber = i + 1;
+            const lineContent = lines[i];
+            if (i === errorLine) {
+              console.error(chalk.red.bold(`${String(lineNumber).padStart(4)} | ${lineContent}`));
+            } else {
+              console.error(chalk.grey(`${String(lineNumber).padStart(4)} | ${lineContent}`));
             }
-            filePath = options.input;
           }
-          
-          // Verify file exists
-          let fileExists = false;
-          try {
-            await fs.access(filePath);
-            fileExists = true;
-          } catch (err) {
-            if (options.debug) {
-              console.error(`DEBUG: Could not access file: ${filePath}`);
-            }
-          }
-          
-          if (!fileExists) {
-            return chalk.red.bold(`Error in ${filePath}: ${error.message}`);
-          }
-          
-          // Read the source file
-          const sourceCode = await fs.readFile(filePath, 'utf8');
-          const lines = sourceCode.split('\n');
-          
-          // Get the error line
-          const errorLine = lines[line - 1] || '';
-          
-          // Highlight the error character
-          const beforeError = errorLine.substring(0, column - 1);
-          const errorChar = errorLine.substring(column - 1, column) || ' ';
-          const afterError = errorLine.substring(column);
-          
-          const highlightedLine = chalk.white(beforeError) + 
-                                chalk.bgRed.white(errorChar) + 
-                                chalk.white(afterError);
-          
-          // Create pointer line
-          const pointerLine = ' '.repeat(column - 1 + 6) + chalk.red('^');
-          
-          // Get context lines (up to 2 lines before and after)
-          const contextLines = [];
-          
-          for (let i = Math.max(1, line - 2); i < line; i++) {
-            contextLines.push(
-              chalk.dim(`${i.toString().padStart(4)} | `) + 
-              chalk.dim(lines[i - 1] || '')
-            );
-          }
-          
-          // Add error line
-          contextLines.push(
-            chalk.bold(`${line.toString().padStart(4)} | `) + 
-            highlightedLine
-          );
-          contextLines.push(pointerLine);
-          
-          // Add lines after
-          for (let i = line + 1; i <= Math.min(lines.length, line + 2); i++) {
-            contextLines.push(
-              chalk.dim(`${i.toString().padStart(4)} | `) + 
-              chalk.dim(lines[i - 1] || '')
-            );
-          }
-          
-          // Compose the final message
-          const errorType = error.constructor.name.replace('Meld', '').replace('Error', ' Error');
-          
-          return [
-            chalk.red.bold(`${errorType}: `) + error.message,
-            chalk.dim(`    at ${chalk.cyan(filePath)}:${chalk.yellow(line.toString())}:${chalk.yellow(column.toString())}`),
-            '',
-            ...contextLines
-          ].join('\n');
-        } catch (err) {
-          console.log('Failed to format error with source context:', err);
-          return chalk.red(`Error in ${error.filePath}: ${error.message}`);
+
+        } catch (contextError) {
+          // If we fail to read context, just print the original error
+          console.error(chalk.red(`${error.name}: ${error.message} (Could not display source context)`));
         }
       };
       
@@ -1007,7 +970,7 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
               console.error('  - message:', error.message);
               console.error('  - code:', error.code);
               console.error('  - severity:', error.severity);
-              console.error('  - filePath:', error.filePath);
+              console.error('  - filePath:', error.sourceLocation?.filePath);
               
               // Log specialized properties based on error type
               if ('directiveKind' in error) {
@@ -1017,11 +980,11 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
                 console.error('  - location:', JSON.stringify((error as any).location, null, 2));
               }
               if ('details' in error) {
-                console.error('  - details:', JSON.stringify((error as any).details, null, 2));
+                console.error('  - details:', JSON.stringify(error.details, null, 2));
               }
               
               // Log context for debugging
-              console.error('  - context:', JSON.stringify(error.context, null, 2));
+              console.error('  - context:', JSON.stringify(error.details, null, 2));
               
               if (error.stack) {
                 console.error('  - stack trace available');
@@ -1049,13 +1012,16 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
           // Handle both MeldError and raw errors that might come from meld-ast
           try {
             // Always use input file path if available to handle hardcoded paths
-            if (error instanceof MeldError && options.input && error.filePath === 'examples/error-test.meld') {
+            if (error instanceof MeldError && options.input && error.sourceLocation?.filePath === 'examples/error-test.meld') {
               // Create a clone of the error with the correct file path
               const fixedPathError = new MeldError(error.message, {
                 code: error.code,
                 severity: error.severity,
-                filePath: options.input,
-                context: error.context ? { ...error.context } : {},
+                sourceLocation: {
+                  filePath: options.input,
+                  ...error.sourceLocation
+                },
+                details: error.details,
                 cause: error.cause as Error | undefined
               });
               
@@ -1103,20 +1069,21 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
                 // Cast error to MeldError for type safety
                 const meldError = error as MeldError;
                 
-                console.error('DEBUG: Error filePath property:', meldError.filePath);
-                if (meldError.context?.sourceLocation) {
-                  console.error('DEBUG: Error sourceLocation.filePath:', meldError.context.sourceLocation.filePath);
+                console.error('DEBUG: Error sourceLocation filePath:', meldError.sourceLocation?.filePath);
+                if (meldError.details?.sourceLocation) {
+                  console.error('DEBUG: Error details.sourceLocation.filePath:', meldError.details.sourceLocation.filePath);
                 }
-                if (meldError.context?.errorFilePath) {
-                  console.error('DEBUG: Error context.errorFilePath:', meldError.context.errorFilePath);
+                if (meldError.details?.errorFilePath) {
+                  console.error('DEBUG: Error details.errorFilePath:', meldError.details.errorFilePath);
                 }
-                if ((meldError as any).location?.filePath) {
-                  console.error('DEBUG: Error location.filePath:', (meldError as any).location.filePath);
+                if (meldError.details?.location?.filePath) {
+                  console.error('DEBUG: Error details.location.filePath:', meldError.details.location.filePath);
                 }
 
                 // Check if file exists at the input path
                 try {
-                  fsService.exists(options.input).then(exists => {
+                  const validatedPath = createValidatedResourcePath(options.input);
+                  fsService.exists(validatedPath).then(exists => {
                     console.error('DEBUG: Input file exists:', exists);
                   });
                 } catch (err) {
@@ -1124,46 +1091,25 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
                 }
               }
               
-              // Fix file path issues - if filePath is missing, create a new error with the correct path
+              // Fix file path issues - if sourceLocation is missing, create a new error with the correct path
               // Cast error to MeldError for type safety
               let meldError = error as MeldError;
               
-              if (!meldError.filePath && options.input) {
-                // Start with a clean context object
-                const newContext: Record<string, any> = {};
-                
-                // Copy the original context if available
-                if (meldError.context) {
-                  Object.assign(newContext, meldError.context);
-                }
-                
-                // Set sourceLocation with the proper file path
-                if (meldError.context?.sourceLocation) {
-                  newContext.sourceLocation = {
-                    ...meldError.context.sourceLocation,
-                    filePath: options.input
-                  };
-                }
-                
-                // Create a new error with the correct file path
-                const updatedError = new MeldError(meldError.message, {
-                  filePath: options.input,
+              if (!meldError.sourceLocation?.filePath && options.input) {
+                // Create a new error with the correct source location
+                const fixedError = new MeldError(meldError.message, {
                   code: meldError.code,
                   severity: meldError.severity,
-                  cause: meldError instanceof Error ? meldError : undefined,
-                  context: newContext
+                  details: meldError.details,
+                  sourceLocation: {
+                    filePath: options.input,
+                    ...meldError.sourceLocation
+                  },
+                  cause: meldError.cause
                 });
                 
-                // For any other properties, try to copy them
-                for (const prop of ['location', 'details', 'directiveKind', 'originalError']) {
-                  if (prop in meldError) {
-                    (updatedError as any)[prop] = (meldError as any)[prop];
-                  }
-                }
-                
-                // Use this updated error instead
-                meldError = updatedError;
-                error = updatedError;
+                // Use this error instead
+                error = fixedError;
               }
               
               // Use the enhanced error display service which now handles nested errors correctly
@@ -1187,9 +1133,13 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
               const enhancedErrorDisplay = await displayErrorWithSourceContext(error instanceof MeldError ? error : new MeldError(
                 error instanceof Error ? error.message : String(error),
                 {
-                  filePath: options.input,
+                  code: 'CLI_ERROR',
+                  severity: ErrorSeverity.Fatal,
+                  sourceLocation: {
+                    filePath: options.input
+                  },
                   cause: error instanceof Error ? error : undefined,
-                  context: {
+                  details: {
                     // Copy line/column from meld-ast errors if available
                     sourceLocation: (typeof error === 'object' && error !== null && 'line' in error && 'column' in error) ? {
                       filePath: (typeof error === 'object' && error !== null && 'sourceFile' in error && typeof (error as any).sourceFile === 'string') 
