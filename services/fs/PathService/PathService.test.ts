@@ -354,7 +354,9 @@ describe('PathService', () => {
       const input = createRawPath('invalid-url');
       mockUrlContentResolver.validateURL.mockRejectedValueOnce(new Error('Invalid format'));
 
-      await expect(service.validateURL(input)).rejects.toThrowError(/URL validation failed: Invalid format/);
+      await expect(service.validateURL(input)).rejects.toThrowError(
+          /^URL validation failed via resolver: Invalid format$/
+      );
     });
 
      it('should pass options to URLContentResolver', async () => {
@@ -394,7 +396,9 @@ describe('PathService', () => {
         const inputUrl = unsafeCreateUrlPath('https://fetch.example.com/fail');
         mockUrlContentResolver.fetchURL.mockRejectedValueOnce(new Error('Network Error'));
 
-        await expect(service.fetchURL(inputUrl)).rejects.toThrowError(/URL fetch failed.*Network Error/);
+        await expect(service.fetchURL(inputUrl)).rejects.toThrowError(
+            /^Failed to fetch URL content: Network Error$/
+        );
     });
   });
 

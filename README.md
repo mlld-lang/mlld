@@ -134,6 +134,8 @@ def hello():
 ```meld
 @path docs = "$PROJECTPATH/docs"
 @path home = "$HOMEPATH/meld"
+# Example Usage:
+@embed [$docs/some_file.txt] 
 ```
 
 ### Data Variables

@@ -145,6 +145,7 @@ The pipeline is organized into logical service groups, with strict initializatio
    - Handlers can provide replacement nodes for the transformed AST
    - Updates `StateService` with results and the final transformed AST
    - Handles file imports and embedding
+   - **Resolves `{{...}}` variable references within plain `TextNode` content**
 
 5. **Output Generation** (`OutputService`)
    ```ascii
@@ -162,8 +163,7 @@ The pipeline is organized into logical service groups, with strict initializatio
    ```
    - Takes the final (transformed) rich AST and state
    - Converts to requested format (markdown, llm-xml)
-   - Handles `InterpolatableValue` arrays within nodes during conversion.
-   - Performs final substitution of `{{...}}` variable references found within `TextNode` content.
+   - **Treats `TextNode` content as pre-resolved (resolution handled by InterpreterService)**
    - Uses `VariableReferenceResolverClient` for detailed field/value processing during conversion.
    - Writes output to file or stdout
 
@@ -217,6 +217,7 @@ When transformation mode is enabled, the pipeline handles directives and variabl
 2. **InterpreterService** (`services/pipeline/InterpreterService/`)
    - Orchestrates directive processing on the rich AST
    - Handles node transformations
+   - **Resolves `{{...}}` variable references within plain `TextNode` content**
    - Manages interpretation state and context (parent/child states)
    - Ensures proper state propagation for imports/embedding
 
@@ -229,7 +230,7 @@ When transformation mode is enabled, the pipeline handles directives and variabl
 4. **OutputService** (`services/pipeline/OutputService/`)
    - Uses transformed rich AST for clean output
    - Supports markdown and LLM XML formats
-   - Performs final text node variable substitution (`{{...}}`)
+   - **Treats `TextNode` content as pre-resolved (resolution handled by InterpreterService)**
    - Uses specialized clients (`VariableReferenceResolverClient`) for detailed data handling during formatting.
 
 ### State Services

@@ -1,4 +1,4 @@
-import type { MeldNode, SourceLocation, DirectiveNode } from '@core/syntax/types/index.js';
+import type { MeldNode, SourceLocation, DirectiveNode, TextNode } from '@core/syntax/types/index.js';
 import { interpreterLogger as logger } from '@core/utils/logger.js';
 import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -14,7 +14,6 @@ import { ResolutionContextFactory } from '@services/resolution/ResolutionService
 import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { createTextNode, createDirectiveNode, createLocation } from '@tests/utils/testFactories.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { DirectiveResult } from '@services/pipeline/DirectiveService/interfaces/DirectiveTypes.js';
 import type { DirectiveProcessingContext, ExecutionContext, FormattingContext } from '@core/types/index.js';
@@ -70,22 +69,19 @@ export class InterpreterService implements IInterpreterService {
   /**
    * Creates a new InterpreterService
    * 
-   * @param resolutionService - Service for text resolution (Required)
-   * @param pathService - Service for path operations (Required)
-   * @param directiveServiceClientFactory - Factory for creating directive service clients (Optional)
-   * @param stateService - Service for state management (Optional)
-   * @param parserClientFactory - Factory for creating parser service clients (Optional)
+   * @param resolutionService - Service for text resolution
+   * @param pathService - Service for path operations
+   * @param directiveServiceClientFactory - Factory for creating directive service clients
+   * @param stateService - Service for state management
+   * @param parserClientFactory - Factory for creating parser service clients
    */
   constructor(
-    // Required parameters first
     @inject('IResolutionService') resolutionService: IResolutionService,
     @inject('IPathService') pathService: IPathService,
-    // Optional parameters last
     @inject('DirectiveServiceClientFactory') directiveServiceClientFactory?: DirectiveServiceClientFactory,
     @inject('IStateService') stateService?: IStateService,
     @inject('ParserServiceClientFactory') parserClientFactory?: ParserServiceClientFactory
   ) {
-    // Assign properties based on the new order
     this.resolutionService = resolutionService;
     this.pathService = pathService;
     this.directiveClientFactory = directiveServiceClientFactory;
@@ -93,21 +89,20 @@ export class InterpreterService implements IInterpreterService {
     this.parserClientFactory = parserClientFactory;
     
     logger.debug('InterpreterService constructor', {
-      hasResolutionService: !!this.resolutionService,
-      hasPathService: !!this.pathService,
       hasDirectiveFactory: !!this.directiveClientFactory,
       hasStateService: !!this.stateService,
+      hasResolutionService: !!this.resolutionService,
       hasParserFactory: !!this.parserClientFactory,
+      hasPathService: !!this.pathService
     });
     
-    // Updated initialization check
-    if (this.directiveClientFactory && this.stateService) { 
+    if (this.directiveClientFactory && this.stateService && this.pathService) {
       this.initializeDirectiveClient();
       this.initializeParserClient();
       this.initialized = true;
       logger.debug('InterpreterService initialized via DI');
     } else {
-      logger.warn('InterpreterService constructed with missing optional dependencies (DirectiveClientFactory, StateService, ParserClientFactory). Manual initialization might be needed (deprecated).');
+      logger.warn('InterpreterService constructed with missing core dependencies (DirectiveClientFactory, StateService, PathService). Manual initialization might be needed (deprecated).');
     }
   }
 
@@ -169,8 +164,7 @@ export class InterpreterService implements IInterpreterService {
   private async callDirectiveHandleDirective(node: DirectiveNode, context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
     if (this.directiveClient && this.directiveClient.handleDirective) {
       try {
-        const result = await this.directiveClient.handleDirective(node, context);
-        return result as IStateService | DirectiveResult;
+        return await this.directiveClient.handleDirective(node, context);
       } catch (error) {
         throw new MeldInterpreterError(
           `Failed to handle directive '${node.directive.kind}' via client: ${getErrorMessage(error)}`,
@@ -255,7 +249,7 @@ export class InterpreterService implements IInterpreterService {
     } else {
       logger.warn(`Warning: ${meldError.message}`, {
         code: meldError.code,
-        filePath: errorFilePath,
+        filePath: errorFilePath, 
         severity: meldError.severity
       });
     }
@@ -287,17 +281,21 @@ export class InterpreterService implements IInterpreterService {
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
     let currentState: IStateService;
+    let initialSnapshot: IStateService | undefined = undefined;
+    let lastGoodState: IStateService | undefined = undefined;
 
     try {
       // Initialize state
       if (opts.initialState) {
         if (opts.mergeState) {
-          // Ensure initialState is treated as IStateService
-          currentState = (opts.initialState as IStateService).createChildState();
+          // When mergeState is true, create child state from initial state
+          currentState = opts.initialState.createChildState();
         } else {
+          // When mergeState is false, create completely isolated state
           currentState = this.stateService!.createChildState();
         }
       } else {
+        // No initial state, create fresh state
         currentState = this.stateService!.createChildState();
       }
 
@@ -315,8 +313,8 @@ export class InterpreterService implements IInterpreterService {
       }
 
       // Take a snapshot of initial state for rollback
-      const initialSnapshot = currentState.clone();
-      let lastGoodState = initialSnapshot;
+      initialSnapshot = currentState.clone();
+      lastGoodState = initialSnapshot;
 
       logger.debug('Starting interpretation', {
         nodeCount: nodes?.length ?? 0,
@@ -327,21 +325,21 @@ export class InterpreterService implements IInterpreterService {
       for (const node of nodes) {
         try {
           currentState = await this.interpretNode(node, currentState, opts);
-          // Update last good state after successful interpretation
           lastGoodState = currentState.clone();
         } catch (error) {
-          // Handle errors based on severity and options
           try {
             this.handleError(error instanceof Error ? error : new Error(String(error)), opts);
-            // If we get here, the error was handled as a warning
-            // Continue with the last good state
             currentState = lastGoodState.clone();
           } catch (fatalError) {
             // If we get here, the error was fatal and should be propagated
             // Restore to initial state before rethrowing
             if (opts.initialState && opts.mergeState) {
-              // Ensure initialState is treated as IStateService
-              (opts.initialState as IStateService).mergeChildState(initialSnapshot);
+              // Only attempt to merge back if we have a parent and mergeState is true
+              if (typeof opts.initialState.mergeChildState === 'function') {
+                (opts.initialState as IStateService).mergeChildState(initialSnapshot);
+              } else {
+                logger.warn('Initial state does not support mergeChildState', { initialState: opts.initialState });
+              }
             }
             throw fatalError;
           }
@@ -350,8 +348,11 @@ export class InterpreterService implements IInterpreterService {
 
       // Merge state back to parent if requested
       if (opts.initialState && opts.mergeState) {
-        // Ensure initialState is treated as IStateService
-        (opts.initialState as IStateService).mergeChildState(currentState);
+        if (typeof opts.initialState.mergeChildState === 'function') {
+          (opts.initialState as IStateService).mergeChildState(currentState);
+        } else {
+          logger.warn('Initial state does not support mergeChildState', { initialState: opts.initialState });
+        }
       }
 
       logger.debug('Interpretation completed successfully', {
@@ -408,126 +409,263 @@ export class InterpreterService implements IInterpreterService {
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
     try {
-      let textState: IStateService;
-      let currentState: IStateService = state;
+      let currentState = state; // Use incoming state directly
 
+      // Process based on node type
       switch (node.type) {
         case 'Text':
-          if (node.type === 'Text' && typeof node.content === 'string' && node.content !== null && node.content.includes('{{')) {
-            this.initializeParserClient();
-            if (!this.parserClient) {
-              throw new MeldInterpreterError('Parser client not available for text node resolution', 'initialization');
+          // Explicitly cast node to TextNode for content access
+          const textNode = node as TextNode;
+          process.stdout.write(`[InterpreterService LOG] Processing TextNode. Content includes '{{': ${textNode.content.includes('{{')}\n`);
+          process.stdout.write(`[InterpreterService LOG] Checking services: parserClient=${!!this.parserClient}, resolutionService=${!!this.resolutionService}\n`);
+          
+          let processedNode: TextNode = textNode; // Initialize with original textNode
+          if (textNode.content.includes('{{')) {
+            logger.debug('TextNode content requires resolution', { content: textNode.content.substring(0, 50) });
+            this.ensureInitialized(); // Ensure parser client is ready
+            if (this.parserClient && this.resolutionService) {
+              process.stdout.write(`[InterpreterService LOG] Parser and Resolution services OK. Attempting parse/resolve.\n`);
+              try {
+                // Handle null from getCurrentFilePath
+                const currentFilePath = state.getCurrentFilePath() ?? undefined;
+                const parsedNodes = await this.parserClient.parseString(textNode.content, { filePath: currentFilePath });
+                const context = ResolutionContextFactory.create(state, currentFilePath);
+                const textResolutionContext = context.withFlags({ preserveUnresolved: false });
+                process.stdout.write(`[InterpreterService LOG] Context for resolveNodes: strict=${textResolutionContext.strict}, depth=${textResolutionContext.depth}, preserveUnresolved=${textResolutionContext.flags.preserveUnresolved}\n`);
+                const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, textResolutionContext);
+                // Create a new node with resolved content
+                processedNode = { ...textNode, content: resolvedContent }; // Use spread on textNode
+                process.stdout.write(`[InterpreterService LOG] Resolved content: '${resolvedContent}'\n`);
+                process.stdout.write(`[InterpreterService LOG] Processed node content: '${processedNode.content}'\n`);
+                logger.debug('Successfully resolved TextNode content', {
+                  originalLength: textNode.content.length,
+                  resolvedLength: resolvedContent.length
+                });
+              } catch (error) {
+                logger.error('Failed to resolve TextNode content during interpretation', {
+                   error: error instanceof Error ? error.message : String(error),
+                   content: textNode.content.substring(0, 100) // Use textNode here
+                });
+                // If resolution fails, use the original node (processedNode remains textNode)
+              }
+            } else {
+              logger.warn('ParserClient or ResolutionService not available for TextNode resolution.');
+              // Use original node if services aren't available
             }
-            const parsedNodes = await this.parserClient.parseString(node.content, { filePath: state.getCurrentFilePath() });
-            const context = ResolutionContextFactory.create(state, state.getCurrentFilePath());
-            const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, context);
-            const resolvedNode: TextNode = { ...node, content: resolvedContent };
-            node = resolvedNode;
           }
-          textState = currentState.clone();
-          if (node.type === 'Text') {
-            textState.addNode(node);
-          }
+          // Create new state for the potentially resolved text node
+          const textState = currentState.clone();
+          textState.addNode(processedNode);
           currentState = textState;
           break;
 
-        case 'Directive':
-          const directiveNode = node as DirectiveNode;
-          if (this.callDirectiveSupportsDirective(directiveNode.directive.kind)) {
-            const context = this.createDirectiveProcessingContext(currentState, directiveNode);
-            const result: IStateService | DirectiveResult = await this.callDirectiveHandleDirective(directiveNode, context);
-
-            if (result && typeof result === 'object' && 'replacement' in result) {
-                const directiveResult = result as DirectiveResult;
-                currentState = directiveResult.state;
-                if (directiveResult.replacement !== undefined) {
-                  if (typeof currentState.clone === 'function' && typeof currentState.transformNode === 'function') {
-                      const transformedState = currentState.clone();
-                      const originalNodes = currentState.getNodes();
-                      const index = originalNodes.findIndex(n => n === directiveNode);
-                      if (index !== -1) {
-                           transformedState.transformNode(index, directiveResult.replacement);
-                      } else {
-                           logger.warn('Could not find original directive node index for transformation');
-                      }
-                      currentState = transformedState;
-                  } else {
-                     logger.warn('StateService missing clone or transformNode method');
-                     currentState = directiveResult.state;
-                  }
-                } else {
-                   currentState = directiveResult.state;
-                   currentState = currentState.clone();
-                }
-            } else {
-                currentState = result as IStateService;
-            }
-          } else {
-            logger.warn('Unsupported directive encountered', { kind: directiveNode.directive.kind });
-            const unsupportedState = currentState.clone();
-            unsupportedState.addNode(directiveNode);
-            currentState = unsupportedState;
-          }
-          break;
-
         case 'CodeFence':
+          // Handle CodeFence nodes similar to Text nodes - preserve them exactly
           const codeFenceState = currentState.clone();
-          if (node.type === 'CodeFence') {
-            codeFenceState.addNode(node);
-          }
+          codeFenceState.addNode(node);
           currentState = codeFenceState;
           break;
 
+        case 'VariableReference':
+          // Handle variable reference nodes
+          if ((node as any).valueType === 'text') {
+            // Handle TextVar nodes similar to Text nodes
+            const textVarState = currentState.clone();
+            textVarState.addNode(node);
+            currentState = textVarState;
+          } else if ((node as any).valueType === 'data') {
+            // Handle DataVar nodes similar to Text/TextVar nodes
+            const dataVarState = currentState.clone();
+            dataVarState.addNode(node);
+            currentState = dataVarState;
+          }
+          break;
+          
+        // Note: Legacy TextVar and DataVar cases are kept for backward compatibility
+        case 'TextVar' as any:
+          // Handle TextVar nodes similar to Text nodes
+          const textVarState = currentState.clone();
+          textVarState.addNode(node);
+          currentState = textVarState;
+          break;
+
+        case 'DataVar' as any:
+          // Handle DataVar nodes similar to Text/TextVar nodes
+          const dataVarState = currentState.clone();
+          dataVarState.addNode(node);
+          currentState = dataVarState;
+          break;
+
+        case 'Comment':
+          // Comments are ignored during interpretation
+          break;
+
+        case 'Directive':
+          const directiveState = currentState.clone(); // Clone the loop's current state ONCE
+          directiveState.addNode(node); // Add the node first to maintain order
+          if (node.type !== 'Directive' || !('directive' in node) || !node.directive) {
+            throw new MeldInterpreterError(
+              'Invalid directive node',
+              'invalid_directive',
+              convertLocation(node.location)
+            );
+          }
+          const directiveNode = node as DirectiveNode;
+          const isImportDirective = directiveNode.directive.kind === 'import';
+          
+          // --- Create Context Objects --- 
+          const baseResolutionContext = ResolutionContextFactory.create(directiveState, directiveState.getCurrentFilePath() ?? undefined);
+          // Create Formatting Context (example initialization)
+          const formattingContext: FormattingContext = {
+            isOutputLiteral: directiveState.isTransformationEnabled?.() || false,
+            contextType: 'block', // Default to block context
+            nodeType: directiveNode.type,
+            atLineStart: true, // Default assumption
+            atLineEnd: false // Default assumption
+          };
+          
+          // Create Execution Context (only for @run - example)
+          let executionContext: ExecutionContext | undefined = undefined;
+          if (directiveNode.directive.kind === 'run') {
+            // Populate based on directiveNode properties or defaults
+            executionContext = {
+              cwd: directiveState.getCurrentFilePath() ? this.pathService.dirname(directiveState.getCurrentFilePath()!) : process.cwd(),
+              // ... other ExecutionContext fields based on directive options or defaults
+            };
+          }
+          
+          // Assemble the main processing context
+          const handlerContext: DirectiveProcessingContext = {
+            state: directiveState,
+            resolutionContext: baseResolutionContext, // Use the created resolution context
+            formattingContext: formattingContext,
+            executionContext: executionContext, // Include if it was created
+            directiveNode: directiveNode, // Pass the directive node itself
+          };
+          // --- End Context Creation ---
+
+          const directiveResult = await this.callDirectiveHandleDirective(directiveNode, handlerContext);
+
+          let resultState: IStateService;
+          let replacementNode: MeldNode | undefined = undefined;
+          
+          if (
+            directiveResult &&
+            typeof directiveResult === 'object' &&
+            'replacement' in directiveResult
+          ) {
+            resultState = (directiveResult as DirectiveResult).state; 
+            replacementNode = (directiveResult as DirectiveResult).replacement;
+          } else if (directiveResult && typeof directiveResult === 'object') {
+            resultState = directiveResult as IStateService;
+          } else {
+             throw new MeldInterpreterError(
+               `Directive handler for '${directiveNode.directive.kind}' returned an unexpected type.`,
+               'directive_result_error',
+               convertLocation(directiveNode.location)
+             );
+          }
+
+          if (!resultState) {
+             throw new MeldInterpreterError(
+               `Directive handler for '${directiveNode.directive.kind}' did not return a valid state object.`,
+               'directive_result_error',
+               convertLocation(directiveNode.location)
+             );
+          }
+
+          currentState = resultState;
+
+          if ('getFormattingContext' in resultState && typeof resultState.getFormattingContext === 'function') {
+            const updatedContext = resultState.getFormattingContext();
+            if (updatedContext) {
+              logger.debug('Formatting context updated by directive', {
+                directiveKind: directiveNode.directive.kind,
+                contextType: updatedContext.contextType,
+                isOutputLiteral: updatedContext.isOutputLiteral
+              });
+            }
+          }
+          
+          if (replacementNode) {
+            // Cast node and replacementNode explicitly for transformNode call
+            if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) {
+              logger.debug('Applying replacement node from directive handler', {
+                originalType: node.type,
+                replacementType: replacementNode.type,
+                directiveKind: directiveNode.directive.kind,
+                isVarReference: directiveNode.directive.kind === 'embed' &&
+                               typeof directiveNode.directive.path === 'object' &&
+                               directiveNode.directive.path !== null &&
+                               'isVariableReference' in directiveNode.directive.path
+              });
+
+              currentState.transformNode(node as DirectiveNode, replacementNode as MeldNode);
+            }
+          }
+          
+          if (isImportDirective && 
+              currentState.isTransformationEnabled && 
+              currentState.isTransformationEnabled()) {
+            try {
+              logger.debug('Import directive in transformation mode, copying variables to original state');
+              
+              this.stateVariableCopier.copyAllVariables(
+                currentState,
+                state,
+                {
+                  skipExisting: false,
+                  trackContextBoundary: false,
+                  trackVariableCrossing: false
+                }
+              );
+            } catch (e) {
+              logger.debug('Error copying variables from import to original state', { error: e });
+            }
+          }
+          
+          break;
+
         default:
-          logger.warn('Unhandled node type during interpretation', { type: node.type });
-          const unhandledState = currentState.clone();
-          unhandledState.addNode(node);
-          currentState = unhandledState;
+          throw new MeldInterpreterError(
+            `Unknown node type: ${node.type}`,
+            'unknown_node',
+            convertLocation(node.location)
+          );
       }
 
       return currentState;
     } catch (error) {
-      const location = convertLocation(node?.location); 
-      const meldError = error instanceof MeldError 
-        ? error 
-        : new MeldInterpreterError(
-            `Error interpreting ${node?.type ?? 'unknown'} node: ${getErrorMessage(error)}`,
-            node?.type ?? 'interpretation_error', 
-            location,
-            { cause: error instanceof Error ? error : undefined } 
-          );
-      if (!meldError.sourceLocation && node?.location) {
-         // Don't assign to read-only sourceLocation
-      } else if (!meldError.location && location) {
-         meldError.location = location; // Assign legacy location if sourceLocation missing
+      // Preserve MeldInterpreterError or wrap other errors
+      if (error instanceof MeldInterpreterError) {
+        console.log("[TEST DEBUG] Re-throwing existing MeldInterpreterError:", JSON.stringify(error));
+        throw error;
       }
-      throw meldError; 
+      // Wrap other errors, ensuring location is included
+      const errorLocation: InterpreterLocation | undefined = node.location ? {
+          line: node.location.start?.line,
+          column: node.location.start?.column,
+          filePath: state?.getCurrentFilePath() ?? undefined
+      } : undefined;
+      
+      console.log("[TEST DEBUG] interpretNode catch creating error with location:", JSON.stringify(errorLocation));
+
+      throw new MeldInterpreterError(
+        getErrorMessage(error),
+        node.type, // Use node type as code for context
+        errorLocation, // Pass constructed ErrorSourceLocation
+        {
+          cause: error instanceof Error ? error : undefined,
+          severity: ErrorSeverity.Recoverable, 
+          context: {
+            nodeType: node.type,
+            state: {
+              filePath: state?.getCurrentFilePath() ?? undefined
+            }
+          }
+        }
+      );
     }
-  }
-
-  /**
-   * Creates a processing context for a directive.
-   */
-  private createDirectiveProcessingContext(
-    currentState: IStateService, // Use IStateService
-    directiveNode: DirectiveNode
-  ): DirectiveProcessingContext {
-    const filePath = typeof currentState.getCurrentFilePath === 'function' 
-                      ? currentState.getCurrentFilePath() 
-                      : undefined;
-                      
-    const resolutionContext = ResolutionContextFactory.create(currentState, filePath);
-    
-    const formattingContext: FormattingContext = {}; 
-    const executionContext: ExecutionContext | undefined = directiveNode.directive.kind === 'run' ? { cwd: process.cwd() } : undefined;
-
-    return {
-      state: currentState, 
-      resolutionContext,
-      formattingContext,
-      executionContext,
-      directiveNode
-    };
   }
 
   async createChildContext(

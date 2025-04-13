@@ -1,6 +1,7 @@
 import type { MeldNode } from '@core/syntax/types/index.js';
 import type { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import type { StateNode } from './types.js';
 import type {
   JsonValue,
   TextVariable,
@@ -405,7 +406,7 @@ interface IStateService {
    * 
    * @returns The internal StateNode object.
    */
-  // getInternalStateNode(): StateNode; // Commenting out if StateNode type import is issue
+  getInternalStateNode(): StateNode;
 
   /**
    * Gets a command definition by name (preferred over getCommandVar).

@@ -1,5 +1,5 @@
 import * as path from 'path';
-import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import type { ResolutionContext, FormattingContext } from '@core/types/resolution';
 import {
@@ -34,15 +34,15 @@ import {
   NormalizedAbsoluteDirectoryPath,
   isBasicCommand
 } from '@core/types';
-import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/ast/ast/astTypes';
+import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/syntax/types/index.js';
 import { ResolutionContextFactory } from './ResolutionContextFactory';
 import { CommandResolver } from './resolvers/CommandResolver';
 import { ContentResolver } from './resolvers/ContentResolver';
-import { VariableReferenceResolver } from './resolvers/VariableReferenceResolver';
+import { VariableReferenceResolver } from './resolvers/VariableReferenceResolver.js';
 import { logger } from '@core/utils/logger';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { inject, singleton, container } from 'tsyringe';
-import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index';
 import { Service } from '@core/ServiceProvider';
 import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
@@ -59,6 +59,15 @@ import { isTextVariable, isPathVariable, isCommandVariable, isDataVariable, isFi
 // Import and alias the AST Field type
 import { Field as AstField } from '@core/syntax/types/shared-types';
 import { InterpolatableValue } from '@core/syntax/types/ast';
+import type {
+  AbsolutePath,
+  RelativePath,
+  RawPath,
+  PathValidationContext
+} from '@core/types/paths.js';
+import {
+  createAbsolutePath,
+} from '@core/types/paths.js';
 
 /**
  * Internal type for heading nodes in the ResolutionService
@@ -413,15 +422,20 @@ export class ResolutionService implements IResolutionService {
    * Handles TextNodes and delegates VariableReferenceNodes to the appropriate resolver.
    */
   public async resolveNodes(nodes: InterpolatableValue, context: ResolutionContext): Promise<string> {
-    // Add check for resolver
-    if (!this.variableReferenceResolver) {
-        throw new Error('VariableReferenceResolver not initialized in resolveNodes');
+    let result = '';
+    if (!Array.isArray(nodes)) {
+      logger.warn('resolveNodes called with non-array input', { inputType: typeof nodes });
+      // Attempt to handle potential single node case, otherwise return empty
+      if (nodes && typeof nodes === 'object' && 'type' in nodes) {
+        nodes = [nodes as TextNode | VariableReferenceNode];
+      } else {
+        return '';
+      }
     }
-    logger.debug(`resolveNodes called`, { nodeCount: nodes.length, contextFlags: context.flags, inputNodes: JSON.stringify(nodes) });
-    const resolvedParts: string[] = [];
+
     for (const node of nodes) {
       if (node.type === 'Text') {
-        resolvedParts.push((node as TextNode).content);
+        result += (node as TextNode).content;
       } else if (node.type === 'VariableReference') {
         // Move log BEFORE the try block
         logger.info('[resolveNodes] Attempting to resolve VariableReferenceNode:', { 
@@ -434,7 +448,15 @@ export class ResolutionService implements IResolutionService {
           const resolvedValue = await this.variableReferenceResolver.resolve(node as VariableReferenceNode, context);
           // Add log AFTER await
           logger.debug(`[resolveNodes] Successfully resolved node ${node.identifier}, value starts: ${resolvedValue.substring(0, 30)}`);
-          resolvedParts.push(resolvedValue);
+
+          // Check if the resolved value itself needs further resolution
+          // Use Array.isArray as a simple check for InterpolatableValue structure
+          if (Array.isArray(resolvedValue)) { 
+            logger.debug('Recursively resolving nested InterpolatableValue', { variable: node.identifier });
+            result += await this.resolveNodes(resolvedValue, context);
+          } else {
+            result += resolvedValue;
+          }
         } catch (error) {
            logger.error(`resolveNodes: Error resolving individual node ${ (node as VariableReferenceNode).identifier }`, { error });
            if (context.strict) {
@@ -442,7 +464,7 @@ export class ResolutionService implements IResolutionService {
              // throw error;
              return Promise.reject(error); 
            } else {
-             resolvedParts.push(''); // Non-strict
+             result += ''; // Non-strict
            }
          }
        } else {
@@ -450,9 +472,8 @@ export class ResolutionService implements IResolutionService {
        }
     }
     
-    const finalResult = resolvedParts.join('');
-    logger.debug(`resolveNodes: Final resolved string: ${finalResult.substring(0,100)}`);
-    return finalResult;
+    logger.debug(`resolveNodes: Final resolved string: ${result.substring(0,100)}`);
+    return result;
   }
 
   /**

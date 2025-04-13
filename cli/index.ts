@@ -665,13 +665,15 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
       // Use sourceLocation property
       if (error.sourceLocation) {
         const { filePath } = error.sourceLocation;
+        // Explicitly cast to Location for DTS
+        const loc = error.sourceLocation as Location;
         const displayContext: { message: string; code?: string; cause?: Error | unknown; path?: string; startLine?: number; endLine?: number } = {
           message: error.message,
           code: error.code,
           cause: error.cause,
           path: filePath,
-          startLine: error.sourceLocation.start?.line,
-          endLine: error.sourceLocation.end?.line 
+          startLine: loc.start?.line,
+          endLine: loc.end?.line 
         };
         
         // Check if error.details exists and has path property (MeldError uses details)
@@ -726,14 +728,12 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
 }
 
 /**
- * Main CLI entry point
- * 
- * @param fsAdapter Optional filesystem adapter for testing
- * @param customArgs Optional command line arguments (defaults to process.argv.slice(2))
+ * Central entry point for the CLI, parsing arguments and orchestrating file processing.
+ * Allows injecting a filesystem adapter for testing.
  */
-export async function main(fsAdapter?: typeof Meld, customArgs?: string[]): Promise<void> {
+export async function main(customArgs?: string[]): Promise<void> {
   process.title = 'meld';
-  let cliOptions: CLIOptions = { input: 'unknown' }; // Initialize with default
+  let cliOptions: CLIOptions = { input: '' }; // Initialize with default
 
   try {
     // Reset errorLogged flag for each invocation of main
@@ -837,26 +837,13 @@ export async function main(fsAdapter?: typeof Meld, customArgs?: string[]): Prom
       });
     }
 
-    // Get DI container
-    // const serviceProvider = new ServiceProvider(); // Don't instantiate directly
-    // const container = container; // Use the imported container directly
-
-    // Handle custom FS for testing
-    let apiOptions: ProcessOptions = cliToApiOptions(cliOptions);
-    if (fsAdapter) {
-      // Assign fsAdapter only if it's compatible with NodeFileSystem
-      // This might need adjustment based on the actual type of Meld API's fs option
-      apiOptions.fs = fsAdapter instanceof NodeFileSystem ? fsAdapter : new NodeFileSystem(); 
-      cliOptions.custom = true; 
-    }
-
     // Watch mode or single processing
     if (cliOptions.watch) {
       await watchFiles(cliOptions); // Pass cliOptions
       return;
     }
 
-    await processFileWithOptions(cliOptions, apiOptions);
+    await processFileWithOptions(cliOptions, cliToApiOptions(cliOptions));
 
   } catch (error: unknown) { // Catch unknown type
     // Use the centralized error handler
