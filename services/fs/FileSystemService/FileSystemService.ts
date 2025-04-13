@@ -11,11 +11,44 @@ import { promisify } from 'util';
 import { MeldFileSystemError } from '@core/errors/MeldFileSystemError.js';
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IPathService, URLValidationOptions } from '@services/fs/PathService/IPathService.js';
 import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
 import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
 import type { ValidatedResourcePath, RawPath } from '@core/types/paths.js';
 import { createRawPath } from '@core/types/paths.js';
+import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError.js';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
+import type { Location, Position } from '@core/types/index.js';
+import * as path from 'path';
+import * as os from 'os';
+import type { MeldNode } from '@core/syntax/types/index.js';
+import { PathErrorMessages } from '@core/errors/messages/index.js';
+import { container } from 'tsyringe';
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURLCache.js';
+import { URLError } from '@services/fs/PathService/errors/url/index.js';
+import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+import {
+  AbsolutePath,
+  RelativePath,
+  UrlPath,
+  StructuredPath,
+  PathValidationContext,
+  NormalizedAbsoluteDirectoryPath,
+  unsafeCreateAbsolutePath,
+  unsafeCreateRelativePath,
+  unsafeCreateUrlPath,
+  isRawPath,
+  isAbsolutePath,
+  isRelativePath,
+  isUrlPath,
+  isValidatedResourcePath,
+  PathContentType,
+  type MeldPath,
+  type AnyPath,
+  type MeldResolvedFilesystemPath,
+} from '@core/types/paths.js';
 
 const execAsync = promisify(exec);
 
@@ -142,7 +175,8 @@ export class FileSystemService implements IFileSystemService {
       }
       
       // Fall back to path operations service
-      return this.pathOps.resolvePath(createRawPath(pathString)) as string;
+      const rawPath = createRawPath(pathString);
+      return this.pathOps.resolvePath(rawPath) as string;
     } catch (error) {
       logger.warn('Error resolving path', {
         path: filePath,

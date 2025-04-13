@@ -26,7 +26,13 @@ import { FileSystemService } from '@services/fs/FileSystemService/FileSystemServ
 import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { resolveService } from '@core/ServiceProvider.js';
-import { unsafeCreateNormalizedAbsoluteDirectoryPath, PathValidationContext, NormalizedAbsoluteDirectoryPath, createValidatedResourcePath, type ValidatedResourcePath } from '@core/types/paths.js';
+import { 
+  unsafeCreateNormalizedAbsoluteDirectoryPath, 
+  PathValidationContext, 
+  NormalizedAbsoluteDirectoryPath,
+  unsafeCreateValidatedResourcePath,
+  type ValidatedResourcePath 
+} from '@core/types/paths.js';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -1082,7 +1088,7 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
 
                 // Check if file exists at the input path
                 try {
-                  const validatedPath = createValidatedResourcePath(options.input);
+                  const validatedPath = unsafeCreateValidatedResourcePath(options.input);
                   fsService.exists(validatedPath).then(exists => {
                     console.error('DEBUG: Input file exists:', exists);
                   });
@@ -1110,6 +1116,16 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
                 
                 // Use this error instead
                 error = fixedError;
+              }
+              
+              // Check if file exists at the input path
+              try {
+                const validatedPath = unsafeCreateValidatedResourcePath(options.input);
+                fsService.exists(validatedPath).then(exists => {
+                  console.error('DEBUG: Input file exists:', exists);
+                });
+              } catch (err) {
+                console.error('DEBUG: Error checking if file exists:', err);
               }
               
               // Use the enhanced error display service which now handles nested errors correctly
