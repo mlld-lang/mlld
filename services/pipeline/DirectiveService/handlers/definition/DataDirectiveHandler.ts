@@ -29,7 +29,8 @@ import {
     SourceLocation as CoreSourceLocation, // Alias import
     VariableOrigin, 
     VariableMetadata, 
-    DataVariable 
+    DataVariable,
+    IPathVariable 
 } from '@core/types/index.js'; 
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
@@ -39,8 +40,8 @@ import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 // Import command definition types and type guard
 import { ICommandDefinition, isBasicCommand } from '@core/types/define.js'; 
-// <<< Remove duplicate imports >>>
-// import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, StructuredPath as AstStructuredPath, VariableMetadata } from '@core/types'; 
+// <<< Restore missing imports for path types >>>
+import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState } from '@core/types'; 
 
 // Define local interfaces mirroring expected AST structure for type safety
 // Based on docs/dev/AST.md
@@ -111,13 +112,15 @@ export class DataDirectiveHandler implements IDirectiveHandler {
     try {
       let resolvedValue: unknown;
       
-      // <<< Only create location if currentFilePath is defined >>>
-      const directiveSourceLocation: CoreSourceLocation | undefined =
-          node.location?.start && currentFilePath ? {
-              filePath: currentFilePath, // Guaranteed string here
+      // <<< Define location using CoreSourceLocation type explicitly >>>
+      let directiveSourceLocation: CoreSourceLocation | undefined = undefined;
+      if (node.location?.start && typeof currentFilePath === 'string') {
+          directiveSourceLocation = { 
+              filePath: currentFilePath, 
               line: node.location.start.line,
               column: node.location.start.column,
-          } : undefined; // Leave undefined if path is missing
+          };
+      }
 
       if (source === 'literal') {
         // Value should exist for literal source
@@ -185,37 +188,36 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           if (embedSubtype === 'embedPath') {
               const embedPathObject = embed.path;
               if (!embedPathObject) {
-                 throw new DirectiveError('Missing path for @embed source (subtype: embedPath)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: currentFilePath ?? undefined } });
+                 throw new DirectiveError('Missing path for @embed source (subtype: embedPath)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: currentFilePath ?? undefined } }); 
               }
-              const valueToResolve = embedPathObject.interpolatedValue ?? embedPathObject.raw;
-              const resolvedEmbedPathString = await this.resolutionService.resolveInContext(valueToResolve, resolutionContext);
+              const resolvedEmbedPathString = await this.resolutionService.resolveInContext(embedPathObject, resolutionContext);
               const validatedMeldPath = await this.resolutionService.resolvePath(resolvedEmbedPathString, resolutionContext);
               
               if (validatedMeldPath.contentType !== 'filesystem') {
-                  throw new DirectiveError(`Cannot embed non-filesystem path: ${resolvedEmbedPathString}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: currentFilePath ?? undefined } });
+                  throw new DirectiveError(`Cannot embed non-filesystem path: ${resolvedEmbedPathString}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: currentFilePath ?? undefined } }); 
               }
 
               const fsService = this.fileSystemService;
               if (!fsService) {
-                throw new DirectiveError('File system service is unavailable for @embed execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node, context: { currentFilePath: currentFilePath ?? undefined } });
+                throw new DirectiveError('File system service is unavailable for @embed execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node, context: { currentFilePath: currentFilePath ?? undefined } }); 
               }
               fileContent = await fsService.readFile(validatedMeldPath.validatedPath);
 
           } else if (embedSubtype === 'embedVariable') {
               const embedPathObject = embed.path;
               if (!embedPathObject) {
-                 throw new DirectiveError('Missing variable reference for @embed source (subtype: embedVariable)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: currentFilePath ?? undefined } });
+                 throw new DirectiveError('Missing variable reference for @embed source (subtype: embedVariable)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: currentFilePath ?? undefined } }); 
               }
               fileContent = await this.resolutionService.resolveInContext(embedPathObject.raw, resolutionContext);
 
           } else if (embedSubtype === 'embedTemplate') {
               const templateContent = embed.content;
               if (!templateContent || !isInterpolatableValueArray(templateContent)) {
-                  throw new DirectiveError('Missing or invalid content for @embed source (subtype: embedTemplate)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: currentFilePath ?? undefined } });
+                  throw new DirectiveError('Missing or invalid content for @embed source (subtype: embedTemplate)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: currentFilePath ?? undefined } }); 
               }
               fileContent = await this.resolutionService.resolveNodes(templateContent, resolutionContext);
           } else {
-             throw new DirectiveError(`Unsupported embed subtype: ${embedSubtype}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: currentFilePath ?? undefined } });
+             throw new DirectiveError(`Unsupported embed subtype: ${embedSubtype}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: { currentFilePath: currentFilePath ?? undefined } }); 
           }
           
           if (embed.section) {
@@ -254,24 +256,38 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       
       const metadata: Partial<VariableMetadata> = {
           origin: VariableOrigin.DIRECT_DEFINITION, 
-          definedAt: directiveSourceLocation // Assign potentially undefined location
+          definedAt: directiveSourceLocation 
       };
       
-      // <<< Revert to 3 arguments for setDataVar >>>
-      await state.setDataVar(identifier, resolvedValue as JsonValue, metadata);
+      // <<< Call setDataVar with 3 args, casting state explicitly >>>
+      await (state as IStateService).setDataVar(identifier, resolvedValue as JsonValue, metadata);
       
-      // <<< Return state directly without casting >>>
-      return { state: state, replacement: undefined }; 
+      // <<< Return state directly, casting state explicitly for clarity >>>
+      return { state: state as IStateService, replacement: undefined }; 
 
     } catch (error) {
       if (error instanceof DirectiveError) {
         throw error;
       } 
+      // <<< Ensure final error uses correct CoreSourceLocation for details if possible >>>
+      let errorLocation: CoreSourceLocation | undefined = undefined;
+      if (node.location?.start && typeof currentFilePath === 'string') {
+          errorLocation = { 
+              filePath: currentFilePath, 
+              line: node.location.start.line,
+              column: node.location.start.column,
+          };
+      }
       throw new DirectiveError(
         `Error processing data directive: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'data',
         DirectiveErrorCode.EXECUTION_FAILED,
-        { node: node, context: { currentFilePath: currentFilePath ?? undefined }, cause: error instanceof Error ? error : undefined }
+        { 
+          node: node, 
+          context: { currentFilePath: currentFilePath ?? undefined }, // Keep context simple here
+          cause: error instanceof Error ? error : undefined,
+          location: errorLocation // Pass the potentially undefined CoreSourceLocation here
+        }
       );
     }
   }
