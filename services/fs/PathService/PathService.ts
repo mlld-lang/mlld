@@ -2,7 +2,7 @@ import type { IPathService, URLValidationOptions } from '@services/fs/PathServic
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import type { Location, Position } from '@core/types/index.js';
+import type { Location } from '@core/types.js';
 import * as path from 'path';
 import * as os from 'os';
 import type { MeldNode } from '@core/syntax/types/index.js';
@@ -26,7 +26,6 @@ import {
   URLError 
 } from '@services/fs/PathService/errors/url/index.js';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
-import type { IFileSystemClient } from '@services/fs/FileSystemService/interfaces/IFileSystemClient.js';
 import {
   AbsolutePath,
   RelativePath,
@@ -51,6 +50,7 @@ import {
   createRawPath
 } from '@core/types/paths.js';
 import { ErrorSeverity } from '@core/errors/index.js';
+import type { Position } from '@core/types.js';
 import type { IFileSystemClient } from '@services/fs/FileSystemService/IFileSystemClient.js';
 
 /**
@@ -613,7 +613,7 @@ export class PathService implements IPathService {
         throw new PathValidationError(
           PathErrorMessages.NULL_BYTE,
           {
-            code: PathErrorCode.E_PATH_NULL_BYTE,
+            code: 'E_PATH_NULL_BYTE',
             severity: ErrorSeverity.Fatal,
             details: { pathString: rawInputPath }
           }
@@ -689,10 +689,10 @@ export class PathService implements IPathService {
             throw new PathValidationError(
                 PathErrorMessages.OUTSIDE_PROJECT_ROOT,
                 {
-                    code: PathErrorCode.E_PATH_OUTSIDE_ROOT,
+                    code: 'E_PATH_OUTSIDE_ROOT',
                     severity: ErrorSeverity.Fatal,
                     details: {
-                        pathString: resolvedPath as string,
+                        pathString: resolvedPath as string, // Use resolved path here?
                         resolvedPath: resolvedPath as string,
                         allowedRoots: allowedDirStrings
                     }
@@ -724,7 +724,7 @@ export class PathService implements IPathService {
         throw new PathValidationError(
           PathErrorMessages.FILE_NOT_FOUND,
           {
-            code: PathErrorCode.E_FILE_NOT_FOUND,
+            code: 'E_FILE_NOT_FOUND',
             severity: ErrorSeverity.Fatal,
             details: { pathString: resolvedPath as string }
           }
@@ -739,7 +739,7 @@ export class PathService implements IPathService {
              throw new PathValidationError(
                  PathErrorMessages.NOT_A_FILE,
                  {
-                   code: PathErrorCode.E_PATH_NOT_A_FILE,
+                   code: 'E_PATH_NOT_A_FILE',
                    severity: ErrorSeverity.Fatal,
                    details: { pathString: resolvedPath as string }
                  }
@@ -750,7 +750,7 @@ export class PathService implements IPathService {
              throw new PathValidationError(
                  PathErrorMessages.NOT_A_DIRECTORY,
                  {
-                   code: PathErrorCode.E_PATH_NOT_A_DIRECTORY,
+                   code: 'E_PATH_NOT_A_DIRECTORY',
                    severity: ErrorSeverity.Fatal,
                    details: { pathString: resolvedPath as string }
                  }
@@ -779,7 +779,7 @@ export class PathService implements IPathService {
       throw new PathValidationError(
         PathErrorMessages.NULL_BYTE,
         {
-          code: PathErrorCode.E_PATH_NULL_BYTE,
+          code: 'E_PATH_NULL_BYTE',
           severity: ErrorSeverity.Fatal,
           details: { pathString: pathString },
           sourceLocation: location
@@ -793,14 +793,14 @@ export class PathService implements IPathService {
    * @param filePath - The path to check
    * @returns True if the path exists, false otherwise
    */
-  async exists(filePath: ValidatedResourcePath): Promise<boolean> {
+  async exists(filePath: string): Promise<boolean> {
     // Ensure factory is initialized - only when needed
     this.ensureFactoryInitialized();
     
     // Try to use the filesystem client
     if (this.fsClient) {
       try {
-        return await this.fsClient.exists(filePath as string);
+        return await this.fsClient.exists(filePath);
       } catch (error) {
         logger.warn('Error using fsClient.exists', { 
           error, 
@@ -819,24 +819,24 @@ export class PathService implements IPathService {
    * @param dirPath - The path to check
    * @returns True if the path is a directory, false otherwise
    */
-  async isDirectory(filePath: ValidatedResourcePath): Promise<boolean> {
+  async isDirectory(dirPath: string): Promise<boolean> {
     // Ensure factory is initialized - only when needed
     this.ensureFactoryInitialized();
     
     // Try to use the filesystem client
     if (this.fsClient) {
       try {
-        return await this.fsClient.isDirectory(filePath as string);
+        return await this.fsClient.isDirectory(dirPath);
       } catch (error) {
         logger.warn('Error using fsClient.isDirectory', { 
           error, 
-          path: filePath 
+          path: dirPath 
         });
       }
     }
     
     // Last resort fallback - assume path is not a directory
-    logger.warn('No filesystem service available, assuming path is not a directory', { path: filePath });
+    logger.warn('No filesystem service available, assuming path is not a directory', { path: dirPath });
     return false;
   }
 

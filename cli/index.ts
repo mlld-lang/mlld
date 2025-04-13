@@ -11,7 +11,7 @@ import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js'
 import { createInterface } from 'readline';
 import { initCommand } from './commands/init.js';
 import { ProcessOptions } from '@core/types/index.js';
-import { MeldError, ErrorSeverity, type BaseErrorDetails, type ErrorSourceLocation } from '@core/errors/MeldError.js';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { watch } from 'fs/promises';
@@ -26,13 +26,7 @@ import { FileSystemService } from '@services/fs/FileSystemService/FileSystemServ
 import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { resolveService } from '@core/ServiceProvider.js';
-import { 
-  unsafeCreateNormalizedAbsoluteDirectoryPath, 
-  PathValidationContext, 
-  NormalizedAbsoluteDirectoryPath,
-  unsafeCreateValidatedResourcePath,
-  type ValidatedResourcePath 
-} from '@core/types/paths.js';
+import { unsafeCreateNormalizedAbsoluteDirectoryPath, PathValidationContext, NormalizedAbsoluteDirectoryPath } from '@core/types/paths.js';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -976,7 +970,7 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
               console.error('  - message:', error.message);
               console.error('  - code:', error.code);
               console.error('  - severity:', error.severity);
-              console.error('  - filePath:', error.sourceLocation?.filePath);
+              console.error('  - filePath:', error.filePath);
               
               // Log specialized properties based on error type
               if ('directiveKind' in error) {
@@ -986,11 +980,11 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
                 console.error('  - location:', JSON.stringify((error as any).location, null, 2));
               }
               if ('details' in error) {
-                console.error('  - details:', JSON.stringify(error.details, null, 2));
+                console.error('  - details:', JSON.stringify((error as any).details, null, 2));
               }
               
               // Log context for debugging
-              console.error('  - context:', JSON.stringify(error.details, null, 2));
+              console.error('  - context:', JSON.stringify(error.context, null, 2));
               
               if (error.stack) {
                 console.error('  - stack trace available');
@@ -1018,16 +1012,13 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
           // Handle both MeldError and raw errors that might come from meld-ast
           try {
             // Always use input file path if available to handle hardcoded paths
-            if (error instanceof MeldError && options.input && error.sourceLocation?.filePath === 'examples/error-test.meld') {
+            if (error instanceof MeldError && options.input && error.filePath === 'examples/error-test.meld') {
               // Create a clone of the error with the correct file path
               const fixedPathError = new MeldError(error.message, {
                 code: error.code,
                 severity: error.severity,
-                sourceLocation: {
-                  filePath: options.input,
-                  ...error.sourceLocation
-                },
-                details: error.details,
+                filePath: options.input,
+                context: error.context ? { ...error.context } : {},
                 cause: error.cause as Error | undefined
               });
               
@@ -1088,8 +1079,7 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
 
                 // Check if file exists at the input path
                 try {
-                  const validatedPath = unsafeCreateValidatedResourcePath(options.input);
-                  fsService.exists(validatedPath).then(exists => {
+                  fsService.exists(options.input).then(exists => {
                     console.error('DEBUG: Input file exists:', exists);
                   });
                 } catch (err) {
@@ -1102,11 +1092,19 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
               let meldError = error as MeldError;
               
               if (!meldError.sourceLocation?.filePath && options.input) {
+                // Start with a clean details object
+                const newDetails: BaseErrorDetails = {};
+                
+                // Copy the original details if available
+                if (meldError.details) {
+                  Object.assign(newDetails, meldError.details);
+                }
+                
                 // Create a new error with the correct source location
                 const fixedError = new MeldError(meldError.message, {
                   code: meldError.code,
                   severity: meldError.severity,
-                  details: meldError.details,
+                  details: newDetails,
                   sourceLocation: {
                     filePath: options.input,
                     ...meldError.sourceLocation
@@ -1116,16 +1114,6 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
                 
                 // Use this error instead
                 error = fixedError;
-              }
-              
-              // Check if file exists at the input path
-              try {
-                const validatedPath = unsafeCreateValidatedResourcePath(options.input);
-                fsService.exists(validatedPath).then(exists => {
-                  console.error('DEBUG: Input file exists:', exists);
-                });
-              } catch (err) {
-                console.error('DEBUG: Error checking if file exists:', err);
               }
               
               // Use the enhanced error display service which now handles nested errors correctly
@@ -1149,13 +1137,9 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
               const enhancedErrorDisplay = await displayErrorWithSourceContext(error instanceof MeldError ? error : new MeldError(
                 error instanceof Error ? error.message : String(error),
                 {
-                  code: 'CLI_ERROR',
-                  severity: ErrorSeverity.Fatal,
-                  sourceLocation: {
-                    filePath: options.input
-                  },
+                  filePath: options.input,
                   cause: error instanceof Error ? error : undefined,
-                  details: {
+                  context: {
                     // Copy line/column from meld-ast errors if available
                     sourceLocation: (typeof error === 'object' && error !== null && 'line' in error && 'column' in error) ? {
                       filePath: (typeof error === 'object' && error !== null && 'sourceFile' in error && typeof (error as any).sourceFile === 'string') 
