@@ -250,8 +250,10 @@ export class DirectiveService implements IDirectiveService {
           this.registerHandler(textHandler);
 
           // Check for services needed by DataDirectiveHandler
-          if (!this.fileSystemService || !this.pathService) {
-            this.logger.warn('FileSystemService or PathService not available for DataDirectiveHandler injection');
+          if (!this.fileSystemService) {
+            this.logger.warn('FileSystemService not available for DataDirectiveHandler injection');
+          } else if (!this.pathService) {
+            this.logger.warn('PathService not available for DataDirectiveHandler injection');
           } else {
             const dataHandler = new DataDirectiveHandler(
               this.resolutionService,
@@ -561,11 +563,9 @@ export class DirectiveService implements IDirectiveService {
     if (!this.interpreterClient) {
       throw new MeldError('InterpreterServiceClient not available for createChildContext');
     }
-    // Pass arguments matching the client interface
+    // Pass arguments matching the client interface (parentState, filePath, options)
     const childStateLike = await this.interpreterClient.createChildContext(parentState, filePath, options);
-    // Need to ensure the returned StateServiceLike can be treated as IStateService
-    // This might require casting or a more robust check/conversion if signatures differ significantly
-    // For now, keep the cast, assuming the implementation returns a compatible object.
+    // Keep cast for now
     return childStateLike as IStateService; 
   }
 

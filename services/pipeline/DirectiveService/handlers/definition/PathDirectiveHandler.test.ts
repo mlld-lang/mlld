@@ -111,52 +111,81 @@ describe('PathDirectiveHandler', () => {
       const node = await createNodeFromExample(example.code) as DirectiveNode;
       mockProcessingContext.directiveNode = node;
 
-      const pathValue = '$PROJECTPATH/docs';
-      resolutionService.resolveInContext.mockResolvedValueOnce(pathValue);
+      // Simulate the path object from the AST node
+      const astPathObject = node.directive.path as StructuredPath;
+      const expectedValueToResolve = astPathObject.interpolatedValue ?? astPathObject.raw;
+      const expectedResolvedString = '$PROJECTPATH/docs'; // What resolveInContext should return
+
+      // Mock resolveInContext to return the resolved string
+      resolutionService.resolveInContext.mockResolvedValueOnce(expectedResolvedString);
+      // Mock resolvePath to return a mock MeldPath based on the resolved string
+      const mockValidatedPath = createMockMeldPath(expectedResolvedString);
+      resolutionService.resolvePath.mockResolvedValueOnce(mockValidatedPath);
 
       const result = await handler.execute(mockProcessingContext);
 
       expect(validationService.validate).toHaveBeenCalledWith(node);
       
+      // Verify resolveInContext was called with the raw path string (since no interpolation)
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        expect.objectContaining({
-          structured: expect.objectContaining({
-            base: '$PROJECTPATH',
-            segments: expect.arrayContaining(['docs'])
-          })
-        }),
+        expectedValueToResolve, // Should be the raw string '$PROJECTPATH/docs'
         mockProcessingContext.resolutionContext
       );
-      const expectedState = createMockMeldPath(pathValue).value;
-      expect(stateService.setPathVar).toHaveBeenCalledWith('docs', expectedState);
+      
+      // Verify resolvePath was called with the resolved string
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith(
+        expectedResolvedString, // The string returned by resolveInContext
+        mockProcessingContext.resolutionContext
+      );
+
+      // Verify setPathVar was called with the final validated path state
+      expect(stateService.setPathVar).toHaveBeenCalledWith(
+        'docs', // The identifier
+        mockValidatedPath.value // The .value property holding the state
+      );
       expect(result).toBe(stateService);
     });
 
     it('should handle paths with variables', async () => {
       const exampleSet = pathDirectiveExamples.combinations.pathWithVariables;
       const exampleLines = exampleSet.code.split('\n');
-      const pathDirectiveLine = exampleLines[1];
+      const pathDirectiveLine = exampleLines[1]; // Get the @path line
       const node = await createNodeFromExample(pathDirectiveLine) as DirectiveNode;
       mockProcessingContext.directiveNode = node;
 
-      const resolvedPath = '$PROJECTPATH/meld/docs';  
-      resolutionService.resolveInContext.mockResolvedValueOnce(resolvedPath);
+      // Simulate the path object from the AST node
+      const astPathObject = node.directive.path as StructuredPath;
+      // For this case, the value passed to resolveInContext should be the InterpolatableValue array
+      const expectedValueToResolve = astPathObject.interpolatedValue;
+      const expectedResolvedString = '$PROJECTPATH/meld/docs'; // Mock resolved string
+
+      // Mock resolveInContext to return the resolved string
+      resolutionService.resolveInContext.mockResolvedValueOnce(expectedResolvedString);
+      // Mock resolvePath
+      const mockValidatedPath = createMockMeldPath(expectedResolvedString);
+      resolutionService.resolvePath.mockResolvedValueOnce(mockValidatedPath);
 
       const result = await handler.execute(mockProcessingContext);
 
       expect(validationService.validate).toHaveBeenCalledWith(node);
       
+      // Verify resolveInContext was called with the InterpolatableValue
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        expect.objectContaining({
-          structured: expect.objectContaining({
-            base: '$PROJECTPATH',
-            segments: expect.arrayContaining(['{{project}}', 'docs'])
-          })
-        }),
+        expectedValueToResolve, // Should be the InterpolatableValue array
         mockProcessingContext.resolutionContext
       );
-      const expectedStateCustom = createMockMeldPath(resolvedPath).value;
-      expect(stateService.setPathVar).toHaveBeenCalledWith('customPath', expectedStateCustom);
+
+      // Verify resolvePath was called with the resolved string
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith(
+        expectedResolvedString,
+        mockProcessingContext.resolutionContext
+      );
+
+      // Verify setPathVar
+      expect(stateService.setPathVar).toHaveBeenCalledWith(
+        'customPath', // Identifier
+        mockValidatedPath.value
+      );
       expect(result).toBe(stateService);
     });
 
@@ -165,24 +194,38 @@ describe('PathDirectiveHandler', () => {
       const node = await createNodeFromExample(example.code) as DirectiveNode;
       mockProcessingContext.directiveNode = node;
 
-      const pathValue = '$./config';
-      resolutionService.resolveInContext.mockResolvedValueOnce(pathValue);
+      // Simulate the path object from the AST node
+      const astPathObject = node.directive.path as StructuredPath;
+      const expectedValueToResolve = astPathObject.interpolatedValue ?? astPathObject.raw;
+      const expectedResolvedString = './config'; // Use the raw path as resolved for this test
+
+      // Mock resolveInContext
+      resolutionService.resolveInContext.mockResolvedValueOnce(expectedResolvedString);
+      // Mock resolvePath
+      const mockValidatedPath = createMockMeldPath(expectedResolvedString);
+      resolutionService.resolvePath.mockResolvedValueOnce(mockValidatedPath);
 
       const result = await handler.execute(mockProcessingContext);
 
       expect(validationService.validate).toHaveBeenCalledWith(node);
       
+      // Verify resolveInContext was called with the raw string
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        expect.objectContaining({
-          structured: expect.objectContaining({
-            base: '$.',
-            segments: expect.arrayContaining(['config'])
-          })
-        }),
+        expectedValueToResolve, // Should be the raw string './config'
         mockProcessingContext.resolutionContext
       );
-      const expectedStateConfig = createMockMeldPath(pathValue).value;
-      expect(stateService.setPathVar).toHaveBeenCalledWith('config', expectedStateConfig);
+
+      // Verify resolvePath was called with the resolved string
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith(
+        expectedResolvedString,
+        mockProcessingContext.resolutionContext
+      );
+
+      // Verify setPathVar
+      expect(stateService.setPathVar).toHaveBeenCalledWith(
+        'config', // Identifier
+        mockValidatedPath.value
+      );
       expect(result).toBe(stateService);
     });
   });

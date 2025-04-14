@@ -55,8 +55,8 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         column: node.location.start.column
       } : undefined;
 
-      // Re-enable validation (optional, could be done by caller)
-      // await this.validationService.validate(node);
+      // Uncomment validation call
+      await this.validationService.validate(node);
 
       // Assert directive node structure
       if (!node.directive || node.directive.kind !== 'path') {
