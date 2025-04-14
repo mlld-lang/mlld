@@ -569,7 +569,7 @@ export class PathService implements IPathService {
     } else {
       // It was a MeldPath but neither URL nor Filesystem - error
       throw new PathValidationError(
-          PathErrorMessages.EXPECTED_FILESYSTEM_PATH,
+          PathErrorMessages.INVALID_PATH,
           { code: PathErrorCode.E_PATH_EXPECTED_FS, path: rawPathString },
           location
       );
@@ -614,7 +614,7 @@ export class PathService implements IPathService {
     fsPathObj.isDirectory = undefined; 
 
     // Security checks
-    fsPathObj.isSecure = this.checkSecurityBoundaries(absolutePathToCheck, context);
+    fsPathObj.isSecure = this.checkSecurityBoundaries(absolutePathToCheck, context, location);
     if (!fsPathObj.isSecure) {
       throw new PathValidationError(PathErrorMessages.OUTSIDE_BASE_DIR, { 
         code: PathErrorCode.E_PATH_OUTSIDE_ROOT, 
@@ -624,7 +624,7 @@ export class PathService implements IPathService {
 
     // Existence and type checks
     try {
-      const { exists, isDirectory } = await this.checkExistenceAndType(absolutePathToCheck, context);
+      const { exists, isDirectory } = await this.checkExistenceAndType(absolutePathToCheck, context, location);
       fsPathObj.exists = exists;
       fsPathObj.isDirectory = isDirectory; 
 
@@ -663,7 +663,21 @@ export class PathService implements IPathService {
     return fsPathObj;
   }
   
-  private checkSecurityBoundaries(resolvedPath: AbsolutePath | RelativePath, context: PathValidationContext): boolean {
+  /**
+   * Check if a resolved path is within the allowed security boundaries.
+   * Throws PathValidationError if the path is outside boundaries.
+   * 
+   * @param resolvedPath The absolute path to check.
+   * @param context The validation context.
+   * @param location Optional source location for error reporting.
+   * @returns True if the path is secure (currently always returns true or throws).
+   * @throws {PathValidationError} If the path is outside the project root and external paths are not allowed.
+   */
+  private checkSecurityBoundaries(
+    resolvedPath: AbsolutePath | RelativePath, 
+    context: PathValidationContext, 
+    location?: Location
+  ): boolean {
     if (context.allowExternalPaths) {
       return true;
     }
@@ -679,7 +693,20 @@ export class PathService implements IPathService {
     return true;
   }
   
-  private async checkExistenceAndType(resolvedPath: AbsolutePath | RelativePath, context: PathValidationContext): Promise<{ exists: boolean; isDirectory?: boolean }> {
+  /**
+   * Checks the existence and type (file/directory) of a resolved path.
+   * 
+   * @param resolvedPath The absolute or relative path to check.
+   * @param context The validation context.
+   * @param location Optional source location for error reporting.
+   * @returns A promise resolving to an object with `exists` and optional `isDirectory` properties.
+   * @throws {PathValidationError} If there's an internal error during the check.
+   */
+  private async checkExistenceAndType(
+    resolvedPath: AbsolutePath | RelativePath, 
+    context: PathValidationContext, 
+    location?: Location
+  ): Promise<{ exists: boolean; isDirectory?: boolean }> {
     this.ensureFactoryInitialized();
     if (!this.fsClient) {
       logger.warn('FileSystemServiceClient not available for existence check');

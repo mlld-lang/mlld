@@ -20,7 +20,6 @@ import {
   PathContentType,
   StructuredPath, 
   ValidatedResourcePath, 
-  PathValidationContext, 
   SourceLocation,
   MeldError,
   ErrorSeverity,
@@ -29,12 +28,12 @@ import {
   MeldResolutionError, 
   PathValidationError,
   VariableResolutionError,
-  isUrlPath,
   unsafeCreateNormalizedAbsoluteDirectoryPath,
   NormalizedAbsoluteDirectoryPath,
-  isBasicCommand
+  isBasicCommand,
+  ResolutionErrorCode
 } from '@core/types';
-import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/syntax/types/index.js';
+import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/syntax/types/index';
 import { ResolutionContextFactory } from './ResolutionContextFactory';
 import { CommandResolver } from './resolvers/CommandResolver';
 import { ContentResolver } from './resolvers/ContentResolver';
@@ -74,6 +73,7 @@ import {
   isValidatedResourcePath
 } from '@core/types/paths.js';
 import { PathResolver } from '@services/fs/PathService/PathResolver.js';
+import { PathValidationError, PathValidationErrorDetails } from '@core/errors/PathValidationError';
 
 /**
  * Internal type for heading nodes in the ResolutionService
@@ -685,24 +685,19 @@ export class ResolutionService implements IResolutionService {
 
     } catch (error) {
         logger.error('resolvePath (validation only) failed', { error, resolvedPathInput: resolvedPathString });
-        if (context.strict) {
-            // Ensure it's a MeldError, preferably PathValidationError
-            const meldError = (error instanceof MeldError)
-              ? error
-              : new PathValidationError('Path validation failed', {
-                  code: 'E_PATH_VALIDATION_FAILED', 
-                  details: { pathInput: resolvedPathString, validationContext },
-                  cause: error
-              });
-            throw meldError;
+        if (error instanceof PathValidationError) {
+            // Re-throw specific PathValidationError
+            throw error; 
+        } else {
+            // Wrap other errors
+            const details: PathValidationErrorDetails = { pathString: resolvedPathString, validationContext };
+            const wrapError = new PathValidationError('Unexpected error during path validation', {
+              code: ResolutionErrorCode.SERVICE_UNAVAILABLE, 
+              details: details,
+              cause: error
+            });
+            throw wrapError;
         }
-        // Non-strict mode
-        throw new PathValidationError('Path validation failed (non-strict)', { 
-            code: 'E_PATH_VALIDATION_FAILED_NON_STRICT', 
-            severity: ErrorSeverity.Recoverable, 
-            details: { pathInput: resolvedPathString, validationContext },
-            cause: error 
-        });
     }
   }
 
@@ -834,107 +829,61 @@ export class ResolutionService implements IResolutionService {
   }
 
   /**
-   * Resolve any value based on the provided context rules.
-   * This is a general-purpose resolution method that routes based on allowed types in context.
-   * 
-   * @param value - The string or structured path representation to resolve
-   * @param context - The resolution context defining allowed types and rules
-   * @returns The resolved value as a string
-   * @throws {MeldResolutionError} If resolution fails and context.strict is true
+   * Resolve potentially interpolated values, handling both plain strings and AST path structures.
+   * If the input is an AST-like path object, it resolves the `interpolatedValue` if present,
+   * otherwise it falls back to resolving the `raw` string.
    */
-  async resolveInContext(value: string | StructuredPath, context: ResolutionContext): Promise<string> {
-    logger.debug(`resolveInContext called`, { value: typeof value === 'string' ? value.substring(0, 50) : JSON.stringify(value), contextFlags: context.flags });
+  async resolveInContext(
+    value: string | AstPathValueObject, 
+    context: ResolutionContext
+  ): Promise<string> { 
+    logger.debug('resolveInContext called', { valueType: typeof value, contextFlags: context.flags });
 
-    // Refactored logic based on @AST-VARIABLES.md
-    if (typeof value === 'string') {
-        // If input is a string, parse it and resolve the nodes.
-        // This handles strings potentially containing {{variables}}.
-        if (!value.includes('{{') && !value.includes('$')) { // Optimization
-            logger.debug('resolveInContext: Input string contains no variable markers, returning directly.');
-            return value;
-        }
-        try {
-            const nodes = await this.parseForResolution(value, context);
-            logger.debug(`resolveInContext: Parsed string into ${nodes.length} nodes, resolving...`);
-            return await this.resolveNodes(nodes, context);
-        } catch (error) {
-            logger.error('resolveInContext failed parsing/resolving string value', { error });
-            if (context.strict) throw error; 
-            return value; // Return original string in non-strict mode on error
-        }
-    } else if (value && typeof value === 'object' && 'interpolatedValue' in value && value.interpolatedValue) {
-        // If it's a StructuredPath with an interpolatedValue array (from brackets/quotes)
-        logger.debug(`resolveInContext: Resolving nodes from StructuredPath.interpolatedValue`);
-        try {
-          return await this.resolveNodes(value.interpolatedValue, context);
-    } catch (error) {
-          logger.error('resolveInContext failed resolving nodes from StructuredPath.interpolatedValue', { error });
-          if (context.strict) throw error;
-          return value.raw ?? ''; // Return raw value in non-strict mode
-        }
-    } else if (value && typeof value === 'object' && 'raw' in value && typeof value.raw === 'string') {
-        // If it's a StructuredPath without interpolation, return raw (or resolve it? TBD)
-        // For now, assume raw value is sufficient if no interpolation needed.
-        logger.debug(`resolveInContext: Returning raw value from non-interpolated StructuredPath: ${value.raw}`);
-        return value.raw; 
-    } else if (Array.isArray(value) && isInterpolatableValueArray(value)) {
-        // Handle direct InterpolatableValue input
-        logger.debug(`resolveInContext: Resolving nodes from direct InterpolatableValue array`);
-        try {
-            return await this.resolveNodes(value, context);
-        } catch (error) {
-            logger.error('resolveInContext failed resolving direct InterpolatableValue array', { error });
-            if (context.strict) throw error;
-            return ''; // Return empty in non-strict mode
-        }
+    // Check if value is the AST-like path object
+    if (typeof value === 'object' && value !== null && 'raw' in value) {
+      logger.debug(`resolveInContext: Value is AstPathValueObject`);
+      // If interpolatedValue exists and is an array, resolve that array
+      if (Array.isArray(value.interpolatedValue)) {
+        logger.debug('Resolving interpolatedValue from AstPathValueObject');
+        return this.resolveNodes(value.interpolatedValue, context);
+      } else {
+        // Otherwise, treat the raw string as needing potential resolution
+        logger.debug('No interpolatedValue on AstPathValueObject, resolving raw string');
+        return this.resolveText(value.raw, context);
+      }
+    } else if (typeof value === 'string') {
+      // Handle plain string input
+      logger.debug('resolveInContext: Value is plain string, calling resolveText');
+      return this.resolveText(value, context);
     } else {
-       // Handle other cases or throw error?
-       const errorMsg = 'resolveInContext received unsupported value type';
-       logger.error(errorMsg, { value });
-       if (context.strict) {
-           throw new MeldResolutionError(errorMsg, { code: 'E_UNSUPPORTED_TYPE' });
-       }
-       return ''; // Return empty string in non-strict mode
+      // Handle unexpected input types
+      logger.warn('resolveInContext received unexpected value type', { value });
+      return ''; // Return empty string for unexpected types
     }
   }
 
   /**
-   * Validate that resolution is allowed in the given context
+   * Validate a path input string during resolution.
    */
   async validateResolution(pathInput: string, validationContext: PathValidationContext): Promise<MeldPath> {
+    logger.debug(`validateResolution called for path: '${pathInput}'`);
     try {
-      const validated = await this.pathService.validatePath(pathInput, validationContext);
-      return validated;
+      const validatedPath = await this.pathService.validatePath(pathInput, validationContext);
+      return validatedPath;
     } catch (error) {
+      logger.error(`Path validation failed during resolution: ${pathInput}`, { error });
       if (error instanceof PathValidationError) {
-        // Wrap PathValidationError in MeldResolutionError
-        throw new MeldResolutionError(
-          `Path validation failed during resolution: ${error.message}`,
-          {
-            code: ResolutionErrorCode.PATH_VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            details: {
-              pathString: pathInput, // Ensure pathString is used
-              validationContext: validationContext,
-            },
-            cause: error,
-            sourceLocation: (validationContext as any)?.location
-          }
-        );
+          // Re-throw specific PathValidationError
+          throw error; 
       } else {
-        throw new MeldResolutionError(
-          `Unexpected error during path validation: ${getErrorMessage(error)}`,
-          {
-            code: ResolutionErrorCode.UNEXPECTED_ERROR,
-            severity: ErrorSeverity.Fatal,
-            details: {
-              pathString: pathInput, // Ensure pathString is used
-              validationContext: validationContext,
-            },
-            cause: error,
-            sourceLocation: (validationContext as any)?.location
-          }
-        );
+          // Wrap other errors
+          const details: PathValidationErrorDetails = { pathString: pathInput, validationContext };
+          const wrapError = new PathValidationError('Unexpected error during path validation', {
+            code: ResolutionErrorCode.SERVICE_UNAVAILABLE, 
+            details: details,
+            cause: error
+          });
+          throw wrapError;
       }
     }
   }

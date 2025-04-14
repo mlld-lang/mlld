@@ -112,7 +112,7 @@ describe('TextDirectiveHandler Integration', () => {
 
       const result = await handler.execute(mockProcessingContext);
       
-      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!', expect.objectContaining({ definedAt: expect.objectContaining({ line: 1, column: 1 }) }));
+      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!');
       expect(result).toBe(stateService);
     });
 
@@ -135,7 +135,7 @@ describe('TextDirectiveHandler Integration', () => {
       mockProcessingContext.directiveNode = node;
 
       const result = await handler.execute(mockProcessingContext);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('message', 'Hello "quoted World" !', expect.objectContaining({ definedAt: expect.objectContaining({ line: 2 }) }));
+      expect(stateService.setTextVar).toHaveBeenCalledWith('message', 'Hello "quoted World" !');
       expect(result).toBe(stateService);
     });
 
@@ -158,7 +158,7 @@ describe('TextDirectiveHandler Integration', () => {
       mockProcessingContext.directiveNode = node;
 
       const result = await handler.execute(mockProcessingContext);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('userInfo', 'Alice', expect.objectContaining({ definedAt: expect.objectContaining({ line: 3 }) }));
+      expect(stateService.setTextVar).toHaveBeenCalledWith('userInfo', 'Alice');
       expect(result).toBe(stateService);
     });
 
@@ -181,7 +181,7 @@ describe('TextDirectiveHandler Integration', () => {
       process.env.ENV_HOST = 'example.com';
 
       const result = await handler.execute(mockProcessingContext);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('config', 'example.com:3000', expect.objectContaining({ definedAt: expect.objectContaining({ line: 4 }) }));
+      expect(stateService.setTextVar).toHaveBeenCalledWith('config', 'example.com:3000');
       expect(result).toBe(stateService);
 
       delete process.env.ENV_HOST;

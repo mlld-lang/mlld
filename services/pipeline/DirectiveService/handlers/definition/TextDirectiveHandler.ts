@@ -3,7 +3,7 @@ import type {
     InterpolatableValue, 
     VariableReferenceNode, 
     TextNode, 
-    StructuredPath as AstStructuredPath
+    StructuredPath // Corrected import name
 } from '@core/syntax/types/nodes.js'; // Import AST types
 import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -25,9 +25,10 @@ import type { DirectiveProcessingContext } from '@core/types/index.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 
 // Define local interfaces mirroring expected AST structure for RHS
+// Consider moving these to a shared types file if used elsewhere
 interface EmbedRHSStructure {
     subtype: 'embedPath' | 'embedVariable' | 'embedTemplate';
-    path?: AstStructuredPath;
+    path?: StructuredPath; // Use corrected type name
     content?: InterpolatableValue;
     section?: string;
 }
@@ -69,39 +70,20 @@ export class TextDirectiveHandler implements IDirectiveHandler {
 
   /**
    * Checks if a value appears to be a string literal
-   * This is a preliminary check before full validation
+   * @deprecated This logic is typically handled by the parser.
    */
-  private isStringLiteral(value: string): boolean {
-    const firstChar = value[0];
-    const lastChar = value[value.length - 1];
-    const validQuotes = ['\'', '"', '`'];
-    
-    // Check for matching quotes
-    if (!validQuotes.includes(firstChar) || firstChar !== lastChar) {
-      return false;
-    }
-
-    // Check for unclosed quotes
-    let isEscaped = false;
-    for (let i = 1; i < value.length - 1; i++) {
-      if (value[i] === '\\') {
-        isEscaped = !isEscaped;
-      } else if (value[i] === firstChar && !isEscaped) {
-        return false; // Found an unescaped quote in the middle
-      } else {
-        isEscaped = false;
-      }
-    }
-
-    return true;
-  }
+  // private isStringLiteral(value: string): boolean { ... } // REMOVED
 
   async execute(context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
     const state = context.state;
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
     const currentFilePath = state.getCurrentFilePath();
-    const simplifiedContext = { currentFilePath: currentFilePath ?? undefined }; // Create simplified context once
+    // Standardized context for errors
+    const errorDetailsContext = { 
+      node: node, 
+      context: { currentFilePath: currentFilePath ?? undefined } 
+    };
 
     logger.debug('Processing text directive', {
       location: node.location,
@@ -119,165 +101,202 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         column: node.location.start.column
       } : undefined;
 
+      // Use more specific type assertion if possible, or keep as any
       const { identifier, value, source = 'literal', embed, run } = node.directive as any;
       
       let resolvedValue: string;
       
       if (source === 'literal') {
           if (typeof value === 'string') {
-              resolvedValue = value;
+              resolvedValue = value; // Assume string literals are already processed by parser/resolver if needed
           } else if (isInterpolatableValueArray(value)) {
+              // Resolve the array of nodes into a single string
               resolvedValue = await this.resolutionService.resolveNodes(value, resolutionContext);
           } else {
-             throw new DirectiveError(`Invalid value type for @text source 'literal'. Expected string or InterpolatableValue array.`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: simplifiedContext });
+             throw new DirectiveError(
+               `Invalid value type for @text source 'literal'. Expected string or InterpolatableValue array.`,
+                this.kind, 
+                DirectiveErrorCode.VALIDATION_FAILED, 
+                errorDetailsContext
+             );
           }
       } else if (source === 'run' && run) {
+        const runDetails = run as RunRHSStructure;
         process.stdout.write(`[TextDirectiveHandler LOG] Entered source=run block\n`);
-        process.stdout.write(`[TextDirectiveHandler LOG] run object: ${JSON.stringify(run)}\n`);
-        process.stdout.write(`[TextDirectiveHandler LOG] runSubtype: ${run.subtype}\n`);
-        process.stdout.write(`[TextDirectiveHandler LOG] commandInput: ${JSON.stringify(run.command)}\n`);
+        process.stdout.write(`[TextDirectiveHandler LOG] run object: ${JSON.stringify(runDetails)}\n`);
+        process.stdout.write(`[TextDirectiveHandler LOG] runSubtype: ${runDetails.subtype}\n`);
+        process.stdout.write(`[TextDirectiveHandler LOG] commandInput: ${JSON.stringify(runDetails.command)}\n`);
         try {
-          const commandInput = run.command;
-          const runSubtype = run.subtype;
-          if (!commandInput) throw new Error('Missing command input for @run source');
+          const commandInput = runDetails.command;
+          const runSubtype = runDetails.subtype;
+          if (!commandInput) throw new DirectiveError('Missing command input for @run source', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
           
           let resolvedCommandString: string;
 
           if (runSubtype === 'runDefined') {
              if (typeof commandInput !== 'object' || !('name' in commandInput)) {
-                 throw new Error('Invalid command input structure for runDefined subtype');
+                 throw new DirectiveError('Invalid command input structure for runDefined subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
              }
-             const cmdVar = state.getCommandVar(commandInput.name);
+             const cmdVar = state.getCommandVar(commandInput.name); // Use IStateService method
              if (cmdVar && cmdVar.value && isBasicCommand(cmdVar.value)) { 
+                // Assuming commandTemplate holds the string to run for @text
                 resolvedCommandString = cmdVar.value.commandTemplate; 
              } else {
                 const errorMsg = cmdVar ? `Command '${commandInput.name}' is not a basic command suitable for @text/@run` : `Command definition '${commandInput.name}' not found`;
-                throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { node: node, context: simplifiedContext });
+                throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, errorDetailsContext);
              }
           } else if (runSubtype === 'runCommand' || runSubtype === 'runCode' || runSubtype === 'runCodeParams') {
              if (!isInterpolatableValueArray(commandInput)) {
-                throw new Error(`Expected InterpolatableValue for command input with subtype '${runSubtype}'`);
+                // This check might be redundant if AST guarantees this structure
+                throw new DirectiveError(`Expected InterpolatableValue for command input with subtype '${runSubtype}'`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
              }
              resolvedCommandString = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
           } else {
-             throw new Error(`Unsupported run subtype '${runSubtype}' encountered in @text handler`);
+             throw new DirectiveError(`Unsupported run subtype '${runSubtype}' encountered in @text handler`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
           }
           process.stdout.write(`[TextDirectiveHandler LOG] Resolved command string: ${resolvedCommandString}\n`);
           
           if (!this.fileSystemService) {
-            throw new DirectiveError('File system service is unavailable for @run execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node: node, context: simplifiedContext });
+            // Throw specific error if service is missing
+            throw new DirectiveError('File system service is unavailable for @run execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, errorDetailsContext);
           }
           
           process.stdout.write(`[TextDirectiveHandler LOG] Calling executeCommand with: ${resolvedCommandString}\n`);
+          // Use IFileSystemService method
           const { stdout } = await this.fileSystemService.executeCommand(
               resolvedCommandString,
               { cwd: this.fileSystemService.getCwd() } 
           );
-          resolvedValue = stdout.replace(/\n$/, '');
+          resolvedValue = stdout.replace(/\n$/, ''); // Remove trailing newline
 
           logger.debug('Executed command for @text directive', { resolvedCommand: resolvedCommandString, output: resolvedValue });
 
         } catch (error) {
           if (error instanceof DirectiveError) throw error;
+          // Include original error as cause
           if (error instanceof MeldResolutionError || error instanceof FieldAccessError) {
-            throw new DirectiveError('Failed to resolve command for @text directive', this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { node: node, context: simplifiedContext, cause: error });
+            throw new DirectiveError('Failed to resolve command for @text directive', this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { ...errorDetailsContext, cause: error instanceof Error ? error : undefined });
           } else if (error instanceof Error) {
-            throw new DirectiveError(`Failed to execute command for @text directive: ${error.message}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node: node, context: simplifiedContext, cause: error });
+            throw new DirectiveError(`Failed to execute command for @text directive: ${error.message}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { ...errorDetailsContext, cause: error });
           }
-          throw error; 
+          // Re-throw unknown errors, checking instanceof Error for cause
+          throw new DirectiveError('Unknown error during @run execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { ...errorDetailsContext, cause: error instanceof Error ? error : undefined });
         }
       } else if (source === 'embed' && embed) {
+        const embedDetails = embed as EmbedRHSStructure;
         try {
-          const embedSubtype = embed.subtype;
+          const embedSubtype = embedDetails.subtype;
           let fileContent: string;
 
           if (embedSubtype === 'embedPath') {
-              const embedPathObject = embed.path;
+              const embedPathObject = embedDetails.path;
               if (!embedPathObject) {
-                 throw new DirectiveError('Missing path for @embed source (subtype: embedPath)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: simplifiedContext });
+                 throw new DirectiveError('Missing path for @embed source (subtype: embedPath)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
               }
+              // Resolve path string first
               const valueToResolve = embedPathObject.interpolatedValue ?? embedPathObject.raw;
               const resolvedEmbedPathString = await this.resolutionService.resolveInContext(valueToResolve, resolutionContext);
+              // Then validate and normalize the resolved path string
               const validatedMeldPath = await this.resolutionService.resolvePath(resolvedEmbedPathString, resolutionContext);
               
               if (validatedMeldPath.contentType !== 'filesystem') {
-                  throw new DirectiveError(`Cannot embed non-filesystem path: ${resolvedEmbedPathString}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: simplifiedContext });
+                  throw new DirectiveError(`Cannot embed non-filesystem path: ${resolvedEmbedPathString}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
               }
               if (!this.fileSystemService) { 
-                throw new DirectiveError('File system service is unavailable for @embed execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node: node, context: simplifiedContext });
+                throw new DirectiveError('File system service is unavailable for @embed execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, errorDetailsContext);
               }
+              // Use validated path from MeldPath object
               fileContent = await this.fileSystemService.readFile(validatedMeldPath.validatedPath);
 
           } else if (embedSubtype === 'embedVariable') {
-              const embedPathObject = embed.path; 
+              const embedPathObject = embedDetails.path; 
               if (!embedPathObject) {
-                 throw new DirectiveError('Missing variable reference for @embed source (subtype: embedVariable)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: simplifiedContext });
+                 throw new DirectiveError('Missing variable reference for @embed source (subtype: embedVariable)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
               }
+              // Resolve the variable reference represented by embedPathObject.raw
               fileContent = await this.resolutionService.resolveInContext(embedPathObject.raw, resolutionContext);
 
           } else if (embedSubtype === 'embedTemplate') {
-              const templateContent = embed.content;
+              const templateContent = embedDetails.content;
               if (!templateContent || !isInterpolatableValueArray(templateContent)) { 
-                  throw new DirectiveError('Missing or invalid content for @embed source (subtype: embedTemplate)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: simplifiedContext });
+                  throw new DirectiveError('Missing or invalid content for @embed source (subtype: embedTemplate)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
               }
+              // Resolve the template content nodes
               fileContent = await this.resolutionService.resolveNodes(templateContent, resolutionContext);
           } else {
-             throw new DirectiveError(`Unsupported embed subtype: ${embedSubtype}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node, context: simplifiedContext });
+             // Should not happen if parser validation is correct
+             throw new DirectiveError(`Unsupported embed subtype: ${embedSubtype}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
           }
           
-          if (embed.section) {
-             resolvedValue = await this.resolutionService.extractSection(fileContent, embed.section);
+          // Extract section if specified
+          if (embedDetails.section) {
+             // Use IResolutionService method
+             resolvedValue = await this.resolutionService.extractSection(fileContent, embedDetails.section);
           } else {
              resolvedValue = fileContent;
           }
           
-          logger.debug('Resolved @embed source for @text directive', { subtype: embedSubtype, section: embed.section, finalValueLength: resolvedValue.length });
+          logger.debug('Resolved @embed source for @text directive', { subtype: embedSubtype, section: embedDetails.section, finalValueLength: resolvedValue.length });
           
         } catch (error) {
           if (error instanceof DirectiveError) throw error;
+          // Include original error as cause
           if (error instanceof MeldResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) {
-            throw new DirectiveError('Failed to resolve @embed source for @text directive', this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { node: node, context: simplifiedContext, cause: error });
+            throw new DirectiveError('Failed to resolve @embed source for @text directive', this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { ...errorDetailsContext, cause: error instanceof Error ? error : undefined });
           } else if (error instanceof Error) {
-            throw new DirectiveError(`Failed to read/process embed source for @text directive: ${error.message}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { node: node, context: simplifiedContext, cause: error });
+            throw new DirectiveError(`Failed to read/process embed source for @text directive: ${error.message}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { ...errorDetailsContext, cause: error });
           }
-          throw error; 
+           // Re-throw unknown errors, checking instanceof Error for cause
+          throw new DirectiveError('Unknown error during @embed execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { ...errorDetailsContext, cause: error instanceof Error ? error : undefined });
         }
       } else {
         throw new DirectiveError(
               `Unsupported source type '${source}' for @text directive`,
               this.kind, 
               DirectiveErrorCode.VALIDATION_FAILED, 
-              { node: node, context: simplifiedContext }
+              errorDetailsContext
           );
       }
 
+      // Prepare metadata for the variable
       const metadata: Partial<VariableMetadata> = {
           origin: VariableOrigin.DIRECT_DEFINITION,
           definedAt: directiveSourceLocation
       };
       
-      await state.setTextVar(identifier, resolvedValue, metadata);
+      // Use IStateService method to set the variable
+      await state.setTextVar(identifier, resolvedValue);
 
-      return state;
+      // Return the updated state
+      return state as IStateService;
     } catch (error) {
+      // Ensure all thrown errors are DirectiveErrors with consistent details
       if (error instanceof DirectiveError) {
+        // Ensure context is included in details if missing
         if (!error.details?.context) { 
-           if (error.details) {
-              error.details.context = simplifiedContext;
-           } else { 
-             (error as any).details = { context: simplifiedContext }; 
-           }
+           // Need to re-throw a NEW error here as details might be readonly
+           throw new DirectiveError(
+              error.message,
+              this.kind,
+              error.code,
+              { 
+                ...(error.details || {}), 
+                ...errorDetailsContext, 
+                // Access cause from details if it exists and is an Error
+                cause: error.details?.cause instanceof Error ? error.details.cause : undefined 
+              }
+           );
         }
         throw error;
       }
       
+      // Wrap unexpected errors in a new DirectiveError
       throw new DirectiveError(
         `Failed to process text directive: ${error instanceof Error ? error.message : 'Unknown error'}`,
         this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
         { 
-          node: node, 
-          context: simplifiedContext, 
+          ...errorDetailsContext, 
           cause: error instanceof Error ? error : undefined 
         }
       );

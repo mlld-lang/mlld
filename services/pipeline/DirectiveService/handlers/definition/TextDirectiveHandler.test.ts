@@ -133,7 +133,7 @@ describe('TextDirectiveHandler', () => {
       mockProcessingContext.directiveNode = node;
 
       const result = await handler.execute(mockProcessingContext);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
       expect(result).toBe(stateService);
     });
 
@@ -146,7 +146,7 @@ describe('TextDirectiveHandler', () => {
       resolutionService.resolveNodes.mockResolvedValueOnce('Line 1\nLine 2\t"Quoted"'); 
 
       const result = await handler.execute(mockProcessingContext);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('escaped', 'Line 1\nLine 2\t"Quoted"', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(stateService.setTextVar).toHaveBeenCalledWith('escaped', 'Line 1\nLine 2\t"Quoted"');
       expect(result).toBe(stateService);
     });
 
@@ -159,7 +159,7 @@ describe('TextDirectiveHandler', () => {
       resolutionService.resolveNodes.mockResolvedValueOnce('Template content');
 
       const result = await handler.execute(mockProcessingContext);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('message', 'Template content', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(stateService.setTextVar).toHaveBeenCalledWith('message', 'Template content');
       expect(result).toBe(stateService);
     });
 
@@ -173,7 +173,7 @@ describe('TextDirectiveHandler', () => {
       
       const result = await handler.execute(mockProcessingContext);
       // Corrected expected value based on mock
-      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello, Alice!', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello, Alice!');
       expect(result).toBe(stateService);
     });
 
@@ -186,7 +186,7 @@ describe('TextDirectiveHandler', () => {
       resolutionService.resolveNodes.mockResolvedValueOnce('Docs are at $PROJECTPATH/docs');
 
       const result = await handler.execute(mockProcessingContext);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('configText', 'Docs are at $PROJECTPATH/docs', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(stateService.setTextVar).toHaveBeenCalledWith('configText', 'Docs are at $PROJECTPATH/docs');
       expect(result).toBe(stateService);
     });
 
@@ -211,7 +211,7 @@ describe('TextDirectiveHandler', () => {
 
       // Mock is set up in beforeEach
       const result = await handler.execute(mockProcessingContext);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('message', 'Hello, World!', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(stateService.setTextVar).toHaveBeenCalledWith('message', 'Hello, World!');
       expect(result).toBe(stateService);
     });
 
@@ -222,7 +222,7 @@ describe('TextDirectiveHandler', () => {
       mockProcessingContext.directiveNode = node;
 
       const result = await handler.execute(mockProcessingContext);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello', expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
       expect(result).toBe(stateService);
     });
 

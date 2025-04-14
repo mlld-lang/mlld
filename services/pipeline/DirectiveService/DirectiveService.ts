@@ -1,34 +1,28 @@
 import type { DirectiveNode, DirectiveKind, DirectiveData } from '@core/syntax/types/index.js';
 import { directiveLogger } from '@core/utils/logger.js';
-import { IDirectiveService, IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import { IDirectiveService, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { 
-  ValidationServiceLike, 
-  StateServiceLike, 
-  PathServiceLike, 
-  FileSystemLike, 
   ParserServiceLike, 
   InterpreterServiceLike,
   CircularityServiceLike, 
-  ResolutionServiceLike,
-  DirectiveServiceLike
 } from '@core/shared-service-types.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
-import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import type { ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import { Service } from '@core/ServiceProvider.js';
 import { inject, delay, injectable } from 'tsyringe';
 import { container } from 'tsyringe';
-import type { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
-import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 import { DirectiveResult } from './interfaces/DirectiveTypes.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import type { DirectiveProcessingContext, FormattingContext, ExecutionContext } from '@core/types/index.js';
+import type { DirectiveProcessingContext, FormattingContext, ExecutionContext, ResolutionContext } from '@core/types/index.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 
 // Import all handlers
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
@@ -69,17 +63,15 @@ export class MeldLLMXMLError extends Error {
   ]
 })
 export class DirectiveService implements IDirectiveService {
-  private validationService!: ValidationServiceLike;
+  private validationService!: IValidationService;
   private stateService!: IStateService;
-  private fileSystemService!: FileSystemLike;
+  private fileSystemService!: IFileSystemService;
   private parserService!: ParserServiceLike;
-  private interpreterService?: InterpreterServiceLike; // Legacy reference
-  private interpreterClient?: IInterpreterServiceClient; // Client from factory pattern
+  private interpreterService?: InterpreterServiceLike;
+  private interpreterClient?: IInterpreterServiceClient;
   private interpreterClientFactory?: InterpreterServiceClientFactory;
   private circularityService!: CircularityServiceLike;
   private resolutionService!: IResolutionService;
-  private resolutionClient?: IResolutionServiceClientForDirective;
-  private resolutionClientFactory?: ResolutionServiceClientForDirectiveFactory;
   private factoryInitialized: boolean = false;
   private interpreterFactoryInitialized: boolean = false;
   private initialized = false;
@@ -102,10 +94,10 @@ export class DirectiveService implements IDirectiveService {
    * @param logger Logger for directive operations (optional)
    */
   constructor(
-    @inject('IValidationService') validationService?: ValidationServiceLike,
+    @inject('IValidationService') validationService?: IValidationService,
     @inject('IStateService') stateService?: IStateService,
     @inject('IPathService') private pathService?: IPathService,
-    @inject('IFileSystemService') fileSystemService?: FileSystemLike,
+    @inject('IFileSystemService') fileSystemService?: IFileSystemService,
     @inject('IParserService') parserService?: ParserServiceLike,
     @inject('InterpreterServiceClientFactory') interpreterServiceClientFactory?: InterpreterServiceClientFactory,
     @inject('ICircularityService') circularityService?: CircularityServiceLike,
@@ -130,7 +122,7 @@ export class DirectiveService implements IDirectiveService {
         pathService,
         fileSystemService,
         parserService,
-        interpreterServiceClientFactory, // Pass factory here now
+        interpreterServiceClientFactory,
         circularityService,
         resolutionService
       );
@@ -150,10 +142,10 @@ export class DirectiveService implements IDirectiveService {
    * Uses DI-only mode for initialization.
    */
   private initializeFromParams(
-    validationService?: ValidationServiceLike,
+    validationService?: IValidationService,
     stateService?: IStateService,
-    pathService?: PathServiceLike,
-    fileSystemService?: FileSystemLike,
+    pathService?: IPathService,
+    fileSystemService?: IFileSystemService,
     parserService?: ParserServiceLike,
     interpreterServiceClientFactory?: InterpreterServiceClientFactory,
     circularityService?: CircularityServiceLike,
@@ -200,10 +192,10 @@ export class DirectiveService implements IDirectiveService {
    * The service is automatically initialized via dependency injection.
    */
   initialize(
-    validationService: ValidationServiceLike,
+    validationService: IValidationService,
     stateService: IStateService,
-    pathService: PathServiceLike,
-    fileSystemService: FileSystemLike,
+    pathService: IPathService,
+    fileSystemService: IFileSystemService,
     parserService: ParserServiceLike,
     interpreterServiceClientFactory: InterpreterServiceClientFactory,
     circularityService: CircularityServiceLike,
@@ -250,7 +242,7 @@ export class DirectiveService implements IDirectiveService {
             this.logger.warn('FileSystemService not available for TextDirectiveHandler injection');
           }
           const textHandler = new TextDirectiveHandler(
-            this.validationService as IValidationService,
+            this.validationService,
             this.resolutionService,
             this.fileSystemService as IFileSystemService 
           );
@@ -261,7 +253,7 @@ export class DirectiveService implements IDirectiveService {
             this.logger.warn('FileSystemService or PathService not available for DataDirectiveHandler injection');
           }
           const dataHandler = new DataDirectiveHandler(
-            this.validationService as IValidationService,
+            this.validationService,
             this.resolutionService,
             this.fileSystemService as IFileSystemService, 
             this.pathService as IPathService 
@@ -273,13 +265,13 @@ export class DirectiveService implements IDirectiveService {
              this.logger.warn('PathService not available for PathDirectiveHandler injection');
           }
           const pathHandler = new PathDirectiveHandler(
-            this.validationService as IValidationService,
+            this.validationService,
             this.resolutionService
           );
           this.registerHandler(pathHandler);
 
           const defineHandler = new DefineDirectiveHandler(
-            this.validationService as IValidationService,
+            this.validationService,
             this.resolutionService
           );
           this.registerHandler(defineHandler);
@@ -294,7 +286,7 @@ export class DirectiveService implements IDirectiveService {
     } else {
         try {
             const runHandler = new RunDirectiveHandler(
-              this.validationService as IValidationService,
+              this.validationService,
               this.resolutionService,
               this.stateService,
               this.fileSystemService
@@ -314,7 +306,7 @@ export class DirectiveService implements IDirectiveService {
                 this.logger.warn('Skipping Embed handler due to missing FileSystemService.');
             } else {
                 const embedHandler = new EmbedDirectiveHandler(
-                  this.validationService as IValidationService,
+                  this.validationService,
                   this.resolutionService,
                   this.stateService as IStateService,
                   this.circularityService,
@@ -336,7 +328,7 @@ export class DirectiveService implements IDirectiveService {
                  this.logger.warn('Skipping Import handler due to missing dependencies.');
             } else {
                 const importHandler = new ImportDirectiveHandler(
-                  this.validationService as IValidationService,
+                  this.validationService,
                   this.resolutionService,
                   this.stateService as IStateService,
                   this.fileSystemService,
@@ -393,8 +385,8 @@ export class DirectiveService implements IDirectiveService {
     try {
       // --- Create DirectiveProcessingContext --- 
       const state = context.state?.clone() || this.stateService!.createChildState();
-      const currentFilePath = context.currentFilePath ?? state.getCurrentFilePath() ?? undefined;
-      const resolutionContext = ResolutionContextFactory.create(state, currentFilePath);
+      const currentFilePath = state.getCurrentFilePath() ?? undefined;
+      const resolutionContext = ResolutionContextFactory.create(state as IStateService, currentFilePath);
       const formattingContext: FormattingContext = { 
          isOutputLiteral: state.isTransformationEnabled(),
          contextType: 'block', 
@@ -443,20 +435,13 @@ export class DirectiveService implements IDirectiveService {
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown directive processing error';
         const code = (error instanceof DirectiveError) ? error.code : DirectiveErrorCode.EXECUTION_FAILED;
-        const severity = (error instanceof MeldError) ? error.severity : ErrorSeverity.Fatal;
-        const simplifiedContext = { currentFilePath: context.currentFilePath ?? this.stateService?.getCurrentFilePath() ?? undefined };
+        const simplifiedContext = { currentFilePath: context.state?.getCurrentFilePath() ?? undefined };
 
         throw new DirectiveError(
           message,
           kind,
           code,
-          {
-            node: node,
-            context: simplifiedContext,
-            location: node.location,
-            severity: severity,
-            cause: error instanceof Error ? error : undefined
-          }
+          simplifiedContext
         );
     }
   }
@@ -473,11 +458,11 @@ export class DirectiveService implements IDirectiveService {
     this.factoryInitialized = true;
     
     try {
-      this.resolutionClientFactory = container.resolve('ResolutionServiceClientForDirectiveFactory');
-      this.initializeResolutionClient();
+      this.interpreterClientFactory = container.resolve('InterpreterServiceClientFactory');
+      this.initializeInterpreterClient();
     } catch (error) {
       // Factory not available, will use direct reference
-      this.logger.debug('ResolutionServiceClientForDirectiveFactory not available, using direct reference for resolution operations');
+      this.logger.debug('InterpreterServiceClientFactory not available, using direct reference for resolution operations');
     }
   }
   
@@ -485,92 +470,17 @@ export class DirectiveService implements IDirectiveService {
    * Initialize the ResolutionServiceClientForDirective using the factory
    */
   private initializeResolutionClient(): void {
-    if (!this.resolutionClientFactory) {
+    if (!this.interpreterClientFactory) {
       return;
     }
     
     try {
-      this.resolutionClient = this.resolutionClientFactory.createClient();
-      this.logger.debug('Successfully created ResolutionServiceClientForDirective using factory');
+      this.interpreterClient = this.interpreterClientFactory.createClient();
+      this.logger.debug('Successfully created InterpreterServiceClient using factory');
     } catch (error) {
-      this.logger.warn('Failed to create ResolutionServiceClientForDirective, falling back to direct reference', { error });
-      this.resolutionClient = undefined;
+      this.logger.warn('Failed to create InterpreterServiceClient', { error });
+      this.interpreterClient = undefined;
     }
-  }
-
-  /**
-   * Resolve text using the resolution service
-   * @private
-   */
-  private async resolveText(text: string, context: DirectiveContext): Promise<string> {
-    this.ensureFactoryInitialized();
-    
-    if (this.resolutionClient) {
-      try {
-        return await this.resolutionClient.resolveInContext(text, context.resolutionContext || {
-          currentFilePath: context.currentFilePath,
-          workingDirectory: context.workingDirectory
-        } as ResolutionContext);
-      } catch (error) {
-        directiveLogger.warn('Error using resolutionClient.resolveInContext', { error });
-      }
-    }
-    
-    // Fallback to direct resolution service
-    return this.resolutionService.resolveInContext(text, {
-      currentFilePath: context.currentFilePath,
-      workingDirectory: context.workingDirectory
-    } as ResolutionContext);
-  }
-
-  /**
-   * Resolve data using the resolution service
-   * @private
-   */
-  private async resolveData(ref: string, context: DirectiveContext): Promise<any> {
-    this.ensureFactoryInitialized();
-    
-    if (this.resolutionClient) {
-      try {
-        return await this.resolutionClient.resolveData(ref, context.resolutionContext || {
-          currentFilePath: context.currentFilePath,
-          workingDirectory: context.workingDirectory
-        });
-      } catch (error) {
-        directiveLogger.warn('Error using resolutionClient.resolveData', { error });
-      }
-    }
-    
-    // Fallback to direct resolution service
-    return this.resolutionService.resolveData(ref, {
-      currentFilePath: context.currentFilePath,
-      workingDirectory: context.workingDirectory
-    });
-  }
-
-  /**
-   * Resolve path using the resolution service
-   * @private
-   */
-  private async resolvePath(path: string, context: DirectiveContext): Promise<string> {
-    this.ensureFactoryInitialized();
-    
-    if (this.resolutionClient) {
-      try {
-        return await this.resolutionClient.resolvePath(path, context.resolutionContext || {
-          currentFilePath: context.currentFilePath,
-          workingDirectory: context.workingDirectory
-        });
-      } catch (error) {
-        directiveLogger.warn('Error using resolutionClient.resolvePath', { error });
-      }
-    }
-    
-    // Fallback to direct resolution service
-    return this.resolutionService.resolvePath(path, {
-      currentFilePath: context.currentFilePath,
-      workingDirectory: context.workingDirectory
-    });
   }
 
   /**
@@ -652,7 +562,7 @@ export class DirectiveService implements IDirectiveService {
    * Process multiple directives in sequence
    * @returns The final state after processing all directives
    */
-  async processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<IStateService> {
+  async processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveProcessingContext): Promise<IStateService> {
     this.ensureInitialized();
     // Initialize with IStateService
     let currentState: IStateService = parentContext?.state?.clone() as IStateService || this.stateService!.createChildState();
@@ -713,20 +623,13 @@ export class DirectiveService implements IDirectiveService {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown directive processing error';
         const code = (error instanceof DirectiveError) ? error.code : DirectiveErrorCode.EXECUTION_FAILED;
-        const severity = (error instanceof MeldError) ? error.severity : ErrorSeverity.Fatal;
         const simplifiedContext = { currentFilePath: currentFilePath };
 
         throw new DirectiveError(
           message,
           node.directive.kind,
           code,
-          {
-            node: node,
-            context: simplifiedContext,
-            location: node.location,
-            severity: severity,
-            cause: error instanceof Error ? error : undefined
-          }
+          simplifiedContext
         );
       }
     }
@@ -771,7 +674,7 @@ export class DirectiveService implements IDirectiveService {
   /**
    * Create a child context for nested directives
    */
-  public createChildContext(parentContext: DirectiveContext, filePath: string): DirectiveContext {
+  public createChildContext(parentContext: DirectiveProcessingContext, filePath: string): DirectiveProcessingContext {
     // Create a child state that inherits from parent
     const childState = parentContext.state.createChildState();
     
@@ -805,7 +708,7 @@ export class DirectiveService implements IDirectiveService {
       workingDirectory: parentContext.workingDirectory,
       resolutionContext,
       formattingContext
-    } as DirectiveContext;
+    } as DirectiveProcessingContext;
   }
 
   supportsDirective(kind: string): boolean {
@@ -827,349 +730,12 @@ export class DirectiveService implements IDirectiveService {
     }
   }
 
-  private async handleTextDirective(node: DirectiveNode): Promise<void> {
-    const directive = node.directive;
-    
-    this.logger.debug('Processing text directive', {
-      identifier: directive.identifier,
-      location: node.location
-    });
-
-    try {
-      // Value is already interpolated by meld-ast
-      await this.stateService!.setTextVar(directive.identifier, directive.value);
-      
-      this.logger.debug('Text directive processed successfully', {
-        identifier: directive.identifier,
-        location: node.location
-      });
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorForLog = error instanceof Error ? error : new Error(String(error));
-      
-      this.logger.error('Failed to process text directive', {
-        identifier: directive.identifier,
-        location: node.location,
-        error: errorForLog
-      });
-      
-      throw new MeldDirectiveError(
-        errorMessage,
-        'text',
-        { location: node.location?.start }
-      );
-    }
-  }
-
-  private async handleDataDirective(node: DirectiveNode): Promise<void> {
-    const directive = node.directive;
-    
-    this.logger.debug('Processing data directive', {
-      identifier: directive.identifier,
-      location: node.location
-    });
-
-    try {
-      // Value is already interpolated by meld-ast
-      let value = directive.value;
-      if (typeof value === 'string') {
-        value = JSON.parse(value);
-      }
-
-      await this.stateService!.setDataVar(directive.identifier, value);
-      
-      this.logger.debug('Data directive processed successfully', {
-        identifier: directive.identifier,
-        location: node.location
-      });
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorForLog = error instanceof Error ? error : new Error(String(error));
-      
-      this.logger.error('Failed to process data directive', {
-        identifier: directive.identifier,
-        location: node.location,
-        error: errorForLog
-      });
-      
-      throw new MeldDirectiveError(
-        errorMessage,
-        'data',
-        { location: node.location?.start }
-      );
-    }
-  }
-
-  private async handleImportDirective(node: DirectiveNode): Promise<void> {
-    const directive = node.directive;
-    
-    this.logger.debug('Processing import directive', {
-      path: directive.path,
-      section: directive.section,
-      fuzzy: directive.fuzzy,
-      location: node.location
-    });
-
-    try {
-      // Path is already interpolated by meld-ast
-      const fullPath = await this.pathService!.resolvePath(directive.path);
-      
-      // Check for circular imports
-      this.circularityService!.beginImport(fullPath);
-
-      try {
-        // Check if file exists
-        if (!await this.fileSystemService!.exists(fullPath)) {
-          throw new Error(`Import file not found: ${fullPath}`);
-        }
-
-        // Create a child state for the import
-        const childState = await this.stateService!.createChildState();
-
-        // Read the file content
-        const content = await this.fileSystemService!.readFile(fullPath);
-
-        // If a section is specified, extract it (section name is already interpolated)
-        let processedContent = content;
-        if (directive.section) {
-          processedContent = await this.extractSection(
-            content, 
-            directive.section, 
-            directive.fuzzy || 0
-          );
-        }
-
-        // Parse and interpret the content
-        const parsedNodes = await this.parserService!.parse(processedContent);
-        await this.callInterpreterInterpret(parsedNodes, {
-          initialState: childState,
-          filePath: fullPath,
-          mergeState: true
-        });
-
-        this.logger.debug('Import content processed', {
-          path: fullPath,
-          section: directive.section,
-          location: node.location
-        });
-      } finally {
-        // Always end import tracking, even if there was an error
-        this.circularityService!.endImport(fullPath);
-      }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorForLog = error instanceof Error ? error : new Error(String(error));
-      
-      this.logger.error('Failed to process import directive', {
-        path: directive.path,
-        section: directive.section,
-        location: node.location,
-        error: errorForLog
-      });
-      
-      throw new MeldDirectiveError(
-        errorMessage,
-        'import',
-        { location: node.location?.start }
-      );
-    }
-  }
-
-  private async extractSection(
-    content: string,
-    section: string,
-    fuzzyMatch: number
-  ): Promise<string> {
-    try {
-      // Split content into lines
-      const lines = content.split('\n');
-      const headings: { title: string; line: number; level: number }[] = [];
-      
-      // Find all headings and their levels
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const match = line.match(/^(#{1,6})\s+(.+)$/);
-        if (match) {
-          headings.push({
-            title: match[2],
-            line: i,
-            level: match[1].length
-          });
-        }
-      }
-
-      // Find best matching heading
-      let bestMatch: typeof headings[0] | undefined;
-      let bestScore = 0;
-
-      for (const heading of headings) {
-        const score = this.calculateSimilarity(heading.title, section);
-        if (score > fuzzyMatch && score > bestScore) {
-          bestScore = score;
-          bestMatch = heading;
-        }
-      }
-
-      if (!bestMatch) {
-        // Find closest match for error message
-        let closestMatch = '';
-        let closestScore = 0;
-        for (const heading of headings) {
-          const score = this.calculateSimilarity(heading.title, section);
-          if (score > closestScore) {
-            closestScore = score;
-            closestMatch = heading.title;
-          }
-        }
-
-        throw new MeldLLMXMLError(
-          'Section not found',
-          'SECTION_NOT_FOUND',
-          { title: section, bestMatch: closestMatch }
-        );
-      }
-
-      // Find the end of the section (next heading of same or higher level)
-      let endLine = lines.length;
-      for (let i = bestMatch.line + 1; i < lines.length; i++) {
-        const line = lines[i];
-        const match = line.match(/^(#{1,6})\s+/);
-        if (match && match[1].length <= bestMatch.level) {
-          endLine = i;
-          break;
-        }
-      }
-
-      // Extract the section content
-      return lines.slice(bestMatch.line, endLine).join('\n');
-    } catch (error) {
-      if (error instanceof MeldLLMXMLError) {
-        throw error;
-      }
-      throw new MeldLLMXMLError(
-        error instanceof Error ? error.message : 'Unknown error during section extraction',
-        'PARSE_ERROR',
-        error
-      );
-    }
-  }
-
-  private calculateSimilarity(str1: string, str2: string): number {
-    // Convert strings to lowercase for case-insensitive comparison
-    const s1 = str1.toLowerCase();
-    const s2 = str2.toLowerCase();
-
-    if (s1 === s2) return 1.0;
-
-    // Calculate Levenshtein distance
-    const len1 = s1.length;
-    const len2 = s2.length;
-    const matrix: number[][] = [];
-
-    for (let i = 0; i <= len1; i++) {
-      matrix[i] = [i];
-    }
-    for (let j = 0; j <= len2; j++) {
-      matrix[0][j] = j;
-    }
-
-    for (let i = 1; i <= len1; i++) {
-      for (let j = 1; j <= len2; j++) {
-        const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j - 1] + cost
-        );
-      }
-    }
-
-    // Convert distance to similarity score between 0 and 1
-    const maxLen = Math.max(len1, len2);
-    return maxLen === 0 ? 1.0 : 1.0 - matrix[len1][len2] / maxLen;
-  }
-
-  private async handleEmbedDirective(node: DirectiveNode): Promise<void> {
-    const directive = node.directive;
-    
-    this.logger.debug('Processing embed directive', {
-      path: directive.path,
-      section: directive.section,
-      fuzzy: directive.fuzzy,
-      names: directive.names,
-      location: node.location
-    });
-
-    try {
-      // Path is already interpolated by meld-ast
-      const fullPath = await this.pathService!.resolvePath(directive.path);
-      
-      // Check for circular imports
-      this.circularityService!.beginImport(fullPath);
-
-      try {
-        // Check if file exists
-        if (!await this.fileSystemService!.exists(fullPath)) {
-          throw new Error(`Embed file not found: ${fullPath}`);
-        }
-
-        // Create a child state for the import
-        const childState = await this.stateService!.createChildState();
-
-        // Read the file content
-        const content = await this.fileSystemService!.readFile(fullPath);
-
-        // If a section is specified, extract it (section name is already interpolated)
-        let processedContent = content;
-        if (directive.section) {
-          processedContent = await this.extractSection(
-            content, 
-            directive.section, 
-            directive.fuzzy || 0
-          );
-        }
-
-        // Parse and interpret the content
-        const parsedNodes = await this.parserService!.parse(processedContent);
-        await this.callInterpreterInterpret(parsedNodes, {
-          initialState: childState,
-          filePath: fullPath,
-          mergeState: true
-        });
-
-        this.logger.debug('Embed content processed', {
-          path: fullPath,
-          section: directive.section,
-          location: node.location
-        });
-      } finally {
-        // Always end import tracking, even if there was an error
-        this.circularityService!.endImport(fullPath);
-      }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorForLog = error instanceof Error ? error : new Error(String(error));
-      
-      this.logger.error('Failed to process embed directive', {
-        path: directive.path,
-        section: directive.section,
-        location: node.location,
-        error: errorForLog
-      });
-      
-      throw new MeldDirectiveError(
-        errorMessage,
-        'embed',
-        { location: node.location?.start }
-      );
-    }
-  }
-
   /**
-   * Utility type guard to check if an object conforms to IStateService.
-   * Needs to be robust enough to distinguish from DirectiveResult etc.
+   * Type guard to check if an object is an instance of IStateService
+   * TODO: Improve this check - instanceof might not work with interfaces/DI. 
+   * Relying on specific methods/properties might be better.
    */
   private isStateService(obj: any): obj is IStateService {
-    return obj && typeof obj === 'object' && typeof obj.clone === 'function' && typeof obj.getVariable === 'function' && !('replacement' in obj);
+    return obj && typeof obj.getVariable === 'function' && typeof obj.clone === 'function'; // Example check
   }
 } 

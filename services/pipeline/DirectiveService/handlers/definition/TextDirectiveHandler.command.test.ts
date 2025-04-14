@@ -248,7 +248,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
     await handler.execute(mockProcessingContext);
 
     expect(fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
-    expect(stateService.setTextVar).toHaveBeenCalledWith('cmdOutput', 'Hello Command', expect.any(Object));
+    expect(stateService.setTextVar).toHaveBeenCalledWith('cmdOutput', 'Hello Command');
   });
   
   it('should handle variable references in command input', async () => {
@@ -274,7 +274,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
 
     expect(resolutionService.resolveNodes).toHaveBeenCalledWith(commandTemplateNodes, expect.anything());
     expect(fileSystemService.executeCommand).toHaveBeenCalledWith(resolvedCommand, { cwd: '/test' });
-    expect(stateService.setTextVar).toHaveBeenCalledWith('cmdOutputVar', 'Input: test value', expect.any(Object));
+    expect(stateService.setTextVar).toHaveBeenCalledWith('cmdOutputVar', 'Input: test value');
   });
   
   it('should handle special characters in command outputs', async () => {
@@ -295,7 +295,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
     await handler.execute(mockProcessingContext);
 
     expect(fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
-    expect(stateService.setTextVar).toHaveBeenCalledWith('specialOutput', output, expect.any(Object));
+    expect(stateService.setTextVar).toHaveBeenCalledWith('specialOutput', output);
   });
   
   it('should handle multi-line command outputs', async () => {
@@ -317,7 +317,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
 
     expect(fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
     // Note: The handler removes the trailing newline from stdout
-    expect(stateService.setTextVar).toHaveBeenCalledWith('multiLineOutput', output, expect.any(Object));
+    expect(stateService.setTextVar).toHaveBeenCalledWith('multiLineOutput', output);
   });
   
   it('should handle nested variable references across multiple levels', async () => {
@@ -344,6 +344,6 @@ describe('TextDirectiveHandler - Command Execution', () => {
 
     expect(resolutionService.resolveNodes).toHaveBeenCalledWith(commandTemplateNodes, expect.anything());
     expect(fileSystemService.executeCommand).toHaveBeenCalledWith(resolvedCommand, { cwd: '/test' });
-    expect(stateService.setTextVar).toHaveBeenCalledWith('cmdOutputNested', finalOutput, expect.any(Object));
+    expect(stateService.setTextVar).toHaveBeenCalledWith('cmdOutputNested', finalOutput);
   });
 }); 
