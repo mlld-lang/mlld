@@ -52,7 +52,7 @@ import { JsonValue } from '@core/types';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import { mock, mockDeep, type DeepMockProxy } from 'vitest-mock-extended'; // Import mockDeep
 import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
-import { expectToThrowWithConfig } from '@tests/utils/errorTestUtils.js'; // Ensure this is imported
+import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils.js'; // Import ErrorTestOptions
 import { VariableMetadata, TextVariable } from '@core/types/variables.js'; // Added TextVariable
 
 // Mock child_process
@@ -274,8 +274,8 @@ describe('RunDirectiveHandler', () => {
     it('should execute script content with specified language using a temp file', async () => {
       const location = createLocation();
       const scriptContent: InterpolatableValue = [ createTextNode('print("Python script ran")', location) ];
-      // Fix createRunDirective arguments: parameters should be 4th, language 5th
-      const node = createRunDirective(scriptContent, location, 'runCode', undefined, 'python'); 
+      // Swapped language and parameters arguments
+      const node = createRunDirective(scriptContent, location, 'runCode', 'python'); 
       const processingContext = createMockProcessingContext(node);
       
       resolutionService.resolveNodes.mockResolvedValueOnce('print("Python script ran")');
@@ -302,8 +302,8 @@ describe('RunDirectiveHandler', () => {
       const scriptContent: InterpolatableValue = [ createTextNode('import sys\nprint(f"Input: {sys.argv[1]}")', location) ];
       const paramNode: VariableReferenceNode = { type: 'VariableReference', identifier: 'inputVar', valueType: VariableType.TEXT, isVariableReference: true, location };
       const params = [ paramNode ];
-      // Fix createRunDirective arguments: params is 4th, language 5th
-      const node = createRunDirective(scriptContent, location, 'runCodeParams', params, 'python'); 
+      // Swapped language and parameters arguments
+      const node = createRunDirective(scriptContent, location, 'runCodeParams', 'python', params); 
       const processingContext = createMockProcessingContext(node);
 
       resolutionService.resolveNodes.mockResolvedValueOnce('import sys\nprint(f"Input: {sys.argv[1]}")');
@@ -332,12 +332,17 @@ describe('RunDirectiveHandler', () => {
         const scriptContent: InterpolatableValue = [ createTextNode('print("hello")', location) ];
         const paramNode: VariableReferenceNode = { type: 'VariableReference', identifier: 'missingVar', valueType: VariableType.TEXT, isVariableReference: true, location };
         const params = [ paramNode ];
-        // Fix createRunDirective arguments
-        const node = createRunDirective(scriptContent, location, 'runCodeParams', params, 'python');
-        // Create a context specifically for strict mode
-        const strictResolutionContext = mockDeep<ResolutionContext>();
-        strictResolutionContext.strict = true;
-        const processingContext = createMockProcessingContext(node, { resolutionContext: strictResolutionContext });
+        // Swapped language and parameters arguments
+        const node = createRunDirective(scriptContent, location, 'runCodeParams', 'python', params);
+        // Create a strict context by overriding the one from the helper
+        const baseContext = createMockProcessingContext(node);
+        const processingContext: DirectiveProcessingContext = {
+            ...baseContext,
+            resolutionContext: { 
+                ...baseContext.resolutionContext, 
+                strict: true 
+            }
+        };
 
         resolutionService.resolveNodes.mockResolvedValueOnce('print("hello")');
         const resolutionError = new Error('Variable not found by mock');
@@ -346,14 +351,13 @@ describe('RunDirectiveHandler', () => {
         await expectToThrowWithConfig(
             async () => await handler.execute(processingContext),
             {
-                errorType: DirectiveError,
+                type: 'DirectiveError',
                 code: DirectiveErrorCode.RESOLUTION_FAILED,
-                message: /Failed to resolve parameter variable 'missingVar'/i,
+                messageContains: 'Failed to resolve parameter variable \'missingVar\'',
                 cause: resolutionError
-            }
+            } as ErrorTestOptions
         );
-        // Assert against the strict context
-        expect(resolutionService.resolve).toHaveBeenCalledWith(paramNode, strictResolutionContext);
+        expect(resolutionService.resolve).toHaveBeenCalledWith(paramNode, processingContext.resolutionContext);
         expect(fileSystemService.executeCommand).not.toHaveBeenCalled();
     });
   });
@@ -383,11 +387,11 @@ describe('RunDirectiveHandler', () => {
       await expectToThrowWithConfig(
           async () => await handler.execute(processingContext),
           {
-              errorType: DirectiveError,
+              type: 'DirectiveError',
               code: DirectiveErrorCode.RESOLUTION_FAILED,
-              message: /Failed to resolve command/i, 
+              messageContains: 'Failed to resolve command',
               cause: resolutionError
-          }
+          } as ErrorTestOptions
       );
     });
 
@@ -403,11 +407,11 @@ describe('RunDirectiveHandler', () => {
       await expectToThrowWithConfig(
           async () => await handler.execute(processingContext),
           {
-              errorType: DirectiveError,
+              type: 'DirectiveError',
               code: DirectiveErrorCode.EXECUTION_FAILED,
-              message: /Failed to execute command: Execution failed/i,
+              messageContains: 'Failed to execute command: Execution failed',
               cause: executionError
-          }
+          } as ErrorTestOptions
       );
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith('invalid-command', {
         cwd: '/workspace'
@@ -425,10 +429,10 @@ describe('RunDirectiveHandler', () => {
       await expectToThrowWithConfig(
           async () => await handler.execute(processingContext),
           {
-              errorType: DirectiveError,
+              type: 'DirectiveError',
               code: DirectiveErrorCode.VARIABLE_NOT_FOUND,
-              message: /Command definition 'undefinedCommand' not found/i,
-          }
+              messageContains: 'Command definition \'undefinedCommand\' not found',
+          } as ErrorTestOptions
       );
       expect(stateService.getCommandVar).toHaveBeenCalledWith('undefinedCommand'); 
     });
