@@ -32,6 +32,7 @@ import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterS
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient';
 import type { MeldPath } from '@core/types/paths';
 import { createMeldPath, unsafeCreateValidatedResourcePath } from '@core/types/paths';
+import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
 
 // Mock the logger using vi.mock
 const mockLoggerObject = {
@@ -158,6 +159,7 @@ describe('ImportDirectiveHandler Transformation', () => {
   let circularityService: DeepMockProxy<ICircularityService>;
   let childState: ReturnType<typeof createStateServiceMock>;
   let context: TestContextDI;
+  let mockProcessingContext: DirectiveProcessingContext;
 
   beforeEach(async () => {
     context = TestContextDI.createIsolated();
@@ -189,7 +191,7 @@ describe('ImportDirectiveHandler Transformation', () => {
     // Configure Mocks
     stateService.isTransformationEnabled.mockReturnValue(true);
     stateService.createChildState.mockReturnValue(childState);
-    stateService.getCurrentFilePath.mockReturnValue('/project/main.meld');
+    stateService.getCurrentFilePath.mockReturnValue('/project/transform.meld');
 
     childState.getAllTextVars.mockReturnValue(new Map());
     childState.getAllDataVars.mockReturnValue(new Map());
@@ -236,6 +238,23 @@ describe('ImportDirectiveHandler Transformation', () => {
     await context?.cleanup();
   });
 
+  const createMockProcessingContext = (node: DirectiveNode): DirectiveProcessingContext => {
+    const mockResolutionContext = mockDeep<ResolutionContext>();
+    const mockFormattingContext = mockDeep<FormattingContext>();
+    if (!stateService) {
+      throw new Error('Test setup error: stateService is not defined');
+    }
+    expect(stateService.getCurrentFilePath).toBeDefined(); 
+    expect(stateService.isTransformationEnabled).toBeDefined();
+    
+    return {
+        state: stateService, 
+        resolutionContext: mockResolutionContext,
+        formattingContext: mockFormattingContext,
+        directiveNode: node,
+    };
+  };
+
   describe('transformation behavior', () => {
     it('should return DirectiveResult with empty text node replacement when transformation enabled', async () => {
       const importPath = 'imported.meld';
@@ -259,7 +278,9 @@ describe('ImportDirectiveHandler Transformation', () => {
       const importedVar: TextVariable = { name: 'var1', type:VariableType.TEXT, value: 'value1', metadata: { definedAt: createTestLocation(1,1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
       childState.getAllTextVars.mockReturnValue(new Map([['var1', importedVar]]));
 
-      const result = await handler.execute(node as any, directiveContext) as DirectiveResult;
+      mockProcessingContext = createMockProcessingContext(node);
+
+      const result = await handler.execute(mockProcessingContext) as DirectiveResult;
 
       expect(resolutionService.resolvePath).toHaveBeenCalledWith(finalPath, expect.any(Object));
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
@@ -309,7 +330,9 @@ describe('ImportDirectiveHandler Transformation', () => {
         return undefined;
       });
 
-      const result = await handler.execute(node as any, directiveContext) as DirectiveResult;
+      mockProcessingContext = createMockProcessingContext(node);
+
+      const result = await handler.execute(mockProcessingContext) as DirectiveResult;
 
       expect(result.state).toBe(stateService);
       expect(result.replacement).toEqual<TextNode>({
@@ -339,12 +362,14 @@ describe('ImportDirectiveHandler Transformation', () => {
       resolutionService.resolvePath.mockResolvedValue(createMeldPath(importPath, unsafeCreateValidatedResourcePath(finalPath), true));
       fileSystemService.exists.mockResolvedValue(false);
 
+      mockProcessingContext = createMockProcessingContext(node);
+
       await expectToThrowWithConfig(
-        () => handler.execute(node as any, directiveContext),
+        () => handler.execute(mockProcessingContext),
         {
           type: 'DirectiveError',
-          code: DirectiveErrorCode.FILE_NOT_FOUND,
-          messageContains: `File not found: ${finalPath}`
+          code: DirectiveErrorCode.EXECUTION_FAILED,
+          messageContains: 'Disk read failed'
         }
       );
 

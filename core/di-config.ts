@@ -32,9 +32,9 @@ import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution
 import { StateServiceClientFactory } from '@services/state/StateService/factories/StateServiceClientFactory.js';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
-import {
-  LoggerFactory,
-  logger as mainLogger,
+import { 
+  LoggerFactory, 
+  logger as mainLogger, 
   // ... other loggers ...
 } from '@core/utils/logger.js';
 

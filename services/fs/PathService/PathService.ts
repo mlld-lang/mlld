@@ -493,7 +493,7 @@ export class PathService implements IPathService {
       raw: raw, // Use 'raw' instead of 'original'
       normalized: normalized,
       structured: { // Ensure structured object matches interface
-         segments: segments,
+      segments: segments,
          base: base,
          url: isUrl,
          // variables: {} // Initialize variables if needed
