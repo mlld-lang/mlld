@@ -11,9 +11,11 @@ import type { DirectiveService } from '@services/pipeline/DirectiveService/Direc
 import type { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import type { StateDebuggerService as DebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
 import type { TransformationOptions } from './state.js';
-import type { StateServiceLike } from '@core/shared-service-types';
-import type { ResolutionContext } from './resolution';
-import type { MeldNode } from '@core/syntax/types';
+import type { StateServiceLike } from '@core/shared-service-types.js';
+import type { ResolutionContext } from './resolution.js';
+import type { MeldNode } from '@core/syntax/types/index.js';
+import type { DirectiveNode } from '@core/syntax/types/index.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 /**
  * Represents a position in a file
@@ -130,7 +132,6 @@ export interface FormattingContext {
 
 /**
  * Context specific to the execution of @run directives.
- * Based on _spec/types/run-spec.md
  */
 export interface ExecutionContext {
   /** The current working directory for the command execution. */
@@ -160,7 +161,7 @@ export interface ExecutionContext {
  */
 export interface DirectiveProcessingContext {
   /** The current state service instance for the directive to operate on. */
-  state: StateServiceLike;
+  state: IStateService;
   /** The context for resolving variables within the directive. */
   resolutionContext: ResolutionContext;
   /** The context related to formatting (e.g., newline handling). */
@@ -168,7 +169,7 @@ export interface DirectiveProcessingContext {
   /** The context specific to command execution (only present for @run directives). */
   executionContext?: ExecutionContext;
   /** The original directive node being processed. */
-  directiveNode: MeldNode; // Added to provide direct access to the node
+  directiveNode: DirectiveNode;
 }
 
 // --- END NEW CONTEXT TYPE DEFINITIONS ---

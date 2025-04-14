@@ -33,7 +33,7 @@ import {
   isBasicCommand,
   ResolutionErrorCode
 } from '@core/types';
-import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode, StructuredPath } from '@core/syntax/types/index.js';
+import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/syntax/types/index.js';
 import { ResolutionContextFactory } from './ResolutionContextFactory';
 import { CommandResolver } from './resolvers/CommandResolver';
 import { ContentResolver } from './resolvers/ContentResolver';
@@ -374,7 +374,7 @@ export class ResolutionService implements IResolutionService {
   /**
    * Parse a string into AST nodes for resolution
    */
-  private async parseForResolution(value: string, context: ResolutionContext): Promise<MeldNode[]> {
+  private async parseForResolution(value: string, context: ResolutionContext): Promise<InterpolatableValue> {
     logger.debug(`Entering parseForResolution`, { value: value.substring(0, 50), contextFlags: context.flags });
 
     // Ensure factory/client is initialized (might be needed if called early)
@@ -386,7 +386,12 @@ export class ResolutionService implements IResolutionService {
         logger.debug(`parseForResolution: Attempting parse via ParserServiceClient.`);
         const nodes = await this.parserClient.parseString(value, { filePath: context.currentFilePath });
         logger.debug(`parseForResolution: Parsed via client into ${nodes.length} nodes.`);
-        return nodes;
+        // Filter nodes to match InterpolatableValue type
+        const interpolatableNodes = nodes.filter(
+          (node): node is TextNode | VariableReferenceNode => 
+            node.type === 'Text' || node.type === 'VariableReference'
+        );
+        return interpolatableNodes;
       } catch (error) {
         logger.error(`parseForResolution: ParserServiceClient failed.`, { error });
         // Re-throw the error to ensure failure is explicit
@@ -403,7 +408,12 @@ export class ResolutionService implements IResolutionService {
             logger.debug(`parseForResolution: Attempting parse via direct ParserService.`);
             const nodes = await this.parserService.parse(value);
             logger.debug(`parseForResolution: Parsed via service into ${nodes.length} nodes.`);
-            return nodes;
+            // Filter nodes to match InterpolatableValue type
+            const interpolatableNodes = nodes.filter(
+              (node): node is TextNode | VariableReferenceNode => 
+                node.type === 'Text' || node.type === 'VariableReference'
+            );
+            return interpolatableNodes;
          } catch (error) {
              logger.error(`parseForResolution: Direct ParserService failed.`, { error });
              // Re-throw the error
@@ -422,6 +432,7 @@ export class ResolutionService implements IResolutionService {
             details: { serviceName: 'ParserService/Client' }
         });
     }
+    return []; // Should not be reached if errors are thrown
   }
 
   /**
@@ -500,7 +511,7 @@ export class ResolutionService implements IResolutionService {
     // Remove outer try...catch, handle rejection with .catch()
     // try {
       // 1. Parse the input string into nodes
-      const nodes = await this.parseForResolution(text, context);
+      const nodes: InterpolatableValue = await this.parseForResolution(text, context);
       logger.debug(`resolveText: Parsed into ${nodes.length} nodes. Delegating to resolveNodes.`);
       
       // 2. Delegate node resolution and add explicit .catch handler
@@ -835,7 +846,7 @@ export class ResolutionService implements IResolutionService {
    * otherwise it falls back to resolving the `raw` string.
    */
   async resolveInContext(
-    value: string | StructuredPath, // Use StructuredPath type
+    value: string | StructuredPath, // Use the imported StructuredPath
     context: ResolutionContext
   ): Promise<string> { 
     logger.debug('resolveInContext called', { valueType: typeof value, contextFlags: context.flags });
@@ -843,14 +854,15 @@ export class ResolutionService implements IResolutionService {
     // Check if value is the AST StructuredPath object
     if (typeof value === 'object' && value !== null && 'raw' in value && 'structured' in value) { // Check for properties of StructuredPath
       logger.debug(`resolveInContext: Value is StructuredPath`);
-      // If interpolatedValue exists and is an array, resolve that array
-      if (Array.isArray(value.interpolatedValue)) {
+      // Check interpolatedValue property (which exists on StructuredPath)
+      if (Array.isArray(value.interpolatedValue)) { 
         logger.debug('Resolving interpolatedValue from StructuredPath');
         return this.resolveNodes(value.interpolatedValue, context);
       } else {
-        // Otherwise, treat the raw string as needing potential resolution
+        // Fallback to raw string
         logger.debug('No interpolatedValue on StructuredPath, resolving raw string');
-        return this.resolveText(value.raw, context);
+        // Ensure value.raw is treated as string
+        return this.resolveText(String(value.raw), context); 
       }
     } else if (typeof value === 'string') {
       // Handle plain string input
@@ -859,7 +871,7 @@ export class ResolutionService implements IResolutionService {
     } else {
       // Handle unexpected input types
       logger.warn('resolveInContext received unexpected value type', { value });
-      return ''; // Return empty string for unexpected types
+      return '';
     }
   }
 

@@ -38,8 +38,8 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
   ) {}
 
   async execute(context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
-    const state = context.state;
-    const node = context.directiveNode;
+    const state: IStateService = context.state;
+    const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
     const currentFilePath = state.getCurrentFilePath();
     const baseErrorDetails = { 
