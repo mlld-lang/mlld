@@ -33,19 +33,8 @@ export type { ResolutionContext, FormattingContext } from '@core/types/resolutio
 export interface IResolutionService {
   /**
    * Resolve text variables ({{var}}) in a string.
-   * 
-   * @param text - The string containing text variables to resolve
-   * @param context - The resolution context with state and configuration flags
-   * @returns The string with all variables resolved
-   * @throws {MeldResolutionError} If resolution fails and context.strict is true
-   * 
-   * @example
-   * ```ts
-   * const resolved = await resolutionService.resolveText(
-   *   "Hello, {{name}}! Welcome to {{company}}.",
-   *   createResolutionContext(state, { allowedVariableTypes: [VariableType.TEXT] })
-   * );
-   * ```
+   * Deprecated: Use resolveInContext or resolveNodes for better context handling.
+   * @deprecated Prefer resolveInContext or resolveNodes.
    */
   resolveText(text: string, context: ResolutionContext): Promise<string>;
 
@@ -63,77 +52,56 @@ export interface IResolutionService {
   /**
    * Resolve path variables ($path) and constructs to MeldPath objects.
    * Handles special paths like $HOMEPATH, $PROJECTPATH, etc.
+   * This primarily resolves the path string and validates it.
    * 
    * @param pathString - The path string with potential variables to resolve
    * @param context - The resolution context with state and path validation rules
    * @returns The resolved MeldPath object (which could be Normalized or Raw, File or Directory)
    * @throws {MeldResolutionError} If resolution fails and context.strict is true
    * @throws {PathValidationError} If the path violates security rules specified in context.pathContext
-   * 
-   * @example
-   * ```ts
-   * const configPath = await resolutionService.resolvePath(
-   *   "$./src/config/$environment.json",
-   *   createResolutionContext(state, { 
-   *     allowedVariableTypes: [VariableType.TEXT, VariableType.PATH],
-   *     pathContext: { purpose: PathPurpose.READ } 
-   *   })
-   * );
-   * ```
    */
   resolvePath(pathString: string, context: ResolutionContext): Promise<MeldPath>;
 
   /**
    * Resolve command references ($command(args)) to their execution results.
+   * Note: Execution logic might better reside in the command definition or specific handlers.
    * 
    * @param commandName - The command name to resolve
    * @param args - The arguments passed to the command (already resolved)
    * @param context - The resolution context providing state and execution environment
    * @returns The command execution result as a string (standard behavior)
    * @throws {MeldResolutionError} If command resolution or execution fails and context.strict is true
-   * 
-   * @example
-   * ```ts
-   * const result = await resolutionService.resolveCommand(
-   *   "listFiles",
-   *   ["*.js", "--recursive"],
-   *   createResolutionContext(state, { allowedVariableTypes: [VariableType.COMMAND] })
-   * );
-   * ```
    */
   resolveCommand(commandName: string, args: string[], context: ResolutionContext): Promise<string>;
 
   /**
    * Resolve content from a file path (represented by MeldPath).
-   * Note: Direct file reading might be better suited for FileSystemService.
-   * This method assumes the path is already resolved and validated appropriately.
-   * 
-   * @param path - The MeldPath object representing the file to read
-   * @returns The file content as a string
-   * @throws {MeldFileSystemError} If the file cannot be read
+   * Deprecated: Use FileSystemService.readFile directly.
+   * @deprecated Prefer FileSystemService.readFile.
    */
   resolveFile(path: MeldPath): Promise<string>;
 
   /**
    * Resolve raw content nodes (TextNode, CodeFenceNode, etc.), preserving formatting but skipping comments.
-   * Applies variable resolution within TextNodes based on the context.
-   * 
-   * @param nodes - The AST nodes to convert to text
-   * @param context - The resolution context with state and flags
-   * @returns The resolved content as a string
-   * @throws {MeldResolutionError} If variable resolution within text fails and context.strict is true
+   * Deprecated: Resolution should happen during interpretation (InterpreterService) or via resolveNodes.
+   * @deprecated Prefer resolveNodes or ensure interpretation handles this.
    */
   resolveContent(nodes: MeldNode[], context: ResolutionContext): Promise<string>;
 
   /**
-   * Resolves an array of AST nodes (only TextNode and VariableReferenceNode) into a single string.
-   * Handles TextNodes and delegates VariableReferenceNodes to the appropriate resolver.
+   * Resolves an array of AST nodes (specifically TextNode and VariableReferenceNode) into a single string.
+   * Handles literal text and delegates VariableReferenceNodes to the appropriate resolver.
+   * 
+   * @param nodes - The InterpolatableValue array (TextNode | VariableReferenceNode)[]
+   * @param context - The resolution context.
+   * @returns The fully resolved and concatenated string content.
+   * @throws {MeldResolutionError} If variable resolution fails in strict mode.
    */
   resolveNodes(nodes: InterpolatableValue, context: ResolutionContext): Promise<string>;
 
   /**
    * Resolves any value based on the provided context rules.
-   * This is a general-purpose resolution method that routes based on allowed types in context.
+   * This is the preferred general-purpose resolution method.
    * 
    * @param value - The string, structured path representation, or pre-parsed node array to resolve
    * @param context - The resolution context defining allowed types and rules
@@ -146,7 +114,7 @@ export interface IResolutionService {
    * Resolves a field access path against a given base value.
    *
    * @param baseValue The starting value (e.g., an object, array).
-   * @param fieldPath An array of AST Field objects representing the access path.
+   * @param fieldPath An array of AST Field objects (`{ type: 'field' | 'index', value: string | number }`) representing the access path.
    * @param context Context for resolution.
    * @returns A Promise resolving to a Result containing the resolved value or a FieldAccessError.
    */
@@ -157,12 +125,15 @@ export interface IResolutionService {
   ): Promise<Result<JsonValue, FieldAccessError>>;
 
   /**
-   * Validate that a value can be resolved successfully within the given context.
-   * Performs a dry run of resolution without returning the value.
+   * Validate that a path can be resolved successfully within the given context.
+   * Performs a dry run of path resolution without returning the value.
+   * Primarily intended for path validation use cases.
    * 
-   * @param value - The string or structured path to validate
-   * @param context - The resolution context defining rules and state
-   * @throws {MeldResolutionError | PathValidationError} If validation fails based on context rules
+   * @param pathInput - The path string to validate
+   * @param validationContext - Specific context for path validation rules
+   * @returns The resolved MeldPath if valid.
+   * @throws {PathValidationError} If validation fails based on context rules
+   * @throws {MeldResolutionError} If variables in the path cannot be resolved.
    */
   validateResolution(pathInput: string, validationContext: PathValidationContext): Promise<MeldPath>;
 
@@ -179,11 +150,8 @@ export interface IResolutionService {
 
   /**
    * Detect potential circular variable references within a string.
-   * Note: Comprehensive circularity detection might involve CircularityService.
-   * 
-   * @param value - The string containing potential variable references
-   * @param context - The resolution context (needed to resolve initial variable)
-   * @throws {MeldResolutionError} If a circular reference is detected
+   * Deprecated: Circularity detection is handled by CircularityService.
+   * @deprecated Use CircularityService for comprehensive detection.
    */
   detectCircularReferences(value: string, context: ResolutionContext): Promise<void>;
   
@@ -194,15 +162,6 @@ export interface IResolutionService {
    * @param value - The value to convert (e.g., from resolveData)
    * @param context - The resolution context containing formatting rules
    * @returns The formatted string representation
-   * 
-   * @example
-   * ```ts
-   * const dataValue = await resolutionService.resolveData("config", context);
-   * const formatted = await resolutionService.convertToFormattedString(
-   *   dataValue,
-   *   context.withFormattingContext({ isBlock: true }) 
-   * );
-   * ```
    */
   convertToFormattedString(value: JsonValue, context: ResolutionContext): Promise<string>;
   
@@ -219,64 +178,6 @@ export interface IResolutionService {
    * @returns The VariableResolutionTracker instance or undefined
    */
   getResolutionTracker(): VariableResolutionTracker | undefined;
-
-  /**
-   * Resolves a VariableReferenceNode specifically as data.
-   * Deprecated: Use resolveInContext or resolve.
-   * @deprecated Prefer resolveInContext or resolve.
-   */
-  resolveData(ref: VariableReferenceNode, context: ResolutionContext): Promise<any>;
-
-  /**
-   * Resolves and validates a path string or StructuredPath object.
-   * Handles system paths ($PROJECTPATH, $HOMEPATH) and user-defined path variables.
-   *
-   * @param pathInput The raw path string or StructuredPath object.
-   * @param context The resolution context, potentially including path validation options.
-   * @returns A validated MeldPath object.
-   * @throws {PathValidationError} If the path is invalid.
-   * @throws {MeldResolutionError} If path variables cannot be resolved.
-   */
-  resolvePath(pathInput: string | StructuredPath, context: ResolutionContext): Promise<MeldPath>;
-
-  /**
-   * Resolves a command reference.
-   * Deprecated: Command resolution is typically handled within specific handlers.
-   * @deprecated Command resolution should be handled by specific directive handlers.
-   */
-  resolveCommand(commandName: string, context: ResolutionContext): Promise<string | null>;
-
-  /**
-   * Resolves an array of MeldNodes, processing variable references and concatenating text.
-   *
-   * @param nodes The array of MeldNodes to process.
-   * @param context The resolution context.
-   * @returns The fully resolved and concatenated string content.
-   * @throws {MeldResolutionError} If variable resolution fails in strict mode.
-   */
-  resolveNodes(nodes: MeldNode[], context: ResolutionContext): Promise<string>;
-
-  /**
-   * Validates if a given value (string or AST node) can be resolved according to the context rules.
-   * Checks allowed variable types.
-   *
-   * @param value The value or node to validate.
-   * @param context The resolution context containing validation rules.
-   * @returns A promise that resolves if validation passes, or rejects otherwise.
-   * @throws {VariableResolutionError | MeldResolutionError} If validation fails.
-   */
-  validateResolution(value: string | MeldNode | InterpolatableValue, context: ResolutionContext): Promise<void>;
-
-  /**
-   * Resolves a specific field access chain against a given data object.
-   * 
-   * @param dataObject The object or array to access fields from.
-   * @param fieldPath An array representing the access path (e.g., [ { type: 'field', value: 'user' }, { type: 'index', value: 0 } ]).
-   * @param context The resolution context.
-   * @returns The resolved value at the end of the chain.
-   * @throws {FieldAccessError} If field access fails.
-   */
-  resolveFieldAccess(dataObject: any, fieldPath: { type: 'field' | 'index'; value: string | number }[], context: ResolutionContext): Promise<any>;
 }
 
 export type { IResolutionService };

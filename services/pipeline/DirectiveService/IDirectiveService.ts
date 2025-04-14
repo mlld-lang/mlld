@@ -1,18 +1,17 @@
 import { DirectiveNode, SourceLocation } from '@core/syntax/types/index.js';
 import type { DirectiveContextBase } from '@core/shared/types.js';
 import type { 
-  StateServiceLike, 
-  ValidationServiceLike,
-  PathServiceLike,
-  FileSystemLike,
   ParserServiceLike,
   CircularityServiceLike,
-  ResolutionServiceLike,
 } from '@core/shared-service-types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 import type { DirectiveResult } from './interfaces/DirectiveTypes.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 
 /**
  * @deprecated Use DirectiveProcessingContext instead.
@@ -101,14 +100,14 @@ export interface IDirectiveService {
    * @param resolutionService - Service for variable resolution
    */
   initialize(
-    validationService: ValidationServiceLike,
-    stateService: StateServiceLike,
-    pathService: PathServiceLike,
-    fileSystemService: FileSystemLike,
+    validationService: IValidationService,
+    stateService: IStateService,
+    pathService: IPathService,
+    fileSystemService: IFileSystemService,
     parserService: ParserServiceLike,
     interpreterServiceClientFactory: any, // Use 'any' to allow both IInterpreterService and InterpreterServiceClientFactory
     circularityService: CircularityServiceLike,
-    resolutionService: ResolutionServiceLike
+    resolutionService: IResolutionService
   ): void;
 
   /**

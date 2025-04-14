@@ -19,6 +19,24 @@ import type { ValidationServiceLike } from '@core/shared-service-types.js';
  */
 interface IValidationService extends ValidationServiceLike {
   /**
+   * Validate a directive node against the registered validator for its kind.
+   * 
+   * @param node - The directive node to validate
+   * @throws {MeldDirectiveError} If validation fails
+   * @throws {MeldError} If no validator is registered for the node's kind
+   * 
+   * @example
+   * ```ts
+   * try {
+   *   await validationService.validate(directiveNode);
+   * } catch (error) {
+   *   logger.error(`Validation failed: ${error.message}`);
+   * }
+   * ```
+   */
+  validate(node: DirectiveNode): Promise<void>;
+
+  /**
    * Register a validator function for a specific directive kind.
    * 
    * @param kind - The directive kind to register a validator for

@@ -18,7 +18,8 @@ import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterSe
 import { DirectiveResult } from './interfaces/DirectiveTypes.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import type { DirectiveProcessingContext, FormattingContext, ExecutionContext, ResolutionContext } from '@core/types/index.js';
+import type { ResolutionContext } from '@core/types/resolution.js';
+import type { DirectiveProcessingContext, FormattingContext, ExecutionContext } from '@core/types/index.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -244,7 +245,7 @@ export class DirectiveService implements IDirectiveService {
           const textHandler = new TextDirectiveHandler(
             this.validationService,
             this.resolutionService,
-            this.fileSystemService as IFileSystemService 
+            this.fileSystemService
           );
           this.registerHandler(textHandler);
 
@@ -255,8 +256,8 @@ export class DirectiveService implements IDirectiveService {
           const dataHandler = new DataDirectiveHandler(
             this.validationService,
             this.resolutionService,
-            this.fileSystemService as IFileSystemService, 
-            this.pathService as IPathService 
+            this.fileSystemService,
+            this.pathService
           );
           this.registerHandler(dataHandler);
           
@@ -288,7 +289,6 @@ export class DirectiveService implements IDirectiveService {
             const runHandler = new RunDirectiveHandler(
               this.validationService,
               this.resolutionService,
-              this.stateService,
               this.fileSystemService
             );
             this.registerHandler(runHandler);
@@ -308,10 +308,8 @@ export class DirectiveService implements IDirectiveService {
                 const embedHandler = new EmbedDirectiveHandler(
                   this.validationService,
                   this.resolutionService,
-                  this.stateService as IStateService,
                   this.circularityService,
                   this.fileSystemService,
-                  this.parserService,
                   this.pathService,
                   this.interpreterClientFactory,
                   this.logger
@@ -330,7 +328,7 @@ export class DirectiveService implements IDirectiveService {
                 const importHandler = new ImportDirectiveHandler(
                   this.validationService,
                   this.resolutionService,
-                  this.stateService as IStateService,
+                  this.stateService,
                   this.fileSystemService,
                   this.parserService,
                   this.pathService,
@@ -386,50 +384,52 @@ export class DirectiveService implements IDirectiveService {
       // --- Create DirectiveProcessingContext --- 
       const state = context.state?.clone() || this.stateService!.createChildState();
       const currentFilePath = state.getCurrentFilePath() ?? undefined;
-      const resolutionContext = ResolutionContextFactory.create(state as IStateService, currentFilePath);
+      const resolutionContext = ResolutionContextFactory.create(state, currentFilePath);
       const formattingContext: FormattingContext = { 
          isOutputLiteral: state.isTransformationEnabled(),
          contextType: 'block', 
          nodeType: node.type,
-         atLineStart: true, // Default assumptions
+         atLineStart: true, 
          atLineEnd: false
       };
       let executionContext: ExecutionContext | undefined;
       if (kind === 'run' && this.pathService && currentFilePath) {
          executionContext = { cwd: this.pathService.dirname(currentFilePath) };
       } else if (kind === 'run') {
-         executionContext = { cwd: process.cwd() }; // Fallback CWD
+         executionContext = { cwd: process.cwd() };
       }
       
+      // Explicitly type the properties when creating the object
       const processingContext: DirectiveProcessingContext = {
-          state: state as IStateService, 
+          state: state as IStateService, // Explicit cast
           resolutionContext: resolutionContext,
           formattingContext: formattingContext,
           executionContext: executionContext,
-          directiveNode: node
+          directiveNode: node as DirectiveNode // Explicit cast
       };
       // --- End Context Creation ---
 
       this.logger.debug(`Executing handler for directive: ${kind}`);
       
-      const result = await handler.execute(processingContext);
+      // Handler should receive correctly typed context now
+      const result = await handler.execute(processingContext); 
       
       // Handle result
       if (result && typeof result === 'object') {
         if ('replacement' in result && 'state' in result && result.state) {
           // It's a DirectiveResult, ensure state is IStateService
           if (!this.isStateService(result.state)) {
-             throw new MeldDirectiveError('Invalid state object returned in DirectiveResult', kind, { code: DirectiveErrorCode.INTERNAL_ERROR });
+             throw new MeldDirectiveError('Invalid state object returned in DirectiveResult', kind, { code: DirectiveErrorCode.EXECUTION_FAILED });
           }
-          return result as DirectiveResult;
+          return result;
         } else if (this.isStateService(result)) {
           // It's an IStateService
-          return result as IStateService;
+          return result;
         } else {
-          throw new MeldDirectiveError('Invalid result type returned by directive handler', kind, { code: DirectiveErrorCode.INTERNAL_ERROR });
+          throw new MeldDirectiveError('Invalid result type returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED });
         }
       } else {
-        throw new MeldDirectiveError('Invalid or null result returned by directive handler', kind, { code: DirectiveErrorCode.INTERNAL_ERROR });
+        throw new MeldDirectiveError('Invalid or null result returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED });
       }
 
     } catch (error) {
@@ -441,7 +441,7 @@ export class DirectiveService implements IDirectiveService {
           message,
           kind,
           code,
-          simplifiedContext
+          { node, context: simplifiedContext, cause: error instanceof Error ? error : undefined }
         );
     }
   }
@@ -611,10 +611,10 @@ export class DirectiveService implements IDirectiveService {
 
         let updatedState: IStateService;
         if ('replacement' in result && 'state' in result) {
-           updatedState = result.state as IStateService; // Assert type
+           updatedState = result.state;
            // Handle replacement node if needed (maybe add to a list for Interpreter)
         } else {
-           updatedState = result as IStateService; // Assert type
+           updatedState = result;
         }
 
         // Merge the updated state back into the current loop state

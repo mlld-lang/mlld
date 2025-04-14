@@ -53,6 +53,7 @@ interface IFileSystemService extends FileSystemBase {
   
   /**
    * Checks if a file or directory exists.
+   * This is the preferred method over any potential legacy 'fileExists' methods.
    * 
    * @param filePath - Validated path to check
    * @returns A promise that resolves with true if the path exists, false otherwise

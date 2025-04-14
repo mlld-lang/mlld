@@ -76,7 +76,8 @@ export class DataDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'data';
 
   constructor(
-    @inject('IValidationService') private validationService: IValidationService,
+    // Removed unused IValidationService injection based on audit
+    // @inject('IValidationService') private validationService: IValidationService, 
     @inject('IResolutionService') private resolutionService: IResolutionService,
     @inject('IFileSystemService') private fileSystemService: IFileSystemService,
     @inject('IPathService') private pathService: IPathService

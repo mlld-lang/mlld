@@ -41,6 +41,7 @@ import { RawPath } from '@core/types/paths';
 import type { ICommandDefinition } from '@core/types/define.js';
 import type { SourceLocation } from '@core/types/common';
 import type { SourceLocation as SyntaxSourceLocation } from '@core/syntax/types/interfaces/common.js';
+import type { DirectiveProcessingContext } from '@core/types/index.js';
 
 /**
  * Handler for @import directives
@@ -103,9 +104,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   }
 
   async execute(
-    node: DirectiveNode,
-    context: DirectiveContext
+    context: DirectiveProcessingContext
   ): Promise<DirectiveResult> {
+    const node = context.directiveNode;
     let resolvedIdentifier: string | undefined;
     let targetState: IStateService;
     let resultState: IStateService;
@@ -124,10 +125,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       targetState = context.state;
 
       // 3. Resolve the PathValueObject
-      const resolutionContext = ResolutionContextFactory.create(
-        targetState,
-        context.currentFilePath
-      );
+      const resolutionContext = context.resolutionContext;
+      if (!resolutionContext) {
+        throw new DirectiveError('ResolutionContext not found in DirectiveProcessingContext', this.kind, DirectiveErrorCode.INVALID_CONTEXT, { location: node.location });
+      }
 
       let resolvedPath: MeldPath;
       try {
@@ -153,6 +154,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           );
       }
       
+      const currentFilePath = context.state.getCurrentFilePath() ?? context.resolutionContext?.currentFilePath ?? undefined;
+
       let fileContent: string;
 
       // 4. Handle URL vs. File Path based on resolved isURLImport flag
@@ -275,7 +278,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           // Options removed
         ) as unknown as IStateService; // Double assertion: Like -> unknown -> IStateService
 
-        logger.debug('Import interpretation complete', {
+        logger.debug('Import interpretation complete. Propagation to parent state handled by Interpreter.', {
           filePath: resolvedIdentifier,
           textVarsCount: resultState?.getAllTextVars().size || 0,
           dataVarsCount: resultState?.getAllDataVars().size || 0,
@@ -284,73 +287,15 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         });
 
         if (resultState) {
-          let parentState = null;
-          
-          if (importedState.getParentState && typeof importedState.getParentState === 'function') {
-            try {
-              parentState = importedState.getParentState();
-              logger.debug('Found parent state via getParentState() method', {
-                filePath: resolvedIdentifier,
-                parentStateId: parentState?.getStateId?.() || 'unknown'
-              });
-            } catch (error) {
-              logger.debug('Error getting parent state via getParentState()', { error });
-            }
-          }
-          
-          if (!parentState && context && context.parentState) {
-            parentState = context.parentState;
-            logger.debug('Using context.parentState as fallback', {
-              filePath: resolvedIdentifier,
-              parentStateId: parentState?.getStateId?.() || 'unknown'
-            });
-          }
-          
-          if (parentState) {
-            logger.debug('Propagating variables to parent state from imported file', {
-              filePath: resolvedIdentifier
-            });
-            
-            const textVars = resultState.getAllTextVars();
-            textVars.forEach((value, key) => {
-              try {
-                parentState.setTextVar(key, value.value);
-                logger.debug(`Propagated text variable to parent: ${key}`);
-              } catch (err) {
-                logger.warn(`Failed to propagate text variable ${key} to parent`, { error: err });
-              }
-            });
-            
-            const dataVars = resultState.getAllDataVars();
-            dataVars.forEach((value, key) => {
-              try {
-                parentState.setDataVar(key, value.value);
-                logger.debug(`Propagated data variable to parent: ${key}`);
-              } catch (err) {
-                logger.warn(`Failed to propagate data variable ${key} to parent`, { error: err });
-              }
-            });
-            
-            const pathVars = resultState.getAllPathVars();
-            pathVars.forEach((value, key) => {
-              try {
-                parentState.setPathVar(key, value.value);
-                logger.debug(`Propagated path variable to parent: ${key}`);
-              } catch (err) {
-                logger.warn(`Failed to propagate path variable ${key} to parent`, { error: err });
-              }
-            });
-            
-            const commands = resultState.getAllCommands();
-            commands.forEach((value, key) => {
-              try {
-                parentState.setCommand(key, value.value, value.metadata);
-                logger.debug(`Propagated command to parent: ${key}`);
-              } catch (err) {
-                logger.warn(`Failed to propagate command ${key} to parent`, { error: err });
-              }
-            });
-          }
+          // We only need to ensure the resultState has the variables.
+          // Propagation to the main state happens in InterpreterService.
+          logger.debug('Import interpretation complete. Propagation to parent state handled by Interpreter.', {
+            filePath: resolvedIdentifier,
+            textVarsCount: resultState?.getAllTextVars().size || 0,
+            dataVarsCount: resultState?.getAllDataVars().size || 0,
+            pathVarsCount: resultState?.getAllPathVars().size || 0,
+            commandsCount: resultState?.getAllCommands().size || 0
+          });
         }
       } catch (error) {
         if (error instanceof DirectiveError) { throw error; }
@@ -359,11 +304,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       if (!imports || imports.length === 0 || imports.some((i: { name: string }) => i.name === '*')) {
           if (importDirectiveLocation) {
-            this.importAllVariables(resultState, targetState, importDirectiveLocation, resolvedIdentifier, context.currentFilePath);
+            this.importAllVariables(resultState, targetState, importDirectiveLocation, resolvedIdentifier, currentFilePath);
           }
       } else {
           if (importDirectiveLocation) {
-            this.processStructuredImports(imports, resultState, targetState, importDirectiveLocation, resolvedIdentifier, context.currentFilePath);
+            this.processStructuredImports(imports, resultState, targetState, importDirectiveLocation, resolvedIdentifier, currentFilePath);
           }
       }
 
@@ -523,7 +468,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             value: originalVar.value,
             metadata: metadata
           };
-          targetState.setCommand(key, newVar.value, newVar.metadata);
+          targetState.setCommandVar(key, newVar.value, newVar.metadata);
           logger.debug(`Imported command: ${key}`);
         } catch (error) {
           logger.warn(`Failed to import command ${key}`, { error });
@@ -622,7 +567,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
              createdAt: Date.now(),
              modifiedAt: Date.now(),
            };
-           targetState.setCommand(targetName, commandVar, metadata);
+           targetState.setCommandVar(targetName, commandVar, metadata);
            logger.debug(`Imported command: ${name} as ${targetName}`);
            variableFound = true;
            continue;

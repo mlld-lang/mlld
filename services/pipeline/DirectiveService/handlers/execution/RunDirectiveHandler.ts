@@ -31,7 +31,6 @@ export class RunDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'run';
 
   constructor(
-    @inject('IValidationService') private validationService: IValidationService,
     @inject('IResolutionService') private resolutionService: IResolutionService,
     @inject('IFileSystemService') private fileSystemService: IFileSystemService
   ) {}

@@ -16,6 +16,9 @@ import { PathValidationError } from '@core/errors/PathValidationError.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IStateService as ClonedState } from '@services/state/StateService/IStateService.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import { Result } from '@core/types/common.js';
+import type { MeldPath } from '@core/types/paths.js';
 
 /**
  * Creates a mock ValidationService with default behavior
@@ -49,7 +52,6 @@ export function createStateServiceMock() {
   service.getAllPathVars.mockReturnValue(new Map());
   service.getCommandVar.mockReturnValue(undefined);
   service.getAllCommands.mockReturnValue(new Map());
-  service.getOriginalNodes.mockReturnValue([]); // Keep original method if still present
   service.addNode.mockReturnValue(undefined);
   service.appendContent.mockReturnValue(undefined);
   service.getTransformedNodes.mockReturnValue([]);
@@ -68,7 +70,6 @@ export function createStateServiceMock() {
   service.hasLocalChanges.mockReturnValue(false);
   service.getLocalChanges.mockReturnValue([]);
   service.setImmutable.mockReturnValue(undefined);
-  // service.isImmutable needs property mock if readonly
   Object.defineProperty(service, 'isImmutable', { get: () => false });
   service.createChildState.mockReturnValue(service); // Return self for simple cases
   service.mergeChildState.mockReturnValue(undefined);
@@ -76,7 +77,6 @@ export function createStateServiceMock() {
   service.setVariable.mockResolvedValue({} as any);
   service.hasVariable.mockReturnValue(false);
   service.removeVariable.mockResolvedValue(false);
-  // service.getInternalStateNode.mockReturnValue({} as any);
 
   // Mock methods added from StateServiceLike
   service.enableTransformation = vi.fn();
@@ -96,13 +96,9 @@ export function createStateServiceMock() {
  */
 export function createResolutionServiceMock() {
   const service = mock<IResolutionService>();
-  // Default behaviors based on IResolutionService
-  service.resolveText.mockResolvedValue('resolved-text');
-  service.resolveData.mockResolvedValue({ mock: 'data' }); // Resolve to a simple object
-  // Ensure MeldPath mock is reasonably structured
-  service.resolvePath.mockResolvedValue({
+  const mockMeldPath = {
     contentType: 'filesystem',
-    validatedPath: '/resolved/mock/path' as any, // Cast for branding
+    validatedPath: '/resolved/mock/path' as any,
     originalValue: '$mock/path',
     value: { exists: true, isAbsolute: true, isSecure: true, isValidSyntax: true },
     isURL: false,
@@ -110,25 +106,25 @@ export function createResolutionServiceMock() {
     raw: '$mock/path',
     isAbsolute: true,
     isRelative: false,
-    isFilesystem: true
-  } as any); // Cast to MeldPath
+    isFilesystem: true,
+    isSecure: true,
+    isValidSyntax: true
+  } as MeldPath;
+  service.resolveText.mockResolvedValue('resolved-text');
+  service.resolveData.mockResolvedValue({ mock: 'data' });
+  service.resolvePath.mockResolvedValue(mockMeldPath);
   service.resolveCommand.mockResolvedValue('resolved-command-output');
   service.resolveFile.mockResolvedValue('resolved-file-content');
   service.resolveContent.mockResolvedValue('resolved-content');
   service.resolveNodes.mockResolvedValue('resolved-nodes-string');
   service.resolveInContext.mockResolvedValue('resolved-in-context');
-  // Correctly mock Result type for resolveFieldAccess
   service.resolveFieldAccess.mockResolvedValue({ success: true, value: 'resolved-field-access' });
-  service.validateResolution.mockResolvedValue(undefined);
+  service.validateResolution.mockResolvedValue(mockMeldPath);
   service.extractSection.mockResolvedValue('extracted-section');
   service.detectCircularReferences.mockResolvedValue(undefined);
   service.convertToFormattedString.mockResolvedValue('formatted-string');
-  // service.enableResolutionTracking // Typically not mocked unless testing tracking
-  // service.getResolutionTracker // Typically not mocked unless testing tracking
-
-  // Remove outdated mocks
-  // service.resolveVariable is outdated
-  // service.resolve is outdated (superseded by resolveInContext, resolveNodes etc.)
+  service.enableResolutionTracking.mockReturnValue(undefined);
+  service.getResolutionTracker.mockReturnValue(undefined);
 
   return service;
 }
@@ -139,7 +135,8 @@ export function createResolutionServiceMock() {
  */
 export function createFileSystemServiceMock() {
   const service = mock<IFileSystemService>();
-  // Default behaviors based on IFileSystemService
+  
+  // Explicitly mock all methods from IFileSystemService
   service.readFile.mockResolvedValue('mock-file-content');
   service.writeFile.mockResolvedValue(undefined);
   service.exists.mockResolvedValue(true);
@@ -148,17 +145,15 @@ export function createFileSystemServiceMock() {
   service.readDir.mockResolvedValue(['file1.txt', 'subdir']);
   service.ensureDir.mockResolvedValue(undefined);
   service.isDirectory.mockResolvedValue(false);
-  // service.watch // Requires more complex mocking if needed
+  service.watch.mockImplementation(async function* () {}); // Basic async generator mock
   service.getCwd.mockReturnValue('/mock/workspace');
   service.dirname.mockReturnValue('/mock/workspace');
   service.executeCommand.mockResolvedValue({ stdout: 'mock command output', stderr: '' });
-  // service.setFileSystem // Usually not needed unless testing filesystem switching
-  // service.getFileSystem // Usually not needed unless testing filesystem switching
-  // service.mkdir is deprecated, ensureDir is mocked instead
+  service.setFileSystem.mockReturnValue(undefined);
+  service.getFileSystem.mockReturnValue(mock<IFileSystem>()); // Return mocked IFileSystem
+  service.mkdir.mockResolvedValue(undefined); // Keep deprecated method mocked
+  service.deleteFile.mockResolvedValue(undefined);
 
-  // Remove outdated/incorrect mocks
-  // service.fileExists is replaced by exists
-  // service.deleteFile is not in IFileSystemService
   return service;
 }
 

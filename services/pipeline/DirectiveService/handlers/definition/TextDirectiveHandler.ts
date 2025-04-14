@@ -45,28 +45,19 @@ interface RunRHSStructure {
  * Handler for @text directives
  * Stores text values in state after resolving variables and processing embedded content
  */
+@injectable()
 @Service({
-  description: 'Handler for text directives',
-  dependencies: [
-    { token: 'IValidationService', name: 'validationService' },
-    { token: 'IResolutionService', name: 'resolutionService' },
-    { token: 'IFileSystemService', name: 'fileSystemService' }
-  ]
+  description: 'Handler for @text directives'
 })
 export class TextDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'text';
 
   constructor(
-    @inject('IValidationService') private validationService: IValidationService,
+    // Removed unused IValidationService injection based on audit
+    // @inject('IValidationService') private validationService: IValidationService,
     @inject('IResolutionService') private resolutionService: IResolutionService,
-    @inject('IFileSystemService') private fileSystemService: IFileSystemService
-  ) {
-    logger.debug('TextDirectiveHandler constructor called', {
-      hasValidationService: !!validationService,
-      hasResolutionService: !!resolutionService,
-      hasFileSystemService: !!fileSystemService
-    });
-  }
+    @inject('IFileSystemService') private fileSystemService: IFileSystemService // Assuming FS is used
+  ) {}
 
   /**
    * Checks if a value appears to be a string literal
