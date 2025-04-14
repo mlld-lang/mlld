@@ -117,23 +117,26 @@ describe('EmbedDirectiveHandler Transformation', () => {
       if (p.includes('actual/file.md')) return 'Content from field access';
       if (p.includes('user@example.com')) return 'Content from contact email path';
       if (p.includes('any.md')) return 'Some content';
+      if (p === '/project/root/resolved/path.md') return 'Content from resolved path';
       return 'Default embedded content';
     });
 
-    resolutionService.resolveInContext.mockImplementation(async (val: any): Promise<string> => {
-        if (typeof val === 'string') {
-           if (val === '{{filePath}}') return 'resolved/path.md';
-           if (val === '{{vars.myPath.nested}}') return 'actual/file.md';
-           if (val === '{{contact.email}}') return 'user@example.com';
-           return val;
-        } 
-        if (val && typeof val === 'object' && 'raw' in val) return val.raw;
-        return JSON.stringify(val);
+    resolutionService.resolveInContext.mockImplementation(async (value: any, context: any): Promise<string> => { 
+      const rawValue = (typeof value === 'object' && value !== null && 'raw' in value && typeof value.raw === 'string') ? value.raw : value;
+      
+      if (rawValue === '{{filePath}}') return 'resolved/path.md';
+      if (rawValue === '{{vars.myPath.nested}}') return 'actual/file.md';
+      if (rawValue === '{{contact.email}}') return 'user@example.com';
+      
+      return typeof rawValue === 'string' ? rawValue : 'mock-fallback';
     });
     
     resolutionService.resolvePath.mockImplementation(async (resolvedPathString: string): Promise<MeldPath> => {
       const isAbsolute = resolvedPathString.startsWith('/');
       const validatedPath = isAbsolute ? resolvedPathString : `/project/root/${resolvedPathString}`;
+      if (resolvedPathString === 'resolved/path.md') {
+        return createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath('/project/root/resolved/path.md'), false);
+      }
       return createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath(validatedPath), isAbsolute);
     });
     
@@ -218,7 +221,11 @@ describe('EmbedDirectiveHandler Transformation', () => {
         type: 'Text',
         content: 'Content 1'
       }));
-      expect(resolutionService.extractSection).toHaveBeenCalledWith(expect.any(String), 'Section 1');
+      expect(resolutionService.extractSection).toHaveBeenCalledWith(
+        expect.any(String),
+        'Section 1',
+        undefined
+      );
     });
 
     it('should handle heading level in transformation', async () => {
@@ -234,7 +241,14 @@ describe('EmbedDirectiveHandler Transformation', () => {
       mockProcessingContext = createMockProcessingContext(node);
       const result = await handler.execute(mockProcessingContext);
       expect((result.replacement as TextNode)?.content).toBe(originalContent);
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('headingLevel adjustment specified'), expect.any(Object));
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('headingLevel adjustment specified'), 
+        expect.objectContaining({ node: node })
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid headingLevel option'), 
+        expect.objectContaining({ node: node })
+      );
     });
 
     it('should handle under header in transformation', async () => {
@@ -262,10 +276,6 @@ describe('EmbedDirectiveHandler Transformation', () => {
       );
       mockProcessingContext = createMockProcessingContext(node);
       
-      resolutionService.resolveInContext.mockResolvedValue('resolved/path.md');
-      resolutionService.resolvePath.mockResolvedValue(createMeldPath('resolved/path.md', unsafeCreateValidatedResourcePath('/project/root/resolved/path.md')));
-      fileSystemService.readFile.mockResolvedValue('Content from resolved path');
-
       const result = await handler.execute(mockProcessingContext);
 
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith('{{filePath}}', mockProcessingContext.resolutionContext);
@@ -290,7 +300,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const result = await handler.execute(mockProcessingContext);
       
       expect(result.replacement).toBeDefined();
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path, mockProcessingContext.resolutionContext);
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
+        '{{userData.user.profile.bio}}', 
+        mockProcessingContext.resolutionContext
+      );
       expect(result.replacement).toEqual(expect.objectContaining({
         type: 'Text',
         content: resolvedContent,
@@ -313,7 +326,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const result = await handler.execute(mockProcessingContext);
       
       expect(result.replacement).toBeDefined();
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path, mockProcessingContext.resolutionContext);
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
+        '{{role.architect}}', 
+        mockProcessingContext.resolutionContext
+      );
       expect(result.replacement).toEqual(expect.objectContaining({
         type: 'Text',
         content: resolvedContent,
@@ -372,7 +388,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
       const result = await handler.execute(mockProcessingContext);
 
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path, mockProcessingContext.resolutionContext);
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
+        '{{vars.myPath.nested}}', 
+        mockProcessingContext.resolutionContext
+      );
       expect(resolutionService.resolvePath).not.toHaveBeenCalled();
       expect(fileSystemService.readFile).not.toHaveBeenCalled();
       expect(result.replacement).toEqual(expect.objectContaining({
@@ -395,7 +414,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
       const result = await handler.execute(mockProcessingContext);
 
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path, mockProcessingContext.resolutionContext);
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
+        '{{contact.email}}', 
+        mockProcessingContext.resolutionContext
+      );
       expect(resolutionService.resolvePath).not.toHaveBeenCalled();
       expect(fileSystemService.readFile).not.toHaveBeenCalled();
       expect(result.replacement).toEqual(expect.objectContaining({
