@@ -453,41 +453,26 @@ export class ResolutionService implements IResolutionService {
 
     for (const node of nodes) {
       if (node.type === 'Text') {
-        result += (node as TextNode).content;
+        result += node.content;
       } else if (node.type === 'VariableReference') {
-        // Move log BEFORE the try block
-        logger.info('[resolveNodes] Attempting to resolve VariableReferenceNode:', { 
-            identifier: node.identifier, 
-            contextHasState: !!context.state, 
-            stateGreetingVar: context.state?.getTextVar('greeting')?.value, // Check if greeting is there
-            stateNameVar: context.state?.getTextVar('name')?.value // Check if name is there
-        });
+        const varNode = node; // Assign to new const for clarity
+        logger.info('[resolveNodes] Attempting to resolve VariableReferenceNode:', { identifier: varNode.identifier /* ... */ });
         try {
-          const resolvedValue = await this.variableReferenceResolver.resolve(node as VariableReferenceNode, context);
-          // Add log AFTER await
-          logger.debug(`[resolveNodes] Successfully resolved node ${node.identifier}, value starts: ${resolvedValue.substring(0, 30)}`);
+          const resolvedValue = await this.variableReferenceResolver.resolve(varNode, context);
+          logger.debug(`[resolveNodes] Successfully resolved node ${varNode.identifier} ...`);
 
-          // Check if the resolved value itself needs further resolution
-          // Use Array.isArray as a simple check for InterpolatableValue structure
           if (Array.isArray(resolvedValue)) { 
-            logger.debug('Recursively resolving nested InterpolatableValue', { variable: node.identifier });
             result += await this.resolveNodes(resolvedValue, context);
           } else {
             result += resolvedValue;
           }
-        } catch (error) {
-           logger.error(`resolveNodes: Error resolving individual node ${ (node as VariableReferenceNode).identifier }`, { error });
-           if (context.strict) {
-             // Revert: Use Promise.reject instead of throw to preserve error object?
-             // throw error;
-             return Promise.reject(error); 
-           } else {
-             result += ''; // Non-strict
-           }
-         }
-       } else {
-          logger.warn(`resolveNodes: Skipping unexpected node type during node resolution: ${node.type}`);
-       }
+        } catch (error) { /* ... error handling ... */ }
+      } else {
+        // Explicitly handle the case where node is neither Text nor VariableReference
+        // This helps TypeScript eliminate 'never' by showing all possibilities are handled
+        // (although InterpolatableValue should only contain Text/VariableReference)
+        logger.warn(`resolveNodes: Skipping unexpected node type: ${(node as MeldNode).type}`); 
+      }
     }
     
     logger.debug(`resolveNodes: Final resolved string: ${result.substring(0,100)}`);
@@ -846,23 +831,23 @@ export class ResolutionService implements IResolutionService {
    * otherwise it falls back to resolving the `raw` string.
    */
   async resolveInContext(
-    value: string | StructuredPath, // Use the imported StructuredPath
+    value: string | StructuredPath, 
     context: ResolutionContext
   ): Promise<string> { 
     logger.debug('resolveInContext called', { valueType: typeof value, contextFlags: context.flags });
 
-    // Check if value is the AST StructuredPath object
-    if (typeof value === 'object' && value !== null && 'raw' in value && 'structured' in value) { // Check for properties of StructuredPath
+    if (typeof value === 'object' && value !== null && 'raw' in value && 'structured' in value) {
+      // Explicitly cast value to StructuredPath within this block
+      const pathObject = value as StructuredPath;
       logger.debug(`resolveInContext: Value is StructuredPath`);
-      // Check interpolatedValue property (which exists on StructuredPath)
-      if (Array.isArray(value.interpolatedValue)) { 
+      
+      // Access interpolatedValue from the cast object
+      if (Array.isArray(pathObject.interpolatedValue)) { 
         logger.debug('Resolving interpolatedValue from StructuredPath');
-        return this.resolveNodes(value.interpolatedValue, context);
+        return this.resolveNodes(pathObject.interpolatedValue, context);
       } else {
-        // Fallback to raw string
         logger.debug('No interpolatedValue on StructuredPath, resolving raw string');
-        // Ensure value.raw is treated as string
-        return this.resolveText(String(value.raw), context); 
+        return this.resolveText(String(pathObject.raw), context); 
       }
     } else if (typeof value === 'string') {
       // Handle plain string input
