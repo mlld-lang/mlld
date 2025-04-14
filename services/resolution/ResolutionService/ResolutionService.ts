@@ -33,7 +33,7 @@ import {
   isBasicCommand,
   ResolutionErrorCode
 } from '@core/types';
-import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/syntax/types/index';
+import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode, StructuredPath } from '@core/syntax/types/index.js';
 import { ResolutionContextFactory } from './ResolutionContextFactory';
 import { CommandResolver } from './resolvers/CommandResolver';
 import { ContentResolver } from './resolvers/ContentResolver';
@@ -57,7 +57,7 @@ import { VariableResolutionErrorFactory } from './resolvers/error-factory';
 import { isTextVariable, isPathVariable, isCommandVariable, isDataVariable, isFilesystemPath } from '@core/types/guards';
 // Import and alias the AST Field type
 import { Field as AstField } from '@core/syntax/types/shared-types';
-import { InterpolatableValue } from '@core/syntax/types/ast.js';
+import { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import type {
   AbsolutePath,
   RelativePath,
@@ -72,7 +72,7 @@ import {
   createRawPath,
   isValidatedResourcePath
 } from '@core/types/paths.js';
-import { PathResolver } from '@services/fs/PathService/PathResolver.js';
+import { PathValidationErrorDetails } from '@core/errors/PathValidationError.js';
 import { injectable } from 'tsyringe';
 
 /**
@@ -835,21 +835,21 @@ export class ResolutionService implements IResolutionService {
    * otherwise it falls back to resolving the `raw` string.
    */
   async resolveInContext(
-    value: string | AstPathValueObject, 
+    value: string | StructuredPath, // Use StructuredPath type
     context: ResolutionContext
   ): Promise<string> { 
     logger.debug('resolveInContext called', { valueType: typeof value, contextFlags: context.flags });
 
-    // Check if value is the AST-like path object
-    if (typeof value === 'object' && value !== null && 'raw' in value) {
-      logger.debug(`resolveInContext: Value is AstPathValueObject`);
+    // Check if value is the AST StructuredPath object
+    if (typeof value === 'object' && value !== null && 'raw' in value && 'structured' in value) { // Check for properties of StructuredPath
+      logger.debug(`resolveInContext: Value is StructuredPath`);
       // If interpolatedValue exists and is an array, resolve that array
       if (Array.isArray(value.interpolatedValue)) {
-        logger.debug('Resolving interpolatedValue from AstPathValueObject');
+        logger.debug('Resolving interpolatedValue from StructuredPath');
         return this.resolveNodes(value.interpolatedValue, context);
       } else {
         // Otherwise, treat the raw string as needing potential resolution
-        logger.debug('No interpolatedValue on AstPathValueObject, resolving raw string');
+        logger.debug('No interpolatedValue on StructuredPath, resolving raw string');
         return this.resolveText(value.raw, context);
       }
     } else if (typeof value === 'string') {

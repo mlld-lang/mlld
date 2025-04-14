@@ -104,7 +104,7 @@ interface IInterpreterService {
    * });
    * ```
    */
-  interpret(nodes: MeldNode[], options?: InterpreterOptionsBase): Promise<IStateService>;
+  interpret(nodes: MeldNode[], options?: InterpreterOptions): Promise<IStateService>;
 
   /**
    * Interpret a single Meld node in the context of an existing state.
