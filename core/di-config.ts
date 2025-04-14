@@ -66,51 +66,50 @@ import { Logger, fsLogger } from '@core/utils/simpleLogger.js';
  * that use dependency injection decorators.
  */
 
-// Create minimal instances of core services with circular dependencies first
-const pathOps = new PathOperationsService();
-const nodeFileSystem = new NodeFileSystem();
-const projectPathResolver = new ProjectPathResolver();
+/**
+ * DI Configuration
+ */
 
-// Register the nodeFileSystem instance as IFileSystem
+// Remove manual instantiation
+// const pathOps = new PathOperationsService();
+const nodeFileSystem = new NodeFileSystem(); // Keep for now
+// const projectPathResolver = new ProjectPathResolver(); // Remove manual instantiation
+
+// Register IFileSystem instance
 container.registerInstance('IFileSystem', nodeFileSystem);
-container.registerInstance('NodeFileSystem', nodeFileSystem);
 
-// Create URLContentResolver first (no dependencies)
-const urlContentResolver = new URLContentResolver();
-container.registerInstance('URLContentResolver', urlContentResolver);
-container.registerInstance('IURLContentResolver', urlContentResolver);
+// Register PathOperationsService
+container.register('PathOperationsService', { useClass: PathOperationsService });
+container.register('IPathOperationsService', { useToken: 'PathOperationsService' });
 
-// Create PathService with URLContentResolver dependency
-const pathService = new PathService(projectPathResolver, urlContentResolver);
-// Put PathService in test mode for debugging
-pathService.setTestMode(true);
+// Register ProjectPathResolver
+container.register(ProjectPathResolver, { useClass: ProjectPathResolver });
 
-// Register PathService
-container.registerInstance('PathService', pathService);
-container.registerInstance('IPathService', pathService);
+// Register URLContentResolver
+container.register('URLContentResolver', { useClass: URLContentResolver });
+container.register('IURLContentResolver', { useToken: 'URLContentResolver' });
 
-// Create PathServiceClientFactory
+// Manually instantiate other core services (temporarily)
+// Temporarily resolve dependencies for manual PathService creation
+const resolvedProjectPathResolver = container.resolve(ProjectPathResolver);
+const resolvedUrlContentResolver = container.resolve(URLContentResolver);
+
+// Remove: const urlContentResolver = new URLContentResolver();
+// Remove: container.registerInstance('URLContentResolver', urlContentResolver);
+// Remove: container.registerInstance('IURLContentResolver', urlContentResolver);
+
+// Create PathService manually using resolved dependencies
+const pathService = new PathService(resolvedProjectPathResolver, resolvedUrlContentResolver);
+container.registerInstance('PathService', pathService); // Keep instance registration for now
+container.registerInstance('IPathService', pathService); // Keep instance registration for now
+
+// Manually inject factories/clients (keep for now)
 const pathServiceClientFactory = new PathServiceClientFactory(pathService);
 container.registerInstance('PathServiceClientFactory', pathServiceClientFactory);
-
-// Now create FileSystemService with all dependencies
-const fileSystemService = new FileSystemService(pathOps, nodeFileSystem, pathServiceClientFactory);
-container.registerInstance('FileSystemService', fileSystemService);
-container.registerInstance('IFileSystemService', fileSystemService);
-
-// Create FileSystemServiceClientFactory
-const fileSystemServiceClientFactory = new FileSystemServiceClientFactory(fileSystemService);
-container.registerInstance('FileSystemServiceClientFactory', fileSystemServiceClientFactory);
-
-// Manually inject FileSystemServiceClientFactory into PathService
-pathService['fsClientFactory'] = fileSystemServiceClientFactory;
+pathService['fsClientFactory'] = pathServiceClientFactory;
 pathService['factoryInitialized'] = true;
-
-// Manually inject PathServiceClient into FileSystemService
-fileSystemService['pathClient'] = pathServiceClientFactory.createClient();
-fileSystemService['factoryInitialized'] = true;
-
-const parserService = new ParserService();
+pathService['pathClient'] = pathServiceClientFactory.createClient();
+pathService['factoryInitialized'] = true;
 
 // Create StateService with early initialization
 // This is needed because ResolutionService depends on StateService
@@ -123,7 +122,7 @@ container.registerInstance('StateTrackingServiceClientFactory', stateTrackingSer
 const stateService = new StateService(stateFactory, stateEventService, stateTrackingServiceClientFactory);
 
 // Create the ResolutionService with the StateService dependency
-const resolutionService = new ResolutionService(stateService, fileSystemService, pathService);
+const resolutionService = new ResolutionService(stateService, pathService);
 
 // Register instances of services with circular dependencies
 container.registerInstance('PathService', pathService);
@@ -185,15 +184,6 @@ container.register('IValidationService', { useToken: 'ValidationService' });
 // CircularityService
 container.register('CircularityService', { useClass: CircularityService });
 container.register('ICircularityService', { useToken: 'CircularityService' });
-
-// URLContentResolver is already registered above (lines 79-81)
-
-// ProjectPathResolver
-container.register(ProjectPathResolver, { useClass: ProjectPathResolver });
-
-// PathOperationsService
-container.register('PathOperationsService', { useClass: PathOperationsService });
-container.register('IPathOperationsService', { useToken: 'PathOperationsService' });
 
 // SourceMapService
 container.register('SourceMapService', { useClass: SourceMapService });
