@@ -1,9 +1,9 @@
-import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { DirectiveNode, DefineDirectiveData, RunDirectiveData } from '@core/syntax/types.js';
-import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { inject, injectable } from 'tsyringe';
@@ -20,6 +20,8 @@ import { ResolutionContextFactory } from '@services/resolution/ResolutionService
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import { MeldResolutionError, FieldAccessError } from '@core/errors';
 import { VariableMetadata, VariableOrigin } from '@core/types/variables.js';
+import type { DirectiveProcessingContext, ResolutionContext } from '@core/types/index.js';
+import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 
 @injectable()
 @Service({
@@ -30,27 +32,37 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
 
   constructor(
     @inject('IValidationService') private validationService: IValidationService,
-    @inject('IStateService') private stateService: IStateService,
     @inject('IResolutionService') private resolutionService: IResolutionService
   ) {}
 
-  async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
+  async execute(context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
+    const state = context.state;
+    const node = context.directiveNode as DirectiveNode;
+    const resolutionContext = context.resolutionContext;
+    const currentFilePath = state.getCurrentFilePath();
+    const errorDetails = { 
+      node: node, 
+      context: { currentFilePath: currentFilePath ?? undefined } 
+    };
+
     try {
-      // 1. Validate directive structure
-      // Temporarily comment out validation due to potential DirectiveNode/IDirectiveNode type conflict (See Issue #34)
+      // Validation (optional)
       // await this.validationService.validate(node);
 
-      // 2. Extract data from directive AST node
+      // Assert directive node structure
+      if (!node.directive || node.directive.kind !== 'define') {
+          throw new DirectiveError('Invalid node type provided to DefineDirectiveHandler', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
+      }
       const directive = node.directive as DefineDirectiveData;
       const { name, parameters: paramNames, command, value } = directive;
       
       // Parse name for potential embedded metadata
       const nameMetadata = this.parseIdentifier(name);
 
-      // 3. Create the appropriate command definition object (IBasic or ILanguage)
+      // Create the appropriate command definition object
       let commandDefinition: ICommandDefinition;
       const directiveSourceLocation: SourceLocation | undefined = node.location ? {
-         filePath: context.currentFilePath ?? 'unknown',
+         filePath: currentFilePath ?? 'unknown',
          line: node.location.start.line,
          column: node.location.start.column
       } : undefined;
@@ -59,31 +71,29 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       const mappedParameters: ICommandParameterMetadata[] = (paramNames || []).map((paramName, index) => ({
           name: paramName,
           position: index + 1,
-          // TODO: Add support for required/defaultValue if grammar allows
       }));
 
       // Construct base metadata (origin will be set by StateService)
       const baseMetadata: Partial<VariableMetadata> = {
-          definedAt: directiveSourceLocation
-          // Origin will be set to DIRECT_DEFINITION by StateService
+          definedAt: directiveSourceLocation,
+          origin: VariableOrigin.DIRECT_DEFINITION // Set origin here
       };
       
       if (value !== undefined) {
         // Defined using literal value (e.g., @define cmd = "echo {{var}}")
-        // This is always a basic command.
         if (!isInterpolatableValueArray(value)) {
-            throw new DirectiveError('Invalid literal value for @define directive', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node, context });
+            throw new DirectiveError('Invalid literal value for @define directive', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
         }
         
         // Resolve the InterpolatableValue to get the final command string
-        const resolutionContext = ResolutionContextFactory.create(context.state, context.currentFilePath);
         let resolvedCommandTemplate: string;
         try {
+            // Use resolution context from DirectiveProcessingContext
             resolvedCommandTemplate = await this.resolutionService.resolveNodes(value, resolutionContext);
         } catch (error) {
              const errorMsg = `Failed to resolve literal value for command '${nameMetadata.name}'`;
              logger.error(errorMsg, { error });
-             throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { node, context, cause: error instanceof Error ? error : undefined });
+             throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { ...errorDetails, cause: error instanceof Error ? error : undefined });
         }
 
         commandDefinition = {
@@ -91,19 +101,19 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
           name: nameMetadata.name,
           parameters: mappedParameters,
           commandTemplate: resolvedCommandTemplate,
-          isMultiline: false, // Literal strings are typically single line unless template literal was used
+          isMultiline: false, 
           sourceLocation: directiveSourceLocation,
           definedAt: Date.now(),
-          ...(nameMetadata.metadata && { ...nameMetadata.metadata }) // Spread parsed metadata (riskLevel, description)
+          ...(nameMetadata.metadata && { ...nameMetadata.metadata }) 
         };
       } else if (command) {
-        // Defined using @run syntax (e.g., @define cmd = @run [...])
-        const runData = command as any; // Use cast based on local interface RunRHSStructure if needed
+        // Defined using @run syntax
+        const runData = command as any; // Use direct AST structure
         const runSubtype = runData.subtype;
-        const commandInput = runData.command; // This is InterpolatableValue or command object
+        const commandInput = runData.command; 
 
         if (!commandInput) {
-           throw new DirectiveError('Missing command value within @run for @define directive', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
+           throw new DirectiveError('Missing command value within @run for @define directive', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
         }
 
         let resolvedCommandContent: string;
@@ -111,31 +121,33 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
         let commandLanguage = runData.language;
 
         // Resolve the command content string first
-        const resolutionContext = ResolutionContextFactory.create(context.state, context.currentFilePath);
         try {
             if (runSubtype === 'runDefined') {
-                 if (typeof commandInput !== 'object' || !('name' in commandInput)) {
-                     throw new Error('Invalid command input structure for runDefined subtype');
+                 const definedCommand = commandInput as { name: string }; // Simplified assertion
+                 if (typeof definedCommand !== 'object' || !definedCommand.name) {
+                     throw new DirectiveError('Invalid command input structure for runDefined subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
                  }
-                 const cmdVar = context.state.getCommandVar(commandInput.name);
-                 if (cmdVar && cmdVar.value && isBasicCommand(cmdVar.value)) { 
+                 const cmdVar = state.getCommandVar(definedCommand.name); // Use state from context
+                 if (cmdVar?.value && isBasicCommand(cmdVar.value)) { 
                     resolvedCommandContent = cmdVar.value.commandTemplate; 
                  } else {
-                    const errorMsg = cmdVar ? `Cannot define command '${nameMetadata.name}' using non-basic command '${commandInput.name}'` : `Command definition '${commandInput.name}' not found`;
-                    throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { node: node as any, context });
+                    const errorMsg = cmdVar ? `Cannot define command '${nameMetadata.name}' using non-basic command '${definedCommand.name}'` : `Command definition '${definedCommand.name}' not found`;
+                    throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, errorDetails);
                  }
             } else if (runSubtype === 'runCommand' || runSubtype === 'runCode' || runSubtype === 'runCodeParams') {
-                 if (!isInterpolatableValueArray(commandInput)) {
-                    throw new Error(`Expected InterpolatableValue for command input with subtype '${runSubtype}'`);
+                 const interpolatableCommand = commandInput as InterpolatableValue;
+                 if (!isInterpolatableValueArray(interpolatableCommand)) {
+                    throw new DirectiveError(`Expected InterpolatableValue for command input with subtype '${runSubtype}'`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
                  }
-                 resolvedCommandContent = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
+                 // Use resolution context from DirectiveProcessingContext
+                 resolvedCommandContent = await this.resolutionService.resolveNodes(interpolatableCommand, resolutionContext);
             } else {
-                 throw new Error(`Unsupported run subtype '${runSubtype}' encountered in @define handler`);
+                 throw new DirectiveError(`Unsupported run subtype '${runSubtype}' encountered in @define handler`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
             }
         } catch (error) {
              const errorMsg = `Failed to resolve @run content for command '${nameMetadata.name}'`;
              logger.error(errorMsg, { error });
-             throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { node: node as any, context, cause: error instanceof Error ? error : undefined });
+             throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { ...errorDetails, cause: error instanceof Error ? error : undefined });
         }
 
         // Now create the definition based on the @run subtype
@@ -144,7 +156,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
               type: 'basic',
               name: nameMetadata.name,
               parameters: mappedParameters,
-              commandTemplate: resolvedCommandContent, // Use resolved string
+              commandTemplate: resolvedCommandContent, 
               isMultiline: commandIsMultiline,
               sourceLocation: directiveSourceLocation,
               definedAt: Date.now(),
@@ -156,49 +168,33 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
               name: nameMetadata.name,
               parameters: mappedParameters,
               language: commandLanguage || '', 
-              codeBlock: resolvedCommandContent, // Use resolved string
+              codeBlock: resolvedCommandContent, 
               languageParameters: runData.parameters?.map((p: any) => typeof p === 'string' ? p : p.identifier), 
               sourceLocation: directiveSourceLocation,
               definedAt: Date.now(),
               ...(nameMetadata.metadata && { ...nameMetadata.metadata })
             };
         } else {
-             // This case is already handled above, but included for completeness
-             throw new DirectiveError(`Unsupported @run subtype '${runSubtype}' within @define directive`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
+             throw new DirectiveError(`Unsupported @run subtype '${runSubtype}' within @define directive`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
         }
       } else {
-         throw new DirectiveError('Invalid @define directive structure: must have a value or an @run command', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node: node as any, context });
+         throw new DirectiveError('Invalid @define directive structure: must have a value or an @run command', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
       }
       
       logger.debug('Constructed command definition', { name: commandDefinition.name, type: commandDefinition.type });
 
-      // 4. Create new state for modifications
-      const newState = context.state.clone();
-
-      // 5. Store the ICommandDefinition using setCommandVar
-      // Pass the baseMetadata containing definedAt
-      newState.setCommandVar(commandDefinition.name, commandDefinition, baseMetadata);
+      // Store the ICommandDefinition using setCommandVar on the provided state
+      state.setCommandVar(commandDefinition.name, commandDefinition);
       logger.debug(`Stored command '${commandDefinition.name}'`, { definition: commandDefinition });
 
-      return newState;
+      // Return the modified state
+      return state;
     } catch (error) {
       // Wrap in DirectiveError if needed
       if (error instanceof DirectiveError) {
-        // Ensure location is set if missing
-        if (!error.details?.location && node.location) {
-          const wrappedError = new DirectiveError(
-            error.message,
-            error.kind,
-            error.code,
-            {
-              ...(error.details || {}),
-              // Add cast here as well if needed
-              node: error.details?.node || node as any, 
-              location: node.location,
-              severity: error.details?.severity || DirectiveErrorSeverity[error.code]
-            }
-          );
-          throw wrappedError;
+        // Ensure details are attached if missing
+        if (!error.details?.context) {
+          error.details = { ...(error.details || {}), ...errorDetails };
         }
         throw error;
       }
@@ -213,12 +209,8 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
         this.kind,
         errorCode,
         {
-          // Add cast here
-          node: node as any,
-          context,
-          cause: error instanceof Error ? error : undefined,
-          location: node.location,
-          severity: DirectiveErrorSeverity[errorCode]
+          ...errorDetails,
+          cause: error instanceof Error ? error : undefined
         }
       );
 
@@ -233,64 +225,46 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
           description?: string; 
       } 
   } {
-    // Check for metadata fields
     const parts = identifier.split('.');
     const name = parts[0];
 
     if (!name) {
       throw new DirectiveError(
-        'Define directive requires a valid identifier',
+        'Define directive requires a valid base identifier name',
         this.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
-        {
-          // Add cast here
-          node: undefined as any, // Node isn't available here, but error expects it potentially
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
-        }
+        {} // Cannot provide node details here easily
       );
     }
 
-    // Handle metadata if present
     if (parts.length > 1) {
       const metaType = parts[1];
-      const metaValue = parts.slice(2).join('.') || ''; // Join remaining parts for description
+      const metaValue = parts.slice(2).join('.') || '';
 
       if (metaType === 'risk') {
         const riskValue = metaValue.toLowerCase();
-        if (!['high', 'medium', 'low'].includes(riskValue)) { // Allow 'medium'
+        if (!['high', 'medium', 'low'].includes(riskValue)) {
           throw new DirectiveError(
             `Invalid risk level '${metaValue}'. Must be high, medium, or low`,
             this.kind,
             DirectiveErrorCode.VALIDATION_FAILED,
-            {
-              // Add cast here
-              node: undefined as any,
-              severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
-            }
+            {}
           );
         }
         return { name, metadata: { riskLevel: riskValue as 'high' | 'medium' | 'low' } };
       }
 
       if (metaType === 'about') {
-        // Use the rest of the identifier as the description
-        return { name, metadata: { description: metaValue || 'Defined command' } }; // Provide default if empty
+        return { name, metadata: { description: metaValue || 'Defined command' } };
       }
 
-      // If not risk or about, treat as invalid metadata
       throw new DirectiveError(
         `Invalid metadata type '${metaType}'. Only risk and about are supported.`,
         this.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
-        {
-           // Add cast here
-           node: undefined as any,
-           severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
-        }
+        {}
       );
     }
-
-    // No metadata parts found
     return { name };
   }
 } 

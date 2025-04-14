@@ -1,5 +1,5 @@
 import type { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types/index.js';
-import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -21,21 +21,16 @@ import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterS
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { InterpreterOptionsBase, StructuredPath, StateServiceLike } from '@core/shared-service-types.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { MeldPath, StructuredPath as CoreStructuredPath } from '@core/types/paths.js';
 import { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
 import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
+import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { EmbedDirectiveData } from '@core/syntax/types/directives.js';
 import { vi } from 'vitest';
-
-function isInterpolatableValueArray(value: unknown): value is InterpolatableValue {
-    return Array.isArray(value) && 
-           (value.length === 0 || 
-            (value[0] && typeof value[0] === 'object' && ('type' in value[0]) && 
-             (value[0].type === 'Text' || value[0].type === 'VariableReference')));
-}
+import type { DirectiveProcessingContext } from '@core/types/index.js';
+import type { SourceLocation } from '@core/types/common.js';
 
 export interface ILogger {
   debug: (message: string, ...args: any[]) => void;
@@ -79,7 +74,6 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
   constructor(
     @inject('IValidationService') private validationService: IValidationService,
     @inject('IResolutionService') private resolutionService: IResolutionService,
-    @inject('IStateService') private stateService: IStateService,
     @inject('ICircularityService') private circularityService: ICircularityService,
     @inject('IFileSystemService') private fileSystemService: IFileSystemService,
     @inject('IPathService') private pathService: IPathService,
@@ -123,7 +117,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
   private createReplacementNode(
     content: string, 
     originalNode: DirectiveNode,
-    context?: DirectiveContext
+    context?: DirectiveProcessingContext
   ): TextNode {
     this.logger.debug('Creating replacement node with content preservation', {
       originalNodeType: originalNode.type,
@@ -169,12 +163,24 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
   /**
    * Executes the @embed directive
    * 
-   * @param node - The directive node to execute
    * @param context - The context in which to execute the directive
    * @returns A DirectiveResult containing the replacement node and state
    */
-  async execute(node: DirectiveNode, context: DirectiveContext): Promise<DirectiveResult> {
-    // Use EmbedDirectiveData for the directive part
+  async execute(context: DirectiveProcessingContext): Promise<DirectiveResult> {
+    const node = context.directiveNode as DirectiveNode;
+    const state = context.state;
+    const resolutionContext = context.resolutionContext;
+    const currentFilePath = state.getCurrentFilePath();
+    const errorDetailsContext = { currentFilePath: currentFilePath ?? undefined };
+    const standardErrorDetails = { 
+      node: node, 
+      context: errorDetailsContext 
+    };
+
+    // Assert directive node structure
+    if (!node.directive || node.directive.kind !== 'embed') {
+        throw new DirectiveError('Invalid node type provided to EmbedDirectiveHandler', this.kind, DirectiveErrorCode.VALIDATION_FAILED, standardErrorDetails);
+    }
     const directiveData = node.directive as EmbedDirectiveData;
     this.logger.debug(`Processing embed directive`, { location: node.location });
 
@@ -182,9 +188,6 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     await this.validationService.validate(node);
     
     try {
-      const newState = context.state.clone(); 
-      const resolutionContext = ResolutionContextFactory.create(newState, context.currentFilePath);
-
       let content: string = ''; 
 
       // <<< Add Logging >>>
@@ -208,18 +211,15 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               `Missing path property for embedPath subtype.`,
               this.kind,
               DirectiveErrorCode.VALIDATION_FAILED,
-              { location: node?.location }
+              standardErrorDetails
             );
           }
 
           let resolvedPath: MeldPath;
           try {
             process.stdout.write(`Resolving embed path\n`);
-            // 1. Resolve the path object - prioritize interpolatedValue if present
             const valueToResolve: string | InterpolatableValue = embedPathObject.interpolatedValue ?? embedPathObject.raw;
-            // Pass string or InterpolatableValue to resolveInContext
             const resolvedPathString = await this.resolutionService.resolveInContext(valueToResolve, resolutionContext);
-            // 2. Validate the resolved string
             resolvedPath = await this.resolutionService.resolvePath(resolvedPathString, resolutionContext);
             
             process.stdout.write(`Resolved embed path to: ${resolvedPath.validatedPath}\n`);
@@ -228,27 +228,29 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               `Error resolving embed path: ${error instanceof Error ? error.message : String(error)}`,
               this.kind,
               DirectiveErrorCode.RESOLUTION_FAILED,
-              { location: node?.location, cause: error instanceof Error ? error : undefined }
+              { ...standardErrorDetails, cause: error instanceof Error ? error : undefined }
             );
           }
 
           // Read file content
           try {
-            // Use validatedPath for logging string
             process.stdout.write(`Attempting to read file: ${resolvedPath.validatedPath}\n`);
-            // Use validatedPath for exists check
             if (!(await this.fileSystemService.exists(resolvedPath.validatedPath))) {
+              const errorSourceLocation: SourceLocation | undefined = node?.location ? { 
+                line: node.location.start.line, 
+                column: node.location.start.column, 
+                filePath: currentFilePath ?? 'unknown'
+              } : undefined;
+
               throw new MeldFileNotFoundError(
                 `Embed source file not found: ${resolvedPath.validatedPath}`,
                 {
                   details: { filePath: resolvedPath.validatedPath, operation: 'embed' },
-                  sourceLocation: node?.location ? { line: node.location.start.line, column: node.location.start.column, filePath: context.currentFilePath } : undefined
+                  sourceLocation: errorSourceLocation
                 }
               );
             }
-            // Use validatedPath for readFile
             content = await this.fileSystemService.readFile(resolvedPath.validatedPath);
-            // Use validatedPath for logging
             process.stdout.write(`Read file content successfully\n`);
           } catch (error) {
             const errorCode = error instanceof MeldFileNotFoundError
@@ -258,7 +260,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               ? error.message
               : `Error reading embed source file: ${resolvedPath.validatedPath}: ${error instanceof Error ? error.message : String(error)}`;
 
-            throw new DirectiveError(message, this.kind, errorCode, { location: node?.location, cause: error instanceof Error ? error : undefined });
+            throw new DirectiveError(message, this.kind, errorCode, { ...standardErrorDetails, cause: error instanceof Error ? error : undefined });
           }
           break;
 
@@ -271,13 +273,12 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               `Missing path property for embedVariable subtype.`,
               this.kind,
               DirectiveErrorCode.VALIDATION_FAILED,
-              { location: node?.location }
+              standardErrorDetails
             );
           }
           
           try {
             process.stdout.write(`Resolving embed variable/path\n`);
-            // Use resolveInContext, passing interpolatedValue or raw string
             const valueToResolveVar = variablePathObject.interpolatedValue ?? variablePathObject.raw;
             const resolvedValue = await this.resolutionService.resolveInContext(valueToResolveVar, resolutionContext);
 
@@ -298,7 +299,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               `Error resolving embed variable/path: ${error instanceof Error ? error.message : String(error)}`,
               this.kind,
               DirectiveErrorCode.RESOLUTION_FAILED,
-              { location: node?.location, cause: error instanceof Error ? error : undefined }
+              { ...standardErrorDetails, cause: error instanceof Error ? error : undefined }
             );
           }
           break;
@@ -317,13 +318,12 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               `Missing or invalid content array for embedTemplate subtype.`,
               this.kind,
               DirectiveErrorCode.VALIDATION_FAILED,
-              { location: node?.location }
+              standardErrorDetails
             );
           }
 
           try {
             process.stdout.write(`Attempting resolveNodes on templateContent (length: ${templateContent?.length ?? '?'})\n`);
-            // Pass InterpolatableValue directly to resolveNodes
             content = await this.resolutionService.resolveNodes(templateContent, resolutionContext);
             process.stdout.write(`Resolved template content length: ${content.length}\n`);
           } catch (error) {
@@ -331,7 +331,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               `Error resolving embed template: ${error instanceof Error ? error.message : String(error)}`,
               this.kind,
               DirectiveErrorCode.RESOLUTION_FAILED,
-              { location: node?.location, cause: error instanceof Error ? error : undefined }
+              { ...standardErrorDetails, cause: error instanceof Error ? error : undefined }
             );
           }
           break;
@@ -341,7 +341,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             `Unsupported embed subtype: ${directiveData.subtype}`,
             this.kind,
             DirectiveErrorCode.VALIDATION_FAILED,
-            { location: node?.location }
+            standardErrorDetails
           );
       }
 
@@ -367,7 +367,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             `Error extracting section "${section}": ${error instanceof Error ? error.message : String(error)}`,
             this.kind,
             DirectiveErrorCode.EXECUTION_FAILED,
-            { location: node?.location, cause: error instanceof Error ? error : undefined }
+            { ...standardErrorDetails, cause: error instanceof Error ? error : undefined }
           );
         }
       }
@@ -379,10 +379,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         // TODO: Find appropriate service/utility for heading adjustment
         // <<< Log the logger object >>>
         process.stdout.write(`>>> EMBED HANDLER - Logger object: ${typeof this.logger}, Warn is mock: ${vi.isMockFunction(this.logger?.warn)}\n`);
-        this.logger.warn(`Heading level adjustment specified (+${headingLevel}) but not currently supported by ResolutionService. Content unchanged.`, { location: node?.location });
+        this.logger.warn(`Heading level adjustment specified (+${headingLevel}) but not currently supported by ResolutionService. Content unchanged.`, standardErrorDetails);
         // Validate the option format here if needed
         if (typeof headingLevel !== 'number' || !Number.isInteger(headingLevel) || headingLevel < 1) {
-          this.logger.warn(`Invalid headingLevel option: ${headingLevel}. Must be a positive integer.`, { location: node?.location });
+          this.logger.warn(`Invalid headingLevel option: ${headingLevel}. Must be a positive integer.`, standardErrorDetails);
         }
       }
 
@@ -390,7 +390,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       const underHeader = options.underHeader;
       if (underHeader) {
         // TODO: Find appropriate service/utility for header wrapping
-        this.logger.warn(`Under-header wrapping specified ("${underHeader}") but not currently supported by ResolutionService. Content unchanged.`, { location: node?.location });
+        this.logger.warn(`Under-header wrapping specified ("${underHeader}") but not currently supported by ResolutionService. Content unchanged.`, standardErrorDetails);
       }
 
       // Create the replacement node
@@ -403,63 +403,38 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       // needed, they should occur in the main interpreter loop.
 
       return {
-        state: newState, // Return the cloned state, embed usually doesn't modify state itself
+        state: state, // Return the original state from context
         replacement: replacementNode
       };
     } catch (error) {
-      // Final catch-all for errors during embed execution
       if (error instanceof DirectiveError) {
+         if (!error.details?.context) {
+            throw new DirectiveError(
+                error.message,
+                this.kind,
+                error.code,
+                { 
+                  ...(error.details || {}),
+                  ...standardErrorDetails,
+                  cause: error.details?.cause instanceof Error ? error.details.cause : undefined 
+                }
+            );
+         }
         throw error;
-      }
+      } 
       
-      // Wrap other errors, ensuring location is handled safely
-      const details = {
-        node,
-        context,
-        cause: error instanceof Error ? error : undefined,
-        location: node?.location // <<< Use optional chaining
-      };
+      // Wrap other errors
       throw new DirectiveError(
         `Error processing embed directive: ${error instanceof Error ? error.message : 'Unknown error'}`,
         this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
-        details
+        { 
+          cause: error instanceof Error ? error : undefined 
+        }
       );
     } finally {
       // Remove incorrect endImport call
       // this.circularityService.endImport();
     }
-  }
-
-  /**
-   * Adjusts the heading level of content by prepending the appropriate number of # characters
-   * 
-   * @param content - The content to adjust
-   * @param level - The heading level (1-6)
-   * @returns The content with adjusted heading level
-   */
-  private applyHeadingLevel(content: string, level: number): string {
-    // Validate level is between 1 and 6
-    if (level < 1 || level > 6) {
-      this.logger.warn(`Invalid heading level: ${level}. Must be between 1 and 6. Using unmodified content.`, {
-        level,
-        directive: this.kind
-      });
-      return content; // Return unmodified content for invalid levels
-    }
-    
-    // Add the heading markers
-    return '#'.repeat(level) + ' ' + content;
-  }
-
-  /**
-   * Wraps content under a header by prepending the header and adding appropriate spacing
-   * 
-   * @param content - The content to wrap
-   * @param header - The header text to prepend
-   * @returns The content wrapped under the header
-   */
-  private wrapUnderHeader(content: string, header: string): string {
-    return `${header}\n\n${content}`;
   }
 } 

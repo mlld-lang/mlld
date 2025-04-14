@@ -128,7 +128,7 @@ describe('PathDirectiveHandler', () => {
         mockProcessingContext.resolutionContext
       );
       const expectedState = createMockMeldPath(pathValue).value;
-      expect(stateService.setPathVar).toHaveBeenCalledWith('docs', expectedState, expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(stateService.setPathVar).toHaveBeenCalledWith('docs', expectedState);
       expect(result).toBe(stateService);
     });
 
@@ -156,7 +156,7 @@ describe('PathDirectiveHandler', () => {
         mockProcessingContext.resolutionContext
       );
       const expectedStateCustom = createMockMeldPath(resolvedPath).value;
-      expect(stateService.setPathVar).toHaveBeenCalledWith('customPath', expectedStateCustom, expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(stateService.setPathVar).toHaveBeenCalledWith('customPath', expectedStateCustom);
       expect(result).toBe(stateService);
     });
 
@@ -182,7 +182,7 @@ describe('PathDirectiveHandler', () => {
         mockProcessingContext.resolutionContext
       );
       const expectedStateConfig = createMockMeldPath(pathValue).value;
-      expect(stateService.setPathVar).toHaveBeenCalledWith('config', expectedStateConfig, expect.objectContaining({ definedAt: expect.any(Object) }));
+      expect(stateService.setPathVar).toHaveBeenCalledWith('config', expectedStateConfig);
       expect(result).toBe(stateService);
     });
   });

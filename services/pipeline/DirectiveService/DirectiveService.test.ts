@@ -10,16 +10,19 @@ import { vi } from 'vitest';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { TestDirectiveHandlerHelper } from '@tests/utils/di/TestDirectiveHandlerHelper.js';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import { IResolutionService } from '@services/pipeline/ResolutionService/IResolutionService.js';
+import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { IStateService } from '@services/state/IStateService.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
-import { createTextDirective } from '@tests/utils/testFactories.js'; // Import factory
+import { ErrorSeverity, MeldError } from '@core/errors/MeldError.js';
+import { createTextDirective } from '@tests/utils/testFactories.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { createMockFormattingContext } from '@tests/mocks/serviceMocks.js';
+import type { DirectiveProcessingContext, FormattingContext, ResolutionContext } from '@core/types/index.js';
 
 // Main test suite for DirectiveService
 describe('DirectiveService', () => {
   let context: TestContextDI;
   let service: IDirectiveService;
-  let mockState: any;
+  let mockState: IStateService;
 
   beforeEach(async () => {
     // Initialize test context with isolated container
@@ -41,68 +44,23 @@ describe('DirectiveService', () => {
         }),
         setTextVar: vi.fn().mockImplementation(function(this: any, name, value) {
             // console.log(`[mockState setTextVar] ${name} =`, value);
-            this._vars[name] = value?.value ?? value; // Store primitive value or raw value
+            this._vars[name] = value; // Store raw value for simplicity in mock
         }),
         setDataVar: vi.fn().mockImplementation(function(this: any, name, value) {
             // console.log(`[mockState setDataVar] ${name} =`, value);
             this._vars[name] = value; // Store the whole object/array value
         }),
-        // <<< Realistic clone mock >>>
         clone: vi.fn().mockImplementation(function(this: any) {
              const originalVars = this._vars;
-             // console.log('[mockState clone] Cloning state. Vars:', originalVars);
-             
-             // <<< Create clone object with NEW function definitions >>>
              const cloned = { 
+                 ...this, // Copy existing methods
                  _vars: { ...originalVars }, // Shallow copy internal vars
-                 
-                 getTextVar: function(name: string) {
-                     const val = this._vars[name];
-                     // console.log(`[CLONE getTextVar] ${name}:`, val, 'in', this._vars);
-                     return val && typeof val !== 'object' ? { type: 'text', value: val } : undefined;
-                 },
-                 getDataVar: function(name: string) {
-                     const val = this._vars[name];
-                      // console.log(`[CLONE getDataVar] ${name}:`, val, 'in', this._vars);
-                     return val && typeof val === 'object' ? { type: 'data', value: val } : undefined;
-                 },
-                 setTextVar: function(name: string, value: any) {
-                     // console.log(`[CLONE setTextVar] ${name} =`, value, 'in', this._vars);
-                     this._vars[name] = value?.value ?? value; 
-                 },
-                 setDataVar: function(name: string, value: any) {
-                     // console.log(`[CLONE setDataVar] ${name} =`, value, 'in', this._vars);
-                     this._vars[name] = value; 
-                 },
-                 // Define clone method for the clone itself
-                 clone: function() { 
-                     // console.log('[CLONE clone] Cloning the clone. Vars:', this._vars);
-                     const nestedClone = { 
-                         ...this, 
-                         _vars: { ...this._vars } 
-                     };
-                     return nestedClone; 
-                 },
-                 getVariable: function(name: string) { 
-                    // console.log(`[CLONE getVariable] ${name} in', this._vars`);
-                    return this._vars[name]; 
-                 },
-                 setCurrentFilePath: vi.fn(),
-                 getCurrentFilePath: vi.fn().mockReturnValue('mock/cloned-path.meld'),
-                 createChildState: function() { return this.clone(); }, 
-                 mergeChildState: vi.fn(),
-                 getNodes: vi.fn().mockReturnValue([]), 
-                 addNode: vi.fn(), 
-                 getTransformedNodes: vi.fn().mockReturnValue([]), 
-                 setTransformedNodes: vi.fn(), 
-                 transformNode: vi.fn(), 
-                 isTransformationEnabled: vi.fn().mockReturnValue(false), 
+                 // Ensure clone can also clone
+                 clone: function() { return this.clone(); }, 
+                 createChildState: function() { return this.clone(); },
              };
-            
-             // console.log('[mockState clone] Cloned state created. Vars:', cloned._vars);
              return cloned;
         }),
-         // Add other necessary IStateService methods if handlers call them
          getVariable: vi.fn().mockImplementation(function(this: any, name) {
              return this._vars[name]; // Simple lookup for testing
          }),
@@ -110,12 +68,24 @@ describe('DirectiveService', () => {
          getCurrentFilePath: vi.fn().mockReturnValue('mock/path.meld'),
          createChildState: vi.fn().mockImplementation(function(this: any) { return this.clone(); }),
          mergeChildState: vi.fn(),
-         getNodes: vi.fn().mockReturnValue([]), // Add if needed
-         addNode: vi.fn(), // Add if needed
-         getTransformedNodes: vi.fn().mockReturnValue([]), // Add if needed
-         setTransformedNodes: vi.fn(), // Add if needed
-         transformNode: vi.fn(), // Add if needed
-         isTransformationEnabled: vi.fn().mockReturnValue(false), // Default unless overridden in test
+         getNodes: vi.fn().mockReturnValue([]), 
+         addNode: vi.fn(), 
+         getTransformedNodes: vi.fn().mockReturnValue([]), 
+         setTransformedNodes: vi.fn(), 
+         transformNode: vi.fn(), 
+         isTransformationEnabled: vi.fn().mockReturnValue(false),
+         // Add missing methods required by IStateService
+         getParentState: vi.fn().mockReturnValue(undefined),
+         setTransformationEnabled: vi.fn(),
+         getTransformationOptions: vi.fn().mockReturnValue({}),
+         getAllTextVars: vi.fn().mockReturnValue(new Map()),
+         getAllDataVars: vi.fn().mockReturnValue(new Map()),
+         getAllPathVars: vi.fn().mockReturnValue(new Map()),
+         getCommandVar: vi.fn().mockReturnValue(undefined),
+         setCommandVar: vi.fn(),
+         getAllCommandVars: vi.fn().mockReturnValue(new Map()),
+         hasVariable: vi.fn().mockImplementation(function(this:any, name) { return name in this._vars; }),
+         getStateSnapshot: vi.fn().mockReturnValue({ vars: {}, nodes: [] }),
 
     };
     context.registerMock<IStateService>('IStateService', mockState);
@@ -145,64 +115,43 @@ describe('DirectiveService', () => {
     // Use the helper to initialize the DirectiveService with all handlers
     service = await TestDirectiveHandlerHelper.initializeDirectiveService(context);
     
-    // <<< Add mock for resolveNodes for DirectiveService tests >>>
+    // Mock resolveNodes for DirectiveService tests
     const resolutionService = await context.container.resolve<IResolutionService>('IResolutionService');
-    resolutionService.resolveNodes = vi.fn().mockImplementation(async (nodes, ctx) => {
+    vi.spyOn(resolutionService, 'resolveNodes').mockImplementation(async (nodes, ctx) => {
         const stateForResolve = ctx.state; 
         if (!stateForResolve) {
-            process.stderr.write('[DirectiveService.test mock] resolveNodes received context without state!\n'); // Use stderr for warnings
+            console.warn('[DirectiveService.test mock] resolveNodes received context without state!');
             return '';
         }
-        // <<< Debug Log using process.stdout.write >>>
-        process.stdout.write('[DirectiveService.test mock] ctx.state === mockState?: ' + (stateForResolve === mockState) + '\n');
-        process.stdout.write('[DirectiveService.test mock] stateForResolve._vars before lookup: ' + JSON.stringify(stateForResolve._vars) + '\n');
-        // process.stdout.write(\'[DirectiveService.test mock] resolveNodes input: \' + JSON.stringify(nodes) + \'\\n\');
-
+        let result = '';
         if (Array.isArray(nodes)) {
-           let result = '';
            for (const node of nodes) {
               if (node.type === 'Text') {
                   result += node.content;
-                   // <<< Log text part >>>
-                  process.stdout.write(`[DirectiveService.test mock] Appended text: "${node.content}", Current result: "${result}"\n`);
               } else if (node.type === 'VariableReference') {
                  const identifier = node.identifier;
-                 // <<< Log variable lookup >>>
-                 process.stdout.write(`[DirectiveService.test mock] Looking up variable: ${identifier}\n`);
                  const variable = stateForResolve.getTextVar(identifier);
-                 // <<< Log lookup result >>>
-                 process.stdout.write(`[DirectiveService.test mock] getTextVar result for ${identifier}: ` + JSON.stringify(variable) + '\n');
-                 
-                 if (variable && variable.value !== undefined) { // Check value exists
+                 if (variable?.value !== undefined) {
                     result += variable.value;
-                    // <<< Log variable append >>>
-                   process.stdout.write(`[DirectiveService.test mock] Appended variable ${identifier}: "${variable.value}", Current result: "${result}"\n`);
                  } else {
                    const dataVar = stateForResolve.getDataVar(identifier); 
-                   if (dataVar && dataVar.value !== undefined) { // Check value exists
+                   if (dataVar?.value !== undefined) {
                       try {
-                         // <<< Check if dataVar.value is already the desired string >>>
-                         if (typeof dataVar.value === 'string') {
-                             result += dataVar.value;
-                         } else {
-                            result += JSON.stringify(dataVar.value);
-                         }
+                         result += typeof dataVar.value === 'string' ? dataVar.value : JSON.stringify(dataVar.value);
                       } catch { 
-                          // <<< Add identifier to placeholder >>>
                           result += `[Object: ${identifier}]`; 
                       }
                    } else {
-                     // <<< Add identifier to placeholder >>>
                      result += `{{${identifier}}}`; 
                    }
                  }
               }
            }
-           // <<< Log final return >>>
-           process.stdout.write('[DirectiveService.test mock] resolveNodes returning: ' + result + '\n');
-           return result;
+        } else {
+            result = JSON.stringify(nodes); // Fallback
         }
-        return JSON.stringify(nodes); // Fallback for non-array
+        console.log('[DirectiveService.test mock] resolveNodes returning: ' + result + '\n');
+        return result;
     });
   });
 
@@ -212,39 +161,56 @@ describe('DirectiveService', () => {
 
   describe('Service initialization', () => {
     it('should initialize with all required services', () => {
-      expect(service.getSupportedDirectives()).toContain('text');
-      expect(service.getSupportedDirectives()).toContain('data');
-      expect(service.getSupportedDirectives()).toContain('path');
+      // Check if handlers are registered (assuming helper registers them)
+      expect(service.hasHandler('text')).toBe(true);
+      expect(service.hasHandler('data')).toBe(true);
+      expect(service.hasHandler('path')).toBe(true);
     });
 
     it('should throw if used before initialization', async () => {
-      // Create instance without calling initialize
-      const service = new DirectiveService();
+      // Create instance directly, bypassing DI initialization
+      const uninitializedService = new DirectiveService(); 
       const node = context.factory.createTextDirective('test', '"value"', context.factory.createLocation(1, 1));
-      
+      const mockProcessingContext: DirectiveProcessingContext = { 
+          state: mockState, 
+          directiveNode: node,
+          resolutionContext: {} as ResolutionContext, // Placeholder
+          formattingContext: {} as FormattingContext // Placeholder
+      };
+
       try {
-        await service.processDirective(node, {} as any);
-        // Should not reach here
+        // Call handleDirective which checks initialization
+        await uninitializedService.handleDirective(node, mockProcessingContext); 
         expect.fail('Service did not throw when used before initialization');
       } catch (e) {
-        expect(e).toBeInstanceOf(DirectiveError); // Check base type
-        const error = e as DirectiveError;
-        expect(error.code).toBe(DirectiveErrorCode.INVALID_CONTEXT); // Check specific code
-        // Update assertion to match the actual error message prefix
-        expect(error.message).toContain('DirectiveService must be initialized'); 
+        // Expect the specific error thrown by ensureInitialized
+        expect(e).toBeInstanceOf(MeldError); 
+        expect((e as MeldError).message).toContain('DirectiveService has not been initialized');
       }
     });
 
     it('should throw if handler is missing', async () => {
-      const context = TestContextDI.createIsolated();
-      await context.initialize();
-      const service = await context.resolve(DirectiveService);
-      (service as any).handlers.delete('text'); 
+      // Get the initialized service from context
+      const initializedService = service as DirectiveService;
+      
+      // Manually remove a handler after initialization
+      (initializedService as any).handlers.delete('text'); 
       
       const node = createTextDirective('test', 'value'); 
+      const currentFilePath = 'test.meld';
+      const state = await context.resolve<IStateService>('IStateService');
+      state.setCurrentFilePath(currentFilePath);
+
+      const processingContext: DirectiveProcessingContext = { 
+          state: state, 
+          directiveNode: node,
+          resolutionContext: ResolutionContextFactory.create(state, currentFilePath),
+          formattingContext: createMockFormattingContext(), // Use mock
+      };
       
       try {
-        await service.processDirective(node, { state: context.resolveSync('IStateService') } as any);
+        // Call handleDirective which checks for handler
+        await initializedService.handleDirective(node, processingContext);
         expect.fail('Should have thrown HANDLER_NOT_FOUND');
       } catch(e) {
         expect(e).toBeInstanceOf(DirectiveError);
@@ -252,66 +218,60 @@ describe('DirectiveService', () => {
         expect(error.code).toBe(DirectiveErrorCode.HANDLER_NOT_FOUND);
         expect(error.message).toContain('No handler registered for directive kind: text'); 
       }
-      await context.cleanup();
     });
   });
 
   describe('Directive processing', () => {
     describe('Text directives', () => {
       it('should process basic text directive', async () => {
-        // Verify file exists
-        const exists = await context.fs.exists('test.meld');
-        console.log('test.meld exists:', exists);
-
-        // Parse the fixture file
         const content = await context.fs.readFile('test.meld');
-        console.log('test.meld content:', content);
-        
         const nodes = await context.services.parser.parse(content);
-        console.log('Parsed nodes:', nodes);
-        
-        // Ensure the node has the expected structure for TextDirectiveHandler
         const directiveNode = nodes[0] as DirectiveNode;
-        if (directiveNode && directiveNode.directive && directiveNode.directive.kind === 'text') {
-            if (directiveNode.directive.source === undefined) {
-                 // Add source: 'literal' if missing for simple assignments
-                 directiveNode.directive.source = 'literal'; 
-            }
-        } else {
+        if (directiveNode?.directive?.kind === 'text' && directiveNode.directive.source === undefined) {
+            directiveNode.directive.source = 'literal'; 
+        } else if (!directiveNode || directiveNode.directive?.kind !== 'text') {
             throw new Error('Test setup error: Parsed node is not a valid @text directive.');
         }
         
         // Create execution context
         const state = await context.container.resolve<IStateService>('IStateService');
-        const execContext = { currentFilePath: 'test.meld', state: state };
+        state.setCurrentFilePath('test.meld'); // Set file path on state
+        const processingContext: DirectiveProcessingContext = { 
+            state: state, 
+            directiveNode: directiveNode,
+            resolutionContext: ResolutionContextFactory.create(state, 'test.meld'),
+            formattingContext: createMockFormattingContext(), // Use mock
+        };
 
-        // Process the directive
-        const result = await service.processDirective(directiveNode, execContext);
+        // Process the directive using handleDirective
+        const result = await service.handleDirective(directiveNode, processingContext);
+        const resultState = result as IStateService;
 
-        // <<< Assert against the RESULT state >>>
-        expect(result.getTextVar('greeting')?.value).toBe('Hello');
+        // Assert against the RESULT state
+        expect(resultState.getTextVar('greeting')?.value).toBe('Hello');
       });
 
-      // TODO: Fix mocking issue and re-enable test. See #30.
       it.skip('should process text directive with variable interpolation', async () => {
         const state = await context.container.resolve<IStateService>('IStateService');
-        // Set initial var on the state that will be cloned
-        state.setTextVar('name', { type: 'text', value: 'World' }); 
+        state.setCurrentFilePath('test-interpolation.meld');
+        await state.setTextVar('name', 'World'); 
 
-        // Parse and process
         const content = await context.fs.readFile('test-interpolation.meld');
         const nodes = await context.services.parser.parse(content);
         const node = nodes[0] as DirectiveNode;
-        // Ensure source is set for the handler
-        if (node && node.directive) { node.directive.source = 'literal'; }
+        if (node?.directive) { node.directive.source = 'literal'; }
         
-        const result = await service.processDirective(node, {
-          currentFilePath: 'test-interpolation.meld',
-          state: state
-        });
+        const processingContext: DirectiveProcessingContext = { 
+            state: state, 
+            directiveNode: node,
+            resolutionContext: ResolutionContextFactory.create(state, 'test-interpolation.meld'),
+            formattingContext: createMockFormattingContext(),
+        };
 
-        // <<< Assert against the RESULT state >>>
-        expect(result.getTextVar('greeting')?.value).toBe('Hello World');
+        const result = await service.handleDirective(node, processingContext);
+        const resultState = result as IStateService;
+
+        expect(resultState.getTextVar('greeting')?.value).toBe('Hello World');
       });
     });
 
@@ -320,43 +280,44 @@ describe('DirectiveService', () => {
         const content = await context.fs.readFile('test-data.meld');
         const nodes = await context.services.parser.parse(content);
         const node = nodes[0] as DirectiveNode;
-        
-        // Ensure source is set for the handler
-        if (node && node.directive) { node.directive.source = 'literal'; }
+        if (node?.directive) { node.directive.source = 'literal'; }
         
         const state = await context.container.resolve<IStateService>('IStateService');
-        const execContext = { currentFilePath: 'test-data.meld', state: state };
-        const result = await service.processDirective(node, execContext);
-         // <<< Assert against the RESULT state >>>
-        expect(result.getDataVar('config')?.value).toEqual({ key: 'value' });
+        state.setCurrentFilePath('test-data.meld');
+        const processingContext: DirectiveProcessingContext = { 
+            state: state, 
+            directiveNode: node,
+            resolutionContext: ResolutionContextFactory.create(state, 'test-data.meld'),
+            formattingContext: createMockFormattingContext(),
+        };
+
+        const result = await service.handleDirective(node, processingContext);
+        const resultState = result as IStateService;
+
+        expect(resultState.getDataVar('config')?.value).toEqual({ key: 'value' });
       });
 
-      // TODO: Fix mocking issue and re-enable test. See #30.
       it.skip('should process data directive with variable interpolation', async () => {
         const state = await context.container.resolve<IStateService>('IStateService');
-        // Set initial var on the state that will be cloned
-        state.setTextVar('user', { type: 'text', value: 'Alice' }); 
-        // ... arrange ...
+        state.setCurrentFilePath('test-data-interpolation.meld');
+        await state.setTextVar('user', 'Alice'); 
+
         const content = await context.fs.readFile('test-data-interpolation.meld');
         const nodes = await context.services.parser.parse(content);
         const node = nodes[0] as DirectiveNode;
+        if (node?.directive) { node.directive.source = 'literal'; }
         
-        // Ensure source is set for the handler
-        if (node && node.directive) { node.directive.source = 'literal'; }
+        const processingContext: DirectiveProcessingContext = { 
+            state: state, 
+            directiveNode: node,
+            resolutionContext: ResolutionContextFactory.create(state, 'test-data-interpolation.meld'),
+            formattingContext: createMockFormattingContext(),
+        };
         
-        // Add Logging
-        console.log('--- Data Interpolation Test ---');
-        console.log('Parsed Node:', JSON.stringify(node, null, 2));
+        const result = await service.handleDirective(node, processingContext);
+        const resultState = result as IStateService;
         
-        const execContext = { currentFilePath: 'test-data-interpolation.meld', state: state }; 
-        const result = await service.processDirective(node, execContext);
-        
-        // <<< Log the result state's internal vars for debugging >>>
-        console.log('Data Interpolation Result State Vars:', JSON.stringify((result as any)._vars, null, 2));
-        // console.log('Data Interpolation Result:', JSON.stringify(result.getDataVar('config')?.value, null, 2));
-
-        // <<< Assert against the RESULT state >>>
-        expect(result.getDataVar('config')?.value).toEqual({ greeting: 'Hello Alice' });
+        expect(resultState.getDataVar('config')?.value).toEqual({ greeting: 'Hello Alice' });
       });
     });
 
@@ -404,7 +365,7 @@ describe('DirectiveService', () => {
         );
         
         try {
-          const result = await service.processDirective(node, {
+          const result = await service.handleDirective(node, {
             currentFilePath: 'main.meld',
             state: context.services.state
           });
@@ -470,7 +431,7 @@ describe('DirectiveService', () => {
         );
         
         try {
-          const result = await service.processDirective(node, {
+          const result = await service.handleDirective(node, {
             currentFilePath: 'main.meld',
             state: context.services.state
           });
@@ -492,8 +453,7 @@ describe('DirectiveService', () => {
         const mockExists = vi.spyOn(context.fs, 'exists');
         mockExists.mockResolvedValue(true);
         
-        const mockReadFile = vi.spyOn(context.fs, 'readFile');
-        mockReadFile.mockImplementation(async (path) => {
+        const mockReadFile = vi.spyOn(context.fs, 'readFile').mockImplementation(async (path) => {
           if (path === 'b.meld') {
             return '@import [a.meld]';
           } else if (path === 'a.meld') {
@@ -502,10 +462,17 @@ describe('DirectiveService', () => {
           return '';
         });
         
-        await expect(service.processDirective(node, {
-          currentFilePath: 'a.meld',
-          state: context.services.state
-        })).rejects.toThrow(DirectiveError);
+        const state = context.services.state;
+        state.setCurrentFilePath('a.meld');
+        const processingContext: DirectiveProcessingContext = { 
+            state: state, 
+            directiveNode: node,
+            resolutionContext: ResolutionContextFactory.create(state, 'a.meld'),
+            formattingContext: createMockFormattingContext(),
+        };
+        
+        await expect(service.handleDirective(node, processingContext))
+          .rejects.toThrow(DirectiveError); // Should throw DirectiveError eventually
         
         // Restore mocks
         mockExists.mockRestore();
