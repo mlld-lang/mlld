@@ -15,8 +15,14 @@ import { IStateService } from '@services/state/IStateService.js';
 import { ErrorSeverity, MeldError } from '@core/errors/MeldError.js';
 import { createTextDirective } from '@tests/utils/testFactories.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { createMockFormattingContext } from '@tests/mocks/serviceMocks.js';
 import type { DirectiveProcessingContext, FormattingContext, ResolutionContext } from '@core/types/index.js';
+
+// Define a simple mock FormattingContext
+const mockFormattingContext: FormattingContext = {
+  isBlock: false,
+  preserveLiteralFormatting: false,
+  preserveWhitespace: false,
+};
 
 // Main test suite for DirectiveService
 describe('DirectiveService', () => {
@@ -51,15 +57,51 @@ describe('DirectiveService', () => {
             this._vars[name] = value; // Store the whole object/array value
         }),
         clone: vi.fn().mockImplementation(function(this: any) {
-             const originalVars = this._vars;
-             const cloned = { 
-                 ...this, // Copy existing methods
-                 _vars: { ...originalVars }, // Shallow copy internal vars
-                 // Ensure clone can also clone
-                 clone: function() { return this.clone(); }, 
-                 createChildState: function() { return this.clone(); }, 
+             const clonedVars = { ...this._vars }; // Shallow copy internal vars
+             // Return a new object that explicitly includes the necessary methods
+             // and operates on the cloned vars.
+             const clonedState: IStateService = {
+                // Explicitly include all methods from IStateService, delegating to original mock or providing new impls
+                getTextVar: vi.fn().mockImplementation((name) => {
+                    const val = clonedVars[name];
+                    return val && typeof val !== 'object' ? { type: 'text', value: val, source: 'mock', location: undefined } : undefined;
+                }),
+                getDataVar: vi.fn().mockImplementation((name) => {
+                    const val = clonedVars[name];
+                    return val && typeof val === 'object' ? { type: 'data', value: val, source: 'mock', location: undefined } : undefined;
+                }),
+                getPathVar: vi.fn().mockReturnValue(undefined), // Add missing path methods if needed
+                getCommandVar: vi.fn().mockReturnValue(undefined),
+                getVariable: vi.fn().mockImplementation((name) => clonedVars[name]), 
+                setTextVar: vi.fn().mockImplementation((name, value) => { clonedVars[name] = value; }),
+                setDataVar: vi.fn().mockImplementation((name, value) => { clonedVars[name] = value; }),
+                setPathVar: vi.fn(),
+                setCommandVar: vi.fn(),
+                getAllTextVars: vi.fn().mockReturnValue(new Map(Object.entries(clonedVars).filter(([k,v]) => typeof v !== 'object').map(([k,v]) => [k, { type: 'text', value: v, source: 'mock'}]))),
+                getAllDataVars: vi.fn().mockReturnValue(new Map(Object.entries(clonedVars).filter(([k,v]) => typeof v === 'object').map(([k,v]) => [k, { type: 'data', value: v, source: 'mock'}]))),
+                getAllPathVars: vi.fn().mockReturnValue(new Map()),
+                getAllCommandVars: vi.fn().mockReturnValue(new Map()),
+                hasVariable: vi.fn().mockImplementation((name) => name in clonedVars),
+                setCurrentFilePath: vi.fn(),
+                getCurrentFilePath: this.getCurrentFilePath, // Preserve original mock
+                getNodes: this.getNodes, // Preserve original mock
+                addNode: vi.fn(), // Cloned state might need its own node list or delegate
+                getTransformedNodes: this.getTransformedNodes,
+                setTransformedNodes: vi.fn(),
+                transformNode: vi.fn(),
+                isTransformationEnabled: this.isTransformationEnabled,
+                setTransformationEnabled: vi.fn(),
+                getTransformationOptions: this.getTransformationOptions,
+                getParentState: () => this, // Cloned state's parent is the original state
+                getStateSnapshot: vi.fn().mockReturnValue({ vars: { ...clonedVars }, nodes: [] }), 
+                // Add clone and createChildState to the new object, recursively
+                clone: vi.fn().mockImplementation(() => clonedState.clone()), // Recursive call needs to be defined carefully or use the outer one
+                createChildState: vi.fn().mockImplementation(() => clonedState.clone()), // Simplification: child is a clone 
              };
-             return cloned;
+             // Fix recursion for clone/createChildState if the above is problematic
+             (clonedState as any).clone = () => this.clone.bind(clonedState)(); // Or re-implement clone logic here if needed
+             (clonedState as any).createChildState = () => this.clone.bind(clonedState)();
+             return clonedState;
         }),
          getVariable: vi.fn().mockImplementation(function(this: any, name) {
              return this._vars[name]; // Simple lookup for testing
@@ -90,6 +132,86 @@ describe('DirectiveService', () => {
     };
     context.registerMock<IStateService>('IStateService', mockState);
 
+    // --- BEGIN RESOLUTION SERVICE MOCK SETUP ---
+    // 1. Create a manual mock object for IResolutionService
+    const mockResolutionService: IResolutionService = {
+      resolveText: vi.fn(),
+      resolveData: vi.fn(),
+      resolvePath: vi.fn(),
+      resolveCommand: vi.fn(),
+      resolveFile: vi.fn(), // Deprecated but might be needed by mock setup
+      resolveContent: vi.fn(), // Deprecated but might be needed by mock setup
+      resolveNodes: vi.fn(), // Include for completeness, though we spy on resolveInContext
+      resolveInContext: vi.fn(), // THE IMPORTANT ONE TO SPY ON
+      resolveFieldAccess: vi.fn(),
+      validateResolution: vi.fn(),
+      extractSection: vi.fn(),
+      detectCircularReferences: vi.fn(), // Deprecated
+      convertToFormattedString: vi.fn(),
+      enableResolutionTracking: vi.fn(),
+      getResolutionTracker: vi.fn(),
+      // Add any other methods from IResolutionService if tests require them
+    };
+
+    // 2. Register THIS specific mock instance
+    context.registerMock<IResolutionService>('IResolutionService', mockResolutionService);
+
+    // 3. Set up the spy on the 'resolveInContext' method of our mock instance
+    vi.spyOn(mockResolutionService, 'resolveInContext').mockImplementation(async (value, ctx) => {
+        const stateForResolve = ctx.state; 
+        if (!stateForResolve) {
+            console.warn('[DirectiveService.test mock] resolveInContext received context without state!');
+            return '';
+        }
+        let result = '';
+        // Simplified mock logic: Check if input is array (InterpolatableValue)
+        if (Array.isArray(value)) {
+           for (const node of value) {
+              if (node.type === 'Text') {
+                  result += node.content;
+              } else if (node.type === 'VariableReference') {
+                 const identifier = node.identifier;
+                 // Use the mockState directly for variable lookup in the mock
+                 const variable = mockState.getTextVar(identifier);
+                 if (variable?.value !== undefined) {
+                    result += variable.value;
+                 } else {
+                   const dataVar = mockState.getDataVar(identifier); 
+                   if (dataVar?.value !== undefined) {
+                      try {
+                         result += typeof dataVar.value === 'string' ? dataVar.value : JSON.stringify(dataVar.value);
+                      } catch { 
+                          result += `[Object: ${identifier}]`; 
+                      }
+                   } else {
+                     // Simulate unresolved variable based on original mock logic
+                     result += `{{${identifier}}}`; 
+                   }
+                 }
+              }
+           }
+        } else if (typeof value === 'string') {
+            // Basic string handling: return as is for this mock, assuming no vars in plain strings for these tests
+            // or implement simple parsing/lookup if needed
+            // Simulate basic interpolation for integration tests
+            if (value.includes('{{name}}')) {
+                result = value.replace('{{name}}', mockState.getTextVar('name')?.value || '{{name}}');
+            } else if (value.includes('{{val}}')) {
+                result = value.replace('{{val}}', mockState.getTextVar('val')?.value || '{{val}}');
+            } else if (value.includes('{{user}}')) {
+                result = value.replace('{{user}}', mockState.getTextVar('user')?.value || '{{user}}');
+            } else {
+                 result = value; 
+            }
+           
+        } else { // Assuming StructuredPath otherwise
+            result = (value as any).raw || ''; // Fallback for StructuredPath
+        }
+        // console.log('[DirectiveService.test mock] resolveInContext value:', value, 'returning:', result);
+        return result;
+    });
+    // --- END RESOLUTION SERVICE MOCK SETUP ---
+
     // Load test fixtures
     await context.fixtures.load('directiveTestProject');
 
@@ -112,47 +234,9 @@ describe('DirectiveService', () => {
     context.registerMock('IStateTrackingService', trackingService);
     context.registerMock('StateTrackingService', trackingService);
     
-    // Use the helper to initialize the DirectiveService with all handlers
+    // 4. Initialize the DirectiveService - it will now receive the spied-upon instance
     service = await TestDirectiveHandlerHelper.initializeDirectiveService(context);
     
-    // Mock resolveNodes for DirectiveService tests
-    const resolutionService = await context.container.resolve<IResolutionService>('IResolutionService');
-    vi.spyOn(resolutionService, 'resolveNodes').mockImplementation(async (nodes, ctx) => {
-        const stateForResolve = ctx.state; 
-        if (!stateForResolve) {
-            console.warn('[DirectiveService.test mock] resolveNodes received context without state!');
-            return '';
-        }
-        let result = '';
-        if (Array.isArray(nodes)) {
-           for (const node of nodes) {
-              if (node.type === 'Text') {
-                  result += node.content;
-              } else if (node.type === 'VariableReference') {
-                 const identifier = node.identifier;
-                 const variable = stateForResolve.getTextVar(identifier);
-                 if (variable?.value !== undefined) {
-                    result += variable.value;
-                 } else {
-                   const dataVar = stateForResolve.getDataVar(identifier); 
-                   if (dataVar?.value !== undefined) {
-                      try {
-                         result += typeof dataVar.value === 'string' ? dataVar.value : JSON.stringify(dataVar.value);
-                      } catch { 
-                          result += `[Object: ${identifier}]`; 
-                      }
-                   } else {
-                     result += `{{${identifier}}}`; 
-                   }
-                 }
-              }
-           }
-        } else {
-            result = JSON.stringify(nodes); // Fallback
-        }
-        console.log('[DirectiveService.test mock] resolveNodes returning: ' + result + '\n');
-        return result;
-    });
   });
 
   afterEach(async () => {
@@ -175,7 +259,7 @@ describe('DirectiveService', () => {
           state: mockState, 
           directiveNode: node,
           resolutionContext: {} as ResolutionContext, // Placeholder
-          formattingContext: {} as FormattingContext // Placeholder
+          formattingContext: mockFormattingContext // Use constant mock
       };
 
       try {
@@ -185,7 +269,7 @@ describe('DirectiveService', () => {
       } catch (e) {
         // Expect the specific error thrown by ensureInitialized
         expect(e).toBeInstanceOf(MeldError); 
-        expect((e as MeldError).message).toContain('DirectiveService has not been initialized');
+        expect((e as MeldError).message).toContain('DirectiveService must be initialized before use');
       }
     });
 
@@ -205,7 +289,7 @@ describe('DirectiveService', () => {
           state: state, 
           directiveNode: node,
           resolutionContext: ResolutionContextFactory.create(state, currentFilePath),
-          formattingContext: createMockFormattingContext(), // Use mock
+          formattingContext: mockFormattingContext, // Use constant mock
       };
       
       try {
@@ -240,7 +324,7 @@ describe('DirectiveService', () => {
             state: state, 
             directiveNode: directiveNode,
             resolutionContext: ResolutionContextFactory.create(state, 'test.meld'),
-            formattingContext: createMockFormattingContext(), // Use mock
+            formattingContext: mockFormattingContext, // Use constant mock
         };
 
         // Process the directive using handleDirective
@@ -265,7 +349,7 @@ describe('DirectiveService', () => {
             state: state, 
             directiveNode: node,
             resolutionContext: ResolutionContextFactory.create(state, 'test-interpolation.meld'),
-            formattingContext: createMockFormattingContext(),
+            formattingContext: mockFormattingContext,
         };
 
         const result = await service.handleDirective(node, processingContext);
@@ -288,7 +372,7 @@ describe('DirectiveService', () => {
             state: state, 
             directiveNode: node,
             resolutionContext: ResolutionContextFactory.create(state, 'test-data.meld'),
-            formattingContext: createMockFormattingContext(),
+            formattingContext: mockFormattingContext,
         };
 
         const result = await service.handleDirective(node, processingContext);
@@ -311,7 +395,7 @@ describe('DirectiveService', () => {
             state: state, 
             directiveNode: node,
             resolutionContext: ResolutionContextFactory.create(state, 'test-data-interpolation.meld'),
-            formattingContext: createMockFormattingContext(),
+            formattingContext: mockFormattingContext,
         };
         
         const result = await service.handleDirective(node, processingContext);
@@ -468,7 +552,7 @@ describe('DirectiveService', () => {
             state: state, 
             directiveNode: node,
             resolutionContext: ResolutionContextFactory.create(state, 'a.meld'),
-            formattingContext: createMockFormattingContext(),
+            formattingContext: mockFormattingContext, // Use constant mock
         };
         
         await expect(service.handleDirective(node, processingContext))
