@@ -121,12 +121,16 @@ describe('DefineDirectiveHandler', () => {
       };
   };
 
-  // Helper to create mock DirectiveProcessingContext
+  // Restore the helper function
   const createMockProcessingContext = (node: DirectiveNode): DirectiveProcessingContext => {
       const mockResolutionContext = mock<ResolutionContext>();
       const mockFormattingContext = mock<FormattingContext>();
+      // Ensure it uses the stateService defined in the outer scope (from beforeEach)
+      if (!stateService) {
+        throw new Error('Test setup error: stateService is not defined when creating context');
+      }
       return {
-          state: stateService,
+          state: stateService, 
           resolutionContext: mockResolutionContext,
           formattingContext: mockFormattingContext,
           directiveNode: node,
@@ -136,25 +140,24 @@ describe('DefineDirectiveHandler', () => {
   describe('command definition', () => {
     it('should handle basic command definition without parameters', async () => {
       const node = createValidDefineNode('cmd1', 'echo hello'); 
+      // Use the helper function again
       const processingContext = createMockProcessingContext(node);
-      // Mock the specific resolution needed for this test
       resolutionService.resolveNodes.mockResolvedValueOnce('echo hello resolved');
 
+      // Remove logging added for debugging
+      // console.log(...);
+      
       const result = await handler.execute(processingContext);
       const resultState = getStateFromResult(result);
 
-      expect(resultState).toBe(stateService); // Expect the original state to be returned (modified)
-      // Remove metadata check (3rd argument)
+      expect(resultState).toBe(stateService); 
       expect(stateService.setCommandVar).toHaveBeenCalledWith('cmd1', 
           expect.objectContaining({
               type: 'basic',
               name: 'cmd1',
-              commandTemplate: 'echo hello resolved', // Expect resolved value
+              commandTemplate: 'echo hello resolved', 
               parameters: [],
               isMultiline: false,
-              // Metadata checks can be simplified or removed if not critical
-              // sourceLocation: expect.objectContaining({ filePath: 'test.mld' }),
-              // definedAt: expect.any(Number)
           })
       );
     });
