@@ -18,7 +18,6 @@ import {
   failure,
   MeldPath,
   PathContentType,
-  StructuredPath, 
   ValidatedResourcePath, 
   SourceLocation,
   MeldError,
@@ -74,6 +73,8 @@ import {
 } from '@core/types/paths.js';
 import { PathValidationErrorDetails } from '@core/errors/PathValidationError.js';
 import { injectable } from 'tsyringe';
+// Import StructuredPath explicitly from syntax types
+import type { StructuredPath } from '@core/syntax/types/nodes.js'; 
 
 /**
  * Internal type for heading nodes in the ResolutionService

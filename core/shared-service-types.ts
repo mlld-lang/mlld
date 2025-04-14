@@ -207,30 +207,6 @@ export interface PathServiceLike {
 }
 
 /**
- * Basic structured path representation
- */
-export interface StructuredPath {
-  /** The raw path string */
-  raw: string;
-  /** Structured representation of the path */
-  structured: {
-    /** Path segments */
-    segments: string[];
-    /** Variables in the path */
-    variables?: {
-      /** Special variables like $CURRENT_FILE */
-      special?: string[];
-      /** Path variables */
-      path?: string[];
-    };
-    /** Whether path is relative to current working directory */
-    cwd?: boolean;
-  };
-  /** Normalized path string */
-  normalized?: string;
-}
-
-/**
  * Resolution service interface without implementation details
  * This is a minimal version to avoid circular dependencies
  */

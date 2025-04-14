@@ -25,8 +25,11 @@ export enum PathPurpose {
   /** Path is intended for execution (e.g., a script path for @run). */
   EXECUTE = 'execute',
   /** Path is intended for importing content (e.g., for @import). */
-  IMPORT = 'import'
-  // Removed WRITE and UNKNOWN for simplification during refactor - can be re-added later if needed.
+  IMPORT = 'import',
+  WRITE = 'write',
+  EMBED = 'embed',
+  DEFINE_PATH = 'define_path',
+  GENERAL = 'general' // Default if purpose is unspecified
 }
 
 /**
@@ -71,21 +74,6 @@ export type AnyPath = RawPath | ValidatedResourcePath;
  * Branded type for normalized absolute directory paths (as defined in import-spec)
  */
 export type NormalizedAbsoluteDirectoryPath = string & { __brand: 'NormalizedAbsoluteDirectoryPath' };
-
-/**
- * Structured path representation for complex path operations.
- * From _spec/types/import-spec.md
- */
-export interface StructuredPath {
-  readonly segments: readonly string[];
-  readonly variables?: Readonly<Record<string, string>>;
-  readonly isAbsolute: boolean;
-  readonly isNormalized: boolean;
-  readonly isDirectory: boolean;
-  readonly original: string;
-  readonly normalized?: string;
-  readonly pathVariableRefs?: readonly string[];
-}
 
 /**
  * Rules for validating paths.

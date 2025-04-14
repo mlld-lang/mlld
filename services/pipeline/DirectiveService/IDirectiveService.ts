@@ -1,5 +1,4 @@
 import { DirectiveNode, SourceLocation } from '@core/syntax/types/index.js';
-import type { DirectiveContextBase } from '@core/shared/types.js';
 import type { 
   ParserServiceLike,
   CircularityServiceLike,
@@ -12,39 +11,6 @@ import type { ResolutionContext } from '@core/types/resolution.js';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 import type { DirectiveResult } from './interfaces/DirectiveTypes.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-
-/**
- * @deprecated Use DirectiveProcessingContext instead.
- * Context for directive execution
- * Extends the base context with state-specific fields
- */
-export interface DirectiveContext extends DirectiveContextBase {
-  /** Parent state for nested contexts */
-  parentState?: IStateService;
-  /** Current state for this directive */
-  state: IStateService;
-  /** Current file being processed */
-  currentFilePath?: string;
-  /** Working directory for command execution */
-  workingDirectory?: string;
-  /** Resolution context for variable resolution */
-  resolutionContext?: any;
-  /** Formatting context for output generation - propagates formatting preferences across service boundaries */
-  formattingContext?: {
-    /** Whether in output-literal mode (formerly transformation mode) */
-    isOutputLiteral: boolean;
-    /** Whether this is an inline or block context */
-    contextType: 'inline' | 'block';
-    /** Current node type being processed */
-    nodeType: string;
-    /** Whether at start of line */
-    atLineStart?: boolean;
-    /** Whether at end of line */
-    atLineEnd?: boolean;
-    /** Parent formatting context for inheritance */
-    parentContext?: any;
-  };
-}
 
 /**
  * Interface for directive handlers
@@ -161,9 +127,9 @@ export interface IDirectiveService {
    * @returns A new directive context with a child state
    */
   createChildContext(
-    parentContext: DirectiveContext,
+    parentContext: DirectiveProcessingContext,
     filePath: string
-  ): DirectiveContext;
+  ): DirectiveProcessingContext;
 
   /**
    * Process a directive node, validating and executing it
@@ -186,7 +152,10 @@ export interface IDirectiveService {
    * const state = await directiveService.processDirective(node);
    * ```
    */
-  processDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<IStateService>;
+  processDirective(
+    node: DirectiveNode,
+    parentContext?: DirectiveProcessingContext
+  ): Promise<IStateService>;
 
   /**
    * Process multiple directive nodes in sequence
@@ -196,7 +165,10 @@ export interface IDirectiveService {
    * @returns The final state after processing all directives
    * @throws {MeldDirectiveError} If any directive processing fails
    */
-  processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<IStateService>;
+  processDirectives(
+    nodes: DirectiveNode[],
+    parentContext?: DirectiveProcessingContext
+  ): Promise<IStateService>;
 
   /**
    * Check if a directive kind is supported

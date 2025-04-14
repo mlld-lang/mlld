@@ -380,6 +380,9 @@ export class DirectiveService implements IDirectiveService {
       throw new DirectiveError(`No handler registered for directive kind: ${kind}`, kind, DirectiveErrorCode.HANDLER_NOT_FOUND, { node, location: node.location });
     }
 
+    // Explicitly cast the handler retrieved from the map
+    const specificHandler = handler as IDirectiveHandler;
+
     try {
       // --- Create DirectiveProcessingContext --- 
       const state = context.state?.clone() || this.stateService!.createChildState();
@@ -401,18 +404,18 @@ export class DirectiveService implements IDirectiveService {
       
       // Explicitly type the properties when creating the object
       const processingContext: DirectiveProcessingContext = {
-          state: state as IStateService, // Explicit cast
+          state: state as IStateService, 
           resolutionContext: resolutionContext,
           formattingContext: formattingContext,
           executionContext: executionContext,
-          directiveNode: node as DirectiveNode // Explicit cast
+          directiveNode: node as DirectiveNode 
       };
       // --- End Context Creation ---
 
       this.logger.debug(`Executing handler for directive: ${kind}`);
       
-      // Handler should receive correctly typed context now
-      const result = await handler.execute(processingContext); 
+      // Use the specifically cast handler
+      const result = await specificHandler.execute(processingContext); 
       
       // Handle result
       if (result && typeof result === 'object') {
