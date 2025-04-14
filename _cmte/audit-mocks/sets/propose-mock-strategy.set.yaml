@@ -1,0 +1,11 @@
+# _cmte/audit-mocks/sets/propose-mock-strategy.set.yaml
+name: propose-mock-strategy
+description: "Proposes a refined mocking strategy based on the consolidated analysis."
+# No for_each, this is a single architect task
+
+tasks:
+  - useTask: define-mock-strategy
+    prior_outputs:
+      # Map the output from the synthesize-mock-findings set.
+      consolidated_analysis: "{{ synthesize-mock-findings.consolidate-mock-analysis.output }}"
+    # Task context will include consolidated_analysis + global_variables 

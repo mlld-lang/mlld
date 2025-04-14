@@ -1,0 +1,15 @@
+# _cmte/audit-mocks/sets/synthesize-mock-findings.set.yaml
+name: synthesize-mock-findings
+description: "Consolidates the mock usage analysis from individual test suites."
+# No for_each, this is a single architect task
+
+tasks:
+  - useTask: consolidate-mock-analysis
+    prior_outputs:
+      # Map outputs from the gather-mock-usage set.
+      # Assumes the output of analyze-test-file-mocks is named 'output'.
+      # The structure will be like: { DirectiveServiceTests: { output: "..." }, ResolutionServiceTests: { output: "..." }, ... }
+      analysis_notes: "{{ gather-mock-usage.*.output }}" # Gather all outputs
+    # Task context will include analysis_notes map + global_variables
+
+ 
