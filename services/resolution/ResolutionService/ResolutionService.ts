@@ -73,7 +73,6 @@ import {
   isValidatedResourcePath
 } from '@core/types/paths.js';
 import { PathResolver } from '@services/fs/PathService/PathResolver.js';
-import { PathValidationError, PathValidationErrorDetails } from '@core/errors/PathValidationError';
 import { injectable } from 'tsyringe';
 
 /**

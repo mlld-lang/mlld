@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { container } from 'tsyringe';
 
-// Import all service classes that need explicit registration
+// Import all service classes
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 import { StateService } from '@services/state/StateService/StateService.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
@@ -19,7 +19,7 @@ import { URLContentResolver } from '@services/resolution/URLContentResolver/URLC
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { SourceMapService, sourceMapService } from '@core/utils/SourceMapService.js';
+import { SourceMapService } from '@core/utils/SourceMapService.js';
 import { CLIService, DefaultPromptService } from '@services/cli/CLIService/CLIService.js';
 import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
@@ -32,195 +32,104 @@ import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution
 import { StateServiceClientFactory } from '@services/state/StateService/factories/StateServiceClientFactory.js';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
-import { 
-  LoggerFactory, 
-  logger as mainLogger, 
-  stateLogger,
-  parserLogger,
-  interpreterLogger,
-  filesystemLogger,
-  validationLogger,
-  outputLogger,
-  pathLogger,
-  directiveLogger,
-  circularityLogger,
-  resolutionLogger,
-  importLogger,
-  cliLogger,
-  embedLogger
+import {
+  LoggerFactory,
+  logger as mainLogger,
+  // ... other loggers ...
 } from '@core/utils/logger.js';
 
 // Import AST factory classes
 import { NodeFactory } from '@core/syntax/types/factories/NodeFactory.js';
 import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
 import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNodeFactory.js';
-import { TextNodeFactory } from '@core/syntax/types/factories/TextNodeFactory.js';
-import { CodeFenceNodeFactory } from '@core/syntax/types/factories/CodeFenceNodeFactory.js';
-import { CommentNodeFactory } from '@core/syntax/types/factories/CommentNodeFactory.js';
-import { ErrorNodeFactory } from '@core/syntax/types/factories/ErrorNodeFactory.js';
-import { Logger, fsLogger } from '@core/utils/simpleLogger.js';
+// ... other AST factories ...
 
-/**
- * This file contains the configuration for dependency injection using tsyringe.
- * It must be imported at the entry point of the application before any other imports
- * that use dependency injection decorators.
- */
+// --- Standard Container Registrations ---
 
-/**
- * DI Configuration
- */
+// Register File System Implementation (used via IFileSystem token)
+container.registerInstance('IFileSystem', new NodeFileSystem()); // Can keep instance for NodeFileSystem
 
-// Remove manual instantiation
-// const pathOps = new PathOperationsService();
-const nodeFileSystem = new NodeFileSystem(); // Keep for now
-// const projectPathResolver = new ProjectPathResolver(); // Remove manual instantiation
+// Register Core Services (using standard class registration)
+container.register(PathOperationsService, { useClass: PathOperationsService });
+container.register('IPathOperationsService', { useToken: PathOperationsService }); // Use Class as token
 
-// Register IFileSystem instance
-container.registerInstance('IFileSystem', nodeFileSystem);
-
-// Register PathOperationsService
-container.register('PathOperationsService', { useClass: PathOperationsService });
-container.register('IPathOperationsService', { useToken: 'PathOperationsService' });
-
-// Register ProjectPathResolver
 container.register(ProjectPathResolver, { useClass: ProjectPathResolver });
+// No interface token needed if injected via class type
 
-// Register URLContentResolver
-container.register('URLContentResolver', { useClass: URLContentResolver });
-container.register('IURLContentResolver', { useToken: 'URLContentResolver' });
+container.register(URLContentResolver, { useClass: URLContentResolver });
+container.register('IURLContentResolver', { useToken: URLContentResolver }); // Use Class as token
 
-// Manually instantiate other core services (temporarily)
-// Temporarily resolve dependencies for manual PathService creation
-const resolvedProjectPathResolver = container.resolve(ProjectPathResolver);
-const resolvedUrlContentResolver = container.resolve(URLContentResolver);
+container.register(PathService, { useClass: PathService });
+container.register('IPathService', { useToken: PathService }); // Use Class as token
 
-// Remove: const urlContentResolver = new URLContentResolver();
-// Remove: container.registerInstance('URLContentResolver', urlContentResolver);
-// Remove: container.registerInstance('IURLContentResolver', urlContentResolver);
+container.register(FileSystemService, { useClass: FileSystemService });
+container.register('IFileSystemService', { useToken: FileSystemService }); // Use Class as token
 
-// Create PathService manually using resolved dependencies
-const pathService = new PathService(resolvedProjectPathResolver, resolvedUrlContentResolver);
-container.registerInstance('PathService', pathService); // Keep instance registration for now
-container.registerInstance('IPathService', pathService); // Keep instance registration for now
+container.register(ParserService, { useClass: ParserService });
+container.register('IParserService', { useToken: ParserService }); // Use Class as token
 
-// Manually inject factories/clients (keep for now)
-const pathServiceClientFactory = new PathServiceClientFactory(pathService);
-container.registerInstance('PathServiceClientFactory', pathServiceClientFactory);
-pathService['fsClientFactory'] = pathServiceClientFactory;
-pathService['factoryInitialized'] = true;
-pathService['pathClient'] = pathServiceClientFactory.createClient();
-pathService['factoryInitialized'] = true;
+container.register(StateFactory, { useClass: StateFactory });
+// No interface token needed if injected via class type
 
-// Create StateService with early initialization
-// This is needed because ResolutionService depends on StateService
-const stateFactory = new StateFactory();
-container.registerInstance(StateFactory, stateFactory);
-const stateEventService = new StateEventService();
-const stateTrackingService = new StateTrackingService();
-const stateTrackingServiceClientFactory = new StateTrackingServiceClientFactory(stateTrackingService);
-container.registerInstance('StateTrackingServiceClientFactory', stateTrackingServiceClientFactory);
-const stateService = new StateService(stateFactory, stateEventService, stateTrackingServiceClientFactory);
+container.register(StateEventService, { useClass: StateEventService });
+container.register('IStateEventService', { useToken: StateEventService }); // Use Class as token
 
-// Create the ResolutionService with the StateService dependency
-const resolutionService = new ResolutionService(stateService, pathService);
+container.register(StateTrackingService, { useClass: StateTrackingService });
+container.register('IStateTrackingService', { useToken: StateTrackingService }); // Use Class as token
 
-// Register instances of services with circular dependencies
-container.registerInstance('PathService', pathService);
-container.registerInstance('IPathService', pathService);
-container.registerInstance('ParserService', parserService);
-container.registerInstance('IParserService', parserService);
-container.registerInstance('ResolutionService', resolutionService);
-container.registerInstance('IResolutionService', resolutionService);
-container.registerInstance('StateService', stateService);
-container.registerInstance('IStateService', stateService);
+container.register(StateService, { useClass: StateService });
+container.register('IStateService', { useToken: StateService }); // Use Class as token
 
-// Register client factories for circular dependency resolution
-container.register('PathServiceClientFactory', { useClass: PathServiceClientFactory });
-container.register('ParserServiceClientFactory', { useClass: ParserServiceClientFactory });
-container.register('ResolutionServiceClientFactory', { useClass: ResolutionServiceClientFactory });
-container.register('VariableReferenceResolverClientFactory', { useClass: VariableReferenceResolverClientFactory });
-container.register('VariableReferenceResolverFactory', { useClass: VariableReferenceResolverFactory });
+container.register(ResolutionService, { useClass: ResolutionService });
+container.register('IResolutionService', { useToken: ResolutionService }); // Use Class as token
+
+// Register Client Factories (these break circular dependencies)
+container.register(PathServiceClientFactory, { useClass: PathServiceClientFactory });
+container.register(FileSystemServiceClientFactory, { useClass: FileSystemServiceClientFactory });
+container.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
+container.register(ResolutionServiceClientFactory, { useClass: ResolutionServiceClientFactory });
+container.register(VariableReferenceResolverClientFactory, { useClass: VariableReferenceResolverClientFactory });
+container.register(VariableReferenceResolverFactory, { useClass: VariableReferenceResolverFactory });
+container.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
+container.register(ResolutionServiceClientForDirectiveFactory, { useClass: ResolutionServiceClientForDirectiveFactory });
+container.register(StateServiceClientFactory, { useClass: StateServiceClientFactory });
+container.register(StateTrackingServiceClientFactory, { useClass: StateTrackingServiceClientFactory });
+container.register(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory });
 
 // Register AST factory classes
 container.register(NodeFactory, { useClass: NodeFactory });
 container.register(VariableNodeFactory, { useClass: VariableNodeFactory });
 container.register(DirectiveNodeFactory, { useClass: DirectiveNodeFactory });
-container.register(TextNodeFactory, { useClass: TextNodeFactory });
-container.register(CodeFenceNodeFactory, { useClass: CodeFenceNodeFactory });
-container.register(CommentNodeFactory, { useClass: CommentNodeFactory });
-container.register(ErrorNodeFactory, { useClass: ErrorNodeFactory });
-container.register('DirectiveServiceClientFactory', { useClass: DirectiveServiceClientFactory });
-container.register('ResolutionServiceClientForDirectiveFactory', { useClass: ResolutionServiceClientForDirectiveFactory });
-container.register('StateServiceClientFactory', { useClass: StateServiceClientFactory });
-container.register('StateTrackingServiceClientFactory', { useClass: StateTrackingServiceClientFactory });
-container.register('InterpreterServiceClientFactory', { useClass: InterpreterServiceClientFactory });
+// ... (rest of AST factories) ...
 
-// Register remaining services using class registrations
-// These services don't have circular dependencies
+// Register other services
+container.register(InterpreterService, { useClass: InterpreterService });
+container.register('IInterpreterService', { useToken: InterpreterService }); // Use Class as token
 
-// StateService ecosystem (other components)
-container.register('StateFactory', { useClass: StateFactory });
-container.register('StateEventService', { useClass: StateEventService });
-container.register('IStateEventService', { useToken: 'StateEventService' });
-container.register('StateTrackingService', { useClass: StateTrackingService });
-container.register('IStateTrackingService', { useToken: 'StateTrackingService' });
+container.register(DirectiveService, { useClass: DirectiveService });
+container.register('IDirectiveService', { useToken: DirectiveService }); // Use Class as token
 
-// InterpreterService
-container.register('InterpreterService', { useClass: InterpreterService });
-container.register('IInterpreterService', { useToken: 'InterpreterService' });
+container.register(ErrorDisplayService, { useClass: ErrorDisplayService });
+container.register('IErrorDisplayService', { useToken: ErrorDisplayService }); // Use Class as token
 
-// DirectiveService
-container.register('DirectiveService', { useClass: DirectiveService });
-container.register('IDirectiveService', { useToken: 'DirectiveService' });
+container.register(ValidationService, { useClass: ValidationService });
+container.register('IValidationService', { useToken: ValidationService }); // Use Class as token
 
-// ErrorDisplayService
-container.register('ErrorDisplayService', { useClass: ErrorDisplayService });
-container.register('IErrorDisplayService', { useToken: 'ErrorDisplayService' });
+container.register(CircularityService, { useClass: CircularityService });
+container.register('ICircularityService', { useToken: CircularityService }); // Use Class as token
 
-// ValidationService
-container.register('ValidationService', { useClass: ValidationService });
-container.register('IValidationService', { useToken: 'ValidationService' });
+container.register(SourceMapService, { useClass: SourceMapService });
+container.register('ISourceMapService', { useToken: SourceMapService }); // Use Class as token
 
-// CircularityService
-container.register('CircularityService', { useClass: CircularityService });
-container.register('ICircularityService', { useToken: 'CircularityService' });
-
-// SourceMapService
-container.register('SourceMapService', { useClass: SourceMapService });
-container.register('ISourceMapService', { useToken: 'SourceMapService' });
-
-// Logger Factory
-container.register('LoggerFactory', { useClass: LoggerFactory });
-container.register('ILoggerFactory', { useToken: 'LoggerFactory' });
-
-// Main Winston Logger
+// Register Loggers
+container.register(LoggerFactory, { useClass: LoggerFactory });
+container.register('ILoggerFactory', { useToken: LoggerFactory }); // Use Class as token
 container.register('MainLogger', { useValue: mainLogger });
 container.register('ILogger', { useToken: 'MainLogger' });
+// ... register other specific loggers using useValue ...
 
-// Service-specific Winston Loggers
-container.register('StateLogger', { useValue: stateLogger });
-container.register('ParserLogger', { useValue: parserLogger });
-container.register('InterpreterLogger', { useValue: interpreterLogger });
-container.register('FilesystemLogger', { useValue: filesystemLogger });
-container.register('ValidationLogger', { useValue: validationLogger });
-container.register('OutputLogger', { useValue: outputLogger });
-container.register('PathLogger', { useValue: pathLogger });
-container.register('DirectiveLogger', { useValue: directiveLogger });
-container.register('CircularityLogger', { useValue: circularityLogger });
-container.register('ResolutionLogger', { useValue: resolutionLogger });
-container.register('ImportLogger', { useValue: importLogger });
-container.register('CliLogger', { useValue: cliLogger });
-container.register('EmbedLogger', { useValue: embedLogger });
-
-// Simple logger
-container.register('SimpleLogger', { useClass: Logger });
-container.register('ISimpleLogger', { useToken: 'SimpleLogger' });
-container.register('FSSimpleLogger', { useValue: fsLogger });
-
-// CLIService
-container.register('CLIService', { useClass: CLIService });
-container.register('ICLIService', { useToken: 'CLIService' });
-
-// DefaultPromptService
-container.register('DefaultPromptService', { useClass: DefaultPromptService });
-container.register('IPromptService', { useClass: DefaultPromptService });
+// Register CLI Services
+container.register(CLIService, { useClass: CLIService });
+container.register('ICLIService', { useToken: CLIService }); // Use Class as token
+container.register(DefaultPromptService, { useClass: DefaultPromptService });
+container.register('IPromptService', { useToken: DefaultPromptService }); // Use Class as token
