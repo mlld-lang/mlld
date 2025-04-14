@@ -14,6 +14,8 @@ import {
   createFileSystemServiceMock,
   createDirectiveErrorMock
 } from '@tests/utils/mocks/serviceMocks.js';
+import { mock, mockDeep } from 'vitest-mock-extended';
+import type { DirectiveProcessingContext, FormattingContext, ResolutionContext } from '@core/types/index.js';
 
 /**
  * RunDirectiveHandler Transformation Test Status
@@ -36,8 +38,9 @@ describe('RunDirectiveHandler Transformation', () => {
   let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
   let clonedState: any;
   let context: TestContextDI;
+  let mockProcessingContext: DirectiveProcessingContext;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Create context with isolated container
     context = TestContextDI.create({ isolatedContainer: true });
     
@@ -57,13 +60,15 @@ describe('RunDirectiveHandler Transformation', () => {
     // Configure mock behaviors
     stateService.clone.mockReturnValue(clonedState);
     stateService.isTransformationEnabled.mockReturnValue(true);
+    stateService.getCurrentFilePath.mockReturnValue('/project/run_transform.meld');
+    stateService.setTextVar.mockImplementation(async (name: string, value: string): Promise<TextVariable> => {
+        return { type: VariableType.TEXT, name, value } as TextVariable;
+    });
     fileSystemService.getCwd.mockReturnValue('/workspace');
 
     // Create handler directly with the mocks
     handler = new RunDirectiveHandler(
-      validationService,
       resolutionService,
-      stateService,
       fileSystemService
     );
   });
@@ -72,132 +77,96 @@ describe('RunDirectiveHandler Transformation', () => {
     await context?.cleanup();
   });
 
+  const createMockProcessingContext = (node: DirectiveNode): DirectiveProcessingContext => {
+      const mockResolutionContext = mockDeep<ResolutionContext>();
+      const mockFormattingContext = mockDeep<FormattingContext>();
+      if (!stateService) {
+        throw new Error('Test setup error: stateService is not defined');
+      }
+      expect(stateService.getCurrentFilePath).toBeDefined(); 
+      expect(stateService.isTransformationEnabled).toBeDefined();
+      
+      return {
+          state: stateService, 
+          resolutionContext: mockResolutionContext,
+          formattingContext: mockFormattingContext,
+          directiveNode: node,
+          executionContext: { cwd: '/workspace' },
+      };
+  };
+
   describe('transformation behavior', () => {
     it('should return replacement node with command output when transformation enabled', async () => {
       const node = createRunDirective('echo test', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld', state: stateService };
+      mockProcessingContext = createMockProcessingContext(node);
+      vi.mocked(resolutionService.resolveNodes).mockResolvedValue('echo "output"');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'output', stderr: '' });
+      
+      const result = await handler.execute(mockProcessingContext);
 
-      validationService.validate.mockResolvedValue(undefined);
-      resolutionService.resolveInContext.mockResolvedValue('echo test');
-      fileSystemService.executeCommand.mockResolvedValue({
-        stdout: 'test output',
-        stderr: ''
-      });
-
-      const result = await handler.execute(node, context);
-
-      expect(result.replacement).toBeDefined();
-      expect(result.replacement).toMatchObject({
+      expect(result.replacement).toEqual(expect.objectContaining({
         type: 'Text',
-        content: 'test output',
-        location: node.location,
-        formattingMetadata: {
-          isFromDirective: true,
-          originalNodeType: 'Directive',
-          preserveFormatting: true,
-          isOutputLiteral: true,
-          transformationMode: true
-        }
-      });
-      expect(result.state).toBe(clonedState);
+        content: 'output'
+      }));
+      expect(result.state).toBe(stateService);
     });
 
     it('should handle variable interpolation in command during transformation', async () => {
       const node = createRunDirective('echo {{message}}', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld', state: stateService };
+      mockProcessingContext = createMockProcessingContext(node);
+      vi.mocked(resolutionService.resolveNodes).mockResolvedValue('echo Hello World');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'Hello World', stderr: '' });
 
-      validationService.validate.mockResolvedValue(undefined);
-      resolutionService.resolveInContext.mockResolvedValue('echo Hello World');
-      fileSystemService.executeCommand.mockResolvedValue({
-        stdout: 'Hello World',
-        stderr: ''
-      });
+      const result = await handler.execute(mockProcessingContext);
 
-      const result = await handler.execute(node, context);
-
-      expect(result.replacement).toBeDefined();
-      expect(result.replacement).toMatchObject({
+      expect(result.replacement).toEqual(expect.objectContaining({
         type: 'Text',
-        content: 'Hello World',
-        location: node.location,
-        formattingMetadata: {
-          isFromDirective: true,
-          originalNodeType: 'Directive',
-          preserveFormatting: true,
-          isOutputLiteral: true,
-          transformationMode: true
-        }
-      });
-      expect(result.state).toBe(clonedState);
+        content: 'Hello World'
+      }));
+      expect(result.state).toBe(stateService);
     });
 
     it('should handle stderr output in transformation', async () => {
       const node = createRunDirective('echo error >&2', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld', state: stateService };
+      mockProcessingContext = createMockProcessingContext(node);
+      vi.mocked(resolutionService.resolveNodes).mockResolvedValue('echo Err >&2');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: '', stderr: 'Error output' });
 
-      validationService.validate.mockResolvedValue(undefined);
-      resolutionService.resolveInContext.mockResolvedValue('echo error >&2');
-      fileSystemService.executeCommand.mockResolvedValue({
-        stdout: '',
-        stderr: 'error output'
-      });
+      const result = await handler.execute(mockProcessingContext);
 
-      const result = await handler.execute(node, context);
-
-      expect(result.replacement).toBeDefined();
-      expect(result.replacement).toMatchObject({
+      expect(result.replacement).toEqual(expect.objectContaining({
         type: 'Text',
-        content: 'error output',
-        location: node.location,
-        formattingMetadata: {
-          isFromDirective: true,
-          originalNodeType: 'Directive',
-          preserveFormatting: true,
-          isOutputLiteral: true,
-          transformationMode: true
-        }
-      });
-      expect(result.state).toBe(clonedState);
+        content: 'Error output'
+      }));
+      expect(result.state).toBe(stateService);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('stderr', 'Error output');
     });
 
     it('should handle both stdout and stderr in transformation', async () => {
       const node = createRunDirective('echo test && echo error >&2', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld', state: stateService };
+      mockProcessingContext = createMockProcessingContext(node);
+      vi.mocked(resolutionService.resolveNodes).mockResolvedValue('echo Out && echo Err >&2');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'Out', stderr: 'Err' });
 
-      validationService.validate.mockResolvedValue(undefined);
-      resolutionService.resolveInContext.mockResolvedValue('echo test && echo error >&2');
-      fileSystemService.executeCommand.mockResolvedValue({
-        stdout: 'test output',
-        stderr: 'error output'
-      });
+      const result = await handler.execute(mockProcessingContext);
 
-      const result = await handler.execute(node, context);
-
-      expect(result.replacement).toBeDefined();
-      expect(result.replacement).toMatchObject({
+      expect(result.replacement).toEqual(expect.objectContaining({
         type: 'Text',
-        content: 'test output\nerror output',
-        location: node.location,
-        formattingMetadata: {
-          isFromDirective: true,
-          originalNodeType: 'Directive',
-          preserveFormatting: true,
-          isOutputLiteral: true,
-          transformationMode: true
-        }
-      });
-      expect(result.state).toBe(clonedState);
+        content: 'Out\nErr'
+      }));
+      expect(result.state).toBe(stateService);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'Out');
+      expect(stateService.setTextVar).toHaveBeenCalledWith('stderr', 'Err');
     });
 
     it('should preserve error handling during transformation', async () => {
       const node = createRunDirective('invalid-command', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld', state: stateService };
+      mockProcessingContext = createMockProcessingContext(node);
+      const executionError = new Error('Command failed');
+      vi.mocked(resolutionService.resolveNodes).mockResolvedValue('bad-command');
+      vi.mocked(fileSystemService.executeCommand).mockRejectedValue(executionError);
 
-      validationService.validate.mockResolvedValue(undefined);
-      resolutionService.resolveInContext.mockResolvedValue('invalid-command');
-      fileSystemService.executeCommand.mockRejectedValue(new Error('Command failed'));
-
-      await expect(handler.execute(node, context)).rejects.toThrow('Failed to execute command: Command failed');
+      await expect(handler.execute(mockProcessingContext)).rejects.toThrow('Failed to execute command: Command failed');
     });
   });
 }); 

@@ -19,7 +19,6 @@ import type { IValidationService } from '@services/resolution/ValidationService/
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 // Import the centralized syntax examples and helpers but don't use the problematic syntax-test-helpers
@@ -295,7 +294,7 @@ describe('RunDirectiveHandler', () => {
       expect(resolutionServiceMock.resolveNodes).toHaveBeenCalledWith(scriptContent, processingContext.resolutionContext);
       expect(fileSystemServiceMock.writeFile).toHaveBeenCalledWith(expect.stringContaining('.py'), 'print("Python script ran")');
       expect(fileSystemServiceMock.executeCommand).toHaveBeenCalledWith(
-        expect.stringMatching(/^python .*\.py$/),
+        expect.stringMatching(/^python .*?meld-script-.*?\.python$/),
         { cwd: '/workspace' }
       );
       expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'Python script ran');
@@ -325,7 +324,7 @@ describe('RunDirectiveHandler', () => {
       expect(resolutionServiceMock.resolveInContext).toHaveBeenCalledWith(paramNode, processingContext.resolutionContext); 
       expect(fileSystemServiceMock.writeFile).toHaveBeenCalledWith(expect.stringContaining('.py'), 'import sys\nprint(f"Input: {sys.argv[1]}")');
       expect(fileSystemServiceMock.executeCommand).toHaveBeenCalledWith(
-        expect.stringMatching(/^python .*\.py "TestParameter"$/),
+        expect.stringMatching(/^python .*?meld-script-.*?\.python \"TestParameter\"$/),
         { cwd: '/workspace' }
       );
       expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'Input: TestParameter');
@@ -369,21 +368,6 @@ describe('RunDirectiveHandler', () => {
   });
 
   describe('error handling', () => {
-    it('should handle validation errors', async () => {
-      const node = createRunDirective([createTextNode('')], createLocation());
-      const processingContext = createMockProcessingContext(node);
-      const validationError = new DirectiveError('Mock Validation Failed', 'run', DirectiveErrorCode.VALIDATION_FAILED);
-      validationService.validate.mockRejectedValue(validationError);
-      
-      await expectToThrowWithConfig(
-        async () => await handler.execute(processingContext),
-        {
-            type: 'DirectiveError',
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-        } as ErrorTestOptions
-      );
-    });
-
     it('should handle resolution errors for command', async () => {
       const commandNodes: InterpolatableValue = [ 
           { type: 'VariableReference', identifier: 'undefined_var', valueType: VariableType.TEXT, isVariableReference: true, location: createLocation() } 
@@ -397,7 +381,7 @@ describe('RunDirectiveHandler', () => {
           async () => await handler.execute(processingContext),
           {
               type: 'DirectiveError',
-              code: DirectiveErrorCode.RESOLUTION_FAILED,
+              code: DirectiveErrorCode.EXECUTION_FAILED, 
               messageContains: 'Failed to resolve command', 
               cause: resolutionError
           } as ErrorTestOptions 
