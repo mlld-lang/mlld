@@ -36,6 +36,7 @@ import type { MeldPath, PathPurpose, ValidatedResourcePath } from '@core/types/p
 import { createMeldPath, unsafeCreateValidatedResourcePath, PathContentType } from '@core/types/paths';
 import type { URLResponse } from '@services/fs/PathService/IURLCache';
 import type { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import type { DirectiveProcessingContext, ResolutionContext, FormattingContext } from '@core/types/index.js';
 
 /**
  * ImportDirectiveHandler Test Status
@@ -82,6 +83,7 @@ describe('ImportDirectiveHandler', () => {
   let urlContentResolver: DeepMockProxy<IURLContentResolver>;
   let childState: ReturnType<typeof createStateServiceMock>;
   let context: TestContextDI;
+  let mockProcessingContext: DirectiveProcessingContext;
 
   beforeEach(async () => {
     context = TestContextDI.createIsolated();
@@ -163,6 +165,22 @@ describe('ImportDirectiveHandler', () => {
     await context?.cleanup();
   });
 
+  const createMockProcessingContext = (node: DirectiveNode): DirectiveProcessingContext => {
+    const mockResolutionContext = mockDeep<ResolutionContext>();
+    const mockFormattingContext = mockDeep<FormattingContext>();
+    if (!stateService) {
+      throw new Error('Test setup error: stateService is not defined');
+    }
+    expect(stateService.getCurrentFilePath).toBeDefined();
+    
+    return {
+      state: stateService, 
+      resolutionContext: mockResolutionContext,
+      formattingContext: mockFormattingContext,
+      directiveNode: node,
+    };
+  };
+
   describe('special path variables', () => {
     const resolvedProjectPath = '/project/path/test.meld';
     const resolvedHomePath = '/home/user/test.meld';
@@ -178,60 +196,59 @@ describe('ImportDirectiveHandler', () => {
         return raw;
       });
       resolutionService.resolvePath.mockImplementation(async (resolvedPathString: string, context: ResolutionContext): Promise<MeldPath> => {
-          return createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath(resolvedPathString), true);
+        return createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath(resolvedPathString), true);
       });
       fileSystemService.readFile.mockResolvedValue('mock content');
       fileSystemService.exists.mockResolvedValue(true);
     });
 
     it('should handle $. alias for project path', async () => {
-      const pathInput = createDirectiveNode('import', { path: { raw: '$./samples/nested.meld', structured: { base: '.', segments: ['samples', 'nested'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
-      const directiveContext: DirectiveContext = { currentFilePath: '/some/path.meld', state: stateService };
-      await handler.execute(pathInput, directiveContext);
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith('$./samples/nested.meld', expect.objectContaining({ currentFilePath: '/some/path.meld' }));
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedProjectPath, expect.objectContaining({ currentFilePath: '/some/path.meld' }));
+      const node = createDirectiveNode('import', { path: { raw: '$./samples/nested.meld', structured: { base: '.', segments: ['samples', 'nested'], url: false }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' });
+      mockProcessingContext = createMockProcessingContext(node);
+      await handler.execute(mockProcessingContext);
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith('$./samples/nested.meld', mockProcessingContext.resolutionContext);
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedProjectPath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(resolvedProjectPath);
       expect(circularityService.beginImport).toHaveBeenCalledWith(resolvedProjectPath);
       expect(circularityService.endImport).toHaveBeenCalledWith(resolvedProjectPath);
     });
 
     it('should handle $PROJECTPATH for project path', async () => {
-      const pathInput = createDirectiveNode('import', { path: { raw: '$PROJECTPATH/samples/nested.meld', structured: { base: '.', segments: ['samples', 'nested'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
-      const directiveContext: DirectiveContext = { currentFilePath: '/some/path.meld', state: stateService };
-      await handler.execute(pathInput, directiveContext);
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith('$PROJECTPATH/samples/nested.meld', expect.objectContaining({ currentFilePath: '/some/path.meld' }));
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedProjectPath, expect.objectContaining({ currentFilePath: '/some/path.meld' }));
+      const node = createDirectiveNode('import', { path: { raw: '$PROJECTPATH/samples/nested.meld', structured: { base: '.', segments: ['samples', 'nested'], url: false }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' });
+      mockProcessingContext = createMockProcessingContext(node);
+      await handler.execute(mockProcessingContext);
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith('$PROJECTPATH/samples/nested.meld', mockProcessingContext.resolutionContext);
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedProjectPath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(resolvedProjectPath);
       expect(circularityService.beginImport).toHaveBeenCalledWith(resolvedProjectPath);
     });
 
     it('should handle $~ alias for home path', async () => {
-      const pathInput = createDirectiveNode('import', { path: { raw: '$~/examples/basic.meld', structured: { base: '.', segments: ['examples', 'basic'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
-      const directiveContext: DirectiveContext = { currentFilePath: '/some/path.meld', state: stateService };
-      await handler.execute(pathInput, directiveContext);
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith('$~/examples/basic.meld', expect.objectContaining({ currentFilePath: '/some/path.meld' }));
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedHomePath, expect.objectContaining({ currentFilePath: '/some/path.meld' }));
+      const node = createDirectiveNode('import', { path: { raw: '$~/examples/basic.meld', structured: { base: '.', segments: ['examples', 'basic'], url: false }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' });
+      mockProcessingContext = createMockProcessingContext(node);
+      await handler.execute(mockProcessingContext);
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith('$~/examples/basic.meld', mockProcessingContext.resolutionContext);
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedHomePath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(resolvedHomePath);
       expect(circularityService.beginImport).toHaveBeenCalledWith(resolvedHomePath);
     });
 
     it('should handle $HOMEPATH for home path', async () => {
-      const pathInput = createDirectiveNode('import', { path: { raw: '$HOMEPATH/examples/basic.meld', structured: { base: '.', segments: ['examples', 'basic'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
-      const directiveContext: DirectiveContext = { currentFilePath: '/some/path.meld', state: stateService };
-      await handler.execute(pathInput, directiveContext);
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith('$HOMEPATH/examples/basic.meld', expect.objectContaining({ currentFilePath: '/some/path.meld' }));
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedHomePath, expect.objectContaining({ currentFilePath: '/some/path.meld' }));
+      const node = createDirectiveNode('import', { path: { raw: '$HOMEPATH/examples/basic.meld', structured: { base: '.', segments: ['examples', 'basic'], url: false }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' });
+      mockProcessingContext = createMockProcessingContext(node);
+      await handler.execute(mockProcessingContext);
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith('$HOMEPATH/examples/basic.meld', mockProcessingContext.resolutionContext);
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedHomePath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(resolvedHomePath);
       expect(circularityService.beginImport).toHaveBeenCalledWith(resolvedHomePath);
     });
 
     it('should throw error if resolved path does not exist', async () => {
       fileSystemService.exists.mockResolvedValue(false);
-      const pathInput = createDirectiveNode('import', { path: { raw: '$PROJECTPATH/nonexistent.meld', structured: { base: '.', segments: ['nonexistent'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
-      const directiveContext: DirectiveContext = { currentFilePath: '/some/path.meld', state: stateService };
-      
+      const node = createDirectiveNode('import', { path: { raw: '$PROJECTPATH/nonexistent.meld', structured: { base: '.', segments: ['nonexistent'], url: false }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' });
+      mockProcessingContext = createMockProcessingContext(node);
       await expectToThrowWithConfig(
-        () => handler.execute(pathInput, directiveContext),
+        () => handler.execute(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.FILE_NOT_FOUND,
@@ -242,70 +259,25 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it.skip('should handle user-defined path variables in import path', async () => {
-      const directiveContext: DirectiveContext = { currentFilePath: '/project/main.meld', state: stateService };
-      const importLocation = createLocation(5, 1, undefined, undefined, '/project/main.meld');
-      const mockDocsPathVariable: IPathVariable = {
-        name: 'docs',
-        type: VariableType.PATH,
-        value: {
-          contentType: PathContentType.FILESYSTEM,
-          originalValue: './local_docs',
-          isValidSyntax: true,
-          isSecure: true,
-          isAbsolute: false,
-          validatedPath: unsafeCreateValidatedResourcePath('/project/local_docs')
-        },
-        metadata: {
-            definedAt: createTestLocation(1, 1),
-            origin: VariableOrigin.DIRECT_DEFINITION,
-            createdAt: Date.now(),
-            modifiedAt: Date.now(),
-        }
-      };
-      const pathObject: StructuredPath = {
-        raw: '$docs/file.meld',
-        structured: {
-          base: '.',
-          segments: ['file.meld'],
-          variables: { path: ['docs'] },
-        },
-        isPathVariable: true,
-      };
-      const node = createDirectiveNode('import', { path: pathObject }, importLocation);
-      const finalResolvedPath = '/project/local_docs/file.meld';
-      resolutionService.resolvePath.mockResolvedValue(createMeldPath(pathObject.raw, unsafeCreateValidatedResourcePath(finalResolvedPath), true));
-      fileSystemService.exists.mockResolvedValue(true);
-      fileSystemService.readFile.mockResolvedValue('@text imported = "Imported content"');
-      const nodeContentLocation = createTestLocation(1, 1);
-      const nodeFileLocation = createLocation(1, 1, undefined, undefined, finalResolvedPath);
-      const parsedNodes: MeldNode[] = [
-        { type: 'Directive', directive: { kind: 'text', identifier: 'imported', source: 'literal', value: [{ type: 'Text', content: 'Imported content', location: nodeContentLocation }] }, location: nodeContentLocation } as any
-      ];
-      parserService.parse.mockResolvedValue(parsedNodes as any);
-      const importedTextVar: TextVariable = {
-        type: VariableType.TEXT,
-        name: 'imported',
-        value: 'Imported content',
-        metadata: { definedAt: createTestLocation(1, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() }
-      };
-      childState.getAllTextVars.mockReturnValue(new Map([['imported', importedTextVar]]));
-      await handler.execute(node, directiveContext);
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(pathObject, expect.objectContaining({ purpose: 'import', currentFilePath: '/project/main.meld' }));
-      expect(fileSystemService.exists).toHaveBeenCalledWith(finalResolvedPath);
-      expect(fileSystemService.readFile).toHaveBeenCalledWith(finalResolvedPath);
-      expect(parserService.parse).toHaveBeenCalledWith('@text imported = "Imported content"', { filePath: finalResolvedPath });
-      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[]);
+      const node = createDirectiveNode('import', { path: { raw: '$docs/file.meld', structured: { base: '.', segments: ['file.meld'], variables: { path: ['docs'] } }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' });
+      mockProcessingContext = createMockProcessingContext(node);
+      await handler.execute(mockProcessingContext);
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith(node.path, expect.objectContaining({ purpose: 'import', currentFilePath: '/project/main.meld' }));
+      expect(fileSystemService.exists).toHaveBeenCalledWith(node.path.raw);
+      expect(fileSystemService.readFile).toHaveBeenCalledWith(node.path.raw);
+      expect(parserService.parse).toHaveBeenCalledWith(node.path.raw, { filePath: node.path.raw });
+      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(expect.any(Array));
       expect(stateService.setTextVar).toHaveBeenCalledWith('imported', expect.objectContaining({
         type: VariableType.TEXT,
-        value: 'Imported content',
+        value: expect.any(String),
         metadata: expect.objectContaining({
           origin: VariableOrigin.IMPORT,
-          definedAt: importLocation,
-          context: { importedFrom: importedTextVar.metadata }
+          definedAt: node.location,
+          context: { importedFrom: expect.any(Object) }
         })
       }));
-      expect(circularityService.beginImport).toHaveBeenCalledWith(finalResolvedPath.replace(/\\/g, '/'));
-      expect(circularityService.endImport).toHaveBeenCalledWith(finalResolvedPath.replace(/\\/g, '/'));
+      expect(circularityService.beginImport).toHaveBeenCalledWith(node.path.raw.replace(/\\/g, '/'));
+      expect(circularityService.endImport).toHaveBeenCalledWith(node.path.raw.replace(/\\/g, '/'));
     });
   });
 
@@ -313,13 +285,12 @@ describe('ImportDirectiveHandler', () => {
     it('should import all variables with *', async () => {
       const importPathRaw = 'imported.meld';
       const finalPath = '/project/imported.meld';
-      const directiveContext = { currentFilePath: '/project/test.meld', state: stateService };
-      const importLocation = createLocation(2, 1, undefined, undefined, '/project/test.meld');
-      const pathInput = createDirectiveNode('import', {
+      const node = createDirectiveNode('import', {
         path: { raw: importPathRaw, structured: { base: '.', segments: ['imported'], url: false }, isPathVariable: true },
         imports: [{ name: '*' }],
         subtype: 'importAll'
-      }, importLocation);
+      }, createLocation(2, 1, undefined, undefined, '/project/test.meld'));
+      mockProcessingContext = createMockProcessingContext(node);
       resolutionService.resolveInContext.mockResolvedValue(finalPath);
       resolutionService.resolvePath.mockResolvedValue(createMeldPath(finalPath, unsafeCreateValidatedResourcePath(finalPath), true));
       fileSystemService.exists.mockResolvedValue(true);
@@ -336,9 +307,9 @@ describe('ImportDirectiveHandler', () => {
       childState.getAllTextVars.mockReturnValue(new Map([['greeting', importedTextVar]]));
       childState.getAllDataVars.mockReturnValue(new Map([['info', importedDataVar]]));
       (childState as any).getCurrentFilePath.mockReturnValue(finalPath);
-      await handler.execute(pathInput, directiveContext);
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(importPathRaw, expect.objectContaining({ currentFilePath: '/project/test.meld' }));
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(finalPath, expect.objectContaining({ currentFilePath: '/project/test.meld' }));
+      await handler.execute(mockProcessingContext);
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(importPathRaw, mockProcessingContext.resolutionContext);
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith(finalPath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text greeting="Hello"\n@data info={ "val": 1 }');
@@ -352,16 +323,15 @@ describe('ImportDirectiveHandler', () => {
     it('should import specific variables with alias', async () => {
       const importPathRaw = 'vars.meld';
       const finalPath = '/project/vars.meld';
-      const directiveContext = { currentFilePath: '/project/test.meld', state: stateService };
-      const importLocation = createLocation(3, 1, undefined, undefined, '/project/test.meld');
-      const pathInput = createDirectiveNode('import', {
+      const node = createDirectiveNode('import', {
         path: { raw: importPathRaw, structured: { base: '.', segments: ['vars'], url: false }, isPathVariable: true },
         imports: [
           { name: 'var1', alias: null },
           { name: 'var2', alias: 'aliasedVar2' }
         ],
         subtype: 'importNamed'
-      }, importLocation);
+      }, createLocation(3, 1, undefined, undefined, '/project/test.meld'));
+      mockProcessingContext = createMockProcessingContext(node);
       resolutionService.resolveInContext.mockResolvedValue(finalPath);
       resolutionService.resolvePath.mockResolvedValue(createMeldPath(finalPath, unsafeCreateValidatedResourcePath(finalPath), true));
       fileSystemService.exists.mockResolvedValue(true);
@@ -385,9 +355,9 @@ describe('ImportDirectiveHandler', () => {
         return undefined;
       });
       (childState as any).getCurrentFilePath.mockReturnValue(finalPath);
-      const result = await handler.execute(pathInput, directiveContext);
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(importPathRaw, expect.objectContaining({ currentFilePath: '/project/test.meld' }));
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(finalPath, expect.objectContaining({ currentFilePath: '/project/test.meld' }));
+      const result = await handler.execute(mockProcessingContext);
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(importPathRaw, mockProcessingContext.resolutionContext);
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith(finalPath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text var1="value1"\n@text var2="value2"\n@text var3="value3"');
@@ -404,12 +374,12 @@ describe('ImportDirectiveHandler', () => {
 
   describe('error handling', () => {
     it('should handle validation errors from ValidationService', async () => {
-      const pathInput = createDirectiveNode('import', { path: { raw: 'valid.meld', structured: { base: '.', segments: ['valid'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
-      const directiveContext = { currentFilePath: '/project/test.meld', state: stateService };
+      const node = createDirectiveNode('import', { path: { raw: 'valid.meld', structured: { base: '.', segments: ['valid'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
+      mockProcessingContext = createMockProcessingContext(node);
       const validationError = new DirectiveError('Mock validation error', 'import', DirectiveErrorCode.VALIDATION_FAILED);
       validationService.validate.mockImplementationOnce(async () => { throw validationError; });
       await expectToThrowWithConfig(
-        () => handler.execute(pathInput, directiveContext),
+        () => handler.execute(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.VALIDATION_FAILED,
@@ -420,13 +390,12 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should handle variable not found during path resolution', async () => {
-      const pathInputRaw = '$invalidVar/path';
-      const pathInput = createDirectiveNode('import', { path: { raw: pathInputRaw, structured: { base: '.', segments: ['$invalidVar', 'path'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
-      const directiveContext = { currentFilePath: '/project/test.meld', state: stateService };
+      const node = createDirectiveNode('import', { path: { raw: '$invalidVar/path', structured: { base: '.', segments: ['$invalidVar', 'path'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
+      mockProcessingContext = createMockProcessingContext(node);
       const resolutionError = new MeldResolutionError('Variable not found: invalidVar', { code: 'VAR_NOT_FOUND' });
       resolutionService.resolveInContext.mockImplementationOnce(async () => { throw resolutionError; });
       await expectToThrowWithConfig(
-        () => handler.execute(pathInput, directiveContext),
+        () => handler.execute(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.RESOLUTION_FAILED,
@@ -437,30 +406,28 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should handle file not found from FileSystemService', async () => {
-      const pathInputRaw = 'missing.meld';
-      const pathInput = createDirectiveNode('import', { path: { raw: pathInputRaw, structured: { base: '.', segments: ['missing'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
-      const directiveContext = { currentFilePath: '/project/test.meld', state: stateService };
+      const node = createDirectiveNode('import', { path: { raw: 'missing.meld', structured: { base: '.', segments: ['missing'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
+      mockProcessingContext = createMockProcessingContext(node);
       const resolvedPathString = '/project/missing.meld';
       resolutionService.resolveInContext.mockResolvedValue(resolvedPathString);
       resolutionService.resolvePath.mockResolvedValue(createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath(resolvedPathString), true));
       fileSystemService.exists.mockResolvedValue(false);
       await expectToThrowWithConfig(
-        () => handler.execute(pathInput, directiveContext),
+        () => handler.execute(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.FILE_NOT_FOUND,
           messageContains: `File not found: ${resolvedPathString}`
         }
       );
-       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(pathInputRaw, expect.any(Object));
+       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.path.raw, expect.any(Object));
        expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedPathString, expect.any(Object));
        expect(circularityService.endImport).toHaveBeenCalledWith(resolvedPathString.replace(/\\/g, '/'));
     });
 
     it('should handle circular imports from CircularityService', async () => {
-      const pathInputRaw = 'circular.meld';
-      const pathInput = createDirectiveNode('import', { path: { raw: pathInputRaw, structured: { base: '.', segments: ['circular'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
-      const directiveContext = { currentFilePath: '/project/test.meld', state: stateService };
+      const node = createDirectiveNode('import', { path: { raw: 'circular.meld', structured: { base: '.', segments: ['circular'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
+      mockProcessingContext = createMockProcessingContext(node);
       const resolvedPathString = '/project/circular.meld';
       const circularError = new DirectiveError('Circular import detected: /project/circular.meld', 'import', DirectiveErrorCode.CIRCULAR_REFERENCE);
       resolutionService.resolveInContext.mockResolvedValue(resolvedPathString);
@@ -468,23 +435,22 @@ describe('ImportDirectiveHandler', () => {
       fileSystemService.exists.mockResolvedValue(true);
       circularityService.beginImport.mockImplementationOnce(() => { throw circularError; });
       await expectToThrowWithConfig(
-        () => handler.execute(pathInput, directiveContext),
+        () => handler.execute(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.CIRCULAR_REFERENCE,
           messageContains: 'Circular import detected'
         }
       );
-       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(pathInputRaw, expect.any(Object));
+       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.path.raw, expect.any(Object));
        expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedPathString, expect.any(Object));
        expect(circularityService.beginImport).toHaveBeenCalledWith(resolvedPathString.replace(/\\/g, '/'));
       expect(circularityService.endImport).toHaveBeenCalledWith(resolvedPathString.replace(/\\/g, '/'));
     });
 
     it('should handle parse errors from ParserService', async () => {
-      const pathInputRaw = 'parse_error.meld';
-      const pathInput = createDirectiveNode('import', { path: { raw: pathInputRaw, structured: { base: '.', segments: ['parse_error'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
-      const directiveContext = { currentFilePath: '/project/test.meld', state: stateService };
+      const node = createDirectiveNode('import', { path: { raw: 'parse_error.meld', structured: { base: '.', segments: ['parse_error'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
+      mockProcessingContext = createMockProcessingContext(node);
       const resolvedPathString = '/project/parse_error.meld';
       const parseError = new MeldError('Bad syntax in imported file', { code: 'PARSE_ERROR', severity: ErrorSeverity.Recoverable });
       resolutionService.resolveInContext.mockResolvedValue(resolvedPathString);
@@ -493,7 +459,7 @@ describe('ImportDirectiveHandler', () => {
       fileSystemService.readFile.mockResolvedValue('invalid meld content');
       parserService.parse.mockRejectedValueOnce(parseError);
       await expectToThrowWithConfig(
-        () => handler.execute(pathInput, directiveContext),
+        () => handler.execute(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.EXECUTION_FAILED,
@@ -506,9 +472,8 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should handle interpretation errors from InterpreterService', async () => {
-      const pathInputRaw = 'interpret_error.meld';
-      const pathInput = createDirectiveNode('import', { path: { raw: pathInputRaw, structured: { base: '.', segments: ['interpret_error'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
-      const directiveContext = { currentFilePath: '/project/test.meld', state: stateService };
+      const node = createDirectiveNode('import', { path: { raw: 'interpret_error.meld', structured: { base: '.', segments: ['interpret_error'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
+      mockProcessingContext = createMockProcessingContext(node);
       const resolvedPathString = '/project/interpret_error.meld';
       const interpretError = new MeldError('Interpretation failed', { code: 'INTERPRET_FAIL', severity: ErrorSeverity.Recoverable });
       const parsedNodes: MeldNode[] = [{ type: 'Text', content: 'content' } as any];
@@ -519,7 +484,7 @@ describe('ImportDirectiveHandler', () => {
       parserService.parse.mockResolvedValue(parsedNodes as any);
       interpreterServiceClient.interpret.mockRejectedValueOnce(interpretError);
       await expectToThrowWithConfig(
-        () => handler.execute(pathInput, directiveContext),
+        () => handler.execute(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.EXECUTION_FAILED,
@@ -534,9 +499,8 @@ describe('ImportDirectiveHandler', () => {
 
   describe('cleanup', () => {
       it('should always call endImport on CircularityService even if read fails', async () => {
-          const pathInputRaw = 'read_fail.meld';
-          const pathInput = createDirectiveNode('import', { path: { raw: pathInputRaw, structured: { base: '.', segments: ['read_fail'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
-          const directiveContext = { currentFilePath: '/project/test.meld', state: stateService };
+          const node = createDirectiveNode('import', { path: { raw: 'read_fail.meld', structured: { base: '.', segments: ['read_fail'], url: false }, isPathVariable: true }, imports: [{ name: '*', alias: null }], subtype: 'importAll' });
+          mockProcessingContext = createMockProcessingContext(node);
           const resolvedPathString = '/project/read_fail.meld';
           const readError = new MeldError('Disk read failed', { code: 'FS_READ_ERROR', severity: ErrorSeverity.Recoverable });
           resolutionService.resolveInContext.mockResolvedValue(resolvedPathString);
@@ -544,7 +508,7 @@ describe('ImportDirectiveHandler', () => {
           fileSystemService.exists.mockResolvedValue(true);
           fileSystemService.readFile.mockRejectedValueOnce(readError);
           await expectToThrowWithConfig(
-              () => handler.execute(pathInput, directiveContext),
+              () => handler.execute(mockProcessingContext),
               {
                   type: 'DirectiveError',
                   code: DirectiveErrorCode.EXECUTION_FAILED,
