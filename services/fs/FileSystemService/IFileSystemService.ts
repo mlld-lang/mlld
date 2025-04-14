@@ -179,6 +179,14 @@ interface IFileSystemService extends FileSystemBase {
    * @throws {MeldFileSystemError} If the directory cannot be created
    */
   mkdir(dirPath: ValidatedResourcePath, options?: { recursive?: boolean }): Promise<void>;
+
+  /**
+   * Deletes a file at the specified path.
+   * Should not throw if the file doesn't exist.
+   * @param filePath Path to the file to delete
+   * @returns A promise that resolves when the file is deleted
+   */
+  deleteFile(filePath: string): Promise<void>;
 }
 
 export type { IFileSystemService }; 

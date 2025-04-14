@@ -91,7 +91,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
                       resolvedParams.push(param);
                   } else if (param.type === 'VariableReference') {
                       try {
-                          const resolvedParam = await this.resolutionService.resolve(param as VariableReferenceNode, resolutionContext);
+                          const resolvedParam = await this.resolutionService.resolveInContext(param as VariableReferenceNode, resolutionContext);
                           resolvedParams.push(resolvedParam);
                       } catch (error) {
                           const errorMsg = `Failed to resolve parameter variable '${param.identifier}' for runCodeParams`;
@@ -162,7 +162,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
               if (arg.type === 'variable') {
                   const varNode = arg.value as VariableReferenceNode;
                   try {
-                     const resolvedArg = await this.resolutionService.resolve(varNode, resolutionContext);
+                     const resolvedArg = await this.resolutionService.resolveInContext(varNode, resolutionContext);
                      resolvedArgs.push(resolvedArg);
                   } catch (error) {
                       const errorMsg = `Failed to resolve argument variable '${varNode.identifier}' for command '${commandName}'`;
