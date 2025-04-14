@@ -5,6 +5,7 @@ import type {
   ParserServiceLike, 
   InterpreterServiceLike,
   CircularityServiceLike, 
+  InterpreterOptionsBase
 } from '@core/shared-service-types.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
@@ -243,7 +244,6 @@ export class DirectiveService implements IDirectiveService {
             this.logger.warn('FileSystemService not available for TextDirectiveHandler injection');
           }
           const textHandler = new TextDirectiveHandler(
-            this.validationService,
             this.resolutionService,
             this.fileSystemService
           );
@@ -252,14 +252,14 @@ export class DirectiveService implements IDirectiveService {
           // Check for services needed by DataDirectiveHandler
           if (!this.fileSystemService || !this.pathService) {
             this.logger.warn('FileSystemService or PathService not available for DataDirectiveHandler injection');
+          } else {
+            const dataHandler = new DataDirectiveHandler(
+              this.resolutionService,
+              this.fileSystemService,
+              this.pathService
+            );
+            this.registerHandler(dataHandler);
           }
-          const dataHandler = new DataDirectiveHandler(
-            this.validationService,
-            this.resolutionService,
-            this.fileSystemService,
-            this.pathService
-          );
-          this.registerHandler(dataHandler);
           
           // Check for PathService needed by PathDirectiveHandler
           if (!this.pathService) {
@@ -552,13 +552,21 @@ export class DirectiveService implements IDirectiveService {
    * Calls the createChildContext method on the interpreter service
    * Uses the client if available, falls back to direct service reference
    */
-  private async callInterpreterCreateChildContext(parentState: IStateService, filePath?: string, options?: any): Promise<IStateService> {
+  private async callInterpreterCreateChildContext(
+    parentState: IStateService, 
+    filePath?: string, 
+    options?: InterpreterOptionsBase 
+  ): Promise<IStateService> {
     this.ensureInterpreterFactoryInitialized();
     if (!this.interpreterClient) {
       throw new MeldError('InterpreterServiceClient not available for createChildContext');
     }
-    // Assert return type
-    return await this.interpreterClient.createChildContext(parentState, filePath, options) as IStateService;
+    // Pass arguments matching the client interface
+    const childStateLike = await this.interpreterClient.createChildContext(parentState, filePath, options);
+    // Need to ensure the returned StateServiceLike can be treated as IStateService
+    // This might require casting or a more robust check/conversion if signatures differ significantly
+    // For now, keep the cast, assuming the implementation returns a compatible object.
+    return childStateLike as IStateService; 
   }
 
   /**
