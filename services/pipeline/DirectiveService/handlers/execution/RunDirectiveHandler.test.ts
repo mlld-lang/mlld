@@ -382,7 +382,7 @@ describe('RunDirectiveHandler', () => {
           {
               type: 'DirectiveError',
               code: DirectiveErrorCode.EXECUTION_FAILED, 
-              messageContains: 'Failed to resolve command', 
+              messageContains: 'Failed to execute command: Resolution failed', 
               cause: resolutionError
           } as ErrorTestOptions 
       );
