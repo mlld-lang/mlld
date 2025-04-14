@@ -1,0 +1,11 @@
+name: "audit-interfaces"
+description: "Compares each service interface definition against its usage in handlers."
+for_each: services_to_audit # Corresponds to iterable_objects key in workflow.yaml
+
+tasks:
+  # Task runs in parallel for each service defined in services_to_audit
+  - useTask: compare-interface-usage
+    # Context automatically includes:
+    # item.key (e.g., "IFileSystemService")
+    # item.value (e.g., { interfacePath: "...", implementationPathGlob: "..." })
+    # all global_variables (allInterfacesContent, allHandlersContent, etc.) 

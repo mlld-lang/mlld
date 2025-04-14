@@ -421,7 +421,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             );
          }
         throw error;
-      } 
+      }
       
       // Wrap other errors
       throw new DirectiveError(

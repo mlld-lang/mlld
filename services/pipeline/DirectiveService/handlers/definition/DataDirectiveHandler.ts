@@ -275,7 +275,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       
       const metadata: Partial<VariableMetadata> = {
           origin: VariableOrigin.DIRECT_DEFINITION, 
-          definedAt: directiveSourceLocation
+          definedAt: directiveSourceLocation 
       };
       
       // Call setDataVar with 2 args

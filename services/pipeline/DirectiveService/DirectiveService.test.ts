@@ -57,7 +57,7 @@ describe('DirectiveService', () => {
                  _vars: { ...originalVars }, // Shallow copy internal vars
                  // Ensure clone can also clone
                  clone: function() { return this.clone(); }, 
-                 createChildState: function() { return this.clone(); },
+                 createChildState: function() { return this.clone(); }, 
              };
              return cloned;
         }),
@@ -228,7 +228,7 @@ describe('DirectiveService', () => {
         const nodes = await context.services.parser.parse(content);
         const directiveNode = nodes[0] as DirectiveNode;
         if (directiveNode?.directive?.kind === 'text' && directiveNode.directive.source === undefined) {
-            directiveNode.directive.source = 'literal'; 
+                 directiveNode.directive.source = 'literal'; 
         } else if (!directiveNode || directiveNode.directive?.kind !== 'text') {
             throw new Error('Test setup error: Parsed node is not a valid @text directive.');
         }

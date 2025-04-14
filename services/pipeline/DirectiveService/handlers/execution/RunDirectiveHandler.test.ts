@@ -48,13 +48,18 @@ import { join } from 'path';   // Import join
 import { randomBytes } from 'crypto'; // Import randomBytes
 import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
-import { JsonValue } from '@core/types';
+import { JsonValue, Result, success } from '@core/types';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
 import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils.js'; // Standardized casing
 import { VariableMetadata } from '@core/types/variables.js'; // Added VariableMetadata
 import { MeldResolutionError, FieldAccessError, PathValidationError } from '@core/errors'; // Added imports
 import { MeldPath } from '@core/types'; // Added MeldPath import
+import type { ValidatedResourcePath } from '@core/types/paths.js'; // Import ValidatedResourcePath
+import type { Stats } from 'fs-extra'; // Import Stats
+import { Field as AstField } from '@core/syntax/types/shared-types.js'; // Import AstField
+import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js'; // Import tracker types
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js'; // Import IFileSystem
 
 // Mock child_process
 vi.mock('child_process', () => ({
@@ -100,12 +105,10 @@ describe('RunDirectiveHandler', () => {
     resolutionServiceMock = {
       resolveNodes: vi.fn().mockImplementation(async (nodes, ctx) => nodes.map((n: any) => n.content || `{{${n.identifier}}}`).join('')),
       resolveInContext: vi.fn().mockImplementation(async (value, ctx) => {
-          // Simulate resolving variable nodes passed to resolveInContext
           if (typeof value === 'object' && value?.type === 'VariableReference') {
               if (value.identifier === 'missingVar') throw new MeldResolutionError('Variable not found by mock', { code: 'VAR_NOT_FOUND' });
               return `resolved-var:${value.identifier}`;
           }
-          // Fallback for strings or other types
           return typeof value === 'string' ? value : JSON.stringify(value)
       }),
       resolveText: vi.fn().mockResolvedValue(''),
@@ -114,13 +117,13 @@ describe('RunDirectiveHandler', () => {
       resolveCommand: vi.fn().mockResolvedValue(null),
       extractSection: vi.fn().mockResolvedValue(''),
       validateResolution: vi.fn().mockResolvedValue(undefined),
-      resolveFieldAccess: vi.fn().mockResolvedValue(undefined),
+      resolveFieldAccess: vi.fn().mockImplementation(async (base, path, ctx) => success(base)), 
       getResolutionTracker: vi.fn().mockReturnValue(undefined), 
-      resolveFile: vi.fn().mockResolvedValue(''),
-      resolveContent: vi.fn().mockResolvedValue(''),
-      detectCircularReferences: vi.fn().mockResolvedValue(undefined),
-      convertToFormattedString: vi.fn().mockResolvedValue(''),
-      enableResolutionTracking: vi.fn(),
+      resolveFile: vi.fn().mockResolvedValue(''), 
+      resolveContent: vi.fn().mockResolvedValue(''), 
+      detectCircularReferences: vi.fn().mockResolvedValue(undefined), 
+      convertToFormattedString: vi.fn().mockResolvedValue(''), 
+      enableResolutionTracking: vi.fn(), 
     };
 
     // Create complete mock object for IFileSystemService manually
@@ -134,13 +137,13 @@ describe('RunDirectiveHandler', () => {
       ensureDir: vi.fn().mockResolvedValue(undefined),
       setFileSystem: vi.fn(),
       deleteFile: vi.fn().mockResolvedValue(undefined),
-      stat: vi.fn().mockResolvedValue({} as any),
+      stat: vi.fn().mockResolvedValue({ isFile: () => true, isDirectory: () => false } as Stats),
       isFile: vi.fn().mockResolvedValue(true),
       readDir: vi.fn().mockResolvedValue([]),
       isDirectory: vi.fn().mockResolvedValue(false),
-      watch: vi.fn(),
+      watch: vi.fn().mockImplementation(async function*() { yield { eventType: '', filename: ''} }),
       dirname: vi.fn().mockReturnValue('.'),
-      getFileSystem: vi.fn().mockReturnValue({} as any),
+      getFileSystem: vi.fn().mockReturnValue({} as IFileSystem),
       fileExists: vi.fn().mockResolvedValue(true),
       resolvePath: vi.fn().mockImplementation(async (p) => p as string),
     };

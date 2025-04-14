@@ -1,0 +1,114 @@
+name: "handler-interface-mock-audit"
+description: "Audits each directive handler's usage of service interfaces and its corresponding test's mock usage."
+outputPath: "_output/handler-audit"
+
+# Define file collections - Paths relative to this workflow file
+files:
+  # --- Interface Files --- (Used in collections below)
+  IFileSystemServiceFile: "../../services/fs/FileSystemService/IFileSystemService.ts"
+  IResolutionServiceFile: "../../services/resolution/ResolutionService/IResolutionService.ts"
+  IPathServiceFile: "../../services/fs/PathService/IPathService.ts"
+  IValidationServiceFile: "../../services/resolution/ValidationService/IValidationService.ts"
+  IStateServiceFile: "../../services/state/StateService/IStateService.ts"
+  ICircularityServiceFile: "../../services/resolution/CircularityService/ICircularityService.ts"
+  IInterpreterServiceClientFactoryFile: "../../services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.ts"
+
+  # --- Mock Utilities File --- 
+  mockUtilsFile: "../../tests/utils/mocks/serviceMocks.ts" 
+
+  # --- Relevant Docs --- 
+  diArchitectureDocFile: "../../docs/dev/DI-ARCHITECTURE.md"
+  testingDocFile: "../../docs/dev/TESTS.md"
+
+  # --- Handler Context File Collections --- 
+  # Each collection includes the handler, its test, and ALL interfaces it uses.
+  RunHandler_AuditFiles:
+    - "../../services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.ts"
+    - "../../services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.test.ts"
+    - "../../services/resolution/ValidationService/IValidationService.ts" # IValidationServiceFile
+    - "../../services/resolution/ResolutionService/IResolutionService.ts" # IResolutionServiceFile
+    - "../../services/fs/FileSystemService/IFileSystemService.ts"       # IFileSystemServiceFile
+
+  EmbedHandler_AuditFiles:
+    - "../../services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.ts"
+    - "../../services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.test.ts"
+    - "../../services/resolution/ValidationService/IValidationService.ts" # IValidationServiceFile
+    - "../../services/resolution/ResolutionService/IResolutionService.ts" # IResolutionServiceFile
+    - "../../services/resolution/CircularityService/ICircularityService.ts" # ICircularityServiceFile
+    - "../../services/fs/FileSystemService/IFileSystemService.ts"       # IFileSystemServiceFile
+    - "../../services/fs/PathService/IPathService.ts"                   # IPathServiceFile
+    - "../../services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.ts" # IInterpreterServiceClientFactoryFile
+
+  DefineDirectiveHandler_AuditFiles:
+    - "../../services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.ts"
+    - "../../services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.test.ts"
+    - "../../services/resolution/ValidationService/IValidationService.ts" # IValidationServiceFile
+    - "../../services/resolution/ResolutionService/IResolutionService.ts" # IResolutionServiceFile
+
+  TextDirectiveHandler_AuditFiles:
+    - "../../services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.ts"
+    - "../../services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.test.ts"
+    - "../../services/resolution/ValidationService/IValidationService.ts" # IValidationServiceFile
+    - "../../services/resolution/ResolutionService/IResolutionService.ts" # IResolutionServiceFile
+    - "../../services/fs/FileSystemService/IFileSystemService.ts"       # IFileSystemServiceFile
+
+  DataDirectiveHandler_AuditFiles:
+    - "../../services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.ts"
+    - "../../services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.test.ts"
+    - "../../services/resolution/ValidationService/IValidationService.ts" # IValidationServiceFile
+    - "../../services/resolution/ResolutionService/IResolutionService.ts" # IResolutionServiceFile
+    - "../../services/fs/FileSystemService/IFileSystemService.ts"       # IFileSystemServiceFile
+    - "../../services/fs/PathService/IPathService.ts"                   # IPathServiceFile
+
+  PathDirectiveHandler_AuditFiles:
+    - "../../services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.ts"
+    - "../../services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.test.ts"
+    - "../../services/resolution/ValidationService/IValidationService.ts" # IValidationServiceFile
+    - "../../services/resolution/ResolutionService/IResolutionService.ts" # IResolutionServiceFile
+
+  ImportDirectiveHandler_AuditFiles:
+    - "../../services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.ts"
+    - "../../services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.test.ts"
+    - "../../services/resolution/ValidationService/IValidationService.ts" # IValidationServiceFile
+    - "../../services/resolution/ResolutionService/IResolutionService.ts" # IResolutionServiceFile
+    - "../../services/fs/FileSystemService/IFileSystemService.ts"       # IFileSystemServiceFile
+    - "../../services/fs/PathService/IPathService.ts"                   # IPathServiceFile
+    - "../../services/resolution/CircularityService/ICircularityService.ts" # ICircularityServiceFile
+    - "../../services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.ts" # IInterpreterServiceClientFactoryFile
+
+# Global context 
+global_variables:
+  diArchitectureContext: "{{ files.diArchitectureDocFile }}"
+  testingStandardsContext: "{{ files.testingDocFile }}"
+  mockUtilsContent: "{{ files.mockUtilsFile }}"
+
+# Iterate over HANDLERS, providing a name and the context bundle
+iterable_objects:
+  handlers_to_audit: 
+    RunDirectiveHandler: 
+      handlerName: "RunDirectiveHandler"
+      auditBundleContent: "{{ files.RunHandler_AuditFiles }}"
+    EmbedDirectiveHandler:
+      handlerName: "EmbedDirectiveHandler"
+      auditBundleContent: "{{ files.EmbedHandler_AuditFiles }}"
+    DefineDirectiveHandler:
+      handlerName: "DefineDirectiveHandler"
+      auditBundleContent: "{{ files.DefineDirectiveHandler_AuditFiles }}"
+    TextDirectiveHandler:
+      handlerName: "TextDirectiveHandler"
+      auditBundleContent: "{{ files.TextDirectiveHandler_AuditFiles }}"
+    DataDirectiveHandler:
+      handlerName: "DataDirectiveHandler"
+      auditBundleContent: "{{ files.DataDirectiveHandler_AuditFiles }}"
+    PathDirectiveHandler:
+      handlerName: "PathDirectiveHandler"
+      auditBundleContent: "{{ files.PathDirectiveHandler_AuditFiles }}"
+    ImportDirectiveHandler:
+      handlerName: "ImportDirectiveHandler"
+      auditBundleContent: "{{ files.ImportDirectiveHandler_AuditFiles }}"
+
+# Define the sequence of sets, iterating over handlers
+sets:
+  - useSet: audit-handler-interfaces-and-mocks
+    for_each: handlers_to_audit
+  - useSet: synthesize-handler-audit # Aggregate results 

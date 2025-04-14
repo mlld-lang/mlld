@@ -62,7 +62,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       if (!node.directive || node.directive.kind !== 'path') {
           throw new DirectiveError('Invalid node type provided to PathDirectiveHandler', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
       }
-      const directive = node.directive as PathDirectiveData;
+      const directive = node.directive as PathDirectiveData; 
       const identifier = directive.identifier;
       const pathObject = directive.path;
       
@@ -135,7 +135,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
          if (!error.details?.context) {
             error.details = { ...(error.details || {}), ...errorDetails };
          }
-         throw error;
+        throw error;
       } 
       
       // Wrap unexpected errors

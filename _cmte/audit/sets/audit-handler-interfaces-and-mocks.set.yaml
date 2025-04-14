@@ -1,0 +1,8 @@
+name: "audit-handler-interfaces-and-mocks"
+description: "Audits a specific handler's interface usage and its test's mock usage."
+for_each: handlers_to_audit
+ 
+tasks:
+  # Run tasks in parallel for each handler
+  - useTask: analyze-handler-audit
+    # Context: item.key="HandlerName", item.value={handlerPath, testPath, usesInterfaces, handlerContent, testContent, IServiceNameContent...}, global_variables 

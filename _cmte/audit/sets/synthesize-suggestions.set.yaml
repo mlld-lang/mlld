@@ -1,0 +1,12 @@
+name: "synthesize-suggestions"
+description: "Combines findings from previous audits and suggests concrete fixes."
+# Not iterated - runs once after previous sets complete
+
+tasks:
+  - useTask: generate-fix-suggestions
+    prior_outputs:
+      # Collect all interface audit results into an array
+      interface_audit_results: "{{ audit-interfaces.compare-interface-usage[*].output }}"
+      # Collect all mock audit results into an array
+      mock_audit_results: "{{ audit-mocks.compare-mock-usage[*].output }}"
+    # Context includes global_variables and the two arrays above 
