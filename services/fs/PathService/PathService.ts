@@ -1,7 +1,7 @@
 import type { IPathService, URLValidationOptions } from '@services/fs/PathService/IPathService';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import type { Position, Location } from '@core/types/index';
 import * as path from 'path';
 import * as os from 'os';
@@ -24,14 +24,14 @@ import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURL
 import { 
   URLError 
 } from '@services/fs/PathService/errors/url/index';
-import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver';
+import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+import type { StructuredPath } from '@core/syntax/types/nodes.js';
 import {
   AbsolutePath,
   RelativePath,
   UrlPath,
   RawPath,
   ValidatedResourcePath,
-  StructuredPath,
   PathValidationContext,
   NormalizedAbsoluteDirectoryPath,
   unsafeCreateAbsolutePath,
@@ -47,7 +47,7 @@ import {
   type AnyPath,
   type MeldResolvedFilesystemPath,
   createRawPath
-} from '@core/types/paths';
+} from '@core/types/paths.js';
 import { ErrorSeverity } from '@core/errors/index';
 import type { PathValidationRules } from '@core/types/paths';
 
@@ -351,7 +351,7 @@ export class PathService implements IPathService {
       });
     }
 
-    const rawInputPath = isRawPath(filePath) ? filePath : filePath.original;
+    const rawInputPath = isRawPath(filePath) ? filePath : filePath.raw;
 
     if (!rawInputPath) {
       // Return empty RelativePath for empty input.
@@ -487,15 +487,21 @@ export class PathService implements IPathService {
     const segments = normalized.substring(base.length).split('/').filter(Boolean);
     const isUrl = this.isURL(createRawPath(pathString));
 
+    // TODO: Populate structured.variables properly based on parsing/resolution info if available
+    // This current implementation is simplified.
     return {
-      original: raw,
+      raw: raw, // Use 'raw' instead of 'original'
       normalized: normalized,
-      isAbsolute: path.isAbsolute(normalized),
-      segments: segments,
-      isNormalized: !this.hasDotSegments(normalized),
-      isDirectory: normalized.endsWith('/'),
-      variables: {},
-      pathVariableRefs: []
+      structured: { // Ensure structured object matches interface
+         segments: segments,
+         base: base,
+         url: isUrl,
+         // variables: {} // Initialize variables if needed
+      },
+      // These properties might depend on validation state, set defaults or omit if not applicable here
+      // isVariableReference: false, 
+      // isPathVariable: false,
+      // interpolatedValue: undefined 
     };
   }
 
