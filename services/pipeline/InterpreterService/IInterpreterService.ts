@@ -2,6 +2,8 @@ import type { MeldNode, SourceLocation } from '@core/syntax/types/index.js';
 import type { DirectiveServiceLike } from '@core/shared-service-types.js';
 import type { MeldError } from '@core/errors/MeldError.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import type { InterpreterOptionsBase } from '@core/shared-service-types.js';
 
 /**
  * Error handler function type for handling Meld errors during interpretation.
@@ -81,7 +83,7 @@ interface IInterpreterService {
    * @param directiveService - Service for handling directives
    * @param stateService - The state service to use
    */
-  initialize(directiveService: DirectiveServiceLike, stateService: IStateService): void;
+  initialize(directiveService: IDirectiveService, stateService: IStateService): void;
 
   /**
    * Interpret a sequence of Meld nodes.
@@ -102,7 +104,7 @@ interface IInterpreterService {
    * });
    * ```
    */
-  interpret(nodes: MeldNode[], options?: InterpreterOptions): Promise<IStateService>;
+  interpret(nodes: MeldNode[], options?: InterpreterOptionsBase): Promise<IStateService>;
 
   /**
    * Interpret a single Meld node in the context of an existing state.
@@ -130,7 +132,7 @@ interface IInterpreterService {
   createChildContext(
     parentState: IStateService,
     filePath?: string,
-    options?: InterpreterOptions
+    options?: InterpreterOptionsBase
   ): Promise<IStateService>;
 } 
 

@@ -1,5 +1,4 @@
 import type { MeldNode } from '@core/syntax/types/index.js';
-import type { ParserServiceLike } from '@core/shared-service-types.js';
 
 /**
  * Service responsible for parsing Meld content into an Abstract Syntax Tree (AST).
@@ -17,40 +16,15 @@ import type { ParserServiceLike } from '@core/shared-service-types.js';
  * Dependencies:
  * - meld-ast: For the underlying parsing functionality
  */
-interface IParserService extends ParserServiceLike {
-  /**
-   * Parse Meld content into an AST using meld-ast.
-   * 
-   * @param content - The Meld content to parse
-   * @returns A promise that resolves to an array of MeldNodes representing the AST
-   * @throws {MeldParseError} If the content cannot be parsed
-   * 
-   * @example
-   * ```ts
-   * const content = '@text greeting = "Hello, world!"';
-   * const nodes = await parserService.parse(content);
-   * // nodes contains a DirectiveNode representing the @text directive
-   * ```
-   */
-  parse(content: string): Promise<MeldNode[]>;
 
-  /**
-   * Parse Meld content and provide location information for each node.
-   * This is useful for error reporting and source mapping.
-   * 
-   * @param content - The Meld content to parse
-   * @param filePath - Optional file path for better error messages
-   * @returns A promise that resolves to an array of MeldNodes with location information
-   * @throws {MeldParseError} If the content cannot be parsed
-   * 
-   * @example
-   * ```ts
-   * const content = '@text greeting = "Hello, world!"';
-   * const nodes = await parserService.parseWithLocations(content, 'example.meld');
-   * // nodes contains a DirectiveNode with location information
-   * ```
-   */
+// Assume these types are defined correctly elsewhere
+interface ParserOptions {
+  filePath?: string;
+}
+
+export interface IParserService {
+  parseString(content: string, options?: ParserOptions): Promise<MeldNode[]>;
+  parseFile(filePath: string): Promise<MeldNode[]>;
+  parse(content: string, filePath?: string): Promise<MeldNode[]>;
   parseWithLocations(content: string, filePath?: string): Promise<MeldNode[]>;
 } 
-
-export type { IParserService }; 

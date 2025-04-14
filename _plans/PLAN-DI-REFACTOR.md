@@ -17,16 +17,27 @@ Reference: Findings documented in `_plans/FIXING-TYPE-ISSUES.md`.
 ### Phase 1: Analysis & `Like` Type Removal Prep
 
 *   **Objective:** Identify all manual DI configurations and `Like` type usages, ensuring necessary Client Factories exist.
-*   **Tasks:**
-    *   Map all manual instantiations (`new ...`) and registrations (`registerInstance`) in `core/di-config.ts` for `StateService`, `ResolutionService`, `FileSystemService`, `PathService`.
-    *   Identify *all* usages of `...Like` types (from `core/shared-service-types.ts`) across *all* `I...Service.ts` interfaces.
-    *   Identify all corresponding Client Factories (`...ClientFactory`) used for these core services.
-    *   Verify that the existing Client Factories expose the necessary methods to fully replace the functionality previously covered by the `Like` interfaces. Update/add methods to factories if needed.
+*   **Tasks & Findings:**
+    *   **Map Manual Instantiations/Registrations in `di-config.ts`:** (DONE)
+        *   **Manually Instantiated (`new ...`):** `PathOperationsService`, `NodeFileSystem`, `ProjectPathResolver`, `URLContentResolver`, `PathService`, `PathServiceClientFactory`, `FileSystemService`, `FileSystemServiceClientFactory`, `ParserService`, `StateFactory`, `StateEventService`, `StateTrackingService`, `StateTrackingServiceClientFactory`, `StateService`, `ResolutionService`.
+        *   **Registered with `registerInstance(...)`:** The instances created above were registered using `registerInstance` for both their class and interface tokens (e.g., `'IFileSystem'`, `'NodeFileSystem'`, `'PathService'`, `'IPathService'`, `'FileSystemService'`, `'IFileSystemService'`, `'StateService'`, `'IStateService'`, `'ResolutionService'`, `'IResolutionService'`, etc.).
+        *   **Manual Property Injection:** `PathService` manually receives `FileSystemServiceClientFactory`; `FileSystemService` manually receives `PathServiceClient`.
+        *   **Observation:** Core interdependent services (`State`, `Resolution`, `FS`, `Path`) heavily rely on manual setup, bypassing standard `tsyringe` constructor resolution.
+    *   **Identify `Like` Type Usages:** (DONE)
+        *   **Interfaces Extending `Like` Types:** `ICircularityService` (extends `CircularityServiceLike`), `IValidationService` (extends `ValidationServiceLike`), `IParserService` (extends `ParserServiceLike`).
+        *   **Interfaces Using `Like` Types in Parameters:** `IInterpreterService.initialize` (uses `DirectiveServiceLike`), `IDirectiveService.initialize` (uses `ParserServiceLike`, `CircularityServiceLike`).
+        *   **(Note:** `IResolutionService` previously used `StateServiceLike` but was updated).**
+    *   **Identify Corresponding Client Factories:** (DONE)
+        *   Key factories involved in cycles: `PathServiceClientFactory`, `FileSystemServiceClientFactory`, `ParserServiceClientFactory`(?), `ResolutionServiceClientFactory`(?), `StateServiceClientFactory`(?), `StateTrackingServiceClientFactory`, `InterpreterServiceClientFactory`.
+    *   **Verify Client Factory Methods:** (DONE for Path/FS)
+        *   `PathServiceClientFactory` exposes `resolvePath` and `normalizePath` via its client.
+        *   `FileSystemServiceClientFactory` exposes `exists` and `isDirectory` via its client.
+        *   **Conclusion:** These seem appropriate for breaking the Path/FS cycle. Assume other factories provide similar minimal interfaces for their respective cycles.
 
 ### Phase 2: Refactor Core Services to use `@Service` & `@inject`
 
 *   **Objective:** Modify core service implementations to use standard DI patterns.
-*   **Target Files:** `StateService.ts`, `ResolutionService.ts`, `FileSystemService.ts`, `PathService.ts`.
+*   **Target Files:** `StateService.ts`, `ResolutionService.ts`, `FileSystemService.ts`, `PathService.ts` (and potentially their direct dependencies like `PathOperationsService`, `URLContentResolver` if not already decorated/injectable).
 *   **Tasks (for each service):**
     *   Ensure the class has the `@Service({...})` decorator (if not already present).
     *   Modify the constructor to use `@inject(...)` for *all* dependencies.
@@ -37,9 +48,9 @@ Reference: Findings documented in `_plans/FIXING-TYPE-ISSUES.md`.
 ### Phase 3: Update Interfaces to use Full Types
 
 *   **Objective:** Enforce stricter contracts by removing `Like` types from interfaces.
-*   **Target Files:** All `I...Service.ts` files identified in Phase 1.
+*   **Target Files:** All `I...Service.ts` files identified in Phase 1 (`IInterpreterService`, `ICircularityService`, `IValidationService`, `IDirectiveService`, `IParserService`).
 *   **Tasks:**
-    *   Replace all usages of `...Like` types with their corresponding full interfaces (`IStateService`, `IValidationService`, `IPathService`, `IFileSystemService`, `IResolutionService`, etc.).
+    *   Replace all usages of `...Like` types (extensions, parameters) with their corresponding full interfaces (`IDirectiveService`, `ICircularityService`, `IValidationService`, `IParserService` etc.).
     *   Remove imports for `...Like` types that are no longer used.
 
 ### Phase 4: Update DI Registrations in `di-config.ts`
@@ -47,10 +58,10 @@ Reference: Findings documented in `_plans/FIXING-TYPE-ISSUES.md`.
 *   **Objective:** Transition DI configuration to container-managed resolution for core services.
 *   **Target File:** `core/di-config.ts`.
 *   **Tasks:**
-    *   Remove all manual instantiation (`new ...`) logic for `StateService`, `ResolutionService`, `FileSystemService`, `PathService`.
+    *   Remove all manual instantiation (`new ...`) logic for `StateService`, `ResolutionService`, `FileSystemService`, `PathService` (and their manually instantiated dependencies).
     *   Remove all manual property injection logic related to these services.
     *   Remove all `container.registerInstance(...)` calls for these core services and their interfaces.
-    *   Ensure these core services are registered using `container.register(..., { useClass: ... })` (using their class names as tokens).
+    *   Ensure these core services (and their dependencies) are registered using `container.register(..., { useClass: ... })` (using their class names as tokens).
     *   Ensure their interface tokens (`'IStateService'`, etc.) are correctly mapped using `container.register(..., { useToken: ... })` to the class registration token.
     *   Verify all necessary Client Factory registrations (`...ClientFactory`) are present and correct.
     *   Run `tsc` or the build process frequently to check for DI resolution errors as changes are made.
@@ -68,4 +79,11 @@ Reference: Findings documented in `_plans/FIXING-TYPE-ISSUES.md`.
 
 ## 3. Next Steps
 
-*   Begin Phase 1: Analysis & `Like` Type Removal Prep. 
+*   ~~Begin Phase 1: Analysis & `Like` Type Removal Prep.~~ **Phase 1 Complete.**
+*   Begin Phase 2: Refactor Core Services to use `@Service` & `@inject`.
+
+*   Begin Phase 3: Update Interfaces to use Full Types.
+
+*   Begin Phase 4: Update DI Registrations in `di-config.ts`.
+
+*   Begin Phase 5: Testing & Validation. 

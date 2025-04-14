@@ -1,5 +1,4 @@
 import type { DirectiveNode } from '@core/syntax/types/index.js';
-import type { ValidationServiceLike } from '@core/shared-service-types.js';
 
 /**
  * Service responsible for validating directive nodes against schemas and constraints.
@@ -17,7 +16,7 @@ import type { ValidationServiceLike } from '@core/shared-service-types.js';
  * Dependencies:
  * - None directly, though validators may depend on other services
  */
-interface IValidationService extends ValidationServiceLike {
+export interface IValidationService {
   /**
    * Validate a directive node against the registered validator for its kind.
    * 
@@ -74,5 +73,3 @@ interface IValidationService extends ValidationServiceLike {
    */
   getRegisteredDirectiveKinds(): string[];
 } 
-
-export type { IValidationService }; 

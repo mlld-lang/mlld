@@ -74,6 +74,7 @@ import {
 } from '@core/types/paths.js';
 import { PathResolver } from '@services/fs/PathService/PathResolver.js';
 import { PathValidationError, PathValidationErrorDetails } from '@core/errors/PathValidationError';
+import { injectable } from 'tsyringe';
 
 /**
  * Internal type for heading nodes in the ResolutionService
@@ -117,6 +118,7 @@ function isHeadingTextNode(node: MeldNode): node is TextNode {
 /**
  * Service responsible for resolving variables, commands, and paths in different contexts
  */
+@injectable()
 @singleton()
 @Service({
   description: 'Service responsible for resolving variable references and other dynamic content'

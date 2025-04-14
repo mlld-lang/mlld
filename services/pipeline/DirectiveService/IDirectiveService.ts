@@ -105,7 +105,7 @@ export interface IDirectiveService {
     pathService: IPathService,
     fileSystemService: IFileSystemService,
     parserService: ParserServiceLike,
-    interpreterServiceClientFactory: any, // Use 'any' to allow both IInterpreterService and InterpreterServiceClientFactory
+    interpreterServiceClientFactory: any,
     circularityService: CircularityServiceLike,
     resolutionService: IResolutionService
   ): void;
