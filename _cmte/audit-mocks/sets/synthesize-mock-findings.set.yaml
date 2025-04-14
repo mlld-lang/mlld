@@ -8,8 +8,9 @@ tasks:
     prior_outputs:
       # Map outputs from the gather-mock-usage set.
       # Assumes the output of analyze-test-file-mocks is named 'output'.
-      # The structure will be like: { DirectiveServiceTests: { output: "..." }, ResolutionServiceTests: { output: "..." }, ... }
-      analysis_notes: "{{ gather-mock-usage.*.output }}" # Gather all outputs
-    # Task context will include analysis_notes map + global_variables
+      # The structure will be an array of outputs from each iteration.
+      # Try including the task name in the reference:
+      analysis_notes: "{{ gather-mock-usage.analyze-test-file-mocks[*].output }}"
+    # Task context will include analysis_notes array + global_variables
 
  
