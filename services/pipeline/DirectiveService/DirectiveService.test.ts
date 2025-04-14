@@ -88,11 +88,17 @@ describe('DirectiveService', () => {
       getResolutionTracker: vi.fn(),
     };
     context.registerMock<IResolutionService>('IResolutionService', mockResolutionService);
-    // Keep the essential spy for resolveInContext, now targeting the manual mock
+    // Keep the essential spy for resolveInContext
     vi.spyOn(mockResolutionService, 'resolveInContext').mockImplementation(async (value, ctx) => {
+      // Add checks for StructuredPath
+      if (typeof value === 'object' && value !== null && 'raw' in value && !Array.isArray(value)) {
+        // It looks like a StructuredPath, try to use raw or stringify
+        return value.raw || JSON.stringify(value) || '';
+      }
       if (typeof value === 'string') return value; 
       if (Array.isArray(value)) return value.map(n => n.type === 'Text' ? n.content : `{{${(n as any).identifier}}}`).join('');
-      return (value as any).raw || JSON.stringify(value) || '';
+      // Fallback for other unexpected types
+      return JSON.stringify(value) || '';
     });
 
     // --- Keep Generic Mocks for Others ---
@@ -103,9 +109,9 @@ describe('DirectiveService', () => {
     context.registerMock<InterpreterServiceClientFactory>('InterpreterServiceClientFactory', createGenericMock<InterpreterServiceClientFactory>());
     context.registerMock<CircularityServiceLike>('ICircularityService', createGenericMock<CircularityServiceLike>());
 
-    // --- SIMPLE MOCK HANDLERS ---
+    // --- SIMPLE MOCK HANDLERS (Corrected based on actual IDirectiveHandler interface) ---
     mockTextHandler = {
-        kind: 'definition',
+        kind: 'text', // Use actual directive kind
         execute: vi.fn().mockImplementation(async (ctx: DirectiveProcessingContext): Promise<IStateService> => {
             const directiveData = (ctx.directiveNode.directive as any);
             const resolvedValue = directiveData.value || 'mock text value'; 
@@ -114,7 +120,7 @@ describe('DirectiveService', () => {
         }),
     };
     mockDataHandler = {
-        kind: 'definition',
+        kind: 'data', // Use actual directive kind
         execute: vi.fn().mockImplementation(async (ctx: DirectiveProcessingContext): Promise<IStateService> => {
             const directiveData = (ctx.directiveNode.directive as any);
             const resolvedValue = directiveData.value || { mockKey: 'mock data value' };
@@ -123,7 +129,7 @@ describe('DirectiveService', () => {
         }),
     };
     mockImportHandler = {
-        kind: 'execution',
+        kind: 'import', // Use actual directive kind
         execute: vi.fn().mockImplementation(async (ctx: DirectiveProcessingContext): Promise<IStateService> => {
              console.log('[MockImportHandler] called for:', ctx.directiveNode.directive.path?.raw)
              return ctx.state;
