@@ -8,16 +8,16 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
 
 describe('ContentResolver', () => {
+  const helpers = TestContextDI.createTestHelpers();
   let contextDI: TestContextDI;
   let resolver: ContentResolver;
-  let stateService: DeepMockProxy<IStateService>;
+  let stateService: IStateService;
   let context: ResolutionContext;
 
   beforeEach(async () => {
-    contextDI = TestContextDI.createIsolated();
-    stateService = mockDeep<IStateService>();
+    contextDI = helpers.setupMinimal();
     
-    contextDI.registerMock<IStateService>('IStateService', stateService);
+    stateService = await contextDI.resolve<IStateService>('IStateService');
     
     resolver = new ContentResolver(stateService);
     

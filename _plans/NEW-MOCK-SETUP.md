@@ -7,6 +7,7 @@ Implement the new, standardized mocking strategy proposed in the `_cmte/audit-mo
 **References:**
 *   **Strategy Proposal:** `_cmte/audit-mocks/output/03-propose-mock-strategy.define-mock-strategy.md`
 *   **Analysis Findings:** `_cmte/audit-mocks/output/02-synthesize-mock-findings.consolidate-mock-analysis.md`
+*   **Handler Audit Plan:** `_plans/PLAN-PHASE-5B.md` (Relevant handler refactoring steps integrated below)
 
 **Key Components of the New Strategy:**
 *   Centralized `MockFactory` (`tests/utils/mocks/MockFactory.ts`).
@@ -17,96 +18,94 @@ Implement the new, standardized mocking strategy proposed in the `_cmte/audit-mo
 
 ## 2. Implementation Phases (Methodical Rollout)
 
-### Phase 1: Implement Core Mock Utilities (No Integration Yet)
+### Phase 1: Implement Core Mock Utilities (No Integration Yet) ✅
 *   **Objective:** Create the foundational mock utilities without modifying existing tests or `TestContextDI`.
 *   **Tasks:**
-    1.  Create `tests/utils/mocks/MockFactory.ts`. Implement static factory methods (`createStateService`, etc.) ensuring accurate interface matching based on previous checks and the strategy proposal.
-    2.  Create `tests/utils/mocks/ClientFactoryHelpers.ts`. Implement `registerClientFactory` and `registerStandardClientFactories`, ensuring all necessary client factories (including `ParserServiceClientFactory`) are mocked.
+    1.  ✅ Create `tests/utils/mocks/MockFactory.ts`. Implement static factory methods (`createStateService`, etc.) ensuring accurate interface matching based on previous checks and the strategy proposal.
+    2.  ✅ Create `tests/utils/mocks/ClientFactoryHelpers.ts`. Implement `registerClientFactory` and `registerStandardClientFactories`, ensuring all necessary client factories (including `ParserServiceClientFactory`) are mocked.
 *   **Verification:** Manually review the created files against the service interfaces and the strategy document. Ensure method signatures are correct.
 
-### Phase 2: Verify `MockFactory` in Isolation (Simple Test Case)
+### Phase 2: Verify `MockFactory` in Isolation (Simple Test Case) ✅
 *   **Objective:** Confirm the `MockFactory` produces usable mocks in a simple, controlled test environment.
-*   **Tasks:**
-    1.  Identify a simple, self-contained test file (e.g., a single directive handler test with minimal external dependencies).
-    2.  In that test file's `beforeEach`:
-        *   Keep the existing `TestContextDI` setup for resolving the *service under test*.
-        *   *Manually* import `MockFactory`.
-        *   Create required mock dependencies using `MockFactory.createXService()`.
-        *   Register these factory-created mocks with the `TestContextDI` instance using `context.registerMock()`.
-    3.  Adapt the tests in that file to use the factory-created mocks (using `vi.spyOn` on these mocks for specific behavior).
+*   **Tasks:** (Verified during Phase 5 refactors)
 *   **Verification:** Run tests *only for this specific file*. Debug any issues. Confirm the factory-created mocks function correctly in this limited scope.
 
-### Phase 3: Verify `ClientFactoryHelpers` in Isolation (Simple Test Case)
+### Phase 3: Verify `ClientFactoryHelpers` in Isolation (Simple Test Case) ✅
 *   **Objective:** Confirm the `ClientFactoryHelpers` correctly mock and register client factories for services with circular dependencies.
-*   **Tasks:**
-    1.  Identify a simple test file involving a service known to use a client factory (e.g., `FileSystemService` or `PathService` tests, if simple ones exist, or create a dedicated small test).
-    2.  In that file's `beforeEach`:
-        *   Keep the existing `TestContextDI` setup.
-        *   *Manually* import `ClientFactoryHelpers`.
-        *   Call `ClientFactoryHelpers.registerStandardClientFactories(context)` or `registerClientFactory` as needed.
-    3.  Adapt the test to verify the interaction with the mocked client factory / client instance.
+*   **Tasks:** (Verified during Phase 5 refactors)
 *   **Verification:** Run tests *only for this specific file*. Debug issues with client factory mock registration and usage.
 
-### Phase 4: Integrate Factories into `TestContextDI` Helpers
+### Phase 4: Integrate Factories into `TestContextDI` Helpers ✅
 *   **Objective:** Refactor `TestContextDI` to leverage the verified `MockFactory` and `ClientFactoryHelpers`.
 *   **Tasks:**
-    1.  Edit `tests/utils/di/TestContextDI.ts`.
-    2.  Import `MockFactory` and `ClientFactoryHelpers`.
-    3.  Implement the proposed helper methods (`setupMinimal`, `setupWithStandardMocks`) ensuring they:
+    1.  ✅ Edit `tests/utils/di/TestContextDI.ts`.
+    2.  ✅ Import `MockFactory` and `ClientFactoryHelpers`.
+    3.  ✅ Implement the proposed helper methods (`setupMinimal`, `setupWithStandardMocks`) ensuring they:
         *   Use `MockFactory.standardFactories` for default service mocks.
         *   Use `ClientFactoryHelpers.registerStandardClientFactories` to handle default client factory mocks.
         *   Register other essential mocks (like `IFileSystem`, `DirectiveLogger`).
-    4.  Refactor the internal `registerServices` (or equivalent initialization logic) to use these defaults cleanly.
+    4.  ✅ Refactor the internal `registerServices` (or equivalent initialization logic) to use these defaults cleanly.
 *   **Verification:** Create a *new*, simple test file (`tests/utils/di/TestContextDIHelpers.test.ts`?) specifically to test the `setupWithStandardMocks` and `setupMinimal` helpers. Verify they create a context and provide the expected default mocks.
 
-### Phase 5: Gradual Migration Using `TestContextDI` Helpers (Simple -> Complex)
-*   **Objective:** Update existing test suites to use the new helpers, starting with simpler ones.
+### Phase 5: Gradual Migration Using `TestContextDI` Helpers (Simple -> Complex) ✅
+*   **Objective:** Update existing test suites to use the new helpers, starting with simpler ones and deferring complex/fixture-suitable ones.
 *   **Tasks:**
-    1.  Refactor the simple test file(s) modified in Phase 2/3 to now use `helpers.setupWithStandardMocks()`.
-    2.  Select another relatively simple test file (e.g., another handler, `StateEventService.test.ts`?). Refactor using the helpers and `vi.spyOn` for test-specific mocks.
-    3.  Run tests specifically for the refactored file and debug any issues.
-    4.  Continue this process incrementally, file by file or small group by small group.
-    5.  **Defer** the most complex/problematic files (`ResolutionService.test.ts`, `PathService.test.ts`, `CLIService.test.ts`, `InterpreterService.unit.test.ts`, `FileSystemService.test.ts`, `RunDirectiveHandler.test.ts`) until later in this phase or Phase 7.
-    6.  **(New)** Continue migrating remaining simpler/medium tests. Candidates include:
+    1.  ✅ Refactor the simple test file(s) modified in Phase 2/3 to now use `helpers.setupWithStandardMocks()`.
+    2.  ✅ Select another relatively simple test file (e.g., another handler, `StateEventService.test.ts`?). Refactor using the helpers and `vi.spyOn` for test-specific mocks.
+    3.  ✅ Run tests specifically for the refactored file and debug any issues.
+    4.  ✅ Continue this process incrementally, file by file or small group by small group.
+    5.  ✅ **Defer** the most complex/problematic files (`ResolutionService.test.ts`, `PathService.test.ts`, `CLIService.test.ts`, `InterpreterService.unit.test.ts`, `FileSystemService.test.ts`, `RunDirectiveHandler.test.ts`) until later phases.
+    6.  ✅ **(New)** Continue migrating remaining simpler/medium tests that *do not* primarily test directive handlers or interpreter logic. Candidates completed:
+        *   ✅ `services/resolution/ResolutionService/resolvers/CommandResolver.test.ts`
+        *   ✅ `services/resolution/ResolutionService/resolvers/ContentResolver.test.ts`
+        *   ✅ `services/resolution/ResolutionService/resolvers/StringConcatenationHandler.test.ts`
+        *   ✅ `services/resolution/ResolutionService/resolvers/StringLiteralHandler.test.ts`
+        *   ✅ `services/resolution/URLContentResolver/URLContentResolver.test.ts` (No DI changes needed)
+        *   ✅ `services/resolution/ValidationService/validators/FuzzyMatchingValidator.test.ts` (No DI changes needed)
+        *   ✅ `services/sourcemap/SourceMapService.test.ts` (DI part refactored)
+        *   ✅ `services/state/StateEventService/StateInstrumentation.test.ts` (No DI changes needed)
+        *   ✅ `services/state/StateService/migration.test.ts`
+        *   ✅ `services/state/StateService/StateFactory.test.ts`
+        *   ✅ `services/state/utilities/StateVariableCopier.test.ts`
+    7.  Identify remaining files suitable for Phase 5 (non-handler/interpreter focused):
         *   `services/fs/FileSystemService/NodeFileSystem.test.ts`
         *   `services/fs/ProjectPathResolver.test.ts`
-        *   `services/pipeline/DirectiveService/DirectiveService.integration.test.ts`
-        *   `services/pipeline/DirectiveService/DirectiveService.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.command.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.integration.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.transformation.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.transformation.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.transformation.test.ts`
-        *   `services/pipeline/InterpreterService/InterpreterService.integration.test.ts`
-        *   `services/pipeline/OutputService/OutputService.test.ts`
         *   `services/pipeline/ParserService/ParserService.test.ts`
-        *   `services/resolution/ResolutionService/resolvers/CommandResolver.test.ts`
-        *   `services/resolution/ResolutionService/resolvers/ContentResolver.test.ts`
-        *   `services/resolution/ResolutionService/resolvers/StringConcatenationHandler.test.ts`
-        *   `services/resolution/ResolutionService/resolvers/StringLiteralHandler.test.ts`
         *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.edge.test.ts`
         *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts`
-        *   `services/resolution/URLContentResolver/URLContentResolver.test.ts`
-        *   `services/resolution/ValidationService/validators/FuzzyMatchingValidator.test.ts`
-        *   `services/sourcemap/SourceMapService.test.ts`
-        *   `services/state/StateEventService/StateInstrumentation.test.ts`
-        *   `services/state/StateService/migration.test.ts`
-        *   `services/state/StateService/StateFactory.test.ts`
         *   `services/state/StateService/StateService.test.ts`
-        *   `services/state/utilities/StateVariableCopier.test.ts`
         *   Files under `tests/` directory should be evaluated individually for applicability.
-*   **Verification:** Test each refactored file individually. Periodically run `npm test services` to track progress, but expect failures until most files are migrated.
+*   **Verification:** Test each refactored file individually. Periodically run `npm test services` to track progress.
 
-### Phase 6: Introduce & Verify Test Fixtures
-*   **Objective:** Create and utilize test fixtures for common, complex setups like directive and interpreter testing.
+### Phase 6: Introduce & Verify Test Fixtures & Refactor Handlers/Interpreter
+*   **Objective:** Create and utilize test fixtures for common setups, and refactor deferred handler/interpreter tests using these fixtures, addressing issues identified in `PLAN-PHASE-5B.md`.
 *   **Tasks:**
-    1.  Create `tests/utils/fixtures/DirectiveTestFixture.ts` (ensure it uses the new `TestContextDI` helpers).
-    2.  Refactor relevant handler tests (e.g., `TextDirectiveHandler.test.ts`) to use `DirectiveTestFixture`. Debug fixture usage.
-    3.  Create `tests/utils/fixtures/InterpreterTestFixture.ts` (ensure it uses the new `TestContextDI` helpers).
-    4.  Refactor relevant interpreter tests (e.g., `InterpreterService.unit.test.ts`) to use `InterpreterTestFixture`. Debug fixture usage. Address the `NodeFactory.js` import error here if it still exists.
-*   **Verification:** Run tests specifically for fixture-using files. Ensure fixtures provide the correct setup and simplify the tests.
+    1.  **Stabilize Interfaces/Mocks (Review):** Briefly review core interfaces (`IValidationService`, `IResolutionService`, `IFileSystemService`) and their corresponding mocks in `MockFactory` against `PLAN-PHASE-5B.md` (Phase 5B.1/5B.2) findings. Make minor adjustments if necessary *before* building fixtures.
+    2.  **Create `DirectiveTestFixture.ts`:** Implement the fixture in `tests/utils/fixtures/`, ensuring it uses the new `TestContextDI` helpers and provides a standardized setup for handler testing.
+    3.  **Refactor Directive Handler Tests:** Use `DirectiveTestFixture` to refactor relevant handler tests deferred from Phase 5. While refactoring each test file, ensure the handler code itself is updated according to `PLAN-PHASE-5B.md`, Phase 5B.4:
+        *   Update `execute` signature.
+        *   Use `context` parameter correctly.
+        *   Update service calls to match revised interfaces.
+        *   Remove unused injections.
+        *   Standardize `DirectiveError` usage.
+        *   Remove internal `state.clone()` calls.
+        *   Fix test setup, assertions, and linter errors.
+        *   Target Handler Tests:
+            *   `services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.test.ts`
+            *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.command.test.ts`
+            *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.integration.test.ts`
+            *   `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.transformation.test.ts`
+            *   `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.test.ts`
+            *   `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.transformation.test.ts`
+            *   `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.test.ts`
+            *   `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.transformation.test.ts`
+    4.  **Create `InterpreterTestFixture.ts`:** Implement the fixture in `tests/utils/fixtures/`, ensuring it uses the new `TestContextDI` helpers.
+    5.  **Refactor Interpreter Tests:** Use `InterpreterTestFixture` to refactor relevant interpreter tests deferred from Phase 5. Apply relevant refactoring principles (context usage, updated service calls, etc.).
+        *   Target Interpreter Tests:
+            *   `services/pipeline/InterpreterService/InterpreterService.integration.test.ts`
+            *   `services/pipeline/InterpreterService/InterpreterService.unit.test.ts`
+    6.  **Refactor Other Suitable Tests:** Use the created fixtures (or new ones if needed) to refactor other suitable tests deferred from Phase 5 (e.g., `DirectiveService.integration.test.ts`, `DirectiveService.test.ts`, `OutputService.test.ts`? Apply relevant refactoring principles.).
+*   **Verification:** Run tests specifically for fixture-using files. Ensure fixtures provide the correct setup and simplify the tests. Ensure handler/interpreter code aligns with updated interfaces and practices.
 
 ### Phase 7: Tackle Complex Test Suites
 *   **Objective:** Apply the verified strategy, helpers, and potentially fixtures to the most complex test suites identified earlier.
@@ -116,6 +115,7 @@ Implement the new, standardized mocking strategy proposed in the `_cmte/audit-mo
         *   Resolving the `ResolutionContext.withStrict` issue (revisit factory/type/usage).
     2.  Refactor `PathService.test.ts`, focusing on correct `FileSystemServiceClient` mocking for different validation scenarios.
     3.  Refactor `CLIService.test.ts`, ensuring `IFileSystemService.exists` and file writing/reading are mocked correctly for test cases.
+    4.  Refactor `FileSystemService.test.ts`.
 *   **Verification:** Focused debugging and testing for these specific complex files. Ensure mocks accurately reflect the service's interactions.
 
 ### Phase 8: Validation & Cleanup
@@ -123,11 +123,12 @@ Implement the new, standardized mocking strategy proposed in the `_cmte/audit-mo
 *   **Tasks:**
     1.  Run the *entire* test suite (`npm test`) and fix any remaining failures.
     2.  Address previously skipped tests, attempting to enable and fix them using the new mocking strategy.
-    3.  Perform a final review for consistency across test files.
+    3.  Perform a final review for consistency across test files, ensuring handler/service issues identified in `PLAN-PHASE-5B.md` are resolved.
     4.  Remove any old/unused mock utilities or helper functions (e.g., from `serviceMocks.js`).
     5.  Update testing documentation (`docs/dev/TESTS.md` or similar) to reflect the new standard mocking strategy.
     6.  Ensure TypeScript checks (`tsc --noEmit`) pass cleanly.
 
 ## 3. Next Steps
 
-*   Begin Phase 1: Create `MockFactory.ts` and `ClientFactoryHelpers.ts`. 
+*   Continue remaining Phase 5 tasks (non-handler/interpreter files).
+*   Begin Phase 6: Review interfaces/mocks, then create `tests/utils/fixtures/DirectiveTestFixture.ts`. 

@@ -6,16 +6,18 @@ import type { StateNode } from '@services/state/StateService/types.js';
 import type { IStateService, ICommandDefinition, MigrationResult, IFilesystemPathState } from '@services/state/StateService/types.js';
 import { vi } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/index.js';
-import { mockDeep } from 'vitest-mock-extended';
+import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
 
 describe('State Migration', () => {
+  const helpers = TestContextDI.createTestHelpers();
   let context: TestContextDI;
   let oldState: IStateService;
   let result: MigrationResult;
 
   beforeEach(async () => {
-    context = TestContextDI.createIsolated();
-    const mockState = mockDeep<IStateService>();
+    context = helpers.setupMinimal();
+    
+    oldState = MockFactory.createStateService();
     
     const textVars = new Map<string, any>();
     const dataVars = new Map<string, any>();
@@ -24,24 +26,20 @@ describe('State Migration', () => {
     const imports = new Set<string>();
     const nodes: MeldNode[] = [];
 
-    mockState.setTextVar.mockImplementation((name, value) => { textVars.set(name, { value }); });
-    mockState.setDataVar.mockImplementation((name, value) => { dataVars.set(name, { value }); });
-    mockState.setPathVar.mockImplementation((name, value) => { pathVars.set(name, { value }); });
-    mockState.setCommandVar.mockImplementation((name, value) => { commandVars.set(name, { name, value }); });
-    mockState.addImport.mockImplementation((path) => { imports.add(path); });
-    mockState.addNode.mockImplementation((node) => { nodes.push(node); });
+    vi.spyOn(oldState, 'setTextVar').mockImplementation(async (name, value) => { textVars.set(name, { value }); return { name, value }; });
+    vi.spyOn(oldState, 'setDataVar').mockImplementation(async (name, value) => { dataVars.set(name, { value }); return { name, value }; });
+    vi.spyOn(oldState, 'setPathVar').mockImplementation(async (name, value) => { pathVars.set(name, { value }); return { name, value }; });
+    vi.spyOn(oldState, 'setCommandVar').mockImplementation(async (name, value) => { commandVars.set(name, value ); return { name, value }; });
+    vi.spyOn(oldState, 'addImport').mockImplementation((path) => { imports.add(path); });
+    vi.spyOn(oldState, 'addNode').mockImplementation((node) => { nodes.push(node); });
 
-    mockState.getAllTextVars.mockReturnValue(textVars);
-    mockState.getAllDataVars.mockReturnValue(dataVars);
-    mockState.getAllPathVars.mockReturnValue(pathVars);
-    mockState.getAllCommands.mockReturnValue(commandVars);
-    mockState.getImports.mockReturnValue(imports);
-    mockState.getNodes.mockReturnValue(nodes);
-    mockState.getCurrentFilePath.mockReturnValue(null);
-
-    context.registerMock<IStateService>('IStateService', mockState);
-    
-    oldState = await context.resolve<IStateService>('IStateService');
+    vi.spyOn(oldState, 'getAllTextVars').mockReturnValue(textVars);
+    vi.spyOn(oldState, 'getAllDataVars').mockReturnValue(dataVars);
+    vi.spyOn(oldState, 'getAllPathVars').mockReturnValue(pathVars);
+    vi.spyOn(oldState, 'getAllCommands').mockReturnValue(commandVars);
+    vi.spyOn(oldState, 'getImports').mockReturnValue(imports);
+    vi.spyOn(oldState, 'getNodes').mockReturnValue(nodes);
+    vi.spyOn(oldState, 'getCurrentFilePath').mockReturnValue(null);
   });
 
   afterEach(async () => {
@@ -172,7 +170,7 @@ describe('State Migration', () => {
 
   describe('error handling', () => {
     it('should handle migration errors gracefully', () => {
-      const errorMock = mockDeep<IStateService>();
+      const errorMock = MockFactory.createStateService();
       errorMock.getAllTextVars.mockImplementation(() => { throw new Error('Test error'); });
       errorMock.getAllDataVars.mockReturnValue(new Map());
       errorMock.getAllPathVars.mockReturnValue(new Map());

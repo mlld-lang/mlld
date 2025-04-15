@@ -27,11 +27,12 @@ vi.mock('@core/utils/logger', () => ({
 }));
 
 describe('CommandResolver', () => {
+  const helpers = TestContextDI.createTestHelpers(); // Define helpers
   let contextDI: TestContextDI;
   let resolver: CommandResolver;
-  let stateService: DeepMockProxy<IStateService>;
-  let fileSystemService: DeepMockProxy<IFileSystemService>;
-  let parserService: DeepMockProxy<IParserService>;
+  let stateService: IStateService; // Use interface type
+  let fileSystemService: IFileSystemService; // Use interface type
+  let parserService: IParserService; // Use interface type
   let context: ResolutionContext;
 
   const mockSimpleCmdDef: IBasicCommandDefinition = {
@@ -60,13 +61,16 @@ describe('CommandResolver', () => {
   };
 
   beforeEach(async () => {
-    contextDI = TestContextDI.createIsolated();
+    // Use standard setup with mocks
+    contextDI = helpers.setupWithStandardMocks();
 
-    stateService = mockDeep<IStateService>();
-    fileSystemService = mockDeep<IFileSystemService>();
-    parserService = mockDeep<IParserService>(); 
+    // Resolve mocked services from the container
+    stateService = await contextDI.resolve<IStateService>('IStateService');
+    fileSystemService = await contextDI.resolve<IFileSystemService>('IFileSystemService');
+    parserService = await contextDI.resolve<IParserService>('IParserService');
 
-    stateService.getCommandVar.mockImplementation((name: string): CommandVariable | undefined => {
+    // Configure mocks using vi.spyOn for test-specific behavior
+    vi.spyOn(stateService, 'getCommandVar').mockImplementation((name: string): CommandVariable | undefined => {
       let definition: IBasicCommandDefinition | undefined;
       if (name === 'simple') definition = mockSimpleCmdDef;
       if (name === 'echo') definition = mockEchoCmdDef;
@@ -78,18 +82,16 @@ describe('CommandResolver', () => {
       return undefined;
     });
     
-    fileSystemService.executeCommand.mockResolvedValue({ stdout: '', stderr: '' });
-    fileSystemService.dirname.mockImplementation(p => p ? p.substring(0, p.lastIndexOf('/') || 0) : '');
-    fileSystemService.getCwd.mockReturnValue('/mock/cwd');
+    vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValue({ stdout: '', stderr: '' });
+    vi.spyOn(fileSystemService, 'dirname').mockImplementation(p => p ? p.substring(0, p.lastIndexOf('/') || 0) : '');
+    vi.spyOn(fileSystemService, 'getCwd').mockReturnValue('/mock/cwd');
     
-    stateService.getCurrentFilePath.mockReturnValue('/mock/dir/test.meld');
-
-    contextDI.registerMock<IStateService>('IStateService', stateService);
-    contextDI.registerMock<IFileSystemService>('IFileSystemService', fileSystemService);
-    contextDI.registerMock<IParserService>('IParserService', parserService);
+    vi.spyOn(stateService, 'getCurrentFilePath').mockReturnValue('/mock/dir/test.meld');
     
+    // Instantiate CommandResolver directly with resolved mocks
     resolver = new CommandResolver(stateService, fileSystemService, parserService); 
 
+    // Create ResolutionContext
     context = ResolutionContextFactory.create(stateService, 'test.meld')
                .withAllowedTypes([VariableType.COMMAND]); 
   });

@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from 'vitest';
+import { describe, expect, test, beforeEach, afterEach } from 'vitest';
 import { SourceMapService, sourceMapService, SourceLocation, ISourceMapService } from '@core/utils/SourceMapService.js';
 import { extractErrorLocation, extractLocationFromErrorObject, addMapping, resetSourceMaps } from '@core/utils/sourceMapUtils.js';
 import { MeldError } from '@core/errors/MeldError.js';
@@ -128,19 +128,26 @@ describe('SourceMapService', () => {
 
   // Test for DI mode
   describe('DI mode', () => {
+    const helpers = TestContextDI.createTestHelpers(); // Define helpers
     let testContext: TestContextDI;
     let sourceMapService: ISourceMapService;
 
     beforeEach(async () => {
-      // Create a new test context with DI
-      testContext = TestContextDI.createIsolated();
-      await testContext.initialize();
+      // Create a new test context using the minimal setup helper
+      testContext = helpers.setupMinimal();
+      // Initialize if needed (setupMinimal might handle this)
+      // await testContext.initialize(); 
 
-      // Get the SourceMapService from the container
-      sourceMapService = container.resolve<ISourceMapService>(SourceMapService);
+      // Resolve the SourceMapService using the context resolver
+      sourceMapService = await testContext.resolve<ISourceMapService>('ISourceMapService');
       
       // Reset the service for clean test state
       sourceMapService.reset();
+    });
+
+    // Add afterEach for cleanup
+    afterEach(async () => {
+      await testContext?.cleanup();
     });
 
     test('should register source files via DI', () => {

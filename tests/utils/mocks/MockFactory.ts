@@ -6,6 +6,7 @@ import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 
 export class MockFactory {
   /**
@@ -19,6 +20,7 @@ export class MockFactory {
     'IDirectiveService': () => MockFactory.createDirectiveService(),
     'IInterpreterService': () => MockFactory.createInterpreterService(),
     'IParserService': () => MockFactory.createParserService(),
+    'IValidationService': () => MockFactory.createValidationService(),
     // Add other core services as needed
   };
 
@@ -247,6 +249,20 @@ export class MockFactory {
       parseFile: vi.fn().mockResolvedValue([]),
       parse: vi.fn().mockResolvedValue([]),
       parseWithLocations: vi.fn().mockResolvedValue([])
+    };
+    
+    return { ...baseMock, ...overrides };
+  }
+  
+  /**
+   * Create a typed mock validation service
+   */
+  static createValidationService(overrides: Partial<IValidationService> = {}): IValidationService {
+    const baseMock: IValidationService = {
+      validate: vi.fn().mockResolvedValue(undefined),
+      registerValidator: vi.fn(),
+      removeValidator: vi.fn(),
+      getRegisteredDirectiveKinds: vi.fn().mockReturnValue(['text', 'data', 'path', 'define', 'run', 'embed', 'import'])
     };
     
     return { ...baseMock, ...overrides };
