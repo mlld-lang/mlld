@@ -4,16 +4,20 @@ import type { StateNode, IStateFactory } from '@services/state/StateService/type
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
 describe('StateFactory', () => {
+  const helpers = TestContextDI.createTestHelpers(); // Define helpers
   let factory: IStateFactory;
   let context: TestContextDI;
 
   beforeEach(async () => {
-    // Create test context with isolated DI container
-    context = TestContextDI.createIsolated();
-    await context.initialize();
+    // Use setupMinimal helper, which provides basic DI without extensive mocks
+    context = helpers.setupMinimal(); 
+    // Initialization is handled within setupMinimal if needed
     
-    // Get service instance using DI with await for proper initialization
+    // Get service instance using DI (expecting the real factory)
     factory = await context.resolve<IStateFactory>('IStateFactory');
+    
+    // Add a check to ensure we got the real factory
+    expect(factory).toBeInstanceOf(StateFactory);
   });
 
   afterEach(async () => {

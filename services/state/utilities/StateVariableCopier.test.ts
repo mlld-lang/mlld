@@ -1,18 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
 
 describe('StateVariableCopier', () => {
-  // Create mock state services
+  const helpers = TestContextDI.createTestHelpers();
+  let context: TestContextDI;
   let sourceState: IStateService;
   let targetState: IStateService;
   let trackingService: IStateTrackingService;
   let copier: StateVariableCopier;
   
-  beforeEach(() => {
-    // Mock source state
-    sourceState = {
+  beforeEach(async () => {
+    context = helpers.setupMinimal();
+    
+    sourceState = MockFactory.createStateService({
       getStateId: vi.fn().mockReturnValue('source-state-id'),
       getCurrentFilePath: vi.fn().mockReturnValue('/path/to/file.meld'),
       
@@ -21,56 +25,31 @@ describe('StateVariableCopier', () => {
         ['textVar1', 'text value 1'],
         ['textVar2', 'text value 2']
       ])),
-      getTextVar: vi.fn((name) => {
-        const vars = new Map([
-          ['textVar1', 'text value 1'],
-          ['textVar2', 'text value 2']
-        ]);
-        return vars.get(name);
-      }),
+      getTextVar: vi.fn((name) => sourceState.getAllTextVars!().get(name)),
       
       // Data variables
       getAllDataVars: vi.fn().mockReturnValue(new Map([
         ['dataVar1', { key: 'value' }],
         ['dataVar2', [1, 2, 3]]
       ])),
-      getDataVar: vi.fn((name) => {
-        const vars = new Map([
-          ['dataVar1', { key: 'value' }],
-          ['dataVar2', [1, 2, 3]]
-        ]);
-        return vars.get(name);
-      }),
+      getDataVar: vi.fn((name) => sourceState.getAllDataVars!().get(name)),
       
       // Path variables
       getAllPathVars: vi.fn().mockReturnValue(new Map([
         ['pathVar1', '/path/to/somewhere'],
         ['pathVar2', './relative/path']
       ])),
-      getPathVar: vi.fn((name) => {
-        const vars = new Map([
-          ['pathVar1', '/path/to/somewhere'],
-          ['pathVar2', './relative/path']
-        ]);
-        return vars.get(name);
-      }),
+      getPathVar: vi.fn((name) => sourceState.getAllPathVars!().get(name)),
       
       // Commands
       getAllCommands: vi.fn().mockReturnValue(new Map([
         ['cmd1', { command: 'echo hello' }],
         ['cmd2', { command: 'ls -la', options: { cwd: '/' } }]
       ])),
-      getCommand: vi.fn((name) => {
-        const commands = new Map([
-          ['cmd1', { command: 'echo hello' }],
-          ['cmd2', { command: 'ls -la', options: { cwd: '/' } }]
-        ]);
-        return commands.get(name);
-      })
-    } as unknown as IStateService;
+      getCommand: vi.fn((name) => sourceState.getAllCommands!().get(name)),
+    });
     
-    // Mock target state
-    targetState = {
+    targetState = MockFactory.createStateService({
       getStateId: vi.fn().mockReturnValue('target-state-id'),
       setTextVar: vi.fn(),
       setDataVar: vi.fn(),
@@ -80,16 +59,18 @@ describe('StateVariableCopier', () => {
       getDataVar: vi.fn(),
       getPathVar: vi.fn(),
       getCommand: vi.fn()
-    } as unknown as IStateService;
+    });
     
-    // Mock tracking service
     trackingService = {
       trackContextBoundary: vi.fn(),
       trackVariableCrossing: vi.fn()
     } as unknown as IStateTrackingService;
     
-    // Create the copier with tracking
     copier = new StateVariableCopier(trackingService);
+  });
+  
+  afterEach(async () => {
+    await context?.cleanup();
   });
   
   describe('copyAllVariables', () => {
