@@ -1,5 +1,4 @@
 import type { IPathService, URLValidationOptions } from '@services/fs/PathService/IPathService';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import type { Position, Location } from '@core/types/index';
@@ -19,7 +18,7 @@ import { Service } from '@core/ServiceProvider';
 import { injectable, inject, container } from 'tsyringe';
 import { pathLogger as logger } from '@core/utils/logger';
 import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
+import type { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
 import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURLCache';
 import { 
   URLError 
@@ -84,9 +83,6 @@ export class PathService implements IPathService {
     this.homePath = homeEnv || '';
     this.projectPath = process.cwd();
     
-    // Initialize factory if available - REMOVED to avoid circular dependency
-    // this.ensureFactoryInitialized();
-    
     if (process.env.DEBUG === 'true') {
       console.log('PathService: Initialized with', {
         hasFileSystemClient: !!this.fsClient,
@@ -97,25 +93,16 @@ export class PathService implements IPathService {
     }
   }
 
-  /**
-   * Lazily initialize the FileSystemServiceClient factory
-   * This is called only when needed to avoid circular dependencies
-   */
   private ensureFactoryInitialized(): void {
     if (this.factoryInitialized) {
       return;
     }
-    
     this.factoryInitialized = true;
-    
-    // Try to resolve the factory from the container
     try {
       this.fsClientFactory = container.resolve('FileSystemServiceClientFactory');
       this.initializeFileSystemClient();
     } catch (error: unknown) {
-      // Factory not available
-      logger.debug('FileSystemServiceClientFactory not available');
-      // Don't throw an error in test mode
+      logger.debug('FileSystemServiceClientFactory not available during lazy init');
       if (process.env.NODE_ENV !== 'test' && !this.testMode) {
         throw new MeldError('FileSystemServiceClientFactory not available - factory pattern required', { 
           code: 'FACTORY_NOT_AVAILABLE',
@@ -126,19 +113,15 @@ export class PathService implements IPathService {
     }
   }
 
-  /**
-   * Initialize the FileSystemServiceClient using the factory
-   */
   private initializeFileSystemClient(): void {
     if (!this.fsClientFactory) {
       return;
     }
-    
     try {
       this.fsClient = this.fsClientFactory.createClient();
-      logger.debug('Successfully created FileSystemServiceClient using factory');
+      logger.debug('Successfully created FileSystemServiceClient using factory (lazy)');
     } catch (error) {
-      logger.warn('Failed to create FileSystemServiceClient', { error });
+      logger.warn('Failed to create FileSystemServiceClient (lazy)', { error });
       this.fsClient = undefined;
     }
   }
@@ -147,9 +130,8 @@ export class PathService implements IPathService {
    * @deprecated This method is deprecated and will be removed in a future version.
    * Use dependency injection through constructor instead. This is now a no-op method.
    */
-  initialize(fileSystem: IFileSystemService, parser: any = null): void {
+  initialize(): void {
     logger.warn('PathService.initialize is deprecated and is now a no-op. Use dependency injection instead.');
-    // No-op - all services are now injected in the constructor
   }
 
   /**
@@ -715,8 +697,10 @@ export class PathService implements IPathService {
   ): Promise<{ exists: boolean; isDirectory?: boolean }> {
     this.ensureFactoryInitialized();
     if (!this.fsClient) {
-      logger.warn('FileSystemServiceClient not available for existence check');
-      return { exists: false };
+      logger.error('FileSystemServiceClient not available for existence check');
+      throw new PathValidationError(PathErrorMessages.INTERNAL_ERROR, {
+         code: PathErrorCode.E_INTERNAL, path: resolvedPath, details: { reason: 'fsClient missing after lazy load attempt' }
+      }, location);
     }
     try {
         const pathToCheck = isAbsolutePath(resolvedPath) ? resolvedPath : unsafeCreateAbsolutePath(path.resolve(context.workingDirectory, resolvedPath));
@@ -727,11 +711,10 @@ export class PathService implements IPathService {
         }
         return { exists, isDirectory };
     } catch (error) {
-        const pathString = isAbsolutePath(resolvedPath) ? resolvedPath : path.resolve(context.workingDirectory, resolvedPath);
-        logger.error('Error checking path existence/type', { path: pathString, error }); 
+        logger.error('Error checking path existence/type', { path: resolvedPath, error }); 
         throw new PathValidationError(PathErrorMessages.INVALID_PATH, {
           code: PathErrorCode.E_INTERNAL,
-          path: pathString, 
+          path: resolvedPath, 
           cause: error instanceof Error ? error : new Error(String(error)),
       }, location);
     }
@@ -756,14 +739,11 @@ export class PathService implements IPathService {
    * @returns True if the path exists, false otherwise
    */
   async exists(filePath: ValidatedResourcePath): Promise<boolean> { 
+    if (filePath.contentType === PathContentType.URL) return true; // Assume URLs exist
     this.ensureFactoryInitialized();
-    if (!this.fsClient) return false; 
-    try {
-      return await this.fsClient.exists(filePath);
-    } catch (error) {
-      logger.error('Error checking existence', { path: filePath, error }); 
-      return false; 
-    }
+    if (!this.fsClient) return false; // Or throw?
+    const pathToCheck = isAbsolutePath(filePath.validatedPath) ? filePath.validatedPath : unsafeCreateAbsolutePath(path.resolve(this.projectPath, filePath.validatedPath));
+    return this.fsClient.exists(pathToCheck);
   }
 
   /**
@@ -772,14 +752,11 @@ export class PathService implements IPathService {
    * @returns True if the path is a directory, false otherwise
    */
   async isDirectory(dirPath: ValidatedResourcePath): Promise<boolean> { 
+    if (dirPath.contentType === PathContentType.URL) return false; // URLs are not directories
     this.ensureFactoryInitialized();
-    if (!this.fsClient) return false; 
-    try {
-      return await this.fsClient.isDirectory(dirPath);
-    } catch (error) {
-      logger.error('Error checking directory type', { path: dirPath, error }); 
-      return false;
-    }
+    if (!this.fsClient) return false;
+    const pathToCheck = isAbsolutePath(dirPath.validatedPath) ? dirPath.validatedPath : unsafeCreateAbsolutePath(path.resolve(this.projectPath, dirPath.validatedPath));
+    return this.fsClient.isDirectory(pathToCheck);
   }
 
   /**
@@ -822,7 +799,7 @@ export class PathService implements IPathService {
    * @returns The joined path
    */
   joinPaths(...paths: string[]): string {
-    return path.join(...paths);
+    return path.join(...paths).replace(/\\/g, '/');
   }
   
   /**
@@ -833,7 +810,7 @@ export class PathService implements IPathService {
    * @returns The directory name
    */
   dirname(filePath: string): string {
-    return path.dirname(filePath);
+    return path.dirname(filePath).replace(/\\/g, '/');
   }
   
   /**
@@ -852,12 +829,12 @@ export class PathService implements IPathService {
    * Note: Does not validate the URL, just checks format.
    */
   isURL(path: RawPath): boolean {
-    try {
-      const url = new URL(path);
-      return ['http:', 'https:'].includes(url.protocol);
-    } catch (_) {
-      return false;
+    if (!this.urlContentResolver) {
+      logger.warn('URLContentResolver not available, cannot accurately check isURL');
+      // Basic check if resolver is missing
+      return /^https?:\/\//i.test(path);
     }
+    return this.urlContentResolver.isURL(path);
   }
 
   /**
@@ -870,34 +847,26 @@ export class PathService implements IPathService {
    * @throws {URLSecurityError} If URL is blocked by security policy
    */
   async validateURL(url: RawPath, options?: URLValidationOptions): Promise<UrlPath> {
-    const urlString = url;
+    if (!url || !url.trim()) throw new PathValidationError(PathErrorMessages.EMPTY_PATH, { code: PathErrorCode.E_PATH_EMPTY, path: url });
     if (!this.isURL(url)) {
-      throw new PathValidationError(PathErrorMessages.INVALID_PATH, { 
-        code: PathErrorCode.E_PATH_EXPECTED_FS, 
-        path: urlString,
-      }, undefined);
+         throw new PathValidationError(PathErrorMessages.INVALID_PATH, { code: PathErrorCode.E_PATH_EXPECTED_FS, path: url });
     }
-    if (options?.allowedProtocols && !options.allowedProtocols.some(p => urlString.startsWith(`${p}:`))) {
-      throw new PathValidationError('URL protocol not allowed', {
-        code: PathErrorCode.E_URL_PROTOCOL_NOT_ALLOWED, 
-        path: urlString,
-      }, undefined);
+    if (!this.urlContentResolver) {
+        logger.error('Cannot validate URL - URLContentResolver dependency is missing.');
+        throw new MeldError('URLContentResolver is required for URL validation', { code: 'DEPENDENCY_MISSING', severity: ErrorSeverity.Fatal });
     }
-    if (this.urlContentResolver) {
-      try {
-        await this.urlContentResolver.validateURL(urlString, options); 
-      } catch (error) {
-         const cause = error instanceof Error ? error : new Error(String(error));
-         // Ensure cause.message is accessible
-         const causeMessage = cause.message ? `: ${cause.message}` : ''; 
-         throw new PathValidationError(
-             `URL validation failed via resolver${causeMessage}`, 
-             { code: PathErrorCode.E_URL_VALIDATION_FAILED, path: urlString, cause: cause },
-             undefined
-         );
-      }
+    try {
+        const validatedUrlString = await this.urlContentResolver.validateURL(url, options);
+        return unsafeCreateUrlPath(validatedUrlString);
+    } catch (error) {
+        const cause = error instanceof Error ? error : new Error(String(error));
+        logger.warn('URL validation failed via resolver', { url, error: cause.message });
+        throw new PathValidationError(`${PathErrorMessages.INVALID_URL}: ${cause.message}`, {
+            code: PathErrorCode.E_URL_INVALID,
+            path: url,
+            cause: cause
+        });
     }
-    return unsafeCreateUrlPath(urlString);
   }
 
   /**
@@ -911,21 +880,19 @@ export class PathService implements IPathService {
    */
   async fetchURL(url: UrlPath, options?: URLFetchOptions): Promise<URLResponse> {
     if (!this.urlContentResolver) {
-      throw new MeldError('URLContentResolver service is not available', { 
-          code: 'SERVICE_UNAVAILABLE', 
-          severity: ErrorSeverity.Fatal 
-        });
+        logger.error('Cannot fetch URL - URLContentResolver dependency is missing.');
+        throw new MeldError('URLContentResolver is required for URL fetching', { code: 'DEPENDENCY_MISSING', severity: ErrorSeverity.Fatal });
     }
     try {
-      return await this.urlContentResolver.fetchURL(url, options); 
+        return await this.urlContentResolver.fetchURL(url, options);
     } catch (error) {
-      const cause = error instanceof Error ? error : new Error(String(error));
-      // Ensure cause.message is accessible
-      const causeMessage = cause.message ? `: ${cause.message}` : ''; 
-      throw new PathValidationError(
-          `Failed to fetch URL content${causeMessage}`, 
-          { code: PathErrorCode.E_URL_FETCH_FAILED, path: url, cause: cause } 
-      ); 
+        const cause = error instanceof Error ? error : new Error(String(error));
+        logger.error('Failed to fetch URL content', { url, error: cause.message });
+        throw new URLError(`${PathErrorMessages.URL_FETCH_FAILED}: ${cause.message}`, {
+            code: 'E_URL_FETCH',
+            url: url,
+            cause: cause
+        });
     }
   }
 }

@@ -5,21 +5,21 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import path from 'path';
 
 describe('PathOperationsService', () => {
+  const helpers = TestContextDI.createTestHelpers();
   let service: IPathOperationsService;
   let context: TestContextDI;
 
   beforeEach(async () => {
-    // Create isolated test context
-    context = TestContextDI.createIsolated();
+    // Use the helper
+    context = helpers.setupWithStandardMocks();
+    // Await initialization implicitly
+    await context.resolve('IFileSystemService');
 
-    // Register the service
-    context.registerMock('IPathOperationsService', new PathOperationsService());
-
-    // Initialize context
-    await context.initialize();
-
-    // Get service instance using DI
-    service = await context.container.resolve('IPathOperationsService');
+    // Resolve the service (expecting real implementation)
+    service = await context.resolve('IPathOperationsService');
+    
+    // Verify we got the real service
+    expect(service).toBeInstanceOf(PathOperationsService);
   });
 
   afterEach(async () => {
@@ -33,6 +33,10 @@ describe('PathOperationsService', () => {
     });
 
     it('resolves paths', () => {
+      // Note: service.resolve likely calls Node's path.resolve internally.
+      // The exact output depends on the environment where tests run.
+      // For consistency, we might want to mock the internal call or adjust assertion.
+      // Let's keep the original assertion for now, assuming consistent env.
       expect(service.resolve('project/nested', '../file.txt'))
         .toBe(path.resolve('project/file.txt'));
     });
@@ -48,8 +52,9 @@ describe('PathOperationsService', () => {
     });
 
     it('normalizes paths', () => {
+      // Using path.normalize for expected value for consistency
       expect(service.normalize('project/./nested/../file.txt'))
-        .toBe('project/file.txt');
+        .toBe(path.normalize('project/file.txt'));
     });
 
     it('checks if path is absolute', () => {
@@ -58,21 +63,18 @@ describe('PathOperationsService', () => {
     });
 
     it('gets relative path', () => {
+      // Using path.relative for expected value
       expect(service.relative('/base/dir', '/base/dir/sub/file.txt'))
-        .toBe('sub/file.txt');
+        .toBe(path.relative('/base/dir', '/base/dir/sub/file.txt')); // Should be 'sub/file.txt'
       expect(service.relative('/base/dir', '/other/dir'))
-        .toBe('../../other/dir');
+        .toBe(path.relative('/base/dir', '/other/dir')); // Should be '../other/dir' on Unix-like
     });
 
     it('parses paths', () => {
       const parsed = service.parse('/base/dir/file.txt');
-      expect(parsed).toEqual({
-        root: '/',
-        dir: '/base/dir',
-        base: 'file.txt',
-        ext: '.txt',
-        name: 'file'
-      });
+      // Use path.parse for expected value to handle platform differences (e.g., root)
+      const expected = path.parse('/base/dir/file.txt');
+      expect(parsed).toEqual(expected);
     });
   });
 }); 

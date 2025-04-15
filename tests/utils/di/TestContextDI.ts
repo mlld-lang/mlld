@@ -335,12 +335,9 @@ export class TestContextDI extends TestContext {
    * Initializes the test context with dependency injection
    */
   private async initializeAsync(): Promise<void> {
-    // Create a new filesystem for this test
     this.fs = new MemfsTestFileSystem();
     this.normalizePathForTests = (path) => path;
-    
     await this.registerServices();
-    
     this.initialized = true;
   }
 
@@ -348,20 +345,21 @@ export class TestContextDI extends TestContext {
    * Registers all the necessary services for the test context using MockFactory defaults
    */
   private async registerServices(): Promise<void> {
-    // Register standard mocks from MockFactory first
+    // === Change Order: Register Factories FIRST ===
+    this.registerFactories(); 
+    
+    // Register standard mocks from MockFactory 
     for (const [token, factory] of Object.entries(MockFactory.standardFactories)) {
       if (!this.container.isRegistered(token)) {
-        // Use registerMock internally for consistency, although registerService could also work
         this.container.registerMock(token, factory()); 
       }
     }
     
     this.registerMock<MemfsTestFileSystem>('IFileSystem', this.fs);
-    this.registerURLContentResolver(); // Keep custom mock for now
-    this.registerFactories();
+    this.registerURLContentResolver();
     this.registerDebugServices();
 
-    // Register REAL StateService last, allows standard mock to be default
+    // Register REAL StateService last
     this.container.registerService(StateFactory, StateFactory);
     this.container.registerService('IStateService', StateService); 
   }
@@ -430,14 +428,14 @@ export class TestContextDI extends TestContext {
    * Registers factory classes using ClientFactoryHelpers
    */
   private registerFactories(): void {
+    // === Change: Register standard factories UNCONDITIONALLY for now ===
+    ClientFactoryHelpers.registerStandardClientFactories(this);
+    
+    // Remove conditional logic for now
+    /*
     const factoryTokens = [
         'PathServiceClientFactory', 
-        'FileSystemServiceClientFactory', 
-        'VariableReferenceResolverClientFactory',
-        'DirectiveServiceClientFactory',
-        'ResolutionServiceClientForDirectiveFactory',
-        'StateServiceClientFactory',
-        'StateTrackingServiceClientFactory'
+        // ... other tokens
     ];
     let needsRegister = false;
     for(const token of factoryTokens) {
@@ -449,6 +447,7 @@ export class TestContextDI extends TestContext {
     if (needsRegister) {
         ClientFactoryHelpers.registerStandardClientFactories(this);
     }
+    */
   }
 
   /**
@@ -493,20 +492,11 @@ export class TestContextDI extends TestContext {
         customMocks: Record<string, any> = {}, 
         options: TestContextDIOptions = {}
       ): TestContextDI => {
-        const context = new TestContextDI({ ...options, autoInit: false }); // Prevent auto-init
-
-        // Run standard initialization FIRST
-        const initPromise = context.initializeAsync(); 
-        
-        // AFTER standard init, register custom mocks to ensure they override
-        // We need to ensure initPromise resolves before registering overrides
-        // A bit tricky, maybe better to pass overrides into initialize?
-        // Alternative: Register overrides, then init, then re-register overrides?
-        // Let's try re-registering overrides AFTER init completes.
-        context.initPromise = initPromise.then(() => {
-            context.registerMocks(customMocks); // Register overrides again after init
-        });
-        
+        const context = new TestContextDI({ ...options, autoInit: false });
+        // Register custom mocks FIRST (including factory overrides)
+        context.registerMocks(customMocks);
+        // Run standard initialization AFTER overrides are registered
+        context.initPromise = context.initializeAsync(); 
         return context;
       }
     };
