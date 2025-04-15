@@ -2,30 +2,35 @@ import { vi } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
 import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
+import type { DirectiveNode, SourceLocation } from '@core/syntax/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IDirectiveService, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { DirectiveNode, DirectiveProcessingContext } from '@core/types/index.js';
-import type { DirectiveResult } from '@services/pipeline/DirectiveService/interfaces/DirectiveTypes.js';
-import { SourceLocationFactory } from '@tests/utils/factories/NodeFactory.js';
+import { DirectiveProcessingContext, DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
+import { SourceLocationFactory } from '@core/syntax/types/factories/SourceLocationFactory.js';
 
 /**
- * Options for configuring the DirectiveTestFixture
+ * Options for customizing the DirectiveTestFixture.
  */
 export interface DirectiveTestOptions {
+  /** Overrides for the mock IStateService */
   stateOverrides?: Partial<IStateService>;
+  /** Overrides for the mock IResolutionService */
   resolutionOverrides?: Partial<IResolutionService>;
-  directiveServiceOverrides?: Partial<IDirectiveService>; // Renamed for clarity
+  /** Overrides for the mock IDirectiveService */
+  directiveOverrides?: Partial<IDirectiveService>;
+  /** Overrides for the mock IValidationService */
   validationOverrides?: Partial<IValidationService>;
-  handler?: IDirectiveHandler; // The specific handler being tested
-  handlerToken?: string; // Optional token to register the handler under
-  otherMocks?: Record<string, any>; // For any other specific mocks needed
+  /** A specific directive handler instance to register and test */
+  handler?: IDirectiveHandler;
+  /** Additional mocks to register with the context */
+  additionalMocks?: Record<string, any>;
 }
 
 /**
- * A test fixture for simplifying tests related to Directive Handlers and DirectiveService.
- * Provides a pre-configured DI context with standard mocks and helpers.
+ * A reusable test fixture for testing directive handlers and related services.
+ * Provides a pre-configured TestContextDI with standard mocks.
  */
 export class DirectiveTestFixture {
   context: TestContextDI;
@@ -33,35 +38,24 @@ export class DirectiveTestFixture {
   resolutionService: IResolutionService;
   directiveService: IDirectiveService;
   validationService: IValidationService;
-  handler?: IDirectiveHandler;
-
-  // Private constructor to force creation via static method
-  private constructor(context: TestContextDI) {
-    this.context = context;
-  }
+  handler?: IDirectiveHandler; // The specific handler being tested, if provided
 
   /**
-   * Asynchronously creates and initializes a new DirectiveTestFixture.
-   * @param options - Configuration options for the fixture and its mocks.
-   * @returns A promise that resolves to the initialized DirectiveTestFixture.
+   * Creates and initializes a new DirectiveTestFixture instance.
+   * @param options - Optional configuration for the fixture.
+   * @returns A promise that resolves with the initialized fixture.
    */
   static async create(options: DirectiveTestOptions = {}): Promise<DirectiveTestFixture> {
-    const helpers = TestContextDI.createTestHelpers();
-    // Start with standard mocks, but allow overriding everything via options
-    const context = helpers.setupWithStandardMocks(options.otherMocks || {}, { isolatedContainer: true });
+    const fixture = new DirectiveTestFixture();
     
-    // Await initial context setup which registers standard mocks
-    // Accessing initPromise directly causes lint errors, await a resolve instead
-    await context.resolve('IFileSystemService'); // Resolve something simple to ensure init completes
+    // Use the setupMinimal helper to get a basic context with essential mocks (like IFileSystem)
+    // We will register the core service mocks manually based on options.
+    fixture.context = TestContextDI.createTestHelpers().setupMinimal();
 
-    const fixture = new DirectiveTestFixture(context);
-
-    // --- Mock Registration with Overrides ---
-    
-    // Register standard client factories (important for circular dependencies)
+    // Register standard client factories first (important for circular dependencies)
     ClientFactoryHelpers.registerStandardClientFactories(fixture.context);
 
-    // Register/Override core services with potential overrides
+    // Register standard service mocks using MockFactory, applying overrides
     fixture.context.registerMock<IStateService>(
       'IStateService', 
       MockFactory.createStateService(options.stateOverrides)
@@ -72,50 +66,45 @@ export class DirectiveTestFixture {
     );
     fixture.context.registerMock<IValidationService>(
       'IValidationService',
-      {
-        validate: vi.fn().mockResolvedValue(undefined), // Default mock for validate
-        registerValidator: vi.fn(),
-        removeValidator: vi.fn(),
-        getRegisteredDirectiveKinds: vi.fn().mockReturnValue([]),
-        ...options.validationOverrides // Apply specific overrides for validation
-      } as IValidationService // Cast necessary as we might not override all methods
+      MockFactory.createValidationService(options.validationOverrides)
     );
     fixture.context.registerMock<IDirectiveService>(
-        'IDirectiveService',
-        MockFactory.createDirectiveService(options.directiveServiceOverrides)
+      'IDirectiveService',
+      MockFactory.createDirectiveService(options.directiveOverrides)
     );
-
-    // Register the specific handler being tested, if provided
-    if (options.handler) {
-      fixture.handler = options.handler;
-      const handlerToken = options.handlerToken || `handler:${options.handler.kind}`; // Default token
-      fixture.context.registerMock(handlerToken, options.handler);
-      // Also register it with the DirectiveService mock if we expect routing tests
-      const directiveServiceMock = await fixture.context.resolve<IDirectiveService>('IDirectiveService');
-      vi.spyOn(directiveServiceMock, 'registerHandler').mockImplementation((h) => {
-          if (h.kind === options.handler?.kind) {
-              // Allow registering the test handler
-          } else {
-              // Optionally mock other registrations
-          }
-      });
-       vi.spyOn(directiveServiceMock, 'hasHandler').mockImplementation((kind) => kind === options.handler?.kind);
-       // Register the actual handler with the mock service
-       directiveServiceMock.registerHandler(options.handler);
+    // Register other standard mocks if needed for handler tests (e.g., Parser, Interpreter)
+    if (!fixture.context.container.isRegistered('IParserService')) {
+       fixture.context.registerMock('IParserService', MockFactory.createParserService());
+    }
+    if (!fixture.context.container.isRegistered('IInterpreterService')) {
+       fixture.context.registerMock('IInterpreterService', MockFactory.createInterpreterService());
+    }
+    // Register any additional mocks provided
+    if (options.additionalMocks) {
+      fixture.context.registerMocks(options.additionalMocks);
     }
 
-    // --- Resolve Services ---
-    // Resolve core services needed by the fixture/tests
-    fixture.directiveService = await fixture.context.resolve('IDirectiveService');
-    fixture.stateService = await fixture.context.resolve('IStateService');
-    fixture.resolutionService = await fixture.context.resolve('IResolutionService');
-    fixture.validationService = await fixture.context.resolve('IValidationService');
+    // If a specific handler is provided, store it and potentially register it
+    // (Registration might happen within DirectiveService mock or be tested directly)
+    if (options.handler) {
+      fixture.handler = options.handler;
+      // Example: If testing DirectiveService routing, mock registerHandler
+      // const directiveServiceMock = await fixture.context.resolve<IDirectiveService>('IDirectiveService');
+      // vi.spyOn(directiveServiceMock, 'registerHandler').mockImplementation(...) 
+    }
+
+    // Resolve the core services into fixture properties for easy access
+    // Use resolveSync as initializeAsync was effectively handled by setupMinimal/manual registration
+    fixture.stateService = fixture.context.resolveSync('IStateService');
+    fixture.resolutionService = fixture.context.resolveSync('IResolutionService');
+    fixture.validationService = fixture.context.resolveSync('IValidationService');
+    fixture.directiveService = fixture.context.resolveSync('IDirectiveService');
     
     return fixture;
   }
 
   /**
-   * Cleans up the TestContextDI container.
+   * Cleans up the test context resources.
    */
   async cleanup(): Promise<void> {
     await this.context.cleanup();
@@ -126,85 +115,54 @@ export class DirectiveTestFixture {
    */
   createDirectiveNode(
     kind: string, 
-    name: string, 
+    identifier: string, // Use 'identifier' consistent with DirectiveData structure
     value: any, 
     directiveProps: Record<string, any> = {}, // Additional properties for the nested directive object
-    nodeOptions: Partial<DirectiveNode> = {} // Options for the top-level node
+    location?: SourceLocation // Allow providing a specific location
   ): DirectiveNode {
     return {
       type: 'Directive',
-      kind,
-      // The nested 'directive' object often holds parsed details
+      // The nested 'directive' object holds parsed details
       directive: {
-        kind,
-        identifier: name, // Assuming 'name' corresponds to 'identifier'
+        kind: kind as any, // Cast kind if it might be non-standard for testing
+        identifier,
         value,
-        source: 'literal', // Default source
         ...directiveProps
       },
-      // Standard node properties
-      name: name, // Keep top-level name for convenience if used elsewhere
-      value: value, // Keep top-level value for convenience if used elsewhere
-      location: nodeOptions.location || SourceLocationFactory.createDummyLocation('test.meld'),
-      ...nodeOptions
-    } as DirectiveNode;
+      location: location || SourceLocationFactory.createDummyLocation('test.meld'),
+    } as DirectiveNode; // Cast necessary if kind isn't strictly DirectiveKind
   }
-  
+
   /**
-   * Helper to execute the registered directive handler directly.
-   * Requires a handler to be provided during fixture creation.
+   * Executes the specific directive handler provided during fixture creation.
+   * Throws an error if no handler was provided.
+   * 
+   * @param node - The directive node to process.
+   * @param contextOverrides - Optional overrides for the processing context.
+   * @returns The result of the handler execution (DirectiveResult or IStateService).
    */
   async executeHandler(
     node: DirectiveNode, 
-    contextOverrides: Partial<DirectiveProcessingContext> = {}
+    resolutionContextOverrides: Partial<ResolutionContext> = {},
+    executionContextOverrides: Partial<DirectiveProcessingContext> = {}
   ): Promise<DirectiveResult | IStateService> {
     if (!this.handler) {
-      throw new Error('No directive handler registered for direct execution. Use options.handler when creating the fixture.');
+      throw new Error('No directive handler was provided to the fixture during creation. Cannot execute directly.');
     }
 
-    // Create a default resolution context if not overridden
-    const resolutionContext = contextOverrides.resolutionContext || {
-        strict: true,
-        filePath: this.stateService.getCurrentFilePath() || '/test/file.meld',
-        // Add other default context fields if necessary
-    };
-
-    const processingContext: DirectiveProcessingContext = {
+    // Construct the context, merging overrides
+    const context: DirectiveProcessingContext = {
       state: this.stateService,
-      resolutionContext: resolutionContext,
-      directiveNode: node,
-      formattingContext: contextOverrides.formattingContext || {
-          isBlock: false,
-          preserveLiteralFormatting: false,
-          preserveWhitespace: false,
+      resolutionContext: {
+        strict: true, // Default to strict resolution
+        filePath: this.stateService.getCurrentFilePath() || '/test/file.meld', // Get path from state or use default
+        depth: 0,
+        ...resolutionContextOverrides // Apply overrides
       },
-      // Allow overriding any part of the context
-      ...contextOverrides
+      node,
+      ...executionContextOverrides // Apply top-level context overrides
     };
-    
-    return this.handler.execute(processingContext);
-  }
 
-  /**
-   * Helper to process a directive through the mocked DirectiveService.
-   * Useful for testing the routing and interaction logic within DirectiveService itself.
-   */
-  async processDirectiveViaService(node: DirectiveNode): Promise<IStateService | DirectiveResult> {
-     const currentFilePath = this.stateService.getCurrentFilePath() || '/test/file.meld';
-     const processingContext: DirectiveProcessingContext = {
-            state: this.stateService,
-            directiveNode: node,
-            resolutionContext: {
-                strict: true,
-                filePath: currentFilePath,
-            },
-            formattingContext: {
-                 isBlock: false,
-                 preserveLiteralFormatting: false,
-                 preserveWhitespace: false,
-             },
-        };
-    // Assumes DirectiveService.handleDirective is the method that routes
-    return this.directiveService.handleDirective(node, processingContext);
+    return this.handler.execute(context);
   }
 } 
