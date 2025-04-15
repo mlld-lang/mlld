@@ -27,7 +27,7 @@ import type { ResolutionContext } from '@core/types/resolution.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
-import { mock } from 'vitest-mock-extended';
+import { mock, mockDeep, DeepMockProxy } from 'vitest-mock-extended';
 
 /**
  * ImportDirectiveHandler Test Status
@@ -53,7 +53,7 @@ describe('ImportDirectiveHandler', () => {
   let parserService: IParserService;
   let interpreterServiceClientFactory: InterpreterServiceClientFactory;
   let interpreterServiceClient: IInterpreterServiceClient;
-  let circularityService: ICircularityService;
+  let circularityService: DeepMockProxy<ICircularityService>;
   let urlContentResolver: IURLContentResolver;
   let context: TestContextDI;
   let mockProcessingContext: DirectiveProcessingContext;
@@ -61,21 +61,24 @@ describe('ImportDirectiveHandler', () => {
   let validationService: any; // Assuming IValidationService is imported but not used in the test
 
   beforeEach(async () => {
+    // Create the deep mock first
+    circularityService = mockDeep<ICircularityService>();
+
     context = helpers.setupWithStandardMocks({
-        'ILogger': mockLoggerObject
+        'ILogger': mockLoggerObject,
+        // Register the mock for ICircularityService
+        'ICircularityService': circularityService 
     });
     await context.resolve('IFileSystemService');
 
-    // Resolve standard services first
     stateService = await context.resolve('IStateService');
     resolutionService = await context.resolve('IResolutionService');
     fileSystemService = await context.resolve('IFileSystemService');
     pathService = await context.resolve('IPathService');
     parserService = await context.resolve('IParserService');
     interpreterServiceClientFactory = await context.resolve('InterpreterServiceClientFactory');
-    circularityService = await context.resolve('ICircularityService');
     urlContentResolver = await context.resolve('IURLContentResolver');
-    validationService = await context.resolve('IValidationService'); // Resolve ValidationService
+    validationService = await context.resolve('IValidationService');
     
     // Create the childState mock HERE, before trying to spy on it
     childState = MockFactory.createStateService({ 
@@ -99,32 +102,6 @@ describe('ImportDirectiveHandler', () => {
     // Resolve the handler AFTER setting up mocks it might depend on
     handler = await context.resolve(ImportDirectiveHandler);
 
-    // Mock createChildState to create and return a fresh mock 
-    // Assign the created mock to the outer childState variable so interpreter mock can use it
-    vi.spyOn(stateService, 'createChildState').mockImplementation(async () => {
-        process.stdout.write("\n--- createChildState Mock Called ---\n"); 
-        const freshChildState = MockFactory.createStateService({
-            getCurrentFilePath: vi.fn().mockReturnValue('/project/imported.meld'),
-            isTransformationEnabled: vi.fn().mockReturnValue(false),
-            // Provide default empty maps, tests can override specific gets if needed
-            getAllTextVars: vi.fn().mockReturnValue(new Map()), 
-            getAllDataVars: vi.fn().mockReturnValue(new Map()),
-            getAllPathVars: vi.fn().mockReturnValue(new Map()),
-            getAllCommands: vi.fn().mockReturnValue(new Map()),
-            getTextVar: vi.fn(), 
-            getDataVar: vi.fn(),
-            getPathVar: vi.fn(),
-            getCommand: vi.fn(),
-            setCurrentFilePath: vi.fn(), // Ensure this exists
-            // Add other necessary mocks if tests require them
-        });
-        (freshChildState as any).__test_marker = 'freshly_mocked_child';
-        expect(freshChildState.setCurrentFilePath).toBeDefined();
-        process.stdout.write(`--- Fresh Child State Created: Marker = ${(freshChildState as any).__test_marker}, setCurrentFilePath type = ${typeof freshChildState.setCurrentFilePath} ---\n`);
-        childState = freshChildState; // Assign to outer variable
-        return freshChildState;
-    });
-    
     // Mock interpreterServiceClient AFTER createChildState mock is set up
     // Now it resolves with the *same* childState instance created above
     interpreterServiceClient = {
@@ -164,8 +141,7 @@ describe('ImportDirectiveHandler', () => {
     vi.spyOn(fileSystemService, 'exists').mockResolvedValue(true);
     vi.spyOn(fileSystemService, 'readFile').mockResolvedValue('');
     vi.spyOn(parserService, 'parse').mockResolvedValue([]);
-    vi.spyOn(circularityService, 'beginImport');
-    vi.spyOn(circularityService, 'endImport');
+    
     vi.spyOn(urlContentResolver, 'validateURL').mockResolvedValue(undefined as any);
     vi.spyOn(urlContentResolver, 'fetchURL').mockResolvedValue({ content: '', url: '', fromCache: false, metadata: {} } as URLResponse);
   });
