@@ -25,11 +25,15 @@ import {
 } from '@core/syntax/types/shared-types.js';
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
+import { Service } from '@core/ServiceProvider.js';
 
 /**
  * Handles resolution of variable references based on VariableReferenceNode AST.
  */
 @injectable()
+@Service({
+  description: 'Resolves variable references, including field access'
+})
 export class VariableReferenceResolver {
   private readonly MAX_RESOLUTION_DEPTH = 10;
   private resolutionTracker?: VariableResolutionTracker;

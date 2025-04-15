@@ -300,7 +300,6 @@ describe('EmbedDirectiveHandler Transformation', () => {
         'embedVariable'
       );
       node.directive.path = { raw: '{{role.architect}}', type: 'InterpolatableValue', values: [{type: 'VariableReference', identifier: 'role', fields: [{type: 'field', value: 'architect'}]}] } as any;
-      const valuePassedToResolve = node.directive.path?.values;
       mockProcessingContext = createMockProcessingContext(node);
       const resolvedContent = 'You are a senior architect skilled in TypeScript.';
       vi.spyOn(fixture.resolutionService, 'resolveInContext').mockResolvedValue(resolvedContent);
@@ -345,7 +344,6 @@ describe('EmbedDirectiveHandler Transformation', () => {
         'embedVariable'
       );
       node.directive.path = { raw: '{{vars.myPath.nested}}', type: 'InterpolatableValue', values: [{type: 'VariableReference', identifier: 'vars', fields: [{type: 'field', value: 'myPath'}, {type: 'field', value: 'nested'}]}] } as any;
-      const valuePassedToResolve = node.directive.path?.values;
       mockProcessingContext = createMockProcessingContext(node);
 
       vi.spyOn(fixture.resolutionService, 'resolveInContext').mockResolvedValue('actual/file.md');
@@ -372,7 +370,6 @@ describe('EmbedDirectiveHandler Transformation', () => {
         'embedVariable'
       );
       node.directive.path = { raw: '{{contact.email}}', type: 'InterpolatableValue', values: [{type: 'VariableReference', identifier: 'contact', fields: [{type: 'field', value: 'email'}]}] } as any;
-      const valuePassedToResolve = node.directive.path?.values;
       mockProcessingContext = createMockProcessingContext(node);
 
       vi.spyOn(fixture.resolutionService, 'resolveInContext').mockResolvedValue('user@example.com');

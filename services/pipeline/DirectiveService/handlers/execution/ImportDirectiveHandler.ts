@@ -264,7 +264,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       const parsedResults = await this.parserService.parse(fileContent);
       const nodesToInterpret = Array.isArray(parsedResults) ? parsedResults : [];
 
-      const importedState = context.state.createChildState();
+      const importedState = await context.state.createChildState();
+      // --- Use process.stdout.write for reliable debug output --- 
+      process.stdout.write(`\nDEBUG: importedState marker: ${(importedState as any)?.__test_marker}\n`);
+      process.stdout.write(`DEBUG: importedState has setCurrentFilePath: ${typeof (importedState as any)?.setCurrentFilePath}\n`);
+      // --- END DEBUG --- 
       if (resolvedIdentifier) {
         importedState.setCurrentFilePath(resolvedIdentifier);
       }

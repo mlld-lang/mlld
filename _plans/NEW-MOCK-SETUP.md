@@ -137,3 +137,22 @@ Implement the new, standardized mocking strategy proposed in the `_cmte/audit-mo
 
 *   Continue remaining Phase 5 tasks (non-handler/interpreter files).
 *   Continue Phase 6: Refactor next handler test (`services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.command.test.ts`). 
+
+## 4. Learnings & Refinements (from Phase 6.3 Debugging)
+
+*   **DI Resolution Debugging:** When encountering "Cannot resolve service" errors, investigate thoroughly:
+    *   **Check `@Service()` Decorators:** Verify the decorator exists on the service being resolved *and* all concrete classes in its dependency tree (including dependencies of dependencies).
+    *   **Verify Token/Registration:** Ensure injection tokens match registration tokens. Avoid manual container registration in tests where possible; rely on `@Service()`.
+    *   **Check Fixture Mocks:** Ensure test fixtures (`DirectiveTestFixture`, etc.) register mocks for all necessary dependencies, including transitive ones if not handled by DI.
+    *   **Check Factory Dependencies:** If a service depends on a Factory, ensure the Factory *and* the concrete class it might resolve (like `VariableReferenceResolver` for its factory) are correctly decorated and resolvable.
+
+*   **Mocking Strategy & Configuration:**
+    *   **Plain Object Factories (`MockFactory` current):** Mocks returned as plain objects (like `{ method: vi.fn() }`) cannot be easily configured *later* in tests using Vitest methods (`.mockReturnValue`, etc.). Configuration must happen via the `overrides` object passed to the factory function. Add `// TODO:` comments if workarounds (like direct spying in tests) are needed due to factory limitations.
+    *   **`mockDeep` (`vitest-mock-extended`):** While useful for auto-mocking large interfaces, configuring defaults and applying overrides *within a factory function* using `mockDeep` can be complex and lead to type errors. Use directly in tests or carefully manage factory configuration if used there.
+    *   **`vi.spyOn`:** Best used on actual instances or `mockDeep` objects, not plain object mocks.
+
+*   **Async/Await with Mocks:** Always `await` the results of mocked functions that return Promises (`mockResolvedValue` or `async mockImplementation`) before accessing properties or methods on the resolved value. Forgetting `await` (e.g., `const result = service.asyncMethod(); result.property;`) leads to errors as you're accessing the Promise object itself.
+
+*   **Test Logic Accuracy:**
+    *   Verify test assertions match the *actual* arguments and behavior of the code under test.
+    *   Remove tests that assert unreachable states or side effects not relevant to the tested code path. 
