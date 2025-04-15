@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
 import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
-import type { DirectiveNode, SourceLocation } from '@core/syntax/types/index.js';
+import type { DirectiveNode, SourceLocation, StructuredPath } from '@core/syntax/types/nodes.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IDirectiveService, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
@@ -120,17 +120,31 @@ export class DirectiveTestFixture {
     directiveProps: Record<string, any> = {}, // Additional properties for the nested directive object
     location?: SourceLocation // Allow providing a specific location
   ): DirectiveNode {
+    const directiveData: Record<string, any> = {
+      kind: kind as any,
+      identifier,
+      ...directiveProps
+    };
+
+    // Specific handling for @path directive structure
+    if (kind === 'path') {
+      // PathDirectiveData expects the path string/object under the 'path' key
+      // Simulate the parser creating a StructuredPath object from the raw string
+      directiveData.path = {
+        raw: value, // The original string value
+        structured: {}, // Minimal structured object for the test
+        // interpolatedValue: undefined, // Ensure this isn't present for simple strings
+      } as StructuredPath;
+    } else {
+      // For other directives, assume value goes directly on 'value' key
+      directiveData.value = value;
+    }
+
     return {
       type: 'Directive',
-      // The nested 'directive' object holds parsed details
-      directive: {
-        kind: kind as any, // Cast kind if it might be non-standard for testing
-        identifier,
-        value,
-        ...directiveProps
-      },
+      directive: directiveData,
       location: location || createLocation(),
-    } as DirectiveNode; // Cast necessary if kind isn't strictly DirectiveKind
+    } as DirectiveNode;
   }
 
   /**
