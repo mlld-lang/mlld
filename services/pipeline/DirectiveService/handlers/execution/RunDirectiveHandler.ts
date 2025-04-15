@@ -18,6 +18,13 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
 import type { DirectiveProcessingContext, ResolutionContext } from '@core/types/index.js';
+import type { ICommandDefinition } from '@core/types/define.js';
+import { isBasicCommand } from '@core/types/define.js';
+import type { SourceLocation } from '@core/types/common.js';
+import type { VariableMetadata, VariableOrigin } from '@core/types/variables.js';
+import * as os from 'os';
+import * as fs from 'fs-extra';
+import * as path from 'path';
 
 /**
  * Handler for @run directives
@@ -164,7 +171,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         }
       }
 
-      // Store results
+      // Store results using correct variable names
       await state.setTextVar(outputVariable, stdout || '');
       await state.setTextVar(errorVariable, stderr || '');
 
@@ -225,5 +232,22 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       this.animationInterval = null;
       process.stdout.write(`\r\x1b[K`);
     }
+  }
+
+  private getTempFilePath(language: string): string {
+    const uniqueSuffix = randomBytes(8).toString('hex');
+    const extension = language === 'python' ? 'py' : language === 'javascript' ? 'js' : 'tmp';
+    return path.join(os.tmpdir(), `meld-script-${uniqueSuffix}.${extension}`);
+  }
+
+  private escapePath(filePath: string): string {
+    // Simple escaping for common shells - might need refinement
+    return filePath.replace(/ /g, '\\ ').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  }
+
+  private escapeArgument(arg: string): string {
+    // Simple escaping for command line arguments
+    // This is highly dependent on the shell and context, use libraries for robust escaping if needed
+    return `"${arg.replace(/"/g, '\\"').replace(/\$/g, '\$').replace(/`/g, '\`')}"`;
   }
 }
