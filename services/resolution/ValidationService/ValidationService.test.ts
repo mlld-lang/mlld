@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mockDeep, mockReset } from 'vitest-mock-extended';
+import { describe, it, expect, beforeEach, afterEach, vi, Mock } from 'vitest';
+import { mockDeep, mockReset, DeepMockProxy } from 'vitest-mock-extended';
 import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { DirectiveNode } from '@core/syntax/types.js';
@@ -26,11 +26,17 @@ import { textDirectiveExamples } from '@core/syntax/index.js';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import { DirectiveKind } from '@core/syntax/types/interfaces/index.js';
+import { NodeFactory } from '@core/syntax/types/factories/NodeFactory.js';
+import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNodeFactory.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 
 describe('ValidationService', () => {
   const helpers = TestContextDI.createTestHelpers();
   let service: IValidationService;
   let context: TestContextDI;
+  let mockResolutionService: DeepMockProxy<IResolutionService>;
+  let directiveNodeFactory: DirectiveNodeFactory;
   
   beforeEach(async () => {
     // Use helper
@@ -43,6 +49,43 @@ describe('ValidationService', () => {
     
     // Verify we got the real service
     expect(service).toBeInstanceOf(ValidationService);
+
+    // Mock ResolutionService if not already handled by setup
+    mockResolutionService = mockDeep<IResolutionService>();
+    mockResolutionService.resolvePath.mockResolvedValue({ path: '/resolved/path', type: 'file' });
+    mockResolutionService.resolveInContext.mockImplementation(async (val) => val);
+    mockResolutionService.validateResolution.mockResolvedValue({ path: '/resolved/path', type: 'file' });
+
+    context.registerMock<IResolutionService>('IResolutionService', mockResolutionService);
+
+    // Resolve the factory
+    // Ensure NodeFactory is registered if DirectiveNodeFactory depends on it implicitly via DI
+    // Assuming TestContextDI handles registration or DI framework throws if missing
+    // Removed isRegistered checks
+    // if (!context.isRegistered(NodeFactory)) {
+    //   context.registerMock(NodeFactory, new NodeFactory()); // Register basic instance
+    // }
+    // if (!context.isRegistered(DirectiveNodeFactory)) {
+    //    context.registerService(DirectiveNodeFactory, DirectiveNodeFactory); // Register factory itself
+    // }
+    // Attempt to resolve directly, relying on the container or setup
+    try {
+      directiveNodeFactory = await context.resolve(DirectiveNodeFactory);
+    } catch (e) {
+      // If DirectiveNodeFactory isn't registered by default helpers, register it manually
+      // This might be needed if setupMinimal/setupWithStandardMocks doesn't include it
+      const nodeFactoryInstance = new NodeFactory(); // Need instance for DNF constructor
+      const directiveFactoryInstance = new DirectiveNodeFactory(nodeFactoryInstance);
+      context.registerMock(NodeFactory, nodeFactoryInstance); // Register instances
+      context.registerMock(DirectiveNodeFactory, directiveFactoryInstance);
+      directiveNodeFactory = directiveFactoryInstance; // Assign directly
+    }
+
+    // Reset mocks before each test
+    vi.resetAllMocks();
+    mockResolutionService.resolvePath.mockResolvedValue({ path: '/resolved/path', type: 'file' });
+    mockResolutionService.validateResolution.mockResolvedValue({ path: '/resolved/path', type: 'file' });
+    mockResolutionService.resolveInContext.mockImplementation(async (val) => val);
   });
   
   afterEach(async () => {
@@ -257,28 +300,28 @@ describe('ValidationService', () => {
     
     it('should validate a valid import directive with from syntax without alias', async () => {
       // Need a node structure representing this syntax
-       const node = makeDirectiveNode('import', '[role] from [imports.meld]', { path: 'imports.meld', imports: [{ name: 'role' }] });
+       const node = directiveNodeFactory.createDirectiveNode(DirectiveKind.Import, { path: 'imports.meld', imports: [{ name: 'role' }] });
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
     it('should validate a valid import directive with from syntax and alias', async () => {
-      const node = makeDirectiveNode('import', '[role as roles] from [imports.meld]', { path: 'imports.meld', imports: [{ name: 'role', alias: 'roles' }] });
+      const node = directiveNodeFactory.createDirectiveNode(DirectiveKind.Import, { path: 'imports.meld', imports: [{ name: 'role', alias: 'roles' }] });
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
     // This might change depending on parser strictness
     it('should currently allow empty alias when using as syntax', async () => {
-       const node = makeDirectiveNode('import', '[role as] from [imports.meld]', { path: 'imports.meld', imports: [{ name: 'role', alias: '' }] });
+       const node = directiveNodeFactory.createDirectiveNode(DirectiveKind.Import, { path: 'imports.meld', imports: [{ name: 'role', alias: '' }] });
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
     it('should validate structured imports using bracket notation without alias', async () => {
-      const node = makeDirectiveNode('import', '[role] from [imports.meld]', { path: 'imports.meld', imports: [{ name: 'role' }] });
+      const node = directiveNodeFactory.createDirectiveNode(DirectiveKind.Import, { path: 'imports.meld', imports: [{ name: 'role' }] });
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
     it('should validate structured imports with multiple variables', async () => {
-       const node = makeDirectiveNode('import', '[var1, var2 as alias2, var3] from [imports.meld]', {
+       const node = directiveNodeFactory.createDirectiveNode(DirectiveKind.Import, {
            path: 'imports.meld',
            imports: [{ name: 'var1' }, { name: 'var2', alias: 'alias2' }, { name: 'var3' }]
        });
@@ -294,7 +337,7 @@ describe('ValidationService', () => {
     });
 
      it('should throw on missing path with Fatal severity (structured form)', async () => {
-       const node = makeDirectiveNode('import', '[var1]', { imports: [{ name: 'var1' }] }); // Missing path
+       const node = directiveNodeFactory.createDirectiveNode(DirectiveKind.Import, { imports: [{ name: 'var1' }] }); // Missing path
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
           severity: ErrorSeverity.Fatal, directiveKind: 'import', messageContains: 'path is required'
@@ -302,7 +345,7 @@ describe('ValidationService', () => {
     });
 
      it('should throw on missing import specifiers with Fatal severity (structured form)', async () => {
-       const node = makeDirectiveNode('import', '[] from [path.meld]', { path: 'path.meld', imports: [] }); // Empty imports array
+       const node = directiveNodeFactory.createDirectiveNode(DirectiveKind.Import, { path: 'path.meld', imports: [] }); // Empty imports array
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
           severity: ErrorSeverity.Fatal, directiveKind: 'import', messageContains: 'Import specifiers cannot be empty'
@@ -357,7 +400,8 @@ describe('ValidationService', () => {
   
   describe('Unknown directive handling', () => {
     it('should throw on unknown directive kind with Fatal severity', async () => {
-       const node = makeDirectiveNode('unknown', '');
+       // Need to cast 'unknown' as DirectiveKind temporarily if type checking complains
+       const node = directiveNodeFactory.createDirectiveNode('unknown' as DirectiveKind, {});
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.HANDLER_NOT_FOUND,
           severity: ErrorSeverity.Fatal, directiveKind: 'unknown', messageContains: 'No validator registered'
@@ -384,6 +428,4 @@ describe('ValidationService', () => {
     // (Currently, most validation errors seem Fatal based on tests)
     // it('should identify recoverable errors correctly', async () => { ... });
   });
-}); 
-}); 
 }); 

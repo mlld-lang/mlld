@@ -11,6 +11,7 @@ import { createTextNode, createVariableReferenceNode, createDirectiveNode } from
 import { createStateServiceMock, createResolutionServiceMock } from '@tests/utils/mocks/serviceMocks.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
+import type { Logger } from '@core/utils/logger.js';
 
 // --- Import REAL Service Implementations for Integration Test ---
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
@@ -73,6 +74,17 @@ describe('DirectiveService Integration Tests', () => {
     testContainer.register<CircularityService>('ICircularityService', { useClass: CircularityService }, { lifecycle: Lifecycle.Singleton });
     testContainer.register<InterpreterServiceClientFactory>(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory }, { lifecycle: Lifecycle.Singleton });
     testContainer.register<DirectiveService>(DirectiveService, { useClass: DirectiveService }, { lifecycle: Lifecycle.Singleton });
+    
+    // Register a mock logger for DirectiveService dependency
+    const mockLogger: Logger = {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        trace: vi.fn(),
+        level: 'info'
+    };
+    testContainer.register<Logger>('DirectiveLogger', { useValue: mockLogger });
     
     // Resolve services from the test container AFTER registration
     directiveService = testContainer.resolve(DirectiveService);
