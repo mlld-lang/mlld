@@ -101,10 +101,10 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           } else if (subtype === 'runCode' || subtype === 'runCodeParams') {
             if (!isInterpolatableValueArray(commandInput)) throw new DirectiveError('Invalid command input for runCode/runCodeParams', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
             const scriptContent = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
-            if (language) {
+              if (language) {
               tempFilePath = await this.createTempScriptFile(scriptContent, language);
               commandToExecute = `${language} ${this.escapePath(tempFilePath)}`;
-            } else {
+              } else {
               commandToExecute = scriptContent;
             }
             if (subtype === 'runCodeParams' && languageParams) {
@@ -153,9 +153,9 @@ export class RunDirectiveHandler implements IDirectiveHandler {
            const cause = executionError instanceof Error ? executionError : new Error(String(executionError));
            const details = { ...baseErrorDetails, cause };
            logger.error(`Failed to execute command: ${cause.message}`, { command: commandToExecute, details });
-           throw new DirectiveError(
+          throw new DirectiveError(
                `Failed to execute command: ${cause.message}`,
-               this.kind,
+              this.kind,
                DirectiveErrorCode.EXECUTION_FAILED, // Correctly throws EXECUTION_FAILED
                details
            );

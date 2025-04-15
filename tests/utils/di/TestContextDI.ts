@@ -361,7 +361,7 @@ export class TestContextDI extends TestContext {
 
     // Register REAL StateService last
     this.container.registerService(StateFactory, StateFactory);
-    this.container.registerService('IStateService', StateService); 
+    this.container.registerService('IStateService', StateService);
   }
 
   /**
@@ -404,22 +404,22 @@ export class TestContextDI extends TestContext {
    */
   private registerDebugServices(): void {
     if (!this.container.isRegistered('IStateTrackingService')) {
-      const mockStateTrackingService = {
-        trackState: vi.fn(),
-        getStateHistory: vi.fn().mockReturnValue([]),
-        clearHistory: vi.fn()
-      };
+    const mockStateTrackingService = {
+      trackState: vi.fn(),
+      getStateHistory: vi.fn().mockReturnValue([]),
+      clearHistory: vi.fn()
+    };
       this.registerMock('IStateTrackingService', mockStateTrackingService);
     }
     if (!this.container.isRegistered('IStateDebuggerService')) {
-      const mockStateDebuggerService = {
-        debugState: vi.fn(),
-        createSnapshot: vi.fn(),
-        compareSnapshots: vi.fn().mockReturnValue([]),
-        enable: vi.fn(),
-        disable: vi.fn(),
-        isEnabled: vi.fn().mockReturnValue(false)
-      };
+    const mockStateDebuggerService = {
+      debugState: vi.fn(),
+      createSnapshot: vi.fn(),
+      compareSnapshots: vi.fn().mockReturnValue([]),
+      enable: vi.fn(),
+      disable: vi.fn(),
+      isEnabled: vi.fn().mockReturnValue(false)
+    };
       this.registerMock('IStateDebuggerService', mockStateDebuggerService);
     }
   }

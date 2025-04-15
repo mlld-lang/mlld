@@ -66,7 +66,37 @@ Implement the new, standardized mocking strategy proposed in the `_cmte/audit-mo
     2.  Select another relatively simple test file (e.g., another handler, `StateEventService.test.ts`?). Refactor using the helpers and `vi.spyOn` for test-specific mocks.
     3.  Run tests specifically for the refactored file and debug any issues.
     4.  Continue this process incrementally, file by file or small group by small group.
-    5.  **Defer** the most complex/problematic files (`ResolutionService.test.ts`, `PathService.test.ts`, `CLIService.test.ts`, `InterpreterService.unit.test.ts`) until later in this phase or Phase 7.
+    5.  **Defer** the most complex/problematic files (`ResolutionService.test.ts`, `PathService.test.ts`, `CLIService.test.ts`, `InterpreterService.unit.test.ts`, `FileSystemService.test.ts`, `RunDirectiveHandler.test.ts`) until later in this phase or Phase 7.
+    6.  **(New)** Continue migrating remaining simpler/medium tests. Candidates include:
+        *   `services/fs/FileSystemService/NodeFileSystem.test.ts`
+        *   `services/fs/ProjectPathResolver.test.ts`
+        *   `services/pipeline/DirectiveService/DirectiveService.integration.test.ts`
+        *   `services/pipeline/DirectiveService/DirectiveService.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.command.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.integration.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.transformation.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.transformation.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.transformation.test.ts`
+        *   `services/pipeline/InterpreterService/InterpreterService.integration.test.ts`
+        *   `services/pipeline/OutputService/OutputService.test.ts`
+        *   `services/pipeline/ParserService/ParserService.test.ts`
+        *   `services/resolution/ResolutionService/resolvers/CommandResolver.test.ts`
+        *   `services/resolution/ResolutionService/resolvers/ContentResolver.test.ts`
+        *   `services/resolution/ResolutionService/resolvers/StringConcatenationHandler.test.ts`
+        *   `services/resolution/ResolutionService/resolvers/StringLiteralHandler.test.ts`
+        *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.edge.test.ts`
+        *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts`
+        *   `services/resolution/URLContentResolver/URLContentResolver.test.ts`
+        *   `services/resolution/ValidationService/validators/FuzzyMatchingValidator.test.ts`
+        *   `services/sourcemap/SourceMapService.test.ts`
+        *   `services/state/StateEventService/StateInstrumentation.test.ts`
+        *   `services/state/StateService/migration.test.ts`
+        *   `services/state/StateService/StateFactory.test.ts`
+        *   `services/state/StateService/StateService.test.ts`
+        *   `services/state/utilities/StateVariableCopier.test.ts`
+        *   Files under `tests/` directory should be evaluated individually for applicability.
 *   **Verification:** Test each refactored file individually. Periodically run `npm test services` to track progress, but expect failures until most files are migrated.
 
 ### Phase 6: Introduce & Verify Test Fixtures

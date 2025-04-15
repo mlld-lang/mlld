@@ -10,6 +10,8 @@ import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveServic
 import type { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
 import type { IStateServiceClient } from '@services/state/StateService/factories/IStateServiceClient.js';
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/factories/IStateTrackingServiceClient.js';
+import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
+import type { IStateService } from '@services/state/StateService/interfaces/IStateService.js';
 
 export class ClientFactoryHelpers {
   /**
@@ -27,8 +29,8 @@ export class ClientFactoryHelpers {
    * @param context - The TestContextDI instance
    * @returns A record mapping client names to their factory and client mocks
    */
-  static registerStandardClientFactories(context: TestContextDI): Record<string, { factory: any; client: any }> {
-    const factories: Record<string, { factory: any; client: any }> = {};
+  static registerStandardClientFactories(context: TestContextDI): Record<string, any> {
+    const factories: Record<string, any> = {};
     
     // Path service client
     const pathClient: IPathServiceClient = {
@@ -88,6 +90,14 @@ export class ClientFactoryHelpers {
       registerRelationship: vi.fn()
     };
     factories.stClient = ClientFactoryHelpers.registerClientFactory(context, 'StateTrackingServiceClientFactory', stClient);
+    
+    // Interpreter service client
+    const interpreterClient: IInterpreterServiceClient = {
+      interpret: vi.fn().mockResolvedValue({} as IStateService),
+      interpretNode: vi.fn().mockResolvedValue({} as IStateService),
+      createChildContext: vi.fn().mockResolvedValue({} as IStateService)
+    };
+    factories.interpreterClient = ClientFactoryHelpers.registerClientFactory(context, 'InterpreterServiceClientFactory', interpreterClient);
     
     return factories;
   }

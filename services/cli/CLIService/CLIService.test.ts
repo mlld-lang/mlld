@@ -187,6 +187,21 @@ describe('CLIService', () => {
     const textExample = textDirectiveExamples.atomic.simpleString;
     await mockFileSystemService.writeFile('test.mld', textExample.code);
 
+    // Explicitly mock the exists method AFTER writing the file
+    vi.spyOn(mockFileSystemService, 'exists').mockImplementation(async (path) => {
+      if (path === 'test.mld' || path === '/project/input.mld' || path === 'test.md') {
+        // Files expected to exist in various tests
+        return true;
+      }
+      // Handle the specific case for the missing file test
+      if (path === 'nonexistent.mld') {
+        return false;
+      }
+      // Default to false for other paths if needed, or adjust as necessary
+      // console.warn(`Mock exists check for unexpected path: ${path}`);
+      return false; 
+    });
+
     // Initialize mock logger
     mockLogger = {
       debug: vi.fn(),
