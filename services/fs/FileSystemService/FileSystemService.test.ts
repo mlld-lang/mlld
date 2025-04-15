@@ -11,37 +11,26 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
 import fs from 'fs-extra';
-import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
 
 describe('FileSystemService', () => {
+  const helpers = TestContextDI.createTestHelpers();
   let context: TestContextDI;
   let service: FileSystemService;
   let pathOps: PathOperationsService;
   let pathService: PathService;
   let projectPathResolver: ProjectPathResolver;
-  let factories: Record<string, { factory: any; client: any }>;
 
   beforeEach(async () => {
-    context = TestContextDI.createIsolated();
-    await context.initialize();
+    context = helpers.setupWithStandardMocks({}, { isolatedContainer: true });
+    await context.resolve('IPathService');
 
     await context.fixtures.load('fileSystemProject');
 
-    factories = ClientFactoryHelpers.registerStandardClientFactories(context);
-
-    pathOps = new PathOperationsService();
-    projectPathResolver = new ProjectPathResolver();
-    
-    pathService = new PathService(projectPathResolver);
-    pathService.enableTestMode();
-    pathService.setProjectPath('/project');
-    context.registerMock('IPathService', pathService);
-    context.registerMock('PathService', pathService);
-    
-    await context.initialize();
-    
     service = await context.resolve(FileSystemService);
-
+    pathOps = await context.resolve('IPathOperationsService');
+    pathService = await context.resolve(PathService);
+    projectPathResolver = await context.resolve(ProjectPathResolver);
+    
     await service.ensureDir('project/list-dir');
     await service.writeFile('project/list-dir/file1.txt', 'content1');
     await service.writeFile('project/list-dir/file2.txt', 'content2');
