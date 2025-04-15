@@ -9,16 +9,11 @@ import type { DirectiveNode, InterpolatableValue, StructuredPath as AstStructure
 import type { StructuredPath } from '@core/types/paths.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { dataDirectiveExamples } from '@core/syntax/index.js';
-import {
-  createValidationServiceMock,
-  createStateServiceMock,
-  createResolutionServiceMock,
-} from '@tests/utils/mocks/serviceMocks.js';
+import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 // Import new context types
 import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
-import { mock } from 'vitest-mock-extended';
 import { JsonValue } from '@core/types'; // Import JsonValue
 // Import error type
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
@@ -32,16 +27,11 @@ import type { IPathService } from '@services/fs/PathService/IPathService.js'; //
  * DataDirectiveHandler Test Status
  * --------------------------------
  * 
- * MIGRATION STATUS: Complete ✅
+ * MIGRATION STATUS: Phase 5 ✅ (Using TestContextDI helpers)
  * 
- * This test file has been fully migrated to use:
- * - TestContextDI.createIsolated() for container management
- * - Standardized mock factories with vitest-mock-extended
- * - Centralized syntax examples where appropriate
- * 
- * Some tests still use createDirectiveNode for reliability due to
- * specific test requirements that are challenging to express with
- * centralized syntax examples.
+ * This test file has been migrated to use:
+ * - TestContextDI.createTestHelpers().setupWithStandardMocks()
+ * - vi.spyOn on resolved mocks for test-specific behavior
  */
 
 /**
@@ -78,47 +68,46 @@ function getStateFromResult(result: DirectiveResult | IStateService): IStateServ
 }
 
 describe('DataDirectiveHandler', () => {
+  // Use helpers
+  const helpers = TestContextDI.createTestHelpers();
   let testDIContext: TestContextDI;
   let handler: DataDirectiveHandler;
-  let validationService: ReturnType<typeof createValidationServiceMock>;
-  let stateService: ReturnType<typeof createStateServiceMock>;
-  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
+  // Use standard interface types for mocks
+  let stateService: IStateService;
+  let resolutionService: IResolutionService;
+  let fileSystemService: IFileSystemService;
   let mockProcessingContext: DirectiveProcessingContext;
 
   beforeEach(async () => {
-    testDIContext = TestContextDI.createIsolated();
-    await testDIContext.initialize();
+    // --- Phase 5: Use setupWithStandardMocks --- 
+    testDIContext = helpers.setupWithStandardMocks({}, { isolatedContainer: true });
+    // Await initialization implicitly by resolving a service
+    await testDIContext.resolve('IFileSystemService'); 
 
-    validationService = createValidationServiceMock();
-    stateService = createStateServiceMock();
-    resolutionService = createResolutionServiceMock();
-
-    stateService.getCurrentFilePath.mockReturnValue('/test.meld');
-
-    // Register mocks first
-    testDIContext.registerMock('IValidationService', validationService);
-    testDIContext.registerMock('IStateService', stateService);
-    testDIContext.registerMock('IResolutionService', resolutionService);
-    testDIContext.registerMock<IFileSystemService>('IFileSystemService', mock<IFileSystemService>());
-    testDIContext.registerMock<IPathService>('IPathService', mock<IPathService>()); 
-
-    // Resolve handler AFTER registering mocks
-    handler = await testDIContext.container.resolve(DataDirectiveHandler);
+    // --- Resolve services/mocks from context ---
+    stateService = await testDIContext.resolve('IStateService');
+    resolutionService = await testDIContext.resolve('IResolutionService');
+    fileSystemService = await testDIContext.resolve('IFileSystemService');
+    // Resolve other needed services/mocks
+    const pathService = await testDIContext.resolve<IPathService>('IPathService');
+    handler = await testDIContext.resolve(DataDirectiveHandler);
     
-    // General mock resolution logic (can be overridden in tests)
-    resolutionService.resolveNodes.mockImplementation(async (nodes, ctx) => {
+    // Default mock behavior needed for tests (applied to resolved mocks)
+    vi.spyOn(stateService, 'getCurrentFilePath').mockReturnValue('/test.meld');
+    vi.spyOn(resolutionService, 'resolveNodes').mockImplementation(async (nodes, ctx) => {
       return nodes.map((n: any) => n.content || `{{${n.identifier}}}`).join('');
     });
-    resolutionService.resolveInContext.mockImplementation(async (value, ctx) => {
+    vi.spyOn(resolutionService, 'resolveInContext').mockImplementation(async (value, ctx) => {
         if (typeof value === 'string') return value.replace('${username}', 'Alice');
         return JSON.stringify(value);
     });
+    vi.spyOn(stateService, 'setDataVar'); // Spy for assertions
 
-    // Create base processing context
-    const mockResolutionContext = mock<ResolutionContext>();
-    const mockFormattingContext = mock<FormattingContext>();
+    // Create base processing context using resolved mocks
+    const mockResolutionContext: ResolutionContext = { strict: true, filePath: '/test.meld' };
+    const mockFormattingContext: FormattingContext = { isBlock: false, preserveLiteralFormatting: false, preserveWhitespace: false };
     mockProcessingContext = {
-        state: stateService,
+        state: stateService, 
         resolutionContext: mockResolutionContext,
         formattingContext: mockFormattingContext,
         directiveNode: undefined as any, 
@@ -256,7 +245,7 @@ describe('DataDirectiveHandler', () => {
 
     it('should handle state errors', async () => {
       // Create a state mock specifically for this test where setDataVar throws
-      const stateErrorMock = mock<IStateService>();
+      const stateErrorMock = MockFactory.createStateService();
       // Configure necessary methods used before the error
       stateErrorMock.getCurrentFilePath.mockReturnValue('/test.meld'); 
       // Configure setDataVar to throw

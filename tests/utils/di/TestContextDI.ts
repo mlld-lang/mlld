@@ -44,6 +44,10 @@ import type { IValidationService } from '@services/resolution/ValidationService/
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
 import type { IStateDebuggerService } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService.js';
+import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
+import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
+import type { IStateServiceClient } from '@services/state/StateService/interfaces/IStateServiceClient.js';
+import type { IStateTrackingServiceClient } from '@tests/utils/debug/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 
 /**
  * Options for creating a TestContextDI instance
@@ -335,40 +339,38 @@ export class TestContextDI extends TestContext {
     this.fs = new MemfsTestFileSystem();
     this.normalizePathForTests = (path) => path;
     
-    // Register core services for testing
     await this.registerServices();
     
-    // Mark as initialized
     this.initialized = true;
   }
 
   /**
-   * Registers all the necessary services for the test context
+   * Registers all the necessary services for the test context using MockFactory defaults
    */
   private async registerServices(): Promise<void> {
-    this.registerFileSystemService();
-    this.registerURLContentResolver();
-    this.registerPathService();
-    this.registerStateEventService();
-    this.registerParserService();
-    this.registerResolutionService();
-    this.registerValidationService();
-    this.registerCircularityService();
-    this.registerDirectiveService();
-    this.registerInterpreterService();
-    this.registerOutputService();
-    this.registerDebugServices();
+    // Register standard mocks from MockFactory first
+    for (const [token, factory] of Object.entries(MockFactory.standardFactories)) {
+      if (!this.container.isRegistered(token)) {
+        // Use registerMock internally for consistency, although registerService could also work
+        this.container.registerMock(token, factory()); 
+      }
+    }
+    
+    this.registerMock<MemfsTestFileSystem>('IFileSystem', this.fs);
+    this.registerURLContentResolver(); // Keep custom mock for now
     this.registerFactories();
+    this.registerDebugServices();
 
-    // Register REAL StateService and its dependencies
+    // Register REAL StateService last, allows standard mock to be default
     this.container.registerService(StateFactory, StateFactory);
-    this.container.registerService('IStateService', StateService);
+    this.container.registerService('IStateService', StateService); 
   }
 
   /**
-   * Registers the URLContentResolver mock
+   * Registers the URLContentResolver mock - Keep custom mock for now if needed
    */
   private registerURLContentResolver(): void {
+    if (this.container.isRegistered('IURLContentResolver')) return;
     const mockURLContentResolver = {
       isURL: vi.fn().mockImplementation((path: string) => {
         if (!path) return false;
@@ -379,8 +381,7 @@ export class TestContextDI extends TestContext {
           return false;
         }
       }),
-      validateURL: vi.fn().mockImplementation(async (url: string, options?: any) => {
-        // Simple validation that just returns the URL if it looks like a URL
+      validateURL: vi.fn().mockImplementation(async (url: string, _options?: any) => {
         try {
           new URL(url);
           return url;
@@ -388,550 +389,125 @@ export class TestContextDI extends TestContext {
           throw new Error(`Invalid URL: ${url}`);
         }
       }),
-      fetchURL: vi.fn().mockImplementation(async (url: string, options?: any) => {
+      fetchURL: vi.fn().mockImplementation(async (url: string, _options?: any) => {
         return {
           content: `Mock content for ${url}`,
-          metadata: {
-            statusCode: 200,
-            contentType: 'text/plain'
-          },
+          metadata: { statusCode: 200, contentType: 'text/plain' },
           fromCache: false,
           url
         };
       })
     };
-    
-    this.container.registerMock('IURLContentResolver', mockURLContentResolver);
-  }
-
-  /**
-   * Registers the FileSystemService mock
-   */
-  private registerFileSystemService(): void {
-    const mockFsService = {
-      readFile: vi.fn().mockImplementation(async (path: string) => {
-        try {
-          return await this.fs.readFile(path);
-        } catch (error) {
-          throw error;
-        }
-      }),
-      writeFile: vi.fn().mockImplementation(async (path: string, content: string) => {
-        try {
-          return await this.fs.writeFile(path, content);
-        } catch (error) {
-          throw error;
-        }
-      }),
-      mkdir: vi.fn().mockImplementation(async (path: string) => {
-        try {
-          return await this.fs.mkdir(path);
-        } catch (error) {
-          throw error;
-        }
-      }),
-      exists: vi.fn().mockImplementation(async (path: string) => {
-        try {
-          return await this.fs.exists(path);
-        } catch (error) {
-          return false;
-        }
-      }),
-      stat: vi.fn().mockImplementation(async (path: string) => {
-        try {
-          return await this.fs.stat(path);
-        } catch (error) {
-          throw error;
-        }
-      }),
-      listFiles: vi.fn().mockImplementation(async (path: string) => {
-        try {
-          return await this.fs.listFiles(path);
-        } catch (error) {
-          throw error;
-        }
-      }),
-      isDirectory: vi.fn().mockImplementation(async (path: string) => {
-        try {
-          const stats = await this.fs.stat(path);
-          return stats.isDirectory();
-        } catch (error) {
-          return false;
-        }
-      }),
-      isFile: vi.fn().mockImplementation(async (path: string) => {
-        try {
-          const stats = await this.fs.stat(path);
-          return stats.isFile();
-        } catch (error) {
-          return false;
-        }
-      }),
-      debug: vi.fn(),
-      isTestEnabled: vi.fn().mockReturnValue(true),
-      isTestMode: vi.fn().mockReturnValue(true)
-    };
-    
-    this.container.registerMock('IFileSystemService', mockFsService);
-  }
-
-  /**
-   * Registers the PathService mock
-   */
-  private registerPathService(): void {
-    const mockPathService = {
-      validatePath: vi.fn().mockImplementation(async (path: string) => {
-        if (!path || path === '') {
-          throw createPathValidationError('Empty path is not allowed', {
-            code: 'EMPTY_PATH',
-            path: ''
-          });
-        }
-        
-        if (path.includes('\0')) {
-          throw createPathValidationError('Path contains null bytes', {
-            code: 'NULL_BYTES',
-            path
-          });
-        }
-        
-        return path;
-      }),
-      normalizePath: vi.fn().mockImplementation((path: string) => path),
-      resolveRelativePath: vi.fn().mockImplementation((path: string, basePath?: string) => {
-        if (path.startsWith('/')) return path;
-        if (!basePath) return '/' + path;
-        return basePath.replace(/\/[^/]*$/, '') + '/' + path;
-      }),
-      joinPaths: vi.fn().mockImplementation((...paths: string[]) => {
-        return paths.join('/').replace(/\/+/g, '/');
-      }),
-      isAbsolutePath: vi.fn().mockImplementation((path: string) => {
-        return path.startsWith('/');
-      }),
-      dirname: vi.fn().mockImplementation((path: string) => {
-        return path.replace(/\/[^/]*$/, '') || '/';
-      }),
-      basename: vi.fn().mockImplementation((path: string) => {
-        return path.split('/').pop() || '';
-      }),
-      extname: vi.fn().mockImplementation((path: string) => {
-        const base = path.split('/').pop() || '';
-        const match = base.match(/\.[^.]*$/);
-        return match ? match[0] : '';
-      }),
-      isTestMode: vi.fn().mockReturnValue(true)
-    };
-    
-    this.container.registerMock('IPathService', mockPathService);
-  }
-
-  /**
-   * Registers the StateEventService mock
-   */
-  private registerStateEventService(): void {
-    const mockStateEventService = {
-      subscribe: vi.fn(),
-      unsubscribe: vi.fn(),
-      publish: vi.fn()
-    };
-    
-    this.container.registerMock('IStateEventService', mockStateEventService);
-  }
-
-  /**
-   * Registers the ParserService mock
-   */
-  private registerParserService(): void {
-    const mockParserService = {
-      parse: vi.fn().mockReturnValue([]),
-      parseWithLocations: vi.fn().mockReturnValue([])
-    };
-    
-    this.container.registerMock('IParserService', mockParserService);
-  }
-
-  /**
-   * Registers the ResolutionService mock
-   */
-  private registerResolutionService(): void {
-    const mockResolutionService = {
-      resolveVariable: vi.fn(),
-      resolvePathVariable: vi.fn(),
-      resolveDataVariable: vi.fn(),
-      resolvePrimitive: vi.fn().mockImplementation(value => value),
-      resolveCommand: vi.fn(),
-      resolveVariableInText: vi.fn().mockImplementation((text, state) => text),
-      resolveAll: vi.fn().mockImplementation((value, state) => value)
-    };
-    
-    this.container.registerMock('IResolutionService', mockResolutionService);
-  }
-
-  /**
-   * Registers the ValidationService mock
-   */
-  private registerValidationService(): void {
-    const mockValidationService = {
-      validateDirective: vi.fn().mockReturnValue(true),
-      registerValidator: vi.fn()
-    };
-    
-    this.container.registerMock('IValidationService', mockValidationService);
-  }
-
-  /**
-   * Registers the CircularityService mock
-   */
-  private registerCircularityService(): void {
-    const mockCircularityService = {
-      markFileVisited: vi.fn(),
-      isFileVisited: vi.fn().mockReturnValue(false),
-      clearVisitedFiles: vi.fn(),
-      getVisitedFiles: vi.fn().mockReturnValue([])
-    };
-    
-    this.container.registerMock('ICircularityService', mockCircularityService);
-  }
-
-  /**
-   * Registers the DirectiveService mock
-   */
-  private registerDirectiveService(): void {
-    const mockDirectiveService = {
-      executeDirective: vi.fn().mockImplementation(async (node) => {
-        return {
-          success: true,
-          node,
-          replacement: null
-        };
-      }),
-      registerHandler: vi.fn(),
-      getHandler: vi.fn()
-    };
-    
-    // Create a mock logger for directive service
-    const mockDirectiveLogger = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn()
-    };
-    
-    this.container.registerMock('IDirectiveService', mockDirectiveService);
-    this.container.registerMock('DirectiveLogger', mockDirectiveLogger);
-  }
-
-  /**
-   * Registers the InterpreterService mock
-   */
-  private registerInterpreterService(): void {
-    const mockInterpreterService = {
-      interpret: vi.fn().mockReturnValue(''),
-      interpretWithState: vi.fn().mockReturnValue({ content: '', state: null })
-    };
-    
-    this.container.registerMock('IInterpreterService', mockInterpreterService);
-  }
-
-  /**
-   * Registers the OutputService mock
-   */
-  private registerOutputService(): void {
-    const mockOutputService = {
-      generateOutput: vi.fn().mockReturnValue('')
-    };
-    
-    this.container.registerMock('IOutputService', mockOutputService);
+    this.registerMock('IURLContentResolver', mockURLContentResolver);
   }
 
   /**
    * Registers debug services for testing
    */
   private registerDebugServices(): void {
-    // Register state tracking service for tests that need it
-    const mockStateTrackingService = {
-      trackState: vi.fn(),
-      getStateHistory: vi.fn().mockReturnValue([]),
-      clearHistory: vi.fn()
-    };
-    
-    this.container.registerMock('IStateTrackingService', mockStateTrackingService);
-    
-    // Register state debugger service
-    const mockStateDebuggerService = {
-      debugState: vi.fn(),
-      createSnapshot: vi.fn(),
-      compareSnapshots: vi.fn().mockReturnValue([]),
-      enable: vi.fn(),
-      disable: vi.fn(),
-      isEnabled: vi.fn().mockReturnValue(false)
-    };
-    
-    this.container.registerMock('IStateDebuggerService', mockStateDebuggerService);
+    if (!this.container.isRegistered('IStateTrackingService')) {
+      const mockStateTrackingService = {
+        trackState: vi.fn(),
+        getStateHistory: vi.fn().mockReturnValue([]),
+        clearHistory: vi.fn()
+      };
+      this.registerMock('IStateTrackingService', mockStateTrackingService);
+    }
+    if (!this.container.isRegistered('IStateDebuggerService')) {
+      const mockStateDebuggerService = {
+        debugState: vi.fn(),
+        createSnapshot: vi.fn(),
+        compareSnapshots: vi.fn().mockReturnValue([]),
+        enable: vi.fn(),
+        disable: vi.fn(),
+        isEnabled: vi.fn().mockReturnValue(false)
+      };
+      this.registerMock('IStateDebuggerService', mockStateDebuggerService);
+    }
   }
 
   /**
-   * Registers factory classes for circular dependency resolution
+   * Registers factory classes using ClientFactoryHelpers
    */
   private registerFactories(): void {
-    // Register PathServiceClientFactory mock
-    const mockPathServiceClientFactory = {
-      createClient: vi.fn().mockImplementation(() => {
-        const mockPathClient: IPathServiceClient = {
-          resolvePath: vi.fn().mockImplementation((path: string) => path),
-          normalizePath: vi.fn().mockImplementation((path: string) => path)
-        };
-        return mockPathClient;
-      })
-    };
-    
-    // Register FileSystemServiceClientFactory mock
-    const mockFileSystemServiceClientFactory = {
-      createClient: vi.fn().mockImplementation(() => {
-        const mockFileSystemClient: IFileSystemServiceClient = {
-          exists: vi.fn().mockImplementation(async (path: string) => {
-            try {
-              return await this.fs.exists(path);
-            } catch (error) {
-              return false;
-            }
-          }),
-          isDirectory: vi.fn().mockImplementation(async (path: string) => {
-            try {
-              const stats = await this.fs.stat(path);
-              return stats.isDirectory();
-            } catch (error) {
-              return false;
-            }
-          })
-        };
-        return mockFileSystemClient;
-      })
-    };
-    
-    // Register VariableReferenceResolverClientFactory mock
-    const mockVariableReferenceResolverClientFactory = {
-      createClient: vi.fn().mockImplementation(() => {
-        const mockVariableReferenceResolverClient: IVariableReferenceResolverClient = {
-          resolve: vi.fn().mockImplementation(async (text: string, context: any) => {
-            // Simple mock implementation that returns the text unchanged
-            return text;
-          }),
-          setResolutionTracker: vi.fn()
-        };
-        return mockVariableReferenceResolverClient;
-      })
-    };
-    
-    // Register DirectiveServiceClientFactory mock
-    const mockDirectiveServiceClientFactory = {
-      createClient: vi.fn().mockImplementation(() => {
-        const mockDirectiveServiceClient: IDirectiveServiceClient = {
-          supportsDirective: vi.fn().mockImplementation((kind: string) => {
-            // Default to supporting all directives in tests
-            return true;
-          }),
-          getSupportedDirectives: vi.fn().mockImplementation(() => {
-            // Return common directive kinds
-            return ['text', 'data', 'path', 'define', 'run', 'embed', 'import'];
-          })
-        };
-        return mockDirectiveServiceClient;
-      })
-    };
-    
-    // Register ResolutionServiceClientForDirectiveFactory mock
-    const mockResolutionServiceClientForDirectiveFactory = {
-      createClient: vi.fn().mockImplementation(() => {
-        const mockResolutionServiceClientForDirective: IResolutionServiceClientForDirective = {
-          resolveText: vi.fn().mockImplementation(async (text: string, context: any) => {
-            // Simple mock implementation that returns the text unchanged
-            return text;
-          }),
-          resolveData: vi.fn().mockImplementation(async (ref: string, context: any) => {
-            // Simple mock implementation that returns the ref as a string
-            return ref;
-          }),
-          resolvePath: vi.fn().mockImplementation(async (path: string, context: any) => {
-            // Simple mock implementation that returns the path unchanged
-            return path;
-          }),
-          resolveContent: vi.fn().mockImplementation(async (nodes: any[], context: any) => {
-            // Simple mock implementation that returns empty string
-            return '';
-          }),
-          resolveInContext: vi.fn().mockImplementation(async (value: string | any, context: any) => {
-            // Simple mock implementation that returns the value as a string
-            return typeof value === 'string' ? value : JSON.stringify(value);
-          })
-        };
-        return mockResolutionServiceClientForDirective;
-      })
-    };
-    
-    // Register StateServiceClientFactory mock
-    const mockStateServiceClientFactory = {
-      createClient: vi.fn().mockImplementation(() => {
-        const mockStateServiceClient: IStateServiceClient = {
-          getStateId: vi.fn().mockImplementation(() => 'test-state-id'),
-          getCurrentFilePath: vi.fn().mockImplementation(() => '/test/file.meld'),
-          getAllTextVars: vi.fn().mockImplementation(() => new Map()),
-          getAllDataVars: vi.fn().mockImplementation(() => new Map()),
-          getAllPathVars: vi.fn().mockImplementation(() => new Map()),
-          getAllCommands: vi.fn().mockImplementation(() => new Map()),
-          isTransformationEnabled: vi.fn().mockImplementation(() => false)
-        };
-        return mockStateServiceClient;
-      })
-    };
-    
-    // Register StateTrackingServiceClientFactory mock
-    const mockStateTrackingServiceClientFactory = {
-      createClient: vi.fn().mockImplementation(() => {
-        const mockStateTrackingServiceClient: IStateTrackingServiceClient = {
-          registerState: vi.fn(),
-          addRelationship: vi.fn(),
-          registerRelationship: vi.fn()
-        };
-        return mockStateTrackingServiceClient;
-      })
-    };
-    
-    this.container.registerMock('PathServiceClientFactory', mockPathServiceClientFactory);
-    this.container.registerMock('FileSystemServiceClientFactory', mockFileSystemServiceClientFactory);
-    this.container.registerMock('VariableReferenceResolverClientFactory', mockVariableReferenceResolverClientFactory);
-    this.container.registerMock('DirectiveServiceClientFactory', mockDirectiveServiceClientFactory);
-    this.container.registerMock('ResolutionServiceClientForDirectiveFactory', mockResolutionServiceClientForDirectiveFactory);
-    this.container.registerMock('StateServiceClientFactory', mockStateServiceClientFactory);
-    this.container.registerMock('StateTrackingServiceClientFactory', mockStateTrackingServiceClientFactory);
+    const factoryTokens = [
+        'PathServiceClientFactory', 
+        'FileSystemServiceClientFactory', 
+        'VariableReferenceResolverClientFactory',
+        'DirectiveServiceClientFactory',
+        'ResolutionServiceClientForDirectiveFactory',
+        'StateServiceClientFactory',
+        'StateTrackingServiceClientFactory'
+    ];
+    let needsRegister = false;
+    for(const token of factoryTokens) {
+        if (!this.container.isRegistered(token)) {
+            needsRegister = true;
+            break;
+        }
+    }
+    if (needsRegister) {
+        ClientFactoryHelpers.registerStandardClientFactories(this);
+    }
   }
-  
+
   /**
-   * Create helper methods for common test patterns
+   * Provides access to test helper methods
    */
   static createTestHelpers() {
     return {
       /**
-       * Sets up a TestContextDI instance for a test
-       * @param options TestContextDI options
+       * Creates a minimal test context with only essential infrastructure mocks (like IFileSystem using MemFS)
+       * Does NOT register standard service mocks from MockFactory.
        */
-      setup: (options: TestContextDIOptions = {}) => {
-        return TestContextDI.create(options);
-      },
-      
-      /**
-       * Creates a context with common mock services
-       * @param mockOverrides Object with mock overrides
-       */
-      setupWithMocks: (mockOverrides: Record<string, any> = {}) => {
-        const context = TestContextDI.create();
-        
-        // Register default mocks for common services
-        const defaultMocks: Record<string, any> = {
-          'IStateService': {
-            getVariable: vi.fn(),
-            setVariable: vi.fn(),
-            hasVariable: vi.fn().mockReturnValue(false),
-            // Add other state methods as needed
-          },
-          'IFileSystemService': {
-            readFile: vi.fn().mockResolvedValue(''),
-            writeFile: vi.fn().mockResolvedValue(undefined),
-            exists: vi.fn().mockResolvedValue(false),
-            // Add other filesystem methods as needed
-          },
-          // Add other common services as needed
-        };
-        
-        // Register all default mocks
-        for (const [token, mock] of Object.entries(defaultMocks)) {
-          // If an override is provided, use it instead
-          const finalMock = mockOverrides[token] || mock;
-          context.registerMock(token, finalMock);
+      setupMinimal: (options: TestContextDIOptions = {}): TestContextDI => {
+        const context = new TestContextDI({ ...options, autoInit: false });
+        context.fs = new MemfsTestFileSystem();
+        context.registerMock<MemfsTestFileSystem>('IFileSystem', context.fs);
+        if (!context.container.isRegistered('FileSystemServiceClientFactory')) {
+          const fsClient: IFileSystemServiceClient = {
+            exists: vi.fn().mockImplementation(async (path: string) => context.fs.exists(path)),
+            isDirectory: vi.fn().mockImplementation(async (path: string) => {
+              try { return (await context.fs.stat(path)).isDirectory(); } catch { return false; }
+            })
+          };
+          ClientFactoryHelpers.registerClientFactory(context, 'FileSystemServiceClientFactory', fsClient);
         }
-        
-        // Register additional mocks from overrides
-        for (const [token, mock] of Object.entries(mockOverrides)) {
-          if (!(token in defaultMocks)) {
-            context.registerMock(token, mock);
-          }
+        if (!context.container.isRegistered('PathServiceClientFactory')) {
+          const pathClient: IPathServiceClient = {
+             resolvePath: vi.fn().mockImplementation((path: string) => path),
+             normalizePath: vi.fn().mockImplementation((path: string) => path)
+          };
+           ClientFactoryHelpers.registerClientFactory(context, 'PathServiceClientFactory', pathClient);
         }
-        
+        context.initialized = true;
+        context.initPromise = Promise.resolve();
         return context;
       },
       
       /**
-       * Creates a test context for directive handler testing
-       * @param directiveHandler The directive handler to test
-       * @param mockOverrides Mock overrides for services
+       * Creates a context with standardized mock service implementations from MockFactory.
+       * Allows overriding specific mocks.
        */
-      setupDirectiveTest: <T>(
-        directiveHandler: T,
-        mockOverrides: Record<string, any> = {}
-      ) => {
-        const context = TestContextDI.create();
+      setupWithStandardMocks: (
+        customMocks: Record<string, any> = {}, 
+        options: TestContextDIOptions = {}
+      ): TestContextDI => {
+        const context = new TestContextDI({ ...options, autoInit: false }); // Prevent auto-init
+
+        // Run standard initialization FIRST
+        const initPromise = context.initializeAsync(); 
         
-        // Register default mocks for directive testing
-        const defaultMocks: Record<string, any> = {
-          'IValidationService': {
-            validateDirective: vi.fn().mockReturnValue(true)
-          },
-          'IStateService': {
-            getVariable: vi.fn(),
-            setVariable: vi.fn(),
-            hasVariable: vi.fn().mockReturnValue(false),
-            getDataVariable: vi.fn(),
-            setDataVariable: vi.fn(),
-            hasDataVariable: vi.fn().mockReturnValue(false),
-            getPathVariable: vi.fn(),
-            setPathVariable: vi.fn(),
-            hasPathVariable: vi.fn().mockReturnValue(false),
-            getCommand: vi.fn(),
-            setCommand: vi.fn(),
-            hasCommand: vi.fn().mockReturnValue(false),
-            storeOriginalNode: vi.fn(),
-            storeTransformedNode: vi.fn(),
-            hasTransformedNode: vi.fn().mockReturnValue(false),
-            createChildState: vi.fn().mockImplementation(function() { return this; }),
-            getImmutable: vi.fn().mockReturnValue(false)
-          },
-          'IResolutionService': {
-            resolveVariable: vi.fn(),
-            resolvePathVariable: vi.fn(),
-            resolveDataVariable: vi.fn(),
-            resolvePrimitive: vi.fn().mockImplementation(value => value),
-            resolveVariableInText: vi.fn().mockImplementation((text) => text),
-            resolveAll: vi.fn().mockImplementation((value) => value)
-          }
-        };
+        // AFTER standard init, register custom mocks to ensure they override
+        // We need to ensure initPromise resolves before registering overrides
+        // A bit tricky, maybe better to pass overrides into initialize?
+        // Alternative: Register overrides, then init, then re-register overrides?
+        // Let's try re-registering overrides AFTER init completes.
+        context.initPromise = initPromise.then(() => {
+            context.registerMocks(customMocks); // Register overrides again after init
+        });
         
-        // Register handler if provided
-        if (directiveHandler) {
-          context.container.registerInstance('directiveHandler', directiveHandler);
-        }
-        
-        // Register all default mocks
-        for (const [token, mock] of Object.entries(defaultMocks)) {
-          // If an override is provided, use it instead
-          const finalMock = mockOverrides[token] || mock;
-          context.registerMock(token, finalMock);
-        }
-        
-        // Register additional mocks from overrides
-        for (const [token, mock] of Object.entries(mockOverrides)) {
-          if (!(token in defaultMocks)) {
-            context.registerMock(token, mock);
-          }
-        }
-        
-        return {
-          context,
-          validationService: context.resolveSync<any>('IValidationService'),
-          stateService: context.resolveSync<any>('IStateService'),
-          resolutionService: context.resolveSync<any>('IResolutionService'),
-          handler: directiveHandler || null
-        };
+        return context;
       }
     };
   }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
@@ -10,10 +10,8 @@ import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
-import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
-import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 import fs from 'fs-extra';
+import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
 
 describe('FileSystemService', () => {
   let context: TestContextDI;
@@ -21,65 +19,29 @@ describe('FileSystemService', () => {
   let pathOps: PathOperationsService;
   let pathService: PathService;
   let projectPathResolver: ProjectPathResolver;
-  let mockPathClient: IPathServiceClient;
-  let mockPathClientFactory: PathServiceClientFactory;
-  let mockFileSystemClient: any;
-  let mockFileSystemClientFactory: FileSystemServiceClientFactory;
+  let factories: Record<string, { factory: any; client: any }>;
 
   beforeEach(async () => {
-    // Initialize test context with isolated container
     context = TestContextDI.createIsolated();
     await context.initialize();
 
-    // Load test fixture
     await context.fixtures.load('fileSystemProject');
 
-    // Create test services with proper DI
+    factories = ClientFactoryHelpers.registerStandardClientFactories(context);
+
     pathOps = new PathOperationsService();
     projectPathResolver = new ProjectPathResolver();
     
-    // Create mock path client and factory
-    mockPathClient = {
-      resolvePath: (path: string) => path,
-      normalizePath: (path: string) => path
-    };
-    
-    mockPathClientFactory = {
-      createClient: () => mockPathClient
-    } as unknown as PathServiceClientFactory;
-    
-    // Create mock FileSystem client and factory
-    mockFileSystemClient = {
-      isDirectory: async (path: string) => path.endsWith('dir') || path.endsWith('directory'),
-      exists: async (path: string) => true
-    };
-    
-    mockFileSystemClientFactory = {
-      createClient: () => mockFileSystemClient
-    } as unknown as FileSystemServiceClientFactory;
-    
-    // Register services with container using the correct methods
-    context.registerMock('IPathOperationsService', pathOps);
-    context.registerMock('PathOperationsService', pathOps);
-    context.registerMock(ProjectPathResolver, projectPathResolver);
-    context.registerMock('IFileSystem', context.fs);
-    context.registerMock('PathServiceClientFactory', mockPathClientFactory);
-    context.registerMock('FileSystemServiceClientFactory', mockFileSystemClientFactory);
-    
-    // Create path service - now without ServiceMediator
     pathService = new PathService(projectPathResolver);
     pathService.enableTestMode();
     pathService.setProjectPath('/project');
     context.registerMock('IPathService', pathService);
     context.registerMock('PathService', pathService);
     
-    // Initialize the context
     await context.initialize();
     
-    // Resolve file system service from container with await for proper initialization
     service = await context.resolve(FileSystemService);
 
-    // Set up test files and directories
     await service.ensureDir('project/list-dir');
     await service.writeFile('project/list-dir/file1.txt', 'content1');
     await service.writeFile('project/list-dir/file2.txt', 'content2');
@@ -127,9 +89,11 @@ describe('FileSystemService', () => {
     });
 
     it('creates parent directories when writing files', async () => {
-      await service.writeFile('project/new/nested/file.txt', 'content');
-      expect(await service.exists('project/new/nested/file.txt')).toBe(true);
-      expect(await service.isDirectory('project/new/nested')).toBe(true);
+      const filePath = 'project/new/nested/file.txt';
+      const dirPath = 'project/new/nested';
+      await service.writeFile(filePath, 'content');
+      expect(await service.exists(filePath)).toBe(true);
+      expect(await service.isDirectory(dirPath)).toBe(true);
     });
   });
 
@@ -187,27 +151,20 @@ describe('FileSystemService', () => {
 
   describe('File modification handling', () => {
     it('updates file content correctly', async () => {
-      // Modify a file
       await service.writeFile('project/test.txt', 'Modified content');
       
-      // Verify modification happened
       const modifiedContent = await service.readFile('project/test.txt');
       expect(modifiedContent).toBe('Modified content');
     });
 
     it('creates new files correctly', async () => {
-      // Create new file
       await service.writeFile('project/new-file.txt', 'New content');
       
-      // Verify file was created
       const exists = await service.exists('project/new-file.txt');
       expect(exists).toBe(true);
       
-      // Verify content was written correctly
       const content = await service.readFile('project/new-file.txt');
       expect(content).toBe('New content');
     });
-
-    // Note: We can add a test for file removal if/when that functionality is needed
   });
 }); 
