@@ -11,7 +11,7 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { MeldNode, TextNode } from '@core/syntax/types/index.js';
-import { SourceLocationFactory, NodeFactory } from '@tests/utils/factories/NodeFactory.js';
+import { createTextNode, createLocation } from '@tests/utils/testFactories.js';
 
 /**
  * Options for configuring the InterpreterTestFixture
@@ -33,15 +33,15 @@ export interface InterpreterTestOptions {
  * Provides a pre-configured DI context with standard mocks and helpers.
  */
 export class InterpreterTestFixture {
-  context: TestContextDI;
-  interpreterService: IInterpreterService;
-  stateService: IStateService;
-  directiveService: IDirectiveService;
-  parserService: IParserService;
-  resolutionService: IResolutionService;
-  fsService: IFileSystemService;
-  pathService: IPathService;
-  circularityService: ICircularityService;
+  context!: TestContextDI;
+  interpreterService!: IInterpreterService;
+  stateService!: IStateService;
+  directiveService!: IDirectiveService;
+  parserService!: IParserService;
+  resolutionService!: IResolutionService;
+  fsService!: IFileSystemService;
+  pathService!: IPathService;
+  circularityService!: ICircularityService;
 
   // Private constructor to force creation via static method
   private constructor(context: TestContextDI) {
@@ -121,9 +121,8 @@ export class InterpreterTestFixture {
         // Default behavior: simply return the state
         return processCtx.state;
     });
-     // Example: Make state service return itself on clone/createChild
+     // Example: Make state service return itself on clone
     vi.spyOn(fixture.stateService, 'clone').mockImplementation(() => fixture.stateService);
-    vi.spyOn(fixture.stateService, 'createChildState').mockImplementation(async () => fixture.stateService);
     
     return fixture;
   }
@@ -166,6 +165,6 @@ export class InterpreterTestFixture {
    * Creates a simple TextNode for testing purposes.
    */
   createTextNode(content: string): TextNode {
-    return NodeFactory.createTextNode(content, SourceLocationFactory.createDummyLocation('test.meld'));
+    return createTextNode(content, createLocation());
   }
 } 

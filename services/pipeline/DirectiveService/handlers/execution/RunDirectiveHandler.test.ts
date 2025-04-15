@@ -335,7 +335,7 @@ describe('RunDirectiveHandler', () => {
             async () => await handler.execute(processingContext),
             {
                 code: DirectiveErrorCode.RESOLUTION_FAILED,
-                messageContains: 'Failed to resolve parameter variable \'missingVar\'', 
+                messageContains: 'Failed to resolve parameter variable: Variable not found by mock', 
                 cause: resolutionError
             } as ErrorTestOptions
         );

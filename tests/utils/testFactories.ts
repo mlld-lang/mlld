@@ -229,56 +229,52 @@ export function createRunDirective(
   subtype?: 'runCommand' | 'runCode' | 'runCodeParams' | 'runDefined',
   language?: string,
   parameters?: Array<VariableReferenceNode | string>,
-  outputVar?: string
+  outputVar?: string,
+  errorVar?: string
 ): DirectiveNode {
+  let resolvedSubtype = subtype;
+  let commandValue: InterpolatableValue | { name: string, args: any[], raw: string } | undefined = undefined;
+  let resolvedParameters: InterpolatableValue | undefined = undefined;
   
-  let determinedSubtype: 'runCommand' | 'runCode' | 'runCodeParams' | 'runDefined';
-  let commandProperty: InterpolatableValue | { name: string, args: any[], raw: string };
-
-  if (subtype) {
-      determinedSubtype = subtype;
-      if (determinedSubtype === 'runDefined') {
-        if (typeof commandInput !== 'object' || !commandInput || !('name' in commandInput)) throw new Error('Invalid input for runDefined subtype');
-        commandProperty = commandInput;
-      } else {
-         if (typeof commandInput === 'string') {
-           commandProperty = [createTextNode(commandInput, location)];
-         } else if (isInterpolatableValueArray(commandInput)) {
-           commandProperty = commandInput;
-         } else {
-           throw new Error('Invalid input for runCommand/runCode subtype');
-         }
-      }
+  // Determine subtype if not provided
+  if (!resolvedSubtype) {
+    if (typeof commandInput === 'object' && 'name' in commandInput) {
+      resolvedSubtype = 'runDefined';
+    } else if (language) {
+      resolvedSubtype = parameters ? 'runCodeParams' : 'runCode';
     } else {
-      if (typeof commandInput === 'object' && commandInput !== null && 'name' in commandInput) {
-        determinedSubtype = 'runDefined';
-        commandProperty = commandInput;
-      } else {
-        determinedSubtype = 'runCommand';
-        if (typeof commandInput === 'string') {
-           commandProperty = [createTextNode(commandInput, location)];
-         } else if (isInterpolatableValueArray(commandInput)) {
-           commandProperty = commandInput;
-         } else {
-            throw new Error('Invalid input for createRunDirective commandInput');
-         }
-      }
+      resolvedSubtype = 'runCommand';
     }
+  }
+
+  // Normalize commandInput based on subtype
+  if (resolvedSubtype === 'runCommand' || resolvedSubtype === 'runCode' || resolvedSubtype === 'runCodeParams') {
+    if (typeof commandInput === 'string') {
+      commandValue = [{ type: 'Text', content: commandInput }];
+    } else if (isInterpolatableValueArray(commandInput)) {
+      commandValue = commandInput;
+    }
+  } else if (resolvedSubtype === 'runDefined') {
+    commandValue = commandInput as { name: string, args: any[], raw: string };
+  }
+
+  // Normalize parameters if they are strings
+  if (parameters) {
+      resolvedParameters = parameters.map(p => 
+          typeof p === 'string' ? { type: 'Text', content: p } : p
+      );
+  }
 
   const directiveData: DirectiveData = {
       kind: 'run',
-      subtype: determinedSubtype,
-      command: commandProperty,
-      ...(outputVar && { output: outputVar })
+      subtype: resolvedSubtype,
+      ...(commandValue && { command: commandValue }),
+      ...(language && { language }),
+      ...(resolvedParameters && { parameters: resolvedParameters }),
+      // Use the passed parameters correctly
+      outputVariable: outputVar || 'stdout', 
+      errorVariable: errorVar || 'stderr' 
   };
-
-  if ((determinedSubtype === 'runCode' || determinedSubtype === 'runCodeParams')) {
-    if (language) directiveData.language = language;
-    directiveData.isMultiLine = true; 
-  }
-  if (determinedSubtype === 'runCodeParams' && parameters) {
-    directiveData.parameters = parameters;
-  }
 
   return {
     type: 'Directive',

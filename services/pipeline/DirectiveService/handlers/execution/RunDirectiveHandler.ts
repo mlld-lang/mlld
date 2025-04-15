@@ -50,6 +50,25 @@ export class RunDirectiveHandler implements IDirectiveHandler {
     return join(tempDir, `meld-script-${randomName}${extension}`);
   }
 
+  // ADDED: Missing helper method to create and write to a temp file
+  private async createTempScriptFile(content: string, language: string): Promise<string> {
+    const filePath = this.getTempFilePath(language);
+    try {
+      await this.fileSystemService.writeFile(filePath, content);
+      logger.debug('Created temporary script file', { path: filePath, language });
+      return filePath;
+    } catch (error) {
+      logger.error('Failed to create temporary script file', { path: filePath, error });
+      // Re-throw as a more specific error or handle as appropriate
+      throw new DirectiveError(
+        `Failed to create temporary script file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        this.kind,
+        DirectiveErrorCode.FILESYSTEM_ERROR,
+        { cause: error instanceof Error ? error : undefined }
+      );
+    }
+  }
+
   async execute(context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
     const state: IStateService = context.state;
     const node = context.directiveNode as DirectiveNode;
@@ -171,7 +190,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         }
       }
 
-      // Store results using correct variable names
+      // Store results using correct variable names extracted from the directive data
       await state.setTextVar(outputVariable, stdout || '');
       await state.setTextVar(errorVariable, stderr || '');
 
