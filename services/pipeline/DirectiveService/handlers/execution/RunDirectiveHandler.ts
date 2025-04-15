@@ -179,7 +179,8 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       if (state.isTransformationEnabled(this.kind)) {
         const replacementNode: TextNode = {
             type: 'Text',
-            content: stdout || '',
+            // Combine stdout and stderr, separated by newline, filtering empty strings
+            content: [stdout, stderr].filter(s => s).join('\n'), 
             location: node.location
         };
         return { state, replacement: replacementNode };

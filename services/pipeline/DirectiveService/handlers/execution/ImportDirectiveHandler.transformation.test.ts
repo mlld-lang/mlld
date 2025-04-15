@@ -17,22 +17,15 @@ import { createTestLocation, createTestText, createTestDirective, createTestCode
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils';
 import { importDirectiveExamples } from '@core/syntax/index';
 import { createNodeFromExample } from '@core/syntax/helpers';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
-import {
-  createValidationServiceMock,
-  createStateServiceMock,
-  createResolutionServiceMock,
-  createFileSystemServiceMock,
-  createPathServiceMock,
-  createParserServiceMock,
-  createInterpreterServiceClientFactoryMock,
-  createInterpreterServiceClientMock
-} from '@tests/utils/mocks/serviceMocks';
-import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
-import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
+import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 import type { MeldPath } from '@core/types/paths';
 import { createMeldPath, unsafeCreateValidatedResourcePath } from '@core/types/paths';
 import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
+import { DirectiveTestFixture, type DirectiveTestOptions } from '@tests/utils/fixtures/DirectiveTestFixture.js';
+import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
+import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 
 // Mock the logger using vi.mock
 const mockLoggerObject = {
@@ -147,70 +140,61 @@ function createTestImportNode(options: {
 }
 
 describe('ImportDirectiveHandler Transformation', () => {
+  let fixture: DirectiveTestFixture;
   let handler: ImportDirectiveHandler;
-  let validationService: ReturnType<typeof createValidationServiceMock>;
-  let stateService: ReturnType<typeof createStateServiceMock>;
-  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
-  let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
-  let pathService: ReturnType<typeof createPathServiceMock>;
   let parserService: DeepMockProxy<IParserService>;
   let interpreterServiceClientFactory: DeepMockProxy<InterpreterServiceClientFactory>;
   let interpreterServiceClient: DeepMockProxy<IInterpreterServiceClient>;
   let circularityService: DeepMockProxy<ICircularityService>;
-  let childState: ReturnType<typeof createStateServiceMock>;
-  let context: TestContextDI;
-  let mockProcessingContext: DirectiveProcessingContext;
+  let childState: IStateService;
+  let mockProcessingContext: Partial<DirectiveProcessingContext>;
+  let urlContentResolver: DeepMockProxy<IURLContentResolver>;
+  let stateTrackingService: DeepMockProxy<IStateTrackingService>;
 
   beforeEach(async () => {
-    context = TestContextDI.createIsolated();
-
-    // Create Standard Mocks
-    validationService = createValidationServiceMock();
-    stateService = createStateServiceMock();
-    resolutionService = createResolutionServiceMock();
-    fileSystemService = createFileSystemServiceMock();
-    pathService = createPathServiceMock();
-    childState = createStateServiceMock();
-
-    // Create Deep Mocks
+    // Create Deep Mocks for non-standard services
     parserService = mockDeep<IParserService>();
     interpreterServiceClientFactory = mockDeep<InterpreterServiceClientFactory>();
     interpreterServiceClient = mockDeep<IInterpreterServiceClient>();
     circularityService = mockDeep<ICircularityService>();
 
-    // Register Mocks
-    context.registerMock('IValidationService', validationService);
-    context.registerMock('IStateService', stateService);
-    context.registerMock('IResolutionService', resolutionService);
-    context.registerMock('IFileSystemService', fileSystemService);
-    context.registerMock('IPathService', pathService);
-    context.registerMock('IParserService', parserService);
-    context.registerMock('InterpreterServiceClientFactory', interpreterServiceClientFactory);
-    context.registerMock('ICircularityService', circularityService);
+    // Create fixture, register additional mocks
+    fixture = await DirectiveTestFixture.create({
+      additionalMocks: {
+        'IParserService': parserService,
+        'InterpreterServiceClientFactory': interpreterServiceClientFactory,
+        'ICircularityService': circularityService,
+        // Register the logger mock needed by ImportDirectiveHandler
+        'ILogger': mockLoggerObject 
+      }
+    });
 
-    // Configure Mocks
-    stateService.isTransformationEnabled.mockReturnValue(true);
-    stateService.createChildState.mockReturnValue(childState);
-    stateService.getCurrentFilePath.mockReturnValue('/project/transform.meld');
+    // Manually create child state mock (could be standardized later)
+    childState = MockFactory.createStateService({
+      getAllTextVars: vi.fn().mockReturnValue(new Map()),
+      getAllDataVars: vi.fn().mockReturnValue(new Map()),
+      getAllPathVars: vi.fn().mockReturnValue(new Map()),
+      getAllCommands: vi.fn().mockReturnValue(new Map()),
+      isTransformationEnabled: vi.fn().mockReturnValue(false),
+      getCurrentFilePath: vi.fn().mockReturnValue('/project/imported.meld'),
+    });
 
-    childState.getAllTextVars.mockReturnValue(new Map());
-    childState.getAllDataVars.mockReturnValue(new Map());
-    childState.getAllPathVars.mockReturnValue(new Map());
-    childState.getAllCommands.mockReturnValue(new Map());
-    childState.isTransformationEnabled.mockReturnValue(false);
-    childState.getCurrentFilePath.mockReturnValue('/project/imported.meld');
+    // Configure mocks provided by fixture or registered
+    vi.spyOn(fixture.stateService, 'isTransformationEnabled').mockReturnValue(true);
+    vi.spyOn(fixture.stateService, 'createChildState').mockResolvedValue(childState);
+    vi.spyOn(fixture.stateService, 'getCurrentFilePath').mockReturnValue('/project/transform.meld');
 
     interpreterServiceClientFactory.createClient.mockReturnValue(interpreterServiceClient);
     interpreterServiceClient.interpret.mockResolvedValue(childState);
 
-    validationService.validate.mockResolvedValue(undefined);
-    resolutionService.resolveInContext.mockImplementation(async (pathInput: string | PathValueObject, context?: ResolutionContext): Promise<string> => {
+    vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
+    vi.spyOn(fixture.resolutionService, 'resolveInContext').mockImplementation(async (pathInput: string | PathValueObject, context?: ResolutionContext): Promise<string> => {
       const rawPath = typeof pathInput === 'string' ? pathInput : pathInput.raw;
       const currentFilePath = context?.currentFilePath ?? '/project/main.meld';
       const baseDir = currentFilePath.substring(0, currentFilePath.lastIndexOf('/'));
       return `${baseDir}/${rawPath}`.replace(/\/\//g, '/');
     });
-    resolutionService.resolvePath.mockImplementation(async (pathInput: PathValueObject | string, context: ResolutionContext): Promise<MeldPath> => {
+    vi.spyOn(fixture.resolutionService, 'resolvePath').mockImplementation(async (pathInput: PathValueObject | string, context: ResolutionContext): Promise<MeldPath> => {
       const raw = typeof pathInput === 'string' ? pathInput : (pathInput as PathValueObject).raw;
       const currentPath = context?.currentFilePath ?? '/project/main.meld';
       const baseDir = currentPath.substring(0, currentPath.lastIndexOf('/'));
@@ -223,43 +207,51 @@ describe('ImportDirectiveHandler Transformation', () => {
       );
     });
 
-    fileSystemService.exists.mockResolvedValue(true);
-    fileSystemService.readFile.mockResolvedValue('');
+    vi.spyOn(fixture.fileSystemService, 'exists').mockResolvedValue(true);
+    vi.spyOn(fixture.fileSystemService, 'readFile').mockResolvedValue('');
     parserService.parse.mockResolvedValue([] as MeldNode[]);
     circularityService.beginImport.mockImplementation(() => {});
     circularityService.endImport.mockImplementation(() => {});
 
-    await context.initialize();
-
-    handler = await context.resolve(ImportDirectiveHandler);
+    // Resolve the handler using the fixture's context
+    handler = await fixture.context.resolve(ImportDirectiveHandler);
   });
 
   afterEach(async () => {
-    await context?.cleanup();
+    await fixture?.cleanup();
   });
 
-  const createMockProcessingContext = (node: DirectiveNode): DirectiveProcessingContext => {
-    const mockResolutionContext = mockDeep<ResolutionContext>();
-    const mockFormattingContext = mockDeep<FormattingContext>();
-    if (!stateService) {
-      throw new Error('Test setup error: stateService is not defined');
-    }
-    expect(stateService.getCurrentFilePath).toBeDefined(); 
-    expect(stateService.isTransformationEnabled).toBeDefined();
-    
-    return {
-        state: stateService, 
-        resolutionContext: mockResolutionContext,
-        formattingContext: mockFormattingContext,
-        directiveNode: node,
-    };
+  // Updated helper to use fixture services AND include resolutionContext
+  const createMockProcessingContext = (node: DirectiveNode): Partial<DirectiveProcessingContext> => {
+      const mockResolutionContext = mockDeep<ResolutionContext>(); // Create mock context
+      // const mockFormattingContext = mockDeep<FormattingContext>(); // Can be mocked if needed
+      if (!fixture || !fixture.stateService) {
+        throw new Error('Test setup error: fixture or stateService is not defined');
+      }
+      expect(fixture.stateService.getCurrentFilePath).toBeDefined(); 
+      expect(fixture.stateService.isTransformationEnabled).toBeDefined();
+      
+      // Set required properties for the mock context
+      // You might need to add more properties based on handler needs
+      mockResolutionContext.currentFilePath = fixture.stateService.getCurrentFilePath();
+      mockResolutionContext.state = fixture.stateService;
+      mockResolutionContext.strict = true; 
+      mockResolutionContext.depth = 0;
+      mockResolutionContext.flags = {}; // Add default flags if needed
+      mockResolutionContext.pathContext = { purpose: 'read' }; // Add default path context
+
+      return {
+          state: fixture.stateService, 
+          resolutionContext: mockResolutionContext, // ADDED mock context
+          // formattingContext: mockFormattingContext,
+          directiveNode: node,
+      };
   };
 
   describe('transformation behavior', () => {
     it('should return DirectiveResult with empty text node replacement when transformation enabled', async () => {
       const importPath = 'imported.meld';
       const finalPath = '/project/imported.meld';
-      const directiveContext: DirectiveContext = { currentFilePath: '/project/main.meld', state: stateService };
       const importLocation = createTestLocation(5, 1);
 
       const node = createTestImportNode({
@@ -267,30 +259,30 @@ describe('ImportDirectiveHandler Transformation', () => {
         location: importLocation
       });
 
-      resolutionService.resolveInContext.mockImplementation(async (pathInput) => {
+      vi.spyOn(fixture.resolutionService, 'resolveInContext').mockImplementation(async (pathInput) => {
         if (typeof pathInput === 'object' && pathInput.raw === importPath) return finalPath;
         return `/project/${pathInput}`;
       });
-      resolutionService.resolvePath.mockResolvedValue(createMeldPath(importPath, unsafeCreateValidatedResourcePath(finalPath), true));
-      fileSystemService.readFile.mockResolvedValue('@text var1="value1"');
-      const parsedNodes: MeldNode[] = [/* Placeholder for actual parsed nodes */]; // Placeholder comment clarified
-      parserService.parse.mockResolvedValue(parsedNodes as any); // Cast to any to resolve mock type mismatch
+      vi.spyOn(fixture.resolutionService, 'resolvePath').mockResolvedValue(createMeldPath(importPath, unsafeCreateValidatedResourcePath(finalPath), true));
+      vi.spyOn(fixture.fileSystemService, 'readFile').mockResolvedValue('@text var1="value1"');
+      const parsedNodes: MeldNode[] = [];
+      parserService.parse.mockResolvedValue(parsedNodes as any);
       const importedVar: TextVariable = { name: 'var1', type:VariableType.TEXT, value: 'value1', metadata: { definedAt: createTestLocation(1,1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
       childState.getAllTextVars.mockReturnValue(new Map([['var1', importedVar]]));
 
       mockProcessingContext = createMockProcessingContext(node);
 
-      const result = await handler.execute(mockProcessingContext) as DirectiveResult;
+      const result = await handler.execute(mockProcessingContext as DirectiveProcessingContext) as DirectiveResult;
 
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(finalPath, expect.any(Object));
-      expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
+      expect(fixture.resolutionService.resolvePath).toHaveBeenCalledWith(finalPath, expect.any(Object));
+      expect(fixture.fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
       expect(parserService.parse).toHaveBeenCalled();
       expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes);
-      expect(stateService.createChildState).toHaveBeenCalled();
+      expect(fixture.stateService.createChildState).toHaveBeenCalled();
       expect(circularityService.endImport).toHaveBeenCalledWith(finalPath.replace(/\\/g, '/'));
 
       expect(result).toBeDefined();
-      expect(result.state).toBe(stateService);
+      expect(result.state).toBe(fixture.stateService);
       expect(result.replacement).toBeDefined();
       expect(result.replacement).toEqual<TextNode>({
         type: 'Text',
@@ -298,13 +290,12 @@ describe('ImportDirectiveHandler Transformation', () => {
         location: importLocation
       });
 
-      expect(stateService.setTextVar).toHaveBeenCalledWith('var1', 'value1');
+      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('var1', 'value1');
     });
 
     it('should handle specific imports correctly in transformation mode', async () => {
       const importPath = 'vars.meld';
       const finalPath = '/project/vars.meld';
-      const directiveContext: DirectiveContext = { currentFilePath: '/project/main.meld', state: stateService };
       const importLocation = createTestLocation(3, 1);
 
       const node = createTestImportNode({
@@ -314,16 +305,16 @@ describe('ImportDirectiveHandler Transformation', () => {
         location: importLocation
       });
 
-      resolutionService.resolveInContext.mockImplementation(async (pathInput) => {
+      vi.spyOn(fixture.resolutionService, 'resolveInContext').mockImplementation(async (pathInput) => {
         if (typeof pathInput === 'object' && pathInput.raw === importPath) return finalPath;
         return `/project/${pathInput}`;
       });
-      resolutionService.resolvePath.mockResolvedValue(createMeldPath(importPath, unsafeCreateValidatedResourcePath(finalPath), true));
-      fileSystemService.readFile.mockResolvedValue('@text var1="v1"\n@text var2="v2"');
+      vi.spyOn(fixture.resolutionService, 'resolvePath').mockResolvedValue(createMeldPath(importPath, unsafeCreateValidatedResourcePath(finalPath), true));
+      vi.spyOn(fixture.fileSystemService, 'readFile').mockResolvedValue('@text var1="v1"\n@text var2="v2"');
       parserService.parse.mockResolvedValue([] as MeldNode[]);
 
-      const importedVar1: TextVariable = { type: VariableType.TEXT, value: 'v1', metadata: { definedAt: createTestLocation(1,1,finalPath), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
-      const importedVar2: TextVariable = { type: VariableType.TEXT, value: 'v2', metadata: { definedAt: createTestLocation(2,1,finalPath), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
+      const importedVar1: TextVariable = { name: 'var1', type: VariableType.TEXT, value: 'v1', metadata: { definedAt: createTestLocation(1,1,finalPath), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
+      const importedVar2: TextVariable = { name: 'var2', type: VariableType.TEXT, value: 'v2', metadata: { definedAt: createTestLocation(2,1,finalPath), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
       childState.getTextVar.mockImplementation(name => {
         if (name === 'var1') return importedVar1;
         if (name === 'var2') return importedVar2;
@@ -332,22 +323,21 @@ describe('ImportDirectiveHandler Transformation', () => {
 
       mockProcessingContext = createMockProcessingContext(node);
 
-      const result = await handler.execute(mockProcessingContext) as DirectiveResult;
+      const result = await handler.execute(mockProcessingContext as DirectiveProcessingContext) as DirectiveResult;
 
-      expect(result.state).toBe(stateService);
+      expect(result.state).toBe(fixture.stateService);
       expect(result.replacement).toEqual<TextNode>({
         type: 'Text', content: '', location: importLocation
       });
 
-      expect(stateService.setTextVar).toHaveBeenCalledWith('var1', 'v1');
-      expect(stateService.setTextVar).toHaveBeenCalledWith('alias2', 'v2');
-      expect(stateService.setTextVar).not.toHaveBeenCalledWith('var2', expect.anything());
+      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('var1', 'v1');
+      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('alias2', 'v2');
+      expect(fixture.stateService.setTextVar).not.toHaveBeenCalledWith('var2', expect.anything());
     });
 
     it('should preserve error handling and cleanup in transformation mode', async () => {
       const importPath = 'missing.meld';
       const finalPath = '/project/missing.meld';
-      const directiveContext: DirectiveContext = { currentFilePath: 'test.meld', state: stateService };
       const importLocation = createTestLocation(1, 1);
 
       const node = createTestImportNode({
@@ -355,26 +345,31 @@ describe('ImportDirectiveHandler Transformation', () => {
         location: importLocation
       });
 
-      resolutionService.resolveInContext.mockImplementation(async (pathInput) => {
+      // Configure mocks via fixture services
+      vi.spyOn(fixture.resolutionService, 'resolveInContext').mockImplementation(async (pathInput) => {
         if (typeof pathInput === 'object' && pathInput.raw === importPath) return finalPath;
         return `/project/${pathInput}`;
       });
-      resolutionService.resolvePath.mockResolvedValue(createMeldPath(importPath, unsafeCreateValidatedResourcePath(finalPath), true));
-      fileSystemService.exists.mockResolvedValue(false);
+      vi.spyOn(fixture.resolutionService, 'resolvePath').mockResolvedValue(createMeldPath(importPath, unsafeCreateValidatedResourcePath(finalPath), true));
+      vi.spyOn(fixture.fileSystemService, 'exists').mockResolvedValue(false);
+      // Use imported MeldFileNotFoundError
+      vi.spyOn(fixture.fileSystemService, 'readFile').mockRejectedValue(new MeldFileNotFoundError(`File not found: ${finalPath}`, { details: { filePath: finalPath }})); 
 
       mockProcessingContext = createMockProcessingContext(node);
 
       await expectToThrowWithConfig(
-        () => handler.execute(mockProcessingContext),
+        () => handler.execute(mockProcessingContext as DirectiveProcessingContext),
         {
           type: 'DirectiveError',
-          code: DirectiveErrorCode.EXECUTION_FAILED,
-          messageContains: 'Disk read failed'
+          // Keep expected code as FILE_NOT_FOUND, handler logic catches MeldFileNotFoundError
+          code: DirectiveErrorCode.FILE_NOT_FOUND, 
+          messageContains: `File not found: ${finalPath}`
         }
       );
 
+      // Assertions use fixture services or registered mocks
       expect(circularityService.endImport).toHaveBeenCalledWith(finalPath.replace(/\\/g, '/'));
-      expect(stateService.setTextVar).not.toHaveBeenCalled();
+      expect(fixture.stateService.setTextVar).not.toHaveBeenCalled();
     });
   });
 }); 

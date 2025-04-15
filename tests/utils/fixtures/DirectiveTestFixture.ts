@@ -9,6 +9,8 @@ import type { IDirectiveService, IDirectiveHandler } from '@services/pipeline/Di
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { DirectiveProcessingContext, DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { createLocation } from '@tests/utils/testFactories.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IPathService } from '@services/path/IPathService.js';
 
 /**
  * Options for customizing the DirectiveTestFixture.
@@ -39,6 +41,7 @@ export class DirectiveTestFixture {
   directiveService: IDirectiveService;
   validationService: IValidationService;
   handler?: IDirectiveHandler; // The specific handler being tested, if provided
+  fileSystemService: IFileSystemService;
 
   /**
    * Creates and initializes a new DirectiveTestFixture instance.
@@ -72,6 +75,16 @@ export class DirectiveTestFixture {
       'IDirectiveService',
       MockFactory.createDirectiveService(options.directiveOverrides)
     );
+    // Explicitly register mock for IFileSystemService
+    fixture.context.registerMock<IFileSystemService>(
+      'IFileSystemService',
+      MockFactory.createFileSystemService() // Using the standard factory
+    );
+    // ADDED: Explicitly register mock for IPathService
+    fixture.context.registerMock<IPathService>(
+      'IPathService',
+      MockFactory.createPathService() // Using the standard factory
+    );
     // Register other standard mocks if needed for handler tests (e.g., Parser, Interpreter)
     if (!fixture.context.container.isRegistered('IParserService')) {
        fixture.context.registerMock('IParserService', MockFactory.createParserService());
@@ -99,6 +112,7 @@ export class DirectiveTestFixture {
     fixture.resolutionService = fixture.context.resolveSync('IResolutionService');
     fixture.validationService = fixture.context.resolveSync('IValidationService');
     fixture.directiveService = fixture.context.resolveSync('IDirectiveService');
+    fixture.fileSystemService = fixture.context.resolveSync('IFileSystemService');
     
     return fixture;
   }

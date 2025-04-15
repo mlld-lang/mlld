@@ -22,7 +22,7 @@ import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingServ
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { MeldPath, StructuredPath as CoreStructuredPath } from '@core/types/paths.js';
+import type { MeldPath } from '@core/types/paths.js';
 import { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
 import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
@@ -77,24 +77,28 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     @inject('ICircularityService') private circularityService: ICircularityService,
     @inject('IFileSystemService') private fileSystemService: IFileSystemService,
     @inject('IPathService') private pathService: IPathService,
-    @inject('IInterpreterServiceClientFactory') private interpreterServiceClientFactory: InterpreterServiceClientFactory,
-    @inject('ILogger') private logger: any
+    @inject('InterpreterServiceClientFactory') private interpreterServiceClientFactory: InterpreterServiceClientFactory,
+    @inject('ILogger') private logger: ILogger
   ) {
   }
 
   private ensureInterpreterServiceClient(): IInterpreterServiceClient {
-    // First try to get the client from the factory
+    // First try to get the client from the factory if not already created
     if (!this.interpreterServiceClient && this.interpreterServiceClientFactory) {
       try {
         this.interpreterServiceClient = this.interpreterServiceClientFactory.createClient();
       } catch (error) {
+        // Log warning HERE if factory fails during lazy creation
         this.logger.warn('Failed to get interpreter service client from factory', {
           error: error instanceof Error ? error.message : String(error)
         });
+        // Re-throw or handle as appropriate? For now, let's let it proceed, 
+        // subsequent checks will throw the EXECUTION_FAILED error.
       }
     }
     
-    // If we still don't have a client, throw an error
+    // If we still don't have a client (factory failed or wasn't available),
+    // throw the EXECUTION_FAILED error.
     if (!this.interpreterServiceClient) {
       throw new DirectiveError(
         'Interpreter service client is not available. Ensure InterpreterServiceClientFactory is registered and resolvable, or provide a mock in tests.',

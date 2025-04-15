@@ -108,23 +108,37 @@ export class PathDirectiveHandler implements IDirectiveHandler {
           );
       }
       
-      // Store the validated path state directly
-      // if (!validatedMeldPath.value) { // Remove this check
-      //      throw new DirectiveError('Validated path object is missing internal state', this.kind, DirectiveErrorCode.EXECUTION_FAILED, errorDetails);
-      // }
-      
+      // Adapt the MeldPath object returned by resolvePath to the structure expected by setPathVar
+      let pathStateForStorage: IFilesystemPathState | IUrlPathState;
+      if (validatedMeldPath.contentType === PathContentType.FILESYSTEM) {
+          // For filesystem paths, MeldResolvedFilesystemPath maps directly to IFilesystemPathState
+          pathStateForStorage = validatedMeldPath;
+      } else if (validatedMeldPath.contentType === PathContentType.URL) {
+          // For URL paths, we need to manually construct IUrlPathState from MeldResolvedUrlPath
+          // Add the missing 'isValidated' property (defaulting to true as resolvePath succeeded)
+          // and ensure fetchStatus is present (defaulting to 'not_fetched')
+          pathStateForStorage = {
+              ...validatedMeldPath,
+              isValidated: true, // Assume validated since resolvePath didn't throw
+              fetchStatus: validatedMeldPath.fetchStatus || 'not_fetched' // Ensure fetchStatus exists
+          };
+      } else {
+          // Should not happen if MeldPath is correctly typed
+           throw new DirectiveError('Unexpected content type in validated path object', this.kind, DirectiveErrorCode.EXECUTION_FAILED, errorDetails);
+      }
+
       const metadata: Partial<VariableMetadata> = {
           origin: VariableOrigin.DIRECT_DEFINITION,
           definedAt: directiveSourceLocation
       };
       
-      // Pass the validatedMeldPath object directly
-      await state.setPathVar(identifier, validatedMeldPath); 
+      // Pass the adapted state object
+      await state.setPathVar(identifier, pathStateForStorage); 
 
       logger.debug('Path directive processed successfully', {
         identifier,
-        storedPath: validatedMeldPath.validatedPath,
-        contentType: validatedMeldPath.contentType,
+        storedPath: pathStateForStorage.validatedPath,
+        contentType: pathStateForStorage.contentType,
         location: node.location
       });
 

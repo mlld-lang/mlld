@@ -2,23 +2,16 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import type { DirectiveNode, InterpolatableValue, VariableReferenceNode, TextNode } from '@core/syntax/types/nodes.js';
+import type { DirectiveNode, InterpolatableValue, VariableReferenceNode, TextNode, StructuredPath } from '@core/syntax/types/nodes.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
 import { ErrorSeverity, MeldError } from '@core/errors/MeldError.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import {
-  createValidationServiceMock,
-  createStateServiceMock,
-  createResolutionServiceMock,
-  createFileSystemServiceMock
-} from '@tests/utils/mocks/serviceMocks.js';
 import { createLocation } from '@tests/utils/testFactories.js';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { StructuredPath } from '@core/types/paths.js';
 import { mock } from 'vitest-mock-extended';
 import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js';
 
 /**
  * TextDirectiveHandler Integration Test Status
@@ -32,34 +25,19 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
  */
 
 describe('TextDirectiveHandler Integration', () => {
+  let fixture: DirectiveTestFixture;
   let handler: TextDirectiveHandler;
-  let stateService: ReturnType<typeof createStateServiceMock>;
-  let validationService: ReturnType<typeof createValidationServiceMock>;
-  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
-  let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
-  let testDIContext: TestContextDI;
-  let mockProcessingContext: DirectiveProcessingContext;
+  let mockProcessingContext: Partial<DirectiveProcessingContext>;
 
   beforeEach(async () => {
-    testDIContext = TestContextDI.createIsolated();
-    await testDIContext.initialize();
-    
-    validationService = createValidationServiceMock();
-    stateService = createStateServiceMock();
-    resolutionService = createResolutionServiceMock();
-    fileSystemService = createFileSystemServiceMock();
-    
-    validationService.validate.mockResolvedValue(undefined);
-    stateService.getCurrentFilePath.mockReturnValue('test.meld');
+    fixture = await DirectiveTestFixture.create();
+    handler = await fixture.context.resolve(TextDirectiveHandler);
+    fixture.handler = handler;
 
-    testDIContext.registerMock('IValidationService', validationService);
-    testDIContext.registerMock('IStateService', stateService);
-    testDIContext.registerMock('IResolutionService', resolutionService);
-    testDIContext.registerMock('IFileSystemService', fileSystemService);
+    vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
+    vi.spyOn(fixture.stateService, 'getCurrentFilePath').mockReturnValue('test.meld');
 
-    handler = await testDIContext.resolve(TextDirectiveHandler);
-
-    resolutionService.resolveNodes.mockImplementation(async (nodes: InterpolatableValue, context: ResolutionContext): Promise<string> => {
+    vi.spyOn(fixture.resolutionService, 'resolveNodes').mockImplementation(async (nodes: InterpolatableValue, context: ResolutionContext): Promise<string> => {
         let result = '';
         for (const node of nodes) {
             if (node.type === 'Text') result += node.content;
@@ -77,18 +55,14 @@ describe('TextDirectiveHandler Integration', () => {
         return result;
     });
 
-    const mockResolutionContext = mock<ResolutionContext>();
-    const mockFormattingContext = mock<FormattingContext>();
     mockProcessingContext = {
-        state: stateService,
-        resolutionContext: mockResolutionContext,
-        formattingContext: mockFormattingContext,
+        state: fixture.stateService,
         directiveNode: undefined as any,
     };
   });
 
   afterEach(async () => {
-    await testDIContext?.cleanup();
+    await fixture?.cleanup();
   });
 
   describe('complex scenarios', () => {
@@ -110,10 +84,10 @@ describe('TextDirectiveHandler Integration', () => {
       };
       mockProcessingContext.directiveNode = node;
 
-      const result = await handler.execute(mockProcessingContext);
+      const result = await fixture.executeHandler(node, {}, mockProcessingContext);
       
-      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!');
-      expect(result).toBe(stateService);
+      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!');
+      expect(result).toBe(fixture.stateService);
     });
 
     it('should handle mixed string literals and variables', async () => {
@@ -134,9 +108,9 @@ describe('TextDirectiveHandler Integration', () => {
       };
       mockProcessingContext.directiveNode = node;
 
-      const result = await handler.execute(mockProcessingContext);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('message', 'Hello "quoted World" !');
-      expect(result).toBe(stateService);
+      const result = await fixture.executeHandler(node, {}, mockProcessingContext);
+      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('message', 'Hello "quoted World" !');
+      expect(result).toBe(fixture.stateService);
     });
 
     it('should handle complex data structure access', async () => {
@@ -157,9 +131,9 @@ describe('TextDirectiveHandler Integration', () => {
       };
       mockProcessingContext.directiveNode = node;
 
-      const result = await handler.execute(mockProcessingContext);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('userInfo', 'Alice');
-      expect(result).toBe(stateService);
+      const result = await fixture.executeHandler(node, {}, mockProcessingContext);
+      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('userInfo', 'Alice');
+      expect(result).toBe(fixture.stateService);
     });
 
     it('should handle environment variables with fallbacks', async () => {
@@ -180,9 +154,9 @@ describe('TextDirectiveHandler Integration', () => {
       
       process.env.ENV_HOST = 'example.com';
 
-      const result = await handler.execute(mockProcessingContext);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('config', 'example.com:3000');
-      expect(result).toBe(stateService);
+      const result = await fixture.executeHandler(node, {}, mockProcessingContext);
+      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('config', 'example.com:3000');
+      expect(result).toBe(fixture.stateService);
 
       delete process.env.ENV_HOST;
     });
@@ -202,23 +176,23 @@ describe('TextDirectiveHandler Integration', () => {
         },
       };
       const testFilePath = 'test.meld';
-      stateService.getCurrentFilePath.mockReturnValue(testFilePath);
+      vi.spyOn(fixture.stateService, 'getCurrentFilePath').mockReturnValue(testFilePath);
       
       mockProcessingContext.directiveNode = node;
-      mockProcessingContext.state = stateService;
+      mockProcessingContext.state = fixture.stateService;
 
       const validationError = new Error('Validation failed for test');
-      vi.mocked(validationService.validate).mockRejectedValueOnce(validationError);
+      vi.spyOn(fixture.validationService, 'validate').mockRejectedValueOnce(validationError);
 
       const errorCollector = new ErrorCollector();
       let thrownError: any;
       
       try {
-          await handler.execute(mockProcessingContext);
+          await fixture.executeHandler(node, {}, mockProcessingContext);
       } catch (error) {
           thrownError = error;
           if (error instanceof Error && !(error instanceof DirectiveError)) {
-             const currentFilePath = mockProcessingContext.state.getCurrentFilePath() ?? undefined;
+             const currentFilePath = fixture.stateService.getCurrentFilePath() ?? undefined;
              const wrappedError = new DirectiveError(
                error.message, 
                'text', 
@@ -228,7 +202,7 @@ describe('TextDirectiveHandler Integration', () => {
              errorCollector.handleError(wrappedError);
           } else if (error instanceof DirectiveError) {
             if (!error.details?.context) { 
-               const currentFilePath = mockProcessingContext.state.getCurrentFilePath() ?? undefined;
+               const currentFilePath = fixture.stateService.getCurrentFilePath() ?? undefined;
                if (error.details) { 
                   error.details.context = { currentFilePath };
                } else { 
