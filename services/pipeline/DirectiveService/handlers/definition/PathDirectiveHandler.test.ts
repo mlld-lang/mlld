@@ -1,23 +1,13 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
-import { createPathDirective, createLocation } from '@tests/utils/testFactories.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import { createLocation } from '@tests/utils/testFactories.js'; // Keep for error tests
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { DirectiveNode } from '@core/syntax/types/nodes.js';
+import type { DirectiveNode, StructuredPath } from '@core/syntax/types/nodes.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { pathDirectiveExamples } from '@core/syntax/index.js';
-import { createNodeFromExample } from '@core/syntax/helpers/index.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { 
-  createValidationServiceMock, 
-  createStateServiceMock, 
-  createResolutionServiceMock,
-} from '@tests/utils/mocks/serviceMocks.js';
-import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, unsafeCreateValidatedResourcePath } from '@core/types';
-import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
-import { mock } from 'vitest-mock-extended';
-import { MeldError } from '@core/errors/MeldError.js';
+import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, unsafeCreateValidatedResourcePath, createMeldPath } from '@core/types';
+import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js'; // Added fixture import
+import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js'; // Keep for error tests
 
 /**
  * PathDirectiveHandler Test Status
@@ -39,233 +29,175 @@ import { MeldError } from '@core/errors/MeldError.js';
  *   to test validation error handling with actual invalid syntax examples.
  */
 
-// Helper to create mock MeldPath objects for tests
-const createMockMeldPath = (resolvedPathString: string): MeldPath => {
-  const isUrl = resolvedPathString.startsWith('http');
-  const state: IFilesystemPathState | IUrlPathState = isUrl ? {
-    contentType: PathContentType.URL,
-    originalValue: resolvedPathString, // Use resolved as original for mock simplicity
-    validatedPath: unsafeCreateValidatedResourcePath(resolvedPathString), // Assume validation ok
-    isValidSyntax: true,
-  } : {
-    contentType: PathContentType.FILESYSTEM,
-    originalValue: resolvedPathString,
-    validatedPath: unsafeCreateValidatedResourcePath(resolvedPathString),
-    isAbsolute: resolvedPathString.startsWith('/'),
-    isSecure: true,
-    isValidSyntax: true,
-    exists: true, // Assume exists for mock simplicity
-  };
-  return { 
-    ...state, 
-    value: state // Add the value property containing the state itself
-  } as MeldPath;
-};
-
 describe('PathDirectiveHandler', () => {
+  let fixture: DirectiveTestFixture;
   let handler: PathDirectiveHandler;
-  let validationService: ReturnType<typeof createValidationServiceMock>;
-  let stateService: ReturnType<typeof createStateServiceMock>;
-  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
-  let mockProcessingContext: DirectiveProcessingContext;
-  let testDIContext: TestContextDI;
+
+  // Helper to create mock MeldPath for tests
+  const createMockMeldPathForTest = (resolvedPathString: string): MeldPath => {
+    // Return the state object directly, matching MeldPath structure
+    return {
+      contentType: PathContentType.FILESYSTEM,
+      originalValue: resolvedPathString,
+      validatedPath: unsafeCreateValidatedResourcePath(resolvedPathString),
+      isAbsolute: resolvedPathString.startsWith('/'),
+      isSecure: true,
+      isValidSyntax: true,
+      exists: true,
+      // Add isValidated for URL compatibility, although this helper focuses on FS
+      isValidated: true 
+    } as MeldPath;
+    // Remove the .value wrapper: 
+    // const state = { ... };
+    // return { ...state, value: state } as MeldPath;
+  };
 
   beforeEach(async () => {
-    testDIContext = TestContextDI.createIsolated();
-    await testDIContext.initialize();
+    // Create the fixture *without* the handler initially
+    fixture = await DirectiveTestFixture.create();
     
-    validationService = createValidationServiceMock();
-    stateService = createStateServiceMock();
-    resolutionService = createResolutionServiceMock();
+    // Resolve the handler from the DI container (which uses the mocks registered by the fixture)
+    handler = await fixture.context.resolve(PathDirectiveHandler);
     
-    stateService.getCurrentFilePath.mockReturnValue('test.meld');
-    
-    resolutionService.resolvePath.mockImplementation(async (resolvedString: string, context: any): Promise<MeldPath> => {
-        return createMockMeldPath(resolvedString);
-    });
-
-    testDIContext.registerMock('IValidationService', validationService);
-    testDIContext.registerMock('IStateService', stateService);
-    testDIContext.registerMock('IResolutionService', resolutionService);
-
-    const mockResolutionContext = mock<ResolutionContext>();
-    const mockFormattingContext = mock<FormattingContext>();
-
-    mockProcessingContext = {
-        state: stateService,
-        resolutionContext: mockResolutionContext,
-        formattingContext: mockFormattingContext,
-        directiveNode: undefined as any,
-    };
-
-    handler = await testDIContext.container.resolve(PathDirectiveHandler);
+    // Assign the resolved handler to the fixture for executeHandler calls
+    fixture.handler = handler;
   });
 
   afterEach(async () => {
-    await testDIContext?.cleanup();
+    await fixture?.cleanup();
   });
 
   describe('basic path handling', () => {
     it('should process simple paths', async () => {
-      const example = pathDirectiveExamples.atomic.projectPath;
-      const node = await createNodeFromExample(example.code) as DirectiveNode;
-      mockProcessingContext.directiveNode = node;
-
-      // Simulate the path object from the AST node
-      const astPathObject = node.directive.path as StructuredPath;
-      const expectedValueToResolve = astPathObject.interpolatedValue ?? astPathObject.raw;
-      const expectedResolvedString = '$PROJECTPATH/docs'; // What resolveInContext should return
-
-      // Mock resolveInContext to return the resolved string
-      resolutionService.resolveInContext.mockResolvedValueOnce(expectedResolvedString);
-      // Mock resolvePath to return a mock MeldPath based on the resolved string
-      const mockValidatedPath = createMockMeldPath(expectedResolvedString);
-      resolutionService.resolvePath.mockResolvedValueOnce(mockValidatedPath);
-
-      const result = await handler.execute(mockProcessingContext);
-
-      expect(validationService.validate).toHaveBeenCalledWith(node);
+      const identifier = 'docs';
+      const rawPathValue = '$PROJECTPATH/docs';
+      const node = fixture.createDirectiveNode('path', identifier, rawPathValue); // Use fixture helper
+      const expectedResolvedString = '/project/docs'; // Example resolved string
+      const mockValidatedPath = createMockMeldPathForTest(expectedResolvedString);
       
-      // Verify resolveInContext was called with the raw path string (since no interpolation)
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        expectedValueToResolve, // Should be the raw string '$PROJECTPATH/docs'
-        mockProcessingContext.resolutionContext
-      );
-      
-      // Verify resolvePath was called with the resolved string
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(
-        expectedResolvedString, // The string returned by resolveInContext
-        mockProcessingContext.resolutionContext
-      );
+      // Mock service methods on fixture properties
+      const resolveInContextSpy = vi.spyOn(fixture.resolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedString);
+      const resolvePathSpy = vi.spyOn(fixture.resolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
+      const setPathVarSpy = vi.spyOn(fixture.stateService, 'setPathVar');
+      const validateSpy = vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
 
-      // Verify setPathVar was called with the final validated path state
-      expect(stateService.setPathVar).toHaveBeenCalledWith(
-        'docs', // The identifier
-        mockValidatedPath.value // The .value property holding the state
+      console.log('NODE OBJECT BEFORE EXECUTE:', JSON.stringify(node, null, 2)); // Add console log
+      const result = await fixture.executeHandler(node); // Use fixture helper
+
+      expect(validateSpy).toHaveBeenCalledWith(node);
+      expect(resolveInContextSpy).toHaveBeenCalledWith(
+        rawPathValue, // Handler extracts raw value from node.directive.path
+        expect.any(Object) // Fixture provides context
       );
-      expect(result).toBe(stateService);
+      expect(resolvePathSpy).toHaveBeenCalledWith(
+        expectedResolvedString, 
+        expect.any(Object)
+      );
+      expect(setPathVarSpy).toHaveBeenCalledWith(identifier, mockValidatedPath);
+      expect(result).toBe(fixture.stateService); // Handler returns the state
     });
 
     it('should handle paths with variables', async () => {
-      const exampleSet = pathDirectiveExamples.combinations.pathWithVariables;
-      const exampleLines = exampleSet.code.split('\n');
-      const pathDirectiveLine = exampleLines[1]; // Get the @path line
-      const node = await createNodeFromExample(pathDirectiveLine) as DirectiveNode;
-      mockProcessingContext.directiveNode = node;
-
-      // Simulate the path object from the AST node
-      const astPathObject = node.directive.path as StructuredPath;
-      // For this case, the value passed to resolveInContext should be the InterpolatableValue array
-      const expectedValueToResolve = astPathObject.interpolatedValue;
-      const expectedResolvedString = '$PROJECTPATH/meld/docs'; // Mock resolved string
-
-      // Mock resolveInContext to return the resolved string
-      resolutionService.resolveInContext.mockResolvedValueOnce(expectedResolvedString);
-      // Mock resolvePath
-      const mockValidatedPath = createMockMeldPath(expectedResolvedString);
-      resolutionService.resolvePath.mockResolvedValueOnce(mockValidatedPath);
-
-      const result = await handler.execute(mockProcessingContext);
-
-      expect(validationService.validate).toHaveBeenCalledWith(node);
+      const identifier = 'customPath';
+      // Simulate an AST node value representing '$PROJECTPATH/{{subdir}}'
+      const astValue = { raw: '$PROJECTPATH/{{subdir}}', structured: [], interpolatedValue: [/* nodes */] }; // Simplified representation
+      const node = fixture.createDirectiveNode('path', identifier, astValue);
+      const expectedResolvedString = '/project/meld/docs'; // Example resolved string
+      const mockValidatedPath = createMockMeldPathForTest(expectedResolvedString);
       
-      // Verify resolveInContext was called with the InterpolatableValue
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        expectedValueToResolve, // Should be the InterpolatableValue array
-        mockProcessingContext.resolutionContext
-      );
+      const resolveInContextSpy = vi.spyOn(fixture.resolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedString);
+      const resolvePathSpy = vi.spyOn(fixture.resolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
+      const setPathVarSpy = vi.spyOn(fixture.stateService, 'setPathVar');
+      const validateSpy = vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
 
-      // Verify resolvePath was called with the resolved string
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(
-        expectedResolvedString,
-        mockProcessingContext.resolutionContext
-      );
+      const result = await fixture.executeHandler(node);
 
-      // Verify setPathVar
-      expect(stateService.setPathVar).toHaveBeenCalledWith(
-        'customPath', // Identifier
-        mockValidatedPath.value
+      expect(validateSpy).toHaveBeenCalledWith(node);
+      // Handler logic should pass the interpolatedValue array (or raw if none) to resolveInContext
+      expect(resolveInContextSpy).toHaveBeenCalledWith(
+        astValue.interpolatedValue, // Assuming interpolatedValue exists and is passed
+        expect.any(Object) 
       );
-      expect(result).toBe(stateService);
+      expect(resolvePathSpy).toHaveBeenCalledWith(expectedResolvedString, expect.any(Object));
+      expect(setPathVarSpy).toHaveBeenCalledWith(identifier, mockValidatedPath);
+      expect(result).toBe(fixture.stateService);
     });
 
     it('should handle relative paths', async () => {
-      const example = pathDirectiveExamples.atomic.relativePath;
-      const node = await createNodeFromExample(example.code) as DirectiveNode;
-      mockProcessingContext.directiveNode = node;
+      const identifier = 'config';
+      const rawPathValue = './config';
+      const node = fixture.createDirectiveNode('path', identifier, rawPathValue);
+      const expectedResolvedString = './config'; // Example resolved string
+      const mockValidatedPath = createMockMeldPathForTest(expectedResolvedString);
 
-      // Simulate the path object from the AST node
-      const astPathObject = node.directive.path as StructuredPath;
-      const expectedValueToResolve = astPathObject.interpolatedValue ?? astPathObject.raw;
-      const expectedResolvedString = './config'; // Use the raw path as resolved for this test
+      const resolveInContextSpy = vi.spyOn(fixture.resolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedString);
+      const resolvePathSpy = vi.spyOn(fixture.resolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
+      const setPathVarSpy = vi.spyOn(fixture.stateService, 'setPathVar');
+      const validateSpy = vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
 
-      // Mock resolveInContext
-      resolutionService.resolveInContext.mockResolvedValueOnce(expectedResolvedString);
-      // Mock resolvePath
-      const mockValidatedPath = createMockMeldPath(expectedResolvedString);
-      resolutionService.resolvePath.mockResolvedValueOnce(mockValidatedPath);
+      const result = await fixture.executeHandler(node);
 
-      const result = await handler.execute(mockProcessingContext);
-
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      
-      // Verify resolveInContext was called with the raw string
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        expectedValueToResolve, // Should be the raw string './config'
-        mockProcessingContext.resolutionContext
-      );
-
-      // Verify resolvePath was called with the resolved string
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(
-        expectedResolvedString,
-        mockProcessingContext.resolutionContext
-      );
-
-      // Verify setPathVar
-      expect(stateService.setPathVar).toHaveBeenCalledWith(
-        'config', // Identifier
-        mockValidatedPath.value
-      );
-      expect(result).toBe(stateService);
+      expect(validateSpy).toHaveBeenCalledWith(node);
+      expect(resolveInContextSpy).toHaveBeenCalledWith(rawPathValue, expect.any(Object));
+      expect(resolvePathSpy).toHaveBeenCalledWith(expectedResolvedString, expect.any(Object));
+      expect(setPathVarSpy).toHaveBeenCalledWith(identifier, mockValidatedPath);
+      expect(result).toBe(fixture.stateService);
     });
   });
 
   describe('error handling', () => {
     it('should handle validation errors', async () => {
-      const node = createPathDirective('validIdentifier', '/some/path', createLocation(1, 1)); 
-      mockProcessingContext.directiveNode = node;
-
+      const node = fixture.createDirectiveNode('path', 'validIdentifier', '/some/path');
       const validationError = new DirectiveError('Mock Validation Failed', 'path', DirectiveErrorCode.VALIDATION_FAILED);
-      vi.mocked(validationService.validate).mockRejectedValueOnce(validationError);
+      
+      vi.spyOn(fixture.validationService, 'validate').mockRejectedValueOnce(validationError);
 
-      const executionPromise = handler.execute(mockProcessingContext);
-
-      await expect(executionPromise).rejects.toThrow(validationError);
-      expect(validationService.validate).toHaveBeenCalledWith(node);
+      await expect(fixture.executeHandler(node)).rejects.toThrow(validationError);
+      expect(fixture.validationService.validate).toHaveBeenCalledWith(node);
     });
 
-    it('should handle resolution errors', async () => {
-      const node = createPathDirective('errorPath', '{{undefined}}', createLocation(1, 1));
-      mockProcessingContext.directiveNode = node;
+    it('should handle resolution errors (resolveInContext)', async () => {
+      const node = fixture.createDirectiveNode('path', 'errorPath', '{{undefined}}');
       const originalError = new Error('Resolution error');
-      vi.mocked(resolutionService.resolveInContext).mockRejectedValueOnce(originalError);
+      
+      vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
+      vi.spyOn(fixture.resolutionService, 'resolveInContext').mockRejectedValueOnce(originalError);
 
-      const executionPromise = handler.execute(mockProcessingContext);
+      const executionPromise = fixture.executeHandler(node);
 
       await expect(executionPromise).rejects.toThrow(DirectiveError);
       await expect(executionPromise).rejects.toHaveProperty('code', DirectiveErrorCode.RESOLUTION_FAILED);
       await expect(executionPromise).rejects.toHaveProperty('cause', originalError);
     });
+    
+    it('should handle resolution errors (resolvePath)', async () => {
+      const node = fixture.createDirectiveNode('path', 'errorPath', '/valid/string');
+      const resolvedString = '/valid/string';
+      const originalError = new Error('Path validation error');
+      
+      vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
+      vi.spyOn(fixture.resolutionService, 'resolveInContext').mockResolvedValue(resolvedString);
+      vi.spyOn(fixture.resolutionService, 'resolvePath').mockRejectedValueOnce(originalError);
 
-    it('should handle state errors', async () => {
-      const node = createPathDirective('errorPath', '/some/path', createLocation(1, 1));
-      mockProcessingContext.directiveNode = node;
+      const executionPromise = fixture.executeHandler(node);
+
+      await expect(executionPromise).rejects.toThrow(DirectiveError);
+      await expect(executionPromise).rejects.toHaveProperty('code', DirectiveErrorCode.VALIDATION_FAILED); // resolvePath failure maps to VALIDATION_FAILED
+      await expect(executionPromise).rejects.toHaveProperty('cause', originalError);
+    });
+
+    it('should handle state errors (setPathVar)', async () => {
+      const node = fixture.createDirectiveNode('path', 'errorPath', '/some/path');
+      const resolvedString = '/some/path';
+      const mockValidatedPath = createMockMeldPathForTest(resolvedString);
       const originalError = new Error('State error');
+      
+      vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
+      vi.spyOn(fixture.resolutionService, 'resolveInContext').mockResolvedValue(resolvedString);
+      vi.spyOn(fixture.resolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
+      vi.spyOn(fixture.stateService, 'setPathVar').mockRejectedValueOnce(originalError);
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('/some/path');
-      vi.mocked(stateService.setPathVar).mockRejectedValueOnce(originalError);
-
-      const executionPromise = handler.execute(mockProcessingContext);
+      const executionPromise = fixture.executeHandler(node);
 
       await expect(executionPromise).rejects.toThrow(DirectiveError);
       await expect(executionPromise).rejects.toHaveProperty('code', DirectiveErrorCode.EXECUTION_FAILED);

@@ -181,6 +181,8 @@ export interface MeldResolvedUrlPath {
   fetchStatus?: 'pending' | 'fetched' | 'error' | 'not_fetched';
   /** Any error encountered during validation or fetching */
   error?: string;
+  /** Whether URL syntax and security policy passed validation */
+  isValidated: boolean;
 }
 
 /**

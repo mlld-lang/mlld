@@ -8,7 +8,7 @@ import type { IResolutionService, ResolutionContext } from '@services/resolution
 import type { IDirectiveService, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { DirectiveProcessingContext, DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
-import { SourceLocationFactory } from '@core/syntax/types/factories/SourceLocationFactory.js';
+import { createLocation } from '@tests/utils/testFactories.js';
 
 /**
  * Options for customizing the DirectiveTestFixture.
@@ -129,7 +129,7 @@ export class DirectiveTestFixture {
         value,
         ...directiveProps
       },
-      location: location || SourceLocationFactory.createDummyLocation('test.meld'),
+      location: location || createLocation(),
     } as DirectiveNode; // Cast necessary if kind isn't strictly DirectiveKind
   }
 
@@ -159,7 +159,7 @@ export class DirectiveTestFixture {
         depth: 0,
         ...resolutionContextOverrides // Apply overrides
       },
-      node,
+      directiveNode: node,
       ...executionContextOverrides // Apply top-level context overrides
     };
 

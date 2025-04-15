@@ -9,13 +9,14 @@ import { directiveLogger as logger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { inject, injectable, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, StructuredPath, VariableMetadata } from '@core/types';
+import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, VariableMetadata } from '@core/types';
 import { VariableOrigin } from '@core/types/variables.js';
 import type { SourceLocation } from '@core/types/common.js';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
 import type { PathDirectiveData } from '@core/syntax/types/directives.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
+import type { StructuredPath } from '@core/syntax/types/nodes.js';
 
 /**
  * Handler for @path directives
@@ -107,22 +108,23 @@ export class PathDirectiveHandler implements IDirectiveHandler {
           );
       }
       
-      // Store the validated path *state* (IFilesystemPathState or IUrlPathState)
-      if (!validatedMeldPath.value) {
-           throw new DirectiveError('Validated path object is missing internal state', this.kind, DirectiveErrorCode.EXECUTION_FAILED, errorDetails);
-      }
+      // Store the validated path state directly
+      // if (!validatedMeldPath.value) { // Remove this check
+      //      throw new DirectiveError('Validated path object is missing internal state', this.kind, DirectiveErrorCode.EXECUTION_FAILED, errorDetails);
+      // }
       
       const metadata: Partial<VariableMetadata> = {
           origin: VariableOrigin.DIRECT_DEFINITION,
           definedAt: directiveSourceLocation
       };
       
-      // Use the state from the context, remove metadata argument
-      await state.setPathVar(identifier, validatedMeldPath.value); 
+      // Pass the validatedMeldPath object directly
+      await state.setPathVar(identifier, validatedMeldPath); 
 
       logger.debug('Path directive processed successfully', {
         identifier,
-        storedValue: validatedMeldPath.value,
+        storedPath: validatedMeldPath.validatedPath,
+        contentType: validatedMeldPath.contentType,
         location: node.location
       });
 
@@ -132,9 +134,10 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       // Handle errors
       if (error instanceof DirectiveError) {
          // Ensure details are attached if missing
-         if (!error.details?.context) {
-            error.details = { ...(error.details || {}), ...errorDetails };
-         }
+         // if (!error.details?.context) { // Remove read-only assignment attempt
+         //    error.details = { ...(error.details || {}), ...errorDetails };
+         // }
+        // Re-throw original if details are sufficient or cannot be added
         throw error;
       } 
       
