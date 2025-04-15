@@ -278,9 +278,12 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         logger.debug('Interpreting imported file', { filePath: resolvedIdentifier, hasInitialState: !!importedState });
 
         resultState = await interpreterClient.interpret(
-          nodesToInterpret,
-          // Options removed
-        ) as unknown as IStateService; // Double assertion: Like -> unknown -> IStateService
+          nodesToInterpret
+        ) as unknown as IStateService; 
+
+        // --- NEW DEBUG LOG --- 
+        process.stdout.write(`\nDEBUG: resultState typeof getAllTextVars: ${typeof (resultState as any)?.getAllTextVars}\n`);
+        // --- END DEBUG --- 
 
         logger.debug('Import interpretation complete. Propagation to parent state handled by Interpreter.', {
           filePath: resolvedIdentifier,
@@ -371,6 +374,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     }
 
     try {
+      // --- TEMPORARY DEBUG LOG ---
+      process.stdout.write(`\nDEBUG: importAllVariables - typeof sourceState?.getAllTextVars: ${typeof sourceState?.getAllTextVars}\n`);
+      // --- END DEBUG LOG ---
       const textVars = sourceState.getAllTextVars();
       textVars.forEach((originalVar, key) => {
         try {
@@ -497,6 +503,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         const targetName = alias || name;
         let variableFound = false;
 
+        // --- TEMPORARY DEBUG LOG ---
+        process.stdout.write(`\nDEBUG: processStructuredImports - typeof sourceState?.getTextVar: ${typeof sourceState?.getTextVar}\n`);
+        // --- END DEBUG LOG ---
         const textVar = sourceState.getTextVar(name);
         if (textVar) {
           const metadata: VariableMetadata = {

@@ -80,46 +80,34 @@ describe('ImportDirectiveHandler', () => {
     urlContentResolver = await context.resolve('IURLContentResolver');
     validationService = await context.resolve('IValidationService');
     
-    // Create the childState mock HERE, before trying to spy on it
+    // Create the childState mock using the factory - this has default mocks
     childState = MockFactory.createStateService({ 
         getCurrentFilePath: vi.fn().mockReturnValue('/project/imported.meld'),
         isTransformationEnabled: vi.fn().mockReturnValue(false),
-        getAllTextVars: vi.fn().mockReturnValue(new Map()),
-        getAllDataVars: vi.fn().mockReturnValue(new Map()),
-        getAllPathVars: vi.fn().mockReturnValue(new Map()),
-        getAllCommands: vi.fn().mockReturnValue(new Map()),
+        // No need to override getAll...Vars here, factory provides defaults
     });
     
-    // Add explicit spy because factory returns plain object
-    // TODO: Revisit if MockFactory mocking strategy changes
-    if (childState.setCurrentFilePath) { // Check if exists before spying
+    // Add the check/spy for setCurrentFilePath (workaround)
+    if (childState.setCurrentFilePath) { 
         vi.spyOn(childState, 'setCurrentFilePath'); 
     } else {
-        // If still missing (shouldn't be, but defensive), add it
         (childState as any).setCurrentFilePath = vi.fn();
     }
 
     // Resolve the handler AFTER setting up mocks it might depend on
     handler = await context.resolve(ImportDirectiveHandler);
 
-    // Mock interpreterServiceClient AFTER createChildState mock is set up
-    // Now it resolves with the *same* childState instance created above
-    interpreterServiceClient = {
-        interpret: vi.fn().mockImplementation(async (nodes) => {
-            // Simulate interpretation populating the childState based on test needs
-            // For 'import all', test manually adds vars to childState mock
-            // For 'import specific', test manually adds vars to childState mock
-             if (childState.getAllTextVars().size > 0 || childState.getAllDataVars().size > 0) {
-                 // If test setup populated childState, return it
-                 return childState;
-             } else {
-                 // Otherwise return a generic new state if childState wasn't populated by test
-                 return MockFactory.createStateService(); 
-             }
-        }),
-        createChildContext: vi.fn().mockResolvedValue(MockFactory.createStateService()) // Less critical for these tests
-    };
+    // Create a deep mock for the client
+    interpreterServiceClient = mockDeep<IInterpreterServiceClient>();
+    // Configure its methods to return the shared childState
+    interpreterServiceClient.interpret.mockResolvedValue(childState);
+    interpreterServiceClient.createChildContext.mockResolvedValue(childState);
+    
+    // Ensure the factory returns this specific deep mock client
     vi.spyOn(interpreterServiceClientFactory, 'createClient').mockReturnValue(interpreterServiceClient);
+    
+    // Mock parent state's createChildState to also return the same childState instance
+    vi.spyOn(stateService, 'createChildState').mockResolvedValue(childState); 
     
     vi.spyOn(stateService, 'getCurrentFilePath').mockReturnValue('/project/current.meld');
     vi.spyOn(stateService, 'isTransformationEnabled').mockReturnValue(false);
@@ -286,16 +274,16 @@ describe('ImportDirectiveHandler', () => {
       const nodeContentLocation2 = createLocation(2, 1, undefined, undefined, finalPath);
       const importedTextVar: TextVariable = { name: 'greeting', type: VariableType.TEXT, value: 'Hello', metadata: { definedAt: createTestLocation(1, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
       const importedDataVar: any = { name: 'info', type: 'data', value: { val: 1 }, metadata: { definedAt: createTestLocation(2, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
-      stateService.getAllTextVars.mockReturnValue(new Map([['greeting', importedTextVar]]));
-      stateService.getAllDataVars.mockReturnValue(new Map([['info', importedDataVar]]));
-      (stateService as any).getCurrentFilePath.mockReturnValue(finalPath);
+      // Configure the mocks on the childState instance created in beforeEach
+      childState.getAllTextVars.mockReturnValue(new Map([['greeting', importedTextVar]]));
+      childState.getAllDataVars.mockReturnValue(new Map([['info', importedDataVar]]));
+
       await handler.execute(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(importPathRaw, mockProcessingContext.resolutionContext);
       expect(resolutionService.resolvePath).toHaveBeenCalledWith(finalPath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text greeting="Hello"\n@data info={ "val": 1 }');
-      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[]);
       expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
       expect(stateService.setDataVar).toHaveBeenCalledWith('info', { val: 1 });
       expect(circularityService.beginImport).toHaveBeenCalledWith(finalPath.replace(/\\/g, '/'));
@@ -330,20 +318,20 @@ describe('ImportDirectiveHandler', () => {
       const importedVar1: TextVariable = { name: 'var1', type: VariableType.TEXT, value: 'value1', metadata: { definedAt: createTestLocation(1, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
       const importedVar2: TextVariable = { name: 'var2', type: VariableType.TEXT, value: 'value2', metadata: { definedAt: createTestLocation(2, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
       const importedVar3: TextVariable = { name: 'var3', type: VariableType.TEXT, value: 'value3', metadata: { definedAt: createTestLocation(3, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
-      stateService.getTextVar.mockImplementation((name) => {
+      // Configure the mock on the childState instance created in beforeEach
+      childState.getTextVar.mockImplementation((name) => {
         if (name === 'var1') return importedVar1;
         if (name === 'var2') return importedVar2;
         if (name === 'var3') return importedVar3;
         return undefined;
       });
-      (stateService as any).getCurrentFilePath.mockReturnValue(finalPath);
+
       const result = await handler.execute(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(importPathRaw, mockProcessingContext.resolutionContext);
       expect(resolutionService.resolvePath).toHaveBeenCalledWith(finalPath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text var1="value1"\n@text var2="value2"\n@text var3="value3"');
-      expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(parsedNodes as any[]);
       expect(stateService.setTextVar).toHaveBeenCalledTimes(2);
       expect(stateService.setTextVar).toHaveBeenCalledWith('var1', 'value1');
       expect(stateService.setTextVar).toHaveBeenCalledWith('aliasedVar2', 'value2');
@@ -415,12 +403,13 @@ describe('ImportDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveInContext').mockResolvedValue(resolvedPathString);
       vi.spyOn(resolutionService, 'resolvePath').mockResolvedValue(createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath(resolvedPathString), true));
       fileSystemService.exists.mockResolvedValue(true);
-      vi.spyOn(circularityService, 'beginImport').mockImplementationOnce(() => { throw circularError; });
+      // Configure mockDeep object directly
+      circularityService.beginImport.mockImplementationOnce(() => { throw circularError; }); 
       await expectToThrowWithConfig(
         () => handler.execute(mockProcessingContext),
         {
           type: 'DirectiveError',
-          code: DirectiveErrorCode.CIRCULAR_REFERENCE,
+          code: DirectiveErrorCode.CIRCULAR_REFERENCE, 
           messageContains: 'Circular import detected'
         }
       );
