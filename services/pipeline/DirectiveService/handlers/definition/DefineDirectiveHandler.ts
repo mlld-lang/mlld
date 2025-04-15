@@ -190,7 +190,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       logger.debug('Constructed command definition', { name: commandDefinition.name, type: commandDefinition.type });
 
       // Store the ICommandDefinition using setCommandVar on the provided state
-      state.setCommandVar(commandDefinition.name, commandDefinition);
+      await state.setCommandVar(commandDefinition.name, commandDefinition);
       logger.debug(`Stored command '${commandDefinition.name}'`, { definition: commandDefinition });
 
       // Return the modified state
