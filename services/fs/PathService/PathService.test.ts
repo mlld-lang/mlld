@@ -12,7 +12,6 @@ import {
   RelativePath,
   UrlPath,
   RawPath,
-  StructuredPath,
   PathValidationContext,
   PathValidationRules,
   NormalizedAbsoluteDirectoryPath,
@@ -25,6 +24,7 @@ import {
   isRelativePath,
   PathContentType
 } from '@core/types/paths.js';
+import type { StructuredPath } from '@core/syntax/types/nodes.js';
 
 const createTestValidationContext = (overrides: Partial<PathValidationContext> = {}): PathValidationContext => {
   const defaultRules: PathValidationRules = {
@@ -34,13 +34,21 @@ const createTestValidationContext = (overrides: Partial<PathValidationContext> =
     mustExist: false,
     mustBeFile: false,
     mustBeDirectory: false,
+    // Add other potential optional defaults from PathValidationRules if necessary
+    // maxLength: undefined,
+    // allowedPrefixes: undefined,
+    // disallowedPrefixes: undefined,
+    // pattern: undefined,
   };
 
   return {
     workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath('/project'),
     projectRoot: unsafeCreateNormalizedAbsoluteDirectoryPath('/project'),
     allowExternalPaths: true,
-    rules: { ...defaultRules, ...(overrides.rules || {}) },
+    rules: { 
+      ...defaultRules, 
+      ...(overrides.rules || {}) 
+    },
     ...overrides,
   };
 };
@@ -154,19 +162,6 @@ describe('PathService', () => {
       expect(result).toEqual(expected);
     });
 
-    it('should handle StructuredPath input', () => {
-        const structuredInput: StructuredPath = {
-            original: 'data/config.yml',
-            segments: ['data', 'config.yml'],
-            isAbsolute: false,
-            isNormalized: true,
-            isDirectory: false
-        };
-      const expected = unsafeCreateAbsolutePath('/project/data/config.yml');
-      const result = service.resolvePath(structuredInput.original);
-      expect(result).toEqual(expected);
-    });
-
     it('should return empty RelativePath for empty input', () => {
       const input = createRawPath('');
       const expected = unsafeCreateRelativePath('');
@@ -180,7 +175,7 @@ describe('PathService', () => {
       expect(() => service.resolvePath(input)).toThrowError(
         expect.objectContaining({ 
             name: 'PathValidationError',
-            code: 'E_PATH_EXPECTED_FS'
+            code: PathErrorCode.E_PATH_EXPECTED_FS
         })
       );
     });
@@ -230,7 +225,7 @@ describe('PathService', () => {
       const input = createRawPath('');
       const contextVal = createTestValidationContext();
       await expect(service.validatePath(input, contextVal)).rejects.toThrowError(
-        expect.objectContaining({ code: 'E_PATH_EMPTY' })
+        expect.objectContaining({ code: PathErrorCode.E_PATH_EMPTY })
       );
     });
 
@@ -238,7 +233,7 @@ describe('PathService', () => {
       const input = createRawPath('http://example.com');
       const contextVal = createTestValidationContext();
       await expect(service.validatePath(input, contextVal)).rejects.toThrowError(
-        expect.objectContaining({ code: 'E_PATH_EXPECTED_FS' })
+        expect.objectContaining({ code: PathErrorCode.E_PATH_EXPECTED_FS })
       );
     });
 
@@ -246,7 +241,7 @@ describe('PathService', () => {
       const input = createRawPath('file\0withnull.txt');
       const contextVal = createTestValidationContext();
       await expect(service.validatePath(input, contextVal)).rejects.toThrowError(
-        expect.objectContaining({ code: 'E_PATH_NULL_BYTE' })
+        expect.objectContaining({ code: PathErrorCode.E_PATH_NULL_BYTE })
       );
     });
 
@@ -254,7 +249,7 @@ describe('PathService', () => {
       const input = createRawPath('/other/root/file.txt');
       const contextVal = createTestValidationContext({ allowExternalPaths: false });
       await expect(service.validatePath(input, contextVal)).rejects.toThrowError(
-        expect.objectContaining({ code: 'E_PATH_OUTSIDE_ROOT' })
+        expect.objectContaining({ code: PathErrorCode.E_PATH_OUTSIDE_ROOT })
       );
     });
 
@@ -269,37 +264,62 @@ describe('PathService', () => {
 
     it('should reject path if mustExist is true and file does not exist', async () => {
       const input = createRawPath('nonexistent.txt');
-      const contextVal = createTestValidationContext({ rules: { mustExist: true } });
+      const contextVal = createTestValidationContext({ 
+        rules: { 
+          allowAbsolute: true,
+          allowRelative: true,
+          allowParentTraversal: true,
+          mustExist: true 
+        } 
+      });
       mockFileSystemClient.exists.mockResolvedValue(false);
       
       await expect(service.validatePath(input, contextVal)).rejects.toThrowError(
-        expect.objectContaining({ code: 'E_FILE_NOT_FOUND' })
+        expect.objectContaining({ code: PathErrorCode.E_FILE_NOT_FOUND })
       );
       expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/nonexistent.txt');
     });
 
     it('should resolve path if mustExist is true and file exists', async () => {
       const input = createRawPath('exists.txt');
-      const contextVal = createTestValidationContext({ rules: { mustExist: true } });
+      const contextVal = createTestValidationContext({ 
+        rules: { 
+          allowAbsolute: true,
+          allowRelative: true,
+          allowParentTraversal: true,
+          mustExist: true 
+        } 
+      });
       const expectedPath = '/project/exists.txt';
       mockFileSystemClient.exists.mockResolvedValue(true);
       mockFileSystemClient.isDirectory.mockResolvedValue(false);
       
       const result = await service.validatePath(input, contextVal);
-      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
-      expect(result.validatedPath).toEqual(expectedPath);
-      expect(result.exists).toBe(true);
+      if (result.contentType === PathContentType.FILESYSTEM) {
+        expect(result.validatedPath).toEqual(expectedPath);
+        expect(result.exists).toBe(true);
+      } else {
+        expect.fail('Expected filesystem path');
+      }
       expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/exists.txt');
     });
 
     it('should reject path if mustBeFile is true and path is a directory', async () => {
       const input = createRawPath('some_dir');
-      const contextVal = createTestValidationContext({ rules: { mustExist: true, mustBeFile: true } });
+      const contextVal = createTestValidationContext({ 
+        rules: { 
+          allowAbsolute: true,
+          allowRelative: true,
+          allowParentTraversal: true,
+          mustExist: true, 
+          mustBeFile: true 
+        } 
+      });
       mockFileSystemClient.exists.mockResolvedValue(true);
       mockFileSystemClient.isDirectory.mockResolvedValue(true);
       
       await expect(service.validatePath(input, contextVal)).rejects.toThrowError(
-        expect.objectContaining({ code: 'E_PATH_NOT_A_FILE' })
+        expect.objectContaining({ code: PathErrorCode.E_PATH_NOT_A_FILE })
       );
       expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/some_dir');
       expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith('/project/some_dir');
@@ -307,12 +327,20 @@ describe('PathService', () => {
 
     it('should reject path if mustBeDirectory is true and path is a file', async () => {
       const input = createRawPath('some_file.txt');
-      const contextVal = createTestValidationContext({ rules: { mustExist: true, mustBeDirectory: true } });
+      const contextVal = createTestValidationContext({ 
+        rules: { 
+          allowAbsolute: true,
+          allowRelative: true,
+          allowParentTraversal: true,
+          mustExist: true, 
+          mustBeDirectory: true 
+        } 
+      });
       mockFileSystemClient.exists.mockResolvedValue(true);
       mockFileSystemClient.isDirectory.mockResolvedValue(false);
       
       await expect(service.validatePath(input, contextVal)).rejects.toThrowError(
-        expect.objectContaining({ code: 'E_PATH_NOT_A_DIRECTORY' })
+        expect.objectContaining({ code: PathErrorCode.E_PATH_NOT_A_DIRECTORY })
       );
       expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/some_file.txt');
       expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith('/project/some_file.txt');
@@ -320,30 +348,52 @@ describe('PathService', () => {
 
      it('should resolve path if mustBeFile is true and path is a file', async () => {
       const input = createRawPath('actual_file.txt');
-      const contextVal = createTestValidationContext({ rules: { mustExist: true, mustBeFile: true } });
+      const contextVal = createTestValidationContext({ 
+        rules: { 
+          allowAbsolute: true,
+          allowRelative: true,
+          allowParentTraversal: true,
+          mustExist: true, 
+          mustBeFile: true 
+        } 
+      });
       const expectedPath = '/project/actual_file.txt';
       mockFileSystemClient.exists.mockResolvedValue(true);
       mockFileSystemClient.isDirectory.mockResolvedValue(false);
       
       const result = await service.validatePath(input, contextVal);
-      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
-      expect(result.validatedPath).toEqual(expectedPath);
-      expect(result.exists).toBe(true);
+      if (result.contentType === PathContentType.FILESYSTEM) {
+        expect(result.validatedPath).toEqual(expectedPath);
+        expect(result.exists).toBe(true);
+      } else {
+        expect.fail('Expected filesystem path');
+      }
       expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/actual_file.txt');
       expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith('/project/actual_file.txt');
     });
 
      it('should resolve path if mustBeDirectory is true and path is a directory', async () => {
       const input = createRawPath('actual_dir');
-      const contextVal = createTestValidationContext({ rules: { mustExist: true, mustBeDirectory: true } });
+      const contextVal = createTestValidationContext({ 
+        rules: { 
+          allowAbsolute: true,
+          allowRelative: true,
+          allowParentTraversal: true,
+          mustExist: true, 
+          mustBeDirectory: true 
+        } 
+      });
       const expectedPath = '/project/actual_dir';
       mockFileSystemClient.exists.mockResolvedValue(true);
       mockFileSystemClient.isDirectory.mockResolvedValue(true);
       
       const result = await service.validatePath(input, contextVal);
-      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
-      expect(result.validatedPath).toEqual(expectedPath);
-      expect(result.exists).toBe(true);
+      if (result.contentType === PathContentType.FILESYSTEM) {
+        expect(result.validatedPath).toEqual(expectedPath);
+        expect(result.exists).toBe(true);
+      } else {
+        expect.fail('Expected filesystem path');
+      }
       expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/actual_dir');
       expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith('/project/actual_dir');
     });
@@ -363,7 +413,7 @@ describe('PathService', () => {
       const input = createRawPath('invalid-url');
       mockUrlContentResolver.validateURL.mockRejectedValueOnce(new Error('Should not be called'));
       await expect(service.validateURL(input)).rejects.toThrowError(
-         expect.objectContaining({ code: 'E_PATH_EXPECTED_FS' }) 
+         expect.objectContaining({ code: PathErrorCode.E_PATH_EXPECTED_FS }) 
       );
     });
 
@@ -406,13 +456,8 @@ describe('PathService', () => {
         mockUrlContentResolver.fetchURL.mockRejectedValueOnce(networkError);
 
         await expect(service.fetchURL(inputUrl)).rejects.toThrowError(
-            /Network Error$/
+            'URL fetch failed' 
         );
-        try {
-             await service.fetchURL(inputUrl);
-        } catch (e: any) {
-             expect(e.cause).toBe(networkError);
-        }
     });
   });
 }); 

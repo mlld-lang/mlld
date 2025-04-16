@@ -345,7 +345,7 @@ export class PathService implements IPathService {
       throw new PathValidationError(
         PathErrorMessages.INVALID_PATH,
         {
-          code: PathErrorCode.INVALID_PATH,
+          code: PathErrorCode.E_PATH_EXPECTED_FS,
           details: { pathString: rawInputPath },
           severity: ErrorSeverity.Fatal
         }
@@ -536,7 +536,7 @@ export class PathService implements IPathService {
       throw new PathValidationError(
         PathErrorMessages.INVALID_PATH,
         { 
-          code: PathErrorCode.INVALID_PATH,
+          code: PathErrorCode.E_PATH_EXPECTED_FS,
           details: { pathString: rawPathString, reason: 'Expected filesystem path' },
           severity: ErrorSeverity.Fatal
         }
