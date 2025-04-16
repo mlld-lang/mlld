@@ -5,7 +5,7 @@ import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
-import { isBasicCommand } from '@core/types.js';
+import { isBasicCommand } from '@core/types/index.js';
 import type { IBasicCommandDefinition, ICommandDefinition, ICommandParameterMetadata } from '@core/types/define.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { logger } from '@core/utils/logger.js';
@@ -108,7 +108,6 @@ export class CommandResolver {
       // Determine working directory (handling null path)
       let cwd: string;
       // Assuming context.state is always defined based on ResolutionContext type.
-      // @ts-ignore - TS unable to guarantee state/method is defined here (See _plans/PLAN-PHASE-3-ISSUES.md)
       const currentFilePath = context.state.getCurrentFilePath(); 
       // Check if path is a valid string before using dirname
       if (typeof currentFilePath === 'string') {

@@ -734,9 +734,9 @@ export class ResolutionService implements IResolutionService {
       if (isBasicCommand(commandDef)) {
           // 5. Execute basic command using CommandResolver
           logger.debug(`Executing basic command '${commandName}' via CommandResolver`);
-          // Add ts-ignore due to suspected flow analysis issue
-          // @ts-ignore - TS unable to guarantee commandResolver is defined despite check
-          return await commandResolver.executeBasicCommand(commandDef, args, context);
+          // Use non-null assertion as check on L732 guarantees commandResolver is defined
+          // @ts-ignore was here
+          return await commandResolver!.executeBasicCommand(commandDef, args, context);
       } else {
           // 6. Handle language commands (or other types)
           // TODO: Implement execution for language commands
@@ -1148,19 +1148,19 @@ export class ResolutionService implements IResolutionService {
     if (!this.pathService) {
         throw new Error('PathService not initialized in createValidationContext');
     }
-    // @ts-ignore - Persistent linter error: Cannot invoke possibly 'undefined'. See _plans/PLAN-PHASE-3-ISSUES.md
+    // @ts-ignore was here - Persistent linter error, but code handles potential undefined state.
     const currentFilePath = context.state?.getCurrentFilePath() ?? null;
-    // Ignore persistent linter error: check above should guarantee definition.
-    // @ts-ignore // TODO: Linter struggles with pathService defined via fallback/DI, check guarantees it's defined.
-    const projectPath = this.pathService.getProjectPath() ?? null; 
+    // Use non-null assertion, check on L1148 guarantees pathService is defined.
+    // @ts-ignore was here
+    const projectPath = this.pathService!.getProjectPath() ?? null; 
     
     let workingDir: NormalizedAbsoluteDirectoryPath | undefined;
     let projRoot: NormalizedAbsoluteDirectoryPath | undefined;
 
     if (currentFilePath) {
-        // Ignore persistent linter error: check above should guarantee definition.
-        // @ts-ignore // TODO: Linter struggles with pathService defined via fallback/DI, check guarantees it's defined.
-        workingDir = unsafeCreateNormalizedAbsoluteDirectoryPath(this.pathService.dirname(currentFilePath));
+        // Use non-null assertion, check on L1148 guarantees pathService is defined.
+        // @ts-ignore was here
+        workingDir = unsafeCreateNormalizedAbsoluteDirectoryPath(this.pathService!.dirname(currentFilePath));
     } else if (projectPath) {
         workingDir = unsafeCreateNormalizedAbsoluteDirectoryPath(projectPath);
     }
