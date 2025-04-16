@@ -234,7 +234,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
         resultState = await interpreterClient.interpret(
           nodesToInterpret
-        ) as unknown as IStateService; 
+        );
       } catch (error) {
         if (error instanceof DirectiveError) { throw error; }
         throw new DirectiveError(`Failed to interpret imported file: ${error instanceof Error ? error.message : String(error)}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED);
