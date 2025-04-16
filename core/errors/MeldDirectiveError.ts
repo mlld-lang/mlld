@@ -29,14 +29,18 @@ export class MeldDirectiveError extends MeldError {
     
     super(`Directive error (${directiveKind}): ${message}${locationStr}`, {
       code: options.code || 'VALIDATION_FAILED',
-      filePath: options.location?.filePath,
       cause: options.cause,
       severity: options.severity || ErrorSeverity.Recoverable, // Default to recoverable for directive errors
-      context: {
+      // Pass context and filePath via details
+      details: {
         ...options.context,
         directiveKind,
-        location: options.location
-      }
+        filePath: options.location?.filePath, // Add filePath to details
+        // Keep location in details as well if needed for context
+        location: options.location 
+      },
+      // Pass location as sourceLocation
+      sourceLocation: options.location 
     });
     
     this.name = 'MeldDirectiveError';

@@ -26,6 +26,8 @@ export class MeldParseError extends MeldError {
    * Location information for where the error occurred
    */
   public readonly location?: Location;
+  // Explicitly store the cause passed in options
+  public readonly cause?: unknown;
 
   constructor(
     message: string, 
@@ -64,17 +66,20 @@ export class MeldParseError extends MeldError {
     const severity = options.severity || ErrorSeverity.Fatal;
     
     super(`Parse error: ${message}${locationStr}`, {
-      cause: options.cause,
-      filePath: options.filePath || filePath, // Use options.filePath if provided
+      // Pass filePath via details, not directly
+      code: 'PARSE_ERROR', // Assign a default code or get from options if needed
       severity,
-      context: {
-        ...options.context,
-        location
-      }
+      details: {
+        ...options.context, // Keep existing context details
+        filePath: options.filePath || filePath 
+      },
+      sourceLocation: location, // Use sourceLocation for the parsed location
+      cause: options.cause
     });
     
     this.name = 'MeldParseError';
-    this.location = location;
+    this.location = location; // Keep this for direct access if needed
+    this.cause = options.cause; // Store the cause
 
     // Ensure proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, MeldParseError.prototype);
@@ -84,10 +89,18 @@ export class MeldParseError extends MeldError {
    * Custom serialization to avoid circular references and include only essential info
    */
   toJSON(): SerializedParseError {
+    // Construct JSON directly, MeldError doesn't have toJSON
+    // Access the stored 'cause' property
+    const cause = this.cause;
     return {
-      ...super.toJSON(),
       name: this.name,
-      location: this.location
-    } as SerializedParseError;
+      message: this.message,
+      code: this.code,
+      severity: this.severity,
+      location: this.location,
+      filePath: this.details?.filePath, // Get filePath from details
+      cause: cause instanceof Error ? cause.message : String(cause), // Handle cause serialization
+      details: this.details // Include other details
+    } as SerializedParseError; // Cast is okay if SerializedParseError matches this structure
   }
 } 

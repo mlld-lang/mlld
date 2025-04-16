@@ -21,7 +21,11 @@ import type {
   ValidationContext,
   ValidationResult,
   Example
-} from '@core/syntax/types.js';
+} from '@core/syntax/types';
+import type { TextNode as TextNodeImport, CodeFenceNode as CodeFenceNodeImport, CommentNode as CommentNodeImport, ErrorNode as ErrorNodeImport, VariableReferenceNode as VariableReferenceNodeImport } from '@core/syntax/types/nodes.js';
+import type { SourceLocation as SourceLocationImport } from '@core/syntax/types/shared-types.js';
+// Correct import path for DirectiveData
+import type { DirectiveData as DirectiveDataImport } from '@core/syntax/types/index.js';
 
 // Re-export all imported types
 export type {

@@ -4,6 +4,9 @@ import type { IResolutionService, ResolutionContext } from '@services/resolution
 import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import type { StructuredPath } from '@core/shared-service-types.js';
+import { MeldPath, createMeldPath, unsafeCreateValidatedResourcePath, RawPath } from '@core/types/paths.js';
+import type { MeldNode, TextNode, VariableReferenceNode, StructuredPath as SyntaxStructuredPath } from '@core/syntax/types/nodes.js';
+import { VariableType } from '@core/types/variables.js';
 
 /**
  * Factory for creating resolution service clients for VariableReferenceResolver
@@ -28,36 +31,48 @@ export class ResolutionServiceClientFactory {
     logger.debug('Creating ResolutionServiceClient');
     
     return {
-      resolveVariables: async (value: string, context: ResolutionContext): Promise<string> => {
-        // This is a private method in ResolutionService, but we're exposing it through the client
-        // The actual implementation will delegate to the private method
-        return this.resolutionService.resolveInContext(value, context);
-      },
-      
       resolveVariableReference: async (reference: string, context: ResolutionContext): Promise<string> => {
-        // Use resolveInContext for variable references
-        return this.resolutionService.resolveInContext(reference, context);
+        if (!this.resolutionService) throw new Error('Resolution service not available in client');
+        return await this.resolutionService.resolveInContext(reference, context);
       },
       
-      extractSection: (content: string, heading: string, fuzzyThreshold?: number): Promise<string> => {
-        // Use extractSection from the resolution service
-        return this.resolutionService.extractSection(content, heading, fuzzyThreshold);
+      extractSection: async (content: string, heading: string, fuzzyThreshold?: number): Promise<string> => {
+        if (!this.resolutionService) throw new Error('Resolution service not available in client');
+        return await this.resolutionService.extractSection(content, heading, fuzzyThreshold);
       },
       
-      resolveText: async (text: string, context: ResolutionContext): Promise<string> => {
-        // Use resolveText from the resolution service
-        return this.resolutionService.resolveText(text, context);
+      resolveVariables: async (value: string, context: ResolutionContext): Promise<string> => {
+        if (!this.resolutionService) throw new Error('Resolution service not available in client');
+        return await this.resolutionService.resolveInContext(value, context);
       },
       
       resolveInContext: async (reference: string | StructuredPath, context: ResolutionContext): Promise<string> => {
-        // Use resolveInContext from the resolution service
-        return this.resolutionService.resolveInContext(reference, context);
+        if (!this.resolutionService) throw new Error('Resolution service not available in client');
+        return await this.resolutionService.resolveInContext(reference, context);
       },
       
-      resolveFile: async (path: string): Promise<string> => {
-        // Use resolveFile from the resolution service
-        return this.resolutionService.resolveFile(path);
+      resolveText: async (text: string, context: ResolutionContext): Promise<string> => {
+        if (!this.resolutionService) throw new Error('Resolution service not available in client');
+        return await this.resolutionService.resolveInContext(text, context);
+      },
+      
+      resolveFile: async (path: string) => {
+        if (!this.resolutionService) throw new Error('Resolution service not available in client');
+        const meldPath = createMeldPath(path as RawPath, unsafeCreateValidatedResourcePath(path));
+        return await this.resolutionService.resolveFile(meldPath);
       }
     };
   }
-} 
+}
+
+// Helper function (consider moving to a shared test utility)
+const createMockVarNode = (identifier: string): VariableReferenceNode => {
+  return {
+    type: 'VariableReference',
+    identifier,
+    valueType: VariableType.TEXT, // Assume text for simplicity
+    fields: [],
+    isVariableReference: true,
+    location: { start: { line: 1, column: 1 }, end: { line: 1, column: identifier.length + 4 } }
+  };
+}; 

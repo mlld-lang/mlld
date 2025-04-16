@@ -1,7 +1,7 @@
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
+import type { IParserService } from '../IParserService.js';
+import type { IParserServiceClient } from '../interfaces/IParserServiceClient.js';
 import { parserLogger as logger } from '@core/utils/logger.js';
 import type { MeldNode, InterpolatableValue } from '@core/syntax/types/nodes.js';
 import type { ParserOptions } from '@core/ast/index.js';

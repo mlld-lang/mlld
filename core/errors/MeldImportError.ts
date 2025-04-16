@@ -39,11 +39,11 @@ export class MeldImportError extends MeldError {
     
     super(`Import error${options.code ? ` (${options.code})` : ''}: ${message}${importChainStr}`, {
       code: options.code || 'IMPORT_FAILED',
-      filePath: options.details?.filePath,
       cause: options.cause || options.details?.cause,
       severity,
-      context: {
+      details: {
         ...options.context,
+        filePath: options.details?.filePath,
         importChain: options.details?.importChain,
         variableName: options.details?.variableName
       }

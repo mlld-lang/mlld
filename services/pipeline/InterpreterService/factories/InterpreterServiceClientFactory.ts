@@ -1,11 +1,11 @@
 import { injectable, inject, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
-import { InterpreterServiceLike, ClientFactory } from '@core/shared-service-types.js';
+import type { IInterpreterService } from '../IInterpreterService.js';
+import type { IInterpreterServiceClient } from '../interfaces/IInterpreterServiceClient.js';
 import { interpreterLogger as logger } from '@core/utils/logger.js';
 import type { MeldNode } from '@core/syntax/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { StateServiceLike, InterpreterOptionsBase, ClientFactory, InterpreterServiceLike } from '@core/shared-service-types.js';
 
 /**
  * Factory for creating interpreter service clients
@@ -13,9 +13,9 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
  */
 @injectable()
 @Service({
-  description: 'Factory for creating interpreter service clients'
+  description: 'Factory for creating InterpreterService clients'
 })
-export class InterpreterServiceClientFactory implements ClientFactory<IInterpreterServiceClient> {
+export class InterpreterServiceClientFactory {
   private interpreterService?: InterpreterServiceLike;
 
   /**
@@ -57,26 +57,20 @@ export class InterpreterServiceClientFactory implements ClientFactory<IInterpret
     logger.debug('Creating InterpreterServiceClient');
     
     return {
-      interpret: (
-        nodes: MeldNode[],
-        options?: InterpreterOptions
-      ): Promise<IStateService> => {
-        return this.getInterpreterService().interpret(nodes, options);
+      interpret: async (nodes: MeldNode[], options?: InterpreterOptionsBase): Promise<StateServiceLike> => {
+        if (!this.interpreterService) throw new Error('Interpreter service not available in client');
+        // Return type matches IInterpreterServiceClient
+        return await this.interpreterService.interpret(nodes, options);
       },
-      interpretNode: (
-        node: MeldNode,
-        state: IStateService,
-        options?: InterpreterOptions
-      ): Promise<IStateService> => {
-        return this.getInterpreterService().interpretNode(node, state, options);
-      },
-      createChildContext: (
-        parentState: IStateService,
+      createChildContext: async (
+        parentState: StateServiceLike,
         filePath?: string,
-        options?: InterpreterOptions
-      ): Promise<IStateService> => {
-        return this.getInterpreterService().createChildContext(parentState, filePath, options);
-      },
+        options?: InterpreterOptionsBase
+      ): Promise<StateServiceLike> => {
+        if (!this.interpreterService) throw new Error('Interpreter service not available in client');
+        // Return type matches IInterpreterServiceClient
+        return await this.interpreterService.createChildContext(parentState, filePath, options);
+      }
     };
   }
 } 

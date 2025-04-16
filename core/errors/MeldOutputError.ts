@@ -24,7 +24,7 @@ export class MeldOutputError extends MeldError {
       code: 'OUTPUT_GENERATION_FAILED',
       cause: options.cause,
       severity,
-      context: {
+      details: {
         ...options.context,
         format
       }

@@ -49,6 +49,7 @@ export class MeldInterpreterError extends MeldError {
   public readonly nodeType: string;
   public readonly location?: InterpreterLocation;
   public readonly context?: InterpreterErrorContext;
+  public readonly cause?: unknown;
 
   constructor(
     message: string,
@@ -63,47 +64,43 @@ export class MeldInterpreterError extends MeldError {
     
     // Interpreter errors are typically recoverable by default, but can be overridden
     const severity = options.severity || ErrorSeverity.Recoverable;
+    const filePath = location?.filePath || options.context?.filePath;
     
     super(`Interpreter error (${nodeType}): ${message}${locationStr}`, {
       code: options.code || 'INTERPRETATION_FAILED',
-      filePath: location?.filePath || options.context?.filePath,
       cause: options.cause,
       severity,
-      context: {
+      details: {
         ...options.context,
-        nodeType,
-        location
-      }
+        filePath: filePath,
+        nodeType: nodeType
+      },
+      sourceLocation: location
     });
     
     this.name = 'MeldInterpreterError';
     this.nodeType = nodeType;
     this.location = location;
     this.context = options.context;
+    this.cause = options.cause;
     
     // Ensure proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, MeldInterpreterError.prototype);
   }
 
   /**
-   * Access to the cause property of this error
-   */
-  get cause(): Error | undefined {
-    return (this as any).errorCause;
-  }
-
-  /**
    * Custom serialization to avoid circular references and include only essential info
    */
   toJSON(): SerializedInterpreterError {
+    const cause = this.cause;
     return {
       name: this.name,
       message: this.message,
       nodeType: this.nodeType,
       location: this.location,
-      filePath: this.filePath,
-      cause: this.cause?.message,
-      fullCauseMessage: this.cause ? this.getFullCauseMessage(this.cause) : undefined,
+      filePath: this.location?.filePath,
+      cause: cause instanceof Error ? cause.message : String(cause),
+      fullCauseMessage: cause instanceof Error ? this.getFullCauseMessage(cause) : undefined,
       severity: this.severity,
       code: this.code,
       context: this.context ? {

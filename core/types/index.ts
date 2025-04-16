@@ -12,7 +12,28 @@ import type { OutputService } from '@services/pipeline/OutputService/OutputServi
 import type { StateDebuggerService as DebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
 import type { TransformationOptions } from './state.js';
 import type { StateServiceLike } from '@core/shared-service-types.js';
-import type { ResolutionContext } from './resolution.js';
+import type {
+  ResolutionContext as ResolutionContextImport,
+  ResolutionFlags,
+  FormattingContext as ResolutionFormattingContext,
+  DocumentFormattingSettings,
+  PathResolutionContext,
+  PathConstraints,
+  ParserFlags
+} from './resolution.js';
+import type {
+  EmbedType,
+  BaseEmbedParams,
+  PathEmbedParams,
+  VariableEmbedParams,
+  TemplateEmbedParams,
+  VariableReference as EmbedVariableReference,
+  FieldAccess,
+  EmbedParams,
+  EmbedResolutionContext,
+  SourceLocation as EmbedSourceLocation,
+  EmbedResult
+} from './embed.js';
 import type { MeldNode } from '@core/syntax/types/index.js';
 import type { DirectiveNode } from '@core/syntax/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -102,8 +123,31 @@ export * from './paths';
 export * from './define';
 export * from './state';
 export * from '../errors/index';
-export * from './embed';
-export * from './dependencies';
+export * from './dependencies.js';
+
+// Explicitly export types from resolution and embed using aliases where needed
+export type { 
+  ResolutionContextImport as ResolutionContext, 
+  ResolutionFlags, 
+  ResolutionFormattingContext,
+  DocumentFormattingSettings, 
+  PathResolutionContext, 
+  PathConstraints, 
+  ParserFlags 
+};
+export type { 
+  EmbedType,
+  BaseEmbedParams,
+  PathEmbedParams,
+  VariableEmbedParams,
+  TemplateEmbedParams,
+  EmbedVariableReference as VariableReference,
+  FieldAccess,
+  EmbedParams,
+  EmbedResolutionContext,
+  EmbedSourceLocation,
+  EmbedResult
+};
 
 // Generic utility types (if any, keep minimal)
 export type Maybe<T> = T | null | undefined;
@@ -120,8 +164,9 @@ export type Maybe<T> = T | null | undefined;
 
 /**
  * Context related to formatting output, particularly newline handling.
+ * Renamed to avoid conflict with ResolutionFormattingContext.
  */
-export interface FormattingContext {
+export interface OutputFormattingContext {
   isOutputLiteral?: boolean; // True if output should be treated literally (e.g., transformation mode)
   contextType?: 'inline' | 'block'; // Hints whether the context is inline text or a block element
   nodeType?: string; // The type of the node being processed
@@ -163,9 +208,9 @@ export interface DirectiveProcessingContext {
   /** The current state service instance for the directive to operate on. */
   state: IStateService;
   /** The context for resolving variables within the directive. */
-  resolutionContext: ResolutionContext;
+  resolutionContext: ResolutionContextImport;
   /** The context related to formatting (e.g., newline handling). */
-  formattingContext: FormattingContext;
+  formattingContext: OutputFormattingContext;
   /** The context specific to command execution (only present for @run directives). */
   executionContext?: ExecutionContext;
   /** The original directive node being processed. */

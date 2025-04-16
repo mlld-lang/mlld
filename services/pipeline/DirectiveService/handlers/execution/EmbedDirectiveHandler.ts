@@ -175,7 +175,13 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     const state = context.state;
     const resolutionContext = context.resolutionContext;
     const currentFilePath = state.getCurrentFilePath();
-    const errorDetailsContext = { currentFilePath: currentFilePath ?? undefined };
+    const errorDetailsContext: Partial<DirectiveProcessingContext> = {
+        state: context.state,
+        resolutionContext: context.resolutionContext,
+        executionContext: context.executionContext,
+        formattingContext: context.formattingContext,
+        directiveNode: node // Include node if helpful in details context
+    };
     const standardErrorDetails = { 
       node: node, 
       context: errorDetailsContext 

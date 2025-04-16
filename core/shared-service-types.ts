@@ -23,6 +23,12 @@ import type {
   MeldPath
 } from './types/index.js';
 
+// Imports needed for base service interfaces defined below
+// These are OK because they import concrete types, not interfaces that might depend back
+import type { VariableType } from '@core/types/variables.js';
+import type { PathValidationContext, RawPath, ValidatedResourcePath } from '@core/types/paths.js';
+import type { StructuredPath } from '@core/syntax/types/nodes.js';
+
 /**
  * Common client factory interface
  */
@@ -414,3 +420,8 @@ export interface DirectiveServiceLike {
    */
   validateDirective(node: DirectiveNode): Promise<void>;
 }
+
+export type {
+  BaseNode,
+  StructuredPath
+};

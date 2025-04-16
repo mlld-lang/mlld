@@ -29,6 +29,7 @@ import type { RawPath, Location as CoreLocation } from '@core/types';
 import type { SourceLocation as SyntaxSourceLocation } from '@core/syntax/types';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
+import type { DirectiveLocation } from '@core/errors/MeldDirectiveError.js';
 
 // Import all handlers
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
@@ -458,10 +459,10 @@ export class DirectiveService implements IDirectiveService {
         if ('replacement' in result && 'state' in result && result.state) {
           // It's a DirectiveResult, ensure state is IStateService
           if (!this.isStateService(result.state)) {
-             // Use correct CoreLocation type if needed by MeldDirectiveError constructor
-             const errorLocation: CoreLocation | undefined = node.location ? { 
-                start: node.location.start, 
-                end: node.location.end, 
+             // Convert to DirectiveLocation for MeldDirectiveErrorOptions
+             const directiveLocation: DirectiveLocation | undefined = node.location ? { 
+                line: node.location.start.line, 
+                column: node.location.start.column, 
                 filePath: currentFilePath ?? undefined 
              } : undefined;
              throw new MeldDirectiveError(
@@ -469,7 +470,7 @@ export class DirectiveService implements IDirectiveService {
                 kind, 
                 { 
                   code: DirectiveErrorCode.EXECUTION_FAILED,
-                  sourceLocation: errorLocation // Pass CoreLocation compatible object
+                  location: directiveLocation // Pass DirectiveLocation
                 }
              );
           }
@@ -478,12 +479,22 @@ export class DirectiveService implements IDirectiveService {
           // It's an IStateService
           return result;
         } else {
-           const errorLocation: CoreLocation | undefined = node.location ? { start: node.location.start, end: node.location.end, filePath: currentFilePath ?? undefined } : undefined;
-           throw new MeldDirectiveError('Invalid result type returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED, sourceLocation: errorLocation });
+           // Convert to DirectiveLocation for MeldDirectiveErrorOptions
+           const directiveLocation: DirectiveLocation | undefined = node.location ? { 
+               line: node.location.start.line, 
+               column: node.location.start.column, 
+               filePath: currentFilePath ?? undefined 
+           } : undefined;
+           throw new MeldDirectiveError('Invalid result type returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED, location: directiveLocation });
         }
       } else {
-         const errorLocation: CoreLocation | undefined = node.location ? { start: node.location.start, end: node.location.end, filePath: currentFilePath ?? undefined } : undefined;
-         throw new MeldDirectiveError('Invalid or null result returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED, sourceLocation: errorLocation });
+         // Convert to DirectiveLocation for MeldDirectiveErrorOptions
+         const directiveLocation: DirectiveLocation | undefined = node.location ? { 
+             line: node.location.start.line, 
+             column: node.location.start.column, 
+             filePath: currentFilePath ?? undefined 
+         } : undefined;
+         throw new MeldDirectiveError('Invalid or null result returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED, location: directiveLocation });
       }
 
     } catch (error) {
@@ -496,10 +507,11 @@ export class DirectiveService implements IDirectiveService {
            // Add other context pieces if relevant and available
         };
         // Convert node.location (SyntaxSourceLocation) to CoreLocation for details
+        const errorFilePath = errorContext.state?.getCurrentFilePath() ?? undefined;
         const errorLocation: CoreLocation | undefined = node.location ? { 
             start: node.location.start, 
             end: node.location.end, 
-            filePath: currentFilePath ?? undefined 
+            filePath: errorFilePath // Use path from context
         } : undefined;
 
         throw new DirectiveError(
@@ -711,10 +723,12 @@ export class DirectiveService implements IDirectiveService {
            // Include other parts if needed
         };
         // Pass correct details structure
+        // Get currentFilePath from the captured context state
+        const errorFilePath = errorContext.state?.getCurrentFilePath() ?? undefined;
         const errorLocation: CoreLocation | undefined = node.location ? { 
             start: node.location.start, 
             end: node.location.end, 
-            filePath: currentFilePath ?? undefined 
+            filePath: errorFilePath // Use path from context
         } : undefined;
         const errorDetails = { 
             node, 
