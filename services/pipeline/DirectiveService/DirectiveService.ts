@@ -470,9 +470,6 @@ export class DirectiveService implements IDirectiveService {
       }
 
     } catch (error) {
-        // --- DEBUG LOG --- 
-        process.stdout.write(`[handleDirective] CAUGHT ERROR processing ${kind}: ${error instanceof Error ? error.stack : String(error)}\n`);
-        // --- END DEBUG LOG ---
         const message = error instanceof Error ? error.message : 'Unknown directive processing error';
         const code = (error instanceof DirectiveError) ? error.code : DirectiveErrorCode.EXECUTION_FAILED;
         // Create a simplified context for the error details
