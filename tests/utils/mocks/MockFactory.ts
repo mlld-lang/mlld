@@ -13,7 +13,6 @@ import type { MeldPath, RawPath, AbsolutePath, RelativePath, ValidatedResourcePa
 import { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
 import { unsafeCreateValidatedResourcePath, PathContentType } from '@core/types/paths.js';
 import type { TextVariable, DataVariable, IPathVariable } from '@core/types/variables.js';
-import { mockDeep } from 'vitest-mock-extended';
 
 export class MockFactory {
   /**
@@ -35,7 +34,7 @@ export class MockFactory {
    * Create a typed mock state service using mockDeep for better compatibility
    */
   static createStateService(overrides: Partial<IStateService> = {}): IStateService {
-    const selfRefMock: { current?: IStateService } = {}; // Use wrapper object for self-reference
+    const selfRefMock: { current?: IStateService } = {};
     const baseMock: IStateService = {
       getTextVar: vi.fn().mockReturnValue(undefined),
       setTextVar: vi.fn().mockResolvedValue({ name: 'mockText', value: 'value' } as any),
@@ -56,38 +55,39 @@ export class MockFactory {
       hasVariable: vi.fn().mockReturnValue(false),
       removeVariable: vi.fn().mockResolvedValue(false),
       getNodes: vi.fn().mockReturnValue([]),
-      addNode: vi.fn().mockImplementation(() => {}),
-      appendContent: vi.fn().mockImplementation(() => {}),
+      addNode: vi.fn(),
+      appendContent: vi.fn(),
       getTransformedNodes: vi.fn().mockReturnValue([]),
-      setTransformedNodes: vi.fn().mockImplementation(() => {}),
-      transformNode: vi.fn().mockImplementation(() => {}),
+      setTransformedNodes: vi.fn(),
+      transformNode: vi.fn(),
       createChildState: vi.fn().mockImplementation(async () => selfRefMock.current!),
-      mergeChildState: vi.fn().mockImplementation(() => {}),
+      mergeChildState: vi.fn(),
       clone: vi.fn().mockImplementation(() => selfRefMock.current!),
-      getParentState: vi.fn().mockReturnValue(undefined),
+      getParentState: vi.fn(),
       isTransformationEnabled: vi.fn().mockReturnValue(false),
-      setTransformationEnabled: vi.fn().mockImplementation(() => {}),
+      setTransformationEnabled: vi.fn(),
       getTransformationOptions: vi.fn().mockReturnValue({
         enabled: false, preserveOriginal: true, transformNested: true,
         selective: false, directiveKinds: new Set()
       } as TransformationOptions),
-      setTransformationOptions: vi.fn().mockImplementation(() => {}),
+      setTransformationOptions: vi.fn(),
       hasTransformationSupport: vi.fn().mockReturnValue(true),
       shouldTransform: vi.fn().mockReturnValue(false),
-      addImport: vi.fn().mockImplementation(() => {}),
-      removeImport: vi.fn().mockImplementation(() => {}),
+      addImport: vi.fn(),
+      removeImport: vi.fn(),
       hasImport: vi.fn().mockReturnValue(false),
       getImports: vi.fn().mockReturnValue(new Set()),
       getCurrentFilePath: vi.fn().mockReturnValue('/mock/path.meld'),
-      setCurrentFilePath: vi.fn().mockImplementation(() => {}),
-      setEventService: vi.fn().mockImplementation(() => {}),
-      setTrackingService: vi.fn().mockImplementation(() => {}),
+      setCurrentFilePath: vi.fn(),
+      setEventService: vi.fn(),
+      setTrackingService: vi.fn(),
       getStateId: vi.fn().mockReturnValue('mock-state-id'),
       hasLocalChanges: vi.fn().mockReturnValue(false),
       getLocalChanges: vi.fn().mockReturnValue([]),
-      setImmutable: vi.fn().mockImplementation(() => {}),
-      getCommand: vi.fn().mockReturnValue(undefined),
-      getCommandOutput: vi.fn().mockReturnValue(undefined),
+      setImmutable: vi.fn(),
+      get isImmutable() { return false; },
+      getCommand: vi.fn(),
+      getCommandOutput: vi.fn(),
       getInternalStateNode: vi.fn().mockReturnValue({
         stateId: 'mock-state-id',
         variables: { text: new Map<string, TextVariable>(), data: new Map<string, DataVariable>(), path: new Map<string, IPathVariable>() },
@@ -97,9 +97,8 @@ export class MockFactory {
         parentStateId: undefined,
         filePath: '/mock/path.meld'
       } as StateNode),
-      get isImmutable() { return false; },
     };
-    selfRefMock.current = { ...baseMock, ...overrides }; // Assign after baseMock is fully defined
+    selfRefMock.current = { ...baseMock, ...overrides }; 
     return selfRefMock.current;
   }
   
@@ -110,13 +109,12 @@ export class MockFactory {
     const baseMock: IResolutionService = {
       resolveText: vi.fn().mockImplementation(async (text) => text),
       resolveData: vi.fn().mockResolvedValue({}),
-      resolvePath: vi.fn().mockResolvedValue({ path: '/mock/path', type: 'file' } as any),
+      resolvePath: vi.fn().mockResolvedValue({} as MeldPath), // Simplified return for validation
       resolveCommand: vi.fn().mockResolvedValue('command output'),
       resolveFile: vi.fn().mockResolvedValue('file content'),
       resolveContent: vi.fn().mockResolvedValue(''),
       resolveNodes: vi.fn().mockResolvedValue('resolved nodes'),
-      resolveInContext: vi.fn().mockImplementation(async (value) => 
-        typeof value === 'string' ? value : 'resolved value'),
+      resolveInContext: vi.fn().mockImplementation(async (value) => typeof value === 'string' ? value : 'resolved value'),
       resolveFieldAccess: vi.fn().mockResolvedValue({ success: true, value: {} }),
       validateResolution: vi.fn().mockResolvedValue({ 
           originalValue: '', 
@@ -130,8 +128,7 @@ export class MockFactory {
        } as MeldPath),
       extractSection: vi.fn().mockResolvedValue('section content'),
       detectCircularReferences: vi.fn(),
-      convertToFormattedString: vi.fn().mockImplementation(async (value) => 
-        typeof value === 'string' ? value : JSON.stringify(value)),
+      convertToFormattedString: vi.fn().mockImplementation(async (value) => typeof value === 'string' ? value : JSON.stringify(value)),
       enableResolutionTracking: vi.fn(),
       getResolutionTracker: vi.fn()
     };
@@ -146,12 +143,7 @@ export class MockFactory {
       readFile: vi.fn().mockResolvedValue(''),
       writeFile: vi.fn().mockResolvedValue(undefined),
       exists: vi.fn().mockResolvedValue(false),
-      stat: vi.fn().mockResolvedValue({
-        isFile: () => true,
-        isDirectory: () => false,
-        size: 0,
-        mtime: new Date()
-      }),
+      stat: vi.fn().mockResolvedValue({ isFile: () => true, isDirectory: () => false, size: 0, mtime: new Date() } as any),
       isFile: vi.fn().mockResolvedValue(true),
       readDir: vi.fn().mockResolvedValue([]),
       ensureDir: vi.fn().mockResolvedValue(undefined),

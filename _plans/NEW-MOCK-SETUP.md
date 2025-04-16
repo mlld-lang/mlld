@@ -141,6 +141,7 @@ Implement the new, standardized mocking strategy proposed in the `_cmte/audit-mo
 ## 4. Learnings & Refinements (from Phase 6.3 Debugging)
 
 *   **DI Resolution Debugging:** When encountering "Cannot resolve service" errors, investigate thoroughly:
+    *   **DO NOT GIVE UP OR DEFER WORK.** Shaking these issues out is EXACTLY why we're doing what we're doing.
     *   **Check `@Service()` Decorators:** Verify the decorator exists on the service being resolved *and* all concrete classes in its dependency tree (including dependencies of dependencies).
     *   **Verify Token/Registration:** Ensure injection tokens match registration tokens. Avoid manual container registration in tests where possible; rely on `@Service()`.
     *   **Check Fixture Mocks:** Ensure test fixtures (`DirectiveTestFixture`, etc.) register mocks for all necessary dependencies, including transitive ones if not handled by DI.
