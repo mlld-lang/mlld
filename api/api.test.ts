@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { main } from '@api/index.js';
+import { processMeld } from '@api/index.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { ProcessOptions } from '@core/types/index.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
-import * as fs from 'fs';
 import { TestDebuggerService } from '@tests/utils/debug/TestDebuggerService.js';
-import { StateService } from '@services/state/StateService.js';
+import { StateService } from '@services/state/StateService/StateService.js';
+import { unsafeCreateValidatedResourcePath } from '@core/types/paths.js';
+import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 
 // Define the type for main function options
 type MainOptions = {
@@ -44,8 +45,8 @@ describe('SDK Integration Tests', () => {
         directive
       };
       
-      await context.services.filesystem.writeFile(testFilePath, '@text greeting = "Hello"');
-      await main(testFilePath, { fs: context.services.filesystem, services: services as any });
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), '@text greeting = "Hello"');
+      await processMeld(testFilePath, { fs: context.services.filesystem as unknown as NodeFileSystem, services: services as any });
       
       // Verify directive.initialize was called with services in correct order
       expect(initSpy).toHaveBeenCalledWith(
@@ -66,9 +67,9 @@ describe('SDK Integration Tests', () => {
     // - Test state management with new behavior
     it('should process content with default behavior', async () => {
       const content = '@text greeting = "Hello"';
-      await context.services.filesystem.writeFile(testFilePath, content);
-      const result = await main(testFilePath, { 
-        fs: context.services.filesystem,
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
+      const result = await processMeld(testFilePath, { 
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: context.services as any
       });
       expect(result).toBe(content);
@@ -76,11 +77,11 @@ describe('SDK Integration Tests', () => {
 
     it('should allow service injection through options', async () => {
       const customState = context.services.state;
-      const spy = vi.spyOn(customState, 'enableTransformation');
+      const spy = vi.spyOn(customState, 'setTransformationEnabled');
 
-      await context.services.filesystem.writeFile(testFilePath, '@text greeting = "Hello"');
-      await main(testFilePath, {
-        fs: context.services.filesystem,
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), '@text greeting = "Hello"');
+      await processMeld(testFilePath, {
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: { state: customState } as any,
         transformation: true
       });
@@ -95,13 +96,13 @@ describe('SDK Integration Tests', () => {
     it.skip('should enable transformation through options', async () => {
       const content = `@text greeting = "Hello"
 @run[echo test]`;
-      await context.services.filesystem.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
       // Start a debug session to capture metrics
       const sessionId = await context.startDebugSession();
       
-      const result = await main(testFilePath, {
-        fs: context.services.filesystem,
+      const result = await processMeld(testFilePath, {
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: context.services as any,
         transformation: true
       });
@@ -121,13 +122,10 @@ describe('SDK Integration Tests', () => {
 
     it.skip('should respect existing transformation state', async () => {
       const content = '@run [echo test]';
-      await context.services.filesystem.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
-      // Enable transformation through context
-      context.enableTransformation();
-      
-      const result = await main(testFilePath, {
-        fs: context.services.filesystem,
+      const result = await processMeld(testFilePath, {
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: context.services as any
       });
       
@@ -143,18 +141,21 @@ describe('SDK Integration Tests', () => {
         state: customState
         // Remove transformation: true
       };
-      await context.services.filesystem.writeFile(testFilePath, content);
-      const result = await main(testFilePath, options);
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
+      const result = await processMeld(testFilePath, {
+        fs: context.services.filesystem as unknown as NodeFileSystem,
+        services: options
+      });
       expect(result).toBe(content);
     });
   });
 
   describe('Debug Mode', () => {
     it('should enable debug mode through options', async () => {
-      await context.services.filesystem.writeFile(testFilePath, '@text greeting = "Hello"');
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), '@text greeting = "Hello"');
       
-      await main(testFilePath, {
-        fs: context.services.filesystem,
+      await processMeld(testFilePath, {
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: context.services as any,
         debug: true
       });
@@ -168,9 +169,9 @@ describe('SDK Integration Tests', () => {
 
   describe('Format Conversion', () => {
     it('should handle definition directives correctly', async () => {
-      await context.services.filesystem.writeFile(testFilePath, '@text greeting = "Hello"');
-      const result = await main(testFilePath, { 
-        fs: context.services.filesystem,
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), '@text greeting = "Hello"');
+      const result = await processMeld(testFilePath, { 
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: context.services as any
       });
       // Definition directives should be omitted from output
@@ -178,13 +179,13 @@ describe('SDK Integration Tests', () => {
     });
 
     it('should handle execution directives correctly', async () => {
-      await context.services.filesystem.writeFile(testFilePath, '@run [echo test]');
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), '@run [echo test]');
       
       context.enableDebug();
       // Transformation is always enabled now, we can't disable it
       
-      const result = await main(testFilePath, {
-        fs: context.services.filesystem,
+      const result = await processMeld(testFilePath, {
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         format: 'xml',
         services: context.services as any, // Cast to any to avoid type errors
         debug: true
@@ -202,10 +203,10 @@ describe('SDK Integration Tests', () => {
 Some text content
 @run [echo test]
 More text`;
-      await context.services.filesystem.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       // Transformation is always enabled now, we can't disable it
-      const result = await main(testFilePath, { 
-        fs: context.services.filesystem,
+      const result = await processMeld(testFilePath, { 
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: context.services as any
       });
       
@@ -227,10 +228,10 @@ More text`;
   describe('Error Handling', () => {
     it('should handle parse errors gracefully', async () => {
       const invalidContent = '@invalid directive';
-      await context.services.filesystem.writeFile(testFilePath, invalidContent);
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), invalidContent);
       
-      await expect(main(testFilePath, { 
-        fs: context.services.filesystem,
+      await expect(processMeld(testFilePath, { 
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: context.services as any
       })).rejects.toThrow();
     });
@@ -238,8 +239,8 @@ More text`;
     it('should handle missing files correctly', async () => {
       const nonExistentFile = 'non-existent.meld';
       
-      await expect(main(nonExistentFile, { 
-        fs: context.services.filesystem,
+      await expect(processMeld(nonExistentFile, { 
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: context.services as any
       })).rejects.toThrow(MeldFileNotFoundError);
     });
@@ -251,10 +252,10 @@ More text`;
         directive: undefined
       };
       
-      await context.services.filesystem.writeFile(testFilePath, '@text greeting = "Hello"');
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), '@text greeting = "Hello"');
       
-      await expect(main(testFilePath, { 
-        fs: context.services.filesystem,
+      await expect(processMeld(testFilePath, { 
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: brokenServices as any
       })).rejects.toThrow();
     });
@@ -265,10 +266,10 @@ More text`;
       const content = `
 @text greeting = "Hello"
 @run [echo {{greeting}}]`;
-      await context.services.filesystem.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
-      const result = await main(testFilePath, {
-        fs: context.services.filesystem,
+      const result = await processMeld(testFilePath, {
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: context.services as any,
         transformation: true
       });
@@ -284,10 +285,10 @@ More text`;
 @text greeting = "Hello"
 @text name = "World"
 @run [echo {{greeting}}, {{name}}!]`;
-      await context.services.filesystem.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
-      const result = await main(testFilePath, {
-        fs: context.services.filesystem,
+      const result = await processMeld(testFilePath, {
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: context.services as any,
         transformation: true
       });
@@ -311,10 +312,10 @@ More text`;
 ## Title
 
 @run [echo "This is a simple example"]`;
-      await context.services.filesystem.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
-      const result = await main(testFilePath, {
-        fs: context.services.filesystem,
+      const result = await processMeld(testFilePath, {
+        fs: context.services.filesystem as unknown as NodeFileSystem,
         services: context.services as any,
         transformation: true
       });

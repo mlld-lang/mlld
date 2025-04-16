@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { main } from '@api/index.js';
+import { processMeld } from '@api/index.js';
 import type { Services, ProcessOptions } from '@core/types/index.js';
+import { unsafeCreateValidatedResourcePath } from '@core/types/paths.js';
+import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 
 describe('Nested Array Access Tests', () => {
   let context: TestContextDI;
@@ -29,10 +31,10 @@ First item of first array: {{nestedArray.0.0}}
 Second item of second array: {{nestedArray.1.1}}
 Third item of third array: {{nestedArray.2.2}}`;
     
-    await context.services.filesystem.writeFile('test.meld', content);
+    await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath('test.meld'), content);
     
-    const result = await main('test.meld', {
-      fs: context.services.filesystem,
+    const result = await processMeld('test.meld', {
+      fs: context.services.filesystem as unknown as NodeFileSystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
     });

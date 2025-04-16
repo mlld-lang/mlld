@@ -433,9 +433,10 @@ describe('CLI Tests', () => {
       process.argv = ['node', 'meld', '/project/test.meld'];
 
       try {
-        await cli.main(fsAdapter);
+        // Call cli.main WITHOUT the fsAdapter argument
+        await cli.main(); 
       } catch (error) {
-        // Expected in test mode
+        // Expected in test mode because mockProcessExit throws
       }
       
       // Verify error message format

@@ -104,6 +104,12 @@ function getOutputExtension(format: 'markdown' | 'xml'): string {
  * Parse command line arguments
  */
 function parseArgs(args: string[]): CLIOptions {
+  // Add defensive check
+  if (!Array.isArray(args)) {
+    console.error('Internal CLI Error: args is not an array in parseArgs', args);
+    throw new TypeError('Internal CLI Error: Expected args to be an array.');
+  }
+
   const options: CLIOptions = {
     input: '',
     format: 'markdown', // Default to markdown format
@@ -685,14 +691,18 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
           console.error(chalk.red(`> ${error.message}`));
         } else {
           console.error(chalk.red(`Error: ${error.message}`));
-          if (error.cause instanceof Error) {
-            console.error(chalk.red(`  Cause: ${error.cause.message}`));
+          // Check for cause on the base Error type
+          const cause = (error as Error).cause;
+          if (cause instanceof Error) {
+            console.error(chalk.red(`  Cause: ${cause.message}`));
           }
         }
       } else {
         console.error(chalk.red(`Error: ${error.message}`));
-        if (error.cause instanceof Error) {
-          console.error(chalk.red(`  Cause: ${error.cause.message}`));
+        // Check for cause on the base Error type
+        const cause = (error as Error).cause;
+        if (cause instanceof Error) {
+          console.error(chalk.red(`  Cause: ${cause.message}`));
         }
       }
     } catch (displayError) {
@@ -713,6 +723,11 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
   } else if (error instanceof Error) {
     logger.error('An unexpected error occurred:', error);
     console.error(chalk.red(`Unexpected Error: ${error.message}`));
+    // Also check for cause on standard errors
+    const cause = error.cause;
+    if (cause instanceof Error) {
+        console.error(chalk.red(`  Cause: ${cause.message}`));
+    }
     if (error.stack) {
       console.error(chalk.gray(error.stack));
     }
@@ -852,24 +867,25 @@ export async function main(customArgs?: string[]): Promise<void> {
 
 // Only call main if this file is being run directly (not imported)
 if (require.main === module) {
-  main().catch(async err => { // Make catch async to allow await handleError
-    // Ensure options are parsed or provide defaults if main failed early
-    let options: CLIOptions = { input: 'unknown' }; // Default options for error handling
-    try {
-      // Try parsing args again inside catch, only if needed for handleError
-      const args = process.argv.slice(2);
-      options = parseArgs(args);
-    } catch (parseErr) {
-      // Use default options if parsing fails
-    }
-    // Call the centralized error handler if error hasn't been logged
-    if (!(err && typeof err === 'object' && (err as any).__logged)) {
-        // Ensure err is an Error instance before passing
-        const errorToHandle = err instanceof Error ? err : new Error(String(err));
-        await handleError(errorToHandle, options);
-    }
-    if (process.env.NODE_ENV !== 'test') {
-      process.exit(1);
-    }
-  });
+  // Keep reference to options parsed in main, or default if main throws early
+  let optionsForErrorHandler: CLIOptions = { input: 'unknown' };
+  main()
+    .then(() => {
+      // Update options if main completed successfully
+      optionsForErrorHandler = getCurrentCLIOptions() || optionsForErrorHandler;
+    })
+    .catch(async err => { // Make catch async to allow await handleError
+      // Update options if main parsed them before throwing
+      optionsForErrorHandler = getCurrentCLIOptions() || optionsForErrorHandler;
+      // Call the centralized error handler if error hasn't been logged
+      if (!(err && typeof err === 'object' && (err as any).__logged)) {
+          // Ensure err is an Error instance before passing
+          const errorToHandle = err instanceof Error ? err : new Error(String(err));
+          // Pass the options captured from main or the default
+          await handleError(errorToHandle, optionsForErrorHandler);
+      }
+      if (process.env.NODE_ENV !== 'test') {
+        process.exit(1);
+      }
+    });
 }
