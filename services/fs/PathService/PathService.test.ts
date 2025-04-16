@@ -6,6 +6,9 @@ import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+import type { Mocked, MockedFunction } from 'vitest';
+import { mockDeep } from 'vitest-mock-extended';
+import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURLCache.js';
 
 import {
   AbsolutePath,
@@ -22,9 +25,9 @@ import {
   unsafeCreateNormalizedAbsoluteDirectoryPath,
   isAbsolutePath,
   isRelativePath,
-  PathContentType
+  PathContentType,
+  MeldPath
 } from '@core/types/paths.js';
-import type { StructuredPath } from '@core/syntax/types/nodes.js';
 
 const createTestValidationContext = (overrides: Partial<PathValidationContext> = {}): PathValidationContext => {
   const defaultRules: PathValidationRules = {
@@ -34,11 +37,6 @@ const createTestValidationContext = (overrides: Partial<PathValidationContext> =
     mustExist: false,
     mustBeFile: false,
     mustBeDirectory: false,
-    // Add other potential optional defaults from PathValidationRules if necessary
-    // maxLength: undefined,
-    // allowedPrefixes: undefined,
-    // disallowedPrefixes: undefined,
-    // pattern: undefined,
   };
 
   return {
@@ -56,10 +54,10 @@ const createTestValidationContext = (overrides: Partial<PathValidationContext> =
 describe('PathService', () => {
   let context: TestContextDI;
   let service: PathService;
-  let projectPathResolver: ProjectPathResolver;
-  let mockFileSystemClient: IFileSystemServiceClient;
-  let mockFileSystemClientFactory: FileSystemServiceClientFactory;
-  let mockUrlContentResolver: IURLContentResolver;
+  let projectPathResolver: Mocked<ProjectPathResolver>;
+  let mockFileSystemClient: Mocked<IFileSystemServiceClient>;
+  let mockFileSystemClientFactory: Mocked<FileSystemServiceClientFactory>;
+  let mockUrlContentResolver: Mocked<IURLContentResolver>;
 
   const TEST_PROJECT_ROOT = '/project';
   const TEST_HOME_DIR = '/home/user';
@@ -67,22 +65,17 @@ describe('PathService', () => {
   beforeEach(async () => {
     context = TestContextDI.createIsolated();
 
-    projectPathResolver = new ProjectPathResolver();
-    vi.spyOn(projectPathResolver, 'getProjectPath').mockReturnValue(TEST_PROJECT_ROOT);
+    projectPathResolver = mockDeep<ProjectPathResolver>();
+    mockUrlContentResolver = mockDeep<IURLContentResolver>();
+    mockFileSystemClient = mockDeep<IFileSystemServiceClient>();
+    mockFileSystemClientFactory = mockDeep<FileSystemServiceClientFactory>();
 
-    mockFileSystemClient = {
-      exists: vi.fn().mockResolvedValue(true),
-      isDirectory: vi.fn().mockResolvedValue(false),
-    };
-    mockFileSystemClientFactory = {
-      createClient: vi.fn().mockReturnValue(mockFileSystemClient)
-    } as unknown as FileSystemServiceClientFactory;
+    mockFileSystemClientFactory.createClient.mockReturnValue(mockFileSystemClient);
 
-    mockUrlContentResolver = {
-        validateURL: vi.fn().mockImplementation(async (url: string) => url),
-        fetchURL: vi.fn().mockResolvedValue({ content: 'mock url content', metadata: {}, fromCache: false, url: 'mocked'}),
-        isURL: vi.fn().mockImplementation((url: string) => /^https?:\/\//i.test(url))
-    };
+    projectPathResolver.getProjectPath.mockReturnValue(TEST_PROJECT_ROOT);
+    mockUrlContentResolver.isURL.mockImplementation((url: string) => /^https?:\/\//i.test(url));
+    mockFileSystemClient.exists.mockResolvedValue(true);
+    mockFileSystemClient.isDirectory.mockResolvedValue(false);
 
     context.registerMock(ProjectPathResolver, projectPathResolver);
     context.registerMock('FileSystemServiceClientFactory', mockFileSystemClientFactory);
@@ -91,8 +84,6 @@ describe('PathService', () => {
     await context.initialize(); 
 
     service = context.resolveSync(PathService);
-
-    service['fsClient'] = mockFileSystemClient;
 
     service.setTestMode(true);
     service.setProjectPath(TEST_PROJECT_ROOT);
@@ -208,7 +199,9 @@ describe('PathService', () => {
       mockFileSystemClient.exists.mockResolvedValue(true);
       const result = await service.validatePath(input, contextVal);
       expect(result.contentType).toBe(PathContentType.FILESYSTEM);
-      expect(result.validatedPath).toEqual(expectedPath);
+      if (result.contentType === PathContentType.FILESYSTEM) {
+        expect(result.validatedPath).toEqual(expectedPath);
+      }
     });
 
     it('should validate an absolute path and return AbsolutePath', async () => {
@@ -218,7 +211,9 @@ describe('PathService', () => {
       mockFileSystemClient.exists.mockResolvedValue(true);
       const result = await service.validatePath(input, contextVal);
       expect(result.contentType).toBe(PathContentType.FILESYSTEM);
-      expect(result.validatedPath).toEqual(expectedPath);
+      if (result.contentType === PathContentType.FILESYSTEM) {
+        expect(result.validatedPath).toEqual(expectedPath);
+      }
     });
 
     it('should reject empty path string', async () => {
@@ -259,7 +254,9 @@ describe('PathService', () => {
       const expectedPath = '/other/root/file.txt';
       const result = await service.validatePath(input, contextVal);
       expect(result.contentType).toBe(PathContentType.FILESYSTEM);
-      expect(result.validatedPath).toEqual(expectedPath);
+      if (result.contentType === PathContentType.FILESYSTEM) {
+        expect(result.validatedPath).toEqual(expectedPath);
+      }
     });
 
     it('should reject path if mustExist is true and file does not exist', async () => {
@@ -277,7 +274,7 @@ describe('PathService', () => {
       await expect(service.validatePath(input, contextVal)).rejects.toThrowError(
         expect.objectContaining({ code: PathErrorCode.E_FILE_NOT_FOUND })
       );
-      expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/nonexistent.txt');
+      expect(mockFileSystemClient.exists).toHaveBeenCalledWith(unsafeCreateAbsolutePath('/project/nonexistent.txt'));
     });
 
     it('should resolve path if mustExist is true and file exists', async () => {
@@ -295,13 +292,14 @@ describe('PathService', () => {
       mockFileSystemClient.isDirectory.mockResolvedValue(false);
       
       const result = await service.validatePath(input, contextVal);
+      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
       if (result.contentType === PathContentType.FILESYSTEM) {
         expect(result.validatedPath).toEqual(expectedPath);
         expect(result.exists).toBe(true);
       } else {
         expect.fail('Expected filesystem path');
       }
-      expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/exists.txt');
+      expect(mockFileSystemClient.exists).toHaveBeenCalledWith(unsafeCreateAbsolutePath('/project/exists.txt'));
     });
 
     it('should reject path if mustBeFile is true and path is a directory', async () => {
@@ -321,8 +319,8 @@ describe('PathService', () => {
       await expect(service.validatePath(input, contextVal)).rejects.toThrowError(
         expect.objectContaining({ code: PathErrorCode.E_PATH_NOT_A_FILE })
       );
-      expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/some_dir');
-      expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith('/project/some_dir');
+      expect(mockFileSystemClient.exists).toHaveBeenCalledWith(unsafeCreateAbsolutePath('/project/some_dir'));
+      expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith(unsafeCreateAbsolutePath('/project/some_dir'));
     });
 
     it('should reject path if mustBeDirectory is true and path is a file', async () => {
@@ -342,8 +340,8 @@ describe('PathService', () => {
       await expect(service.validatePath(input, contextVal)).rejects.toThrowError(
         expect.objectContaining({ code: PathErrorCode.E_PATH_NOT_A_DIRECTORY })
       );
-      expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/some_file.txt');
-      expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith('/project/some_file.txt');
+      expect(mockFileSystemClient.exists).toHaveBeenCalledWith(unsafeCreateAbsolutePath('/project/some_file.txt'));
+      expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith(unsafeCreateAbsolutePath('/project/some_file.txt'));
     });
 
      it('should resolve path if mustBeFile is true and path is a file', async () => {
@@ -362,14 +360,15 @@ describe('PathService', () => {
       mockFileSystemClient.isDirectory.mockResolvedValue(false);
       
       const result = await service.validatePath(input, contextVal);
+      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
       if (result.contentType === PathContentType.FILESYSTEM) {
         expect(result.validatedPath).toEqual(expectedPath);
         expect(result.exists).toBe(true);
       } else {
         expect.fail('Expected filesystem path');
       }
-      expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/actual_file.txt');
-      expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith('/project/actual_file.txt');
+      expect(mockFileSystemClient.exists).toHaveBeenCalledWith(unsafeCreateAbsolutePath('/project/actual_file.txt'));
+      expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith(unsafeCreateAbsolutePath('/project/actual_file.txt'));
     });
 
      it('should resolve path if mustBeDirectory is true and path is a directory', async () => {
@@ -388,14 +387,15 @@ describe('PathService', () => {
       mockFileSystemClient.isDirectory.mockResolvedValue(true);
       
       const result = await service.validatePath(input, contextVal);
+      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
       if (result.contentType === PathContentType.FILESYSTEM) {
         expect(result.validatedPath).toEqual(expectedPath);
         expect(result.exists).toBe(true);
       } else {
         expect.fail('Expected filesystem path');
       }
-      expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/actual_dir');
-      expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith('/project/actual_dir');
+      expect(mockFileSystemClient.exists).toHaveBeenCalledWith(unsafeCreateAbsolutePath('/project/actual_dir'));
+      expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith(unsafeCreateAbsolutePath('/project/actual_dir'));
     });
   });
 
@@ -411,7 +411,7 @@ describe('PathService', () => {
 
     it('should reject an invalid URL string with E_PATH_EXPECTED_FS', async () => {
       const input = createRawPath('invalid-url');
-      mockUrlContentResolver.validateURL.mockRejectedValueOnce(new Error('Should not be called'));
+      mockUrlContentResolver.isURL.mockReturnValueOnce(false);
       await expect(service.validateURL(input)).rejects.toThrowError(
          expect.objectContaining({ code: PathErrorCode.E_PATH_EXPECTED_FS }) 
       );
@@ -431,7 +431,12 @@ describe('PathService', () => {
   describe('fetchURL', () => {
     it('should fetch a validated URL using URLContentResolver', async () => {
       const inputUrl = unsafeCreateUrlPath('https://fetch.example.com/data');
-      const mockResponse = { content: 'fetched data', metadata: {}, fromCache: false, url: 'https://fetch.example.com/data' };
+      const mockResponse: URLResponse = { 
+        content: 'fetched data', 
+        metadata: { statusCode: 200, contentType: 'text/plain' },
+        fromCache: false, 
+        url: 'https://fetch.example.com/data' 
+      };
       mockUrlContentResolver.fetchURL.mockResolvedValueOnce(mockResponse);
 
       const result = await service.fetchURL(inputUrl);
@@ -442,8 +447,13 @@ describe('PathService', () => {
 
     it('should pass options to URLContentResolver fetchURL', async () => {
       const inputUrl = unsafeCreateUrlPath('https://fetch.example.com/data');
-      const options = { method: 'POST' };
-      const mockResponse = { content: 'posted data', metadata: {}, fromCache: false, url: 'https://fetch.example.com/data' };
+      const options: URLFetchOptions = { method: 'POST' } as any;
+      const mockResponse: URLResponse = { 
+        content: 'posted data', 
+        metadata: { statusCode: 200, contentType: 'application/json' },
+        fromCache: false, 
+        url: 'https://fetch.example.com/data' 
+      };
       mockUrlContentResolver.fetchURL.mockResolvedValueOnce(mockResponse);
 
       await service.fetchURL(inputUrl, options);
