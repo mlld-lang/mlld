@@ -282,7 +282,7 @@ export class InterpreterService implements IInterpreterService {
     }
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
-    let currentState: IStateService;
+    let currentState: IStateService | null = null;
     let initialSnapshot: IStateService | undefined = undefined;
     let lastGoodState: IStateService | undefined = undefined;
 
@@ -317,7 +317,8 @@ export class InterpreterService implements IInterpreterService {
       // Take a snapshot of initial state for rollback
       process.stdout.write(`[InterpreterService.interpret DEBUG] About to clone currentState. ID: ${currentState?.getStateId?.()}, Type: ${typeof currentState}\n`);
       process.stdout.write(`[InterpreterService.interpret DEBUG] typeof currentState.clone: ${typeof (currentState as any)?.clone}\n`);
-      initialSnapshot = currentState.clone() as IStateService; 
+      console.log('[InterpreterService.interpret DEBUG] Inspecting currentState:', currentState);
+      initialSnapshot = currentState!.clone() as IStateService; 
       lastGoodState = initialSnapshot;
 
       logger.debug('Starting interpretation', {
@@ -600,8 +601,10 @@ export class InterpreterService implements IInterpreterService {
           }
           
           if (replacementNode) {
+            process.stdout.write(`[InterpreterService LOG] Found replacementNode. Type: ${replacementNode.type}\n`);
             // Cast node and replacementNode explicitly for transformNode call
             if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) {
+              process.stdout.write(`[InterpreterService LOG] Transformation enabled. Checking for transformNode method. Exists? ${!!currentState.transformNode}\n`);
               logger.debug('Applying replacement node from directive handler', {
                 originalType: node.type,
                 replacementType: replacementNode.type,
@@ -616,7 +619,8 @@ export class InterpreterService implements IInterpreterService {
               const nodes = currentState.getTransformedNodes(); 
               const index = nodes.findIndex(n => n === node);
               if (index !== -1) {
-                 currentState.transformNode(index, replacementNode as MeldNode | MeldNode[]);
+                process.stdout.write(`[InterpreterService LOG] Calling transformNode for index: ${index}\n`);
+                currentState.transformNode(index, replacementNode as MeldNode | MeldNode[]);
               } else {
                  logger.warn('Original node not found in transformed nodes for replacement', { node });
               }

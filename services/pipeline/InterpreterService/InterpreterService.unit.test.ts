@@ -61,17 +61,19 @@ describe('InterpreterService Unit', () => {
     // Basic services (can use MockFactory or create manually)
     mockResolutionService = { resolveNodes: vi.fn(), resolveInContext: vi.fn() } as unknown as IResolutionService;
     mockPathService = { dirname: vi.fn().mockReturnValue('.') } as unknown as IPathService;
+    // REVERT to object literal approach
+    // mockStateService = mock<IStateService>();
     mockStateService = {
       // Define clone directly
       clone: vi.fn().mockImplementation(() => {
         process.stdout.write(`[LOG][clone Mock Direct Definition] ENTERED.\n`);
-        process.stdout.write(`[LOG][clone Mock Direct Definition] Returning mockStateService instance.\n`);
+        // process.stdout.write(`[LOG][clone Mock Direct Definition] Returning mockStateService instance.\n`);
         return mockStateService;
       }),
       // Define createChildState directly
       createChildState: vi.fn().mockImplementation(() => {
         process.stdout.write(`[LOG][createChildState Mock Direct Definition] ENTERED\n`);
-        process.stdout.write(`[LOG][createChildState Mock Direct Definition] Returning mockStateService. Type of clone: ${typeof (mockStateService as any).clone}\n`);
+        // process.stdout.write(`[LOG][createChildState Mock Direct Definition] Returning mockStateService. Type of clone: ${typeof (mockStateService as any).clone}\n`);
         return mockStateService;
       }),
       addNode: vi.fn(),
@@ -83,15 +85,15 @@ describe('InterpreterService Unit', () => {
       getDataVar: vi.fn(),
       getPathVar: vi.fn(),
       getCommand: vi.fn(),
-      getCommandVar: vi.fn(),
+      getCommandVar: vi.fn(), // Keep added mock
       getCurrentFilePath: vi.fn(),
       isTransformationEnabled: vi.fn(),
       getStateId: vi.fn(),
       mergeChildState: vi.fn(),
       setCurrentFilePath: vi.fn(),
       getNodes: vi.fn().mockReturnValue([]),
-      transformNode: vi.fn(), // Add missing method for Phase 5 tests
-      getTransformedNodes: vi.fn().mockReturnValue([]), // Add missing method for Phase 5 tests
+      transformNode: vi.fn(), 
+      getTransformedNodes: vi.fn().mockReturnValue([]), 
       _mockStorage: {},
     } as unknown as IStateService;
 
@@ -119,26 +121,40 @@ describe('InterpreterService Unit', () => {
     // Register the mock logger
     testContainer.registerInstance('DirectiveLogger', mockLogger); 
 
-    // --- Configure default mock behaviors ---
-    // Important: Configure mocks *after* they are created
-    vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementation(async (node, ctx) => {
+    // --- Configure default mock behaviors --- 
+    // Restore spyOn for clone and createChildState?
+    // No, they are defined directly above now.
+    // Remove default implementations set via vi.mocked()
+    /*
+    vi.mocked(mockStateService.clone).mockImplementation(...);
+    vi.mocked(mockStateService.createChildState).mockImplementation(...);
+    vi.mocked(mockStateService.getNodes).mockReturnValue([]);
+    vi.mocked(mockStateService.getTransformedNodes).mockReturnValue([]);
+    vi.mocked(mockStateService.addNode).mockImplementation(() => {});
+    vi.mocked(mockStateService.getStateId).mockReturnValue('mock-state-id');
+    vi.mocked(mockStateService.getCurrentFilePath).mockReturnValue(null);
+    vi.mocked(mockStateService.isTransformationEnabled).mockReturnValue(false);
+    vi.mocked(mockStateService.transformNode).mockImplementation(() => {});
+    vi.mocked(mockStateService.mergeChildState).mockImplementation(() => {});
+    vi.mocked(mockStateService.setCurrentFilePath).mockImplementation(() => {});
+    vi.mocked(mockStateService.setTextVar).mockImplementation(...);
+    vi.mocked(mockStateService.getTextVar).mockImplementation(...);
+    vi.mocked(mockStateService.getCommandVar).mockReturnValue(undefined); 
+    */
+    
+    // Explicitly set clone/createChildState implementations *after* mock creation are removed
+    // mockStateService.clone = vi.fn().mockImplementation(...);
+    // mockStateService.createChildState = vi.fn().mockImplementation(...);
+
+    // Keep default handleDirective mock
+    vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementation(async (node, ctx) => { // Default handler returns state
       process.stdout.write(`[LOG][handleDirective Mock - Default beforeEach] Called for node kind: ${node?.directive?.kind}. Returning state.\n`);
       return ctx.state;
     });
 
-    // Assign setTextVar mock implementation directly
-    mockStateService.setTextVar = vi.fn().mockImplementation(async (name, value) => {
-        process.stdout.write(`[LOG][setTextVar Mock Direct] ENTERED. Name: ${name}, Value: ${value}\n`);
-        (mockStateService as any)._mockStorage[name] = value;
-        process.stdout.write(`[LOG][setTextVar Mock Direct] mock state storage updated. _mockStorage[${name}]=${(mockStateService as any)._mockStorage[name]}\n`);
-        return { type: VariableType.TEXT, name, value: String(value), metadata: {} } as TextVariable;
-    });
-
-    // Assign getTextVar mock implementation directly
-    mockStateService.getTextVar = vi.fn().mockImplementation((name) => {
-        process.stdout.write(`[LOG][getTextVar Mock Direct] ENTERED. Name: ${name}\n`);
-        return (mockStateService as any)._mockStorage[name];
-    });
+    // Keep direct assignments for set/getTextVar ? Let's define them on the object literal for simplicity.
+    // mockStateService.setTextVar = vi.fn()...;
+    // mockStateService.getTextVar = vi.fn()...;
 
     // Resolve the service under test using its CONCRETE CLASS
     service = testContainer.resolve(InterpreterService); 
@@ -248,10 +264,6 @@ describe('InterpreterService Unit', () => {
       // Ensure the spy/rejection is set up correctly on the mock client instance
       vi.mocked(mockDirectiveClient.handleDirective).mockRejectedValue(handlerError);
       
-      // Re-resolve the service to ensure it picks up the new factory behavior
-      // Note: This might require adjusting beforeEach/afterEach if state is important
-      // service = testContainer.resolve(InterpreterService);
-
       // Use mockStateService from beforeEach as initial state
       await expect(service.interpret([directiveNode], { initialState: mockStateService }))
             .rejects.toThrow(MeldInterpreterError);
@@ -268,7 +280,6 @@ describe('InterpreterService Unit', () => {
         // Ensure the spy/rejection is set up correctly
         vi.mocked(mockDirectiveClient.handleDirective).mockRejectedValue(testError);
         
-        // Re-resolve the service
         await expect(service.interpret([directiveNode], { initialState: mockStateService }))
             .rejects.toThrow(MeldInterpreterError);
         
@@ -653,6 +664,8 @@ describe('InterpreterService Unit', () => {
       // vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
       // vi.spyOn(workingState, 'clone').mockReturnValue(workingState);
       vi.spyOn(workingState, 'transformNode'); 
+      // Ensure getTransformedNodes returns the node so findIndex works
+      vi.mocked(workingState.getTransformedNodes).mockReturnValue([directiveNode]);
 
       const mockReplacementNode = createTextNode('Replaced Content', directiveNode.location);
       const directiveResult = {
@@ -665,7 +678,7 @@ describe('InterpreterService Unit', () => {
       const finalState = await service.interpret([directiveNode], { initialState: initialTestState });
 
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
-      expect(workingState.transformNode).toHaveBeenCalledWith(directiveNode, mockReplacementNode); 
+      expect(workingState.transformNode).toHaveBeenCalledWith(0, mockReplacementNode); 
       expect(finalState).toBe(workingState); 
     });
 
