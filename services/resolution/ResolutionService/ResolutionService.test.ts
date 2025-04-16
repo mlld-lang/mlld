@@ -72,7 +72,7 @@ import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils';
 import { success, failure } from '@core/types'; // Keep extensionless
 import { container } from 'tsyringe'; // Import container for direct registration
 import { mockDeep, MockProxy } from 'vitest-mock-extended'; // Import mockDeep
-import type { Mocked } from 'vitest'; // Import Mocked
+import type { Mocked, Mock } from 'vitest'; // Import Mock
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -152,6 +152,7 @@ describe('ResolutionService', () => {
   // Add mock AST factories
   let mockTextNodeFactory: TextNodeFactory;
   let mockVariableNodeFactory: VariableNodeFactory;
+  let pathServiceMock: MockProxy<IPathService>; // Use MockProxy for mockDeep compatibility if needed elsewhere, or a simpler type
 
   beforeEach(async () => {
     // Create mock services with strict types
@@ -325,6 +326,26 @@ describe('ResolutionService', () => {
       parse: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content' }]),
       parseWithLocations: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content', location: {} }]),
     } as unknown as IParserService;
+
+    // Mock PathService manually for validateResolution tests
+    pathServiceMock = {
+      // Add other methods from IPathService as needed, potentially using vi.fn()
+      validatePath: vi.fn(), 
+      // Mock other methods used by ResolutionService if any (e.g., dirname, resolvePath?)
+      // Add dummy implementations or vi.fn() for those
+      getHomePath: vi.fn().mockReturnValue('/home/user'),
+      getProjectPath: vi.fn().mockReturnValue('/project'),
+      dirname: vi.fn(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : ''),
+      resolvePath: vi.fn().mockImplementation(async (p: string | StructuredPath) => { 
+        const pathString = typeof p === 'string' ? p : p.raw;
+        return createMeldPath(pathString, unsafeCreateValidatedResourcePath(pathString), pathString.startsWith('/'));
+      }),
+      isURL: vi.fn().mockReturnValue(false),
+      // Add other methods from IPathService if required by ResolutionService... 
+    } as unknown as MockProxy<IPathService>; // Cast needed for manual mock object
+
+    // Register the manual mock object
+    container.registerInstance<IPathService>('IPathService', pathServiceMock);
 
     // Update PathService mock to handle MeldPath potentially
     pathService = {
@@ -703,11 +724,11 @@ describe('ResolutionService', () => {
         isSecure: true,
         isValidSyntax: true
       };
-      pathService.validatePath.mockResolvedValue(expectedMeldPath);
+      pathServiceMock.validatePath.mockResolvedValue(expectedMeldPath);
 
       const result = await service.validateResolution(validPathString, validationContext);
       expect(result).toEqual(expectedMeldPath);
-      expect(pathService.validatePath).toHaveBeenCalledWith(validPathString, validationContext);
+      expect(pathServiceMock.validatePath).toHaveBeenCalledWith(validPathString, validationContext);
     });
 
     it('should re-throw PathValidationError when path validation fails', async () => {
@@ -716,17 +737,17 @@ describe('ResolutionService', () => {
         code: PathErrorCode.NULL_BYTE,
         details: { pathString: invalidPathString }
       });
-      pathService.validatePath.mockRejectedValue(originalError);
+      pathServiceMock.validatePath.mockRejectedValue(originalError);
 
       await expect(service.validateResolution(invalidPathString, validationContext))
         .rejects.toThrow(originalError);
-      expect(pathService.validatePath).toHaveBeenCalledWith(invalidPathString, validationContext);
+      expect(pathServiceMock.validatePath).toHaveBeenCalledWith(invalidPathString, validationContext);
     });
 
     it('should wrap and throw other errors as PathValidationError', async () => {
       const pathString = '/project/some/path';
       const genericError = new Error('Something unexpected happened');
-      pathService.validatePath.mockRejectedValue(genericError);
+      pathServiceMock.validatePath.mockRejectedValue(genericError);
 
       await expect(service.validateResolution(pathString, validationContext))
         .rejects.toMatchObject({
