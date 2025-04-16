@@ -2,6 +2,9 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import type { StateNode } from '@services/state/StateService/types.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import { stateLogger as logger } from '@core/utils/logger.js';
+import type { CommandVariable } from '@core/types/variables.js';
+import { createCommandVariable } from '@core/types/variables.js';
+import type { ICommandDefinition } from '@core/types/define.js';
 
 /**
  * Options for migrating state
@@ -71,8 +74,13 @@ export function migrateState(oldState: IStateService, options: MigrationOptions 
     const data = new Map(oldState.getAllDataVars());
     const path = new Map(oldState.getAllPathVars());
 
-    // Migrate commands
-    const commands = new Map(oldState.getAllCommands());
+    // Migrate commands CORRECTLY
+    const commands = new Map<string, CommandVariable>(); // Expect CommandVariable values
+    for (const [name, commandDef] of oldState.getAllCommands()) {
+      // Use the factory to create the CommandVariable object
+      // Assuming the map from oldState contains ICommandDefinition as value
+      commands.set(name, createCommandVariable(name, commandDef as ICommandDefinition)); 
+    }
 
     // Migrate imports
     const imports = oldState.getImports();
@@ -83,7 +91,7 @@ export function migrateState(oldState: IStateService, options: MigrationOptions 
     // Create migrated state
     const migrated = factory.updateState(state, {
       variables: { text, data, path },
-      commands,
+      commands, // Pass the correctly structured map
       imports,
       nodes
     });
@@ -150,9 +158,10 @@ export function validateMigration(oldState: IStateService, newState: StateNode, 
   }
 
   // Validate commands
-  for (const [key, value] of oldState.getAllCommands()) {
-    const newValue = newState.commands.get(key);
-    if (!newValue || JSON.stringify(newValue.value) !== JSON.stringify(value)) {
+  for (const [key, oldCommandDef] of oldState.getAllCommands()) { // oldState map has ICommandDefinition
+    const newCommandVar = newState.commands.get(key); // newState map has CommandVariable
+    // Check if newCommandVar exists and its value property matches the old definition
+    if (!newCommandVar || JSON.stringify(newCommandVar.value) !== JSON.stringify(oldCommandDef)) {
       warnings.push(`Command mismatch: ${key}`);
     }
   }
