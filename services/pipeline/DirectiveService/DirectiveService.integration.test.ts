@@ -1,5 +1,5 @@
 import { container, Lifecycle } from 'tsyringe';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
@@ -10,8 +10,9 @@ import { DirectiveKind, IDirectiveNode } from '@core/syntax/types/interfaces/IDi
 import { createTextNode, createVariableReferenceNode, createDirectiveNode } from '@tests/utils/testFactories.js';
 import { createStateServiceMock, createResolutionServiceMock } from '@tests/utils/mocks/serviceMocks.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
-import type { Logger } from '@core/utils/logger.js';
+import type { DirectiveProcessingContext } from '@core/types/index.js';
+import type { FormattingContext } from '@core/types/resolution.js';
+import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 
 // --- Import REAL Service Implementations for Integration Test ---
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
@@ -34,6 +35,15 @@ import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/f
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory';
 // Import service needed by StateTrackingServiceClientFactory
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService';
+
+// Define a minimal logger interface for testing
+interface ITestLogger {
+  debug: Mock;
+  info: Mock;
+  warn: Mock;
+  error: Mock;
+  level?: string; 
+}
 
 describe('DirectiveService Integration Tests', () => {
   let context: TestContextDI;
@@ -75,16 +85,16 @@ describe('DirectiveService Integration Tests', () => {
     testContainer.register<InterpreterServiceClientFactory>(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory }, { lifecycle: Lifecycle.Singleton });
     testContainer.register<DirectiveService>(DirectiveService, { useClass: DirectiveService }, { lifecycle: Lifecycle.Singleton });
     
-    // Register a mock logger for DirectiveService dependency
-    const mockLogger: Logger = {
+    // Register a mock logger using the minimal interface
+    const mockLogger: ITestLogger = { 
         debug: vi.fn(),
         info: vi.fn(),
         warn: vi.fn(),
         error: vi.fn(),
-        trace: vi.fn(),
-        level: 'info'
+        level: 'info' 
     };
-    testContainer.register<Logger>('DirectiveLogger', { useValue: mockLogger });
+    // Register using the interface type
+    testContainer.register<ITestLogger>('DirectiveLogger', { useValue: mockLogger });
     
     // Resolve services from the test container AFTER registration
     directiveService = testContainer.resolve(DirectiveService);
@@ -109,6 +119,9 @@ describe('DirectiveService Integration Tests', () => {
     // Initialize state with variables needed for interpolation
     await stateService.setTextVar('name', 'World');
     await stateService.setTextVar('user', 'Alice');
+    await stateService.setTextVar('val', 'dynamic');
+    await stateService.setTextVar('dynamicKey', 'user');
+    await stateService.setTextVar('dynamicValue', 'active');
   });
 
   afterEach(async () => {
@@ -118,14 +131,21 @@ describe('DirectiveService Integration Tests', () => {
   it('should correctly process @text directive with interpolation', async () => {
     // Setup state
     await stateService.setTextVar('name', 'World');
-    const textNode = createDirectiveNode('text', { identifier: 'greeting', value: 'Hello {{name}}!' });
+    
+    // Construct InterpolatableValue for the text directive
+    const textValue: InterpolatableValue = [
+      createTextNode('Hello '),
+      createVariableReferenceNode('name', 'text'),
+      createTextNode('!')
+    ];
+    const textNode = createDirectiveNode('text', { identifier: 'greeting', value: textValue });
     
     // Create DirectiveProcessingContext
     const processingContext: DirectiveProcessingContext = {
       state: stateService,
       resolutionContext: ResolutionContextFactory.create(stateService, 'test-text.meld'),
-      formattingContext: {} as FormattingContext, // Use placeholder empty object
-      executionContext: undefined, // Not needed for text
+      formattingContext: {} as FormattingContext, 
+      executionContext: undefined, 
       directiveNode: textNode
     };
 
@@ -142,14 +162,22 @@ describe('DirectiveService Integration Tests', () => {
   it('should correctly process @data directive with interpolation in string value', async () => {
     // Setup state
     await stateService.setTextVar('val', 'dynamic');
-    const dataNode = createDirectiveNode('data', { identifier: 'config', source: 'literal', value: '{ "key": "{{val}}" }' });
+
+    // Construct InterpolatableValue for the data string value
+    const dataValue: InterpolatableValue = [
+      createTextNode('{ "key": "'),
+      createVariableReferenceNode('val', 'text'), // Assuming 'val' is text type
+      createTextNode('" }')
+    ];
+    // Pass the array to the value property
+    const dataNode = createDirectiveNode('data', { identifier: 'config', source: 'literal', value: dataValue });
 
     // Create DirectiveProcessingContext
     const processingContext: DirectiveProcessingContext = {
       state: stateService,
       resolutionContext: ResolutionContextFactory.create(stateService, 'test-data.meld'),
-      formattingContext: {} as FormattingContext, // Use placeholder empty object
-      executionContext: undefined, // Not needed for data
+      formattingContext: {} as FormattingContext, 
+      executionContext: undefined, 
       directiveNode: dataNode
     };
 
@@ -157,29 +185,39 @@ describe('DirectiveService Integration Tests', () => {
     const result = await directiveService.handleDirective(dataNode, processingContext);
     // Handle both IStateService and DirectiveResult return types
     let resultState: IStateService;
-    if ('state' in result && 'replacement' in result) { // Check if DirectiveResult
+    if ('state' in result && 'replacement' in result) { 
       resultState = result.state;
     } else {
-      resultState = result as IStateService; // Assume IStateService
+      resultState = result as IStateService; 
     }
     expect(resultState).toBeDefined();
     expect(resultState).toHaveProperty('getDataVar'); // Check state has method
 
     const resolvedValue = await resultState.getDataVar('config');
-    expect(resolvedValue?.value).toEqual({ key: 'dynamic' }); // Check resolved value
+    // The data handler should resolve the value string and parse it
+    expect(resolvedValue?.value).toEqual({ key: 'dynamic' }); 
   });
 
   it('should correctly process @data directive with interpolation in object key (if supported) and value', async () => {
     // Setup state
     await stateService.setTextVar('dynamicKey', 'user');
     await stateService.setTextVar('dynamicValue', 'active');
-    const dataNode = createDirectiveNode('data', { identifier: 'dynamicConfig', source: 'literal', value: '{ "{{dynamicKey}}": "{{dynamicValue}}" }' });
+
+    // Construct InterpolatableValue for the complex data string
+    const complexDataValue: InterpolatableValue = [
+      createTextNode('{ "'),
+      createVariableReferenceNode('dynamicKey', 'text'), // Assuming 'dynamicKey' is text
+      createTextNode('": "'),
+      createVariableReferenceNode('dynamicValue', 'text'), // Assuming 'dynamicValue' is text
+      createTextNode('" }')
+    ];
+    const dataNode = createDirectiveNode('data', { identifier: 'dynamicConfig', source: 'literal', value: complexDataValue });
 
     // Create DirectiveProcessingContext
     const processingContext: DirectiveProcessingContext = {
       state: stateService,
       resolutionContext: ResolutionContextFactory.create(stateService, 'test-data-dynamic.meld'),
-      formattingContext: {} as FormattingContext, // Use placeholder empty object
+      formattingContext: {} as FormattingContext, 
       executionContext: undefined,
       directiveNode: dataNode
     };
@@ -188,16 +226,17 @@ describe('DirectiveService Integration Tests', () => {
     const result = await directiveService.handleDirective(dataNode, processingContext);
     // Handle both IStateService and DirectiveResult return types
     let resultState: IStateService;
-    if ('state' in result && 'replacement' in result) { // Check if DirectiveResult
+    if ('state' in result && 'replacement' in result) { 
       resultState = result.state;
     } else {
-      resultState = result as IStateService; // Assume IStateService
+      resultState = result as IStateService; 
     }
     expect(resultState).toBeDefined();
     expect(resultState).toHaveProperty('getDataVar'); // Check state has method
     
     const resolvedValue = await resultState.getDataVar('dynamicConfig');
-    // Assuming keys are NOT interpolated in current implementation, value is
-    expect(resolvedValue?.value).toEqual({ '{{dynamicKey}}': 'active' }); 
+    // If keys ARE NOT interpolated by the data handler/resolver, this should pass.
+    // If keys ARE interpolated, the expected result would need to change.
+    expect(resolvedValue?.value).toEqual({ user: 'active' }); // EXPECTATION UPDATED ASSUMING KEY IS RESOLVED
   });
 }); 

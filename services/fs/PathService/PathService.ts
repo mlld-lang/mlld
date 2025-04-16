@@ -62,18 +62,18 @@ export class PathService implements IPathService {
   private homePath: string;
   private projectPath: string;
   private projectPathResolved: boolean = false;
-  private fsClient?: IFileSystemServiceClient;
-  private fsClientFactory?: FileSystemServiceClientFactory;
-  private factoryInitialized: boolean = false;
+  private readonly fsClient?: IFileSystemServiceClient;
 
   /**
    * Creates a new PathService with dependencies injected.
    * 
    * @param projectPathResolver Resolver for project paths
+   * @param fsClientFactory Factory for creating FileSystemServiceClient
    * @param urlContentResolver Resolver for URL content (optional, used for URL operations)
    */
   constructor(
     @inject(ProjectPathResolver) private readonly projectPathResolver: ProjectPathResolver,
+    @inject('FileSystemServiceClientFactory') fsClientFactory: FileSystemServiceClientFactory,
     @inject('IURLContentResolver') private readonly urlContentResolver?: IURLContentResolver
   ) {
     const homeEnv = process.env.HOME || process.env.USERPROFILE;
@@ -83,46 +83,20 @@ export class PathService implements IPathService {
     this.homePath = homeEnv || '';
     this.projectPath = process.cwd();
     
+    try {
+      this.fsClient = fsClientFactory.createClient();
+      logger.debug('Successfully created FileSystemServiceClient via constructor injection');
+    } catch (error) {
+      logger.warn('Failed to create FileSystemServiceClient via constructor injection', { error });
+      this.fsClient = undefined;
+    }
+    
     if (process.env.DEBUG === 'true') {
       console.log('PathService: Initialized with', {
         hasFileSystemClient: !!this.fsClient,
-        hasFactory: !!this.fsClientFactory,
         urlContentResolverAvailable: !!this.urlContentResolver,
         testMode: this.testMode
       });
-    }
-  }
-
-  private ensureFactoryInitialized(): void {
-    if (this.factoryInitialized) {
-      return;
-    }
-    this.factoryInitialized = true;
-    try {
-      this.fsClientFactory = container.resolve('FileSystemServiceClientFactory');
-      this.initializeFileSystemClient();
-    } catch (error: unknown) {
-      logger.debug('FileSystemServiceClientFactory not available during lazy init');
-      if (process.env.NODE_ENV !== 'test' && !this.testMode) {
-        throw new MeldError('FileSystemServiceClientFactory not available - factory pattern required', { 
-          code: 'FACTORY_NOT_AVAILABLE',
-          severity: ErrorSeverity.Fatal,
-          cause: error instanceof Error ? error : new Error(String(error)) 
-        });
-      }
-    }
-  }
-
-  private initializeFileSystemClient(): void {
-    if (!this.fsClientFactory) {
-      return;
-    }
-    try {
-      this.fsClient = this.fsClientFactory.createClient();
-      logger.debug('Successfully created FileSystemServiceClient using factory (lazy)');
-    } catch (error) {
-      logger.warn('Failed to create FileSystemServiceClient (lazy)', { error });
-      this.fsClient = undefined;
     }
   }
 
@@ -345,7 +319,7 @@ export class PathService implements IPathService {
       throw new PathValidationError(
         PathErrorMessages.INVALID_PATH,
         {
-          code: PathErrorCode.E_PATH_EXPECTED_FS,
+          code: PathErrorCode.INVALID_PATH,
           details: { pathString: rawInputPath },
           severity: ErrorSeverity.Fatal
         }
@@ -531,12 +505,12 @@ export class PathService implements IPathService {
         });
     }
 
-    // URL Check - THIS IS THE BLOCK TO FIX
+    // URL Check
     if (this.isURL(createRawPath(rawPathString))) {
       throw new PathValidationError(
         PathErrorMessages.INVALID_PATH,
         { 
-          code: PathErrorCode.E_PATH_EXPECTED_FS,
+          code: PathErrorCode.INVALID_PATH,
           details: { pathString: rawPathString, reason: 'Expected filesystem path' },
           severity: ErrorSeverity.Fatal
         }
@@ -627,9 +601,9 @@ export class PathService implements IPathService {
       if (context.rules.mustExist && !exists) {
         const isDirExpected = context.rules.mustBeDirectory; 
         throw new PathValidationError(
-          isDirExpected ? PathErrorMessages.PATH_NOT_FOUND : PathErrorMessages.PATH_NOT_FOUND,
+          isDirExpected ? PathErrorMessages.PATH_NOT_FOUND : PathErrorMessages.FILE_NOT_FOUND,
           { 
-            code: PathErrorCode.PATH_NOT_FOUND, 
+            code: PathErrorCode.PATH_NOT_FOUND,
             details: { pathString: absolutePathToCheck } 
           } 
         );
@@ -657,7 +631,7 @@ export class PathService implements IPathService {
       const cause = error instanceof Error ? error : new Error(String(error)); 
       throw new PathValidationError(PathErrorMessages.INVALID_PATH, {
         code: PathErrorCode.INVALID_PATH,
-        details: { pathString: absolutePathToCheck, reason: 'Internal error during existence check' },
+        details: { pathString: String(absolutePathToCheck), reason: 'Internal error during existence check' },
         cause: cause,
         severity: ErrorSeverity.Fatal
       });
@@ -710,12 +684,11 @@ export class PathService implements IPathService {
     context: PathValidationContext, 
     location?: Location
   ): Promise<{ exists: boolean; isDirectory?: boolean }> {
-    this.ensureFactoryInitialized();
     if (!this.fsClient) {
       logger.error('FileSystemServiceClient not available for existence check');
       throw new PathValidationError(PathErrorMessages.INVALID_PATH, {
          code: PathErrorCode.INVALID_PATH,
-         details: { pathString: resolvedPath, reason: 'fsClient missing after lazy load attempt' },
+         details: { pathString: String(resolvedPath), service: 'FileSystemServiceClient', reason: 'Client not initialized' },
          severity: ErrorSeverity.Fatal
       });
     }

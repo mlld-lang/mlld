@@ -89,10 +89,10 @@ export class DataDirectiveHandler implements IDirectiveHandler {
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
     const currentFilePath = state.getCurrentFilePath();
-    // Standardize error details
+    // Pass the full context to error details
     const errorDetails = { 
       node: node, 
-      context: { currentFilePath: currentFilePath ?? undefined } 
+      context: context // Pass the full context object
     };
 
     // Assert directive exists before accessing properties
@@ -101,7 +101,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           `Directive node is missing the 'directive' property.`,
           this.kind, 
           DirectiveErrorCode.VALIDATION_FAILED, 
-          errorDetails
+          errorDetails // Pass updated errorDetails
       );
     }
 
@@ -122,6 +122,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
 
     try {
       let resolvedValue: unknown;
+      let valueToParse: unknown;
       
       // Define location using common SourceLocation type
       let directiveSourceLocation: SourceLocation | undefined = undefined;
@@ -137,7 +138,8 @@ export class DataDirectiveHandler implements IDirectiveHandler {
         if (value === undefined) {
              throw new DirectiveError('Missing value for @data directive with source=\"literal\"' , this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
         }
-        resolvedValue = await this.resolveInterpolatableValuesInData(value, resolutionContext);
+        // Resolve potential variables within the literal value first
+        valueToParse = await this.resolveInterpolatableValuesInData(value, resolutionContext);
       } else if (source === 'run' && run) {
         try {
           // Use direct properties from run (AST structure)
@@ -189,6 +191,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
             );
           }
           logger.debug('Executed command and parsed JSON for @data directive', { resolvedCommand: resolvedCommandString, output: resolvedValue });
+          valueToParse = resolvedValue;
         } catch (error) {
             if (error instanceof DirectiveError) throw error; 
             const code = (error instanceof MeldResolutionError || error instanceof FieldAccessError) ? DirectiveErrorCode.RESOLUTION_FAILED : DirectiveErrorCode.EXECUTION_FAILED;
@@ -255,6 +258,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
             );
           }
           logger.debug('Embedded content and parsed JSON for @data directive', { subtype: embedSubtype, section: embed.section, output: resolvedValue });
+          valueToParse = resolvedValue;
         } catch (error) {
             if (error instanceof DirectiveError) throw error;
             const code = (error instanceof MeldResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) ? DirectiveErrorCode.RESOLUTION_FAILED : DirectiveErrorCode.EXECUTION_FAILED;
@@ -272,15 +276,38 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           );
       }
 
-      logger.info('[DataDirectiveHandler] Setting data var:', { identifier, resolvedValue: JSON.stringify(resolvedValue) });
+      // --- Modify JSON Parsing Step --- 
+      let finalValue: JsonValue;
+      if (typeof valueToParse === 'string') {
+        try {
+          // Use standard JSON.parse()
+          finalValue = JSON.parse(valueToParse); 
+          logger.debug('Successfully parsed resolved string as JSON', { identifier });
+        } catch (parseError) {
+          // Update error details structure here too
+          throw new DirectiveError(
+            `Failed to parse value for @data directive '${identifier}' as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`,
+            this.kind, 
+            DirectiveErrorCode.VALIDATION_FAILED, 
+            { ...errorDetails, cause: parseError instanceof Error ? parseError : undefined }
+          );
+        }
+      } else {
+        // Assume non-string value is already valid JSON (or primitive)
+        // Remove JsonUtils.isValidJsonValue check
+        finalValue = valueToParse as JsonValue; 
+      }
+      // --- End JSON Parsing Step --- 
+
+      logger.info('[DataDirectiveHandler] Setting data var:', { identifier, finalValue: JSON.stringify(finalValue) });
       
       const metadata: Partial<VariableMetadata> = {
           origin: VariableOrigin.DIRECT_DEFINITION, 
           definedAt: directiveSourceLocation 
       };
       
-      // Call setDataVar with 2 args
-      await (state as IStateService).setDataVar(identifier, resolvedValue as JsonValue);
+      // Call setDataVar with the *parsed* finalValue
+      await (state as IStateService).setDataVar(identifier, finalValue);
       
       // Return DirectiveResult
       return { state: state as IStateService, replacement: undefined }; 
@@ -296,7 +323,8 @@ export class DataDirectiveHandler implements IDirectiveHandler {
                 error.code,
                 { 
                   ...(error.details || {}), // Copy existing details
-                  ...errorDetails, // Add standard details
+                  node: error.details?.node ?? node, // Ensure node is included
+                  context: context, // Pass the full context
                   // Copy cause if it exists and is an Error
                   cause: error.details?.cause instanceof Error ? error.details.cause : undefined 
                 }
@@ -310,7 +338,8 @@ export class DataDirectiveHandler implements IDirectiveHandler {
         this.kind, // Use this.kind
         DirectiveErrorCode.EXECUTION_FAILED,
         { 
-          ...errorDetails,
+          node: node, // Ensure node is included
+          context: context, // Pass the full context
           cause: error instanceof Error ? error : undefined,
         }
       );

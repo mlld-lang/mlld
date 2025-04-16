@@ -453,7 +453,7 @@ export function createVariableReferenceNode(
   valueType: 'text' | 'data' | 'path' | 'command',
   fields?: Array<{ type: 'field' | 'index', value: string | number }>,
   location: Location = DEFAULT_LOCATION
-) {
+): VariableReferenceNode {
   return {
     type: 'VariableReference',
     identifier,

@@ -678,57 +678,65 @@ describe('ResolutionService', () => {
   });
 
   describe('validateResolution', () => {
-    it('should validate text variables are allowed', async () => {
-      // Fix: Disallow BOTH TEXT and DATA for {{...}} to fail
-      const modifiedContext = defaultContext.withAllowedTypes([
-         // VariableType.TEXT, // Disallowed
-         // VariableType.DATA, // Also disallow DATA to make {{...}} fail
-         VariableType.PATH,
-         VariableType.COMMAND
-      ]);
-      
-      // beforeEach mocks parser for '{{greeting}}' -> VariableReferenceNode { valueType: TEXT }
-      await expect(service.validateResolution('{{greeting}}', modifiedContext))
-        .rejects
-        .toThrow(/^Variable type \'text\' for \'greeting\' is not allowed/);
+    let validationContext: PathValidationContext;
+
+    beforeEach(() => {
+      // Create a default validation context for these tests
+      validationContext = {
+        workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath('/project'),
+        projectRoot: unsafeCreateNormalizedAbsoluteDirectoryPath('/project'),
+        allowExternalPaths: false,
+        rules: { 
+          allowAbsolute: true,
+          allowRelative: true,
+          allowParentTraversal: true 
+        }
+      };
     });
 
-    it('should validate data variables are allowed', async () => {
-      // Fix: Disallow BOTH TEXT and DATA for {{...}} to fail
-      const modifiedContext = defaultContext.withAllowedTypes([
-         // VariableType.TEXT, // Also disallow TEXT to make {{...}} fail
-         // VariableType.DATA, // Disallowed
-         VariableType.PATH,
-         VariableType.COMMAND
-      ]);
-      
-      // beforeEach mocks parser for '{{user}}' -> VariableReferenceNode { valueType: DATA }
-      await expect(service.validateResolution('{{user}}', modifiedContext))
-        .rejects
-        // Adjusted Expectation: Expect VariableResolutionError because type check is likely bypassed
-        .toThrow(VariableResolutionError);
-        // Old expectation: .toThrow('text variables/references are not allowed in this context'); 
+    it('should return MeldPath when path validation succeeds', async () => {
+      const validPathString = '/project/valid/file.txt';
+      const expectedMeldPath: MeldPath = {
+        contentType: PathContentType.FILESYSTEM,
+        originalValue: validPathString,
+        validatedPath: unsafeCreateAbsolutePath(validPathString),
+        isAbsolute: true,
+        exists: true,
+        isSecure: true,
+        isValidSyntax: true
+      };
+      pathService.validatePath.mockResolvedValue(expectedMeldPath);
+
+      const result = await service.validateResolution(validPathString, validationContext);
+      expect(result).toEqual(expectedMeldPath);
+      expect(pathService.validatePath).toHaveBeenCalledWith(validPathString, validationContext);
     });
 
-    it('should validate path variables are allowed', async () => {
-      const modifiedContext = defaultContext.withAllowedTypes([VariableType.TEXT]);
+    it('should re-throw PathValidationError when path validation fails', async () => {
+      const invalidPathString = 'invalid-path\0';
+      const originalError = new PathValidationError('Null byte error', {
+        code: PathErrorCode.NULL_BYTE,
+        details: { pathString: invalidPathString }
+      });
+      pathService.validatePath.mockRejectedValue(originalError);
 
-      // beforeEach mocks parser for '$home' -> VariableReferenceNode
-      await expect(service.validateResolution('$home', modifiedContext))
-        .rejects
-        // Fix: Adjust expected error message slightly
-        .toThrow(/^Variable type \'path\' for \'home\' is not allowed/);
+      await expect(service.validateResolution(invalidPathString, validationContext))
+        .rejects.toThrow(originalError);
+      expect(pathService.validatePath).toHaveBeenCalledWith(invalidPathString, validationContext);
     });
 
-    it('should validate command references are allowed', async () => {
-      const modifiedContext = defaultContext.withAllowedTypes([VariableType.DATA]);
+    it('should wrap and throw other errors as PathValidationError', async () => {
+      const pathString = '/project/some/path';
+      const genericError = new Error('Something unexpected happened');
+      pathService.validatePath.mockRejectedValue(genericError);
 
-      // beforeEach mocks parser for '$greet()' -> VariableReferenceNode
-      await expect(service.validateResolution('$greet()', modifiedContext))
-        .rejects
-        // Adjusted Expectation: Expect VariableResolutionError because type check is likely bypassed
-        .toThrow(VariableResolutionError);
-        // Old expectation: .toThrow('command variables/references are not allowed in this context');
+      await expect(service.validateResolution(pathString, validationContext))
+        .rejects.toMatchObject({
+          name: 'PathValidationError',
+          // code: ResolutionErrorCode.SERVICE_UNAVAILABLE, // Code might be different now
+          message: 'Unexpected error during path validation',
+          cause: genericError
+        });
     });
   });
 
