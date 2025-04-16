@@ -15,10 +15,10 @@ import {
   PathErrorMessages 
 } from '@core/errors/messages/index';
 import { Service } from '@core/ServiceProvider';
-import { injectable, inject, container } from 'tsyringe';
+import { injectable, inject, container, delay } from 'tsyringe';
 import { pathLogger as logger } from '@core/utils/logger';
 import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
-import type { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURLCache';
 import { 
   URLError 
@@ -62,18 +62,18 @@ export class PathService implements IPathService {
   private homePath: string;
   private projectPath: string;
   private projectPathResolved: boolean = false;
-  private readonly fsClient?: IFileSystemServiceClient;
+  private fsClientInstance?: IFileSystemServiceClient;
 
   /**
    * Creates a new PathService with dependencies injected.
    * 
    * @param projectPathResolver Resolver for project paths
-   * @param fsClientFactory Factory for creating FileSystemServiceClient
+   * @param fsClientFactory Factory for creating FileSystemServiceClient (Delayed Injection)
    * @param urlContentResolver Resolver for URL content (optional, used for URL operations)
    */
   constructor(
     @inject(ProjectPathResolver) private readonly projectPathResolver: ProjectPathResolver,
-    @inject('FileSystemServiceClientFactory') fsClientFactory: FileSystemServiceClientFactory,
+    @inject(delay(() => FileSystemServiceClientFactory)) private readonly fsClientFactory: FileSystemServiceClientFactory,
     @inject('IURLContentResolver') private readonly urlContentResolver?: IURLContentResolver
   ) {
     const homeEnv = process.env.HOME || process.env.USERPROFILE;
@@ -83,17 +83,9 @@ export class PathService implements IPathService {
     this.homePath = homeEnv || '';
     this.projectPath = process.cwd();
     
-    try {
-      this.fsClient = fsClientFactory.createClient();
-      logger.debug('Successfully created FileSystemServiceClient via constructor injection');
-    } catch (error) {
-      logger.warn('Failed to create FileSystemServiceClient via constructor injection', { error });
-      this.fsClient = undefined;
-    }
-    
     if (process.env.DEBUG === 'true') {
       console.log('PathService: Initialized with', {
-        hasFileSystemClient: !!this.fsClient,
+        hasFileSystemClientFactory: !!this.fsClientFactory,
         urlContentResolverAvailable: !!this.urlContentResolver,
         testMode: this.testMode
       });
@@ -684,7 +676,7 @@ export class PathService implements IPathService {
     context: PathValidationContext, 
     location?: Location
   ): Promise<{ exists: boolean; isDirectory?: boolean }> {
-    if (!this.fsClient) {
+    if (!this.getFsClient()) {
       logger.error('FileSystemServiceClient not available for existence check');
       throw new PathValidationError(PathErrorMessages.INVALID_PATH, {
          code: PathErrorCode.INVALID_PATH,
@@ -694,10 +686,10 @@ export class PathService implements IPathService {
     }
     try {
         const pathToCheck = isAbsolutePath(resolvedPath) ? resolvedPath : unsafeCreateAbsolutePath(path.resolve(context.workingDirectory, resolvedPath));
-        const exists = await this.fsClient.exists(pathToCheck); 
+        const exists = await this.getFsClient()!.exists(pathToCheck); 
         let isDirectory: boolean | undefined = undefined;
         if (exists) {
-            isDirectory = await this.fsClient.isDirectory(pathToCheck); 
+            isDirectory = await this.getFsClient()!.isDirectory(pathToCheck); 
         }
         return { exists, isDirectory };
     } catch (error) {
@@ -874,5 +866,22 @@ export class PathService implements IPathService {
           details: { url: url, fetchOptions: options }
         });
     }
+  }
+
+  /**
+   * Lazily gets the FileSystemServiceClient instance.
+   */
+  private getFsClient(): IFileSystemServiceClient | undefined {
+    if (!this.fsClientInstance) {
+      try {
+        // fsClientFactory is delay-injected, accessing it here resolves it
+        this.fsClientInstance = this.fsClientFactory.createClient();
+        logger.debug('Lazily created FileSystemServiceClient');
+      } catch (error) {
+        logger.warn('Failed to lazily create FileSystemServiceClient', { error });
+        this.fsClientInstance = undefined; // Ensure it remains undefined on error
+      }
+    }
+    return this.fsClientInstance;
   }
 }

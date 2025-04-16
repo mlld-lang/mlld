@@ -4,12 +4,12 @@
  * Exports the main Meld class and core services for programmatic usage.
  */
 import 'reflect-metadata'; // Required for tsyringe
-import { container } from 'tsyringe';
+import { container, DependencyContainer } from 'tsyringe'; // Import DependencyContainer
 import '@core/di-config.js'; // Ensure DI config runs before resolving services
 import { MeldError } from '@core/errors/MeldError.js';
 // Do NOT import Meld class
 import type { ProcessOptions } from '@core/types/index.js'; // Correct path
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js'; // Import IFileSystem
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -25,14 +25,21 @@ export type { Location, Position } from '@core/types/index.js';
 
 // Export the main processing function
 export async function processMeld(content: string, options?: Partial<ProcessOptions>): Promise<string> {
-  // Create a child container for this specific process run
-  const childContainer = container.createChildContainer();
+  // Determine the container to use: external or new child
+  const isExternalContainer = !!options?.container;
+  const executionContainer = options?.container ?? container.createChildContainer();
 
-  // Resolve necessary services from the CHILD container
-  const parserService = childContainer.resolve<IParserService>('IParserService');
-  const stateService = childContainer.resolve<IStateService>('IStateService');
-  const interpreterService = childContainer.resolve<IInterpreterService>('IInterpreterService');
-  const outputService = childContainer.resolve<IOutputService>('IOutputService');
+  // If a custom filesystem is provided, register it in the execution container
+  // Note: This assumes if a container is provided, it already has the desired FS registered.
+  if (options?.fs && !isExternalContainer) { 
+    executionContainer.registerInstance<IFileSystem>('IFileSystem', options.fs);
+  }
+
+  // Resolve necessary services from the execution container
+  const parserService = executionContainer.resolve<IParserService>('IParserService');
+  const stateService = executionContainer.resolve<IStateService>('IStateService');
+  const interpreterService = executionContainer.resolve<IInterpreterService>('IInterpreterService');
+  const outputService = executionContainer.resolve<IOutputService>('IOutputService');
 
   // Configure state based on options if necessary (e.g., file path)
   // Example: if (options?.filePath) { stateService.setCurrentFilePath(options.filePath); }
@@ -40,7 +47,7 @@ export async function processMeld(content: string, options?: Partial<ProcessOpti
   const ast = await parserService.parse(content);
   const resultState = await interpreterService.interpret(ast, {
       strict: true, // Default or derive from options
-      initialState: stateService, // Use the fresh state resolved from CHILD container
+      initialState: stateService, // Use the fresh state resolved from execution container
       // Pass other relevant interpreter options derived from ProcessOptions
       // filePath: options?.filePath
   });
@@ -48,8 +55,10 @@ export async function processMeld(content: string, options?: Partial<ProcessOpti
   const nodesToProcess = resultState.getTransformedNodes();
   const finalOutput = await outputService.convert(nodesToProcess, resultState, options?.format || 'xml');
 
-  // Optionally clean up the child container if needed, though usually not necessary for short-lived processes
-  // childContainer.dispose(); 
+  // Dispose the container ONLY if it was created internally
+  if (!isExternalContainer) {
+    executionContainer.dispose(); 
+  }
 
   return finalOutput;
 }

@@ -9,12 +9,12 @@ import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { MeldFileSystemError } from '@core/errors/MeldFileSystemError.js';
-import { injectable, inject } from 'tsyringe';
+import { injectable, inject, delay } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
 import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
-import type { ValidatedResourcePath, RawPath } from '@core/types/paths.js';
+import type { ValidatedResourcePath } from '@core/types/paths.js';
 import { createRawPath } from '@core/types/paths.js';
 
 const execAsync = promisify(exec);
@@ -45,7 +45,7 @@ export class FileSystemService implements IFileSystemService {
   constructor(
     @inject('IPathOperationsService') private readonly pathOps: IPathOperationsService,
     @inject('IFileSystem') fileSystem?: IFileSystem,
-    @inject('PathServiceClientFactory') private readonly pathClientFactory?: PathServiceClientFactory
+    @inject(delay(() => PathServiceClientFactory)) private readonly pathClientFactory?: PathServiceClientFactory
   ) {
     // Set file system implementation
     this.fs = fileSystem || new NodeFileSystem();

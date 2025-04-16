@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, Mock } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { PathValidationError, PathErrorCode } from '@core/errors/PathValidationError.js';
@@ -6,6 +6,7 @@ import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+import { container, DependencyContainer } from 'tsyringe';
 
 import {
   AbsolutePath,
@@ -14,6 +15,7 @@ import {
   RawPath,
   PathValidationContext,
   PathValidationRules,
+  ValidatedResourcePath,
   NormalizedAbsoluteDirectoryPath,
   createRawPath,
   unsafeCreateAbsolutePath,
@@ -25,6 +27,11 @@ import {
   PathContentType
 } from '@core/types/paths.js';
 import type { StructuredPath } from '@core/syntax/types/nodes.js';
+
+// Import necessary interfaces for mocks
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 
 const createTestValidationContext = (overrides: Partial<PathValidationContext> = {}): PathValidationContext => {
   const defaultRules: PathValidationRules = {
@@ -54,7 +61,7 @@ const createTestValidationContext = (overrides: Partial<PathValidationContext> =
 };
 
 describe('PathService', () => {
-  let context: TestContextDI;
+  let testContainer: DependencyContainer;
   let service: PathService;
   let projectPathResolver: ProjectPathResolver;
   let mockFileSystemClient: IFileSystemServiceClient;
@@ -65,15 +72,19 @@ describe('PathService', () => {
   const TEST_HOME_DIR = '/home/user';
 
   beforeEach(async () => {
-    context = TestContextDI.createIsolated();
-
+    // Create mocks first
     projectPathResolver = new ProjectPathResolver();
     vi.spyOn(projectPathResolver, 'getProjectPath').mockReturnValue(TEST_PROJECT_ROOT);
 
-    mockFileSystemClient = {
-      exists: vi.fn().mockResolvedValue(true),
-      isDirectory: vi.fn().mockResolvedValue(false),
-    };
+    // Bypass TS type checking for mock assignment with `any`
+    const mockExists = (vi.fn() as any).mockResolvedValue(true);
+    const mockIsDirectory = (vi.fn() as any).mockResolvedValue(false);
+
+    // Assign to the mock client object
+    mockFileSystemClient = { 
+      exists: mockExists, 
+      isDirectory: mockIsDirectory,
+    } as unknown as IFileSystemServiceClient;
     mockFileSystemClientFactory = {
       createClient: vi.fn().mockReturnValue(mockFileSystemClient)
     } as unknown as FileSystemServiceClientFactory;
@@ -84,23 +95,24 @@ describe('PathService', () => {
         isURL: vi.fn().mockImplementation((url: string) => /^https?:\/\//i.test(url))
     };
 
-    context.registerMock(ProjectPathResolver, projectPathResolver);
-    context.registerMock('FileSystemServiceClientFactory', mockFileSystemClientFactory);
-    context.registerMock('IURLContentResolver', mockUrlContentResolver);
+    // Create child container and register mocks directly
+    testContainer = container.createChildContainer();
+    testContainer.registerInstance(ProjectPathResolver, projectPathResolver); // Register instance
+    testContainer.registerInstance(FileSystemServiceClientFactory, mockFileSystemClientFactory); // Register instance using CLASS token
+    testContainer.registerInstance('IURLContentResolver', mockUrlContentResolver); // Register instance
 
-    await context.initialize(); 
-
-    service = context.resolveSync(PathService);
-
-    service['fsClient'] = mockFileSystemClient;
-
+    // Deeper mocks (IFileSystemService etc.) are no longer needed here, 
+    // because the mock factory above prevents the real factory and its dependencies from being resolved.
+    
+    // Resolve the service using the test container
+    service = testContainer.resolve(PathService);
+ 
     service.setTestMode(true);
     service.setProjectPath(TEST_PROJECT_ROOT);
     service.setHomePath(TEST_HOME_DIR);
   });
 
   afterEach(async () => {
-    await context?.cleanup();
     vi.restoreAllMocks();
   });
 

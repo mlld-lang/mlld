@@ -12,6 +12,8 @@ import type { OutputService } from '@services/pipeline/OutputService/OutputServi
 import type { StateDebuggerService as DebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
 import type { TransformationOptions } from './state.js';
 import type { StateServiceLike } from '@core/shared-service-types.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { DependencyContainer } from 'tsyringe';
 import type {
   ResolutionContext as ResolutionContextImport,
   ResolutionFlags,
@@ -84,8 +86,8 @@ export interface Services {
 }
 
 export interface ProcessOptions {
-  /** 
-   * Controls whether directives should be transformed 
+  /**
+   * Controls whether directives should be transformed
    * @deprecated This option is maintained for backward compatibility but has no effect.
    * Transformation is always enabled regardless of this setting.
    */
@@ -95,11 +97,13 @@ export interface ProcessOptions {
   /** Enables/disables debugging */
   debug?: boolean;
   /** Optional custom filesystem */
-  fs?: NodeFileSystem;
-  /** Optional service overrides */
+  fs?: IFileSystem;
+  /** Optional service overrides - DEPRECATED: Pass individual services instead */
   services?: Partial<Services>;
   /** Controls whether to apply Prettier formatting to the output */
   pretty?: boolean;
+  /** Optional pre-configured DI container - Might become redundant if passing services */
+  container?: DependencyContainer;
 }
 
 /**
