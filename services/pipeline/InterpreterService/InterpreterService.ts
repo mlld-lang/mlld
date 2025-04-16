@@ -292,13 +292,16 @@ export class InterpreterService implements IInterpreterService {
         if (opts.mergeState) {
           // When mergeState is true, create child state from initial state
           currentState = opts.initialState.createChildState();
+          process.stdout.write(`[InterpreterService.interpret DEBUG] Assigned currentState from initial+merge. typeof clone: ${typeof (currentState as any)?.clone}\n`);
         } else {
           // When mergeState is false, create completely isolated state
           currentState = this.stateService!.createChildState();
+          process.stdout.write(`[InterpreterService.interpret DEBUG] Assigned currentState from initial+no-merge. typeof clone: ${typeof (currentState as any)?.clone}\n`);
         }
       } else {
         // No initial state, create fresh state
         currentState = this.stateService!.createChildState();
+        process.stdout.write(`[InterpreterService.interpret DEBUG] Assigned currentState from no-initial. typeof clone: ${typeof (currentState as any)?.clone}\n`);
       }
 
       if (!currentState) {
@@ -314,18 +317,31 @@ export class InterpreterService implements IInterpreterService {
         currentState.setCurrentFilePath(opts.filePath);
       }
 
-      // Take a snapshot of initial state for rollback
-      process.stdout.write(`[InterpreterService.interpret DEBUG] About to clone currentState. ID: ${currentState?.getStateId?.()}, Type: ${typeof currentState}\n`);
-      process.stdout.write(`[InterpreterService.interpret DEBUG] typeof currentState.clone: ${typeof (currentState as any)?.clone}\n`);
-      console.log('[InterpreterService.interpret DEBUG] Inspecting currentState:', currentState);
-      initialSnapshot = currentState!.clone() as IStateService; 
-      lastGoodState = initialSnapshot;
+      // Take a snapshot of initial state for rollback - MOVED INSIDE TRY
+      // process.stdout.write(`[InterpreterService.interpret DEBUG] About to clone currentState. ID: ${currentState?.getStateId?.()}, Type: ${typeof currentState}\n`);
+      // process.stdout.write(`[InterpreterService.interpret DEBUG] typeof currentState.clone: ${typeof (currentState as any)?.clone}\n`);
+      // console.log('[InterpreterService.interpret DEBUG] Inspecting currentState:', currentState);
+      // try {
+      //   process.stdout.write(`[InterpreterService.interpret DEBUG] Keys of currentState: ${Object.getOwnPropertyNames(currentState || {}).join(', ' )}\n`);
+      //   // process.stdout.write(`[InterpreterService.interpret DEBUG] Prototype of currentState: ${Object.getPrototypeOf(currentState)}\n`);
+      // } catch (e: any) {
+      //   process.stdout.write(`[InterpreterService.interpret DEBUG] Error inspecting currentState: ${e.message}\n`);
+      // }
+      // // Add non-null assertion assuming the check above handles null/undefined
+      // initialSnapshot = currentState!.clone() as IStateService; 
+      // lastGoodState = initialSnapshot;
 
       logger.debug('Starting interpretation', {
         nodeCount: nodes?.length ?? 0,
         filePath: opts.filePath,
         mergeState: opts.mergeState
       });
+
+      // Moved initial clone here, after successful state creation
+      process.stdout.write(`[InterpreterService.interpret DEBUG] Cloning initial currentState. ID: ${currentState?.getStateId?.()}, Type: ${typeof currentState}\n`);
+      process.stdout.write(`[InterpreterService.interpret DEBUG] typeof currentState.clone: ${typeof (currentState as any)?.clone}\n`);
+      initialSnapshot = currentState!.clone() as IStateService; 
+      lastGoodState = initialSnapshot;
 
       for (const node of nodes) {
         try {
