@@ -25,6 +25,9 @@ import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { RawPath } from '@core/types/paths.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 
 // Import all handlers
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
@@ -386,9 +389,23 @@ export class DirectiveService implements IDirectiveService {
     const specificHandler = handler as IDirectiveHandler;
 
     try {
-      // --- Create DirectiveProcessingContext --- 
-      const state = context.state?.clone() || this.stateService!.createChildState();
+      // Clone state *before* validation/circularity checks if needed by them
+      const state = context.state?.clone() || this.stateService!.createChildState(); 
       const currentFilePath = state.getCurrentFilePath() ?? undefined;
+
+      // Perform validation first
+      await this.validationService!.validate(node); 
+      
+      // Check for circular imports *after* basic validation but *before* execution
+      if (node.directive.kind === 'import') {
+         const importPath = this.pathService!.resolvePath(node.directive.path, currentFilePath as RawPath | undefined);
+         
+         if (this.circularityService!.isInStack(importPath as RawPath)) {
+            throw new MeldError(`Circular import detected: ${importPath}`, { code: 'CIRCULAR_IMPORT', severity: ErrorSeverity.Fatal });
+         }
+      }
+      
+      // Context Creation (Moved after checks) --- 
       const resolutionContext = ResolutionContextFactory.create(state, currentFilePath);
       const formattingContext: FormattingContext = { 
          isOutputLiteral: state.isTransformationEnabled(),
@@ -739,94 +756,34 @@ export class DirectiveService implements IDirectiveService {
 
   private ensureInitialized(): void {
     if (!this.initialized) {
-      // Correct call: message, kind, code, optional details
       throw new DirectiveError(
         'DirectiveService must be initialized before use',
-        'initialization', // Placeholder kind
+        'initialization',
         DirectiveErrorCode.INVALID_CONTEXT
-        // No details needed here
       );
     }
   }
 
   /**
-   * Type guard to check if an object is an instance of IStateService
-   * TODO: Improve this check - instanceof might not work with interfaces/DI. 
-   * Relying on specific methods/properties might be better.
+   * Type guard to check if an object implements IStateService.
+   * Avoids instanceof checks that might fail with mocks/proxies.
    */
   private isStateService(obj: any): obj is IStateService {
-    return obj && typeof obj.getVariable === 'function' && typeof obj.clone === 'function'; // Example check
+    return obj && typeof obj.getVariable === 'function' && typeof obj.clone === 'function';
   }
 
-  /**
-   * Update the interpreter service reference
-   * @deprecated Use interpreterServiceClientFactory instead
-   */
-  updateInterpreterService(interpreterService: any): void {
-    this.logger.warn('DirectiveService.updateInterpreterService is deprecated and may be removed.');
-    // This method is required by the interface but functionality might be obsolete.
-    // If the internal this.interpreterService property is still used as a fallback,
-    // uncomment the line below. Otherwise, this can be a true no-op.
-    // this.interpreterService = interpreterService; 
+  // Simplified updateInterpreterService - assuming client is primary
+  updateInterpreterService(_interpreterService: any): void {
+    // This might need more complex logic if direct service is still used
+    this.logger.debug('updateInterpreterService called (currently no-op)');
   }
-
+  
   /**
-   * Process a single directive node, validating and executing it.
-   * Required by IDirectiveService interface.
+   * Process a single directive node
+   * @deprecated Use processDirectives for clearer context handling
    */
   async processDirective(node: DirectiveNode, parentContext?: DirectiveProcessingContext): Promise<IStateService> {
-    this.ensureInitialized();
-    
-    // Use current state if no parent context provided, or clone from parent
-    const initialState = parentContext?.state?.clone() || this.stateService!.createChildState();
-    
-    // Create a processing context specific to this single node
-    const currentFilePath = initialState.getCurrentFilePath() ?? undefined;
-    const resolutionContext = ResolutionContextFactory.create(initialState, currentFilePath);
-    const formattingContext: FormattingContext = { 
-      isOutputLiteral: initialState.isTransformationEnabled(),
-      contextType: 'block', 
-      nodeType: node.type,
-      atLineStart: true, 
-      atLineEnd: false
-    };
-    let executionContext: ExecutionContext | undefined;
-    const workingDirectory = currentFilePath ? this.pathService!.dirname(currentFilePath) : process.cwd();
-    if (node.directive.kind === 'run') {
-      executionContext = { cwd: workingDirectory };
-    }
-    
-    const processingContext: DirectiveProcessingContext = {
-        state: initialState,
-        resolutionContext: resolutionContext,
-        formattingContext: formattingContext,
-        executionContext: executionContext,
-        directiveNode: node
-    };
-
-    try {
-      const result = await this.handleDirective(node, processingContext);
-      
-      // Extract the final state
-      let finalState: IStateService;
-      if (result && typeof result === 'object' && 'state' in result) {
-        finalState = result.state;
-      } else if (result && typeof result === 'object' && 'getVariable' in result) {
-        finalState = result;
-      } else {
-        this.logger.error('Unexpected result type from handleDirective in processDirective', { result });
-        throw new DirectiveError('Invalid result from handler', node.directive.kind ?? 'unknown', DirectiveErrorCode.EXECUTION_FAILED, { node });
-      }
-      return finalState;
-    } catch (error) {
-      this.logger.error(`Error processing single directive ${node.directive?.kind ?? 'unknown'}`, { error });
-      if (error instanceof DirectiveError) throw error;
-      throw new DirectiveError(
-          `Failed to process directive: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          node.directive?.kind ?? 'unknown',
-          DirectiveErrorCode.EXECUTION_FAILED,
-          { node, cause: error instanceof Error ? error : undefined }
-      );
-    }
+    this.logger.warn('processDirective is deprecated, use processDirectives');
+    return this.processDirectives([node], parentContext);
   }
 } 
