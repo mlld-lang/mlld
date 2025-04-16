@@ -78,9 +78,9 @@ export class InterpreterService implements IInterpreterService {
   constructor(
     @inject('IResolutionService') resolutionService: IResolutionService,
     @inject('IPathService') pathService: IPathService,
-    @inject('DirectiveServiceClientFactory') directiveServiceClientFactory?: DirectiveServiceClientFactory,
+    @inject(DirectiveServiceClientFactory) directiveServiceClientFactory?: DirectiveServiceClientFactory,
     @inject('IStateService') stateService?: IStateService,
-    @inject('ParserServiceClientFactory') parserClientFactory?: ParserServiceClientFactory
+    @inject(ParserServiceClientFactory) parserClientFactory?: ParserServiceClientFactory
   ) {
     this.resolutionService = resolutionService;
     this.pathService = pathService;
@@ -162,8 +162,10 @@ export class InterpreterService implements IInterpreterService {
    * Updated to accept DirectiveProcessingContext
    */
   private async callDirectiveHandleDirective(node: DirectiveNode, context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
+    process.stdout.write(`[InterpreterService LOG] callDirectiveHandleDirective: Checking client. Has client? ${!!this.directiveClient}. Has handleDirective? ${!!this.directiveClient?.handleDirective}\n`);
     if (this.directiveClient && this.directiveClient.handleDirective) {
       try {
+        process.stdout.write(`[InterpreterService LOG] callDirectiveHandleDirective: Calling client.handleDirective for kind: ${node.directive.kind}\n`);
         return await this.directiveClient.handleDirective(node, context) as IStateService | DirectiveResult;
       } catch (error) {
         throw new MeldInterpreterError(

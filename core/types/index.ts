@@ -86,8 +86,8 @@ export interface Services {
 }
 
 export interface ProcessOptions {
-  /**
-   * Controls whether directives should be transformed
+  /** 
+   * Controls whether directives should be transformed 
    * @deprecated This option is maintained for backward compatibility but has no effect.
    * Transformation is always enabled regardless of this setting.
    */

@@ -23,6 +23,7 @@ import type { OutputFormattingContext, JsonValue } from '@core/types/index.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import { DirectiveResult } from '@services/pipeline/DirectiveService/interfaces/DirectiveTypes.js';
 
 // Define a minimal logger interface for testing
 interface ITestLogger {
@@ -97,7 +98,7 @@ describe('InterpreterService Unit', () => {
     testContainer.registerInstance('IStateService', mockStateService);
     // Register FACTORIES using CLASS tokens (assuming InterpreterService injects them by class)
     testContainer.registerInstance(DirectiveServiceClientFactory, mockDirectiveClientFactory); 
-    testContainer.registerInstance(ParserServiceClientFactory, mockParserClientFactory); 
+    testContainer.registerInstance(ParserServiceClientFactory, mockParserClientFactory); // Assume Parser factory uses Class token for now
 
     // Register needed transitive dependencies (like IFileSystem for FileSystemService)
     const mockFileSystem = {} as unknown as IFileSystem; // Minimal mock
@@ -118,7 +119,10 @@ describe('InterpreterService Unit', () => {
       process.stdout.write(`[LOG][createChildState Mock] Returning mockStateService. Type of clone: ${typeof mockStateService.clone}\n`);
       return mockStateService;
     });
-    vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementation(async (node, ctx) => ctx.state); // Default handler returns state
+    vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementation(async (node, ctx) => {
+      process.stdout.write(`[LOG][handleDirective Mock - Default beforeEach] Called for node kind: ${node?.directive?.kind}. Returning state.\n`);
+      return ctx.state;
+    });
 
     // Assign setTextVar mock implementation directly
     mockStateService.setTextVar = vi.fn().mockImplementation(async (name, value) => {
@@ -171,53 +175,98 @@ describe('InterpreterService Unit', () => {
       expect(finalState).toBe(workingState); // Should return the working state
     });
 
-    // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('processes directive nodes by calling directiveService.handleDirective client', async () => {
+    it('processes directive nodes by calling directiveService.handleDirective client', async () => {
       const directiveNode: DirectiveNode = createDirectiveNode('text', { identifier: 'test', value: 'value' });
       
-      // Use mocks from beforeEach
-      const initialTestState = mock<IStateService>();
-      const workingState = mock<IStateService>();
-      const clonedState = mock<IStateService>(); // State after clone
-      vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
+      // Create specific mock state instances for this test to isolate behavior
+      const initialTestState = { 
+        createChildState: vi.fn(), 
+        // Add other methods if needed by the specific code path under test
+        getStateId: vi.fn().mockReturnValue('initial-test-state'),
+        setCurrentFilePath: vi.fn(),
+        getCurrentFilePath: vi.fn().mockReturnValue('test-file.mld'),
+        clone: vi.fn(), // Add clone even if not directly called on initial
+      } as unknown as IStateService;
+      
+      const workingState = {
+        clone: vi.fn(),
+        addNode: vi.fn(),
+        getNodes: vi.fn().mockReturnValue([]),
+        getStateId: vi.fn().mockReturnValue('working-test-state'),
+        isTransformationEnabled: vi.fn().mockReturnValue(false),
+        getCurrentFilePath: vi.fn().mockReturnValue('test-file.mld'),
+        // Add other methods used by DirectiveContextFactory or interpretNode
+      } as unknown as IStateService;
+      
+      const clonedState = {
+        getStateId: vi.fn().mockReturnValue('cloned-test-state'),
+        // Add methods potentially used after handleDirective returns
+        // (or methods needed by the expect.objectContaining check)
+        getCurrentFilePath: vi.fn().mockReturnValue('test-file.mld'),
+        addNode: vi.fn(),
+        clone: vi.fn().mockReturnThis(),
+        isTransformationEnabled: vi.fn().mockReturnValue(false),
+        setTextVar: vi.fn(),
+        getNodes: vi.fn().mockReturnValue([]),
+      } as unknown as IStateService;
+
+      // Set up the chain: initial -> working -> cloned
+      vi.spyOn(initialTestState, 'createChildState').mockReturnValue(workingState); // Assume synchronous for simplicity unless async needed
       vi.spyOn(workingState, 'clone').mockReturnValue(clonedState);
 
-      // Spy on the *client* method
-      vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue(clonedState as IStateService); 
+      // Configure the handleDirective mock for this specific test case
+      // Ensure the client mock from beforeEach is spied on
+      // Return workingState instead of clonedState to see if it resolves the type issue
+      // Update: Return as DirectiveResult structure
+      vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue(clonedState as IStateService);
+
+      // Reset call counts from beforeEach if necessary (optional, depends on isolation needs)
+      // vi.mocked(mockDirectiveClient.handleDirective).mockClear();
 
       await service.interpret([directiveNode], { initialState: initialTestState });
       
-      expect(initialTestState.createChildState).toHaveBeenCalled(); // Check call on initial state mock
-      expect(workingState.clone).toHaveBeenCalled(); // Check call on working state mock
-      // Assert call on the *client* mock
+      expect(initialTestState.createChildState).toHaveBeenCalled(); 
+      expect(workingState.clone).toHaveBeenCalled(); 
+      
+      // Assert call on the *client* mock (mockDirectiveClient from beforeEach)
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledWith(
         directiveNode,
         expect.objectContaining({
-          state: clonedState as IStateService, // Ensure the cloned state is passed to the client
-          directiveNode: directiveNode
+          state: clonedState as IStateService, // Expecting the explicitly created clonedState
+          directiveNode: directiveNode // Ensure the node passed in context matches
+          // We\'re not need to strictly check resolutionContext, etc. for this test
         })
       );
     });
 
-    // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('throws MeldInterpreterError when directive service fails', async () => {
-      const directiveNode: DirectiveNode = createDirectiveNode('text', {});
+    it('throws MeldInterpreterError when directive service fails', async () => {
+      // Provide a valid node for the text handler to avoid premature validation errors
+      const directiveNode: DirectiveNode = createDirectiveNode('text', { identifier: 'fail_id', value: 'fail-value' });
       const handlerError = new Error('Handler Test error');
-      vi.spyOn(mockDirectiveClient, 'handleDirective').mockRejectedValue(handlerError);
+      // Ensure the spy/rejection is set up correctly on the mock client instance
+      vi.mocked(mockDirectiveClient.handleDirective).mockRejectedValue(handlerError);
       
+      // Re-resolve the service to ensure it picks up the new factory behavior
+      // Note: This might require adjusting beforeEach/afterEach if state is important
+      // service = testContainer.resolve(InterpreterService);
+
+      // Use mockStateService from beforeEach as initial state
       await expect(service.interpret([directiveNode], { initialState: mockStateService }))
             .rejects.toThrow(MeldInterpreterError);
+      // Check the cause property specifically
       await expect(service.interpret([directiveNode], { initialState: mockStateService }))
             .rejects.toHaveProperty('cause', handlerError);
     });
 
-    // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('extracts error location from node when error occurs in handler client', async () => {
+    it('extracts error location from node when error occurs in handler client', async () => {
         const location = createLocation(5, 10, 5, 20);
-        const directiveNode: DirectiveNode = createDirectiveNode('text', {}, location);
+        // Provide a valid node for the text handler
+        const directiveNode: DirectiveNode = createDirectiveNode('text', { identifier: 'loc_fail_id', value: 'loc-fail-value' }, location);
         const testError = new Error('Handler loc Test error');
-        vi.spyOn(mockDirectiveClient, 'handleDirective').mockRejectedValue(testError);
-
+        // Ensure the spy/rejection is set up correctly
+        vi.mocked(mockDirectiveClient.handleDirective).mockRejectedValue(testError);
+        
+        // Re-resolve the service
         await expect(service.interpret([directiveNode], { initialState: mockStateService }))
             .rejects.toThrow(MeldInterpreterError);
         
@@ -234,7 +283,7 @@ describe('InterpreterService Unit', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('sets file path in working state when provided in options', async () => {
+    it('sets file path in working state when provided in options', async () => {
       const textNode: TextNode = createTextNode('Test content');
       const filePath = 'test-path.meld';
       // Use mock from beforeEach
@@ -247,7 +296,7 @@ describe('InterpreterService Unit', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('passes context to directive client', async () => {
+    it('passes context to directive client', async () => {
       const location = createLocation(1, 1, 1, 12);
       const directiveNode: DirectiveNode = createDirectiveNode('text', {}, location);
       const options: InterpreterOptions = { initialState: mockStateService, mergeState: true, filePath: 'test.mld' };
@@ -270,7 +319,7 @@ describe('InterpreterService Unit', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('handles command variables correctly (access on state)', async () => {
+    it('handles command variables correctly (access on state)', async () => {
         const directiveNode: DirectiveNode = createDirectiveNode('run', { command: 'test-command' });
         const commandDef = { kind: 'basic', commandTemplate: 'echo test' } as any;
         const commandVar = { name: 'test-command', value: commandDef, type: VariableType.COMMAND } as CommandVariable;
@@ -291,7 +340,7 @@ describe('InterpreterService Unit', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('processes text nodes with interpolation via parser and resolution services', async () => {
+    it('processes text nodes with interpolation via parser and resolution services', async () => {
         const node = createTextNode('Hello {{name}}!', createLocation(1, 1));
         const initialTestState = mock<IStateService>();
         const workingState = mock<IStateService>();

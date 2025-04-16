@@ -8,6 +8,15 @@ Tests often fail due to errors like "Cannot resolve dependency", "Cannot inject 
 
 ## Troubleshooting Steps:
 
+**Step 0: ADD LOGGING!**
+   *   **Learning:** Complex DI/mock interactions can obscure the root cause. Copious logging is often the fastest way to diagnose issues.
+   *   **Action:** Add logs (using `process.stdout.write` to avoid being swallowed by the test runner) at:
+       *   Entry/exit points of the function/method under test.
+       *   Entry/exit points of mock implementations.
+       *   Right before and after calls to mocked dependencies.
+       *   Inside `catch` blocks to see exactly what errors are caught.
+       *   Log key variable values, mock return values, and object properties (`typeof`, `instanceof`, specific method presence) to verify assumptions.
+
 **Step 1: Identify the Cycle / Complexity**
    *   Trace the dependency graph for the service under test and its dependencies. Look for direct circular dependencies (A -> B -> A) or dependencies involving factories that might indirectly create cycles (A -> FactoryB -> B -> FactoryA -> A).
 
@@ -48,6 +57,8 @@ Tests often fail due to errors like "Cannot resolve dependency", "Cannot inject 
 **Step 8: Address Linter Noise**
    *   **Learning:** We observed persistent, potentially misleading linter errors regarding Vitest mock methods (`Property 'mockResolvedValue' does not exist...`) even when using standard patterns or `as any`.
    *   **Recommendation:** If tests pass at runtime, prioritize fixing runtime logic. Investigate persistent type errors later (potential Vitest/TS version/config issues). Casting mocks with `as any` (`(vi.fn() as any).mockResolvedValue(...)`) can be a temporary workaround to unblock runtime testing, but isn't ideal.
+
+Always: **ADD LOGGING!** Add copious logging to production code and tests so you can see what's going on. Use `process.stdout.write` to ensure it doesn't get swallowed by the test runner. 
 
 ## Applying This Playbook to Skipped Tests:
 
