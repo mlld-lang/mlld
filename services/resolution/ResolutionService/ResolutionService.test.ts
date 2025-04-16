@@ -1,20 +1,15 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach, MockedFunction } from 'vitest';
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
-import type { IStateService } from '@services/state/StateService/IStateService';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService';
-import type { IPathService } from '@services/fs/PathService/IPathService';
-// Import SPECIFIC types needed from ResolutionService exports
-import type {
-  IResolutionService,
-} from '@services/resolution/ResolutionService/IResolutionService';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { MeldResolutionError, VariableResolutionError, PathValidationError, FieldAccessError, MeldError } from '@core/errors/index';
-// Corrected import for ResolutionContext
+import { PathErrorCode } from '@core/errors/PathValidationError.js';
 import type { ResolutionContext } from '@core/types/resolution'; 
-// Corrected import for isFilesystemPath
 import { isFilesystemPath } from '@core/types/guards'; 
 import { 
-  // Remove ResolutionContext from here
   VariableType, 
   MeldVariable, 
   TextVariable,
@@ -23,26 +18,28 @@ import {
   createDataVariable,
   createTextVariable,
   createPathVariable,
+  createCommandVariable,
+  type CommandVariable,
+  type ICommandDefinition,
+  type IFilesystemPathState,
+  type IUrlPathState
+} from '@core/types';
+import type { Field as AstField } from '@core/syntax/types/shared-types.js';
+import type { MeldNode, TextNode, VariableReferenceNode, CommentNode, DirectiveNode } from '@core/syntax/types';
+import type { StructuredPath } from '@core/syntax/types/nodes.js';
+import {
+  MeldPath, 
+  PathPurpose,
   PathContentType,
   type PathValidationContext,
-  type IFilesystemPathState,
-  type IUrlPathState,
-  type StructuredPath,
-  // Remove isFilesystemPath from here
-} from '@core/types'; // Keep extensionless
-// Import the AST Field type correctly
-import type { Field as AstField } from '@core/syntax/types/shared-types';
-// Import AST types from their actual location
-    // Import AST types from their actual location
-import type { MeldNode, TextNode, VariableReferenceNode, CommentNode, DirectiveNode } from '@core/syntax/types'; // Keep extensionless
-// Import path-related types from core/types
-import {
-  MeldPath,
-  PathPurpose,
+  type PathValidationRules,
+  type NormalizedAbsoluteDirectoryPath,
+  unsafeCreateAbsolutePath,
+  unsafeCreateNormalizedAbsoluteDirectoryPath,
+  type MeldResolvedFilesystemPath,
   createMeldPath,
-  unsafeCreateValidatedResourcePath,
-  MeldResolvedFilesystemPath
-} from '@core/types'; // Keep extensionless
+  unsafeCreateValidatedResourcePath
+} from '@core/types'; 
 
 // Import centralized syntax examples and helpers - KEEP THESE
 import { 
@@ -71,10 +68,11 @@ import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/in
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
 // Import error testing utility
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils';
-// Import CommandVariable and ICommandDefinition
-import { CommandVariable, ICommandDefinition, createCommandVariable } from '@core/types';
 // Import success and failure
 import { success, failure } from '@core/types'; // Keep extensionless
+import { container } from 'tsyringe'; // Import container for direct registration
+import { mockDeep, MockProxy } from 'vitest-mock-extended'; // Import mockDeep
+import type { Mocked } from 'vitest'; // Import Mocked
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
