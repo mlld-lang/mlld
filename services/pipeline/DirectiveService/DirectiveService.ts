@@ -454,21 +454,7 @@ export class DirectiveService implements IDirectiveService {
       // Use the specifically cast handler
       const result = await specificHandler.execute(processingContext); 
       
-      // --- DEBUG LOGS ---
-      console.log(`[handleDirective] Handler result for ${kind}:`, JSON.stringify(result, null, 2));
-
-      // --- MORE DEBUG LOGS ---
-      process.stdout.write(`[handleDirective] Type of result: ${typeof result}\n`);
-      process.stdout.write(`[handleDirective] result === context.state ? : ${result === context.state}\n`);
-      if(result && typeof result === 'object' && 'state' in result) {
-        process.stdout.write(`[handleDirective] result has 'state' property.\n`);
-        process.stdout.write(`[handleDirective] result.state === context.state ? : ${result.state === context.state}\n`);
-      } else {
-        process.stdout.write(`[handleDirective] result does NOT look like DirectiveResult.\n`);
-      }
-      // --- END DEBUG LOGS ---
-
-      // NEW: Check for direct state return (object identity)
+      // Check if the result looks like an IStateService instance (has key methods)
       if (result && typeof (result as IStateService).getTextVar === 'function' && typeof (result as IStateService).setDataVar === 'function') {
         this.logger.debug(`Handler for ${kind} returned original state service instance.`);
         // No state update needed as it's the same object
@@ -482,33 +468,6 @@ export class DirectiveService implements IDirectiveService {
         // by the caller (InterpreterService) which knows the node's index.
         return result; // Return the result object
       }
-      // OLD LOGIC REMOVED:
-      /*
-      // Validate the result type
-      if (this.isStateService(result)) { // <<< Check if it's an IStateService
-        // If the handler returned the state service directly, update the main state
-        context.state = result;
-        this.logger.debug(`Handler for ${kind} returned updated state service.`);
-        return result; // Return the state service
-      } else if (result && typeof result === 'object' && 'state' in result ) { // Check if it LOOKS like a DirectiveResult
-        // If it's a DirectiveResult, handle potential node replacement
-        this.logger.debug(`Handler for ${kind} returned DirectiveResult.`);
-        // Apply transformation if needed (result might contain replacement nodes)
-        // ... transformation logic ...
-        if (result.replacement && this.stateService.isTransformationEnabled()) { 
-            this.stateService.transformNode(node, result.replacement);
-        }
-        return result; // Return the DirectiveResult object
-      } else {
-         // If the result is neither, it's an invalid type
-         const errorLocation: CoreLocation | undefined = node.location ? { 
-             line: node.location.start.line, 
-             column: node.location.start.column, 
-             filePath: currentFilePath ?? undefined 
-         } : undefined;
-         throw new MeldDirectiveError('Invalid or null result returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED, location: errorLocation });
-      }
-      */
 
     } catch (error) {
         // --- DEBUG LOG --- 

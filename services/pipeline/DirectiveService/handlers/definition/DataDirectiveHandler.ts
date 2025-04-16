@@ -86,7 +86,6 @@ export class DataDirectiveHandler implements IDirectiveHandler {
   // Update execute signature
   public async execute(context: DirectiveProcessingContext): Promise<DirectiveResult> {
     const state = context.state;
-    process.stdout.write('[LOG] Entering DataDirectiveHandler.execute\n');
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
     const currentFilePath = state.getCurrentFilePath();
@@ -300,7 +299,6 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       }
       // --- End JSON Parsing Step --- 
 
-      process.stdout.write(`[LOG] DataDirectiveHandler calling state.setDataVar for ${identifier}\n`);
       logger.info('[DataDirectiveHandler] Setting data var:', { identifier, finalValue: JSON.stringify(finalValue) });
       
       const metadata: Partial<VariableMetadata> = {
@@ -312,11 +310,9 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       await (state as IStateService).setDataVar(identifier, finalValue);
       
       // Return DirectiveResult
-      process.stdout.write('[LOG] Exiting DataDirectiveHandler.execute successfully\n');
       return { state: state as IStateService, replacement: undefined }; 
 
     } catch (error) {
-      process.stdout.write(`[LOG] ERROR in DataDirectiveHandler.execute: ${error instanceof Error ? error.stack : String(error)}\n`);
       if (error instanceof DirectiveError) {
          // Ensure details are attached if missing by re-throwing
          if (!error.details?.context) {
