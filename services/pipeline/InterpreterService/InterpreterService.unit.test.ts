@@ -62,8 +62,18 @@ describe('InterpreterService Unit', () => {
     mockResolutionService = { resolveNodes: vi.fn(), resolveInContext: vi.fn() } as unknown as IResolutionService;
     mockPathService = { dirname: vi.fn().mockReturnValue('.') } as unknown as IPathService;
     mockStateService = {
-      clone: vi.fn(),
-      createChildState: vi.fn(),
+      // Define clone directly
+      clone: vi.fn().mockImplementation(() => {
+        process.stdout.write(`[LOG][clone Mock Direct Definition] ENTERED.\n`);
+        process.stdout.write(`[LOG][clone Mock Direct Definition] Returning mockStateService instance.\n`);
+        return mockStateService;
+      }),
+      // Define createChildState directly
+      createChildState: vi.fn().mockImplementation(() => {
+        process.stdout.write(`[LOG][createChildState Mock Direct Definition] ENTERED\n`);
+        process.stdout.write(`[LOG][createChildState Mock Direct Definition] Returning mockStateService. Type of clone: ${typeof (mockStateService as any).clone}\n`);
+        return mockStateService;
+      }),
       addNode: vi.fn(),
       setTextVar: vi.fn(),
       setDataVar: vi.fn(),
@@ -80,6 +90,7 @@ describe('InterpreterService Unit', () => {
       mergeChildState: vi.fn(),
       setCurrentFilePath: vi.fn(),
       getNodes: vi.fn().mockReturnValue([]),
+      transformNode: vi.fn(), // Add missing method for Phase 5 tests
       _mockStorage: {},
     } as unknown as IStateService;
 
@@ -109,16 +120,6 @@ describe('InterpreterService Unit', () => {
 
     // --- Configure default mock behaviors ---
     // Important: Configure mocks *after* they are created
-    vi.spyOn(mockStateService, 'clone').mockImplementation(() => {
-        process.stdout.write(`[LOG][clone Mock SpyOn] ENTERED.\n`);
-        process.stdout.write(`[LOG][clone Mock SpyOn] Returning mockStateService instance.\n`);
-        return mockStateService;
-    });
-    vi.spyOn(mockStateService, 'createChildState').mockImplementation(() => {
-      process.stdout.write(`[LOG][createChildState Mock] ENTERED\n`);
-      process.stdout.write(`[LOG][createChildState Mock] Returning mockStateService. Type of clone: ${typeof mockStateService.clone}\n`);
-      return mockStateService;
-    });
     vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementation(async (node, ctx) => {
       process.stdout.write(`[LOG][handleDirective Mock - Default beforeEach] Called for node kind: ${node?.directive?.kind}. Returning state.\n`);
       return ctx.state;
@@ -465,6 +466,7 @@ describe('InterpreterService Unit', () => {
       const node: TextNode = createTextNode('Test content');
       // Use mockStateService from beforeEach for initialState
       const creationError = new Error('Generic state creation error');
+      // Mock rejection for this specific test case
       vi.spyOn(mockStateService, 'createChildState').mockRejectedValue(creationError);
       
       await expect(service.interpret([node], { initialState: mockStateService }))
@@ -476,6 +478,7 @@ describe('InterpreterService Unit', () => {
       const node: TextNode = createTextNode('Test content');
       // Use mockStateService from beforeEach for initialState
       const interpreterError = new MeldInterpreterError('State creation failed', 'STATE_ERROR');
+       // Mock rejection for this specific test case
        vi.spyOn(mockStateService, 'createChildState').mockRejectedValue(interpreterError);
        
       await expect(service.interpret([node], { initialState: mockStateService }))

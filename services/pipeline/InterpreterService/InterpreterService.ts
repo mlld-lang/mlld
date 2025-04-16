@@ -315,8 +315,8 @@ export class InterpreterService implements IInterpreterService {
       }
 
       // Take a snapshot of initial state for rollback
-      process.stdout.write(`[InterpreterService.interpret] About to clone currentState. typeof currentState: ${typeof currentState}\n`);
-      process.stdout.write(`[InterpreterService.interpret] typeof currentState.clone: ${typeof (currentState as any).clone}\n`);
+      process.stdout.write(`[InterpreterService.interpret DEBUG] About to clone currentState. ID: ${currentState?.getStateId?.()}, Type: ${typeof currentState}\n`);
+      process.stdout.write(`[InterpreterService.interpret DEBUG] typeof currentState.clone: ${typeof (currentState as any)?.clone}\n`);
       initialSnapshot = currentState.clone() as IStateService; 
       lastGoodState = initialSnapshot;
 
