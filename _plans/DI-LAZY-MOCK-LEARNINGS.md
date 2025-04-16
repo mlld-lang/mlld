@@ -26,6 +26,8 @@ Tests often fail due to errors like "Cannot resolve dependency", "Cannot inject 
    *   **Mock the *Factory* for `delay()`ed Dependencies:** If Service A uses `@inject(delay(() => FactoryB))`, you **must** mock `FactoryB`. Configure the mock factory's `createClient` (or equivalent method) to return your *mock client instance*. Do NOT try to mock only the client instance directly.
    *   **Sufficient Mock Implementation:** Ensure mock objects implement the methods/properties actually *used* during the test's execution path (even if called indirectly via other services). Start minimal, but add mocked methods as required by runtime errors (e.g., `mockStateService` needed `isTransformationEnabled`).
    *   **Mock Handler/Callback Side-Effects:** If testing delegation (e.g., `DirectiveService` calling a handler), the mock handler must simulate essential side-effects (like `state.setTextVar`) if the test asserts on those effects.
+   *   **`vi.spyOn` vs. Direct Assignment:** When mocking methods in `beforeEach`, prefer using `vi.spyOn(mockObject, 'method').mockImplementation(...)` over direct assignment (`mockObject.method = vi.fn()...`). `spyOn` ensures Vitest properly tracks and restores the mock, which can prevent subtle issues where mocks don't trigger correctly in all tests within a suite.
+   *   **Avoid Shared State for Side Effects:** Resist using shared variables defined in `beforeEach` (like `stateStorage`) within mock implementations to track side effects. This proved unreliable due to potential scope/closure/reset issues. Instead, assert directly that the relevant mock method (e.g., `mockStateService.setTextVar`) was called with the correct arguments using `expect(...).toHaveBeenCalledWith(...)`.
 
 **Step 5: Refine Service Logic (If Necessary)**
    *   **Avoid `instanceof` for Interfaces/Mocks:** `instanceof` doesn't work reliably for interfaces or plain mock objects. Use structural checks (`'prop' in obj`) or object identity (`===`) to verify return types or object states where appropriate (e.g., checking results from handlers).
@@ -57,3 +59,6 @@ Many skipped tests (especially in `InterpreterService`, `DirectiveService`, Hand
 5.  Run the test. Analyze failures using Steps 6 & 7. Refine mocks (Step 4) or assertions (Step 6) as needed.
 6.  Ignore persistent Vitest-related type errors if runtime behavior is correct (Step 8).
 
+## Additional notes
+
+- To get logs to show up you need to use `process.stdout.write` instead of `console.log` otherwise logs get swallowed by the test runner.

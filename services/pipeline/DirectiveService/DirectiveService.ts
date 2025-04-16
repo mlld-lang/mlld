@@ -471,11 +471,12 @@ export class DirectiveService implements IDirectiveService {
 
     } catch (error) {
         // --- DEBUG LOG --- 
-        console.error(`[handleDirective] CAUGHT ERROR processing ${kind}:`, error);
+        process.stdout.write(`[handleDirective] CAUGHT ERROR processing ${kind}: ${error instanceof Error ? error.stack : String(error)}\n`);
         // --- END DEBUG LOG ---
         const message = error instanceof Error ? error.message : 'Unknown directive processing error';
         const code = (error instanceof DirectiveError) ? error.code : DirectiveErrorCode.EXECUTION_FAILED;
         // Create a simplified context for the error details
+        const currentFilePath = context.state?.getCurrentFilePath() ?? undefined;
         const errorContext: Partial<DirectiveProcessingContext> = {
            state: context.state, // Keep state if available
            resolutionContext: context.resolutionContext, // Keep context if available

@@ -99,7 +99,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       
       if (source === 'literal') {
           if (typeof value === 'string') {
-              resolvedValue = value; // Assume string literals are already processed by parser/resolver if needed
+              // Resolve strings that might contain interpolation
+              resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
           } else if (isInterpolatableValueArray(value)) {
               // Resolve the array of nodes into a single string
               logger.debug('Text value is InterpolatableValue, resolving nodes...');
