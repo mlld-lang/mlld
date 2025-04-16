@@ -388,14 +388,16 @@ describe('InterpreterService Unit', () => {
 
   describe('state management', () => {
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('creates child state from initial state when interpreting', async () => {
+    it('creates child state from initial state when interpreting', async () => {
       const textNode: TextNode = createTextNode('Test content');
-      const initialTestState = mock<IStateService>();
-      const workingState = mock<IStateService>();
+      // Use mock from beforeEach instead of manual mock
+      const initialTestState = mockStateService; 
+      const workingState = mockStateService; // Default createChildState returns mockStateService
 
-      vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
-      vi.spyOn(workingState, 'clone').mockReturnValue(workingState);
-      vi.spyOn(workingState, 'addNode').mockReturnValue(undefined);
+      // Spies are on mockStateService in beforeEach, ensure they are sufficient
+      // vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
+      // vi.spyOn(workingState, 'clone').mockReturnValue(workingState);
+      vi.spyOn(workingState, 'addNode'); // Spy on addNode for this test
 
       await service.interpret([textNode], { initialState: initialTestState });
 
@@ -405,14 +407,14 @@ describe('InterpreterService Unit', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('returns the final working state', async () => {
+    it('returns the final working state', async () => {
       const textNode: TextNode = createTextNode('Test content');
       const result = await service.interpret([textNode], { initialState: mockStateService });
       expect(result.getStateId()).toBe(mockStateService.getStateId()); 
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('handles empty node arrays (returns final working state)', async () => {
+    it('handles empty node arrays (returns final working state)', async () => {
       const result = await service.interpret([], { initialState: mockStateService });
       expect(mockStateService.createChildState).toHaveBeenCalled();
       expect(mockStateService.clone).toHaveBeenCalled(); 
@@ -420,7 +422,7 @@ describe('InterpreterService Unit', () => {
     });
     
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('merges state back if mergeState is true (default)', async () => {
+    it('merges state back if mergeState is true (default)', async () => {
       const textNode: TextNode = createTextNode('Test content');
       vi.spyOn(mockStateService, 'mergeChildState');
       
@@ -440,7 +442,7 @@ describe('InterpreterService Unit', () => {
     });
     
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('creates state from internal service if no initial state provided', async () => {
+    it('creates state from internal service if no initial state provided', async () => {
       const textNode: TextNode = createTextNode('Test content');
       // Use mockStateService from beforeEach, reconfigure if needed
       const internalState = mockStateService;
@@ -459,7 +461,7 @@ describe('InterpreterService Unit', () => {
 
   describe('error handling', () => {
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('does NOT wrap generic errors during state creation (when initialState provided)', async () => {
+    it('does NOT wrap generic errors during state creation (when initialState provided)', async () => {
       const node: TextNode = createTextNode('Test content');
       // Use mockStateService from beforeEach for initialState
       const creationError = new Error('Generic state creation error');
@@ -470,7 +472,7 @@ describe('InterpreterService Unit', () => {
     });
     
      // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-     it.skip('preserves interpreter errors during state creation (when initialState provided)', async () => {
+     it('preserves interpreter errors during state creation (when initialState provided)', async () => {
       const node: TextNode = createTextNode('Test content');
       // Use mockStateService from beforeEach for initialState
       const interpreterError = new MeldInterpreterError('State creation failed', 'STATE_ERROR');
@@ -481,7 +483,7 @@ describe('InterpreterService Unit', () => {
     });
     
      // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-     it.skip('wraps errors during node processing (handler client fails)', async () => {
+     it('wraps errors during node processing (handler client fails)', async () => {
       const node: DirectiveNode = createDirectiveNode('text', {});
       // Use mockStateService from beforeEach for initialState
       const processingError = new Error('Directive processing failed');
@@ -494,7 +496,7 @@ describe('InterpreterService Unit', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('extracts location from node for processing errors (handler client fails)', async () => {
+    it('extracts location from node for processing errors (handler client fails)', async () => {
         const location = createLocation(5, 10, 5, 20);
         const node: DirectiveNode = createDirectiveNode('text', {}, location);
         // Use mockStateService from beforeEach for initialState
@@ -517,7 +519,7 @@ describe('InterpreterService Unit', () => {
     });
     
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('does NOT wrap errors from state.clone() (adjust expectation)', async () => {
+    it('does NOT wrap errors from state.clone() (adjust expectation)', async () => {
       const node: TextNode = createTextNode('clone fail test');
       // Use mockStateService from beforeEach for initialState
       const cloneError = new Error('Clone failed');
@@ -530,7 +532,7 @@ describe('InterpreterService Unit', () => {
 
   describe('edge cases', () => {
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('clones working state even on partial failure (handler client fails)', async () => {
+    it('clones working state even on partial failure (handler client fails)', async () => {
       const nodes: MeldNode[] = [
         createTextNode('test1'),
         createDirectiveNode('text', {}, createLocation(2,1))
@@ -544,33 +546,33 @@ describe('InterpreterService Unit', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('throws error for null node', async () => {
+    it('throws error for null node', async () => {
       await expect(service.interpret([null as unknown as MeldNode], { initialState: mockStateService }))
             .rejects.toThrow(/Invalid node encountered/);
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('throws error for undefined node', async () => {
+    it('throws error for undefined node', async () => {
       await expect(service.interpret([undefined as unknown as MeldNode], { initialState: mockStateService }))
             .rejects.toThrow(/Invalid node encountered/);
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('processes node without location', async () => {
+    it('processes node without location', async () => {
       const node: TextNode = createTextNode('test');
       await service.interpret([node], { initialState: mockStateService });
       expect(mockStateService.addNode).toHaveBeenCalledWith(node);
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('processes node with partial location', async () => {
+    it('processes node with partial location', async () => {
       const node: TextNode = createTextNode('test', createLocation(1, 1, 1, 5));
       await service.interpret([node], { initialState: mockStateService });
       expect(mockStateService.addNode).toHaveBeenCalledWith(node);
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('throws wrapped error on command variable processing error (in handler)', async () => {
+    it('throws wrapped error on command variable processing error (in handler)', async () => {
       const node: DirectiveNode = createDirectiveNode('text', {}, createLocation(1,1));
       const initialTestState = mockStateService;
       const cmdError = new Error('Command lookup failed');
@@ -583,7 +585,7 @@ describe('InterpreterService Unit', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('throws if directive node is missing directive property', async () => {
+    it('throws if directive node is missing directive property', async () => {
        const node = createDirectiveNode('text', {}, createLocation(1,1));
        (node as any).directive = undefined;
        await expect(service.interpret([node], { initialState: mockStateService }))
@@ -594,18 +596,21 @@ describe('InterpreterService Unit', () => {
   // Mark describe block as failing
   describe('Phase 5 Refactoring Verification (Manual Setup)', () => {
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('passes correctly structured context to directive client', async () => {
+    it('passes correctly structured context to directive client', async () => {
       const location = createLocation(1,1);
       const directiveNode = createDirectiveNode('run', { subtype: 'runCommand', command: 'echo hello' }, location);
-      const initialTestState = mock<IStateService>();
-      const workingState = mock<IStateService>();
-      const clonedState = mock<IStateService>({
-          getStateId: vi.fn().mockReturnValue('clonedForContextP5Manual'),
-          getCurrentFilePath: vi.fn().mockReturnValue('/test/working-p5-manual.mld') 
-      });
+      // Use mock from beforeEach
+      const initialTestState = mockStateService; 
+      const workingState = mockStateService; // Default createChildState returns mockStateService
+      const clonedState = mockStateService;  // Default clone returns mockStateService
+      // const clonedState = mock<IStateService>({
+      //     getStateId: vi.fn().mockReturnValue('clonedForContextP5Manual'),
+      //     getCurrentFilePath: vi.fn().mockReturnValue('/test/working-p5-manual.mld') 
+      // });
       
-      vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
-      vi.spyOn(workingState, 'clone').mockReturnValue(clonedState);
+      // Ensure spies from beforeEach are sufficient or re-spy if needed
+      // vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
+      // vi.spyOn(workingState, 'clone').mockReturnValue(clonedState);
       vi.spyOn(mockPathService, 'dirname').mockReturnValue('/test'); 
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue(clonedState);
       
@@ -632,14 +637,15 @@ describe('InterpreterService Unit', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('handles DirectiveResult with replacement node in transformation mode', async () => {
+    it('handles DirectiveResult with replacement node in transformation mode', async () => {
       const directiveNode = createDirectiveNode('embed', { subtype: 'embedPath', path: 'file.md' });
-      const initialTestState = mock<IStateService>();
-      const workingState = mock<IStateService>({
-          isTransformationEnabled: vi.fn().mockReturnValue(true) 
-      });
-      vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
-      vi.spyOn(workingState, 'clone').mockReturnValue(workingState);
+      // Use mock from beforeEach
+      const initialTestState = mockStateService; 
+      const workingState = mockStateService; // Default createChildState returns mockStateService
+      // Configure mockStateService for transformation mode for this test
+      vi.spyOn(workingState, 'isTransformationEnabled').mockReturnValue(true); 
+      // vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
+      // vi.spyOn(workingState, 'clone').mockReturnValue(workingState);
       vi.spyOn(workingState, 'transformNode'); 
 
       const mockReplacementNode = createTextNode('Replaced Content', directiveNode.location);
@@ -658,12 +664,13 @@ describe('InterpreterService Unit', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('handles direct IStateService return from directive client', async () => {
+    it('handles direct IStateService return from directive client', async () => {
       const directiveNode = createDirectiveNode('text', { identifier: 'abc', value: 'def' });
-      const initialTestState = mock<IStateService>();
-      const workingState = mock<IStateService>();
-      vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
-      vi.spyOn(workingState, 'clone').mockReturnValue(workingState);
+      // Use mock from beforeEach
+      const initialTestState = mockStateService; 
+      const workingState = mockStateService; // Default createChildState returns mockStateService
+      // vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
+      // vi.spyOn(workingState, 'clone').mockReturnValue(workingState);
       vi.spyOn(workingState, 'transformNode'); 
 
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue(workingState); 
