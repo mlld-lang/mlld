@@ -23,7 +23,17 @@ describe('SDK Integration Tests', () => {
 
   beforeEach(async () => {
     context = TestContextDI.create();
-    await context.initialize();
+    // Explicitly register IFileSystem mock for this test suite's container
+    // Use the fs instance created by TestContextDI internally if possible
+    if (context.fs) { 
+      context.container.registerMock('IFileSystem', context.fs);
+    } else {
+      // Fallback or throw error if context.fs isn't initialized as expected
+      console.warn('TestContextDI fs not available during beforeEach in api.test.ts');
+      // Optionally register a default MemfsTestFileSystem if needed
+      // context.container.registerMock('IFileSystem', new MemfsTestFileSystem());
+    }
+    await context.initialize(); // Let TestContextDI continue its initialization
     testFilePath = 'test.meld';
   });
 

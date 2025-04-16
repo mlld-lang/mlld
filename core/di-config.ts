@@ -44,10 +44,14 @@ import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFa
 import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNodeFactory.js';
 // ... other AST factories ...
 
+// Import IFileSystem type
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+
 // --- Standard Container Registrations ---
 
 // Register File System Implementation (used via IFileSystem token)
-container.registerInstance('IFileSystem', new NodeFileSystem()); // Can keep instance for NodeFileSystem
+container.registerInstance('IFileSystem', new NodeFileSystem()); // REVERTED: Back to instance registration
+// container.registerSingleton<IFileSystem>('IFileSystem', NodeFileSystem); // REMOVED: Singleton registration
 
 // Register Core Services (using standard class registration)
 container.register(PathOperationsService, { useClass: PathOperationsService });

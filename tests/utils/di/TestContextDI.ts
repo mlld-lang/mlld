@@ -11,7 +11,6 @@ import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
-import { ServiceMediator } from '@services/mediator/index.js';
 import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
 import { StateService } from '@services/state/StateService/StateService.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
@@ -47,7 +46,7 @@ import type { IStateDebuggerService } from '@tests/utils/debug/StateDebuggerServ
 import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
 import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
 import type { IStateServiceClient } from '@services/state/StateService/interfaces/IStateServiceClient.js';
-import type { IStateTrackingServiceClient } from '@tests/utils/debug/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+import type { RawPath } from '@core/types/paths.js';
 
 /**
  * Options for creating a TestContextDI instance
@@ -90,9 +89,14 @@ export class TestContextDI extends TestContext {
   public readonly container: TestContainerHelper;
 
   /**
+   * Filesystem instance specifically for this context
+   */
+  public fs!: MemfsTestFileSystem;
+
+  /**
    * Helper method for normalizing paths in tests
    */
-  private normalizePathForTests: (path: string) => string;
+  private normalizePathForTests!: (path: string) => string;
 
   /**
    * Tracks registered mock services for cleanup
@@ -113,6 +117,11 @@ export class TestContextDI extends TestContext {
    * Tracks if this context has been cleaned up
    */
   private isCleanedUp: boolean = false;
+
+  /**
+   * Internal flag for initialization status
+   */
+  private _isInitialized: boolean = false;
   
   /**
    * Leak detection enabled
@@ -212,7 +221,7 @@ export class TestContextDI extends TestContext {
       throw new Error(`Cannot resolve service '${String(token)}' - context has been cleaned up`);
     }
 
-    if (this.initPromise && !this.initialized) {
+    if (this.initPromise && !this._isInitialized) {
       console.warn('Warning: Synchronous resolve called before initialization is complete. This may cause race conditions.');
     }
 
@@ -267,7 +276,7 @@ export class TestContextDI extends TestContext {
     const containerDiagnostics = this.container.getDiagnostics();
     
     return {
-      initialized: this.initialized,
+      initialized: this._isInitialized,
       cleanedUp: this.isCleanedUp,
       mockCount: this.registeredMocks.size,
       childContextCount: this.childContexts.length,
@@ -290,7 +299,7 @@ export class TestContextDI extends TestContext {
     this.registeredMocks.clear();
     
     // Reset initialization state
-    this.initialized = false;
+    this._isInitialized = false;
     
     // Reinitialize
     await this.initializeAsync();
@@ -306,6 +315,7 @@ export class TestContextDI extends TestContext {
     
     // Mark as cleaned up to prevent further use
     this.isCleanedUp = true;
+    this._isInitialized = false;
     
     // Check for memory leaks
     if (this.leakDetectionEnabled) {
@@ -338,15 +348,18 @@ export class TestContextDI extends TestContext {
     this.fs = new MemfsTestFileSystem();
     this.normalizePathForTests = (path) => path;
     await this.registerServices();
-    this.initialized = true;
+    this._isInitialized = true;
   }
 
   /**
    * Registers all the necessary services for the test context using MockFactory defaults
    */
   private async registerServices(): Promise<void> {
-    // === Change Order: Register Factories FIRST ===
-    this.registerFactories(); 
+    // Register IFileSystem FIRST (before factories)
+    this.registerMock<MemfsTestFileSystem>('IFileSystem', this.fs);
+
+    // Register Factories SECOND
+    this.registerFactories();
     
     // Register standard mocks from MockFactory 
     for (const [token, factory] of Object.entries(MockFactory.standardFactories)) {
@@ -355,7 +368,6 @@ export class TestContextDI extends TestContext {
       }
     }
     
-    this.registerMock<MemfsTestFileSystem>('IFileSystem', this.fs);
     this.registerURLContentResolver();
     this.registerDebugServices();
 
@@ -448,6 +460,21 @@ export class TestContextDI extends TestContext {
         ClientFactoryHelpers.registerStandardClientFactories(this);
     }
     */
+
+    if (!this.container.isRegistered('FileSystemServiceClientFactory')) {
+      const fsClient = {
+        exists: vi.fn(),
+        isDirectory: vi.fn()
+      } as unknown as IFileSystemServiceClient; // Cast via unknown
+      ClientFactoryHelpers.registerClientFactory(this, 'FileSystemServiceClientFactory', fsClient);
+    }
+    if (!this.container.isRegistered('PathServiceClientFactory')) {
+      const pathClient = {
+         resolvePath: vi.fn(), 
+         normalizePath: vi.fn()
+      } as unknown as IPathServiceClient; // Cast via unknown
+       ClientFactoryHelpers.registerClientFactory(this, 'PathServiceClientFactory', pathClient);
+    }
   }
 
   /**
@@ -462,24 +489,23 @@ export class TestContextDI extends TestContext {
       setupMinimal: (options: TestContextDIOptions = {}): TestContextDI => {
         const context = new TestContextDI({ ...options, autoInit: false });
         context.fs = new MemfsTestFileSystem();
+        context.normalizePathForTests = (path) => path;
         context.registerMock<MemfsTestFileSystem>('IFileSystem', context.fs);
         if (!context.container.isRegistered('FileSystemServiceClientFactory')) {
-          const fsClient: IFileSystemServiceClient = {
-            exists: vi.fn().mockImplementation(async (path: string) => context.fs.exists(path)),
-            isDirectory: vi.fn().mockImplementation(async (path: string) => {
-              try { return (await context.fs.stat(path)).isDirectory(); } catch { return false; }
-            })
-          };
+          const fsClient = {
+            exists: vi.fn(),
+            isDirectory: vi.fn()
+          } as unknown as IFileSystemServiceClient; // Cast via unknown
           ClientFactoryHelpers.registerClientFactory(context, 'FileSystemServiceClientFactory', fsClient);
         }
         if (!context.container.isRegistered('PathServiceClientFactory')) {
-          const pathClient: IPathServiceClient = {
-             resolvePath: vi.fn().mockImplementation((path: string) => path),
-             normalizePath: vi.fn().mockImplementation((path: string) => path)
-          };
+          const pathClient = {
+             resolvePath: vi.fn(), 
+             normalizePath: vi.fn()
+          } as unknown as IPathServiceClient; // Cast via unknown
            ClientFactoryHelpers.registerClientFactory(context, 'PathServiceClientFactory', pathClient);
         }
-        context.initialized = true;
+        context._isInitialized = true;
         context.initPromise = Promise.resolve();
         return context;
       },

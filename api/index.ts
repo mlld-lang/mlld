@@ -5,6 +5,7 @@
  */
 import 'reflect-metadata'; // Required for tsyringe
 import { container } from 'tsyringe';
+import '@core/di-config.js'; // Ensure DI config runs before resolving services
 import { MeldError } from '@core/errors/MeldError.js';
 // Do NOT import Meld class
 import type { ProcessOptions } from '@core/types/index.js'; // Correct path
@@ -24,11 +25,14 @@ export type { Location, Position } from '@core/types/index.js';
 
 // Export the main processing function
 export async function processMeld(content: string, options?: Partial<ProcessOptions>): Promise<string> {
-  // Resolve necessary services from the container
-  const parserService = container.resolve<IParserService>('IParserService');
-  const stateService = container.resolve<IStateService>('IStateService');
-  const interpreterService = container.resolve<IInterpreterService>('IInterpreterService');
-  const outputService = container.resolve<IOutputService>('IOutputService');
+  // Create a child container for this specific process run
+  const childContainer = container.createChildContainer();
+
+  // Resolve necessary services from the CHILD container
+  const parserService = childContainer.resolve<IParserService>('IParserService');
+  const stateService = childContainer.resolve<IStateService>('IStateService');
+  const interpreterService = childContainer.resolve<IInterpreterService>('IInterpreterService');
+  const outputService = childContainer.resolve<IOutputService>('IOutputService');
 
   // Configure state based on options if necessary (e.g., file path)
   // Example: if (options?.filePath) { stateService.setCurrentFilePath(options.filePath); }
@@ -36,7 +40,7 @@ export async function processMeld(content: string, options?: Partial<ProcessOpti
   const ast = await parserService.parse(content);
   const resultState = await interpreterService.interpret(ast, {
       strict: true, // Default or derive from options
-      initialState: stateService, // Use the fresh state resolved from container
+      initialState: stateService, // Use the fresh state resolved from CHILD container
       // Pass other relevant interpreter options derived from ProcessOptions
       // filePath: options?.filePath
   });
@@ -44,11 +48,15 @@ export async function processMeld(content: string, options?: Partial<ProcessOpti
   const nodesToProcess = resultState.getTransformedNodes();
   const finalOutput = await outputService.convert(nodesToProcess, resultState, options?.format || 'xml');
 
+  // Optionally clean up the child container if needed, though usually not necessary for short-lived processes
+  // childContainer.dispose(); 
+
   return finalOutput;
 }
 
 // Optionally export a function to get services if needed for advanced usage
 export function getService<T>(token: string | symbol): T {
+  // Return from the main container for general service access if required
   return container.resolve<T>(token);
 }
 
