@@ -106,7 +106,7 @@ export class DirectiveService implements IDirectiveService {
     @inject('IPathService') private pathService?: IPathService,
     @inject('IFileSystemService') fileSystemService?: IFileSystemService,
     @inject('IParserService') parserService?: ParserServiceLike,
-    @inject('InterpreterServiceClientFactory') interpreterServiceClientFactory?: InterpreterServiceClientFactory,
+    @inject(delay(() => InterpreterServiceClientFactory)) interpreterServiceClientFactory?: InterpreterServiceClientFactory,
     @inject('ICircularityService') circularityService?: CircularityServiceLike,
     @inject('IResolutionService') resolutionService?: IResolutionService,
     @inject('DirectiveLogger') logger?: ILogger
