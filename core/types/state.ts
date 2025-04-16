@@ -7,8 +7,8 @@ import type { VariableType, VariableMetadata, MeldVariable, TextVariable, DataVa
 import type { IFilesystemPathState, IUrlPathState } from './paths.js';
 import type { ICommandDefinition } from './define.js';
 
-// Placeholder for MeldNode - assumed defined elsewhere
-import type { MeldNode } from '@core/syntax/types.js';
+// Import MeldNode from the correct index file
+import type { DirectiveKind, MeldNode } from '@core/syntax/types';
 
 /**
  * Options for variable copying between states.

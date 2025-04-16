@@ -1,5 +1,5 @@
 import { injectable, inject } from 'tsyringe';
-import type { IDirectiveService } from '../DirectiveService/IDirectiveService.js';
+import type { IDirectiveService } from '../IDirectiveService.js';
 import type { IDirectiveServiceClient } from '../interfaces/IDirectiveServiceClient.js';
 import type { IDirectiveServiceClientFactory } from './IDirectiveServiceClientFactory.js';
 import { Service } from '@core/ServiceProvider.js';
@@ -19,8 +19,10 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
  */
 @injectable()
 @Service({
-  token: 'DirectiveServiceClientFactory',
-  description: 'Factory for creating DirectiveService clients'
+  description: 'Factory for creating DirectiveService clients',
+  dependencies: [
+    { token: 'IDirectiveService', name: 'directiveService' }
+  ]
 })
 export class DirectiveServiceClientFactory implements IDirectiveServiceClientFactory {
   constructor(
@@ -42,7 +44,8 @@ export class DirectiveServiceClientFactory implements IDirectiveServiceClientFac
       },
       validateDirective: (node: DirectiveNode): Promise<void> => {
         return this.directiveService.validateDirective(node);
-      }
+      },
+      getSupportedDirectives: () => this.directiveService.getSupportedDirectives()
     };
   }
 } 

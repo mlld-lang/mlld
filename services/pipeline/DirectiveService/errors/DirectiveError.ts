@@ -1,8 +1,8 @@
-import type { DirectiveNode } from '@core/syntax/types/index.js';
-import type { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { Location } from '@core/types/index.js';
+import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from '@core/errors/MeldError.js';
+import type { DirectiveProcessingContext } from '@core/types/index.js';
+import type { DirectiveNode, DirectiveKind } from '@core/syntax/types/index.js';
 import { MeldDirectiveError, DirectiveLocation, MeldDirectiveErrorOptions } from '@core/errors/MeldDirectiveError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
+import type { Location } from '@core/types';
 
 /**
  * Error codes for directive failures
@@ -38,7 +38,7 @@ export const DirectiveErrorSeverity: Record<DirectiveErrorCode, ErrorSeverity> =
 
 export interface DirectiveErrorDetails {
   node?: DirectiveNode;
-  context?: Partial<DirectiveContext>;
+  context?: Partial<DirectiveProcessingContext>;
   cause?: Error;
   location?: Location;
 }
@@ -63,7 +63,7 @@ export class DirectiveError extends MeldDirectiveError {
       directiveLocation = {
         line: loc.start.line,
         column: loc.start.column,
-        filePath: details?.context?.currentFilePath
+        filePath: details?.context?.state?.getCurrentFilePath() ?? undefined
       };
     }
     

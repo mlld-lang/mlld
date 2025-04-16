@@ -1,7 +1,7 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IOutputService, OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { ResolutionContext } from '@core/types.js'; // Try importing from @core/types directly
+import type { ResolutionContext } from '@core/types/resolution.js';
 import { formatWithPrettier } from '@core/utils/prettierUtils.js';
 
 /**

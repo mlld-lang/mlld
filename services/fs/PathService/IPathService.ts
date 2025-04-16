@@ -14,10 +14,11 @@ import type {
   UrlPath,
   RawPath,
   ValidatedResourcePath, // May use this as a more general validated return type
-  StructuredPath, // Import the one from core/types
   PathValidationContext, // Import the new context
   MeldPath
 } from '@core/types/paths.js';
+// Import StructuredPath from syntax/types
+import type { StructuredPath } from '@core/syntax/types/nodes.js';
 
 /**
  * Options for URL validation and operations
@@ -83,7 +84,7 @@ interface URLValidationOptions {
  * - IFileSystemService: For file and directory existence checks
  * - IParserService: Optional, for AST-based path handling
  */
-interface IPathService extends PathServiceBase {
+interface IPathService {
   /**
    * Initialize the path service with required dependencies.
    * Must be called before using any other methods.

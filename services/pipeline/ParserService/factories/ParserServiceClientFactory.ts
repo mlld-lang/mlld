@@ -3,7 +3,8 @@ import { Service } from '@core/ServiceProvider.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { parserLogger as logger } from '@core/utils/logger.js';
-import type { MeldNode } from '@core/syntax/types.js';
+import type { MeldNode, InterpolatableValue } from '@core/syntax/types/nodes.js';
+import type { ParserOptions } from '@core/ast/index.js';
 
 /**
  * Factory for creating ParserServiceClient instances.

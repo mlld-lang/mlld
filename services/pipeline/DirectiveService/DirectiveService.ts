@@ -25,7 +25,8 @@ import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { RawPath } from '@core/types/paths.js';
+import type { RawPath, Location as CoreLocation } from '@core/types';
+import type { SourceLocation as SyntaxSourceLocation } from '@core/syntax/types';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 
@@ -292,7 +293,6 @@ export class DirectiveService implements IDirectiveService {
     } else {
         try {
             const runHandler = new RunDirectiveHandler(
-              this.validationService,
               this.resolutionService,
               this.fileSystemService
             );
@@ -382,7 +382,19 @@ export class DirectiveService implements IDirectiveService {
 
     const handler = this.handlers.get(kind);
     if (!handler) {
-      throw new DirectiveError(`No handler registered for directive kind: ${kind}`, kind, DirectiveErrorCode.HANDLER_NOT_FOUND, { node, location: node.location });
+      // Convert location for the error details
+      const errorLocation: CoreLocation | undefined = node.location ? { 
+          start: node.location.start, 
+          end: node.location.end, 
+          // Get file path from context if available
+          filePath: context.state?.getCurrentFilePath() ?? context.resolutionContext?.currentFilePath ?? undefined 
+      } : undefined;
+      throw new DirectiveError(
+          `No handler registered for directive kind: ${kind}`, 
+          kind, 
+          DirectiveErrorCode.HANDLER_NOT_FOUND, 
+          { node, location: errorLocation } // Pass converted CoreLocation
+      );
     }
 
     // Explicitly cast the handler retrieved from the map
@@ -401,8 +413,13 @@ export class DirectiveService implements IDirectiveService {
          const importPath = this.pathService!.resolvePath(node.directive.path, currentFilePath as RawPath | undefined);
          
          if (this.circularityService!.isInStack(importPath as RawPath)) {
-            throw new MeldError(`Circular import detected: ${importPath}`, { code: 'CIRCULAR_IMPORT', severity: ErrorSeverity.Fatal });
+            // --- DEBUG LOG --- Log if circular import detected
+            // console.log(`[DirectiveService handleDirective] Circular import DETECTED for: ${importPath}`);
+            // Revert to correct constructor call
+            throw new MeldError(`Circular import detected: ${importPath}`, { code: 'CIRCULAR_IMPORT', severity: ErrorSeverity.Fatal }); 
          }
+         // --- DEBUG LOG --- Log if circular import passed
+         // console.log(`[DirectiveService handleDirective] Circularity check passed. Import path: ${importPath}`);
       }
       
       // Context Creation (Moved after checks) --- 
@@ -441,32 +458,64 @@ export class DirectiveService implements IDirectiveService {
         if ('replacement' in result && 'state' in result && result.state) {
           // It's a DirectiveResult, ensure state is IStateService
           if (!this.isStateService(result.state)) {
-             throw new MeldDirectiveError('Invalid state object returned in DirectiveResult', kind, { code: DirectiveErrorCode.EXECUTION_FAILED });
+             // Use correct CoreLocation type if needed by MeldDirectiveError constructor
+             const errorLocation: CoreLocation | undefined = node.location ? { 
+                start: node.location.start, 
+                end: node.location.end, 
+                filePath: currentFilePath ?? undefined 
+             } : undefined;
+             throw new MeldDirectiveError(
+                'Invalid state object returned in DirectiveResult', 
+                kind, 
+                { 
+                  code: DirectiveErrorCode.EXECUTION_FAILED,
+                  sourceLocation: errorLocation // Pass CoreLocation compatible object
+                }
+             );
           }
           return result;
         } else if (this.isStateService(result)) {
           // It's an IStateService
           return result;
         } else {
-          throw new MeldDirectiveError('Invalid result type returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED });
+           const errorLocation: CoreLocation | undefined = node.location ? { start: node.location.start, end: node.location.end, filePath: currentFilePath ?? undefined } : undefined;
+           throw new MeldDirectiveError('Invalid result type returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED, sourceLocation: errorLocation });
         }
       } else {
-        throw new MeldDirectiveError('Invalid or null result returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED });
+         const errorLocation: CoreLocation | undefined = node.location ? { start: node.location.start, end: node.location.end, filePath: currentFilePath ?? undefined } : undefined;
+         throw new MeldDirectiveError('Invalid or null result returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED, sourceLocation: errorLocation });
       }
 
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown directive processing error';
         const code = (error instanceof DirectiveError) ? error.code : DirectiveErrorCode.EXECUTION_FAILED;
-        const simplifiedContext = { currentFilePath: context.state?.getCurrentFilePath() ?? undefined };
+        // Create a simplified context for the error details
+        const errorContext: Partial<DirectiveProcessingContext> = {
+           state: context.state, // Keep state if available
+           resolutionContext: context.resolutionContext, // Keep context if available
+           // Add other context pieces if relevant and available
+        };
+        // Convert node.location (SyntaxSourceLocation) to CoreLocation for details
+        const errorLocation: CoreLocation | undefined = node.location ? { 
+            start: node.location.start, 
+            end: node.location.end, 
+            filePath: currentFilePath ?? undefined 
+        } : undefined;
 
         throw new DirectiveError(
           message,
           kind,
           code,
-          { node, context: simplifiedContext, cause: error instanceof Error ? error : undefined }
+          // Pass correct details structure with Partial<DirectiveProcessingContext> and CoreLocation
+          { 
+              node, 
+              context: errorContext, 
+              location: errorLocation, // Use 'location' key
+              cause: error instanceof Error ? error : undefined 
+          } 
         );
+      }
     }
-  }
 
   /**
    * Lazily initialize the ResolutionServiceClientForDirective factory
@@ -578,7 +627,7 @@ export class DirectiveService implements IDirectiveService {
   ): Promise<IStateService> {
     this.ensureInterpreterFactoryInitialized();
     if (!this.interpreterClient) {
-      throw new MeldError('InterpreterServiceClient not available for createChildContext');
+      throw new MeldError('InterpreterServiceClient not available for createChildContext', { code: 'CLIENT_UNAVAILABLE', severity: ErrorSeverity.Fatal });
     }
     // Pass arguments matching the client interface (parentState, filePath, options)
     const childStateLike = await this.interpreterClient.createChildContext(parentState, filePath, options);
@@ -655,10 +704,22 @@ export class DirectiveService implements IDirectiveService {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown directive processing error';
         const code = (error instanceof DirectiveError) ? error.code : DirectiveErrorCode.EXECUTION_FAILED;
+        // Create simplified context for error details
+        const errorContext: Partial<DirectiveProcessingContext> = {
+           state: nodeState, // Use nodeState here
+           resolutionContext: resolutionContext,
+           // Include other parts if needed
+        };
         // Pass correct details structure
+        const errorLocation: CoreLocation | undefined = node.location ? { 
+            start: node.location.start, 
+            end: node.location.end, 
+            filePath: currentFilePath ?? undefined 
+        } : undefined;
         const errorDetails = { 
             node, 
-            context: { currentFilePath }, 
+            context: errorContext, 
+            location: errorLocation, // Use 'location' key
             cause: error instanceof Error ? error : undefined 
         };
         throw new DirectiveError(

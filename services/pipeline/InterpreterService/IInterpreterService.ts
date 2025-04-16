@@ -134,6 +134,6 @@ interface IInterpreterService {
     filePath?: string,
     options?: InterpreterOptionsBase
   ): Promise<IStateService>;
-} 
+}
 
-export type { ErrorHandler, InterpreterOptions, IInterpreterService }; 
+export type { ErrorHandler, /* InterpreterOptions, */ IInterpreterService }; 

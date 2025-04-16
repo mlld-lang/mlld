@@ -1,15 +1,22 @@
-import type { MeldNode, Location, VariableReferenceNode, InterpolatableValue, StructuredPath } from '@core/syntax/types/index.js';
+import type { 
+    MeldNode, 
+    InterpolatableValue, 
+    StructuredPath, 
+    Field, 
+    VariableReferenceNode 
+} from '@core/syntax/types/nodes.js';
 import type { MeldVariable, VariableType } from '@core/types/variables.js';
-import { ResolutionContext, ResolutionOptions, Field } from '@core/types/resolution.js';
+import type { ResolutionContext, FormattingContext } from '@core/types/resolution.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { PathValidationContext, MeldPath } from '@core/types/paths.js';
-import { Result } from '@core/types/result.js';
-import { FieldAccessError } from '@core/errors/FieldAccessError.js';
+import type { MeldPath, PathValidationContext } from '@core/types/paths.js';
+import type { Result } from '@core/types';
+import type { MeldResolutionError, PathValidationError, FieldAccessError } from '@core/errors';
 import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import { Field as AstField } from '@core/syntax/types/shared-types.js';
 import type { JsonValue } from '@core/types/common.js';
+import type { Location } from '@core/types';
 
-export type { ResolutionContext, FormattingContext } from '@core/types/resolution.js';
+export type { ResolutionContext, FormattingContext };
 
 /**
  * Service responsible for resolving variables, commands, and paths in Meld content.
@@ -180,8 +187,7 @@ export interface IResolutionService {
   getResolutionTracker(): VariableResolutionTracker | undefined;
 }
 
-export type { IResolutionService };
+export type { FieldAccessError };
 export type { VariableResolutionTracker, ResolutionTrackingConfig };
-export type { MeldResolutionError, PathValidationError, FieldAccessError };
 
 import type { StateServiceLike } from '@core/shared-service-types.js'; 
