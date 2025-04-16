@@ -1,31 +1,29 @@
 import { vi } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
-import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
-import type { MeldNode, TextNode } from '@core/syntax/types/index.js';
+import { TestContextDI } from '../di/TestContextDI';
+import { MockFactory } from '../mocks/MockFactory';
+import { ClientFactoryHelpers } from '../mocks/ClientFactoryHelpers';
+import { IInterpreterService, InterpretOptions } from '@services/pipeline/InterpreterService/IInterpreterService';
+import { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
+import { IStateService } from '@services/state/StateService/IStateService';
+import { IParserService } from '@services/pipeline/ParserService/IParserService';
+import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
+import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import { IPathService } from '@services/fs/PathService/IPathService';
+import { MeldNode, TextNode } from '@core/syntax/types';
 import { createTextNode, createLocation } from '@tests/utils/testFactories.js';
 
 /**
  * Options for configuring the InterpreterTestFixture
  */
 export interface InterpreterTestOptions {
-  interpreterOverrides?: Partial<IInterpreterService>;
   stateOverrides?: Partial<IStateService>;
-  directiveServiceOverrides?: Partial<IDirectiveService>;
+  directiveOverrides?: Partial<IDirectiveService>;
   parserOverrides?: Partial<IParserService>;
   resolutionOverrides?: Partial<IResolutionService>;
+  circularityOverrides?: Partial<ICircularityService>;
   fsOverrides?: Partial<IFileSystemService>;
   pathOverrides?: Partial<IPathService>;
-  circularityOverrides?: Partial<ICircularityService>;
-  otherMocks?: Record<string, any>; // For any other specific mocks needed
 }
 
 /**
@@ -33,15 +31,27 @@ export interface InterpreterTestOptions {
  * Provides a pre-configured DI context with standard mocks and helpers.
  */
 export class InterpreterTestFixture {
-  context!: TestContextDI;
+  context: TestContextDI;
   interpreterService!: IInterpreterService;
   stateService!: IStateService;
   directiveService!: IDirectiveService;
   parserService!: IParserService;
   resolutionService!: IResolutionService;
-  fsService!: IFileSystemService;
-  pathService!: IPathService;
   circularityService!: ICircularityService;
+  fileSystemService!: IFileSystemService;
+  pathService!: IPathService;
+
+  // Store references to mock implementations for easier access in tests
+  mockStateService!: IStateService;
+  mockDirectiveService!: IDirectiveService;
+  mockParserService!: IParserService;
+  mockResolutionService!: IResolutionService;
+  mockCircularityService!: ICircularityService;
+  mockFileSystemService!: IFileSystemService;
+  mockPathService!: IPathService;
+
+  // Stores registered client factories and their mock clients
+  clientFactories!: Record<string, { factory: any, client: any }>;
 
   // Private constructor to force creation via static method
   private constructor(context: TestContextDI) {
@@ -49,81 +59,88 @@ export class InterpreterTestFixture {
   }
 
   /**
-   * Asynchronously creates and initializes a new InterpreterTestFixture.
-   * @param options - Configuration options for the fixture and its mocks.
-   * @returns A promise that resolves to the initialized InterpreterTestFixture.
+   * Creates and initializes a new InterpreterTestFixture.
+   * Sets up a TestContextDI with standard mocks and registers client factories.
    */
   static async create(options: InterpreterTestOptions = {}): Promise<InterpreterTestFixture> {
+    const fixture = new InterpreterTestFixture(TestContextDI.create());
     const helpers = TestContextDI.createTestHelpers();
-    // Start with standard mocks, allowing overrides
-    const context = helpers.setupWithStandardMocks(options.otherMocks || {}, { isolatedContainer: true });
-    
-    // Ensure initialization completes
-    await context.resolve('IFileSystemService'); // Resolve something simple 
 
-    const fixture = new InterpreterTestFixture(context);
+    // Create mock instances using the MockFactory and provided overrides
+    fixture.mockStateService = MockFactory.createStateService(options.stateOverrides);
+    fixture.mockDirectiveService = MockFactory.createDirectiveService(options.directiveOverrides);
+    fixture.mockParserService = MockFactory.createParserService(options.parserOverrides);
+    fixture.mockResolutionService = MockFactory.createResolutionService(options.resolutionOverrides);
+    fixture.mockCircularityService = {
+      isFileVisited: vi.fn().mockReturnValue(false),
+      markFileVisited: vi.fn(),
+      markFileUnvisited: vi.fn(),
+      detectCircularImport: vi.fn(),
+      pushResolution: vi.fn(),
+      popResolution: vi.fn(),
+      ...options.circularityOverrides,
+    } as ICircularityService;
+    fixture.mockFileSystemService = MockFactory.createFileSystemService(options.fsOverrides);
+    fixture.mockPathService = MockFactory.createPathService(options.pathOverrides);
 
-    // --- Mock Registration with Overrides ---
-    ClientFactoryHelpers.registerStandardClientFactories(fixture.context);
+    // Prepare custom mocks for setupWithStandardMocks
+    const customMocks: Record<string, any> = {
+      'IStateService': fixture.mockStateService,
+      'IDirectiveService': fixture.mockDirectiveService,
+      'IParserService': fixture.mockParserService,
+      'IResolutionService': fixture.mockResolutionService,
+      'ICircularityService': fixture.mockCircularityService,
+      'IFileSystemService': fixture.mockFileSystemService,
+      'IPathService': fixture.mockPathService,
+      // Add other essential mocks if needed, e.g., Logger
+      'ILogger': {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        child: vi.fn().mockReturnThis(),
+      },
+    };
 
-    fixture.context.registerMock<IInterpreterService>(
-      'IInterpreterService',
-      MockFactory.createInterpreterService(options.interpreterOverrides)
-    );
-    fixture.context.registerMock<IStateService>(
-      'IStateService', 
-      MockFactory.createStateService(options.stateOverrides)
-    );
-    fixture.context.registerMock<IDirectiveService>(
-        'IDirectiveService',
-        MockFactory.createDirectiveService(options.directiveServiceOverrides)
-    );
-    fixture.context.registerMock<IParserService>(
-        'IParserService',
-        MockFactory.createParserService(options.parserOverrides)
-    );
-    fixture.context.registerMock<IResolutionService>(
-        'IResolutionService',
-        MockFactory.createResolutionService(options.resolutionOverrides)
-    );
-     fixture.context.registerMock<IFileSystemService>(
-        'IFileSystemService',
-        MockFactory.createFileSystemService(options.fsOverrides)
-    );
-     fixture.context.registerMock<IPathService>(
-        'IPathService',
-        MockFactory.createPathService(options.pathOverrides)
-    );
-     fixture.context.registerMock<ICircularityService>(
-        'ICircularityService',
-        { // Assuming no standard mock factory for this yet
-            markFileVisited: vi.fn(),
-            isFileVisited: vi.fn().mockReturnValue(false),
-            clearVisitedFiles: vi.fn(),
-            getVisitedFiles: vi.fn().mockReturnValue([]),
-            ...(options.circularityOverrides || {})
-        } as ICircularityService
-    );
-    
-    // --- Resolve Services ---
-    fixture.interpreterService = await fixture.context.resolve('IInterpreterService');
-    fixture.stateService = await fixture.context.resolve('IStateService');
-    fixture.directiveService = await fixture.context.resolve('IDirectiveService');
-    fixture.parserService = await fixture.context.resolve('IParserService');
-    fixture.resolutionService = await fixture.context.resolve('IResolutionService');
-    fixture.fsService = await fixture.context.resolve('IFileSystemService');
-    fixture.pathService = await fixture.context.resolve('IPathService');
-    fixture.circularityService = await fixture.context.resolve('ICircularityService');
+    // Use setupWithStandardMocks to create the context, providing our custom mocks
+    fixture.context = helpers.setupWithStandardMocks(customMocks);
 
-    // --- Default Mock Behavior Setup (Optional) ---
-    // Example: Make directive service handle directives by returning the state
-    vi.spyOn(fixture.directiveService, 'handleDirective').mockImplementation(async (node, processCtx) => {
-        // Default behavior: simply return the state
-        return processCtx.state;
-    });
-     // Example: Make state service return itself on clone
-    vi.spyOn(fixture.stateService, 'clone').mockImplementation(() => fixture.stateService);
-    
+    // Register standard client factories AFTER core services are mocked
+    // Note: ClientFactoryHelpers might need adjustment if they assume mocks
+    // are already registered by setupWithStandardMocks internal calls.
+    // For now, assume setupWithStandardMocks handles internal factory mocks if needed.
+    // We might need to explicitly register factory mocks here if setup doesn't cover them.
+    fixture.clientFactories = ClientFactoryHelpers.registerStandardClientFactories(fixture.context);
+
+    // Resolve the main service and its key dependencies
+    // The mocks registered above will be injected
+    fixture.interpreterService = await fixture.context.resolve<IInterpreterService>('IInterpreterService');
+    fixture.stateService = await fixture.context.resolve<IStateService>('IStateService');
+    fixture.directiveService = await fixture.context.resolve<IDirectiveService>('IDirectiveService');
+    fixture.parserService = await fixture.context.resolve<IParserService>('IParserService');
+    fixture.resolutionService = await fixture.context.resolve<IResolutionService>('IResolutionService');
+    fixture.circularityService = await fixture.context.resolve<ICircularityService>('ICircularityService');
+    fixture.fileSystemService = await fixture.context.resolve<IFileSystemService>('IFileSystemService');
+    fixture.pathService = await fixture.context.resolve<IPathService>('IPathService');
+
+    // Verify the resolved services are indeed our mock instances
+    // This helps catch DI configuration issues early
+    if (fixture.stateService !== fixture.mockStateService) {
+        console.warn('InterpreterTestFixture: Resolved StateService is not the provided mock instance.');
+    }
+     if (fixture.directiveService !== fixture.mockDirectiveService) {
+        console.warn('InterpreterTestFixture: Resolved DirectiveService is not the provided mock instance.');
+    }
+     if (fixture.parserService !== fixture.mockParserService) {
+        console.warn('InterpreterTestFixture: Resolved ParserService is not the provided mock instance.');
+    }
+      if (fixture.resolutionService !== fixture.mockResolutionService) {
+        console.warn('InterpreterTestFixture: Resolved ResolutionService is not the provided mock instance.');
+    }
+     if (fixture.circularityService !== fixture.mockCircularityService) {
+        console.warn('InterpreterTestFixture: Resolved CircularityService is not the provided mock instance.');
+    }
+
     return fixture;
   }
 
@@ -135,12 +152,19 @@ export class InterpreterTestFixture {
   }
 
   /**
+   * Helper method to run the interpreter service.
+   */
+  async interpret(nodes: MeldNode[], options?: InterpretOptions): Promise<IStateService> {
+    return this.interpreterService.interpret(nodes, options);
+  }
+
+  /**
    * Helper to interpret an array of MeldNodes using the mocked InterpreterService.
    * @param nodes - The nodes to interpret.
    * @param options - Optional interpreter options.
    * @returns The final state after interpretation (typically the mocked stateService).
    */
-  async interpretNodes(nodes: MeldNode[], options?: InterpreterOptions): Promise<IStateService> {
+  async interpretNodes(nodes: MeldNode[], options?: InterpretOptions): Promise<IStateService> {
     // Ensure the service uses the fixture's state service by default
     const interpretOptions = { initialState: this.stateService, ...options };
     return this.interpreterService.interpret(nodes, interpretOptions);
@@ -152,7 +176,7 @@ export class InterpreterTestFixture {
    * @param options - Optional interpreter options.
    * @returns The final state after interpretation.
    */
-  async interpretNode(node: MeldNode, options?: InterpreterOptions): Promise<IStateService> {
+  async interpretNode(node: MeldNode, options?: InterpretOptions): Promise<IStateService> {
      const interpretOptions = { initialState: this.stateService, ...options };
      // Assuming interpretNode exists or is mocked on the service
      if (!this.interpreterService.interpretNode) {

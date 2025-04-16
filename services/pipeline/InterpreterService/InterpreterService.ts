@@ -88,6 +88,17 @@ export class InterpreterService implements IInterpreterService {
     this.stateService = stateService;
     this.parserClientFactory = parserClientFactory;
     
+    // --- DEBUG LOGGING --- 
+    console.log(`[InterpreterService CONSTRUCTOR] Received dependencies:`);
+    console.log(`  - has resolutionService: ${!!this.resolutionService}`);
+    console.log(`  - has pathService: ${!!this.pathService}`);
+    console.log(`  - has directiveClientFactory: ${!!this.directiveClientFactory}`);
+    console.log(`    - factory type: ${typeof this.directiveClientFactory?.createClient}`);
+    console.log(`  - has stateService: ${!!this.stateService}`);
+    console.log(`  - has parserClientFactory: ${!!this.parserClientFactory}`);
+    console.log(`    - factory type: ${typeof this.parserClientFactory?.createClient}`);
+    // --- END DEBUG LOGGING ---
+
     logger.debug('InterpreterService constructor', {
       hasDirectiveFactory: !!this.directiveClientFactory,
       hasStateService: !!this.stateService,
@@ -116,9 +127,18 @@ export class InterpreterService implements IInterpreterService {
     }
     
     try {
+      // --- DEBUG LOGGING --- 
+      console.log(`[InterpreterService initDirectiveClient] Calling factory.createClient(). Factory exists: ${!!this.directiveClientFactory}`);
+      // --- END DEBUG LOGGING ---
       this.directiveClient = this.directiveClientFactory.createClient();
+      // --- DEBUG LOGGING --- 
+      console.log(`[InterpreterService initDirectiveClient] Client created. Type: ${typeof this.directiveClient?.handleDirective}`);
+      // --- END DEBUG LOGGING ---
       logger.debug('Successfully created DirectiveServiceClient using factory', { hasClient: !!this.directiveClient });
     } catch (error) {
+      // --- DEBUG LOGGING --- 
+      console.error(`[InterpreterService initDirectiveClient] Error creating client:`, error);
+      // --- END DEBUG LOGGING ---
       logger.warn('Failed to create DirectiveServiceClient', { error });
       this.directiveClient = undefined;
     }
@@ -133,9 +153,18 @@ export class InterpreterService implements IInterpreterService {
       return;
     }
     try {
+      // --- DEBUG LOGGING --- 
+      console.log(`[InterpreterService initParserClient] Calling factory.createClient(). Factory exists: ${!!this.parserClientFactory}`);
+      // --- END DEBUG LOGGING ---
       this.parserClient = this.parserClientFactory.createClient();
+      // --- DEBUG LOGGING --- 
+      console.log(`[InterpreterService initParserClient] Client created. Type: ${typeof this.parserClient?.parseString}`);
+      // --- END DEBUG LOGGING ---
       logger.debug('Successfully created ParserServiceClient using factory', { hasClient: !!this.parserClient });
     } catch (error) {
+      // --- DEBUG LOGGING --- 
+      console.error(`[InterpreterService initParserClient] Error creating client:`, error);
+      // --- END DEBUG LOGGING ---
       logger.warn('Failed to create ParserServiceClient', { error });
       this.parserClient = undefined;
     }
@@ -313,7 +342,10 @@ export class InterpreterService implements IInterpreterService {
       }
 
       // Take a snapshot of initial state for rollback
-      initialSnapshot = currentState.clone() as IStateService;
+      // --- DEBUG LOGGING --- 
+      console.log(`[InterpreterService interpret] Before initial clone. currentState ID: ${currentState?.getStateId?.()}, typeof clone: ${typeof currentState?.clone}`);
+      // --- END DEBUG LOGGING ---
+      initialSnapshot = currentState.clone() as IStateService; 
       lastGoodState = initialSnapshot;
 
       logger.debug('Starting interpretation', {
@@ -455,6 +487,9 @@ export class InterpreterService implements IInterpreterService {
             }
           }
           // Create new state for the potentially resolved text node
+          // --- DEBUG LOGGING --- 
+          console.log(`[InterpreterService interpretNode - Text] Before clone. currentState ID: ${currentState?.getStateId?.()}, typeof clone: ${typeof currentState?.clone}`);
+          // --- END DEBUG LOGGING ---
           const textState = currentState.clone();
           textState.addNode(processedNode);
           currentState = textState;

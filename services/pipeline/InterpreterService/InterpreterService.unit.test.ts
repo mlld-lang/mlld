@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach, Mock } from 'vitest';
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
 import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { MeldNode, TextNode, DirectiveNode } from '@core/syntax/types/index.js';
@@ -64,6 +64,9 @@ describe('InterpreterService Unit', () => {
     vi.spyOn(stateService, 'createChildState').mockResolvedValue(workingMockState);
     vi.spyOn(stateService, 'getCurrentFilePath').mockReturnValue('/default/test.mld');
     vi.spyOn(stateService, 'isTransformationEnabled').mockReturnValue(true);
+    vi.spyOn(stateService, 'mergeChildState');
+    vi.spyOn(stateService, 'clone').mockImplementation(() => stateService);
+    vi.spyOn(parserService, 'parseString');
   });
 
   afterEach(async () => {
@@ -81,23 +84,46 @@ describe('InterpreterService Unit', () => {
   describe('node interpretation', () => {
     it('processes text nodes by adding to working state', async () => {
       const textNode: TextNode = createTextNode('Test content');
-      await service.interpret([textNode], { initialState: mockInitialState, mergeState: true });
-      expect(mockInitialState.createChildState).toHaveBeenCalled();
-      expect(workingMockState.addNode).toHaveBeenCalledWith(textNode);
+      const initialTestState = MockFactory.createStateService({ getStateId: vi.fn().mockReturnValue('testInitialState')});
+      const workingState = MockFactory.createStateService({ getStateId: vi.fn().mockReturnValue('workingState')});
+      
+      vi.spyOn(initialTestState, 'createChildState').mockImplementation(() => workingState); 
+      vi.spyOn(workingState, 'addNode'); 
+      vi.spyOn(workingState, 'clone').mockReturnValue(workingState);
+
+      console.log(`[TEST DEBUG] Before interpret - initial: ${initialTestState.getStateId()}, working: ${workingState.getStateId()}`);
+      
+      const finalState = await service.interpret([textNode], { initialState: initialTestState, mergeState: true });
+
+      console.log(`[TEST DEBUG] After interpret - finalState ID: ${finalState?.getStateId?.()}`);
+      console.log(`[TEST DEBUG] createChildState calls on initialTestState: ${(initialTestState.createChildState as Mock).mock.calls.length}`);
+      console.log(`[TEST DEBUG] clone calls on workingState (specific instance): ${(workingState.clone as Mock)?.mock?.calls?.length ?? 'N/A'}`);
+      console.log(`[TEST DEBUG] addNode calls on workingState: ${(workingState.addNode as Mock).mock.calls.length}`);
+      
+      expect(initialTestState.createChildState).toHaveBeenCalledTimes(1);
+      expect(workingState.clone).toHaveBeenCalledTimes(1); 
+      expect(workingState.addNode).toHaveBeenCalledWith(textNode);
+      expect(finalState).toBe(workingState); 
     });
 
-    it('processes directive nodes by calling directiveService.handleDirective', async () => {
+    it('processes directive nodes by calling directiveService.handleDirective client', async () => {
       const directiveNode: DirectiveNode = createDirectiveNode('text', { identifier: 'test', value: 'value' });
-      const directiveWorkingState = MockFactory.createStateService({ getStateId: vi.fn().mockReturnValue('directiveWorkingState') });
-      vi.spyOn(directiveWorkingState, 'clone').mockReturnValue(directiveWorkingState);
-      vi.spyOn(workingMockState, 'clone').mockReturnValue(directiveWorkingState);
-      
-      await service.interpret([directiveNode], { initialState: mockInitialState, mergeState: true });
-      expect(workingMockState.clone).toHaveBeenCalled();
+      const initialTestState = MockFactory.createStateService({ getStateId: vi.fn().mockReturnValue('dirInitial')});
+      const workingState = MockFactory.createStateService({ getStateId: vi.fn().mockReturnValue('dirWorking') });
+      const clonedState = MockFactory.createStateService({ getStateId: vi.fn().mockReturnValue('dirCloned') });
+
+      vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
+      vi.spyOn(workingState, 'clone').mockReturnValue(clonedState);
+      vi.spyOn(clonedState, 'addNode').mockReturnValue(undefined);
+
+      await service.interpret([directiveNode], { initialState: initialTestState, mergeState: true });
+
+      expect(initialTestState.createChildState).toHaveBeenCalled();
+      expect(workingState.clone).toHaveBeenCalled();
       expect(directiveService.handleDirective).toHaveBeenCalledWith(
         directiveNode,
         expect.objectContaining({
-          state: directiveWorkingState,
+          state: clonedState,
           directiveNode: directiveNode
         })
       );
@@ -114,7 +140,7 @@ describe('InterpreterService Unit', () => {
             .rejects.toHaveProperty('cause', handlerError);
     });
 
-    it('extracts error location from node when error occurs in handler', async () => {
+    it('extracts error location from node when error occurs in handler client', async () => {
         const location = createLocation(5, 10, 5, 20);
         const directiveNode: DirectiveNode = createDirectiveNode('text', {}, location);
         const testError = new Error('Handler loc Test error');
@@ -146,7 +172,7 @@ describe('InterpreterService Unit', () => {
       expect(workingMockState.setCurrentFilePath).toHaveBeenCalledWith(filePath);
     });
 
-    it('passes context to directive service', async () => {
+    it('passes context to directive client', async () => {
       const location = createLocation(1, 1, 1, 12);
       const directiveNode: DirectiveNode = createDirectiveNode('text', {}, location);
       const options: InterpreterOptions = { initialState: mockInitialState, mergeState: true, filePath: 'test.meld' };
@@ -191,6 +217,8 @@ describe('InterpreterService Unit', () => {
 
     it('processes text nodes with interpolation via parser and resolution services', async () => {
         const node = createTextNode('Hello {{name}}!', createLocation(1, 1));
+        const initialTestState = MockFactory.createStateService();
+        const workingState = MockFactory.createStateService();
         const parsedInterpolatable: InterpolatableValue = [
             createTextNode('Hello ', createLocation(1, 1)),
             { type: 'VariableReference', identifier: 'name', valueType: 'text', isVariableReference: true, location: createLocation(1, 8) },
@@ -198,12 +226,14 @@ describe('InterpreterService Unit', () => {
         ];
         const resolvedContent = 'Hello Alice!';
 
+        vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
+        vi.spyOn(workingState, 'clone').mockReturnValue(workingState);
+        vi.spyOn(workingState, 'addNode').mockReturnValue(undefined);
+        vi.spyOn(workingState, 'getCurrentFilePath').mockReturnValue('/interpolate/path.mld');
         vi.spyOn(parserService, 'parseString').mockResolvedValue(parsedInterpolatable);
         vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValue(resolvedContent);
-        vi.spyOn(workingMockState, 'addNode');
-        vi.spyOn(workingMockState, 'getCurrentFilePath').mockReturnValue('/interpolate/path.mld');
 
-        await service.interpret([node], { initialState: mockInitialState });
+        await service.interpret([node], { initialState: initialTestState });
 
         expect(parserService.parseString).toHaveBeenCalledWith(
             'Hello {{name}}!',
@@ -213,7 +243,7 @@ describe('InterpreterService Unit', () => {
             parsedInterpolatable,
             expect.objectContaining({ currentFilePath: '/interpolate/path.mld' })
         );
-        expect(workingMockState.addNode).toHaveBeenCalledWith(expect.objectContaining({
+        expect(workingState.addNode).toHaveBeenCalledWith(expect.objectContaining({
             type: 'Text',
             content: resolvedContent
         }));
@@ -223,6 +253,16 @@ describe('InterpreterService Unit', () => {
   describe('state management', () => {
     it('creates child state from initial state when interpreting', async () => {
       const textNode: TextNode = createTextNode('Test content');
+      const initialTestState = MockFactory.createStateService();
+      const workingState = MockFactory.createStateService({ getStateId: vi.fn().mockReturnValue('returnedWorkingState') });
+
+      vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
+      vi.spyOn(workingState, 'clone').mockReturnValue(workingState);
+      vi.spyOn(workingState, 'addNode').mockReturnValue(undefined);
+
+      await service.interpret([textNode], { initialState: initialTestState });
+
+      expect(initialTestState.createChildState).toHaveBeenCalled();
       await service.interpret([textNode], { initialState: mockInitialState });
       expect(mockInitialState.createChildState).toHaveBeenCalled();
     });
@@ -389,8 +429,8 @@ describe('InterpreterService Unit', () => {
     });
   });
 
-  describe('Phase 5 Refactoring Verification', () => {
-    it('passes correctly structured context to directive handler', async () => {
+  describe('Phase 5 Refactoring Verification (Manual Setup)', () => {
+    it('passes correctly structured context to directive client', async () => {
       const location = createLocation(1,1);
       const directiveNode = createDirectiveNode('run', { subtype: 'runCommand', command: 'echo hello' }, location);
       const directiveWorkingState = MockFactory.createStateService();
@@ -439,7 +479,7 @@ describe('InterpreterService Unit', () => {
       expect(finalState.getStateId()).toBe(workingMockState.getStateId()); 
     });
 
-    it('handles direct IStateService return from directive handler', async () => {
+    it('handles direct IStateService return from directive client', async () => {
       const directiveNode = createDirectiveNode('text', { identifier: 'abc', value: 'def' });
       vi.spyOn(directiveService, 'handleDirective').mockResolvedValue(workingMockState);
       vi.spyOn(workingMockState, 'transformNode');
