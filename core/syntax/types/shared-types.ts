@@ -14,7 +14,8 @@ type NodeType =
   | 'CodeFence'
   | 'Comment'
   | 'Error'
-  | 'VariableReference';
+  | 'VariableReference'
+  | 'Variable';
 
 // Position in a source file
 interface Position {

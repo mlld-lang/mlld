@@ -1,4 +1,4 @@
-import type { MeldNode, SourceLocation, DirectiveNode, TextNode } from '@core/syntax/types/index.js';
+import type { MeldNode, SourceLocation, DirectiveNode, TextNode, VariableReferenceNode } from '@core/syntax/types/index.js';
 import { interpreterLogger as logger } from '@core/utils/logger.js';
 import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -433,7 +433,14 @@ export class InterpreterService implements IInterpreterService {
                 const context = ResolutionContextFactory.create(state, currentFilePath);
                 const textResolutionContext = context.withFlags({ preserveUnresolved: false });
                 process.stdout.write(`[InterpreterService LOG] Context for resolveNodes: strict=${textResolutionContext.strict}, depth=${textResolutionContext.depth}, preserveUnresolved=${textResolutionContext.flags.preserveUnresolved}\n`);
-                const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, textResolutionContext);
+                
+                // Filter parsed nodes to only include TextNode and VariableReferenceNode for resolveNodes
+                const interpolatableNodes = parsedNodes.filter(
+                  (node): node is TextNode | VariableReferenceNode => 
+                    node.type === 'Text' || node.type === 'VariableReference'
+                );
+
+                const resolvedContent = await this.resolutionService.resolveNodes(interpolatableNodes, textResolutionContext);
                 // Create a new node with resolved content
                 processedNode = { ...textNode, content: resolvedContent }; // Use spread on textNode
                 process.stdout.write(`[InterpreterService LOG] Resolved content: '${resolvedContent}'\n`);

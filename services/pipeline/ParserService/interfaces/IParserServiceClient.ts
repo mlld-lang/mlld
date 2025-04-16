@@ -1,3 +1,5 @@
+import type { MeldNode } from '@core/syntax/types/index.js';
+
 /**
  * Minimal interface for what ResolutionService needs from ParserService.
  * This interface is used to break the circular dependency between ParserService and ResolutionService.
