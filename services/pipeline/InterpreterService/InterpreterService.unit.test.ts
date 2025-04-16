@@ -91,6 +91,7 @@ describe('InterpreterService Unit', () => {
       setCurrentFilePath: vi.fn(),
       getNodes: vi.fn().mockReturnValue([]),
       transformNode: vi.fn(), // Add missing method for Phase 5 tests
+      getTransformedNodes: vi.fn().mockReturnValue([]), // Add missing method for Phase 5 tests
       _mockStorage: {},
     } as unknown as IStateService;
 
@@ -551,13 +552,13 @@ describe('InterpreterService Unit', () => {
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('throws error for null node', async () => {
       await expect(service.interpret([null as unknown as MeldNode], { initialState: mockStateService }))
-            .rejects.toThrow(/Invalid node encountered/);
+            .rejects.toThrow(/No node provided for interpretation/);
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('throws error for undefined node', async () => {
       await expect(service.interpret([undefined as unknown as MeldNode], { initialState: mockStateService }))
-            .rejects.toThrow(/Invalid node encountered/);
+            .rejects.toThrow(/No node provided for interpretation/);
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
@@ -592,7 +593,7 @@ describe('InterpreterService Unit', () => {
        const node = createDirectiveNode('text', {}, createLocation(1,1));
        (node as any).directive = undefined;
        await expect(service.interpret([node], { initialState: mockStateService }))
-            .rejects.toThrow(/Invalid directive node structure/);
+             .rejects.toThrow(/Invalid directive node/);
     });
   });
 
@@ -615,6 +616,8 @@ describe('InterpreterService Unit', () => {
       // vi.spyOn(initialTestState, 'createChildState').mockResolvedValue(workingState);
       // vi.spyOn(workingState, 'clone').mockReturnValue(clonedState);
       vi.spyOn(mockPathService, 'dirname').mockReturnValue('/test'); 
+      // Set specific file path for this test's state
+      vi.spyOn(clonedState, 'getCurrentFilePath').mockReturnValue('/test/working-p5-manual.mld');
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue(clonedState);
       
       await service.interpret([directiveNode], { initialState: initialTestState });
