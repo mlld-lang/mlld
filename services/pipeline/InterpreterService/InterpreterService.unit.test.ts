@@ -89,6 +89,12 @@ describe('InterpreterService Unit', () => {
     mockDirectiveClientFactory = { createClient: vi.fn().mockReturnValue(mockDirectiveClient) } as unknown as DirectiveServiceClientFactory;
     mockParserClientFactory = { createClient: vi.fn().mockReturnValue(mockParserClient) } as unknown as ParserServiceClientFactory;
 
+    // Mock clone directly on the object AFTER other mocks are assigned
+    mockStateService.clone = vi.fn().mockImplementation(() => {
+        process.stdout.write(`[LOG][clone Mock Direct Assign] ENTERED.\n`);
+        return mockStateService;
+    });
+
     // --- Create Container & Register Mocks ---
     testContainer = container.createChildContainer();
     testContainer.registerInstance('IResolutionService', mockResolutionService);
