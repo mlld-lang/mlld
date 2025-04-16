@@ -310,9 +310,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
     try {
       const textVars = sourceState.getAllTextVars();
-      process.stdout.write(`\nDEBUG: importAllVariables - textVars size: ${textVars?.size}\n`); 
+      process.stdout.write(`\nDEBUG: importAllVariables - textVars size: ${textVars?.size}\n`);
       textVars.forEach((originalVar, key) => {
-        process.stdout.write(`\nDEBUG: importAllVariables - Processing text key: ${key}, value: ${originalVar?.value}\n`); // Log each var
+        process.stdout.write(`\nDEBUG: importAllVariables - Processing text key: ${key}, value: ${originalVar?.value}\n`); 
         try {
           const metadata: VariableMetadata = {
             origin: VariableOrigin.IMPORT,
@@ -331,19 +331,19 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             value: originalVar.value,
             metadata: metadata
           };
-          // --- Log before call ---
-          process.stdout.write(`\nDEBUG: Calling targetState.setTextVar(${key}, ${newVar.value})\n`);
-          // --- End log ---
-          targetState.setTextVar(key, newVar.value);
+          process.stdout.write(`\nDEBUG: importAllVariables - Target is stateService? ${Object.is(targetState, (globalThis as any).__test_state_service)} Key: ${key}\n`); 
+          targetState.setTextVar(key, newVar.value); 
+          process.stdout.write(`\nDEBUG: Called targetState.setTextVar for ${key}\n`);
         } catch (error) {
+          process.stdout.write(`\nERROR in importAllVariables textVar loop: ${error}\n`);
           logger.warn(`Failed to import text variable ${key}`, { error });
         }
       });
 
       const dataVars = sourceState.getAllDataVars();
-      process.stdout.write(`\nDEBUG: importAllVariables - dataVars size: ${dataVars?.size}\n`); // Log map size
+      process.stdout.write(`\nDEBUG: importAllVariables - dataVars size: ${dataVars?.size}\n`); 
       dataVars.forEach((originalVar, key) => {
-        process.stdout.write(`\nDEBUG: importAllVariables - Processing data key: ${key}, value: ${JSON.stringify(originalVar?.value)}\n`); // Log each var
+         process.stdout.write(`\nDEBUG: importAllVariables - Processing data key: ${key}\n`);
         try {
           const valueCopy = JSON.parse(JSON.stringify(originalVar.value)) as JsonValue;
           const metadata: VariableMetadata = {
@@ -363,8 +363,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             value: valueCopy,
             metadata: metadata
           };
+          process.stdout.write(`\nDEBUG: importAllVariables - Target is stateService? ${Object.is(targetState, (globalThis as any).__test_state_service)} Key: ${key}\n`); 
           targetState.setDataVar(key, newVar.value);
+          process.stdout.write(`\nDEBUG: Called targetState.setDataVar for ${key}\n`);
         } catch (error) {
+          process.stdout.write(`\nERROR in importAllVariables dataVar loop: ${error}\n`);
           logger.warn(`Failed to import data variable ${key}`, { error });
         }
       });
@@ -420,6 +423,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
       });
     } catch (error) {
+      process.stdout.write(`\nERROR in importAllVariables outer try: ${error}\n`);
       logger.warn('Error during importAllVariables', { error });
     }
   }
@@ -433,14 +437,13 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     currentFilePath: string | undefined
   ): void {
     for (const item of imports) {
-       process.stdout.write(`\nDEBUG: processStructuredImports - Processing item: ${item.name}, Alias: ${item.alias}\n`); // Log item
+      process.stdout.write(`\nDEBUG: processStructuredImports - Processing item: ${item.name}\n`);
       try {
         const { name, alias } = item;
         const targetName = alias || name;
         let variableFound = false;
 
         const textVar = sourceState.getTextVar(name);
-        process.stdout.write(`\nDEBUG: processStructuredImports - Found textVar for ${name}: ${!!textVar}\n`); // Log if found
         if (textVar) {
           const metadata: VariableMetadata = {
             origin: VariableOrigin.IMPORT,
@@ -454,8 +457,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             modifiedAt: Date.now(),
           };
           const newVar: TextVariable = { type: VariableType.TEXT, name: targetName, value: textVar.value, metadata: metadata };
-          process.stdout.write(`\nDEBUG: Calling targetState.setTextVar(${targetName}, ${newVar.value})\n`); // Log before call
+          process.stdout.write(`\nDEBUG: processStructuredImports - Target is stateService? ${Object.is(targetState, (globalThis as any).__test_state_service)} Key: ${targetName}\n`);
           targetState.setTextVar(targetName, newVar.value);
+          process.stdout.write(`\nDEBUG: Called targetState.setTextVar for ${targetName}\n`);
           variableFound = true;
           continue;
         }
@@ -475,7 +479,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           };
           const valueCopy = JSON.parse(JSON.stringify(dataVar.value)) as JsonValue;
           const newVar: DataVariable = { type: VariableType.DATA, name: targetName, value: valueCopy, metadata: metadata };
+          process.stdout.write(`\nDEBUG: processStructuredImports - Target is stateService? ${Object.is(targetState, (globalThis as any).__test_state_service)} Key: ${targetName}\n`); 
           targetState.setDataVar(targetName, newVar.value);
+          process.stdout.write(`\nDEBUG: Called targetState.setDataVar for ${targetName}\n`);
           variableFound = true;
           continue;
         }
@@ -521,6 +527,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
            logger.warn(`Variable "${name}" not found in imported state for structured import.`);
         }
       } catch (error) {
+         process.stdout.write(`\nERROR in processStructuredImports loop: ${error}\n`);
          logger.warn(`Failed to import variable ${item.name} as ${item.alias || item.name}`, { error });
       }
     }

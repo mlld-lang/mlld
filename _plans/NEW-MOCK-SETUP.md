@@ -156,4 +156,6 @@ Implement the new, standardized mocking strategy proposed in the `_cmte/audit-mo
 
 *   **Test Logic Accuracy:**
     *   Verify test assertions match the *actual* arguments and behavior of the code under test.
-    *   Remove tests that assert unreachable states or side effects not relevant to the tested code path. 
+    *   Remove tests that assert unreachable states or side effects not relevant to the tested code path.
+
+*   **Async Mock Return Values:** Awaiting promises returned by mocked methods (e.g., `mockResolvedValue` or `async mockImplementation`) that resolve to *other mock objects* (plain or `mockDeep`) can sometimes lead to unexpected behavior where the resolved object appears to lose its methods or properties at runtime (`typeof method === 'undefined'`). This was observed in `ImportDirectiveHandler.test.ts` with the state object returned by the mocked `interpreterClient.interpret`. The root cause requires further investigation, potentially related to Vitest/Node promise resolution or mock proxy interactions. (See Issue #39). 
