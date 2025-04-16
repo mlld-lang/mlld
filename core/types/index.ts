@@ -106,7 +106,7 @@ export interface ProcessOptions {
  * Centralized export point for core Meld types.
  */
 
-// Fix: Explicitly export from common.js, excluding SourceLocation
+// Export types from common.js, including SourceLocation
 export {
   type JsonValue,
   type JsonObject,
@@ -115,7 +115,8 @@ export {
   success,
   failure,
   type DirectiveReplacement,
-  StringLiteralType
+  StringLiteralType,
+  type SourceLocation
 } from './common';
 
 export * from './variables';
@@ -145,7 +146,6 @@ export type {
   FieldAccess,
   EmbedParams,
   EmbedResolutionContext,
-  EmbedSourceLocation,
   EmbedResult
 };
 

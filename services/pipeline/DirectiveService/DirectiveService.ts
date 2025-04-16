@@ -20,7 +20,7 @@ import { DirectiveResult } from './interfaces/DirectiveTypes.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
-import type { DirectiveProcessingContext, FormattingContext, ExecutionContext } from '@core/types/index.js';
+import type { DirectiveProcessingContext, OutputFormattingContext, ExecutionContext } from '@core/types/index.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -425,7 +425,7 @@ export class DirectiveService implements IDirectiveService {
       
       // Context Creation (Moved after checks) --- 
       const resolutionContext = ResolutionContextFactory.create(state, currentFilePath);
-      const formattingContext: FormattingContext = { 
+      const formattingContext: OutputFormattingContext = { 
          isOutputLiteral: state.isTransformationEnabled(),
          contextType: 'block', 
          nodeType: node.type,
@@ -671,7 +671,7 @@ export class DirectiveService implements IDirectiveService {
 
       // Create contexts
       const resolutionContext = ResolutionContextFactory.create(nodeState, currentFilePath);
-      const formattingContext: FormattingContext = { 
+      const formattingContext: OutputFormattingContext = { 
           isOutputLiteral: nodeState.isTransformationEnabled?.() || false,
           contextType: 'block', 
           nodeType: node.type,

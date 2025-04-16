@@ -16,7 +16,7 @@ import { ParserServiceClientFactory } from '@services/pipeline/ParserService/fac
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { DirectiveResult } from '@services/pipeline/DirectiveService/interfaces/DirectiveTypes.js';
-import type { DirectiveProcessingContext, ExecutionContext, FormattingContext } from '@core/types/index.js';
+import type { DirectiveProcessingContext, ExecutionContext, OutputFormattingContext } from '@core/types/index.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 
@@ -517,7 +517,7 @@ export class InterpreterService implements IInterpreterService {
           // --- Create Context Objects --- 
           const baseResolutionContext = ResolutionContextFactory.create(directiveState, directiveState.getCurrentFilePath() ?? undefined);
           // Create Formatting Context (example initialization)
-          const formattingContext: FormattingContext = {
+          const formattingContext: OutputFormattingContext = {
             isOutputLiteral: directiveState.isTransformationEnabled?.() || false,
             contextType: 'block', // Default to block context
             nodeType: directiveNode.type,
