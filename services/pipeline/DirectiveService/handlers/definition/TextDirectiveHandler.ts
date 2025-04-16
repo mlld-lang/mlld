@@ -73,7 +73,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
     // Standardized context for errors
     const errorDetailsContext = { 
       node: node, 
-      context: { currentFilePath: currentFilePath ?? undefined } 
+      context: context // Pass the full processing context
     };
 
     logger.debug('Processing text directive', {
@@ -102,7 +102,9 @@ export class TextDirectiveHandler implements IDirectiveHandler {
               resolvedValue = value; // Assume string literals are already processed by parser/resolver if needed
           } else if (isInterpolatableValueArray(value)) {
               // Resolve the array of nodes into a single string
+              logger.debug('Text value is InterpolatableValue, resolving nodes...');
               resolvedValue = await this.resolutionService.resolveNodes(value, resolutionContext);
+              logger.debug('Resolved InterpolatableValue to string:', resolvedValue);
           } else {
              throw new DirectiveError(
                `Invalid value type for @text source 'literal'. Expected string or InterpolatableValue array.`,

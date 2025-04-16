@@ -191,38 +191,17 @@ describe('TextDirectiveHandler Integration', () => {
           await fixture.executeHandler(node, {}, mockProcessingContext);
       } catch (error) {
           thrownError = error;
-          if (error instanceof Error && !(error instanceof DirectiveError)) {
-             const currentFilePath = fixture.stateService.getCurrentFilePath() ?? undefined;
-             const wrappedError = new DirectiveError(
-               error.message, 
-               'text', 
-               DirectiveErrorCode.VALIDATION_FAILED, 
-               { node, context: { currentFilePath } }
-             );
-             errorCollector.handleError(wrappedError);
-          } else if (error instanceof DirectiveError) {
-            if (!error.details?.context) { 
-               const currentFilePath = fixture.stateService.getCurrentFilePath() ?? undefined;
-               if (error.details) { 
-                  error.details.context = { currentFilePath };
-               } else { 
-                 (error as any).details = { context: { currentFilePath } }; 
-               }
-            }
-            errorCollector.handleError(error);
-          }
       }
       
       expect(thrownError).toBeDefined();
       expect(thrownError).toBeInstanceOf(DirectiveError);
 
-      const collectedError = errorCollector.getAllErrors()[0];
-      expect(collectedError).toBeDefined();
-      expect(collectedError.details).toBeDefined(); 
-      expect(collectedError.details?.node).toBe(node); 
-      expect(collectedError.details?.node?.location?.start?.line).toBe(5); 
-      expect(collectedError.details?.context).toBeDefined();
-      expect(collectedError.details?.context?.currentFilePath).toBe(testFilePath);
+      expect(thrownError.details).toBeDefined(); 
+      expect(thrownError.details?.node).toBe(node); 
+      expect(thrownError.details?.node?.location?.start?.line).toBe(5); 
+      expect(thrownError.details?.context).toBeDefined();
+      expect(thrownError.details?.context?.state).toBe(fixture.stateService);
+      expect(thrownError.details?.context?.state?.getCurrentFilePath()).toBe(testFilePath);
     });
 
     it.todo('should handle mixed directive types - Complex directive interaction deferred for V1');

@@ -100,21 +100,7 @@ describe('DirectiveService Integration Tests', () => {
     directiveService = testContainer.resolve(DirectiveService);
     stateService = testContainer.resolve<IStateService>('IStateService');
     
-    // Manually break cycles for FS/Path if needed after resolution ( mimicking di-config )
-    // This is complex and brittle, ideally DI handles it. 
-    // If tests fail, this might need adjustment based on specific errors.
-    try {
-      const fs = testContainer.resolve<FileSystemService>('IFileSystemService');
-      const ps = testContainer.resolve<PathService>('IPathService');
-      const pscFactory = testContainer.resolve(PathServiceClientFactory);
-      const fscFactory = testContainer.resolve(FileSystemServiceClientFactory);
-      if (fs && !(fs as any).pathClient) (fs as any).pathClient = pscFactory.createClient();
-      if (ps && !(ps as any).fsClientFactory) (ps as any).fsClientFactory = fscFactory;
-      if (fs && !(fs as any).factoryInitialized) (fs as any).factoryInitialized = true;
-      if (ps && !(ps as any).factoryInitialized) (ps as any).factoryInitialized = true;
-    } catch (e) {
-        console.warn("Manual cycle breaking for FS/Path failed during test setup:", e);
-    }
+    // NOTE: Manual cycle breaking removed. Dependencies should be handled by `delay()` now.
 
     // Initialize state with variables needed for interpolation
     await stateService.setTextVar('name', 'World');

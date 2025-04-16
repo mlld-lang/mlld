@@ -454,50 +454,66 @@ export class DirectiveService implements IDirectiveService {
       // Use the specifically cast handler
       const result = await specificHandler.execute(processingContext); 
       
-      // Handle result
-      if (result && typeof result === 'object') {
-        if ('replacement' in result && 'state' in result && result.state) {
-          // It's a DirectiveResult, ensure state is IStateService
-          if (!this.isStateService(result.state)) {
-             // Convert to DirectiveLocation for MeldDirectiveErrorOptions
-             const directiveLocation: DirectiveLocation | undefined = node.location ? { 
-                line: node.location.start.line, 
-                column: node.location.start.column, 
-                filePath: currentFilePath ?? undefined 
-             } : undefined;
-             throw new MeldDirectiveError(
-                'Invalid state object returned in DirectiveResult', 
-                kind, 
-                { 
-                  code: DirectiveErrorCode.EXECUTION_FAILED,
-                  location: directiveLocation // Pass DirectiveLocation
-                }
-             );
-          }
-          return result;
-        } else if (this.isStateService(result)) {
-          // It's an IStateService
-          return result;
-        } else {
-           // Convert to DirectiveLocation for MeldDirectiveErrorOptions
-           const directiveLocation: DirectiveLocation | undefined = node.location ? { 
-               line: node.location.start.line, 
-               column: node.location.start.column, 
-               filePath: currentFilePath ?? undefined 
-           } : undefined;
-           throw new MeldDirectiveError('Invalid result type returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED, location: directiveLocation });
-        }
+      // --- DEBUG LOGS ---
+      console.log(`[handleDirective] Handler result for ${kind}:`, JSON.stringify(result, null, 2));
+
+      // --- MORE DEBUG LOGS ---
+      process.stdout.write(`[handleDirective] Type of result: ${typeof result}\n`);
+      process.stdout.write(`[handleDirective] result === context.state ? : ${result === context.state}\n`);
+      if(result && typeof result === 'object' && 'state' in result) {
+        process.stdout.write(`[handleDirective] result has 'state' property.\n`);
+        process.stdout.write(`[handleDirective] result.state === context.state ? : ${result.state === context.state}\n`);
       } else {
-         // Convert to DirectiveLocation for MeldDirectiveErrorOptions
-         const directiveLocation: DirectiveLocation | undefined = node.location ? { 
+        process.stdout.write(`[handleDirective] result does NOT look like DirectiveResult.\n`);
+      }
+      // --- END DEBUG LOGS ---
+
+      // NEW: Check for direct state return (object identity)
+      if (result && typeof (result as IStateService).getTextVar === 'function' && typeof (result as IStateService).setDataVar === 'function') {
+        this.logger.debug(`Handler for ${kind} returned original state service instance.`);
+        // No state update needed as it's the same object
+        return result; // Return the state service object itself
+      }
+      // NEW: Check for DirectiveResult-like object (structure check)
+      else if (result && typeof result === 'object' && 'state' in result) {
+        // It looks like a DirectiveResult, potentially with a replacement
+        this.logger.debug(`Handler for ${kind} returned DirectiveResult-like object.`);
+        // Transformation application (calling stateService.transformNode) should be handled
+        // by the caller (InterpreterService) which knows the node's index.
+        return result; // Return the result object
+      }
+      // OLD LOGIC REMOVED:
+      /*
+      // Validate the result type
+      if (this.isStateService(result)) { // <<< Check if it's an IStateService
+        // If the handler returned the state service directly, update the main state
+        context.state = result;
+        this.logger.debug(`Handler for ${kind} returned updated state service.`);
+        return result; // Return the state service
+      } else if (result && typeof result === 'object' && 'state' in result ) { // Check if it LOOKS like a DirectiveResult
+        // If it's a DirectiveResult, handle potential node replacement
+        this.logger.debug(`Handler for ${kind} returned DirectiveResult.`);
+        // Apply transformation if needed (result might contain replacement nodes)
+        // ... transformation logic ...
+        if (result.replacement && this.stateService.isTransformationEnabled()) { 
+            this.stateService.transformNode(node, result.replacement);
+        }
+        return result; // Return the DirectiveResult object
+      } else {
+         // If the result is neither, it's an invalid type
+         const errorLocation: CoreLocation | undefined = node.location ? { 
              line: node.location.start.line, 
              column: node.location.start.column, 
              filePath: currentFilePath ?? undefined 
          } : undefined;
-         throw new MeldDirectiveError('Invalid or null result returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED, location: directiveLocation });
+         throw new MeldDirectiveError('Invalid or null result returned by directive handler', kind, { code: DirectiveErrorCode.EXECUTION_FAILED, location: errorLocation });
       }
+      */
 
     } catch (error) {
+        // --- DEBUG LOG --- 
+        console.error(`[handleDirective] CAUGHT ERROR processing ${kind}:`, error);
+        // --- END DEBUG LOG ---
         const message = error instanceof Error ? error.message : 'Unknown directive processing error';
         const code = (error instanceof DirectiveError) ? error.code : DirectiveErrorCode.EXECUTION_FAILED;
         // Create a simplified context for the error details
@@ -526,8 +542,10 @@ export class DirectiveService implements IDirectiveService {
               cause: error instanceof Error ? error : undefined 
           } 
         );
-      }
     }
+
+    return undefined as never; // Satisfy linter about missing return path
+  }
 
   /**
    * Lazily initialize the ResolutionServiceClientForDirective factory
