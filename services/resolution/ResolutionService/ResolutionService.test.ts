@@ -38,7 +38,8 @@ import {
   unsafeCreateNormalizedAbsoluteDirectoryPath,
   type MeldResolvedFilesystemPath,
   createMeldPath,
-  unsafeCreateValidatedResourcePath
+  unsafeCreateValidatedResourcePath,
+  unsafeCreateUrlPath
 } from '@core/types'; 
 
 // Import centralized syntax examples and helpers - KEEP THESE
@@ -132,399 +133,198 @@ const createMockCommandVariable = (name: string, commandTemplateString: string):
 
 
 describe('ResolutionService', () => {
-  let service: IResolutionService; // Use interface type
-  let stateService: IStateService;
-  let fileSystemService: IFileSystemService;
-  let parserService: IParserService; // Keep this for potential internal use if needed
-  let pathService: IPathService;
-  let defaultContext: ResolutionContext; // Use a default context
+  let service: IResolutionService;
+  let stateService: Mocked<IStateService>;
+  let fileSystemService: Mocked<IFileSystemService>;
+  let parserService: Mocked<IParserService>;
+  let pathServiceMock: Mocked<IPathService>;
+  let defaultContext: ResolutionContext;
   let testContext: TestContextDI;
-  
-  // Factory mocks
-  let mockParserClient: IParserServiceClient;
-  let mockParserClientFactory: ParserServiceClientFactory;
-  let mockVariableResolverClient: IVariableReferenceResolverClient;
-  let mockVariableResolverClientFactory: VariableReferenceResolverClientFactory;
-  let mockDirectiveClient: IDirectiveServiceClient;
-  let mockDirectiveClientFactory: DirectiveServiceClientFactory;
-  let mockFileSystemClient: IFileSystemServiceClient;
-  let mockFileSystemClientFactory: FileSystemServiceClientFactory;
-  // Add mock AST factories
-  let mockTextNodeFactory: TextNodeFactory;
-  let mockVariableNodeFactory: VariableNodeFactory;
-  let pathServiceMock: MockProxy<IPathService>; // Use MockProxy for mockDeep compatibility if needed elsewhere, or a simpler type
+  let mockParserClient: Mocked<IParserServiceClient>;
+  let mockParserClientFactory: Mocked<ParserServiceClientFactory>;
+  let mockVariableResolverClient: Mocked<IVariableReferenceResolverClient>;
+  let mockVariableResolverClientFactory: Mocked<VariableReferenceResolverClientFactory>;
+  let mockDirectiveClient: Mocked<IDirectiveServiceClient>;
+  let mockDirectiveClientFactory: Mocked<DirectiveServiceClientFactory>;
+  let mockFileSystemClient: Mocked<IFileSystemServiceClient>;
+  let mockFileSystemClientFactory: Mocked<FileSystemServiceClientFactory>;
+  let mockTextNodeFactory: Mocked<TextNodeFactory>;
+  let mockVariableNodeFactory: Mocked<VariableNodeFactory>;
 
   beforeEach(async () => {
-    // Create mock services with strict types
-    stateService = {
-      getTextVar: vi.fn().mockImplementation((name: string): TextVariable | undefined => {
-        if (name === 'greeting') return createMockTextVariable('greeting', 'Hello World');
-        if (name === 'subject') return createMockTextVariable('subject', 'Universe');
-        if (name === 'message') return createMockTextVariable('message', '`{{greeting}}, {{subject}}!`');
-        // For circular tests
-        if (name === 'var1') return createMockTextVariable('var1', '{{var2}}');
-        if (name === 'var2') return createMockTextVariable('var2', '{{var1}}');
-        return undefined;
-      }),
-      getDataVar: vi.fn().mockImplementation((name: string): DataVariable | undefined => {
-        if (name === 'user') return createMockDataVariable('user', { name: 'Alice', id: 123 });
-        if (name === 'config') return createMockDataVariable('config', { version: 1, active: true });
-        if (name === 'nested') return createMockDataVariable('nested', { data: { level1: { value: 'deep' } } });
-        return undefined;
-      }),
-      getPathVar: vi.fn().mockImplementation((name: string): IPathVariable | undefined => {
-        // Mock needs to return the correct state object for IPathVariable
-        if (name === 'home') {
-          const state: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: '/home/user/meld', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true }; // Example state adjusted
-          return createMockPathVariable('home', state);
-        }
-        if (name === 'docs') {
-           const state: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: '/mock/project/root/docs', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true }; // Example state adjusted
-          return createMockPathVariable('docs', state);
-        }
-        return undefined;
-      }),
-      getCommandVar: vi.fn().mockImplementation((name: string): CommandVariable | undefined => {
-        // <<< Ensure this mock ALWAYS returns the variable if defined >>>
-        if (name === 'echo') return createMockCommandVariable('echo', 'echo "$@"');
-        if (name === 'errorCmd') return createMockCommandVariable('errorCmd', 'exit 1');
-        if (name === 'greet') return createMockCommandVariable('greet', 'echo Hello there');
-        return undefined; // Return undefined ONLY if not defined
-      }),
-      getCommand: vi.fn().mockImplementation((name: string) => {
-         // This seems unused now? Keep for now, or remove if getCommandVar replaces its usage.
-         if (name === 'echo') return { command: '@run echo ${text}' };
-         if (name === 'greet') return { command: '@run echo Hello there' };
-         return undefined;
-      }),
-      // Update getVariable mock to delegate to specific getters
-      getVariable: vi.fn().mockImplementation((name: string, context?: ResolutionContext): MeldVariable | undefined => {
-          const textVar = stateService.getTextVar(name);
-          if (textVar) return textVar;
-          const dataVar = stateService.getDataVar(name);
-          if (dataVar) return dataVar;
-          const pathVar = stateService.getPathVar(name);
-          if (pathVar) return pathVar;
-          // <<< Ensure command var check uses the correct mock >>>
-          const commandVar = stateService.getCommandVar(name); 
-          if (commandVar) return commandVar;
-         return undefined;
-      }),
-      getAllTextVars: vi.fn().mockReturnValue(new Map<string, TextVariable>([
-        ['greeting', createMockTextVariable('greeting', 'Hello World')],
-        ['subject', createMockTextVariable('subject', 'Universe')],
-      ])),
-      getAllDataVars: vi.fn().mockReturnValue(new Map<string, DataVariable>([
-        ['user', createMockDataVariable('user', { name: 'Alice', id: 123 })],
-      ])),
-      getAllPathVars: vi.fn().mockReturnValue(new Map<string, IPathVariable>([
-         ['home', createMockPathVariable('home', { contentType: PathContentType.FILESYSTEM, originalValue: '/home/user/meld', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true})]
-      ])),
-      // Add other necessary IStateService methods if needed by ResolutionService
-      getCurrentFilePath: vi.fn().mockReturnValue('test.meld'),
-      getTransformedNodes: vi.fn().mockReturnValue([]),
-      isTransformationEnabled: vi.fn().mockReturnValue(true), 
-      getTransformationOptions: vi.fn().mockReturnValue({}),
-    } as unknown as IStateService;
+    // --- 1. Initialize ALL Mocks --- 
+    stateService = mockDeep<IStateService>();
+    fileSystemService = mockDeep<IFileSystemService>();
+    parserService = mockDeep<IParserService>();
+    pathServiceMock = mockDeep<IPathService>(); // Use mockDeep for consistency 
+    mockParserClient = mockDeep<IParserServiceClient>();
+    mockParserClientFactory = mockDeep<ParserServiceClientFactory>();
+    mockVariableResolverClient = mockDeep<IVariableReferenceResolverClient>();
+    mockVariableResolverClientFactory = mockDeep<VariableReferenceResolverClientFactory>();
+    mockDirectiveClient = mockDeep<IDirectiveServiceClient>();
+    mockDirectiveClientFactory = mockDeep<DirectiveServiceClientFactory>();
+    mockFileSystemClient = mockDeep<IFileSystemServiceClient>();
+    mockFileSystemClientFactory = mockDeep<FileSystemServiceClientFactory>();
+    // Use mockDeep for AST factories too - may need adjustments if constructors are complex
+    mockTextNodeFactory = mockDeep<TextNodeFactory>(); 
+    mockVariableNodeFactory = mockDeep<VariableNodeFactory>();
 
-    fileSystemService = {
-      exists: vi.fn().mockResolvedValue(true),
-      readFile: vi.fn().mockResolvedValue('file content'),
-      // Add executeCommand mock
-      executeCommand: vi.fn().mockImplementation(async (command: string, options?: { cwd?: string }) => {
-        // Add specific behavior for errorCmd
-        if (command.startsWith('exit 1')) { // Check if it's our error command
-            const error = new Error('Command failed with exit code 1');
-            (error as any).code = 1; // Simulate non-zero exit code
-            (error as any).stderr = 'Simulated command error';
-            throw error;
-        }
-        // Mock output for echo
-        if (command.startsWith('echo')) {
-           // Simple mock: return command string as stdout
-           // Extract args (everything after echo and space)
-           const argsString = command.substring(5).trim();
-           // <<< Revert to trimming quotes/parens >>>
-           let output = argsString;
-           if (output.startsWith('(') && output.endsWith(')')) {
-             output = output.slice(1, -1);
-           }
-           if (output.startsWith('\"') && output.endsWith('\"')) {
-             output = output.slice(1, -1);
-           }
-           // Also handle the specific case from the test
-           if (output === '"$@"' ) output = 'test'; 
-           return { stdout: output, stderr: '' };
-        }
-        // Default mock behavior for other commands
-        return { stdout: command, stderr: '' };
-      }),
-      // Add other necessary IFileSystemService methods
-      dirname: vi.fn(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : ''), // Needed by CommandResolver
-      getCwd: vi.fn().mockReturnValue('/mock/cwd'), // Needed by CommandResolver
-    } as unknown as IFileSystemService;
+    // --- 2. Configure Mocks --- 
+    // Configure Factories to return Clients
+    mockParserClientFactory.createClient.mockReturnValue(mockParserClient);
+    mockVariableResolverClientFactory.createClient.mockReturnValue(mockVariableResolverClient);
+    mockDirectiveClientFactory.createClient.mockReturnValue(mockDirectiveClient);
+    mockFileSystemClientFactory.createClient.mockReturnValue(mockFileSystemClient);
 
-    // Mock parser to return VariableReferenceNodes where appropriate
-    mockParserClient = {
-      parseString: vi.fn().mockImplementation(async (text: string): Promise<Array<TextNode | VariableReferenceNode>> => {
-         const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: text.length + 1 } }; // Add mock location
+    // Configure StateService mocks (as before)
+    stateService.getTextVar.mockImplementation((name: string): TextVariable | undefined => {
+      if (name === 'greeting') return createMockTextVariable('greeting', 'Hello World');
+      if (name === 'subject') return createMockTextVariable('subject', 'Universe');
+      if (name === 'message') return createMockTextVariable('message', '`{{greeting}}, {{subject}}!`');
+      // For circular tests
+      if (name === 'var1') return createMockTextVariable('var1', '{{var2}}');
+      if (name === 'var2') return createMockTextVariable('var2', '{{var1}}');
+      return undefined;
+    });
+    stateService.getDataVar.mockImplementation((name: string): DataVariable | undefined => {
+      if (name === 'user') return createMockDataVariable('user', { name: 'Alice', id: 123 });
+      if (name === 'config') return createMockDataVariable('config', { version: 1, active: true });
+      if (name === 'nested') return createMockDataVariable('nested', { data: { level1: { value: 'deep' } } });
+      return undefined;
+    });
+    stateService.getPathVar.mockImplementation((name: string): IPathVariable | undefined => {
+      // Mock needs to return the correct state object for IPathVariable
+      if (name === 'home') {
+        const state: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: '/home/user/meld', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true }; // Example state adjusted
+        return createMockPathVariable('home', state);
+      }
+      if (name === 'docs') {
+         const state: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: '/mock/project/root/docs', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true }; // Example state adjusted
+        return createMockPathVariable('docs', state);
+      }
+      return undefined;
+    });
+    stateService.getCommandVar.mockImplementation((name: string): CommandVariable | undefined => {
+      // <<< Ensure this mock ALWAYS returns the variable if defined >>>
+      if (name === 'echo') return createMockCommandVariable('echo', 'echo "$@"');
+      if (name === 'errorCmd') return createMockCommandVariable('errorCmd', 'exit 1');
+      if (name === 'greet') return createMockCommandVariable('greet', 'echo Hello there');
+      return undefined; // Return undefined ONLY if not defined
+    });
+    stateService.getVariable.mockImplementation((name: string, context?: ResolutionContext): MeldVariable | undefined => {
+      const textVar = stateService.getTextVar(name);
+      if (textVar) return textVar;
+      const dataVar = stateService.getDataVar(name);
+      if (dataVar) return dataVar;
+      const pathVar = stateService.getPathVar(name);
+      if (pathVar) return pathVar;
+      // <<< Ensure command var check uses the correct mock >>>
+      const commandVar = stateService.getCommandVar(name); 
+      if (commandVar) return commandVar;
+      return undefined;
+    });
+    stateService.getAllTextVars.mockReturnValue(new Map<string, TextVariable>([
+      ['greeting', createMockTextVariable('greeting', 'Hello World')],
+      ['subject', createMockTextVariable('subject', 'Universe')],
+    ]));
+    stateService.getAllDataVars.mockReturnValue(new Map<string, DataVariable>([
+      ['user', createMockDataVariable('user', { name: 'Alice', id: 123 })],
+    ]));
+    stateService.getAllPathVars.mockReturnValue(new Map<string, IPathVariable>([
+       ['home', createMockPathVariable('home', { contentType: PathContentType.FILESYSTEM, originalValue: '/home/user/meld', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true})]
+    ]));
+    stateService.getCurrentFilePath.mockReturnValue('test.meld');
+    stateService.getTransformedNodes.mockReturnValue([]);
+    stateService.isTransformationEnabled.mockReturnValue(true);
+    stateService.getTransformationOptions.mockReturnValue({});
 
-         if (text === 'simple text') return [{ type: 'Text', content: 'simple text', location: mockLocation } as TextNode];
-         if (text === '{{greeting}}') return [{ type: 'VariableReference', identifier: 'greeting', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode];
-         if (text === '{{user}}') return [{ type: 'VariableReference', identifier: 'user', valueType: VariableType.DATA, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode];
-         if (text === '{{user.name}}') return [{ type: 'VariableReference', identifier: 'user', valueType: VariableType.DATA, fields: [{type: 'field', value: 'name'}], isVariableReference: true, location: mockLocation } as VariableReferenceNode];
-         if (text === '$HOMEPATH') return [{ type: 'VariableReference', identifier: 'HOMEPATH', valueType: VariableType.PATH, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode];
-         if (text === '$home') return [{ type: 'VariableReference', identifier: 'home', valueType: VariableType.PATH, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode];
-         if (text === 'Hello {{name}}') return [
-           { type: 'Text', content: 'Hello ', location: { start: { line: 1, column: 1 }, end: { line: 1, column: 7 } } } as TextNode,
-           { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: { start: { line: 1, column: 7 }, end: { line: 1, column: 15 } } } as VariableReferenceNode
-         ];
-         if (text === '{{var1}}') return [{ type: 'VariableReference', identifier: 'var1', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode];
-         if (text === '{{var2}}') return [{ type: 'VariableReference', identifier: 'var2', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode];
-         
-         // <<< Add handling for command variable syntax >>>
-         const commandMatch = text.match(/^\$?([^\(\]]+)\((.*)\)$/);
-         if (commandMatch) {
-            const commandName = commandMatch[1];
-            // Basic mock: assume args are just text for now
-            const args = commandMatch[2].split(',').map(arg => arg.trim()).filter(Boolean);
-            return [{
-              type: 'VariableReference',
-              identifier: commandName,
-              valueType: VariableType.COMMAND as VariableType,
-              fields: [], // Commands don't have fields
-              isVariableReference: true,
-              location: mockLocation
-            } as VariableReferenceNode];
+    // Configure FileSystemService mock (as before)
+    fileSystemService.exists.mockResolvedValue(true);
+    fileSystemService.readFile.mockResolvedValue('file content');
+    fileSystemService.executeCommand.mockImplementation(async (command: string, options?: { cwd?: string }) => {
+      // Add specific behavior for errorCmd
+      if (command.startsWith('exit 1')) { // Check if it's our error command
+          const error = new Error('Command failed with exit code 1');
+          (error as any).code = 1; // Simulate non-zero exit code
+          (error as any).stderr = 'Simulated command error';
+          throw error;
+      }
+      // Mock output for echo
+      if (command.startsWith('echo')) {
+         // Simple mock: return command string as stdout
+         // Extract args (everything after echo and space)
+         const argsString = command.substring(5).trim();
+         // <<< Revert to trimming quotes/parens >>>
+         let output = argsString;
+         if (output.startsWith('(') && output.endsWith(')')) {
+           output = output.slice(1, -1);
          }
-
-         // Field access tests
-         if (text === '{{user.address}}') {
-            if (!mockVariableNodeFactory) throw new Error('Mock VariableNodeFactory not initialized');
-            return [mockVariableNodeFactory.createVariableReferenceNode('user', VariableType.DATA, [{type: 'field', value: 'address'}], undefined, mockLocation)];
+         if (output.startsWith('\"') && output.endsWith('\"')) {
+           output = output.slice(1, -1);
          }
-         if (text === '{{primitive.length}}') {
-            if (!mockVariableNodeFactory) throw new Error('Mock VariableNodeFactory not initialized');
-             return [mockVariableNodeFactory.createVariableReferenceNode('primitive', VariableType.TEXT, [{type: 'field', value: 'length'}], undefined, mockLocation)];
-         }
+         // Also handle the specific case from the test
+         if (output === '"$@"' ) output = 'test'; 
+         return { stdout: output, stderr: '' };
+      }
+      // Default mock behavior for other commands
+      return { stdout: command, stderr: '' };
+    });
+    fileSystemService.dirname.mockImplementation(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : '');
+    fileSystemService.getCwd.mockReturnValue('/mock/cwd');
 
-         // Fallback: plain text
-         if (!mockTextNodeFactory) throw new Error('Mock TextNodeFactory not initialized');
-         return [mockTextNodeFactory.createTextNode(text, mockLocation)];
-      }),
-      parseFile: vi.fn().mockImplementation(async () => {
-        // Assume factory is available via mock setup below
-        if (!mockTextNodeFactory) throw new Error('Mock TextNodeFactory not initialized');
-        const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 22 } };
-        const mockNode = mockTextNodeFactory.createTextNode('parsed file content', mockLocation);
-        return [mockNode] as MeldNode[];
-      })
-    } as unknown as IParserServiceClient;
+    // Configure PathService mock (use the mockDeep instance)
+    pathServiceMock.getHomePath.mockReturnValue('/home/user');
+    pathServiceMock.getProjectPath.mockReturnValue('/project');
+    pathServiceMock.dirname.mockImplementation(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : '');
+    pathServiceMock.resolvePath.mockImplementation(async (p: string | StructuredPath) => {
+      const pathString = typeof p === 'string' ? p : p.raw;
+      return createMeldPath(pathString, unsafeCreateValidatedResourcePath(pathString), pathString.startsWith('/'));
+    });
+    pathServiceMock.validatePath.mockImplementation(async (pathInput: string | MeldPath, context: PathValidationContext): Promise<MeldPath> => {
+      const pathString = typeof pathInput === 'string' ? pathInput : pathInput.raw;
+      return createMeldPath(pathString, unsafeCreateValidatedResourcePath(pathString), pathString.startsWith('/'));
+    });
+    pathServiceMock.isURL.mockReturnValue(false);
+    // Add other PathService methods if needed by ResolutionService
     
-    // Keep original parser service mock for potential internal use if needed
-    parserService = {
-      parse: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content' }]),
-      parseWithLocations: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content', location: {} }]),
-    } as unknown as IParserService;
+    // Configure ParserServiceClient mock (Implementation needs the AST factories)
+    mockParserClient.parseString.mockImplementation(async (text: string): Promise<Array<TextNode | VariableReferenceNode>> => {
+       const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: text.length + 1 } };
+       // Use the mocked AST factories HERE
+       if (text === '$nonexistent') {
+         return [mockVariableNodeFactory.createVariableReferenceNode('nonexistent', VariableType.PATH, [], undefined, mockLocation)];
+       }
+       if (text === '{{nonexistent}}') {
+          return [mockVariableNodeFactory.createVariableReferenceNode('nonexistent', VariableType.TEXT, [], undefined, mockLocation)];
+       }
+       // Mock other specific cases needed by tests using mockVariableNodeFactory and mockTextNodeFactory
+       // Fallback
+       return [mockTextNodeFactory.createTextNode(text, mockLocation)];
+    });
 
-    // Mock PathService manually for validateResolution tests
-    pathServiceMock = {
-      // Add other methods from IPathService as needed, potentially using vi.fn()
-      validatePath: vi.fn(), 
-      // Mock other methods used by ResolutionService if any (e.g., dirname, resolvePath?)
-      // Add dummy implementations or vi.fn() for those
-      getHomePath: vi.fn().mockReturnValue('/home/user'),
-      getProjectPath: vi.fn().mockReturnValue('/project'),
-      dirname: vi.fn(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : ''),
-      resolvePath: vi.fn().mockImplementation(async (p: string | StructuredPath) => { 
-        const pathString = typeof p === 'string' ? p : p.raw;
-        return createMeldPath(pathString, unsafeCreateValidatedResourcePath(pathString), pathString.startsWith('/'));
-      }),
-      isURL: vi.fn().mockReturnValue(false),
-      // Add other methods from IPathService if required by ResolutionService... 
-    } as unknown as MockProxy<IPathService>; // Cast needed for manual mock object
-
-    // Register the manual mock object
-    container.registerInstance<IPathService>('IPathService', pathServiceMock);
-
-    // Update PathService mock to handle MeldPath potentially
-    pathService = {
-      getHomePath: vi.fn().mockReturnValue('/home/user'),
-      dirname: vi.fn(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : ''),
-      // Adjusted resolvePath mock - Simplified, doesn't return branded type directly
-      resolvePath: vi.fn().mockImplementation(async (p: string | StructuredPath, purpose: PathPurpose, baseDir?: string): Promise<MeldPath> => {
-         const originalPath = typeof p === 'string' ? p : p.original; // Use .original for StructuredPath
-         let resolved = originalPath; // Basic resolution logic for mock
-         if (originalPath === '$HOMEPATH') resolved = '/home/user';
-         if (originalPath === '$HOMEPATH/meld') resolved = '/home/user/meld';
-         if (baseDir && !originalPath.startsWith('/') && !originalPath.startsWith('$')) resolved = `${baseDir}/${originalPath}`;
-         // Use createMeldPath helper from core/types/paths.ts
-         // Pass unsafe branded path for mock validation
-         return createMeldPath(originalPath, unsafeCreateValidatedResourcePath(resolved), resolved.startsWith('/'));
-      }),
-      // Simplified normalizePath mock - just returns input string for now
-      normalizePath: vi.fn().mockImplementation((p: string): string => {
-         return p; // Simplify mock
-      }),
-      // Fix: Update validatePath mock to handle $HOMEPATH and $variable substitution
-      validatePath: vi.fn().mockImplementation(async (pathInput: string | MeldPath, context: PathValidationContext): Promise<MeldPath> => {
-        const originalPathString = typeof pathInput === 'string' ? pathInput : pathInput.originalValue;
-        let resolvedValue = originalPathString;
-        let isAbsolute = false;
-
-        if (originalPathString === '$HOMEPATH') {
-          resolvedValue = '/home/user';
-          isAbsolute = true;
-        } 
-        else if (originalPathString.startsWith('$') && originalPathString.length > 1) {
-           const varName = originalPathString.substring(1);
-           const pathVar = stateService.getPathVar(varName);
-           // Add explicit check for pathVar before type guard
-           if (pathVar && isFilesystemPath(pathVar)) { 
-              const fsState = pathVar.value as IFilesystemPathState;
-              resolvedValue = fsState.originalValue; 
-              isAbsolute = fsState.isAbsolute;
-           } else {
-               // Fix: Throw VariableResolutionError if not found (assume strict for test context)
-               console.warn(`Mock validatePath: Path variable '${varName}' not found or not filesystem path.`);
-               throw new VariableResolutionError(`Path variable not found: ${varName}`, {
-                  code: 'E_VAR_NOT_FOUND',
-                  details: { variableName: varName, variableType: VariableType.PATH }
-               });
-           }
-        }
-        
-         if (!isAbsolute) {
-           isAbsolute = resolvedValue.startsWith('/');
-         }
-
-        if (context.rules?.mustExist && resolvedValue.includes('invalid-for-test')) {
-          throw new PathValidationError('Simulated validation failure: mustExist', {
-            code: 'E_PATH_VALIDATION_FAILED', 
-            details: { pathString: resolvedValue, validationContext: context }
-          });
-        }
-        
-        return createMeldPath(
-            originalPathString,
-            unsafeCreateValidatedResourcePath(resolvedValue),
-            isAbsolute,
-            true
-        );
-      }),
-      getProjectPath: vi.fn().mockReturnValue('/mock/project/root'),
-      isAbsolute: vi.fn().mockImplementation(p => typeof p === 'string' && p.startsWith('/')),
-      // Add missing isURL method from IPathService
-      isURL: vi.fn().mockImplementation((p: string) => typeof p === 'string' && (p.startsWith('http://') || p.startsWith('https://')))
-    } as unknown as IPathService; // Cast needed as mock might not be complete
-    
-    // Mock VariableResolverClient - Keep simple for now
-    mockVariableResolverClient = {
-      resolve: vi.fn().mockResolvedValue('resolved value'),
-      // Update mock to expect AstField[] and use field.type/field.value
-      resolveFieldAccess: vi.fn().mockImplementation(async (baseValue: any, fields: AstField[], context: ResolutionContext): Promise<any> => {
-        let current = baseValue;
-        let failedAtIndex = -1; 
-        for (const [index, field] of fields.entries()) {
-          failedAtIndex = index;
-          const keyOrIndex = field.value; // Use field.value
-          
-          if (field.type === 'field') { // Check field.type
-            const key = keyOrIndex as string;
-            if (current && typeof current === 'object' && !Array.isArray(current) && key in current) {
-              current = current[key];
-            } else {
-              const details = { 
-                baseValue: baseValue,
-                fieldAccessChain: fields, 
-                failedAtIndex: failedAtIndex, 
-                failedKey: key
-              };
-              // Return rejected promise for strict mode
-              return context.strict ? failure(new FieldAccessError(`Field '${String(key)}' not found or invalid.`, details)) : success(''); // Return success('') for non-strict
-            }
-          } else if (field.type === 'index') { // Check field.type
-             const indexNum = keyOrIndex as number;
-             if (Array.isArray(current) && indexNum >= 0 && indexNum < current.length) {
-               current = current[indexNum];
-             } else {
-               const details = { 
-                 baseValue: baseValue,
-                 fieldAccessChain: fields, 
-                 failedAtIndex: failedAtIndex, 
-                 failedKey: indexNum
-                };
-               // Return rejected promise for strict mode
-               return context.strict ? failure(new FieldAccessError(`Index ${String(indexNum)} out of bounds or invalid.`, details)) : success(''); // Return success('') for non-strict
-             }
-          }
-          failedAtIndex = -1; // Reset if access succeeded
-        }
-        return current;
-      }),
-      debugFieldAccess: vi.fn().mockResolvedValue({ value: 'debug field', path: [] }),
-      convertToString: vi.fn().mockImplementation(v => String(v)),
-    } as unknown as IVariableReferenceResolverClient;
-    
-    mockDirectiveClient = {
-      // Add any methods needed for testing
-    } as unknown as IDirectiveServiceClient;
-    
-    mockFileSystemClient = {
-      exists: vi.fn().mockResolvedValue(true),
-      isDirectory: vi.fn().mockResolvedValue(false),
-      readFile: vi.fn().mockResolvedValue('client file content'),
-    } as unknown as IFileSystemServiceClient;
-    
-    // Create mock factories
-    mockParserClientFactory = {
-      createClient: () => mockParserClient
-    } as unknown as ParserServiceClientFactory;
-    
-    mockVariableResolverClientFactory = {
-      createClient: () => mockVariableResolverClient
-    } as unknown as VariableReferenceResolverClientFactory;
-    
-    mockDirectiveClientFactory = {
-      createClient: () => mockDirectiveClient
-    } as unknown as DirectiveServiceClientFactory;
-    
-    mockFileSystemClientFactory = {
-      createClient: () => mockFileSystemClient
-    } as unknown as FileSystemServiceClientFactory;
-
-    // Create instances of mock AST factories
-    // These might need further mocking if they have dependencies, but try basic instance first
-    mockTextNodeFactory = new TextNodeFactory({ createNode: vi.fn((type, loc) => ({type, location: loc})) } as any); // Mock NodeFactory dependency
-    mockVariableNodeFactory = new VariableNodeFactory({ createNode: vi.fn((type, loc) => ({type, location: loc})) } as any); // Mock NodeFactory dependency
-
-    // Create test context with appropriate DI mode
+    // --- 3. Create TestContextDI --- 
     testContext = TestContextDI.createIsolated();
-    
-    // Register mock services with the container
-    testContext.registerMock('IStateService', stateService);
-    testContext.registerMock('IFileSystemService', fileSystemService);
-    testContext.registerMock('IParserService', parserService);
-    testContext.registerMock('IPathService', pathService);
-    
-    // Register mock factories with the container
-    testContext.registerMock('ParserServiceClientFactory', mockParserClientFactory);
-    testContext.registerMock('VariableReferenceResolverClientFactory', mockVariableResolverClientFactory);
-    testContext.registerMock('DirectiveServiceClientFactory', mockDirectiveClientFactory);
-    testContext.registerMock('FileSystemServiceClientFactory', mockFileSystemClientFactory);
+    const container = testContext.container.getContainer();
 
-    // Register mock AST factories
-    testContext.registerMock('TextNodeFactory', mockTextNodeFactory);
-    testContext.registerMock('VariableNodeFactory', mockVariableNodeFactory);
+    // --- 4. Register ALL Mocks --- 
+    container.registerInstance<IStateService>('IStateService', stateService);
+    container.registerInstance<IFileSystemService>('IFileSystemService', fileSystemService);
+    container.registerInstance<IParserService>('IParserService', parserService);
+    container.registerInstance<IPathService>('IPathService', pathServiceMock);
+    container.registerInstance<ParserServiceClientFactory>('ParserServiceClientFactory', mockParserClientFactory);
+    container.registerInstance<VariableReferenceResolverClientFactory>('VariableReferenceResolverClientFactory', mockVariableResolverClientFactory);
+    container.registerInstance<DirectiveServiceClientFactory>('DirectiveServiceClientFactory', mockDirectiveClientFactory);
+    container.registerInstance<FileSystemServiceClientFactory>('FileSystemServiceClientFactory', mockFileSystemClientFactory);
+    container.registerInstance<TextNodeFactory>('TextNodeFactory', mockTextNodeFactory);
+    container.registerInstance<VariableNodeFactory>('VariableNodeFactory', mockVariableNodeFactory);
 
-    // Initialize the context AFTER mocks are registered
+    // --- 5. Initialize Context --- 
     await testContext.initialize();
     
-    // Instantiate the service using the DI container
-    // Try resolving the concrete class directly
-    service = await testContext.resolve(ResolutionService);
+    // --- 6. Resolve Service Under Test --- 
+    service = container.resolve(ResolutionService);
 
-    // Create a default ResolutionContext using the factory
+    // --- 7. Create Default Context --- 
     defaultContext = ResolutionContextFactory.create(stateService, 'test.meld');
   });
   
