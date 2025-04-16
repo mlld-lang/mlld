@@ -153,15 +153,17 @@ export class VariableReferenceResolver {
     }
     
     const newContext = context.withIncreasedDepth();
+    logger.debug(`[VRefResolver.resolve ENTRY] strict=${newContext.strict}, identifier=${node.identifier}`);
 
     try {
       const variable = await this.getVariable(node, newContext);
       
       if (!variable) {
           if (!newContext.strict) {
-             logger.warn(`[RESOLVE] Non-strict mode, variable '${node.identifier}' not found, returning empty string.`);
+             logger.warn(`[VRefResolver.resolve] Non-strict mode, variable '${node.identifier}' not found, returning empty string.`);
              return '';
           }
+          logger.debug(`[VRefResolver.resolve] Variable not found & strict=true. Throwing E_VAR_NOT_FOUND for ${node.identifier}`);
           throw new VariableResolutionError(`Variable not found: ${node.identifier}`, {
               code: 'E_VAR_NOT_FOUND',
               severity: ErrorSeverity.Recoverable, 
@@ -257,26 +259,26 @@ export class VariableReferenceResolver {
       }
 
     } catch (error) {
-        logger.warn(`[RESOLVE CATCH] Error resolving ${node.identifier}:`, { error });
+        logger.warn(`[VRefResolver.resolve CATCH] Error resolving ${node.identifier}, strict=${newContext.strict}:`, { error });
         
-        // Always re-throw FieldAccessErrors if strict mode was enabled during accessFields call
         if (error instanceof FieldAccessError && newContext.strict) {
+            logger.debug(`[VRefResolver.resolve CATCH] Strict mode, re-throwing FieldAccessError for ${node.identifier}`);
             throw error;
         }
         
         if (newContext.strict) {
-            // Ensure other errors are MeldErrors or wrapped
             if (error instanceof MeldError) {
+                logger.debug(`[VRefResolver.resolve CATCH] Strict mode, re-throwing MeldError for ${node.identifier}`);
                 throw error;
             } else {
-                 // <<< Include node and context in details >>>
+                 logger.debug(`[VRefResolver.resolve CATCH] Strict mode, wrapping and throwing other error for ${node.identifier}`);
                  throw new MeldResolutionError(`Failed to resolve variable ${node.identifier}`, {
-                     code: 'E_RESOLVE_FAILED', // Generic code
+                     code: 'E_RESOLVE_FAILED', 
                      cause: error instanceof Error ? error : undefined,
                      details: { 
                          variableName: node.identifier,
-                         node: node,       // Add original node
-                         context: context  // Add original context
+                         node: node,       
+                         context: context  
                      }
                  });
             }

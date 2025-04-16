@@ -441,6 +441,7 @@ export class ResolutionService implements IResolutionService {
    * Handles TextNodes and delegates VariableReferenceNodes to the appropriate resolver.
    */
   public async resolveNodes(nodes: InterpolatableValue, context: ResolutionContext): Promise<string> {
+    logger.debug(`[ResService.resolveNodes ENTRY] strict=${context.strict}, nodeCount=${nodes?.length}`); // Log context
     let result = '';
     if (!Array.isArray(nodes)) {
       logger.warn('resolveNodes called with non-array input', { inputType: typeof nodes });
@@ -456,8 +457,8 @@ export class ResolutionService implements IResolutionService {
       if (node.type === 'Text') {
         result += node.content;
       } else if (node.type === 'VariableReference') {
-        const varNode = node; // Assign to new const for clarity
-        logger.info('[resolveNodes] Attempting to resolve VariableReferenceNode:', { identifier: varNode.identifier /* ... */ });
+        const varNode = node; 
+        logger.info('[resolveNodes] Attempting to resolve VariableReferenceNode:', { identifier: varNode.identifier }); // Keep original log
         try {
           const resolvedValue = await this.variableReferenceResolver.resolve(varNode, context);
           logger.debug(`[resolveNodes] Successfully resolved node ${varNode.identifier} ...`);
@@ -467,11 +468,25 @@ export class ResolutionService implements IResolutionService {
           } else {
             result += resolvedValue;
           }
-        } catch (error) { /* ... error handling ... */ }
+        } catch (error) { 
+          logger.error('[ResService.resolveNodes CATCH] Error for VariableReferenceNode', { error, identifier: varNode.identifier, strict: context.strict }); // Log context
+          if (context.strict) { 
+              if (error instanceof Error && 'code' in error && 'name' in error) { 
+                  logger.debug('[ResService.resolveNodes CATCH] Strict mode, re-throwing MeldError'); // Log before throw
+                  throw error; 
+              } else {
+                   logger.debug('[ResService.resolveNodes CATCH] Strict mode, wrapping and throwing non-MeldError'); // Log before throw
+                   const meldError = new MeldResolutionError(`Failed to resolve node value: ${varNode.identifier}`, { // More specific message
+                        code: 'E_NODE_RESOLUTION_FAILED',
+                        details: { node: varNode, context },
+                        cause: error
+                   });
+                   throw meldError;
+              }
+          }
+          result += context.flags.preserveUnresolved ? `{{${varNode.identifier}}}` : ''; 
+        }
       } else {
-        // Explicitly handle the case where node is neither Text nor VariableReference
-        // This helps TypeScript eliminate 'never' by showing all possibilities are handled
-        // (although InterpolatableValue should only contain Text/VariableReference)
         logger.warn(`resolveNodes: Skipping unexpected node type: ${(node as MeldNode).type}`); 
       }
     }
@@ -486,48 +501,33 @@ export class ResolutionService implements IResolutionService {
    * Primarily used for resolving string values that might contain further variables.
    */
   async resolveText(text: string, context: ResolutionContext): Promise<string> {
-    logger.debug(`resolveText called`, { text: text.substring(0, 50), contextFlags: context.flags });
+    logger.debug(`[ResService.resolveText ENTRY] strict=${context.strict}`, { text: text.substring(0, 50) }); // Log context
     
-    // Optimization: If no variable syntax, return text directly
     if (!text.includes('{{') && !text.includes('$')) { 
         logger.debug('resolveText: Input contains no variable markers, returning original text.');
         return text; 
     }
 
-    // Remove outer try...catch, handle rejection with .catch()
-    // try {
-      // 1. Parse the input string into nodes
       const nodes: InterpolatableValue = await this.parseForResolution(text, context);
       logger.debug(`resolveText: Parsed into ${nodes.length} nodes. Delegating to resolveNodes.`);
       
-      // 2. Delegate node resolution and add explicit .catch handler
       return await this.resolveNodes(nodes, context)
         .catch(error => {
-            logger.error('resolveText explicit .catch handler triggered', { error });
+            logger.error(`[ResService.resolveText CATCH] Error caught, strict=${context.strict}`, { error }); // Log context
             if (context.strict) {
-                // Generalize duck-typing check to re-throw any MeldError-like object
-                if (error instanceof Error && 'code' in error && 'name' in error) { 
-                    logger.debug('[resolveText .catch] Re-throwing original MeldError (duck-typed)', { name: error.name, code: (error as MeldError).code }); // Keep logger call
-                    throw error; // Re-throw original MeldError
-                } else {
-                    // Wrap truly unexpected errors
-                    const errorName = error instanceof Error ? error.name : 'Unknown Type';
-                    const errorCode = typeof error === 'object' && error !== null && 'code' in error ? (error as any).code : 'Unknown Code';
-                    logger.warn('[resolveText .catch] Error did not look like MeldError, wrapping.', { errorName, errorCode }); // Keep warn log
-                    const meldError = new MeldResolutionError('Failed to resolve text', { 
-                        code: 'E_RESOLVE_TEXT_FAILED',
-                        details: { originalText: text, context },
-                        cause: error 
-                    });
-                    throw meldError;
-                }
+                logger.debug('[ResService.resolveText CATCH] Strict mode, re-throwing error'); // Log before throw
+                // Re-throw the original error from resolveNodes if it's already a MeldError
+                if (error instanceof MeldError) throw error;
+                // Otherwise wrap it
+                throw new MeldResolutionError('Failed to resolve text', { 
+                    code: 'E_RESOLVE_TEXT_FAILED',
+                    details: { originalText: text, context },
+                    cause: error 
+                });
             }
-            return text; // Return original text if not strict
+            // If not strict, return original text (potentially configured via context flags in future)
+            return text; 
         });
-
-    // } catch (error) { // Removed old try...catch block
-    //  // ... (old logic removed) ...
-    // }
   }
 
   /**
@@ -799,19 +799,17 @@ export class ResolutionService implements IResolutionService {
    * Calls the internal resolveNodes after filtering for relevant node types.
    */
   async resolveContent(nodes: MeldNode[], context: ResolutionContext): Promise<string> {
-    logger.debug(`resolveContent called`, { nodeCount: nodes.length, contextFlags: context.flags });
+    logger.debug(`[ResService.resolveContent ENTRY] strict=${context.strict}`, { nodeCount: nodes.length }); // Log context
     try {
-      // Filter for TextNode and VariableReferenceNode to create InterpolatableValue
       const interpolatableNodes = nodes.filter(
         (node): node is TextNode | VariableReferenceNode => 
           node.type === 'Text' || node.type === 'VariableReference'
       );
       
-      // Delegate to resolveNodes
       return await this.resolveNodes(interpolatableNodes, context);
 
     } catch (error) {
-       logger.error('resolveContent failed', { error });
+       logger.error(`[ResService.resolveContent CATCH] Error caught, strict=${context.strict}`, { error }); // Log context
        if (context.strict) {
           const meldError = (error instanceof MeldError)
             ? error
@@ -820,9 +818,10 @@ export class ResolutionService implements IResolutionService {
                 details: { nodeCount: nodes.length, context },
                 cause: error
             });
-          throw meldError;
+          logger.debug('[ResService.resolveContent CATCH] Strict mode, re-throwing error'); // Log before throw
+          throw meldError; 
        }
-       return ''; // Return empty on failure in non-strict mode
+       return ''; 
     }
   }
 
