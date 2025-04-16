@@ -67,6 +67,14 @@ describe('InterpreterService Unit', () => {
     vi.spyOn(stateService, 'mergeChildState');
     vi.spyOn(stateService, 'clone').mockImplementation(() => stateService);
     vi.spyOn(parserService, 'parseString');
+
+    // Resolve the service under test using its CONCRETE CLASS
+    service = await fixture.context.resolve(InterpreterService);
+    // --- Add Log After Resolve ---
+    console.log(`[TEST beforeEach] Resolved service. Typeof interpret: ${typeof service?.interpret}, Constructor: ${service?.constructor?.name}`);
+
+    // --- Minimal Spies Setup ---
+    // Spy only on methods potentially used by TextNode processing
   });
 
   afterEach(async () => {
@@ -84,24 +92,56 @@ describe('InterpreterService Unit', () => {
   describe('node interpretation', () => {
     it('processes text nodes by adding to working state', async () => {
       const textNode: TextNode = createTextNode('Test content');
-      const initialTestState = MockFactory.createStateService({ getStateId: vi.fn().mockReturnValue('testInitialState')});
-      const workingState = MockFactory.createStateService({ getStateId: vi.fn().mockReturnValue('workingState')});
       
-      vi.spyOn(initialTestState, 'createChildState').mockImplementation(() => workingState); 
-      vi.spyOn(workingState, 'addNode'); 
+      // --- Create Minimal Manual Mocks for this Test --- 
+      const workingState: IStateService = {
+        // Methods needed by the test assertions/logic
+        getStateId: vi.fn().mockReturnValue('workingState'),
+        addNode: vi.fn(),
+        clone: vi.fn(),
+        // Add other methods potentially called by the service on currentState
+        getCurrentFilePath: vi.fn().mockReturnValue('/test/manual-working.mld'),
+        setCurrentFilePath: vi.fn(),
+        isTransformationEnabled: vi.fn().mockReturnValue(false),
+        getNodes: vi.fn().mockReturnValue([]),
+        // Add dummy implementations for other IStateService methods to satisfy the type
+        getTextVar: vi.fn(), setTextVar: vi.fn(), getAllTextVars: vi.fn(), getLocalTextVars: vi.fn(),
+        getDataVar: vi.fn(), setDataVar: vi.fn(), getAllDataVars: vi.fn(), getLocalDataVars: vi.fn(),
+        getPathVar: vi.fn(), setPathVar: vi.fn(), getAllPathVars: vi.fn(),
+        getCommandVar: vi.fn(), setCommandVar: vi.fn(), getAllCommands: vi.fn(),
+        getVariable: vi.fn(), setVariable: vi.fn(), hasVariable: vi.fn(), removeVariable: vi.fn(),
+        appendContent: vi.fn(), getTransformedNodes: vi.fn(), setTransformedNodes: vi.fn(), transformNode: vi.fn(),
+        createChildState: vi.fn(), // Will be spied on initialTestState
+        mergeChildState: vi.fn(), 
+        getParentState: vi.fn(),
+        setTransformationEnabled: vi.fn(), getTransformationOptions: vi.fn(), setTransformationOptions: vi.fn(),
+        hasTransformationSupport: vi.fn().mockReturnValue(true), shouldTransform: vi.fn(),
+        addImport: vi.fn(), removeImport: vi.fn(), hasImport: vi.fn(), getImports: vi.fn(),
+        setEventService: vi.fn(), setTrackingService: vi.fn(),
+        hasLocalChanges: vi.fn(), getLocalChanges: vi.fn(),
+        setImmutable: vi.fn(), get isImmutable() { return false; },
+        getCommand: vi.fn(), getCommandOutput: vi.fn(),
+        getInternalStateNode: vi.fn()
+      };
+      // workingState.clone needs to return the same instance for this test setup
       vi.spyOn(workingState, 'clone').mockReturnValue(workingState);
 
-      console.log(`[TEST DEBUG] Before interpret - initial: ${initialTestState.getStateId()}, working: ${workingState.getStateId()}`);
-      
+      const initialTestState: IStateService = {
+        // Define methods, ensure createChildState is mockable
+        ...workingState, // Start with working state methods
+        getStateId: vi.fn().mockReturnValue('testInitialState'),
+        createChildState: vi.fn(), // Define the method we will spy on
+        mergeChildState: vi.fn(), // Define mergeChildState
+      };
+      // Configure the relationship: initialTestState.createChildState() returns workingState
+      vi.spyOn(initialTestState, 'createChildState').mockImplementation(() => workingState); 
+      // --- End Manual Mock Creation --- 
+
       const finalState = await service.interpret([textNode], { initialState: initialTestState, mergeState: true });
 
-      console.log(`[TEST DEBUG] After interpret - finalState ID: ${finalState?.getStateId?.()}`);
-      console.log(`[TEST DEBUG] createChildState calls on initialTestState: ${(initialTestState.createChildState as Mock).mock.calls.length}`);
-      console.log(`[TEST DEBUG] clone calls on workingState (specific instance): ${(workingState.clone as Mock)?.mock?.calls?.length ?? 'N/A'}`);
-      console.log(`[TEST DEBUG] addNode calls on workingState: ${(workingState.addNode as Mock).mock.calls.length}`);
-      
       expect(initialTestState.createChildState).toHaveBeenCalledTimes(1);
-      expect(workingState.clone).toHaveBeenCalledTimes(1); 
+      // Clone is called 3 times: initial snapshot + interpretNode Text case + loop update
+      expect(workingState.clone).toHaveBeenCalledTimes(3); 
       expect(workingState.addNode).toHaveBeenCalledWith(textNode);
       expect(finalState).toBe(workingState); 
     });
