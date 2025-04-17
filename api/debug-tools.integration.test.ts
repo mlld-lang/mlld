@@ -136,11 +136,19 @@ describe('Debug Tools Integration Test', () => {
     // meldProcessor = testContainer.resolve(MeldProcessor); // Commented out
     stateService = testContainer.resolve<IStateService>('IStateService');
     stateVisualizationService = testContainer.resolve<IStateVisualizationService>('IStateVisualizationService');
-    variableResolutionTracker = testContainer.resolve(VariableResolutionTracker);
     stateTrackingService = testContainer.resolve<IStateTrackingService>('IStateTrackingService');
-    interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService'); // Resolve interpreter
+    interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService'); 
+    const resolutionService = testContainer.resolve<IResolutionService>('IResolutionService'); // Resolve ResolutionService
 
-    variableResolutionTracker.configure({ enabled: true });
+    // Enable resolution tracking EXPLICITLY
+    const trackerConfig = { enabled: true };
+    resolutionService.enableResolutionTracking(trackerConfig);
+    // Retrieve the tracker instance managed by ResolutionService (optional, could also use the one we resolved directly)
+    variableResolutionTracker = resolutionService.getResolutionTracker()!;
+    // If we didn't resolve tracker separately: variableResolutionTracker = resolutionService.getResolutionTracker()!;
+    // Re-apply config just in case ResolutionService created a new instance internally 
+    // (though the code suggests it uses the one passed/created)
+    variableResolutionTracker.configure(trackerConfig);
   });
 
   afterEach(async () => {
@@ -212,7 +220,10 @@ describe('Debug Tools Integration Test', () => {
     let resolutionAttempts: unknown[] | undefined;
     let trackerError: Error | undefined;
     try {
+      // Add logging before getting attempts
+      process.stdout.write(`DEBUG: [Test] Checking tracker before getAttempts. Tracker: ${variableResolutionTracker ? 'exists' : 'null'}\n`);
       resolutionAttempts = variableResolutionTracker.getAttempts();
+      process.stdout.write(`DEBUG: [Test] Got ${resolutionAttempts?.length ?? 0} attempts.\n`);
     } catch (error) {
       trackerError = error instanceof Error ? error : new Error(String(error));
       console.error("Tracker Error:", trackerError);
@@ -222,15 +233,11 @@ describe('Debug Tools Integration Test', () => {
     expect(resolutionAttempts).toBeDefined();
     expect(Array.isArray(resolutionAttempts)).toBe(true);
     
-    // Find the specific attempt for 'greeting'
-    // Note: Depending on when the tracker is attached/used, 
-    // the exact attempts might differ compared to full MeldProcessor run.
-    // We expect at least the getVariable call.
     const greetingAttempt = (resolutionAttempts as any[]).find(att => att.variableName === 'greeting');
+    // Log the found attempt for inspection
+    process.stdout.write(`DEBUG: [Test] Found greetingAttempt: ${JSON.stringify(greetingAttempt)}\n`);
     expect(greetingAttempt).toBeDefined();
-    // We might not see the final successful resolution if OutputService isn't called, 
-    // but we should see the attempt from getVariable.
-    // expect(greetingAttempt).toHaveProperty('success', true);
+    // expect(greetingAttempt).toHaveProperty('success', true); // Keep commented for now
 
   });
 }); 

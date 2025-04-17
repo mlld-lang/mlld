@@ -436,55 +436,9 @@ export class InterpreterService implements IInterpreterService {
       // Process based on node type
       switch (node.type) {
         case 'Text':
-          // Explicitly cast node to TextNode for content access
-          const textNode = node as TextNode;
-          process.stdout.write(`[InterpreterService LOG] Processing TextNode. Content includes '{{': ${textNode.content.includes('{{')}\n`);
-          process.stdout.write(`[InterpreterService LOG] Checking services: parserClient=${!!this.parserClient}, resolutionService=${!!this.resolutionService}\n`);
-          
-          let processedNode: TextNode = textNode; // Initialize with original textNode
-          if (textNode.content.includes('{{')) {
-            logger.debug('TextNode content requires resolution', { content: textNode.content.substring(0, 50) });
-            this.ensureInitialized(); // Ensure parser client is ready
-            if (this.parserClient && this.resolutionService) {
-              process.stdout.write(`[InterpreterService LOG] Parser and Resolution services OK. Attempting parse/resolve.\n`);
-              try {
-                // Handle null from getCurrentFilePath
-                const currentFilePath = state.getCurrentFilePath() ?? undefined;
-                const parsedNodes = await this.parserClient.parseString(textNode.content, { filePath: currentFilePath });
-                const context = ResolutionContextFactory.create(state, currentFilePath);
-                const textResolutionContext = context.withFlags({ preserveUnresolved: false });
-                process.stdout.write(`[InterpreterService LOG] Context for resolveNodes: strict=${textResolutionContext.strict}, depth=${textResolutionContext.depth}, preserveUnresolved=${textResolutionContext.flags.preserveUnresolved}\n`);
-                
-                // Filter parsed nodes to only include TextNode and VariableReferenceNode for resolveNodes
-                const interpolatableNodes = parsedNodes.filter(
-                  (node): node is TextNode | VariableReferenceNode => 
-                    node.type === 'Text' || node.type === 'VariableReference'
-                );
-
-                const resolvedContent = await this.resolutionService.resolveNodes(interpolatableNodes, textResolutionContext);
-                // Create a new node with resolved content
-                processedNode = { ...textNode, content: resolvedContent }; // Use spread on textNode
-                process.stdout.write(`[InterpreterService LOG] Resolved content: '${resolvedContent}'\n`);
-                process.stdout.write(`[InterpreterService LOG] Processed node content: '${processedNode.content}'\n`);
-                logger.debug('Successfully resolved TextNode content', {
-                  originalLength: textNode.content.length,
-                  resolvedLength: resolvedContent.length
-                });
-              } catch (error) {
-                logger.error('Failed to resolve TextNode content during interpretation', {
-                   error: error instanceof Error ? error.message : String(error),
-                   content: textNode.content.substring(0, 100) // Use textNode here
-                });
-                // If resolution fails, use the original node (processedNode remains textNode)
-              }
-            } else {
-              logger.warn('ParserClient or ResolutionService not available for TextNode resolution.');
-              // Use original node if services aren't available
-            }
-          }
-          // Create new state for the potentially resolved text node
+          // Simply clone state and add the original TextNode
           const textState = currentState.clone();
-          textState.addNode(processedNode);
+          textState.addNode(node); // Add the original node as is
           currentState = textState;
           break;
 

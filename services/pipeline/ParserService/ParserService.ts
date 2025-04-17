@@ -89,7 +89,7 @@ export class ParserService implements IParserService {
     this.factoryInitialized = true;
     
     if (this.resolutionClientFactory) {
-        this.initializeResolutionClient();
+      this.initializeResolutionClient();
     } else {
       logger.warn('ResolutionServiceClientFactory not injected into ParserService');
     }
