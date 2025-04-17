@@ -40,7 +40,17 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService';
+import type { IURLContentResolver, URLResponse } from '@services/resolution/URLContentResolver/IURLContentResolver'; 
+// Import the factory
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
 
+// Define a minimal logger interface if not found/imported
+interface IDirectiveLogger {
+  log: (...args: any[]) => void;
+  warn: (...args: any[]) => void;
+  error: (...args: any[]) => void;
+  debug?: (...args: any[]) => void; // Optional debug
+}
 
 describe('Debug Tools Integration Test', () => {
   let context: TestContextDI; 
@@ -58,6 +68,28 @@ describe('Debug Tools Integration Test', () => {
     testContainer = container.createChildContainer();
 
     testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
+
+    // Register Mocks
+    const mockUrlResolver: IURLContentResolver = {
+      isURL: vi.fn().mockReturnValue(false), // Assume paths are not URLs in this test
+      validateURL: vi.fn().mockImplementation(async (url: string) => url), // Return URL as valid
+      fetchURL: vi.fn().mockResolvedValue({
+        content: 'Mock URL Content',
+        metadata: { statusCode: 200, contentType: 'text/plain' },
+        fromCache: false,
+        url: 'mock://url' // Provide a mock URL in the response
+      } as URLResponse) // Return a mock successful response
+    };
+    testContainer.registerInstance<IURLContentResolver>('IURLContentResolver', mockUrlResolver);
+
+    // Register DirectiveLogger Mock
+    const mockLogger: IDirectiveLogger = { 
+      log: vi.fn(), 
+      warn: vi.fn(), 
+      error: vi.fn(),
+      debug: vi.fn(),
+    }; 
+    testContainer.registerInstance<IDirectiveLogger>('DirectiveLogger', mockLogger);
 
     // Register Core Services 
     testContainer.registerSingleton('StateEventService', StateEventService);
@@ -91,6 +123,11 @@ describe('Debug Tools Integration Test', () => {
     testContainer.registerSingleton<IInterpreterService>('IInterpreterService', InterpreterService);
     testContainer.registerSingleton('OutputService', OutputService);
     testContainer.registerSingleton<IOutputService>('IOutputService', OutputService);
+
+    // --- Register ResolutionServiceClientFactory --- 
+    // It depends on IResolutionService, which is registered above
+    testContainer.registerSingleton(ResolutionServiceClientFactory);
+    // --- End Factory Registration --- 
 
     // Register MeldProcessor (Commented out)
     // testContainer.registerSingleton(MeldProcessor);

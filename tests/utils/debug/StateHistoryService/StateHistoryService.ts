@@ -1,16 +1,20 @@
 import { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService.js';
 import { IStateHistoryService, StateOperation, StateTransformation, HistoryFilter } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
 import type { StateTransformEvent } from '@services/state/StateEventService/IStateEventService.js';
+import { injectable, inject } from 'tsyringe';
 
 /**
  * @package
  * Implementation of state history tracking service.
  */
+@injectable()
 export class StateHistoryService implements IStateHistoryService {
   private operations: StateOperation[] = [];
   private transformations: StateTransformation[] = [];
 
-  constructor(private eventService: IStateEventService) {
+  constructor(
+    @inject('IStateEventService') private eventService: IStateEventService
+  ) {
     // Subscribe to all state events
     this.setupEventSubscriptions();
   }

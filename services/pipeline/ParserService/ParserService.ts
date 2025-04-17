@@ -1,4 +1,4 @@
-import { injectable, singleton, container, inject } from 'tsyringe';
+import { injectable, singleton, container, inject, delay } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { parserLogger as logger } from '@core/utils/logger.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
@@ -63,42 +63,35 @@ function isMeldAstError(error: unknown): error is MeldAstError {
 })
 export class ParserService implements IParserService {
   private resolutionClient?: IResolutionServiceClient;
-  private resolutionClientFactory?: ResolutionServiceClientFactory;
   private factoryInitialized: boolean = false;
-  private variableNodeFactory?: VariableNodeFactory;
+  private variableNodeFactory: VariableNodeFactory;
 
   /**
    * Creates a new instance of the ParserService
    */
   constructor(
-    @inject(VariableNodeFactory) variableNodeFactory?: VariableNodeFactory
+    @inject(VariableNodeFactory) variableNodeFactory: VariableNodeFactory,
+    @inject(delay(() => ResolutionServiceClientFactory)) private resolutionClientFactory?: ResolutionServiceClientFactory
   ) {
-    // We'll initialize the factory lazily to avoid circular dependencies
+    this.variableNodeFactory = variableNodeFactory;
     if (process.env.DEBUG === 'true') {
-      console.log('ParserService: Initialized');
+      console.log('ParserService: Initialized with factory:', !!this.resolutionClientFactory);
     }
-    
-    // Initialize the variable node factory or fall back to container resolution
-    this.variableNodeFactory = variableNodeFactory || container.resolve(VariableNodeFactory);
   }
 
   /**
    * Lazily initialize the ResolutionServiceClient factory
-   * This is called only when needed to avoid circular dependencies
    */
   private ensureFactoryInitialized(): void {
     if (this.factoryInitialized) {
       return;
     }
-    
     this.factoryInitialized = true;
     
-    try {
-      this.resolutionClientFactory = container.resolve('ResolutionServiceClientFactory');
-      this.initializeResolutionClient();
-    } catch (error) {
-      // Factory not available
-      logger.debug('ResolutionServiceClientFactory not available');
+    if (this.resolutionClientFactory) {
+        this.initializeResolutionClient();
+    } else {
+      logger.warn('ResolutionServiceClientFactory not injected into ParserService');
     }
   }
 
@@ -121,7 +114,6 @@ export class ParserService implements IParserService {
 
   private async parseContent(content: string, filePath?: string): Promise<MeldNode[]> {
     try {
-      // parse is already imported at the top of the file
       const options = {
         failFast: true,
         trackLocations: true,
@@ -136,45 +128,35 @@ export class ParserService implements IParserService {
         }
       };
 
-      // Register the content with source mapping service if a filePath is provided
       if (filePath) {
         try {
           const { registerSource } = require('@core/utils/sourceMapUtils.js');
           registerSource(filePath, content);
           logger.debug(`Registered content for source mapping: ${filePath}`);
         } catch (err) {
-          // Source mapping is optional, so just log a debug message if it fails
           logger.debug('Source mapping not available, skipping registration', { error: err });
         }
       }
 
-      // Parse the content
       const result = await parse(content, options);
 
-      // Transform old variable node types into consolidated type - REMOVED
-      // const transformedAst = (result.ast || []).map((node: MeldNode) => this.transformVariableNode(node)); // REMOVED
-      const ast = result.ast || []; // Assign directly
+      const ast = result.ast || [];
 
-      // Validate code fence nesting
-      this.validateCodeFences(ast); // Use ast directly
+      this.validateCodeFences(ast);
 
-      // Log any non-fatal errors
       if (result.errors && result.errors.length > 0) {
         result.errors.forEach((error: unknown) => {
           if (isMeldAstError(error)) {
-            // Don't log warnings directly - we'll handle them through the error display service
             logger.debug('Parse warning detected', { errorMessage: error.toString() });
           }
         });
       }
 
-      return ast; // Return ast directly
+      return ast;
     } catch (error) {
       if (isMeldAstError(error)) {
-        // Create a MeldParseError with the original error information
         const errorLocation = error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } };
         
-        // Always use the provided filePath if we have one, don't rely on what's in the error
         const actualFilePath = filePath;
         const locationWithPath = {
           ...errorLocation,
@@ -185,8 +167,8 @@ export class ParserService implements IParserService {
           error.message,
           locationWithPath,
           {
-            filePath: actualFilePath, // Directly set filePath in the error options
-            cause: isMeldAstError(error) ? error : undefined, // Set the original error as the cause only if it's a proper Error
+            filePath: actualFilePath,
+            cause: isMeldAstError(error) ? error : undefined,
             context: {
               originalError: error,
               sourceLocation: {
@@ -195,13 +177,11 @@ export class ParserService implements IParserService {
                 column: errorLocation.start.column
               },
               location: locationWithPath,
-              // Add the file path in the context for the error display service to use
               errorFilePath: actualFilePath
             }
           }
         );
         
-        // Try to enhance with source mapping information
         if (filePath) {
           try {
             const { enhanceMeldErrorWithSourceInfo } = require('@core/utils/sourceMapUtils.js');

@@ -1,18 +1,20 @@
-import { IStateVisualizationService, VisualizationConfig, StateMetrics, NodeStyle, EdgeStyle } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
-import { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
-import type { IStateTrackingService, StateMetadata, StateRelationship } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { IStateVisualizationService, VisualizationConfig, StateMetrics, NodeStyle, EdgeStyle, ContextVisualizationConfig } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
+import { IStateHistoryService, StateOperation, StateTransformation } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
+import type { IStateTrackingService, StateMetadata, StateRelationship, ContextBoundary, VariableCrossing, ContextHierarchyInfo } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { injectable, inject } from 'tsyringe';
 
 /**
  * @package
  * Implementation of state visualization service.
  */
+@injectable()
 export class StateVisualizationService implements IStateVisualizationService {
   constructor(
-    private historyService: IStateHistoryService,
-    private trackingService: IStateTrackingService,
+    @inject('IStateHistoryService') private historyService: IStateHistoryService,
+    @inject('IStateTrackingService') private trackingService: IStateTrackingService,
   ) {}
 
-  private generateMermaidGraph(nodes: Map<string, StateMetadata>, edges: StateRelationship[], config: VisualizationConfig): string {
+  private generateMermaidGraph(nodes: Map<string, StateMetadata>, edges: Array<{ sourceId: string, targetId: string, type: string }>, config: VisualizationConfig): string {
     const lines: string[] = ['graph TD;'];
     
     // Add nodes with styling
@@ -27,16 +29,18 @@ export class StateVisualizationService implements IStateVisualizationService {
 
     // Add edges with styling
     edges.forEach(edge => {
-      const style = this.getEdgeStyle(edge, config);
+      const style = this.getEdgeStyle({ targetId: edge.targetId, type: edge.type as any, sourceId: edge.sourceId } as StateRelationship, config);
       const styleStr = `style="${style.style},${style.color}"`;
       const label = edge.type;
-      lines.push(`    ${edge.targetId} -->|${label}| ${edge.type} ${styleStr};`);
+      const source = edge.sourceId || 'unknown_source';
+      lines.push(`    ${source} -->|${label}| ${edge.targetId};`);
+      lines.push(`    linkStyle ${lines.length - 2} stroke:${style.color},stroke-width:2px,${style.style};`);
     });
 
     return lines.join('\n');
   }
 
-  private generateDotGraph(nodes: Map<string, StateMetadata>, edges: StateRelationship[], config: VisualizationConfig): string {
+  private generateDotGraph(nodes: Map<string, StateMetadata>, edges: Array<{ sourceId: string, targetId: string, type: string }>, config: VisualizationConfig): string {
     const lines: string[] = ['digraph G {'];
     
     // Add nodes with styling
@@ -58,7 +62,7 @@ export class StateVisualizationService implements IStateVisualizationService {
 
     // Add edges with styling
     edges.forEach(edge => {
-      const style = this.getEdgeStyle(edge, config);
+      const style = this.getEdgeStyle({ targetId: edge.targetId, type: edge.type as any, sourceId: edge.sourceId } as StateRelationship, config);
       const attrs = [
         `style="${style.style}"`,
         `color="${style.color}"`,
@@ -67,7 +71,8 @@ export class StateVisualizationService implements IStateVisualizationService {
       if (style.tooltip) {
         attrs.push(`tooltip="${style.tooltip}"`);
       }
-      lines.push(`    "${edge.targetId}" -> "${edge.type}" [${attrs.join(',')}];`);
+      const source = edge.sourceId || 'unknown_source';
+      lines.push(`    "${source}" -> "${edge.targetId}" [${attrs.join(',')}];`);
     });
 
     lines.push('}');
@@ -140,28 +145,19 @@ export class StateVisualizationService implements IStateVisualizationService {
     const descendants = this.trackingService.getStateDescendants(rootStateId);
     const allStateIds = new Set([...lineage, ...descendants]);
 
-    // Build nodes and edges
     const nodes = new Map<string, StateMetadata>();
-    const edges: StateRelationship[] = [];
+    const edges: Array<{ sourceId: string, targetId: string, type: string }> = [];
 
-    // Collect all states and their relationships
     allStateIds.forEach(stateId => {
-      // Get state metadata from history
-      const operations = this.historyService.getOperationHistory(stateId);
-      const createOp = operations.find(op => op.type === 'create');
-      if (createOp && createOp.metadata) {
-        nodes.set(stateId, createOp.metadata);
-      }
-
-      // Get relationships from tracking service
-      const stateLineage = this.trackingService.getStateLineage(stateId);
-      if (stateLineage.length > 1) {
-        const parentIndex = stateLineage.indexOf(stateId) - 1;
-        if (parentIndex >= 0) {
-          edges.push({
-            targetId: stateId,
-            type: 'parent-child',
-          });
+      const metadata = this.trackingService.getStateMetadata(stateId);
+      if (metadata) {
+        nodes.set(stateId, metadata);
+        // Infer parent-child from metadata.parentId if it exists
+        if (metadata.parentId && allStateIds.has(metadata.parentId)) {
+           // Avoid duplicate edges if already added from child perspective
+           if (!edges.some(e => e.sourceId === metadata.parentId && e.targetId === stateId)) {
+               edges.push({ sourceId: metadata.parentId, targetId: stateId, type: 'parent-child' });
+           }
         }
       }
     });
@@ -169,16 +165,15 @@ export class StateVisualizationService implements IStateVisualizationService {
     // Generate visualization in requested format
     switch (config.format) {
       case 'mermaid':
-        return this.generateMermaidGraph(nodes, edges, config);
+        return this.generateMermaidGraph(nodes, edges.map(e => ({...e, sourceId: e.sourceId || 'unknown'})), config);
       case 'dot':
-        return this.generateDotGraph(nodes, edges, config);
+        return this.generateDotGraph(nodes, edges.map(e => ({...e, sourceId: e.sourceId || 'unknown'})), config);
       case 'json':
         return JSON.stringify({
-          nodes: Array.from(nodes.entries()).map(([id, metadata]) => ({
-            id,
-            ...metadata,
-          })),
-          edges,
+          nodes: Array.from(nodes.values())
+                 .filter(metadata => metadata && metadata.id) // Ensure metadata and id exist
+                 .map(metadata => ({ ...metadata })),
+          edges, // Output the reconstructed edges
         }, null, 2);
       default:
         throw new Error(`Unsupported format: ${config.format}`);
@@ -205,50 +200,34 @@ export class StateVisualizationService implements IStateVisualizationService {
   }
 
   private generateMermaidTransitionDiagram(transformations: StateTransformation[], config: VisualizationConfig): string {
-    const lines: string[] = ['graph LR;'];
-    
-    // Helper to format value display
+    const lines: string[] = ['graph LR;']; // Use LR for left-to-right transitions
+
+    // Helper to format value display (limited length for mermaid)
     const formatValue = (value: unknown): string => {
-      if (typeof value === 'object' && value !== null) {
-        return Object.entries(value as Record<string, unknown>)
-          .map(([key, val]) => {
-            if (Array.isArray(val)) {
-              return `${key}: [${val.join(',')}]`;
-            } else if (typeof val === 'object' && val !== null) {
-              return Object.entries(val as Record<string, unknown>)
-                .map(([k, v]) => Array.isArray(v) ? `${key}.${k}: [${v.join(',')}]` : `${key}.${k}: ${v}`)
-                .join('\\n');
-            }
-            return `${key}: ${val}`;
-          })
-          .join('\\n');
-      }
-      return String(value);
+        if (value === undefined || value === null) return 'null/undefined';
+        const str = JSON.stringify(value);
+        // Limit length to avoid overly large nodes in Mermaid
+        const maxLength = 50;
+        return str.length > maxLength ? str.substring(0, maxLength) + '...' : str;
     };
 
-    // Add nodes and transitions
     transformations.forEach((transform, index) => {
-      const beforeId = `state_${index}`;
-      const afterId = `state_${index + 1}`;
-      
-      // Add before state
-      const beforeLabel = formatValue(transform.before);
-      lines.push(`    ${beforeId}["${beforeLabel}"];`);
-      
-      // Add after state
-      const afterLabel = formatValue(transform.after);
-      lines.push(`    ${afterId}["${afterLabel}"];`);
-      
-      // Add transition with timestamp first for better readability
-      const transitionLabel = config.includeTimestamps
-        ? `${transform.timestamp} ${transform.operation}`
-        : transform.operation;
-      lines.push(`    ${beforeId} -->|${transitionLabel}| ${afterId};`);
-      
-      // Add styling
-      const style = this.getNodeStyle({ source: transform.source } as StateMetadata, config);
-      lines.push(`    style ${beforeId} fill:${style.color};`);
-      lines.push(`    style ${afterId} fill:${style.color};`);
+        const beforeId = `state_${index}_before`;
+        const afterId = `state_${index}_after`;
+        const operation = transform.operation || 'unknown_op';
+
+        // Node for state before transformation
+        lines.push(`    ${beforeId}["Before: ${formatValue(transform.before)}"];`);
+
+        // Node for state after transformation
+        lines.push(`    ${afterId}["After: ${formatValue(transform.after)}"];`);
+
+        // Edge representing the transformation
+        const edgeLabel = config.includeTimestamps ? `${operation}\n${transform.timestamp}` : operation;
+        lines.push(`    ${beforeId} -->|${edgeLabel}| ${afterId};`);
+
+        // Basic styling (can be enhanced with config.styleNodes/Edges)
+        // Note: Styling individual nodes in Mermaid sequence/graph is limited.
     });
 
     return lines.join('\n');
@@ -267,7 +246,7 @@ export class StateVisualizationService implements IStateVisualizationService {
               return `${key}: [${val.join(',')}]`;
             } else if (typeof val === 'object' && val !== null) {
               return Object.entries(val as Record<string, unknown>)
-                .map(([k, v]) => `${key}.${k}: ${v}`)
+                .map(([k, v]) => Array.isArray(v) ? `${key}.${k}: [${v.join(',')}]` : `${key}.${k}: ${v}`)
                 .join('\\n');
             }
             return `${key}: ${val}`;
@@ -304,73 +283,58 @@ export class StateVisualizationService implements IStateVisualizationService {
   }
 
   public generateRelationshipGraph(stateIds: string[], config: VisualizationConfig): string {
-    if (!['mermaid', 'dot', 'json'].includes(config.format)) {
-      throw new Error(`Unsupported format: ${config.format}`);
-    }
-
-    // Collect all states and their relationships
     const nodes = new Map<string, StateMetadata>();
-    const edges: StateRelationship[] = [];
+    const edges: Array<{ sourceId: string, targetId: string, type: string }> = [];
     const processedStates = new Set<string>();
 
-    // Helper to process a state and its relationships
     const processState = (stateId: string) => {
       if (processedStates.has(stateId)) return;
       processedStates.add(stateId);
 
-      // Get state metadata from history
-      const operations = this.historyService.getOperationHistory(stateId);
-      const createOrMergeOp = operations.find(op => op.type === 'create' || op.type === 'merge');
-      if (createOrMergeOp?.metadata) {
-        nodes.set(stateId, createOrMergeOp.metadata);
-      }
-
-      // Get lineage relationships
-      const lineage = this.trackingService.getStateLineage(stateId);
-      if (lineage.length > 1) {
-        for (let i = 1; i < lineage.length; i++) {
-          edges.push({
-            targetId: lineage[i],
-            sourceId: lineage[i - 1],
-            type: 'parent-child',
-          });
+      const metadata = this.trackingService.getStateMetadata(stateId);
+      if (metadata) {
+        nodes.set(stateId, metadata);
+        // Add parent relationship if parent is in the set or processed
+        if (metadata.parentId && (stateIds.includes(metadata.parentId) || processedStates.has(metadata.parentId))) {
+             if (!edges.some(e => e.sourceId === metadata.parentId && e.targetId === stateId)) {
+                 edges.push({ sourceId: metadata.parentId, targetId: stateId, type: 'parent-child' });
+                 // Process parent only if it was in the original requested list
+                 if (stateIds.includes(metadata.parentId)) {
+                    processState(metadata.parentId);
+                 }
+             }
         }
       }
-
-      // Get merge relationships
-      const mergeOps = operations.filter(op => op.type === 'merge');
-      mergeOps.forEach(op => {
-        if (op.parentId) {
-          edges.push({
-            sourceId: op.parentId,
-            targetId: stateId,
-            type: 'merge-source',
-          });
-          // Also process the parent state if we haven't yet
-          processState(op.parentId);
-        }
+      
+      // Find children by checking other states' parentId
+      const allStatesData = this.trackingService.getAllStates();
+      allStatesData.forEach(potentialChild => {
+          if (potentialChild.parentId === stateId && (stateIds.includes(potentialChild.id) || processedStates.has(potentialChild.id))) {
+               if (!edges.some(e => e.sourceId === stateId && e.targetId === potentialChild.id)) {
+                    edges.push({ sourceId: stateId, targetId: potentialChild.id, type: 'parent-child' });
+                    // Process child only if it was in the original requested list
+                    if (stateIds.includes(potentialChild.id)) {
+                        processState(potentialChild.id);
+                    }
+               }
+          }
       });
-
-      // Process descendants
-      const descendants = this.trackingService.getStateDescendants(stateId);
-      descendants.forEach(descendantId => processState(descendantId));
+      
+      // TODO: Add logic to infer merge relationships if needed, potentially using historyService or contextBoundaries
     };
 
-    // Process all requested states
     stateIds.forEach(stateId => processState(stateId));
 
-    // Generate visualization in requested format
     switch (config.format) {
       case 'mermaid':
-        return this.generateMermaidRelationshipGraph(nodes, edges, config);
+         return this.generateMermaidRelationshipGraph(nodes, edges.map(e => ({...e, sourceId: e.sourceId || 'unknown'})), config);
       case 'dot':
-        return this.generateDotRelationshipGraph(nodes, edges, config);
+         return this.generateDotRelationshipGraph(nodes, edges.map(e => ({...e, sourceId: e.sourceId || 'unknown'})), config);
       case 'json':
         return JSON.stringify({
-          nodes: Array.from(nodes.entries()).map(([id, metadata]) => ({
-            id,
-            ...metadata,
-          })),
+          nodes: Array.from(nodes.values())
+                 .filter(metadata => metadata && metadata.id)
+                 .map(metadata => ({ ...metadata })),
           edges,
         }, null, 2);
       default:
@@ -380,7 +344,7 @@ export class StateVisualizationService implements IStateVisualizationService {
 
   private generateMermaidRelationshipGraph(
     nodes: Map<string, StateMetadata>,
-    edges: StateRelationship[],
+    edges: Array<{ sourceId: string, targetId: string, type: string }>,
     config: VisualizationConfig
   ): string {
     const lines: string[] = ['graph TD;'];
@@ -397,7 +361,7 @@ export class StateVisualizationService implements IStateVisualizationService {
 
     // Add edges with styling
     edges.forEach(edge => {
-      const style = this.getEdgeStyle(edge, config);
+      const style = this.getEdgeStyle({ targetId: edge.targetId, type: edge.type as any, sourceId: edge.sourceId } as StateRelationship, config);
       const sourceId = edge.sourceId || 'unknown';
       const label = config.includeMetadata ? edge.type : '';
       lines.push(`    ${sourceId} -->|${label}| ${edge.targetId};`);
@@ -409,7 +373,7 @@ export class StateVisualizationService implements IStateVisualizationService {
 
   private generateDotRelationshipGraph(
     nodes: Map<string, StateMetadata>,
-    edges: StateRelationship[],
+    edges: Array<{ sourceId: string, targetId: string, type: string }>,
     config: VisualizationConfig
   ): string {
     const lines: string[] = ['digraph G {'];
@@ -436,7 +400,7 @@ export class StateVisualizationService implements IStateVisualizationService {
 
     // Add edges with styling
     edges.forEach(edge => {
-      const style = this.getEdgeStyle(edge, config);
+      const style = this.getEdgeStyle({ targetId: edge.targetId, type: edge.type as any, sourceId: edge.sourceId } as StateRelationship, config);
       const sourceId = edge.sourceId || 'unknown';
       const attrs = [
         `style="${style.style}"`,
