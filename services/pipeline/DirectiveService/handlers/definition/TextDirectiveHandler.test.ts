@@ -54,23 +54,34 @@ describe('TextDirectiveHandler', () => {
   let resolutionService: IResolutionService; // Direct reference from fixture
 
   beforeEach(async () => {
-    // Create handler instance (no DI needed for handler itself typically)
-    handler = new TextDirectiveHandler();
-    
-    // Use the fixture to create context, mocks, and resolve services
+    // Create the fixture first, which sets up the DI container with mocks
     fixture = await DirectiveTestFixture.create({
-      handler: handler,
-      // Add specific overrides for this test suite if needed, e.g.:
-      // resolutionOverrides: {
-      //   resolveNodes: vi.fn().mockImplementation(...) // Default mock logic
-      // }
+      // No handler instance passed here; we resolve it from the container
+      // Add specific overrides for this test suite if needed
     });
+
+    // Ensure the actual handler class is registered in the test container
+    // so tsyringe can inject the mocked dependencies into it.
+    // Use registerService for actual classes, not registerMock.
+    // Access the container helper via fixture.context.container
+    if (!fixture.context.container.isRegistered(TextDirectiveHandler)) {
+      fixture.context.container.registerService(TextDirectiveHandler, TextDirectiveHandler);
+    }
+
+    // Resolve the handler instance *from the fixture's container*
+    // This ensures it receives the mocked dependencies correctly.
+    handler = fixture.context.resolveSync(TextDirectiveHandler);
     
-    // Get references to resolved services/mocks from the fixture
+    // Manually assign the resolved handler to the fixture instance
+    // so that fixture.executeHandler() can use it internally.
+    fixture.handler = handler;
+    
+    // Now get references to the *mocked* services from the fixture
+    // These are the instances that should have been injected into 'handler'
     stateService = fixture.stateService;
     resolutionService = fixture.resolutionService;
 
-    // Default mock behavior for resolutionService (can be overridden per test)
+    // Set up spy/mock behavior on the *mocked* resolutionService instance
     vi.spyOn(resolutionService, 'resolveNodes').mockImplementation(async (nodes: InterpolatableValue, context: any): Promise<string> => {
         let result = '';
         for (const node of nodes) {
@@ -83,8 +94,15 @@ describe('TextDirectiveHandler', () => {
                 else if (node.identifier === 'subject') result += 'World';
                 else if (node.identifier === 'configPath') result += '$PROJECTPATH/docs'; // Use a distinct name
                 else if (node.identifier === 'missing' || node.identifier === 'undefined_var') {
-                    // Simulate resolution error
-                    throw new MeldResolutionError(`Variable not found: ${node.identifier}`);
+                    // Simulate resolution error with required options
+                    throw new MeldResolutionError(
+                      `Variable not found: ${node.identifier}`,
+                      { 
+                        code: 'E_VAR_NOT_FOUND', // Example code
+                        details: { variableName: node.identifier }, // Provide details
+                        severity: ErrorSeverity.Recoverable // Use correct enum member
+                      }
+                    );
                 }
                 else result += `{{${node.identifier}}}`; // Fallback for unknown vars
             }
@@ -101,7 +119,7 @@ describe('TextDirectiveHandler', () => {
 
   describe('execute', () => {
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('should handle a simple text assignment with string literal', async () => {
+    it('should handle a simple text assignment with string literal', async () => {
       const example = textDirectiveExamples.atomic.simpleString;
       const node = await createNodeFromExample(example.code);
       
@@ -120,7 +138,7 @@ describe('TextDirectiveHandler', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('should handle text assignment with escaped characters', async () => {
+    it('should handle text assignment with escaped characters', async () => {
       const example = textDirectiveExamples.atomic.escapedCharacters;
       const node = await createNodeFromExample(example.code);
       const expectedValue = 'Line 1\nLine 2\t"Quoted"';
@@ -140,7 +158,7 @@ describe('TextDirectiveHandler', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('should handle a template literal in text directive', async () => {
+    it('should handle a template literal in text directive', async () => {
       const example = textDirectiveExamples.atomic.templateLiteral;
       const node = await createNodeFromExample(example.code);
       const expectedValue = 'Template content';
@@ -159,13 +177,14 @@ describe('TextDirectiveHandler', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('should handle object property interpolation in text value', async () => {
+    it('should handle object property interpolation in text value', async () => {
       const example = textDirectiveExamples.combinations.objectInterpolation;
       const node = await createNodeFromExample(example.code.split('\n')[1]); // Get only the @text line
       const expectedValue = 'Hello, Alice!';
 
       // --- Test Specific Mock Setup ---
-      // Mock resolveNodes for this specific interpolation (uses default mock logic from beforeEach)
+      // Override the default mock to return the specific expected value for this test
+      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce(expectedValue); 
       vi.spyOn(stateService, 'setTextVar');
       
       // --- Execution ---
@@ -178,7 +197,7 @@ describe('TextDirectiveHandler', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('should handle path referencing in text values', async () => {
+    it('should handle path referencing in text values', async () => {
       const example = textDirectiveExamples.combinations.pathReferencing;
       const node = await createNodeFromExample(example.code.split('\n')[5]); // Get only the @text configText line
       const expectedValue = 'Docs are at $PROJECTPATH/docs';
@@ -198,7 +217,7 @@ describe('TextDirectiveHandler', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('should throw DirectiveError if text interpolation contains undefined variables', async () => {
+    it('should throw DirectiveError if text interpolation contains undefined variables', async () => {
       const example = textDirectiveExamples.invalid.undefinedVariable;
       const node = await createNodeFromExample(example.code);
 
@@ -219,7 +238,7 @@ describe('TextDirectiveHandler', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it.skip('should handle basic variable interpolation', async () => {
+    it('should handle basic variable interpolation', async () => {
       const example = textDirectiveExamples.combinations.basicInterpolation;
       const node = await createNodeFromExample(example.code.split('\n')[2]); // Get only the @text message line
       const expectedValue = 'Hello, World!';
