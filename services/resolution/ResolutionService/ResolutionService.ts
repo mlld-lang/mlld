@@ -1078,20 +1078,19 @@ export class ResolutionService implements IResolutionService {
    * @param config Configuration for the resolution tracker
    */
   enableResolutionTracking(config: Partial<ResolutionTrackingConfig>): void {
-    process.stdout.write(`DEBUG: [ResService.enableTracking] Called. Current tracker: ${this.resolutionTracker ? 'exists' : 'null'}\n`);
+    // process.stdout.write(`DEBUG: [ResService.enableTracking] Called. Current tracker: ${this.resolutionTracker ? 'exists' : 'null'}\n`);
     if (!this.resolutionTracker) {
       this.resolutionTracker = new VariableResolutionTracker();
-      process.stdout.write(`DEBUG: [ResService.enableTracking] NEW tracker instance created.\n`);
+      // process.stdout.write(`DEBUG: [ResService.enableTracking] NEW tracker instance created.\n`);
       logger.info('Resolution tracking enabled.');
     } 
     this.resolutionTracker.configure(config);
-    process.stdout.write(`DEBUG: [ResService.enableTracking] Configuring tracker. Enabled: ${this.resolutionTracker.isEnabled()}\n`);
-    // Ensure resolver exists before setting tracker
+    // process.stdout.write(`DEBUG: [ResService.enableTracking] Configuring tracker. Enabled: ${this.resolutionTracker.isEnabled()}\n`);
     if (this.variableReferenceResolver) {
         this.variableReferenceResolver.setTracker(this.resolutionTracker);
-        process.stdout.write(`DEBUG: [ResService.enableTracking] Called resolver.setTracker()\n`);
+        // process.stdout.write(`DEBUG: [ResService.enableTracking] Called resolver.setTracker()\n`);
     } else {
-        process.stdout.write(`DEBUG: [ResService.enableTracking] variableReferenceResolver is NULL, cannot set tracker yet.\n`);
+        // process.stdout.write(`DEBUG: [ResService.enableTracking] variableReferenceResolver is NULL, cannot set tracker yet.\n`);
     }
   }
 

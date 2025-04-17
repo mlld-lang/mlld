@@ -132,7 +132,7 @@ export class VariableReferenceResolver {
   }
 
   setTracker(tracker: VariableResolutionTracker): void {
-    process.stdout.write(`DEBUG: [VarRefResolver.setTracker] Called. Tracker instance received: ${tracker ? 'exists' : 'null'}\n`);
+    // process.stdout.write(`DEBUG: [VarRefResolver.setTracker] Called. Tracker instance received: ${tracker ? 'exists' : 'null'}\n`);
     this.resolutionTracker = tracker;
   }
 
@@ -315,28 +315,31 @@ export class VariableReferenceResolver {
   private async getVariable(node: VariableReferenceNode, context: ResolutionContext): Promise<MeldVariable | undefined> {
     const name = node.identifier;
     const specificType = node.valueType;
-    process.stdout.write(`DEBUG: [VarRefResolver.getVariable] ENTER for '${name}'. Tracker instance: ${this.resolutionTracker ? 'exists' : 'null'}\n`);
+    const currentState = context.state; 
+    if (!currentState) {
+        logger.error(`[VarRefResolver.getVariable] No state found in ResolutionContext for '${name}'`);
+        return undefined;
+    }
+    // process.stdout.write(`DEBUG: [VarRefResolver.getVariable] ENTER for '${name}'. Context State ID: ${currentState.getStateId() ?? 'N/A'}. Tracker: ${this.resolutionTracker ? 'exists' : 'null'}\n`);
 
     this.resolutionTracker?.trackAttemptStart(name, `getVariable (type hint: ${specificType ?? 'any'})`);
     
-    // Always use the generic getVariable from state service
-    const variable: MeldVariable | undefined = await this.stateService.getVariable(name); 
+    // process.stdout.write(`DEBUG: [VarRefResolver.getVariable] Calling context.state.getVariable for '${name}'. StateService Instance State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
+    const variable: MeldVariable | undefined = await currentState.getVariable(name); 
 
     if (variable) {
-        // If a specific type hint was provided, validate the found variable's type
         if (specificType && variable.type !== specificType) {
             logger.warn(`Variable '${name}' found, but type mismatch. Expected ${specificType}, got ${variable.type}.`);
-            process.stdout.write(`DEBUG: [VarRefResolver.getVariable] Before trackAttempt (mismatch) for '${name}'. Tracker: ${this.resolutionTracker ? 'exists' : 'null'}\n`);
-            this.resolutionTracker?.trackResolutionAttempt(name, `variable-type-mismatch`, false);
-            return undefined; // Treat as not found if type doesn't match hint
+            if (this.resolutionTracker) {
+                this.resolutionTracker.trackResolutionAttempt(name, `variable-type-mismatch`, false);
+            }
+            return undefined; 
         }
-        // <<< Add check for allowed variable types >>>
-        logger.debug(`[getVariable Check Allowed] Variable: ${JSON.stringify(variable)}, Allowed: ${JSON.stringify(context.allowedVariableTypes)}`);
         if (context.allowedVariableTypes && !context.allowedVariableTypes.includes(variable.type)) {
             logger.warn(`Variable '${name}' found, but type ${variable.type} is not allowed in this context.`);
-            process.stdout.write(`DEBUG: [VarRefResolver.getVariable] Before trackAttempt (disallowed) for '${name}'. Tracker: ${this.resolutionTracker ? 'exists' : 'null'}\n`);
-            this.resolutionTracker?.trackResolutionAttempt(name, `variable-type-disallowed`, false);
-            // Throw error here, as validateResolution expects a throw in strict mode
+            if (this.resolutionTracker) {
+                this.resolutionTracker.trackResolutionAttempt(name, `variable-type-disallowed`, false);
+            }
             throw new VariableResolutionError(
                 `Variable type '${variable.type}' for '${name}' is not allowed in this context.`,
                 {
@@ -349,16 +352,16 @@ export class VariableReferenceResolver {
                 }
             );
         }
-        // Before the call for success:
-        process.stdout.write(`DEBUG: [VarRefResolver.getVariable] Before trackAttempt (success) for '${name}'. Tracker: ${this.resolutionTracker ? 'exists' : 'null'}\n`);
-        this.resolutionTracker?.trackResolutionAttempt(name, `${variable.type}-variable`, true, variable.value);
+        if (this.resolutionTracker) {
+           this.resolutionTracker.trackResolutionAttempt(name, `${variable.type}-variable`, true, variable.value); 
+        }
         logger.debug(`Found ${variable.type} variable '${name}'.`);
         return variable;
     } else {
-        // Variable not found by generic getter
         logger.warn(`Variable '${name}'${specificType ? ' (hinted type: ' + specificType + ')' : ''} not found in state.`);
-        process.stdout.write(`DEBUG: [VarRefResolver.getVariable] Before trackAttempt (not found) for '${name}'. Tracker: ${this.resolutionTracker ? 'exists' : 'null'}\n`);
-        this.resolutionTracker?.trackResolutionAttempt(name, `variable-not-found (type hint: ${specificType ?? 'any'})`, false);
+        if (this.resolutionTracker) {
+           this.resolutionTracker.trackResolutionAttempt(name, `variable-not-found (type hint: ${specificType ?? 'any'})`, false); 
+        }
         return undefined;
     }
   }

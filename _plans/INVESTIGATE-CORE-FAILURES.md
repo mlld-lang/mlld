@@ -29,25 +29,26 @@ Systematically investigate and fix the core service failures identified in `_pla
 
 ## Investigation Phases (Prioritized)
 
-**Phase 0: Update Debugging Infrastructure**
+**Phase 0: Update Debugging Infrastructure [COMPLETED - Pragmatic]**
 
 *   **Rationale:** The existing state tracking and visualization tools (`tests/utils/debug/*`) are outdated but potentially very valuable for diagnosing the complex state interaction issues observed. Updating this infrastructure first should significantly accelerate the subsequent debugging phases.
+*   **Outcome:** Core debug services (`StateTrackingService`, `StateHistoryService`, `StateVisualizationService`) verified to be instantiable via DI in test setup (`api/debug-tools.integration.test.ts`). Basic visualization calls confirmed working. `VariableResolutionTracker` integration remains problematic and is deferred. The infrastructure is sufficiently ready for use in subsequent phases.
 *   **Target Files:** `StateTrackingService.ts`, `StateVisualizationService.ts`, `IStateTrackingService.ts` (likely location for type definitions), potentially others in `tests/utils/debug/`.
 *   **Investigation Steps:**
-    1.  **Fix Linter Errors (Define Types):** Address the linter errors in `StateTrackingService.ts` by defining the missing types (`ContextBoundary`, `VariableCrossing`, `StateRelationshipInfo`, `ContextHierarchyInfo`). Infer their structure based on usage and define them, likely within `IStateTrackingService.ts` or a dedicated `types.ts` file in the debug directory.
-    2.  **Integrate Tracking Calls:** Review and update `StateService`, `InterpreterService`, and key directive handlers (`ImportDirectiveHandler`, etc.) to ensure they correctly call the relevant methods on the (potentially injected) `IStateTrackingService` (e.g., `registerState`, `addRelationship`, `trackContextBoundary`, `trackVariableCrossing`).
-    3.  **Verify Infrastructure:** Run tests related to the debug services themselves, if they exist. Attempt to generate a simple visualization (e.g., `visualizeContextHierarchy` via `StateVisualizationService`) for a basic test case to confirm the infrastructure is functional after updates.
+    1.  ~**Fix Linter Errors (Define Types):** Address the linter errors in `StateTrackingService.ts` by defining the missing types (`ContextBoundary`, `VariableCrossing`, `StateRelationshipInfo`, `ContextHierarchyInfo`). Infer their structure based on usage and define them, likely within `IStateTrackingService.ts` or a dedicated `types.ts` file in the debug directory.~ [DONE]
+    2.  ~**Integrate Tracking Calls:** Review and update `StateService`, `InterpreterService`, and key directive handlers (`ImportDirectiveHandler`, etc.) to ensure they correctly call the relevant methods on the (potentially injected) `IStateTrackingService` (e.g., `registerState`, `addRelationship`, `trackContextBoundary`, `trackVariableCrossing`).~ [DEFERRED - Missing calls identified but adding them deferred]
+    3.  ~**Verify Infrastructure:** Run tests related to the debug services themselves, if they exist. Attempt to generate a simple visualization (e.g., `visualizeContextHierarchy` via `StateVisualizationService`) for a basic test case to confirm the infrastructure is functional after updates.~ [DONE - Verified via `api/debug-tools.integration.test.ts`]
 
-**Phase 1: Variable Resolution Stability**
+**Phase 1: Variable Resolution Stability [NEXT]**
 
 *   **Target Failures:** `api/integration.test.ts` #1 (Variable/Data Resolution Regression).
 *   **Hypothesized Services:** `InterpreterService`, `ResolutionService`, `StateService`, `VariableReferenceResolver`, `OutputService`.
 *   **Investigation Steps:**
     1.  **Analyze `api/integration.test.ts` Context:** Why does basic `{{var}}` resolution fail here but pass in `api/array-access.test.ts` with the same DI setup? Are there subtle differences in the test structure, content order, or options passed to `processMeld`?
-    2.  **Trace `interpretNode` for TextNode:** Add temporary logging within `InterpreterService.interpretNode` specifically for the failing tests in `api/integration.test.ts`. Log the incoming `TextNode`, the state *before* resolution attempt, the result of parsing the content (`parserClient.parseString`), and the final resolved string from `resolutionService.resolveNodes`.
-    3.  **Trace `ResolutionService.resolveNodes`:** Add logging to trace the nodes being processed and the lookups performed via `VariableReferenceResolver`.
-    4.  **Trace `StateService` Access:** Log variable lookups (`getTextVar`, `getDataVar`) within `VariableReferenceResolver` to ensure the correct state is being queried.
-    5.  **Compare State Snapshots:** Compare the state (variables stored) just before the failing `TextNode` is processed in `api/integration.test.ts` vs. a passing case in `api/array-access.test.ts`. Is the variable correctly defined?
+    2.  **Trace `InterpreterService`:** Add logging/debugging to trace the processing of the relevant `TextNode`s and `VariableReferenceNode`s. Confirm the correct state is being used when calling `ResolutionService`.
+    3.  **Trace `ResolutionService.resolveNodes` / `VariableReferenceResolver`:** Add logging/debugging to trace the resolution flow for the specific failing variable. Check the state lookups (`context.state.getVariable`).
+    4.  **Use Visualization:** In the failing test, call `stateVisualizationService.visualizeContextHierarchy` (or `visualizeVariablePropagation` if relevant) at key points (e.g., before/after the failing resolution) to understand the state structure and variable availability across contexts.
+    5.  **Compare State Snapshots:** Compare the state (variables stored) just before the failing resolution attempt in `api/integration.test.ts` vs. a passing case. Is the variable correctly defined in the expected state instance?
 *   **Fix & Verify:** Implement fixes in the identified service(s). Update relevant unit tests (`ResolutionService.test.ts`, `InterpreterService.unit.test.ts`, `StateService.test.ts`) using the refactoring pattern. Re-run `api/integration.test.ts` to confirm the fix.
 
 **Phase 2: `@import` Directive Processing**

@@ -1,3 +1,14 @@
+> **Note on Current Status (As of Phase 0 Debugging - YYYY-MM-DD):**
+> 
+> Following recent refactoring, the status of these debug tools is as follows:
+> 
+> *   **CLI Commands (`meld debug-*`):** Likely **non-functional** or outdated. Do not rely on them.
+> *   **Programmatic Use (via DI):**
+>     *   `StateTrackingService`, `StateHistoryService`, `StateVisualizationService`: Verified to be instantiable via DI and basic visualization generation (e.g., `visualizeContextHierarchy`) works programmatically within tests (see `api/debug-tools.integration.test.ts`). This is the recommended way to use these tools.
+>     *   `VariableResolutionTracker`: Known issues with integration; attempts may not be recorded correctly in all test setups. Use with caution or defer.
+> *   **API Details:** Refer to the service interfaces (e.g., `IStateVisualizationService.ts`) for the most up-to-date method signatures and options, as the examples below might be outdated.
+> *   **ASCII Visualization:** Still only partially implemented.
+
 # Meld Debugging Tools
 
 This document describes the comprehensive debugging tools available in Meld for troubleshooting variable resolution, state management, and transformation issues.

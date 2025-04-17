@@ -162,10 +162,8 @@ export class InterpreterService implements IInterpreterService {
    * Updated to accept DirectiveProcessingContext
    */
   private async callDirectiveHandleDirective(node: DirectiveNode, context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
-    process.stdout.write(`[InterpreterService LOG] callDirectiveHandleDirective: Checking client. Has client? ${!!this.directiveClient}. Has handleDirective? ${!!this.directiveClient?.handleDirective}\n`);
     if (this.directiveClient && this.directiveClient.handleDirective) {
       try {
-        process.stdout.write(`[InterpreterService LOG] callDirectiveHandleDirective: Calling client.handleDirective for kind: ${node.directive.kind}\n`);
         return await this.directiveClient.handleDirective(node, context) as IStateService | DirectiveResult;
       } catch (error) {
         throw new MeldInterpreterError(
@@ -292,16 +290,13 @@ export class InterpreterService implements IInterpreterService {
         if (opts.mergeState) {
           // When mergeState is true, create child state from initial state
           currentState = opts.initialState.createChildState();
-          process.stdout.write(`[InterpreterService.interpret DEBUG] Assigned currentState from initial+merge. typeof clone: ${typeof (currentState as any)?.clone}\n`);
         } else {
           // When mergeState is false, create completely isolated state
           currentState = this.stateService!.createChildState();
-          process.stdout.write(`[InterpreterService.interpret DEBUG] Assigned currentState from initial+no-merge. typeof clone: ${typeof (currentState as any)?.clone}\n`);
         }
       } else {
         // No initial state, create fresh state
         currentState = this.stateService!.createChildState();
-        process.stdout.write(`[InterpreterService.interpret DEBUG] Assigned currentState from no-initial. typeof clone: ${typeof (currentState as any)?.clone}\n`);
       }
 
       if (!currentState) {
@@ -317,29 +312,12 @@ export class InterpreterService implements IInterpreterService {
         currentState.setCurrentFilePath(opts.filePath);
       }
 
-      // Take a snapshot of initial state for rollback - MOVED INSIDE TRY
-      // process.stdout.write(`[InterpreterService.interpret DEBUG] About to clone currentState. ID: ${currentState?.getStateId?.()}, Type: ${typeof currentState}\n`);
-      // process.stdout.write(`[InterpreterService.interpret DEBUG] typeof currentState.clone: ${typeof (currentState as any)?.clone}\n`);
-      // console.log('[InterpreterService.interpret DEBUG] Inspecting currentState:', currentState);
-      // try {
-      //   process.stdout.write(`[InterpreterService.interpret DEBUG] Keys of currentState: ${Object.getOwnPropertyNames(currentState || {}).join(', ' )}\n`);
-      //   // process.stdout.write(`[InterpreterService.interpret DEBUG] Prototype of currentState: ${Object.getPrototypeOf(currentState)}\n`);
-      // } catch (e: any) {
-      //   process.stdout.write(`[InterpreterService.interpret DEBUG] Error inspecting currentState: ${e.message}\n`);
-      // }
-      // // Add non-null assertion assuming the check above handles null/undefined
-      // initialSnapshot = currentState!.clone() as IStateService; 
-      // lastGoodState = initialSnapshot;
-
       logger.debug('Starting interpretation', {
         nodeCount: nodes?.length ?? 0,
         filePath: opts.filePath,
         mergeState: opts.mergeState
       });
 
-      // Moved initial clone here, after successful state creation
-      process.stdout.write(`[InterpreterService.interpret DEBUG] Cloning initial currentState. ID: ${currentState?.getStateId?.()}, Type: ${typeof currentState}\n`);
-      process.stdout.write(`[InterpreterService.interpret DEBUG] typeof currentState.clone: ${typeof (currentState as any)?.clone}\n`);
       initialSnapshot = currentState!.clone() as IStateService; 
       lastGoodState = initialSnapshot;
 
@@ -386,9 +364,6 @@ export class InterpreterService implements IInterpreterService {
 
       return currentState;
     } catch (error) {
-      // Reverted outer catch block: Just re-throw any error caught here.
-      // Wrapping and location addition should happen in interpretNode.
-      // console.log("[TEST DEBUG] Outer catch block caught:", error);
       throw error; 
     }
   }
@@ -436,9 +411,31 @@ export class InterpreterService implements IInterpreterService {
       // Process based on node type
       switch (node.type) {
         case 'Text':
-          // Simply clone state and add the original TextNode
+          const variableRegex = /{{\s*.*?}}|(?<!\$)\$\b[a-zA-Z_][a-zA-Z0-9_]*\b/;
+          let processedNode: TextNode = node as TextNode; 
+          if (variableRegex.test(processedNode.content)) {
+            if (this.parserClient && this.resolutionService) {
+              try {
+                const varRefContext = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
+                const resolvedStringValue = await this.resolutionService.resolveNodes([processedNode], varRefContext);
+                processedNode = {
+                  type: 'Text',
+                  content: resolvedStringValue,
+                  location: processedNode.location // Use location from processedNode
+                };
+              } catch (error) {
+                logger.error('Failed to resolve VariableReferenceNode during interpretation', {
+                  error: error instanceof Error ? error.message : String(error),
+                  identifier: processedNode.content // Use identifier from processedNode
+                });
+                const errorState = currentState.clone();
+                errorState.addNode(processedNode); // Add original processedNode back
+                currentState = errorState;
+              }
+            }
+          }
           const textState = currentState.clone();
-          textState.addNode(node); // Add the original node as is
+          textState.addNode(processedNode); 
           currentState = textState;
           break;
 
@@ -450,34 +447,28 @@ export class InterpreterService implements IInterpreterService {
           break;
 
         case 'VariableReference':
-          // Handle variable reference nodes
-          if ((node as any).valueType === 'text') {
-            // Handle TextVar nodes similar to Text nodes
-            const textVarState = currentState.clone();
-            textVarState.addNode(node);
-            currentState = textVarState;
-          } else if ((node as any).valueType === 'data') {
-            // Handle DataVar nodes similar to Text/TextVar nodes
-            const dataVarState = currentState.clone();
-            dataVarState.addNode(node);
-            currentState = dataVarState;
-          }
-          break;
-          
-        // Note: Legacy TextVar and DataVar cases are kept for backward compatibility
-        case 'TextVar' as any:
-          // Handle TextVar nodes similar to Text nodes
-          const textVarState = currentState.clone();
-          textVarState.addNode(node);
-          currentState = textVarState;
-          break;
-
-        case 'DataVar' as any:
-          // Handle DataVar nodes similar to Text/TextVar nodes
-          const dataVarState = currentState.clone();
-          dataVarState.addNode(node);
-          currentState = dataVarState;
-          break;
+           const varNode = node as VariableReferenceNode;
+           try {
+               const varRefContext = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
+               const resolvedStringValue = await this.resolutionService.resolveNodes([varNode], varRefContext);
+               const resolvedTextNode: TextNode = {
+                   type: 'Text',
+                   content: resolvedStringValue,
+                   location: varNode.location // Use location from varNode
+               };
+               const resolvedState = currentState.clone();
+               resolvedState.addNode(resolvedTextNode);
+               currentState = resolvedState;
+           } catch (error) {
+                logger.error('Failed to resolve VariableReferenceNode during interpretation', {
+                   error: error instanceof Error ? error.message : String(error),
+                   identifier: varNode.identifier // Use identifier from varNode
+                });
+                const errorState = currentState.clone();
+                errorState.addNode(varNode); // Add original varNode back
+                currentState = errorState;
+           }
+           break;
 
         case 'Comment':
           // Comments are ignored during interpretation
@@ -558,38 +549,12 @@ export class InterpreterService implements IInterpreterService {
           }
 
           currentState = resultState;
-
-          if ('getFormattingContext' in resultState && typeof resultState.getFormattingContext === 'function') {
-            const updatedContext = resultState.getFormattingContext();
-            if (updatedContext) {
-              logger.debug('Formatting context updated by directive', {
-                directiveKind: directiveNode.directive.kind,
-                contextType: updatedContext.contextType,
-                isOutputLiteral: updatedContext.isOutputLiteral
-              });
-            }
-          }
           
           if (replacementNode) {
-            process.stdout.write(`[InterpreterService LOG] Found replacementNode. Type: ${replacementNode.type}\n`);
-            // Cast node and replacementNode explicitly for transformNode call
             if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) {
-              process.stdout.write(`[InterpreterService LOG] Transformation enabled. Checking for transformNode method. Exists? ${!!currentState.transformNode}\n`);
-              logger.debug('Applying replacement node from directive handler', {
-                originalType: node.type,
-                replacementType: replacementNode.type,
-                directiveKind: directiveNode.directive.kind,
-                isVarReference: directiveNode.directive.kind === 'embed' &&
-                               typeof directiveNode.directive.path === 'object' &&
-                               directiveNode.directive.path !== null &&
-                               'isVariableReference' in directiveNode.directive.path
-              });
-              
-              // Find index of original node to replace
               const nodes = currentState.getTransformedNodes(); 
               const index = nodes.findIndex(n => n === node);
               if (index !== -1) {
-                process.stdout.write(`[InterpreterService LOG] Calling transformNode for index: ${index}\n`);
                 currentState.transformNode(index, replacementNode as MeldNode | MeldNode[]);
               } else {
                  logger.warn('Original node not found in transformed nodes for replacement', { node });
