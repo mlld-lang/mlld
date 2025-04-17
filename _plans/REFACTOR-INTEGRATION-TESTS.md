@@ -1,5 +1,42 @@
 # Plan: Refactor Integration Tests for Real Service Usage
 
+## 0. Context for Next Session
+
+**Last Known State (after trying to register more real services in `api.test.ts`):**
+
+*   **Passing:** `services/cli/CLIService/CLIService.test.ts`, `InterpreterService.integration.test.ts` (after its own refactor).
+*   **Build Error:** `api/array-access.test.ts` has a persistent syntax error introduced during mocking refactors (currently skipped via rename).
+*   **Failing (`api.test.ts`, `api/nested-array.test.ts`):** These fail assertion errors. `processMeld`, when called with test content and the manual container, often returns unexpected results (e.g., empty strings, missing variable substitutions) instead of the correctly processed output. Spies on internal methods also fail.
+*   **Failing (`api/integration.test.ts`):** This suite (using its own manual container setup) has multiple assertion failures:
+    *   Variable resolution/state access issues (e.g., `expected undefined to be defined`, `expected '...' to contain 'Value 1'`).
+    *   Path validation tests fail (`promise rejected "PathValidationError: Invalid path format { ... reason: 'Client not initialized' }"`). Mocking/registering `FileSystemServiceClientFactory` and `PathOperationsService` did *not* fix this.
+    *   Circular import test resolves instead of rejecting.
+*   **Failing (`cli/cli.test.ts`):** Many tests fail generically (`Process exited with code 1`) or with incorrect error messages, likely due to the underlying API test failures.
+*   **Failing (`api/resolution-debug.test.ts`):** Tests fail due to incorrect structure (`main is not a function`).
+
+**Core Challenges Identified:**
+
+1.  **`processMeld` Behavior in Tests:** The main hurdle is getting `processMeld` to function correctly when provided with a manually configured `testContainer`. Variable resolution (`{{var}}`) and directive execution (`@run`) often don't produce the expected output string, even when registering *most* real services. This suggests issues with how the remaining mocks interact with the real services inside `processMeld` or potential problems in the services themselves masked by previous tests.
+2.  **`api/integration.test.ts` Path Validation:** The `PathValidationError` persists despite trying various mocking/registration strategies for `FileSystemServiceClientFactory` and its dependencies. The root cause is unclear.
+3.  **Stubborn Syntax Error:** `api/array-access.test.ts` requires manual intervention to fix the build error.
+
+**Current Strategy Reminder:**
+
+*   Use manual child containers (`container.createChildContainer()`).
+*   Register `IFileSystem` with `MemfsTestFileSystem`.
+*   Register essential infrastructure mocks (e.g., `DirectiveLogger`).
+*   Pass the `testContainer` to `processMeld` via `options.container`.
+*   Attempt to use REAL services registered in the `testContainer` as much as possible, resorting to minimal, targeted mocks only when necessary or for specific error condition tests.
+*   Focus assertions on the public API boundaries (`processMeld` output string, errors thrown) rather than internal spies.
+
+**Immediate Next Steps (Start of Next Session):**
+
+1.  **Fix `api/array-access.test.ts` Build Error:** Manually inspect lines ~32-45 and correct the syntax errors in the mock definitions.
+2.  **Re-evaluate `api.test.ts` / `nested-array.test.ts`:** Since registering real `ResolutionService`/`PathService` didn't fix output errors, the problem might be the *mocked* `ParserServiceClientFactory`. **Action:** Register the *real* `ParserServiceClientFactory` in these files and see if variable/directive execution works correctly in the `processMeld` output.
+3.  **Re-evaluate `api/integration.test.ts` Path Errors:** Since mocking *and* using the real FS Client Factory both failed, investigate `PathService.validatePath` and `checkExistenceAndType` more deeply. Is there another dependency or state affecting it? Try simplifying the test cases.
+
+---
+
 ## 1. Goal
 
 Refactor API (`api/`) and CLI (`cli/`) integration tests to eliminate reliance on potentially problematic mock infrastructure (`TestContextDI` helpers, excessive `mock<T>()`). Instead, these tests should utilize the *real* service implementations as registered in `core/di-config.ts`, mocking only essential environmental dependencies like the filesystem (`IFileSystem` using `MemfsTestFileSystem`). This aims to make integration tests more robust, reliable, and truly reflective of component interactions.

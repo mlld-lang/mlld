@@ -2,7 +2,7 @@ import type {
   StateMetadataBase,
   StateRelationshipBase,
   StateTrackingServiceBase
-} from '@core/shared/types.js';
+} from '@core/shared/types';
 
 /**
  * @package
@@ -134,8 +134,8 @@ interface ContextBoundary {
   sourceStateId: string;
   targetStateId: string;
   boundaryType: 'import' | 'embed';
-  timestamp: number;
   filePath?: string;
+  createdAt: number;
 }
 
 /**
@@ -154,6 +154,7 @@ interface VariableCrossing {
  * Information about the context hierarchy.
  */
 interface ContextHierarchyInfo {
+  rootStateId: string;
   states: StateMetadata[];
   boundaries: ContextBoundary[];
   variableCrossings: VariableCrossing[];

@@ -1,5 +1,12 @@
 import { stateLogger as logger } from '@core/utils/logger.js';
-import type { IStateTrackingService, StateMetadata, StateRelationship } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import type { 
+  IStateTrackingService, 
+  StateMetadata, 
+  StateRelationship, 
+  ContextBoundary, 
+  VariableCrossing, 
+  ContextHierarchyInfo
+} from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { v4 as uuidv4 } from 'uuid';
 import { Service } from '@core/ServiceProvider.js';
 
@@ -486,8 +493,18 @@ export class StateTrackingService implements IStateTrackingService {
    * @param type - The type of relationship to get
    * @returns Array of relationships
    */
-  getRelationshipsByType(type: 'parent-child' | 'merge-source' | 'merge-target'): StateRelationshipInfo[] {
-    const results: StateRelationshipInfo[] = [];
+  getRelationshipsByType(type: 'parent-child' | 'merge-source' | 'merge-target'): Array<{
+    sourceId: string;
+    targetId: string;
+    type: 'parent-child' | 'merge-source' | 'merge-target';
+    createdAt: number;
+  }> {
+    const results: Array<{
+      sourceId: string;
+      targetId: string;
+      type: 'parent-child' | 'merge-source' | 'merge-target';
+      createdAt: number;
+    }> = [];
 
     this.states.forEach((_, sourceId) => {
       const relationships = this.getRelationships(sourceId);

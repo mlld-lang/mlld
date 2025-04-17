@@ -14,7 +14,7 @@ export interface ResolutionAttempt {
   context: string;
   timestamp: number;
   success: boolean;
-  value?: any;
+  value?: unknown;
   source?: string;
   contextBoundary?: {
     type: 'parent-to-child' | 'child-to-parent';
@@ -66,7 +66,7 @@ export class VariableResolutionTracker {
     variableName: string, 
     context: string,
     success: boolean, 
-    value?: any,
+    value?: unknown,
     source?: string,
     contextBoundary?: {
       type: 'parent-to-child' | 'child-to-parent';

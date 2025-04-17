@@ -28,8 +28,8 @@ import { OutputService } from '@services/pipeline/OutputService/OutputService.js
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { PathService } from '@services/fs/PathService/PathService.js'; // Import real PathService
-import type { IPathService } from '@services/fs/PathService/IPathService.js'; // Import real PathService
+import { PathService } from '@services/fs/PathService/PathService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { unsafeCreateValidatedResourcePath, PathValidationContext, NormalizedAbsoluteDirectoryPath, createMeldPath, unsafeCreateNormalizedAbsoluteDirectoryPath } from '@core/types/paths.js';
 import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import type { MeldNode, DirectiveNode } from '@core/syntax/types/index.js';
@@ -39,17 +39,14 @@ import { container, type DependencyContainer } from 'tsyringe';
 import { mock } from 'vitest-mock-extended';
 import { URL } from 'node:url';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
-import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
 import type { ILogger } from '@core/utils/logger.js';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js'; // Import real factory
-import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js'; // Import real factory
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 // Import PathOperationsService for registration
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
-import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 // =========================
 
 // Define runDirectiveExamples from the module
@@ -64,13 +61,6 @@ describe('API Integration Tests', () => {
   let context: TestContextDI;
   let testContainer: DependencyContainer; // Manual container
   let projectRoot: string;
-  // Resolved services
-  let parserService: IParserService;
-  let interpreterService: IInterpreterService;
-  let stateService: IStateService;
-  let outputService: IOutputService;
-  let fileSystemService: IFileSystemService;
-  let pathService: IPathService; // Add pathService
 
   beforeEach(async () => {
     // 1. Setup TestContextDI for FS/Fixtures
@@ -81,65 +71,28 @@ describe('API Integration Tests', () => {
     // 2. Create Manual Child Container
     testContainer = container.createChildContainer();
 
-    // 3. Create Mocks
-    const mockDirectiveClient: IDirectiveServiceClient = { supportsDirective: vi.fn().mockReturnValue(true), handleDirective: vi.fn(async () => testContainer.resolve<IStateService>('IStateService')), getSupportedDirectives: vi.fn().mockReturnValue([]), validateDirective: vi.fn().mockReturnValue(undefined) };
-    vi.spyOn(mockDirectiveClient, 'supportsDirective'); vi.spyOn(mockDirectiveClient, 'handleDirective');
-    const mockDirectiveClientFactory = { createClient: vi.fn().mockReturnValue(mockDirectiveClient), directiveService: undefined } as unknown as DirectiveServiceClientFactory;
-    vi.spyOn(mockDirectiveClientFactory, 'createClient');
-    const mockResolutionService = mock<IResolutionService>();
-    mockResolutionService.resolveVariable.mockImplementation(async (name: string) => `${name}_resolved`);
-    
-    const mockParserClientFactory = mock<ParserServiceClientFactory>();
-    // Revert to mocking FS Client Factory, but ensure createClient returns a functional mock
-    const mockFsClient = mock<IFileSystemServiceClient>();
-    // Provide mock implementations for the client methods PathService uses
-    mockFsClient.exists.mockResolvedValue(true); // Assume paths exist by default for validation tests
-    mockFsClient.isDirectory.mockResolvedValue(false); // Assume files by default
-
-    const mockFsClientFactory = {
-        createClient: vi.fn().mockReturnValue(mockFsClient)
-    } as unknown as FileSystemServiceClientFactory;
-    vi.spyOn(mockFsClientFactory, 'createClient');
-
+    // Keep only Logger mock
     const mockLogger = mock<ILogger>();
-    const mockURLContentResolver = { isURL: vi.fn().mockImplementation((path: string) => { try { new URL(path); return true; } catch { return false; } }), validateURL: vi.fn().mockImplementation(async (url: string) => url), fetchURL: vi.fn().mockImplementation(async (url: string) => ({ content: `Mock content for ${url}`})) };
 
-    // 4. Register Dependencies
-    // Infrastructure
+    // Register Dependencies
+    // Infrastructure Mocks (FS, Logger)
     testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
-    testContainer.registerInstance<IURLContentResolver>('IURLContentResolver', mockURLContentResolver);
     testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger);
-    // Mocks for Services/Factories
-    testContainer.registerInstance(DirectiveServiceClientFactory, mockDirectiveClientFactory);
-    testContainer.registerInstance('IResolutionService', mockResolutionService);
-    testContainer.registerInstance('ParserServiceClientFactory', mockParserClientFactory);
-    // Register the MOCK FS Client Factory again
-    // testContainer.register(FileSystemServiceClientFactory, { useClass: FileSystemServiceClientFactory }); // Remove real factory registration
-    testContainer.registerInstance(FileSystemServiceClientFactory, mockFsClientFactory);
-    // Real Services
-    testContainer.register('IStateService', { useClass: StateService });
+
+    // Register Real Factories
+    testContainer.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
+    testContainer.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
+    testContainer.register(FileSystemServiceClientFactory, { useClass: FileSystemServiceClientFactory });
+
+    // Register Real Services (Singleton State)
+    testContainer.registerSingleton('IStateService', StateService);
+    testContainer.register('IResolutionService', { useClass: ResolutionService });
     testContainer.register('IParserService', { useClass: ParserService });
     testContainer.register('IInterpreterService', { useClass: InterpreterService });
     testContainer.register('IOutputService', { useClass: OutputService });
     testContainer.register('IFileSystemService', { useClass: FileSystemService });
-    testContainer.register('IPathService', { useClass: PathService }); // Register real PathService
-    testContainer.register('IPathOperationsService', { useClass: PathOperationsService }); // *** ADD REGISTRATION ***
-
-    // 5. Resolve services from testContainer
-    parserService = testContainer.resolve<IParserService>('IParserService');
-    interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService');
-    stateService = testContainer.resolve<IStateService>('IStateService');
-    outputService = testContainer.resolve<IOutputService>('IOutputService');
-    fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
-    pathService = testContainer.resolve<IPathService>('IPathService'); // Resolve PathService
-
-    // Checks (optional but good practice)
-    if (!parserService || !interpreterService || !stateService || !outputService || !fileSystemService || !pathService) {
-      throw new Error('Failed to resolve necessary services for tests');
-    }
-
-    // Enable transformation (Default behavior now, but keep if tests rely on specific state flags)
-    // stateService.setTransformationEnabled(true); // This method might be deprecated
+    testContainer.register('IPathService', { useClass: PathService });
+    testContainer.register('IPathOperationsService', { useClass: PathOperationsService });
   });
 
   afterEach(async () => {
@@ -156,8 +109,8 @@ describe('API Integration Tests', () => {
       const templateLiteralExample = textDirectiveExamples.combinations.basicInterpolation;
       
       // Add debug logging
-      console.log('DEBUG - textVarExample:', textVarExample.code);
-      console.log('DEBUG - templateLiteralExample:', templateLiteralExample.code);
+      // console.log('DEBUG - textVarExample:', textVarExample.code);
+      // console.log('DEBUG - templateLiteralExample:', templateLiteralExample.code);
       
       // Combine examples with additional content
       const content = `${textVarExample.code}
@@ -167,11 +120,18 @@ Some text content with {{var1}} and {{message}}
 `;
 
       // Start debug session
-      const sessionId = await context.startDebugSession();
+      // const sessionId = await context.startDebugSession();
       
       try {
         // Write content to a file first
         const testFilePath = 'test.meld';
+        // Resolve services needed within the test
+        const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+        const parserService = testContainer.resolve<IParserService>('IParserService');
+        const stateService = testContainer.resolve<IStateService>('IStateService');
+        const interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService');
+        const outputService = testContainer.resolve<IOutputService>('IOutputService');
+        
         await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
         
         // Read the content back (mimicking what main would do)
@@ -181,7 +141,6 @@ Some text content with {{var1}} and {{message}}
         const ast = await parserService.parse(fileContent, testFilePath); // Provide file path for context
 
         // Interpret the AST using the resolved services
-        // Note: Transformation is already enabled in beforeEach
         const resultState = await interpreterService.interpret(ast, {
           strict: true,
           initialState: stateService,
@@ -193,22 +152,22 @@ Some text content with {{var1}} and {{message}}
         const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {}); // Pass format and empty options
 
         // Log debug information
-        console.log('===== RESULT =====');
-        console.log(result);
-        console.log('=================');
+        // console.log('===== RESULT =====');
+        // console.log(result);
+        // console.log('=================');
         
         // Log the state service
-        console.log('===== STATE SERVICE =====');
-        console.log('Has services:', !!context.services); // Keep this check for context.services
-        console.log('Has state service:', !!stateService); // Use resolved stateService
-        console.log('State service methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(stateService)));
-        console.log('=================================');
+        // console.log('===== STATE SERVICE =====');
+        // console.log('Has services:', !!context.services); // Keep this check for context.services
+        // console.log('Has state service:', !!stateService); // Use resolved stateService
+        // console.log('State service methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(stateService)));
+        // console.log('=================================');
         
         // Get debug session results
-        const debugResults = await context.endDebugSession(sessionId);
-        console.log('===== DEBUG SESSION RESULTS =====');
-        console.log(JSON.stringify(debugResults, null, 2));
-        console.log('=================================');
+        // const debugResults = await context.endDebugSession(sessionId);
+        // console.log('===== DEBUG SESSION RESULTS =====');
+        // console.log(JSON.stringify(debugResults, null, 2));
+        // console.log('=================================');
         
         // Verify output contains the expected content with transformed directives
         expect(result).toBeDefined();
@@ -218,13 +177,13 @@ Some text content with {{var1}} and {{message}}
         
         // Check that text variables are set in state
         const var1Value = stateService.getTextVar('var1'); // Use resolved stateService
-        console.log('DEBUG - var1 value in state:', var1Value);
+        // console.log('DEBUG - var1 value in state:', var1Value);
         
         expect(var1Value).toBeDefined();
         expect(var1Value).toBe('Value 1');
         
         const messageValue = stateService.getTextVar('message'); // Use resolved stateService
-        console.log('DEBUG - message value in state:', messageValue);
+        // console.log('DEBUG - message value in state:', messageValue);
         
         expect(messageValue).toBeDefined();
         expect(messageValue).toBe('Hello, World!');
@@ -247,6 +206,13 @@ User info: {{user.name}} ({{user.id}})
 `;
 
       const testFilePath = 'test.meld';
+      // Resolve services needed within the test
+      const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+      const parserService = testContainer.resolve<IParserService>('IParserService');
+      const stateService = testContainer.resolve<IStateService>('IStateService');
+      const interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService');
+      const outputService = testContainer.resolve<IOutputService>('IOutputService');
+      
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
       try {
@@ -264,6 +230,8 @@ User info: {{user.name}} ({{user.id}})
         // Verify output contains the expected content with transformed directives
         expect(result).toBeDefined();
         expect(result).toContain('User info:');
+        expect(result).toContain('Alice'); // Check for resolved name
+        expect(result).toContain('(123)'); // Check for resolved id
         
         // Check that variables are set in state
         const userVar = stateService.getDataVar('user') as any; // Use resolved stateService
@@ -295,6 +263,13 @@ First feature: {{config.app.features.0}}
 `;
 
       const testFilePath = 'test.meld';
+      // Resolve services needed within the test
+      const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+      const parserService = testContainer.resolve<IParserService>('IParserService');
+      const stateService = testContainer.resolve<IStateService>('IStateService');
+      const interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService');
+      const outputService = testContainer.resolve<IOutputService>('IOutputService');
+      
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
       try {
@@ -339,10 +314,17 @@ Template result: {{template}}
 `;
 
       // Start debug session
-      const sessionId = await context.startDebugSession();
+      // const sessionId = await context.startDebugSession();
       
       try {
         const testFilePath = 'test.meld';
+        // Resolve services needed within the test
+        const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+        const parserService = testContainer.resolve<IParserService>('IParserService');
+        const stateService = testContainer.resolve<IStateService>('IStateService');
+        const interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService');
+        const outputService = testContainer.resolve<IOutputService>('IOutputService');
+        
         await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
 
         const fileContent = await fileSystemService.readFile(unsafeCreateValidatedResourcePath(testFilePath));
@@ -356,19 +338,19 @@ Template result: {{template}}
         const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
 
         // Log debug information
-        console.log('===== RESULT =====');
-        console.log(result);
-        console.log('=================');
+        // console.log('===== RESULT =====');
+        // console.log(result);
+        // console.log('=================');
         
         // Get debug session results
-        const debugResults = await context.endDebugSession(sessionId);
-        console.log('===== DEBUG SESSION RESULTS =====');
-        console.log(JSON.stringify(debugResults, null, 2));
-        console.log('=================================');
+        // const debugResults = await context.endDebugSession(sessionId);
+        // console.log('===== DEBUG SESSION RESULTS =====');
+        // console.log(JSON.stringify(debugResults, null, 2));
+        // console.log('=================================');
         
         // Verify output contains the expected content with transformed directives
         expect(result).toBeDefined();
-        expect(result).toContain('Template result:');
+        expect(result).toContain('Template result: Hello, World!'); // Expect resolved value
       } catch (error) {
         console.error('ERROR during test execution:', error);
         throw error;
@@ -379,9 +361,9 @@ Template result: {{template}}
   describe('Path Handling', () => {
     // Define context here to be accessible by all tests in this describe block
     const defaultValidationContext: PathValidationContext = {
-      workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath('/project'), // Use unsafe helper for mock path
-      allowExternalPaths: true, // Adjust as needed for tests
-      rules: { // Basic rules, adjust if specific tests need stricter ones
+      workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath(projectRoot),
+      allowExternalPaths: true,
+      rules: { 
         allowAbsolute: true,
         allowRelative: true,
         allowParentTraversal: true,
@@ -390,650 +372,363 @@ Template result: {{template}}
 
     it('should handle path variables with special $PROJECTPATH syntax', async () => {
       // Enable verbose debugging for this test
-      process.env.MELD_DEBUG = '1';
-      process.env.MELD_DEBUG_LEVEL = 'trace';
-      process.env.MELD_DEBUG_VARS = 'docs,PROJECTPATH,HOMEPATH';
+      // process.env.MELD_DEBUG = '1';
+      // process.env.MELD_DEBUG_LEVEL = 'trace';
+      // process.env.MELD_DEBUG_VARS = 'docs,PROJECTPATH,HOMEPATH';
       
-      console.log('\n\n========== DEBUGGING PATH RESOLUTION ==========');
+      // console.log('\n\n========== DEBUGGING PATH RESOLUTION ==========');
       
       // Get the debug service
-      const debugService = context.services.debug as unknown as TestDebuggerService;
+      // const debugService = context.services.debug as unknown as TestDebuggerService;
       
       // Start a debug session to capture what's happening
-      const sessionId = await debugService.startSession({
-        captureConfig: {
-          capturePoints: ['pre-transform', 'post-transform', 'error'],
-          includeFields: ['nodes', 'transformedNodes', 'variables'],
-          format: 'full'
-        },
-        traceOperations: true,
-        collectMetrics: true
-      });
-      console.log('Debug session started:', sessionId);
+      // const sessionId = await debugService.startSession({ ... });
+      // console.log('Debug session started:', sessionId);
       
-      // Access services directly to inspect them
-      const pathService = context.services.path;
-      const stateService = context.services.state;
-      const resolutionService = context.services.resolution;
+      // Resolve services needed within the test
+      const pathService = testContainer.resolve<IPathService>('IPathService');
+      const stateService = testContainer.resolve<IStateService>('IStateService');
+      const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+      const parserService = testContainer.resolve<IParserService>('IParserService');
+      const interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService');
+      const outputService = testContainer.resolve<IOutputService>('IOutputService');
       
       // Log state service
-      console.log('State service:', {
-        hasPathVar: typeof stateService.getPathVar === 'function',
-        hasSetPathVar: typeof stateService.setPathVar === 'function',
-        initialProjectPath: stateService.getPathVar('PROJECTPATH'),
-        initialHomePath: stateService.getPathVar('HOMEPATH')
-      });
+      // console.log('State service:', { ... });
 
-      // Create test for determining what $PROJECTPATH resolves to
-      // We'll test both formats to see if either works
-      const projectPathTestContent = `
-@path testpath = "$PROJECTPATH/"
-@path testpath2 = "$./"`; 
-      
-      console.log('Writing project path test:', projectPathTestContent);
-      const projectPathTestFilePath = 'projectpath-test.meld';
-      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(projectPathTestFilePath), projectPathTestContent);
-      
-      // Debug pre-processing state
-      await debugService.captureState('before-projectpath-test', {
-        message: 'State before project path test'
-      });
-      
-      try {
-        // Run test to determine $PROJECTPATH value
-        console.log('Processing project path test...');
-        const fileContent = await fileSystemService.readFile(unsafeCreateValidatedResourcePath(projectPathTestFilePath));
-        const ast = await parserService.parse(fileContent, projectPathTestFilePath);
-        const resultState = await interpreterService.interpret(ast, {
-          strict: true,
-          initialState: stateService,
-          filePath: projectPathTestFilePath,
-        });
-        const nodesToProcess = resultState.getNodes();
-        const projectPathResult = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
-        
-        console.log('Project path test result:', projectPathResult);
-        
-        // Debug post-processing state
-        await debugService.captureState('after-projectpath-test', {
-          message: 'State after project path test'
-        });
-        
-        // Check results directly
-        const testpath = stateService.getPathVar('testpath');
-        const testpath2 = stateService.getPathVar('testpath2');
-        console.log('Path variable results:', {
-          testpath,
-          testpath2,
-          projectPath: stateService.getPathVar('PROJECTPATH'),
-          homePath: stateService.getPathVar('HOMEPATH')
-        });
-
-        // Check the structured paths in state service
-        const nodes = stateService.getNodes();
-        // Use the type guard in the filter
-        const directiveNodes = nodes.filter(isDirectiveNode);
-        
-        // Filter for path directives and map
-        const pathNodeInfo = directiveNodes
-          .filter(node => node.directive.kind === 'path') // Filter specifically for path kind
-          .map(node => ({ 
-            name: node.directive.identifier ?? 'unknown', // node is now DirectiveNode
-            value: ('value' in node.directive ? node.directive.value : 'unknown') // node is now DirectiveNode
-          })); 
-
-        console.log('Path nodes info:', pathNodeInfo.length, pathNodeInfo);
-      } catch (error) {
-        console.error('Error during project path test:', error);
-      }
-      
-      // Now for our main test with a docs path
-      // Create both versions to compare
+      // Create main test content
       const docsPath = 'my/docs';
-      const content1 = `
-@path docs = "$PROJECTPATH/my/docs"  
-Docs are at $docs
-      `;
-      const content2 = `
-@path docs = "$./my/docs"  
+      const content = `
+@path docs = "$PROJECTPATH/my/docs"
 Docs are at $docs
       `;
       
-      console.log('\nTesting $PROJECTPATH format first:');
-      const testFilePath1 = 'test-projectpath.meld';
-      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(testFilePath1), content1);
+      const testFilePath = 'test-projectpath.meld';
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
-      // Capture state before processing
-      await debugService.captureState('before-main-test-projectpath', {
-        message: 'State before main test with $PROJECTPATH'
-      });
-      
-      // Direct validation of path string
+      // Direct validation of path string - should work with real services
       try {
-        console.log('Validating $PROJECTPATH/my/docs path directly...');
-        await pathService.validatePath('$PROJECTPATH/my/docs', defaultValidationContext); // Pass context
-        console.log('✅ Direct path validation succeeded for $PROJECTPATH format');
+        // console.log('Validating $PROJECTPATH/my/docs path directly...');
+        await pathService.validatePath('$PROJECTPATH/my/docs', defaultValidationContext);
+        // console.log('✅ Direct path validation succeeded for $PROJECTPATH format');
       } catch (error) {
-        console.error('❌ Direct path validation failed for $PROJECTPATH format:', error);
+        // console.error('❌ Direct path validation failed for $PROJECTPATH format:', error);
+        throw error; // Re-throw if validation fails unexpectedly
       }
       
-      // Process with transformation - $PROJECTPATH version
+      // Process with transformation
       try {
-        console.log('Processing $PROJECTPATH format...');
-        const result = await processMeld(testFilePath1, {
-          fs: context.services.filesystem as unknown as NodeFileSystem,
-          services: context.services as unknown as Partial<Services>,
-        });
+        // console.log('Processing $PROJECTPATH format...');
+        // Use processMeld API for consistency
+        const result = await processMeld(content, { container: testContainer });
         
-        console.log('$PROJECTPATH test result:', result);
+        // console.log('$PROJECTPATH test result:', result);
         const docsVar = stateService.getPathVar('docs');
-        console.log('docs path var:', docsVar);
+        // console.log('docs path var:', docsVar);
+        
+        // Check the output contains the resolved path (relative to project root)
+        expect(result).toContain(`Docs are at ${docsPath}`);
         
       } catch (error) {
-        console.error('Error during $PROJECTPATH test:', error);
+        // console.error('Error during $PROJECTPATH test:', error);
+        throw error;
       }
       
-      console.log('\nTesting $. format next:');
-      const testFilePath2 = 'test-dot.meld';
-      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(testFilePath2), content2);
-      
-      // Capture state before processing
-      await debugService.captureState('before-main-test-dot', {
-        message: 'State before main test with $.'
-      });
-      
-      // Direct validation of path string
-      try {
-        console.log('Validating $./my/docs path directly...');
-        await pathService.validatePath('$./my/docs', defaultValidationContext); // Pass context
-        console.log('✅ Direct path validation succeeded for $. format');
-      } catch (error) {
-        console.error('❌ Direct path validation failed for $. format:', error);
-      }
-      
-      // Process with transformation - $. version
-      try {
-        console.log('Processing $. format...');
-        const result = await processMeld(testFilePath2, {
-          fs: context.services.filesystem as unknown as NodeFileSystem,
-          services: context.services as unknown as Partial<Services>,
-        });
-        
-        console.log('$. test result:', result);
-        const docsVar = stateService.getPathVar('docs');
-        console.log('docs path var:', docsVar);
-        
-      } catch (error) {
-        console.error('Error during $. test:', error);
-      }
-      
-      // Let's try one more approach - structured path directly
-      console.log('\nTesting with structured path directly:');
-      
-      const directContent = `
-@path docs = "$PROJECTPATH/my/docs"  
-Docs are at $docs
-      `;
-      
-      const mainTestFilePath = 'test.meld';
-      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(mainTestFilePath), directContent);
-      
-      // Manual structured path creation
-      const structuredPath = {
-        raw: '$PROJECTPATH/my/docs',
-        structured: {
-          segments: ['my', 'docs'],
-          variables: {
-            special: ['PROJECTPATH'],
-            path: []
-          }
-        }
-      };
-      
-      // Add debugging information
-      await debugService.captureState('before-validation', {
-        structuredPath,
-        message: 'State before path validation'
-      });
-      
-      const wasTestMode = pathService.isTestMode ? pathService.isTestMode() : false;
-      
-      // Temporarily disable test mode to properly validate raw paths 
-      // pathService.setTestMode(false); // Method doesn't exist on interface
-      
-      try {
-        // Directly validate the path - This should now work with real PathService and mocked FS Client Factory
-        await expect(pathService.validatePath(structuredPath.raw, defaultValidationContext)).resolves.toBeDefined();
-      } finally {
-        // Restore original test mode setting
-        // pathService.setTestMode(wasTestMode); // Method doesn't exist
-      }
-      
-      // Process using our manually created path
-      try {
-        // Set up the paths in state service manually
-        console.log('Setting path variable manually...');
-        // Use createMeldPath for setPathVar
-        const meldPathForVar = createMeldPath('$PROJECTPATH/my/docs'); 
-        stateService.setPathVar('docs', meldPathForVar);
-        
-        const manualPath = stateService.getPathVar('docs');
-        console.log('Manually set path:', manualPath);
-        
-        // Process with transformation
-        console.log('Processing file...');
-        const fileContent = await fileSystemService.readFile(unsafeCreateValidatedResourcePath(mainTestFilePath));
-        const ast = await parserService.parse(fileContent, mainTestFilePath);
-        const resultState = await interpreterService.interpret(ast, {
-            strict: true,
-            initialState: stateService,
-            filePath: mainTestFilePath,
-        });
-        const nodesToProcess = resultState.getNodes();
-        const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
-
-        console.log('======= MAIN TEST RESULTS =======');
-        console.log(`Input content: "${directContent}"`);
-        console.log(`Result content: "${result}"`);
-        
-        // Run the actual assertions
-        expect(result.trim()).toContain('Docs are at');       // Text is preserved
-        expect(result).not.toContain('@path');                // Directive is transformed away
-        expect(result).not.toContain('$docs');                // Variable reference is transformed
-        expect(result).toContain(docsPath);                   // Path is included in output
-      } catch (error) {
-        console.error('Error during manual test:', error);
-        // Let's deliberately pass the test so we can see the debug output
-        console.log('Forcing test to pass to see debug output');
-      }
-      
-      // Get the debug results
-      const debugResults = await debugService.endSession(sessionId);
-      console.log('\nDebug session results (summary):', Object.keys(debugResults));
-      
-      // Visualization
-      const visualization = await debugService.visualizeState('mermaid');
-      console.log('\nState visualization:\n', visualization);
-      
-      // Force test to pass for debugging purposes
-      expect(true).toBe(true);
+      // End debug session
+      // const debugResults = await debugService.endSession(sessionId);
+      // console.log('\nDebug session results (summary):', Object.keys(debugResults));
     });
     
     it('should handle path variables with special $. alias syntax', async () => {
-      console.log('\n\n========== DEBUGGING $. PATH RESOLUTION ==========');
+      // console.log('\n\n========== DEBUGGING $. PATH RESOLUTION ==========');
       
-      // Get the debug service for tracking operations
-      const debugService = context.services.debug as unknown as TestDebuggerService;
-      
-      // Get direct access to services
-      const pathService = context.services.path;
-      const stateService = context.services.state;
+      // Resolve services needed within the test
+      const pathService = testContainer.resolve<IPathService>('IPathService');
+      const stateService = testContainer.resolve<IStateService>('IStateService');
+      const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+      // const debugService = context.services.debug as unknown as TestDebuggerService;
       
       // Start a debug session for capturing state
-      const sessionId = await debugService.startSession({
-        captureConfig: {
-          capturePoints: ['pre-transform', 'post-transform', 'error'],
-          includeFields: ['nodes', 'transformedNodes', 'variables'],
-          format: 'full'
-        },
-        traceOperations: true,
-        collectMetrics: true
-      });
-      console.log('Debug session started:', sessionId);
+      // const sessionId = await debugService.startSession({ ... });
+      // console.log('Debug session started:', sessionId);
       
       // First try direct path validation
       try {
-        console.log('Directly validating $./config path...');
-        await pathService.validatePath('$./config', defaultValidationContext); // Pass context
-        console.log('✅ Direct path validation succeeded for $./config');
+        // console.log('Directly validating $./config path...');
+        await pathService.validatePath('$./config', defaultValidationContext);
+        // console.log('✅ Direct path validation succeeded for $./config');
       } catch (error) {
-        console.error('❌ Direct path validation failed for $./config:', error);
+        // console.error('❌ Direct path validation failed for $./config:', error);
+        throw error;
       }
       
       // Create test content with the path format
       const content = `@path config = "$./config"`;
-      console.log('Test content:', content);
+      // console.log('Test content:', content);
       
       const testFilePath = 'test.meld';
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
       // Capture state before processing
-      await debugService.captureState('before-dotslash-test', {
-        message: 'State before $. test'
-      });
+      // await debugService.captureState('before-dotslash-test', { ... });
       
       try {
-        console.log('Processing test file...');
-        const fileContent = await fileSystemService.readFile(unsafeCreateValidatedResourcePath(testFilePath));
-        const ast = await parserService.parse(fileContent, testFilePath);
-        const resultState = await interpreterService.interpret(ast, {
-          strict: true,
-          initialState: stateService,
-          filePath: testFilePath,
-        });
-        const nodesToProcess = resultState.getNodes();
-        const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
+        // console.log('Processing test file...');
+        const result = await processMeld(content, { container: testContainer });
         
-        console.log('Test result:', result);
+        // console.log('Test result:', result);
         
         // Capture post-processing state
-        await debugService.captureState('after-dotslash-test', {
-          message: 'State after $. test'
-        });
+        // await debugService.captureState('after-dotslash-test', { ... });
         
         // Check path variable state
         const configPathVar = stateService.getPathVar('config');
-        console.log('Path variable "config":', configPathVar);
+        // console.log('Path variable "config":', configPathVar);
         
-        // Verify the path variable exists
+        // Verify the path variable exists and contains the original alias
         expect(configPathVar).toBeDefined();
-        
-        // Verify the path alias is correctly stored
-        expect(configPathVar).toContain('$./config');
+        // Assuming configPathVar itself represents the intended value or has toString()
+        expect(String(configPathVar)).toContain('$./config'); 
       } catch (error) {
-        console.error('Error processing $. test:', error);
-        console.log('Force passing test for debugging');
-        expect(true).toBe(true); // REMOVE LATER
+        // console.error('Error processing $. test:', error);
+        throw error;
       }
       
       // End debug session
-      const debugResults = await debugService.endSession(sessionId);
-      console.log('Debug session results:', Object.keys(debugResults));
+      // const debugResults = await debugService.endSession(sessionId);
+      // console.log('Debug session results:', Object.keys(debugResults));
     });
     
     it('should handle path variables with special $HOMEPATH syntax', async () => {
-      console.log('\n\n========== DEBUGGING $HOMEPATH RESOLUTION ==========');
+      // console.log('\n\n========== DEBUGGING $HOMEPATH RESOLUTION ==========');
       
-      // Get the debug service for tracking operations
-      const debugService = context.services.debug as unknown as TestDebuggerService;
-      
-      // Get direct access to services
-      const pathService = context.services.path;
-      const stateService = context.services.state;
+      // Resolve services needed within the test
+      const pathService = testContainer.resolve<IPathService>('IPathService');
+      const stateService = testContainer.resolve<IStateService>('IStateService');
+      const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+      // const debugService = context.services.debug as unknown as TestDebuggerService;
       
       // Start a debug session for capturing state
-      const sessionId = await debugService.startSession({
-        captureConfig: {
-          capturePoints: ['pre-transform', 'post-transform', 'error'],
-          includeFields: ['nodes', 'transformedNodes', 'variables'],
-          format: 'full'
-        },
-        traceOperations: true,
-        collectMetrics: true
-      });
-      console.log('Debug session started:', sessionId);
+      // const sessionId = await debugService.startSession({ ... });
+      // console.log('Debug session started:', sessionId);
       
       // First try direct path validation
       try {
-        console.log('Directly validating $HOMEPATH/meld path...');
-        await pathService.validatePath('$HOMEPATH/meld', defaultValidationContext);
-        console.log('✅ Direct path validation succeeded for $HOMEPATH/meld');
+        // console.log('Directly validating $HOMEPATH/.config path...');
+        await pathService.validatePath('$HOMEPATH/.config', defaultValidationContext);
+        // console.log('✅ Direct path validation succeeded for $HOMEPATH/.config');
       } catch (error) {
-        console.error('❌ Direct path validation failed for $HOMEPATH/meld:', error);
+        // console.error('❌ Direct path validation failed for $HOMEPATH/.config:', error);
+        throw error;
       }
       
       // Create test content with the path format
-      const content = `@path home = "$HOMEPATH/meld"`;
-      console.log('Test content:', content);
+      const content = `@path userConfig = "$HOMEPATH/.config"`;
+      // console.log('Test content:', content);
       
       const testFilePath = 'test.meld';
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
       // Capture state before processing
-      await debugService.captureState('before-homepath-test', {
-        message: 'State before $HOMEPATH test'
-      });
+      // await debugService.captureState('before-homepath-test', { ... });
       
       try {
-        console.log('Processing test file...');
-        const fileContent = await fileSystemService.readFile(unsafeCreateValidatedResourcePath(testFilePath));
-        const ast = await parserService.parse(fileContent, testFilePath);
-        const resultState = await interpreterService.interpret(ast, {
-          strict: true,
-          initialState: stateService,
-          filePath: testFilePath,
-        });
-        const nodesToProcess = resultState.getNodes();
-        const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
+        // console.log('Processing test file...');
+        const result = await processMeld(content, { container: testContainer });
         
-        console.log('Test result:', result);
+        // console.log('Test result:', result);
         
         // Capture post-processing state
-        await debugService.captureState('after-homepath-test', {
-          message: 'State after $HOMEPATH test'
-        });
+        // await debugService.captureState('after-homepath-test', { ... });
         
         // Check path variable state
-        const homePathVar = stateService.getPathVar('home');
-        console.log('Path variable "home":', homePathVar);
+        const configPathVar = stateService.getPathVar('userConfig');
+        // console.log('Path variable "userConfig":', configPathVar);
         
-        // Verify the path variable exists
-        expect(homePathVar).toBeDefined();
-        
-        // Verify the homepath is correctly stored
-        expect(homePathVar).toContain('$HOMEPATH/meld');
+        // Verify the path variable exists and contains the original alias
+        expect(configPathVar).toBeDefined();
+        // Assuming configPathVar itself represents the intended value or has toString()
+        expect(String(configPathVar)).toContain('$HOMEPATH/.config');
       } catch (error) {
-        console.error('Error processing $HOMEPATH test:', error);
-        console.log('Force passing test for debugging');
-        expect(true).toBe(true); // REMOVE LATER
+        // console.error('Error processing $HOMEPATH test:', error);
+        throw error;
       }
       
       // End debug session
-      const debugResults = await debugService.endSession(sessionId);
-      console.log('Debug session results:', Object.keys(debugResults));
+      // const debugResults = await debugService.endSession(sessionId);
+      // console.log('Debug session results:', Object.keys(debugResults));
     });
     
     it('should handle path variables with special $~ alias syntax', async () => {
-      console.log('\n\n========== DEBUGGING $~ RESOLUTION ==========');
+      // console.log('\n\n========== DEBUGGING $~ PATH RESOLUTION ==========');
       
-      // Get the debug service for tracking operations
-      const debugService = context.services.debug as unknown as TestDebuggerService;
-      
-      // Get direct access to services
-      const pathService = context.services.path;
-      const stateService = context.services.state;
+       // Resolve services needed within the test
+      const pathService = testContainer.resolve<IPathService>('IPathService');
+      const stateService = testContainer.resolve<IStateService>('IStateService');
+      const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+      // const debugService = context.services.debug as unknown as TestDebuggerService;
       
       // Start a debug session for capturing state
-      const sessionId = await debugService.startSession({
-        captureConfig: {
-          capturePoints: ['pre-transform', 'post-transform', 'error'],
-          includeFields: ['nodes', 'transformedNodes', 'variables'],
-          format: 'full'
-        },
-        traceOperations: true,
-        collectMetrics: true
-      });
-      console.log('Debug session started:', sessionId);
+      // const sessionId = await debugService.startSession({ ... });
+      // console.log('Debug session started:', sessionId);
       
       // First try direct path validation
       try {
-        console.log('Directly validating $~/data path...');
-        await pathService.validatePath('$~/data', defaultValidationContext);
-        console.log('✅ Direct path validation succeeded for $~/data');
+        // console.log('Directly validating $~/Documents path...');
+        await pathService.validatePath('$~/Documents', defaultValidationContext);
+        // console.log('✅ Direct path validation succeeded for $~/Documents');
       } catch (error) {
-        console.error('❌ Direct path validation failed for $~/data:', error);
+        // console.error('❌ Direct path validation failed for $~/Documents:', error);
+        throw error;
       }
       
       // Create test content with the path format
-      const content = `@path data = "$~/data"`;
-      console.log('Test content:', content);
+      const content = `@path docs = "$~/Documents"`;
+      // console.log('Test content:', content);
       
       const testFilePath = 'test.meld';
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
       // Capture state before processing
-      await debugService.captureState('before-tilde-test', {
-        message: 'State before $~ test'
-      });
+      // await debugService.captureState('before-tilde-test', { ... });
       
       try {
-        console.log('Processing test file...');
-        const fileContent = await fileSystemService.readFile(unsafeCreateValidatedResourcePath(testFilePath));
-        const ast = await parserService.parse(fileContent, testFilePath);
-        const resultState = await interpreterService.interpret(ast, {
-          strict: true,
-          initialState: stateService,
-          filePath: testFilePath,
-        });
-        const nodesToProcess = resultState.getNodes();
-        const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
+        // console.log('Processing test file...');
+        const result = await processMeld(content, { container: testContainer });
         
-        console.log('Test result:', result);
+        // console.log('Test result:', result);
         
         // Capture post-processing state
-        await debugService.captureState('after-tilde-test', {
-          message: 'State after $~ test'
-        });
+        // await debugService.captureState('after-tilde-test', { ... });
         
         // Check path variable state
-        const dataPathVar = stateService.getPathVar('data');
-        console.log('Path variable "data":', dataPathVar);
+        const configPathVar = stateService.getPathVar('docs');
+        // console.log('Path variable "docs":', configPathVar);
         
-        // Verify the path variable exists
-        expect(dataPathVar).toBeDefined();
-        
-        // Verify the path tilde alias is correctly stored
-        expect(dataPathVar).toContain('$~/data');
+        // Verify the path variable exists and contains the original alias
+        expect(configPathVar).toBeDefined();
+        // Assuming configPathVar itself represents the intended value or has toString()
+        expect(String(configPathVar)).toContain('$~/Documents');
       } catch (error) {
-        console.error('Error processing $~ test:', error);
-        console.log('Force passing test for debugging');
-        expect(true).toBe(true); // REMOVE LATER
+        // console.error('Error processing $~ test:', error);
+        throw error;
       }
       
       // End debug session
-      const debugResults = await debugService.endSession(sessionId);
-      console.log('Debug session results:', Object.keys(debugResults));
+      // const debugResults = await debugService.endSession(sessionId);
+      // console.log('Debug session results:', Object.keys(debugResults));
     });
     
     it('should allow raw absolute paths', async () => {
-      const pathService = context.services.path;
       const filePath = '/absolute/path/to/file.txt';
-      // This test focuses on validatePath, doesn't use main
-      const validationContextAbs: PathValidationContext = {
-          workingDirectory: projectRoot as any,
+      // Write a dummy file to the mock FS at this path
+      const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(filePath), 'Absolute file content');
+      
+      const pathService = testContainer.resolve<IPathService>('IPathService');
+      const validationContext: PathValidationContext = {
+          workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath(projectRoot),
           allowExternalPaths: true,
           rules: { allowAbsolute: true, allowRelative: true, allowParentTraversal: true },
       };
-      await expect(pathService.validatePath(filePath, validationContextAbs)).resolves.toBeDefined();
+      await expect(pathService.validatePath(filePath, validationContext)).resolves.toBeDefined();
     });
     
     it('should allow paths with dot segments', async () => {
-        const pathService = context.services.path;
-        const filePath = './relative/./path/../to/file.txt';
-        // This test focuses on validatePath, doesn't use main
-        const validationContextDots: PathValidationContext = {
-            workingDirectory: projectRoot as any,
-            allowExternalPaths: true,
-            rules: { allowAbsolute: true, allowRelative: true, allowParentTraversal: true },
-        };
-        await expect(pathService.validatePath(filePath, validationContextDots)).resolves.toBeDefined();
+      const relativePath = './relative/to/../file.txt'; // Normalized to ./relative/file.txt
+      const absolutePath = path.join(projectRoot, 'relative', 'file.txt');
+      const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(absolutePath), 'Dot segment file content');
+
+      const pathService = testContainer.resolve<IPathService>('IPathService');
+      const validationContext: PathValidationContext = {
+          workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath(projectRoot),
+          allowExternalPaths: true,
+          rules: { allowAbsolute: true, allowRelative: true, allowParentTraversal: true },
+      };
+      // Validate the relative path which should resolve correctly
+      await expect(pathService.validatePath(relativePath, validationContext)).resolves.toBeDefined();
     });
   });
 
   describe('Import Handling', () => {
     it('should handle simple imports', async () => {
-      const importContent = `@text importedVar = "Imported Value"`;
-      const mainContent = `@import [ path = "import.meld" ]\nMain file content: {{importedVar}}`;
-      const mainFilePath = 'test.meld';
-      const importFilePath = 'import.meld'; // Assumed relative to project root
+      const mainFilePath = 'main.meld';
+      const importedFilePath = 'imported.meld';
+      const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+      const stateService = testContainer.resolve<IStateService>('IStateService'); // Resolve state service
 
-      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(importFilePath), importContent);
+      const mainContent = `Main file content: @import "${importedFilePath}"`;
+      const importedContent = `@text importedVar = "Imported Value"{{importedVar}}`;
+      
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(mainFilePath), mainContent);
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(importedFilePath), importedContent); 
 
-      try {
-        console.log('Processing main file for import...');
-        // Refactored processing logic:
-        const fileContent = await fileSystemService.readFile(unsafeCreateValidatedResourcePath(mainFilePath));
-        const ast = await parserService.parse(fileContent, mainFilePath);
-        const resultState = await interpreterService.interpret(ast, {
-            strict: true,
-            initialState: stateService,
-            filePath: mainFilePath,
-        });
-        const nodesToProcess = resultState.getNodes();
-        // Use markdown format for simpler output checking
-        const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
-
-        console.log('Simple import result:', result);
-
-        expect(result.trim()).toBe('Main file content: Imported Value');
-        // Verify state after import
-        const importedVarValue = resultState.getTextVar('importedVar');
-        expect(importedVarValue).toBe('Imported Value');
-
-      } catch (error) {
-        console.error('Error during simple import test:', error);
-        throw error;
-      }
+      // Process using processMeld API
+      const result = await processMeld(mainContent, {
+        container: testContainer,
+      });
+      
+      // console.log('Simple import result:', result);
+      
+      // Check the final output string
+      expect(result.trim()).toBe('Main file content: Imported Value');
+      // Verify state after import
+      const importedVarValue = stateService.getTextVar('importedVar');
+      expect(importedVarValue).toBe('Imported Value');
     });
     
     it('should handle nested imports with proper scope inheritance', async () => {
-        const level2Content = `@text level2Var = "Level 2 Value"`;
-        const level1Content = `@import [ path = "level2.meld" ]\n@text level1Var = "Level 1 Value: {{level2Var}}"`;
-        const mainContent = `@import [ path = "level1.meld" ]\nMain: {{level1Var}} | {{level2Var}}`; // level2Var might not be directly accessible
+      const mainFilePath = 'main.meld';
+      const level1FilePath = 'level1.meld';
+      const level2FilePath = 'level2.meld';
+      const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+      const stateService = testContainer.resolve<IStateService>('IStateService'); // Resolve state service
+      
+      const mainContent = `Main: @import "${level1FilePath}"`;
+      const level1Content = `Level 1: @import "${level2FilePath}" {{level1Var}}`;
+      const level2Content = `@text level2Var = "Level 2 Value"@text level1Var = "{{level2Var}}"{{level2Var}}`; // Level 1 var references Level 2
+      
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(mainFilePath), mainContent);
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(level1FilePath), level1Content);
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(level2FilePath), level2Content); 
 
-        const mainFilePath = 'test.meld';
-        const level1FilePath = 'level1.meld';
-        const level2FilePath = 'level2.meld';
+      // Process using processMeld API
+      const result = await processMeld(mainContent, {
+        container: testContainer,
+      });
 
-        await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(level2FilePath), level2Content);
-        await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(level1FilePath), level1Content);
-        await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(mainFilePath), mainContent);
+      // Adjust expectation based on scope rules. Level 2 vars might not leak to main scope by default.
+      // The output should reflect resolved content from nested levels.
+      expect(result.trim()).toBe('Main: Level 1: Level 2 Value Level 2 Value'); // Check actual output based on service logic
 
-        try {
-            console.log('Processing main file for nested import...');
-            // Refactored processing logic:
-            const fileContent = await fileSystemService.readFile(unsafeCreateValidatedResourcePath(mainFilePath));
-            const ast = await parserService.parse(fileContent, mainFilePath);
-            const resultState = await interpreterService.interpret(ast, {
-                strict: true,
-                initialState: stateService,
-                filePath: mainFilePath,
-            });
-            const nodesToProcess = resultState.getNodes();
-            const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {}); // Use markdown
-
-            console.log('Nested import result:', result);
-
-            // Adjust expectation based on scope rules. Level 2 vars might not leak to main.
-            // Level 1 var should resolve using Level 2 var within its scope.
-            expect(result.trim()).toBe('Main: Level 1 Value: Level 2 Value | Level 2 Value'); // Assumes vars propagate
-
-            // Check final state
-            const level1VarValue = resultState.getTextVar('level1Var');
-            const level2VarValue = resultState.getTextVar('level2Var');
-            expect(level1VarValue).toBe('Level 1 Value: Level 2 Value');
-            expect(level2VarValue).toBe('Level 2 Value'); // Check if it's present in the final state
-
-        } catch (error) {
-            console.error('Error during nested import test:', error);
-            throw error;
-        }
+      // Check final state (variables might be scoped)
+      expect(stateService.getTextVar('level1Var')).toBe('Level 2 Value'); // Check if level1 var was updated in main state
+      expect(stateService.getTextVar('level2Var')).toBe('Level 2 Value'); // Check if level2 var exists in main state
     });
     
     it('should detect circular imports', async () => {
-        const fileAContent = `@import [ path = "fileB.meld" ]\n@text varA = "From A"`;
-        const fileBContent = `@import [ path = "fileA.meld" ]\n@text varB = "From B"`;
+      const fileAPath = 'fileA.meld';
+      const fileBPath = 'fileB.meld';
+      // Resolve services needed within the test
+      const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+      // const stateService = testContainer.resolve<IStateService>('IStateService'); // Not needed for processMeld call
+      // const parserService = testContainer.resolve<IParserService>('IParserService'); // Not needed for processMeld call
+      // const interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService'); // Not needed for processMeld call
 
-        const fileAPath = 'fileA.meld';
-        const fileBPath = 'fileB.meld';
+      const fileAContent = `File A content @import "${fileBPath}"`;
+      const fileBContent = `File B content @import "${fileAPath}"`;
+      
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(fileAPath), fileAContent);
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(fileBPath), fileBContent); 
 
-        await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(fileAPath), fileAContent);
-        await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(fileBPath), fileBContent);
+      // Use processMeld which internally handles interpretation
+      // Expect it to throw due to circular dependency detected by CircularityService
+      await expect(processMeld(fileAContent, {
+        container: testContainer,
+      })).rejects.toThrow(/Circular import detected/i);
 
-        console.log('Testing circular import detection...');
-        // Refactored processing logic (expecting rejection):
-        const fileContent = await fileSystemService.readFile(unsafeCreateValidatedResourcePath(fileAPath));
-        const ast = await parserService.parse(fileContent, fileAPath);
-
-        // Expect interpret to throw
-        await expect(interpreterService.interpret(ast, {
-            strict: true,
-            initialState: stateService,
-            filePath: fileAPath,
-        })).rejects.toThrow(/Circular import detected/i);
-
-        console.log('✅ Circular import detected as expected.');
+      // console.log('✅ Circular import detected as expected.');
     });
   });
 });
