@@ -45,8 +45,11 @@ import { ParserServiceClientFactory } from '@services/pipeline/ParserService/fac
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
 import type { ILogger } from '@core/utils/logger.js';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js'; // Needed for PathService
-import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js'; // Needed for PathService
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js'; // Import real factory
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js'; // Import real factory
+// Import PathOperationsService for registration
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
 // =========================
 
 // Define runDirectiveExamples from the module
@@ -84,11 +87,20 @@ describe('API Integration Tests', () => {
     const mockDirectiveClientFactory = { createClient: vi.fn().mockReturnValue(mockDirectiveClient), directiveService: undefined } as unknown as DirectiveServiceClientFactory;
     vi.spyOn(mockDirectiveClientFactory, 'createClient');
     const mockResolutionService = mock<IResolutionService>();
+    mockResolutionService.resolveVariable.mockImplementation(async (name: string) => `${name}_resolved`);
+    
     const mockParserClientFactory = mock<ParserServiceClientFactory>();
-    // Mock FileSystemServiceClient for PathService dependency
+    // Revert to mocking FS Client Factory, but ensure createClient returns a functional mock
     const mockFsClient = mock<IFileSystemServiceClient>();
-    const mockFsClientFactory = { createClient: vi.fn().mockReturnValue(mockFsClient) } as unknown as FileSystemServiceClientFactory;
+    // Provide mock implementations for the client methods PathService uses
+    mockFsClient.exists.mockResolvedValue(true); // Assume paths exist by default for validation tests
+    mockFsClient.isDirectory.mockResolvedValue(false); // Assume files by default
+
+    const mockFsClientFactory = {
+        createClient: vi.fn().mockReturnValue(mockFsClient)
+    } as unknown as FileSystemServiceClientFactory;
     vi.spyOn(mockFsClientFactory, 'createClient');
+
     const mockLogger = mock<ILogger>();
     const mockURLContentResolver = { isURL: vi.fn().mockImplementation((path: string) => { try { new URL(path); return true; } catch { return false; } }), validateURL: vi.fn().mockImplementation(async (url: string) => url), fetchURL: vi.fn().mockImplementation(async (url: string) => ({ content: `Mock content for ${url}`})) };
 
@@ -101,7 +113,9 @@ describe('API Integration Tests', () => {
     testContainer.registerInstance(DirectiveServiceClientFactory, mockDirectiveClientFactory);
     testContainer.registerInstance('IResolutionService', mockResolutionService);
     testContainer.registerInstance('ParserServiceClientFactory', mockParserClientFactory);
-    testContainer.registerInstance(FileSystemServiceClientFactory, mockFsClientFactory); // Register FS Client Factory mock
+    // Register the MOCK FS Client Factory again
+    // testContainer.register(FileSystemServiceClientFactory, { useClass: FileSystemServiceClientFactory }); // Remove real factory registration
+    testContainer.registerInstance(FileSystemServiceClientFactory, mockFsClientFactory);
     // Real Services
     testContainer.register('IStateService', { useClass: StateService });
     testContainer.register('IParserService', { useClass: ParserService });
@@ -109,6 +123,7 @@ describe('API Integration Tests', () => {
     testContainer.register('IOutputService', { useClass: OutputService });
     testContainer.register('IFileSystemService', { useClass: FileSystemService });
     testContainer.register('IPathService', { useClass: PathService }); // Register real PathService
+    testContainer.register('IPathOperationsService', { useClass: PathOperationsService }); // *** ADD REGISTRATION ***
 
     // 5. Resolve services from testContainer
     parserService = testContainer.resolve<IParserService>('IParserService');

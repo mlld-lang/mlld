@@ -26,6 +26,11 @@ import type { IURLContentResolver } from '@services/resolution/URLContentResolve
 import type { ILogger } from '@core/utils/logger.js';
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
+import { PathService } from '@services/fs/PathService/PathService.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
 
 describe('SDK Integration Tests', () => {
   let context: TestContextDI;
@@ -39,24 +44,14 @@ describe('SDK Integration Tests', () => {
 
     testContainer = container.createChildContainer();
 
-    const mockDirectiveClient = {
-      supportsDirective: vi.fn().mockReturnValue(true),
-      handleDirective: vi.fn(async () => testContainer.resolve<IStateService>('IStateService')),
-      getSupportedDirectives: vi.fn().mockReturnValue([]),
-      validateDirective: vi.fn().mockReturnValue(undefined),
-    } as IDirectiveServiceClient;
+    const mockDirectiveClient: IDirectiveServiceClient = { supportsDirective: vi.fn().mockReturnValue(true), handleDirective: vi.fn(async () => testContainer.resolve<IStateService>('IStateService')), getSupportedDirectives: vi.fn().mockReturnValue([]), validateDirective: vi.fn().mockReturnValue(undefined) };
     vi.spyOn(mockDirectiveClient, 'supportsDirective');
     vi.spyOn(mockDirectiveClient, 'handleDirective');
 
-    const mockDirectiveClientFactory = {
-      createClient: vi.fn().mockReturnValue(mockDirectiveClient),
-      directiveService: undefined 
-    } as unknown as DirectiveServiceClientFactory; 
+    const mockDirectiveClientFactory = { createClient: vi.fn().mockReturnValue(mockDirectiveClient), directiveService: undefined } as unknown as DirectiveServiceClientFactory; 
     vi.spyOn(mockDirectiveClientFactory, 'createClient');
     
-    const mockResolutionService = mock<IResolutionService>();
     const mockParserClientFactory = mock<ParserServiceClientFactory>();
-    const mockPathService = mock<IPathService>();
     const mockLogger = mock<ILogger>();
     const mockURLContentResolver = {
       isURL: vi.fn().mockImplementation((path: string) => { try { new URL(path); return true; } catch { return false; } }),
@@ -68,13 +63,15 @@ describe('SDK Integration Tests', () => {
     testContainer.registerInstance<IURLContentResolver>('IURLContentResolver', mockURLContentResolver);
     testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger);
     testContainer.registerInstance(DirectiveServiceClientFactory, mockDirectiveClientFactory);
-    testContainer.registerInstance('IResolutionService', mockResolutionService);
     testContainer.registerInstance('ParserServiceClientFactory', mockParserClientFactory);
-    testContainer.registerInstance('IPathService', mockPathService);
     testContainer.register('IStateService', { useClass: StateService });
     testContainer.register('IParserService', { useClass: ParserService });
     testContainer.register('IInterpreterService', { useClass: InterpreterService });
     testContainer.register('IOutputService', { useClass: OutputService });
+    testContainer.register('IResolutionService', { useClass: ResolutionService });
+    testContainer.register('IPathService', { useClass: PathService });
+    testContainer.register('IFileSystemService', { useClass: FileSystemService });
+    testContainer.register('IPathOperationsService', { useClass: PathOperationsService });
 
   });
 
@@ -108,8 +105,8 @@ describe('SDK Integration Tests', () => {
     it('should process content with default behavior', async () => {
       const content = '@text greeting = "Hello"';
       await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
-      const result = await processMeld(testFilePath, { fs: context.fs as unknown as NodeFileSystem, container: testContainer });
-      expect(result).toBe(content);
+      const result = await processMeld(content, { fs: context.fs as unknown as NodeFileSystem, container: testContainer });
+      expect(result).toBe('');
     });
 
     it('should allow service injection through options', async () => {
@@ -162,7 +159,7 @@ describe('SDK Integration Tests', () => {
       await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       testContainer.register('IStateService', { useValue: customState });
       
-      const result = await processMeld(testFilePath, {
+      const result = await processMeld(content, {
         fs: context.fs as unknown as NodeFileSystem,
         container: testContainer
       });
@@ -186,15 +183,17 @@ describe('SDK Integration Tests', () => {
 
   describe('Format Conversion', () => {
     it('should handle definition directives correctly', async () => {
-      await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), '@text greeting = "Hello"');
-      const result = await processMeld(testFilePath, { fs: context.fs as unknown as NodeFileSystem, container: testContainer });
+      const content = '@text greeting = "Hello"';
+      await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
+      const result = await processMeld(content, { fs: context.fs as unknown as NodeFileSystem, container: testContainer });
       expect(result).toBe('');
     });
 
     it('should handle execution directives correctly', async () => {
-      await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), '@run [echo test]');
+      const content = '@run [echo test]';
+      await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
-      const result = await processMeld(testFilePath, {
+      const result = await processMeld(content, {
         fs: context.fs as unknown as NodeFileSystem,
         format: 'xml',
         debug: true,
@@ -213,7 +212,7 @@ Some text content
 @run [echo test]
 More text`;
       await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
-      const result = await processMeld(testFilePath, { fs: context.fs as unknown as NodeFileSystem, container: testContainer });
+      const result = await processMeld(content, { fs: context.fs as unknown as NodeFileSystem, container: testContainer });
       
       expect(result).not.toContain('"identifier": "greeting"');
       expect(result).not.toContain('"value": "Hello"');
@@ -232,7 +231,7 @@ More text`;
       const invalidContent = '@invalid directive';
       await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), invalidContent);
       
-      await expect(processMeld(testFilePath, { fs: context.fs as unknown as NodeFileSystem, container: testContainer })).rejects.toThrow();
+      await expect(processMeld(invalidContent, { fs: context.fs as unknown as NodeFileSystem, container: testContainer })).rejects.toThrow();
     });
 
     it('should handle missing files correctly', async () => {

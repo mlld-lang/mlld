@@ -73,11 +73,10 @@ First item of first array: {{nestedArray.0.0}}
 Second item of second array: {{nestedArray.1.1}}
 Third item of third array: {{nestedArray.2.2}}`;
     
-    await context.services.filesystem.writeFile(unsafeCreateValidatedResourcePath('test.meld'), content);
+    await context.fs.writeFile('test.meld', content);
     
-    const result = await processMeld('test.meld', {
-      fs: context.services.filesystem as unknown as NodeFileSystem,
-      services: context.services as unknown as Partial<Services>,
+    const result = await processMeld(content, {
+      fs: context.fs as any,
       transformation: true,
       container: testContainer
     });
