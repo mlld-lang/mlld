@@ -21,6 +21,9 @@ interface IFileSystem {
   
   // Optional testing property
   isTestEnvironment?: boolean;
+
+  // Add the missing deleteFile method signature
+  deleteFile(path: string): Promise<void>;
 }
 
 export type { IFileSystem }; 

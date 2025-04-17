@@ -27,11 +27,23 @@ import type {
  */
 
 /**
- * Base state event interface providing context for state operations.
- * Contains core information about what happened, where, and when.
+ * Specific event type for state transformations, including details.
  */
-interface StateEvent extends StateEventBase {
+interface StateTransformEvent extends StateEventBase {
+  type: 'transform'; // Discriminating literal type
+  details: {
+    operation: string; // e.g., 'setTextVar', 'addNode'
+    before?: unknown;  // State or relevant part before change
+    after?: unknown;   // State or relevant part after change
+  };
 }
+
+/**
+ * Represents any possible state event.
+ * Use type narrowing (e.g., checking event.type) to access specific details.
+ */
+// Make StateEvent a union of the base and specific event types
+type StateEvent = StateEventBase | StateTransformEvent;
 
 /**
  * Event handler function type for processing state events.
@@ -39,7 +51,7 @@ interface StateEvent extends StateEventBase {
  * 
  * @param event - The state event to handle
  */
-type StateEventHandler = StateEventHandlerBase;
+type StateEventHandler = (event: StateEvent) => void | Promise<void>;
 
 /**
  * Event filter predicate for selective event handling.
@@ -48,7 +60,7 @@ type StateEventHandler = StateEventHandlerBase;
  * @param event - The event to evaluate
  * @returns true if the event should be handled, false otherwise
  */
-type StateEventFilter = StateEventFilterBase;
+type StateEventFilter = (event: StateEvent) => boolean;
 
 /**
  * Handler registration options for configuring event subscription.
@@ -120,6 +132,7 @@ interface IStateEventService extends StateEventServiceBase {
 }
 
 export type {
+  StateTransformEvent,
   StateEvent,
   StateEventHandler,
   StateEventFilter,

@@ -289,6 +289,33 @@ export class FileSystemService implements IFileSystemService {
     }
   }
 
+  // Add missing deleteFile method
+  async deleteFile(filePath: ValidatedResourcePath): Promise<void> {
+    const pathString = filePath as string;
+    const context: FileOperationContext = {
+      operation: 'deleteFile',
+      path: pathString,
+    };
+
+    try {
+      logger.debug('Deleting file', context);
+      // Delegate to the underlying file system implementation
+      await this.fs.deleteFile(pathString);
+      logger.debug('Successfully deleted file', context);
+    } catch (error) {
+      const err = error as Error;
+      logger.error('Failed to delete file', { ...context, error: err });
+      // Check if it's a "file not found" type error, potentially return gracefully?
+      // For now, rethrow as a MeldFileSystemError
+      throw new MeldFileSystemError(`Failed to delete file: ${pathString}`, {
+        cause: err,
+        code: 'FS_DELETE_ERROR',
+        severity: ErrorSeverity.Warning, // Maybe Warning instead of Fatal?
+        details: { path: pathString }
+      });
+    }
+  }
+
   // Directory operations
   async readDir(dirPath: ValidatedResourcePath): Promise<string[]> {
     const pathString = dirPath as string;

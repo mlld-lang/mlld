@@ -1,5 +1,6 @@
 import { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService.js';
 import { IStateHistoryService, StateOperation, StateTransformation, HistoryFilter } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
+import type { StateTransformEvent } from '@services/state/StateEventService/IStateEventService.js';
 
 /**
  * @package
@@ -28,19 +29,26 @@ export class StateHistoryService implements IStateHistoryService {
       stateId: event.stateId,
       source: event.source,
       timestamp: event.timestamp,
+      // Add metadata if available in the event (needs StateEvent definition check)
+      // metadata: event.metadata 
+      // Add parentId if available in the event (needs StateEvent definition check)
+      // parentId: event.parentId
     };
 
     this.recordOperation(operation);
 
-    // If it's a transformation, record it separately
-    if (event.type === 'transform' && 'details' in event) {
+    // Use type narrowing check
+    if (event.type === 'transform') {
+      // Explicitly assert the type within the block
+      const transformEvent = event as StateTransformEvent;
+      
       const transformation: StateTransformation = {
-        stateId: event.stateId,
-        timestamp: event.timestamp,
-        operation: event.details?.operation || 'unknown',
-        source: event.source,
-        before: event.details?.before,
-        after: event.details?.after,
+        stateId: transformEvent.stateId,
+        timestamp: transformEvent.timestamp,
+        operation: transformEvent.details.operation, // Access via asserted type
+        source: transformEvent.source,
+        before: transformEvent.details.before,       // Access via asserted type
+        after: transformEvent.details.after,         // Access via asserted type
       };
       this.transformations.push(transformation);
     }
@@ -106,10 +114,28 @@ export class StateHistoryService implements IStateHistoryService {
     this.transformations = this.transformations.filter(t => t.timestamp >= beforeTimestamp);
   }
 
-  public getStateHistory(stateId: string): { operations: StateOperation[]; transformations: StateTransformation[] } {
+  public async getStateHistory(stateId: string): Promise<{
+    operations: StateOperation[];
+    transformations: StateTransformation[];
+  } | undefined> {
+    // Simulate async operation, or potentially check if stateId exists first
+    // For now, just wrap the existing logic in a promise resolution.
+    // In a real scenario, this might involve async lookups if history was stored elsewhere.
+    
+    // Basic check if any operations/transformations exist for the stateId
+    const operations = this.getOperationHistory(stateId);
+    const transformations = this.getTransformationChain(stateId);
+    
+    if (operations.length === 0 && transformations.length === 0) {
+        // Check if the state itself was ever registered, even if no history?
+        // This requires access to StateTrackingService, which isn't injected here.
+        // For simplicity, let's return undefined if no history found.
+        return undefined;
+    }
+    
     return {
-      operations: this.getOperationHistory(stateId),
-      transformations: this.getTransformationChain(stateId)
+      operations,
+      transformations
     };
   }
 } 

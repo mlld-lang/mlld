@@ -3,28 +3,33 @@ import * as path from 'path';
 import type { Stats } from 'fs';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
 import { EventEmitter } from 'events';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.ts';
+import * as fsExtra from 'fs-extra';
+import { join } from 'path';
+import type { FSWatcher } from 'fs';
 
 /**
  * In-memory filesystem for testing using memfs.
  * Provides a clean interface for file operations and ensures proper directory handling.
  */
 export class MemfsTestFileSystem implements IFileSystem {
-  private vol: Volume;
+  public vol: typeof Volume.prototype;
   private root: string = '/';
   private watcher: EventEmitter;
+  readonly isTestEnvironment = true;
 
   constructor() {
     logger.debug('Initializing MemfsTestFileSystem');
     try {
-      this.vol = new Volume();
+      this.vol = Volume.fromJSON({});
       this.watcher = new EventEmitter();
       // Initialize root directory
       this.vol.mkdirSync(this.root, { recursive: true });
       logger.debug('Root directory initialized');
     } catch (error) {
-      logger.error('Error initializing MemfsTestFileSystem', { error });
-      throw new Error(`Error initializing MemfsTestFileSystem: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Error initializing MemfsTestFileSystem', { error: message });
+      throw new Error(`Error initializing MemfsTestFileSystem: ${message}`);
     }
   }
 
@@ -42,8 +47,9 @@ export class MemfsTestFileSystem implements IFileSystem {
       this.vol.mkdirSync('/project/src/nested', { recursive: true });
       logger.debug('Filesystem reset complete, project structure initialized');
     } catch (error) {
-      logger.error('Error initializing filesystem', { error });
-      throw new Error(`Error initializing filesystem: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Error initializing filesystem', { error: message });
+      throw new Error(`Error initializing filesystem: ${message}`);
     }
   }
 
@@ -61,8 +67,9 @@ export class MemfsTestFileSystem implements IFileSystem {
       
       logger.debug('Filesystem cleanup complete');
     } catch (error) {
-      logger.error('Error during cleanup', { error });
-      throw new Error(`Error during cleanup: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Error during cleanup', { error: message });
+      throw new Error(`Error during cleanup: ${message}`);
     }
   }
 
@@ -261,8 +268,10 @@ export class MemfsTestFileSystem implements IFileSystem {
       this.watcher.emit('change', path.basename(memfsPath), 'change');
       logger.debug('File written successfully', { path: memfsPath });
     } catch (error) {
-      logger.error('Error writing file', { path: memfsPath, error });
-      throw new Error(`Error writing file ${memfsPath}: ${error.message}`);
+      // Use instanceof Error check
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Error writing file', { path: memfsPath, error: message });
+      throw new Error(`EACCES: Permission denied ${memfsPath}, ${message}`);
     }
   }
   
@@ -283,8 +292,10 @@ export class MemfsTestFileSystem implements IFileSystem {
       this.watcher.emit('change', path.basename(memfsPath), 'change');
       logger.debug('File written successfully (sync)', { path: memfsPath });
     } catch (error) {
-      logger.error('Error writing file (sync)', { path: memfsPath, error });
-      throw new Error(`Error writing file ${memfsPath}: ${error.message}`);
+      // Use instanceof Error check
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Error writing file (sync)', { path: memfsPath, error: message });
+      throw new Error(`EACCES: Permission denied ${memfsPath}, ${message}`);
     }
   }
 
@@ -341,15 +352,20 @@ export class MemfsTestFileSystem implements IFileSystem {
       logger.debug('File read successfully', { filePath, memfsPath, contentLength: content.length });
       return content;
     } catch (error) {
-      // If error is already formatted (from our checks above), just rethrow
-      if (error.message.startsWith('EISDIR:') || 
-          error.message.startsWith('ENOENT:') ||
-          error.message.startsWith('EINVAL:')) {
-        throw error;
+      // Use instanceof Error check
+      if (error instanceof Error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        // If error is already formatted (from our checks above), just rethrow
+        if (code === 'EISDIR' || code === 'ENOENT' || code === 'EINVAL') {
+          throw error;
+        }
+        // Otherwise wrap in a more descriptive error
+        logger.error('Error reading file', { filePath, memfsPath, error: error.message });
+        throw new Error(`Error reading file '${filePath}': ${error.message}`);
+      } else {
+        logger.error('Unknown error reading file', { filePath, memfsPath, error });
+        throw new Error(`Unknown error reading file '${filePath}'`);
       }
-      // Otherwise wrap in a more descriptive error
-      logger.error('Error reading file', { filePath, memfsPath, error });
-      throw new Error(`Error reading file '${filePath}': ${error.message}`);
     }
   }
 
@@ -359,14 +375,9 @@ export class MemfsTestFileSystem implements IFileSystem {
   async exists(filePath: string): Promise<boolean> {
     logger.debug('Checking if file exists', { filePath });
     const memfsPath = this.getMemfsPath(filePath);
-    try {
-      const exists = this.vol.existsSync(memfsPath);
-      logger.debug('File existence check result', { filePath, memfsPath, exists });
-      return exists;
-    } catch (error) {
-      logger.error('Error checking file existence', { filePath, memfsPath, error });
-      return false;
-    }
+    const exists = this.vol.existsSync(memfsPath);
+    logger.debug('File existence check result', { filePath, memfsPath, exists });
+    return exists;
   }
 
   /**
@@ -386,8 +397,10 @@ export class MemfsTestFileSystem implements IFileSystem {
       });
       return stats;
     } catch (error) {
-      logger.error('Error getting stats', { filePath, memfsPath, error });
-      throw new Error(`Error getting stats for '${filePath}': ${error.message}`);
+      // Use instanceof Error check
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Error getting stats', { filePath, memfsPath, error: message });
+      throw new Error(`ENOENT: Stat failed ${filePath}, ${message}`);
     }
   }
 
@@ -428,12 +441,13 @@ export class MemfsTestFileSystem implements IFileSystem {
       logger.debug('Directory read successful', { dirPath, memfsPath, entryCount: stringEntries.length });
       return stringEntries;
     } catch (error) {
-      if (error.message.startsWith('ENOENT:') || 
-          error.message.startsWith('ENOTDIR:')) {
+      // Use instanceof Error check
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.startsWith('ENOENT:') || message.startsWith('ENOTDIR:')) {
         throw error;
       }
-      logger.error('Error reading directory', { dirPath, memfsPath, error });
-      throw new Error(`Error reading directory '${dirPath}': ${error.message}`);
+      logger.error('Error reading directory', { dirPath, memfsPath, error: message });
+      throw new Error(`Error reading directory '${dirPath}': ${message}`);
     }
   }
 
@@ -459,15 +473,15 @@ export class MemfsTestFileSystem implements IFileSystem {
 
       // Create directory with recursive option
       this.vol.mkdirSync(memfsPath, { recursive: options?.recursive !== false });
+      this.watcher.emit('change', 'rename', memfsPath);
       logger.debug('Directory created successfully', { dirPath, memfsPath });
     } catch (error) {
-      // If error is already formatted (from our checks above), just rethrow
-      if (error.message.startsWith('ENOTDIR:')) {
-        throw error;
+      // Use instanceof Error check and cast for code
+      if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        const message = error.message;
+        logger.error('Error creating directory', { dirPath, memfsPath, error: message });
+        throw new Error(`EACCES: Cannot create directory ${dirPath}, ${message}`);
       }
-      // Otherwise wrap in a more descriptive error
-      logger.error('Error creating directory', { dirPath, memfsPath, error });
-      throw new Error(`Error creating directory '${dirPath}': ${error.message}`);
     }
   }
   
@@ -493,15 +507,15 @@ export class MemfsTestFileSystem implements IFileSystem {
 
       // Create directory with recursive option
       this.vol.mkdirSync(memfsPath, { recursive: options?.recursive !== false });
+      this.watcher.emit('change', 'rename', memfsPath);
       logger.debug('Directory created successfully', { dirPath, memfsPath });
     } catch (error) {
-      // If error is already formatted (from our checks above), just rethrow
-      if (error.message.startsWith('ENOTDIR:')) {
-        throw error;
+      // Use instanceof Error check and cast for code
+      if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        const message = error.message;
+        logger.error('Error creating directory (sync)', { dirPath, memfsPath, error: message });
+        throw new Error(`EACCES: Cannot create directory ${dirPath}, ${message}`);
       }
-      // Otherwise wrap in a more descriptive error
-      logger.error('Error creating directory (sync)', { dirPath, memfsPath, error });
-      throw new Error(`Error creating directory '${dirPath}': ${error.message}`);
     }
   }
 
@@ -520,8 +534,13 @@ export class MemfsTestFileSystem implements IFileSystem {
       logger.debug('Directory check result', { filePath, memfsPath, isDir });
       return isDir;
     } catch (error) {
-      logger.error('Error checking if path is directory', { filePath, memfsPath, error });
-      return false;
+      // Use instanceof Error check and cast for code
+      if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return false;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Error checking if path is directory', { filePath, memfsPath, error: message });
+      throw new Error(`EACCES: Cannot check directory ${filePath}, ${message}`);
     }
   }
 
@@ -540,8 +559,13 @@ export class MemfsTestFileSystem implements IFileSystem {
       logger.debug('File check result', { filePath, memfsPath, isFile });
       return isFile;
     } catch (error) {
-      logger.error('Error checking if path is file', { filePath, memfsPath, error });
-      return false;
+      // Use instanceof Error check and cast for code
+      if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return false;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Error checking if path is file', { filePath, memfsPath, error: message });
+      throw new Error(`EACCES: Cannot check file ${filePath}, ${message}`);
     }
   }
 
@@ -685,8 +709,10 @@ export class MemfsTestFileSystem implements IFileSystem {
       
       logger.debug('Path removed successfully', { path, memfsPath });
     } catch (error) {
-      logger.error('Error removing path', { path, memfsPath, error });
-      throw new Error(`Error removing path '${path}': ${error.message}`);
+      // Fix: Use instanceof Error
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Error removing path', { path: memfsPath, error: message });
+      throw new Error(`Error removing path '${path}': ${message}`);
     }
   }
 
@@ -707,5 +733,88 @@ export class MemfsTestFileSystem implements IFileSystem {
 
   setFileSystem(fileSystem: IFileSystem): void {
     // No-op for test filesystem
+  }
+
+  // Add implementation for deleteFile
+  async deleteFile(filePath: string): Promise<void> {
+    const memfsPath = this.getMemfsPath(filePath);
+    try { 
+      if (this.vol.existsSync(memfsPath)) {
+        // Check if it's a file before unlinking
+        if (this.vol.statSync(memfsPath).isFile()) {
+            this.vol.unlinkSync(memfsPath);
+            this.watcher.emit('change', 'unlink', memfsPath);
+        } else {
+            logger.warn(`Attempted to delete non-file path with deleteFile: ${filePath}`);
+            // Optionally throw an error here if deleting directories with deleteFile is invalid
+            // throw new Error(`EISDIR: Path is a directory, cannot delete with deleteFile: ${filePath}`);
+        }
+      }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(`MemfsTestFileSystem: Unexpected error during deleteFile for ${filePath}:`, { error: message });
+        // Resolve successfully as delete is idempotent or error occurred during check
+    }
+    return Promise.resolve();
+  }
+
+  // Utility methods for tests
+  reset(): void {
+    this.vol.reset();
+    this.watcher.removeAllListeners();
+  }
+
+  toJSON(): Record<string, string> {
+    // Convert buffer values to strings for easier inspection
+    const json = this.vol.toJSON();
+    const stringJson: Record<string, string> = {};
+    for (const key in json) {
+        if (Object.prototype.hasOwnProperty.call(json, key)) {
+            const value = json[key];
+            // Handle null or Buffer values explicitly
+            if (value === null) {
+                stringJson[key] = ''; // Represent null files as empty string?
+            } else if (typeof value === 'string') {
+                stringJson[key] = value;
+            } else {
+                // Assume it might be Buffer-like or other object, attempt toString
+                stringJson[key] = value?.toString() ?? ''; 
+            }
+        }
+    }
+    return stringJson;
+  }
+
+  print(dir = '/'): void {
+    console.log(`--- File System State (${dir}) ---`);
+    const memfsPath = this.getMemfsPath(dir);
+    try {
+        const files = this.vol.readdirSync(memfsPath);
+        files.forEach((file: string | Buffer) => { // Fix: Add type annotation
+            const fileName = String(file);
+            const fullPath = path.join(memfsPath, fileName);
+            try {
+                const stats = this.vol.statSync(fullPath);
+                if (stats.isDirectory()) {
+                  console.log(`  ${fileName}/`);
+                } else {
+                  console.log(`  ${fileName} (${stats.size} bytes)`);
+                }
+            } catch (error) {
+                // Fix: Use instanceof Error
+                const message = error instanceof Error ? error.message : String(error);
+                console.log(`  ${fileName} (Error getting stats: ${message})`);
+            }
+        });
+    } catch (error) {
+         // Fix: Use instanceof Error
+         const message = error instanceof Error ? error.message : String(error);
+         console.log(`Error reading directory ${dir}: ${message}`);
+    }
+    console.log(`-----------------------------`);
+  }
+  
+  simulateChange(eventType: string, filename: string): void {
+      this.watcher.emit('change', eventType, filename);
   }
 } 

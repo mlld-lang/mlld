@@ -68,6 +68,10 @@ export class NodeFileSystem implements IFileSystem {
     }
   }
 
+  async deleteFile(path: string): Promise<void> {
+    await fsExtra.remove(path);
+  }
+
   watch(path: string, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }> {
     return watch(path, options) as AsyncIterableIterator<{ filename: string; eventType: string }>;
   }

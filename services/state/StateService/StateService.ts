@@ -3,7 +3,7 @@ import { stateLogger as logger } from '@core/utils/logger.js';
 import type { IStateService, TransformationOptions } from '@services/state/StateService/IStateService.js';
 import type { StateNode } from '@services/state/StateService/types.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
-import type { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService.js';
+import type { IStateEventService, StateEvent, StateTransformEvent } from '@services/state/StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { inject, container, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
@@ -269,31 +269,33 @@ export class StateService implements IStateService {
    * Made async to ensure event emission is awaited.
    */
   private async updateState(updates: Partial<StateNode>, source: string): Promise<void> {
-    // DEBUG REMOVED
-    // console.log(`[StateService.updateState] Before factory.updateState for source: ${source}`);
+    const oldStateSnapshot = cloneDeep(this.currentState); // Store state BEFORE update
+
     try {
-      const newStateNode = this.stateFactory.updateState(this.currentState, updates); // Get the new node
-      const oldStateId = this.currentState?.stateId;
-      const oldRef = this.currentState; // Store old reference
-      this.currentState = newStateNode; // Assign the new node returned by the factory
-      // Log IMMEDIATELY after assignment
-      // Log IMMEDIATELY after assignment
+      const newStateNode = this.stateFactory.updateState(this.currentState, updates); 
+      this.currentState = newStateNode; 
     } catch (error) {
-      // DEBUG REMOVED
-      // console.error(`[StateService.updateState] Error during factory.updateState for source: ${source}`, error);
       throw error; 
     }
 
-    // Restore event emission
-    this.emitEvent({
+    // Emit specific event type with details
+    const event: StateTransformEvent = {
       type: 'transform',
       stateId: this.getStateId() || 'unknown',
       source,
       timestamp: Date.now(),
       location: {
         file: this.getCurrentFilePath() || undefined
+      },
+      details: {
+        operation: source, // Use source as the operation identifier
+        before: oldStateSnapshot, // Pass the state before the change
+        after: cloneDeep(this.currentState) // Pass the state after the change
       }
-    });
+    };
+    
+    // Pass the specifically typed event to emitEvent
+    await this.emitEvent(event); // Await the emit
   }
 
   // Text variables
