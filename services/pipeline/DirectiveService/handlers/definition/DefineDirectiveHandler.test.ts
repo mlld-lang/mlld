@@ -22,7 +22,7 @@ import type { DirectiveNode, IDirectiveData as DefineDirectiveData } from '@core
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
-import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
+import type { DirectiveProcessingContext, OutputFormattingContext } from '@core/types/index.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { JsonValue } from '@core/types';
@@ -132,7 +132,7 @@ describe('DefineDirectiveHandler', () => {
           state: stateService
       } as ResolutionContext; // Cast to type
       
-      const mockFormattingContext: FormattingContext = { isBlock: false, preserveLiteralFormatting: false, preserveWhitespace: false };
+      const mockFormattingContext: OutputFormattingContext = { isBlock: false, preserveLiteralFormatting: false, preserveWhitespace: false };
       if (!stateService) {
         throw new Error('Test setup error: stateService is not defined when creating context');
       }
@@ -264,13 +264,6 @@ describe('DefineDirectiveHandler', () => {
                description: 'A cool command', 
            })
       );
-    });
-  });
-
-  describe('validation', () => {
-    it.skip('should validate command structure through ValidationService', async () => {
-      // Skipping because handler doesn't seem to call validation service directly
-      // This should be tested at the DirectiveService level
     });
   });
 
