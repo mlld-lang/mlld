@@ -140,7 +140,7 @@ describe('VariableReferenceResolver', () => {
       const result = await resolver.resolve(node, context);
       
       expect(result).toBe('Hello World');
-      expect(stateService.getVariable).toHaveBeenCalledWith('greeting');
+      expect(stateService.getVariable).toHaveBeenCalledWith('greeting', VariableType.TEXT);
     });
 
     it('should resolve data variables using node.valueType', async () => {
@@ -153,7 +153,7 @@ describe('VariableReferenceResolver', () => {
       const result = await resolver.resolve(node, context);
       
       expect(result).toBe(JSON.stringify(mockData)); 
-      expect(stateService.getVariable).toHaveBeenCalledWith('dataVar');
+      expect(stateService.getVariable).toHaveBeenCalledWith('dataVar', VariableType.DATA);
     });
 
     it('should handle field access in data variables', async () => {
@@ -163,7 +163,7 @@ describe('VariableReferenceResolver', () => {
       );
       const result = await resolver.resolve(node, context);
       expect(result).toBe('Alice');
-      expect(stateService.getVariable).toHaveBeenCalledWith('dataObj'); // Check getVariable call
+      expect(stateService.getVariable).toHaveBeenCalledWith('dataObj', VariableType.DATA); // Check getVariable call with type
     });
 
     it('should handle array index access in data variables', async () => {
@@ -176,7 +176,7 @@ describe('VariableReferenceResolver', () => {
 
       const result = await resolver.resolve(node, context);
       expect(result).toBe('Bob');
-      expect(stateService.getVariable).toHaveBeenCalledWith('dataObjWithUsers');
+      expect(stateService.getVariable).toHaveBeenCalledWith('dataObjWithUsers', VariableType.DATA);
     });
 
     it('should throw VariableResolutionError for undefined variables in strict mode', async () => {
@@ -260,7 +260,7 @@ describe('VariableReferenceResolver', () => {
       const result = await resolver.resolve(node, context);
       
       expect(result).toBe(mockPath.originalValue);
-      expect(stateService.getVariable).toHaveBeenCalledWith('docsPath'); // Check getVariable call
+      expect(stateService.getVariable).toHaveBeenCalledWith('docsPath', VariableType.PATH); // Check getVariable call with type
     });
     
     it('should resolve command variables using node.valueType', async () => {
@@ -271,7 +271,7 @@ describe('VariableReferenceResolver', () => {
       const result = await resolver.resolve(node, context);
       
       expect(result).toBe(JSON.stringify(mockCmdDef)); // Verify resolver returns stringified def
-      expect(stateService.getVariable).toHaveBeenCalledWith('myCmd'); // Check getVariable call
+      expect(stateService.getVariable).toHaveBeenCalledWith('myCmd', VariableType.COMMAND); // Check getVariable call with type
     });
 
   }); 
@@ -321,7 +321,7 @@ describe('VariableReferenceResolver', () => {
       expect(result).toBe('Outer Hello World Inner');
       
       // Verify getVariable was called for the outer variable
-      expect(stateService.getVariable).toHaveBeenCalledWith('recursiveTextVar');
+      expect(stateService.getVariable).toHaveBeenCalledWith('recursiveTextVar', VariableType.TEXT);
       
       // Verify resolutionService.resolveNodes was called with the correct array and context
       expect(resolutionService.resolveNodes).toHaveBeenCalledTimes(1);

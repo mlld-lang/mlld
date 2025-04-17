@@ -77,6 +77,10 @@ export function createStateServiceMock() {
   service.setVariable.mockResolvedValue({} as any);
   service.hasVariable.mockReturnValue(false);
   service.removeVariable.mockResolvedValue(false);
+  service.getParentState.mockReturnValue(undefined);
+  service.getInternalStateNode.mockReturnValue({} as any);
+  service.setEventService.mockReturnValue(undefined);
+  service.setTrackingService.mockReturnValue(undefined);
 
   // Mock methods added from StateServiceLike
   service.enableTransformation = vi.fn();

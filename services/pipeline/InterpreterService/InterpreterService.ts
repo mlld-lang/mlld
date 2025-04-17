@@ -1,4 +1,5 @@
 import type { MeldNode, SourceLocation, DirectiveNode, TextNode, VariableReferenceNode } from '@core/syntax/types/index.js';
+import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import { interpreterLogger as logger } from '@core/utils/logger.js';
 import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -323,7 +324,9 @@ export class InterpreterService implements IInterpreterService {
 
       for (const node of nodes) {
         try {
+          process.stdout.write(`DEBUG: [InterpreterService.interpret LOOP] Processing node type: ${node.type}, Current State ID: ${currentState?.getStateId() ?? 'N/A'}\n`);
           currentState = await this.interpretNode(node, currentState, opts);
+          process.stdout.write(`DEBUG: [InterpreterService.interpret LOOP] Node processed. New State ID: ${currentState?.getStateId() ?? 'N/A'}, Node count: ${currentState?.getNodes()?.length ?? 0}\n`);
           lastGoodState = currentState.clone() as IStateService;
         } catch (error) {
           try {
@@ -397,230 +400,220 @@ export class InterpreterService implements IInterpreterService {
       );
     }
 
-    logger.debug('Interpreting node', {
-      type: node.type,
-      location: node.location,
-      filePath: state.getCurrentFilePath()
-    });
+    process.stdout.write(`DEBUG: [InterpreterService.interpretNode ENTRY] Node Type: ${node.type}, State ID: ${state.getStateId() ?? 'N/A'}\n`);
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
+    let currentState = state;
+    let resultState: IStateService | DirectiveResult | null = null;
+    let transformedNode: MeldNode | null = null; // Track potential replacement
 
-    try {
-      let currentState = state; // Use incoming state directly
+    switch (node.type) {
+      case 'Text':
+        // Handle Text nodes
+        const textNode = node as TextNode;
+        process.stdout.write(`DEBUG: [InterpreterService.interpretNode Text] Content: '${textNode.content.substring(0, 50)}...'\n`);
+        // --- Revert: Remove incorrect inline resolution --- 
+        // The parser should create separate VariableReferenceNodes for {{...}}.
+        // TextNodes should be treated as literal content.
+        transformedNode = textNode; // Mark original node for adding
+        process.stdout.write(`DEBUG: [InterpreterService.interpretNode Text] Marking original TextNode for addition.\n`);
+        // --- End Revert --- 
+        break; // End of Text case
 
-      // Process based on node type
-      switch (node.type) {
-        case 'Text':
-          const variableRegex = /{{\s*.*?}}|(?<!\$)\$\b[a-zA-Z_][a-zA-Z0-9_]*\b/;
-          let processedNode: TextNode = node as TextNode; 
-          if (variableRegex.test(processedNode.content)) {
-            if (this.parserClient && this.resolutionService) {
-              try {
-                const varRefContext = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
-                const resolvedStringValue = await this.resolutionService.resolveNodes([processedNode], varRefContext);
-                processedNode = {
-                  type: 'Text',
-                  content: resolvedStringValue,
-                  location: processedNode.location // Use location from processedNode
-                };
-              } catch (error) {
-                logger.error('Failed to resolve VariableReferenceNode during interpretation', {
-                  error: error instanceof Error ? error.message : String(error),
-                  identifier: processedNode.content // Use identifier from processedNode
-                });
-                const errorState = currentState.clone();
-                errorState.addNode(processedNode); // Add original processedNode back
-                currentState = errorState;
-              }
-            }
-          }
-          const textState = currentState.clone();
-          textState.addNode(processedNode); 
-          currentState = textState;
-          break;
+      case 'CodeFence':
+        // Handle CodeFence nodes similar to Text nodes - preserve them exactly
+        const codeFenceState = currentState.clone();
+        codeFenceState.addNode(node);
+        currentState = codeFenceState;
+        break;
 
-        case 'CodeFence':
-          // Handle CodeFence nodes similar to Text nodes - preserve them exactly
-          const codeFenceState = currentState.clone();
-          codeFenceState.addNode(node);
-          currentState = codeFenceState;
-          break;
+      case 'VariableReference':
+         const varNode = node as VariableReferenceNode;
+         try {
+             const varRefContext = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
+             const resolvedStringValue = await this.resolutionService.resolveNodes([varNode], varRefContext);
+             const resolvedTextNode: TextNode = {
+                 type: 'Text',
+                 content: resolvedStringValue,
+                 location: varNode.location // Use location from varNode
+             };
+             transformedNode = resolvedTextNode;
+         } catch (error) {
+              logger.error('Failed to resolve VariableReferenceNode during interpretation', {
+                 error: error instanceof Error ? error.message : String(error),
+                 identifier: varNode.identifier // Use identifier from varNode
+              });
+              const errorState = currentState.clone();
+              errorState.addNode(varNode); // Add original varNode back
+              currentState = errorState;
+         }
+         break;
 
-        case 'VariableReference':
-           const varNode = node as VariableReferenceNode;
-           try {
-               const varRefContext = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
-               const resolvedStringValue = await this.resolutionService.resolveNodes([varNode], varRefContext);
-               const resolvedTextNode: TextNode = {
-                   type: 'Text',
-                   content: resolvedStringValue,
-                   location: varNode.location // Use location from varNode
-               };
-               const resolvedState = currentState.clone();
-               resolvedState.addNode(resolvedTextNode);
-               currentState = resolvedState;
-           } catch (error) {
-                logger.error('Failed to resolve VariableReferenceNode during interpretation', {
-                   error: error instanceof Error ? error.message : String(error),
-                   identifier: varNode.identifier // Use identifier from varNode
-                });
-                const errorState = currentState.clone();
-                errorState.addNode(varNode); // Add original varNode back
-                currentState = errorState;
-           }
-           break;
+      case 'Comment':
+        // Comments are ignored during interpretation
+        break;
 
-        case 'Comment':
-          // Comments are ignored during interpretation
-          break;
-
-        case 'Directive':
-          const directiveState = currentState.clone(); // Clone the loop's current state ONCE
-          directiveState.addNode(node); // Add the node first to maintain order
-          if (node.type !== 'Directive' || !('directive' in node) || !node.directive) {
-            throw new MeldInterpreterError(
-              'Invalid directive node',
-              'invalid_directive',
-              convertLocation(node.location)
-            );
-          }
-          const directiveNode = node as DirectiveNode;
-          const isImportDirective = directiveNode.directive.kind === 'import';
-          
-          // --- Create Context Objects --- 
-          const baseResolutionContext = ResolutionContextFactory.create(directiveState, directiveState.getCurrentFilePath() ?? undefined);
-          // Create Formatting Context (example initialization)
-          const formattingContext: OutputFormattingContext = {
-            isOutputLiteral: directiveState.isTransformationEnabled?.() || false,
-            contextType: 'block', // Default to block context
-            nodeType: directiveNode.type,
-            atLineStart: true, // Default assumption
-            atLineEnd: false // Default assumption
-          };
-          
-          // Create Execution Context (only for @run - example)
-          let executionContext: ExecutionContext | undefined = undefined;
-          if (directiveNode.directive.kind === 'run') {
-            // Populate based on directiveNode properties or defaults
-            executionContext = {
-              cwd: directiveState.getCurrentFilePath() ? this.pathService.dirname(directiveState.getCurrentFilePath()!) : process.cwd(),
-              // ... other ExecutionContext fields based on directive options or defaults
-            };
-          }
-          
-          // Assemble the main processing context
-          const handlerContext: DirectiveProcessingContext = {
-            state: directiveState,
-            resolutionContext: baseResolutionContext, // Use the created resolution context
-            formattingContext: formattingContext,
-            executionContext: executionContext, // Include if it was created
-            directiveNode: directiveNode, // Pass the directive node itself
-          };
-          // --- End Context Creation ---
-
-          const directiveResult = await this.callDirectiveHandleDirective(directiveNode, handlerContext);
-
-          let resultState: IStateService;
-          let replacementNode: MeldNode | undefined = undefined;
-          
-          if (
-            directiveResult &&
-            typeof directiveResult === 'object' &&
-            'replacement' in directiveResult
-          ) {
-            resultState = (directiveResult as DirectiveResult).state as IStateService;
-            replacementNode = (directiveResult as DirectiveResult).replacement;
-          } else if (directiveResult && typeof directiveResult === 'object') {
-            resultState = directiveResult as IStateService;
-          } else {
-             throw new MeldInterpreterError(
-               `Directive handler for '${directiveNode.directive.kind}' returned an unexpected type.`,
-               'directive_result_error',
-               convertLocation(directiveNode.location)
-             );
-          }
-
-          if (!resultState) {
-             throw new MeldInterpreterError(
-               `Directive handler for '${directiveNode.directive.kind}' did not return a valid state object.`,
-               'directive_result_error',
-               convertLocation(directiveNode.location)
-             );
-          }
-
-          currentState = resultState;
-          
-          if (replacementNode) {
-            if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) {
-              const nodes = currentState.getTransformedNodes(); 
-              const index = nodes.findIndex(n => n === node);
-              if (index !== -1) {
-                currentState.transformNode(index, replacementNode as MeldNode | MeldNode[]);
-              } else {
-                 logger.warn('Original node not found in transformed nodes for replacement', { node });
-              }
-            }
-          }
-          
-          if (isImportDirective && 
-              currentState.isTransformationEnabled && 
-              currentState.isTransformationEnabled()) {
-            try {
-              logger.debug('Import directive in transformation mode, copying variables to original state');
-              
-              this.stateVariableCopier.copyAllVariables(
-                currentState,
-                state,
-                {
-                  skipExisting: false,
-                  trackContextBoundary: false,
-                  trackVariableCrossing: false
-                }
-              );
-            } catch (e) {
-              logger.debug('Error copying variables from import to original state', { error: e });
-            }
-          }
-          
-          break;
-
-        default:
+      case 'Directive':
+        const directiveState = currentState.clone(); // Clone the loop's current state ONCE
+        directiveState.addNode(node); // Add the node first to maintain order
+        if (node.type !== 'Directive' || !('directive' in node) || !node.directive) {
           throw new MeldInterpreterError(
-            `Unknown node type: ${node.type}`,
-            'unknown_node',
+            'Invalid directive node',
+            'invalid_directive',
             convertLocation(node.location)
           );
-      }
+        }
+        const directiveNode = node as DirectiveNode;
+        const isImportDirective = directiveNode.directive.kind === 'import';
+        
+        // --- Create Context Objects --- 
+        const baseResolutionContext = ResolutionContextFactory.create(directiveState, directiveState.getCurrentFilePath() ?? undefined);
+        // Create Formatting Context (example initialization)
+        const formattingContext: OutputFormattingContext = {
+          isOutputLiteral: directiveState.isTransformationEnabled?.() || false,
+          contextType: 'block', // Default to block context
+          nodeType: directiveNode.type,
+          atLineStart: true, // Default assumption
+          atLineEnd: false // Default assumption
+        };
+        
+        // Create Execution Context (only for @run - example)
+        let executionContext: ExecutionContext | undefined = undefined;
+        if (directiveNode.directive.kind === 'run') {
+          // Populate based on directiveNode properties or defaults
+          executionContext = {
+            cwd: directiveState.getCurrentFilePath() ? this.pathService.dirname(directiveState.getCurrentFilePath()!) : process.cwd(),
+            // ... other ExecutionContext fields based on directive options or defaults
+          };
+        }
+        
+        // Assemble the main processing context
+        const handlerContext: DirectiveProcessingContext = {
+          state: directiveState,
+          resolutionContext: baseResolutionContext, // Use the created resolution context
+          formattingContext: formattingContext,
+          executionContext: executionContext, // Include if it was created
+          directiveNode: directiveNode, // Pass the directive node itself
+        };
+        // --- End Context Creation ---
 
-      return currentState;
-    } catch (error) {
-      // Preserve MeldInterpreterError or wrap other errors
-      if (error instanceof MeldInterpreterError) {
-        throw error;
-      }
-      // Wrap other errors, ensuring location is included
-      const errorLocation: InterpreterLocation | undefined = node.location ? {
-          line: node.location.start?.line,
-          column: node.location.start?.column,
-          filePath: state?.getCurrentFilePath() ?? undefined
-      } : undefined;
-      
-      throw new MeldInterpreterError(
-        getErrorMessage(error),
-        node.type, // Use node type as code for context
-        errorLocation, // Pass constructed ErrorSourceLocation
-        {
-          cause: error instanceof Error ? error : undefined,
-          severity: ErrorSeverity.Recoverable, 
-          context: {
-            nodeType: node.type,
-            state: {
-              filePath: state?.getCurrentFilePath() ?? undefined
+        const directiveResult = await this.callDirectiveHandleDirective(directiveNode, handlerContext);
+
+        let resultState: IStateService;
+        let replacementNode: MeldNode | undefined = undefined;
+        
+        if (
+          directiveResult &&
+          typeof directiveResult === 'object' &&
+          'replacement' in directiveResult
+        ) {
+          resultState = (directiveResult as DirectiveResult).state as IStateService;
+          replacementNode = (directiveResult as DirectiveResult).replacement;
+        } else if (directiveResult && typeof directiveResult === 'object') {
+          resultState = directiveResult as IStateService;
+        } else {
+           throw new MeldInterpreterError(
+             `Directive handler for '${directiveNode.directive.kind}' returned an unexpected type.`,
+             'directive_result_error',
+             convertLocation(directiveNode.location)
+           );
+        }
+
+        if (!resultState) {
+           throw new MeldInterpreterError(
+             `Directive handler for '${directiveNode.directive.kind}' did not return a valid state object.`,
+             'directive_result_error',
+             convertLocation(directiveNode.location)
+           );
+        }
+
+        currentState = resultState;
+        
+        // --- Add logging before replacement logic ---
+        process.stdout.write(`DEBUG: [InterpreterService Directive Case] Before replacement check. replacementNode type: ${replacementNode?.type}, content: ${(replacementNode as any)?.content}\n`);
+
+        if (replacementNode) { 
+          process.stdout.write(`DEBUG: [InterpreterService Directive Case] replacementNode is defined. Checking transformation enabled.\n`);
+          // Check if transformation is enabled (always true now)
+          if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) {
+            process.stdout.write(`DEBUG: [InterpreterService Directive Case] Transformation enabled. Getting nodes for replacement.\n`);
+            // Get the list of nodes currently being built for output
+            const nodes = currentState.getTransformedNodes(); 
+            process.stdout.write(`DEBUG: [InterpreterService Directive Case] Current transformedNodes length: ${nodes?.length}. Nodes: ${JSON.stringify(nodes?.map(n => ({ type: n.type, loc: n.location?.start })))}`);
+            // Find the index of the original directive node we just processed
+            const index = nodes.findIndex(n => 
+                n.type === node.type &&
+                n.location?.start?.line === node.location?.start?.line &&
+                n.location?.start?.column === node.location?.start?.column &&
+                // Add file path check if available in location
+                (n.location?.filePath === node.location?.filePath || 
+                 (!n.location?.filePath && !node.location?.filePath)) // Handle cases where filePath might be undefined
+            );
+            process.stdout.write(`DEBUG: [InterpreterService Directive Case] Found index for original node ${node.type} (${(node as DirectiveNode)?.directive?.kind}) by location: ${index}\n`);
+            if (index !== -1) {
+              // If found, replace it with the replacementNode from the handler
+              process.stdout.write(`DEBUG: [InterpreterService Directive Case] Calling transformNode to replace index ${index} with ${replacementNode.type} node.\n`);
+              currentState.transformNode(index, replacementNode as MeldNode | MeldNode[]); // <<< STATE IS UPDATED
+              // Add log after transform to verify
+              const nodesAfter = currentState.getTransformedNodes();
+              process.stdout.write(`DEBUG: [InterpreterService Directive Case] After transformNode. New length: ${nodesAfter?.length}. Node at index ${index}: ${nodesAfter?.[index]?.type}\n`);
+            } else {
+               // logger.warn('Original node not found in transformed nodes for replacement', { node });
+               process.stderr.write(`WARN: [InterpreterService Directive Case] Original node not found in transformed nodes for replacement. Node: ${JSON.stringify(node)}\n`);
             }
+          } else {
+             process.stdout.write(`DEBUG: [InterpreterService Directive Case] Transformation NOT enabled (or check failed).\n`);
+          }
+        } // <<< END of replacement logic
+        
+        if (isImportDirective && 
+            currentState.isTransformationEnabled && 
+            currentState.isTransformationEnabled()) {
+          try {
+            logger.debug('Import directive in transformation mode, copying variables to original state');
+            
+            this.stateVariableCopier.copyAllVariables(
+              currentState,
+              state,
+              {
+                skipExisting: false,
+                trackContextBoundary: false,
+                trackVariableCrossing: false
+              }
+            );
+          } catch (e) {
+            logger.debug('Error copying variables from import to original state', { error: e });
           }
         }
-      );
+        
+        break;
+
+      default:
+        throw new MeldInterpreterError(
+          `Unknown node type: ${node.type}`,
+          'unknown_node',
+          convertLocation(node.location)
+        );
     }
+
+    // --- REVISED LOGIC for returning state --- 
+    let finalState = currentState; // Start with the state potentially modified within the switch block
+
+    // If the node itself was transformed (e.g., TextNode with {{, VariableReference), 
+    // add the transformed version to a clone of the finalState.
+    if (transformedNode) {
+      process.stdout.write(`DEBUG: [InterpreterService.interpretNode] Applying transformedNode (Type: ${transformedNode.type}). Cloning state ${finalState.getStateId()}.\n`);
+      finalState = finalState.clone(); // Clone the potentially modified state
+      finalState.addNode(transformedNode); 
+      process.stdout.write(`DEBUG: [InterpreterService.interpretNode] Added transformedNode. New state ID: ${finalState.getStateId()}, Node Count: ${finalState.getNodes()?.length}\n`);
+    } else {
+       // Log if no transformation occurred for this specific node
+       // Ensure we are returning the state potentially modified by a directive handler
+       process.stdout.write(`DEBUG: [InterpreterService.interpretNode] No direct node transformation for ${node.type}. Using state potentially modified by handler (ID: ${finalState.getStateId()}).\n`);
+    }
+
+    process.stdout.write(`DEBUG: [InterpreterService.interpretNode EXIT] Returning State ID: ${finalState.getStateId() ?? 'N/A'}\n`);
+    return finalState;
   }
 
   async createChildContext(

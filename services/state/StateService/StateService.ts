@@ -65,6 +65,7 @@ export class StateService implements IStateService {
   private trackingServiceClientFactory?: StateTrackingServiceClientFactory;
   private trackingClient?: IStateTrackingServiceClient;
   private factoryInitialized: boolean = false;
+  private _parentState?: IStateService;
 
   /**
    * Creates a new StateService instance using dependency injection
@@ -109,6 +110,9 @@ export class StateService implements IStateService {
       
       this.initializeState(actualParentState);
     }
+    
+    // Store the parent state reference
+    this._parentState = parentState;
   }
 
   /**
@@ -337,6 +341,12 @@ export class StateService implements IStateService {
         text // Use the map with the new rich object
       }
     }, `setTextVar:${name}`);
+    
+    // --- Add Log ---
+    const checkVar = this.getTextVar(name); // Read it back immediately
+    process.stdout.write(`DEBUG: [StateService.setTextVar POST-UPDATE] Var '${name}' read back: ${checkVar ? JSON.stringify(checkVar.value) : 'NOT FOUND'}. State ID: ${this.getStateId()}\n`);
+    // -------------
+
     return variable; // Return the created object
   }
 
@@ -1057,22 +1067,49 @@ export class StateService implements IStateService {
 
   // Implement generic getVariable
   getVariable(name: string, type?: VariableType): MeldVariable | undefined {
+    let variable: MeldVariable | undefined = undefined;
+
+    // Check local state first based on type hint or by checking all types
     if (type) {
       switch (type) {
-        case VariableType.TEXT: return this.getTextVar(name);
-        case VariableType.DATA: return this.getDataVar(name);
-        case VariableType.PATH: return this.getPathVar(name);
-        case VariableType.COMMAND: return this.getCommandVar(name);
-        default: return undefined;
+        case VariableType.TEXT: 
+          variable = this.currentState.variables.text.get(name);
+          break;
+        case VariableType.DATA: 
+          variable = this.currentState.variables.data.get(name);
+          break;
+        case VariableType.PATH: 
+          variable = this.currentState.variables.path.get(name);
+          break;
+        case VariableType.COMMAND: 
+          variable = this.currentState.commands.get(name);
+          break;
       }
     } else {
       // Check in order if type not specified
-      return this.getTextVar(name) 
-          ?? this.getDataVar(name) 
-          ?? this.getPathVar(name) 
-          ?? this.getCommandVar(name) 
-          ?? undefined;
+      variable = this.currentState.variables.text.get(name) 
+          ?? this.currentState.variables.data.get(name) 
+          ?? this.currentState.variables.path.get(name) 
+          ?? this.currentState.commands.get(name);
     }
+    
+    // If found locally, return it
+    if (variable) {
+        // Optional: Add log for local find
+        // process.stdout.write(`DEBUG: [StateService.getVariable] Found '${name}' locally in State ${this.getStateId()}\n`);
+        return variable;
+    }
+
+    // If not found locally, check parent state (RECURSIVE)
+    const parentService = this.getParentState();
+    if (parentService) {
+       process.stdout.write(`DEBUG: [StateService.getVariable] '${name}' not found locally (State ${this.getStateId()}), checking parent (State ${parentService.getStateId()})...\n`);
+       // IMPORTANT: Pass the original type hint to the parent call
+       return parentService.getVariable(name, type); 
+    }
+    
+    process.stdout.write(`DEBUG: [StateService.getVariable] '${name}' not found locally (State ${this.getStateId()}) and no parent.\n`);
+    return undefined;
   }
 
   // Implement generic setVariable
@@ -1161,7 +1198,8 @@ export class StateService implements IStateService {
     // which is currently not stored directly. We need to modify how parent is tracked.
     // For now, return undefined. This might need a bigger change if parent access is crucial.
     // TODO: Revisit parent state tracking if needed for functionality.
-    logger.warn('getParentState() is not fully implemented and may return undefined.');
-    return undefined; 
+    // logger.warn('getParentState() is not fully implemented and may return undefined.');
+    // return undefined; 
+    return this._parentState;
   }
 } 

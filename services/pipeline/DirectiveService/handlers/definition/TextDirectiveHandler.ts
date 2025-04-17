@@ -260,6 +260,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       
       // Use IStateService method to set the variable
       await state.setTextVar(identifier, resolvedValue);
+      process.stdout.write(`DEBUG: [TextDirectiveHandler] setTextVar completed for: ${identifier}. State ID: ${state.getStateId()}\n`);
 
       // Return the updated state
       return state as IStateService;

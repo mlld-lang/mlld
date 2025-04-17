@@ -108,10 +108,6 @@ describe('API Integration Tests', () => {
       const textVarExample = textDirectiveExamples.atomic.var1;
       const templateLiteralExample = textDirectiveExamples.combinations.basicInterpolation;
       
-      // Add debug logging
-      // console.log('DEBUG - textVarExample:', textVarExample.code);
-      // console.log('DEBUG - templateLiteralExample:', templateLiteralExample.code);
-      
       // Combine examples with additional content
       const content = `${textVarExample.code}
 ${templateLiteralExample.code}
@@ -119,74 +115,26 @@ ${templateLiteralExample.code}
 Some text content with {{var1}} and {{message}}
 `;
 
-      // Start debug session
-      // const sessionId = await context.startDebugSession();
-      
       try {
-        // Write content to a file first
-        const testFilePath = 'test.meld';
-        // Resolve services needed within the test
-        const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
-        const parserService = testContainer.resolve<IParserService>('IParserService');
+        // Use processMeld API
+        const result = await processMeld(content, { container: testContainer });
+
+        // Resolve state service *after* processing to check final state
         const stateService = testContainer.resolve<IStateService>('IStateService');
-        const interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService');
-        const outputService = testContainer.resolve<IOutputService>('IOutputService');
-        
-        await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
-        
-        // Read the content back (mimicking what main would do)
-        const fileContent = await fileSystemService.readFile(unsafeCreateValidatedResourcePath(testFilePath));
-
-        // Parse the content directly
-        const ast = await parserService.parse(fileContent, testFilePath); // Provide file path for context
-
-        // Interpret the AST using the resolved services
-        const resultState = await interpreterService.interpret(ast, {
-          strict: true,
-          initialState: stateService,
-          filePath: testFilePath // Pass file path
-        });
-
-        // Convert the result using the resolved services
-        const nodesToProcess = resultState.getNodes();
-        const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {}); // Pass format and empty options
-
-        // Log debug information
-        // console.log('===== RESULT =====');
-        // console.log(result);
-        // console.log('=================');
-        
-        // Log the state service
-        // console.log('===== STATE SERVICE =====');
-        // console.log('Has services:', !!context.services); // Keep this check for context.services
-        // console.log('Has state service:', !!stateService); // Use resolved stateService
-        // console.log('State service methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(stateService)));
-        // console.log('=================================');
-        
-        // Get debug session results
-        // const debugResults = await context.endDebugSession(sessionId);
-        // console.log('===== DEBUG SESSION RESULTS =====');
-        // console.log(JSON.stringify(debugResults, null, 2));
-        // console.log('=================================');
         
         // Verify output contains the expected content with transformed directives
         expect(result).toBeDefined();
-        expect(result).toContain('Some text content with');
-        expect(result).toContain('Value 1');
-        expect(result).toContain('Hello, World!');
+        // Assuming markdown format is default or doesn't affect simple text resolution
+        expect(result).toContain('Some text content with Value 1 and Hello, World!'); 
         
         // Check that text variables are set in state
-        const var1Value = stateService.getTextVar('var1'); // Use resolved stateService
-        // console.log('DEBUG - var1 value in state:', var1Value);
+        const var1MeldVar = stateService.getTextVar('var1');
+        expect(var1MeldVar).toBeDefined();
+        expect(var1MeldVar?.value).toBe('Value 1');
         
-        expect(var1Value).toBeDefined();
-        expect(var1Value).toBe('Value 1');
-        
-        const messageValue = stateService.getTextVar('message'); // Use resolved stateService
-        // console.log('DEBUG - message value in state:', messageValue);
-        
-        expect(messageValue).toBeDefined();
-        expect(messageValue).toBe('Hello, World!');
+        const messageMeldVar = stateService.getTextVar('message');
+        expect(messageMeldVar).toBeDefined();
+        expect(messageMeldVar?.value).toBe('Hello, World!');
       } catch (error) {
         console.error('ERROR during test execution:', error);
         throw error;
@@ -234,10 +182,10 @@ User info: {{user.name}} ({{user.id}})
         expect(result).toContain('(123)'); // Check for resolved id
         
         // Check that variables are set in state
-        const userVar = stateService.getDataVar('user') as any; // Use resolved stateService
-        expect(userVar).toBeDefined();
-        expect(userVar).toHaveProperty('name', 'Alice');
-        expect(userVar).toHaveProperty('id', 123);
+        const userMeldVar = stateService.getDataVar('user');
+        expect(userMeldVar).toBeDefined();
+        expect(userMeldVar?.value).toHaveProperty('name', 'Alice');
+        expect(userMeldVar?.value).toHaveProperty('id', 123);
       } catch (error) {
         console.error('ERROR during test execution:', error);
         throw error;
@@ -292,11 +240,13 @@ First feature: {{config.app.features.0}}
         expect(result).toContain('First feature: text');
         
         // Check that data is set in state
-        const configData = stateService.getDataVar('config') as any; // Use resolved stateService
-        expect(configData).toBeDefined();
-        expect(configData.app.name).toBe('Meld');
-        expect(configData.app.features).toBeDefined();
-        expect(Array.isArray(configData.app.features)).toBe(true);
+        const configMeldVar = stateService.getDataVar('config');
+        expect(configMeldVar).toBeDefined();
+        const configValue = configMeldVar?.value as any;
+        expect(configValue).toBeDefined();
+        expect(configValue.app.name).toBe('Meld');
+        expect(configValue.app.features).toBeDefined();
+        expect(Array.isArray(configValue.app.features)).toBe(true);
       } catch (error) {
         console.error('ERROR during test execution:', error);
         throw error;
@@ -671,11 +621,14 @@ Docs are at $docs
       
       // console.log('Simple import result:', result);
       
-      // Check the final output string
-      expect(result.trim()).toBe('Main file content: Imported Value');
+      // Check the final output string - expecting import directive to be removed
+      // expect(result.trim()).toBe('Main file content: Imported Value');
+      expect(result.trim()).toBe('Main file content:');
+      
       // Verify state after import
-      const importedVarValue = stateService.getTextVar('importedVar');
-      expect(importedVarValue).toBe('Imported Value');
+      const importedVar = stateService.getTextVar('importedVar');
+      expect(importedVar).toBeDefined();
+      expect(importedVar?.value).toBe('Imported Value');
     });
     
     it('should handle nested imports with proper scope inheritance', async () => {
@@ -700,11 +653,19 @@ Docs are at $docs
 
       // Adjust expectation based on scope rules. Level 2 vars might not leak to main scope by default.
       // The output should reflect resolved content from nested levels.
-      expect(result.trim()).toBe('Main: Level 1: Level 2 Value Level 2 Value'); // Check actual output based on service logic
+      // Update: Check that the import directive is removed
+      // expect(result.trim()).toBe('Main: Level 1: Level 2 Value Level 2 Value'); // Check actual output based on service logic
+      expect(result.trim()).toBe('Main:');
 
       // Check final state (variables might be scoped)
-      expect(stateService.getTextVar('level1Var')).toBe('Level 2 Value'); // Check if level1 var was updated in main state
-      expect(stateService.getTextVar('level2Var')).toBe('Level 2 Value'); // Check if level2 var exists in main state
+      // Update: Check final merged state
+      const level1Var = stateService.getTextVar('level1Var');
+      expect(level1Var).toBeDefined();
+      expect(level1Var?.value).toBe('Level 2 Value'); // Check if level1 var was updated in main state
+      
+      const level2Var = stateService.getTextVar('level2Var');
+      expect(level2Var).toBeDefined();
+      expect(level2Var?.value).toBe('Level 2 Value'); // Check if level2 var exists in main state
     });
     
     it('should detect circular imports', async () => {

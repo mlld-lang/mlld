@@ -144,7 +144,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     
     expect(result).toBe('item2');
     // Verify getVariable was called
-    expect(stateService.getVariable).toHaveBeenCalledWith('data');
+    expect(stateService.getVariable).toHaveBeenCalledWith('data', VariableType.DATA);
   });
 
   it('should fall back to parser client when parser service fails', async () => {
@@ -185,7 +185,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     const result = await resolver.resolve(node, resolutionContext);
     expect(result).toBe('value2');
     // Verify getVariable was called
-    expect(stateService.getVariable).toHaveBeenCalledWith('data');
+    expect(stateService.getVariable).toHaveBeenCalledWith('data', VariableType.DATA);
   });
 
   it('should provide detailed error information for field access failures', async () => {
@@ -230,7 +230,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     }
 
     // Verify getVariable was called before the error
-    expect(stateService.getVariable).toHaveBeenCalledWith('data');
+    expect(stateService.getVariable).toHaveBeenCalledWith('data', VariableType.DATA);
   });
 
   it('should return empty string for missing fields when strict mode is off', async () => {
@@ -249,7 +249,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     const result = await resolver.resolve(node, nonStrictContext);
     expect(result).toBe('');
     // Verify getVariable was called
-    expect(stateService.getVariable).toHaveBeenCalledWith('data');
+    expect(stateService.getVariable).toHaveBeenCalledWith('data', VariableType.DATA);
   });
 
   it('should handle errors in nested variable resolution', async () => {
@@ -296,7 +296,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     expect(result).toBe(mockOuterVar.value);
         
     // Expect getVariable to be called for the initial identifier
-    expect(stateService.getVariable).toHaveBeenCalledWith('outer');
+    expect(stateService.getVariable).toHaveBeenCalledWith('outer', VariableType.TEXT);
     // Expect resolveInContext NOT to have been called by the resolver itself
     expect(resolutionService.resolveInContext).not.toHaveBeenCalled();
   });

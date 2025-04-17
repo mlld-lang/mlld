@@ -149,7 +149,10 @@ export class StateFactory implements IStateFactory {
       commands: newCommandsMap, // Use new commands map
       imports: new Set(updates.imports ?? state.imports),
       nodes: [...(updates.nodes ?? state.nodes)],
-      transformedNodes: updates.transformedNodes !== undefined ? [...updates.transformedNodes] : state.transformedNodes,
+      // Ensure transformedNodes is always a new array copy if defined
+      transformedNodes: updates.transformedNodes !== undefined 
+                          ? [...updates.transformedNodes] 
+                          : state.transformedNodes ? [...state.transformedNodes] : undefined,
       filePath: updates.filePath ?? state.filePath,
       parentState: updates.parentState ?? state.parentState
     };

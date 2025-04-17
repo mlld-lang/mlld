@@ -437,61 +437,47 @@ export class ResolutionService implements IResolutionService {
   }
 
   /**
-   * Internal helper to resolve an array of AST nodes into a single string.
-   * Handles TextNodes and delegates VariableReferenceNodes to the appropriate resolver.
+   * Resolves an array of AST nodes (TextNode, VariableReferenceNode) into a single string.
+   * This is the core logic for handling InterpolatableValue arrays.
    */
   public async resolveNodes(nodes: InterpolatableValue, context: ResolutionContext): Promise<string> {
-    logger.debug(`[ResService.resolveNodes ENTRY] strict=${context.strict}, nodeCount=${nodes?.length}`); // Log context
+    // logger.debug(`[ResolutionService.resolveNodes ENTRY] Resolving ${nodes?.length ?? 0} nodes. Context: ${context.currentFilePath}, Strict: ${context.strict}, Depth: ${context.depth}`);
+    process.stdout.write(`DEBUG: [ResService.resolveNodes ENTRY] Resolving ${nodes?.length ?? 0} nodes. Path: ${context.currentFilePath}, Strict: ${context.strict}, Depth: ${context.depth}\n`);
     let result = '';
-    if (!Array.isArray(nodes)) {
-      logger.warn('resolveNodes called with non-array input', { inputType: typeof nodes });
-      // Attempt to handle potential single node case, otherwise return empty
-      if (nodes && typeof nodes === 'object' && 'type' in nodes) {
-        nodes = [nodes as TextNode | VariableReferenceNode];
-      } else {
-        return '';
-      }
+    if (!nodes) {
+      // logger.warn('[ResolutionService.resolveNodes] Received null or undefined nodes array.');
+      process.stdout.write(`WARN: [ResService.resolveNodes] Received null or undefined nodes array.\n`);
+      return result;
     }
 
     for (const node of nodes) {
       if (node.type === 'Text') {
         result += node.content;
       } else if (node.type === 'VariableReference') {
-        const varNode = node; 
-        logger.info('[resolveNodes] Attempting to resolve VariableReferenceNode:', { identifier: varNode.identifier }); // Keep original log
+        // logger.debug(`[ResolutionService.resolveNodes] Resolving VariableReference: ${node.identifier}`);
+        process.stdout.write(`DEBUG: [ResService.resolveNodes] Resolving VariableReference: ${node.identifier}\n`);
         try {
-          const resolvedValue = await this.variableReferenceResolver.resolve(varNode, context);
-          logger.debug(`[resolveNodes] Successfully resolved node ${varNode.identifier} ...`);
-
-          if (Array.isArray(resolvedValue)) { 
-            result += await this.resolveNodes(resolvedValue, context);
-          } else {
-            result += resolvedValue;
+          const resolvedValue = await this.variableReferenceResolver.resolve(node, context);
+          // logger.debug(`[ResolutionService.resolveNodes] Resolved ${node.identifier} to: '${resolvedValue.substring(0,50)}...'`);
+          process.stdout.write(`DEBUG: [ResService.resolveNodes] Resolved ${node.identifier} to: '${resolvedValue.substring(0,50)}...'\n`);
+          result += resolvedValue;
+        } catch (error) {
+          // logger.error(`[ResolutionService.resolveNodes] Error resolving VariableReference ${node.identifier}`, { error });
+          process.stderr.write(`ERROR: [ResService.resolveNodes] Error resolving VariableReference ${node.identifier}: ${error instanceof Error ? error.message : String(error)}\n`);
+          // Propagate error if strict mode
+          if (context.strict && error instanceof MeldResolutionError) {
+            throw error;
           }
-        } catch (error) { 
-          logger.error('[ResService.resolveNodes CATCH] Error for VariableReferenceNode', { error, identifier: varNode.identifier, strict: context.strict }); // Log context
-          if (context.strict) { 
-              if (error instanceof Error && 'code' in error && 'name' in error) { 
-                  logger.debug('[ResService.resolveNodes CATCH] Strict mode, re-throwing MeldError'); // Log before throw
-                  throw error; 
-              } else {
-                   logger.debug('[ResService.resolveNodes CATCH] Strict mode, wrapping and throwing non-MeldError'); // Log before throw
-                   const meldError = new MeldResolutionError(`Failed to resolve node value: ${varNode.identifier}`, { // More specific message
-                        code: 'E_NODE_RESOLUTION_FAILED',
-                        details: { node: varNode, context },
-                        cause: error
-                   });
-                   throw meldError;
-              }
-          }
-          result += context.flags.preserveUnresolved ? `{{${varNode.identifier}}}` : ''; 
+          // Otherwise, append nothing or potentially handle differently based on flags
         }
       } else {
-        logger.warn(`resolveNodes: Skipping unexpected node type: ${(node as MeldNode).type}`); 
+        // This block should theoretically be unreachable if InterpolatableValue type guard is correct
+        // logger.warn(`[ResolutionService.resolveNodes] Encountered unexpected node type in InterpolatableValue array.`);
+        process.stdout.write(`WARN: [ResService.resolveNodes] Encountered unexpected node type in InterpolatableValue array.\n`);
       }
     }
-    
-    logger.debug(`resolveNodes: Final resolved string: ${result.substring(0,100)}`);
+    // logger.debug(`[ResolutionService.resolveNodes EXIT] Final resolved string length: ${result.length}`);
+    process.stdout.write(`DEBUG: [ResService.resolveNodes EXIT] Final resolved string length: ${result.length}\n`);
     return result;
   }
 
@@ -1084,7 +1070,7 @@ export class ResolutionService implements IResolutionService {
       // process.stdout.write(`DEBUG: [ResService.enableTracking] NEW tracker instance created.\n`);
       logger.info('Resolution tracking enabled.');
     } 
-    this.resolutionTracker.configure(config);
+    this.resolutionTracker?.configure(config);
     // process.stdout.write(`DEBUG: [ResService.enableTracking] Configuring tracker. Enabled: ${this.resolutionTracker.isEnabled()}\n`);
     if (this.variableReferenceResolver) {
         this.variableReferenceResolver.setTracker(this.resolutionTracker);

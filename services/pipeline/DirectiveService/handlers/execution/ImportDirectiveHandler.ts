@@ -1,8 +1,9 @@
 import type { DirectiveNode, MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types/index.js';
 import { VariableType } from '@core/types/variables.js';
 import type {
-  ImportDirectiveData
+  ImportDirectiveData,
 } from '@core/syntax/types/index.js';
+import type { StructuredPath } from '@core/syntax/types/nodes.js';
 import type {
   TextVariable,
   DataVariable,
@@ -15,9 +16,8 @@ import { VariableOrigin } from '@core/types/variables.js';
 import type { JsonValue } from '@core/types/common.js';
 import type {
   MeldPath,
-  StructuredPath
 } from '@core/types/paths.js';
-import type { DirectiveContext, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import type { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -304,15 +304,16 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       currentFilePath: string | undefined
     ): void {
     if (!sourceState || !targetState) {
-      logger.warn('Cannot import variables - null or undefined state');
+      process.stdout.write(`WARN: [ImportDirectiveHandler.importAllVariables] Cannot import variables - null or undefined state\n`);
       return;
     }
+    process.stdout.write(`DEBUG: [ImportDirectiveHandler.importAllVariables] ENTER. Source State ID: ${sourceState.getStateId()}, Target State ID: ${targetState.getStateId()}\n`);
 
     try {
       const textVars = sourceState.getAllTextVars();
-      process.stdout.write(`\nDEBUG: importAllVariables - textVars size: ${textVars?.size}\n`);
+      process.stdout.write(`DEBUG: [ImportDirectiveHandler.importAllVariables] Found ${textVars?.size ?? 0} text variables in source state.\n`);
       textVars.forEach((originalVar, key) => {
-        process.stdout.write(`\nDEBUG: importAllVariables - Processing text key: ${key}, value: ${originalVar?.value}\n`); 
+        process.stdout.write(`DEBUG: [ImportDirectiveHandler.importAllVariables] Processing text var: ${key}\n`);
         try {
           const metadata: VariableMetadata = {
             origin: VariableOrigin.IMPORT,
@@ -331,19 +332,17 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             value: originalVar.value,
             metadata: metadata
           };
-          process.stdout.write(`\nDEBUG: importAllVariables - Target is stateService? ${Object.is(targetState, (globalThis as any).__test_state_service)} Key: ${key}\n`); 
           targetState.setTextVar(key, newVar.value);
-          process.stdout.write(`\nDEBUG: Called targetState.setTextVar for ${key}\n`);
+          process.stdout.write(`DEBUG: [ImportDirectiveHandler.importAllVariables] Copied text var: ${key} to target state ${targetState.getStateId()}\n`);
         } catch (error) {
-          process.stdout.write(`\nERROR in importAllVariables textVar loop: ${error}\n`);
-          logger.warn(`Failed to import text variable ${key}`, { error });
+          process.stderr.write(`ERROR: [ImportDirectiveHandler.importAllVariables] Failed to copy text var ${key}: ${error instanceof Error ? error.message : String(error)}\n`);
         }
       });
 
       const dataVars = sourceState.getAllDataVars();
-      process.stdout.write(`\nDEBUG: importAllVariables - dataVars size: ${dataVars?.size}\n`); 
+      process.stdout.write(`DEBUG: [ImportDirectiveHandler.importAllVariables] Found ${dataVars?.size ?? 0} data variables in source state.\n`);
       dataVars.forEach((originalVar, key) => {
-         process.stdout.write(`\nDEBUG: importAllVariables - Processing data key: ${key}\n`);
+         process.stdout.write(`DEBUG: [ImportDirectiveHandler.importAllVariables] Processing data var: ${key}\n`);
         try {
           const valueCopy = JSON.parse(JSON.stringify(originalVar.value)) as JsonValue;
           const metadata: VariableMetadata = {
@@ -363,12 +362,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             value: valueCopy,
             metadata: metadata
           };
-          process.stdout.write(`\nDEBUG: importAllVariables - Target is stateService? ${Object.is(targetState, (globalThis as any).__test_state_service)} Key: ${key}\n`); 
           targetState.setDataVar(key, newVar.value);
-          process.stdout.write(`\nDEBUG: Called targetState.setDataVar for ${key}\n`);
+          process.stdout.write(`DEBUG: [ImportDirectiveHandler.importAllVariables] Copied data var: ${key} to target state ${targetState.getStateId()}\n`);
         } catch (error) {
-          process.stdout.write(`\nERROR in importAllVariables dataVar loop: ${error}\n`);
-          logger.warn(`Failed to import data variable ${key}`, { error });
+          process.stderr.write(`ERROR: [ImportDirectiveHandler.importAllVariables] Failed to copy data var ${key}: ${error instanceof Error ? error.message : String(error)}\n`);
         }
       });
 
@@ -436,8 +433,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     sourcePath: string | undefined,
     currentFilePath: string | undefined
   ): Promise<void> {
+    process.stdout.write(`DEBUG: [ImportDirectiveHandler.processStructuredImports] ENTER. Source State ID: ${sourceState.getStateId()}, Target State ID: ${targetState.getStateId()}, Import count: ${imports.length}\n`);
     for (const item of imports) {
-      process.stdout.write(`\nDEBUG: processStructuredImports - Processing item: ${item.name}\n`);
+      process.stdout.write(`DEBUG: [ImportDirectiveHandler.processStructuredImports] Processing item: ${item.name} (alias: ${item.alias ?? 'none'})\n`);
       try {
         const { name, alias } = item;
         const targetName = alias || name;
@@ -457,9 +455,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             modifiedAt: Date.now(),
           };
           const newVar: TextVariable = { type: VariableType.TEXT, name: targetName, value: textVar.value, metadata: metadata };
-          process.stdout.write(`\nDEBUG: processStructuredImports - Target is stateService? ${Object.is(targetState, (globalThis as any).__test_state_service)} Key: ${targetName}\n`);
           targetState.setTextVar(targetName, newVar.value);
-          process.stdout.write(`\nDEBUG: Called targetState.setTextVar for ${targetName}\n`);
+          process.stdout.write(`DEBUG: [ImportDirectiveHandler.processStructuredImports] Copied text var ${name} as ${targetName} to target state ${targetState.getStateId()}\n`);
           variableFound = true;
           continue;
         }
@@ -479,9 +476,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           };
           const valueCopy = JSON.parse(JSON.stringify(dataVar.value)) as JsonValue;
           const newVar: DataVariable = { type: VariableType.DATA, name: targetName, value: valueCopy, metadata: metadata };
-          process.stdout.write(`\nDEBUG: processStructuredImports - Target is stateService? ${Object.is(targetState, (globalThis as any).__test_state_service)} Key: ${targetName}\n`); 
           targetState.setDataVar(targetName, newVar.value);
-          process.stdout.write(`\nDEBUG: Called targetState.setDataVar for ${targetName}\n`);
+          process.stdout.write(`DEBUG: [ImportDirectiveHandler.processStructuredImports] Copied data var ${name} as ${targetName} to target state ${targetState.getStateId()}\n`);
           variableFound = true;
           continue;
         }
@@ -524,11 +520,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
 
         if (!variableFound) {
-           logger.warn(`Variable "${name}" not found in imported state for structured import.`);
+           process.stdout.write(`WARN: [ImportDirectiveHandler.processStructuredImports] Variable "${name}" not found in source state ${sourceState.getStateId()} for structured import.\n`);
         }
       } catch (error) {
-         process.stdout.write(`\nERROR in processStructuredImports loop: ${error}\n`);
-         logger.warn(`Failed to import variable ${item.name} as ${item.alias || item.name}`, { error });
+         process.stderr.write(`ERROR: [ImportDirectiveHandler.processStructuredImports] Failed to import variable ${item.name} as ${item.alias || item.name}: ${error instanceof Error ? error.message : String(error)}\n`);
       }
     }
   }
