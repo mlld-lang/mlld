@@ -2,71 +2,181 @@
 
 This document outlines the standard patterns and best practices for testing in the Meld codebase.
 
-## Test Setup
+## Test Setup Strategies
 
-### Using TestContextDI
+Two primary strategies exist for setting up DI containers in tests:
 
-All tests should use `TestContextDI` for setup:
+1.  **`TestContextDI`:** Convenient for simple unit tests or when only basic fixture loading and mock FS are needed. It handles some registrations automatically but can sometimes hide complex DI resolution issues.
+2.  **Manual Child Container:** Recommended for integration tests or complex unit tests involving multiple services, factories, or potential DI cycles. Provides explicit control over registrations and mimics application behavior more closely.
+
+### Using `TestContextDI` (for Simple Cases)
+
+Use `TestContextDI` for basic setup and potentially simple mocking:
 
 ```typescript
 import { TestContextDI } from '@tests/utils/di';
 
-describe('MyService', () => {
+describe('MySimpleService', () => {
   let context: TestContextDI;
   
   beforeEach(async () => {
-    // Create an isolated test context
     context = TestContextDI.createIsolated();
+    // await context.initialize(); // Only if using context.fs or context.fixtures
   });
   
   afterEach(async () => {
-    // Clean up resources
     await context?.cleanup();
   });
   
   it('should do something', async () => {
-    // Register mocks
-    context.registerMock('IMyService', mockService);
+    // Register MOCKS using TestContextDI
+    const mockDep = { someMethod: vi.fn() };
+    context.registerMock('IDependency', mockDep);
     
+    // Register the REAL service implementation (if not already globally registered)
+    context.container.register('IMySimpleService', { useClass: MySimpleService });
+
     // Resolve service
-    const service = await context.resolve('IMyService');
+    const service = await context.resolve('IMySimpleService');
     
-    // Test implementation
-    const result = await service.doSomething();
-    expect(result).toBe('expected');
+    // Test implementation...
   });
 });
 ```
 
-### Service Resolution
+### Using a Manual Child Container (Recommended for Complex Tests)
 
-Always use async resolution:
-
-```typescript
-// CORRECT
-const service = await context.resolve<IMyService>('IMyService');
-
-// INCORRECT - Don't use synchronous resolution
-const service = context.resolveSync<IMyService>('IMyService');
-```
-
-### Mock Registration
-
-Register mocks using the test context:
+This approach offers more control and transparency for integration tests or services with complex dependencies.
 
 ```typescript
-// Register a mock implementation
-context.registerMock('IMyService', {
-  doSomething: vi.fn().mockReturnValue('mocked result')
+import { TestContextDI } from '@tests/utils/di'; // Still useful for fixtures/FS
+import { container, type DependencyContainer } from 'tsyringe';
+import { vi } from 'vitest';
+// Import necessary services, interfaces, factories, mocks...
+import { MyService } from '@services/MyService.js';
+import type { IMyService } from '@services/IMyService.js';
+import { MyDependencyFactory } from '@services/MyDependencyFactory.js';
+import type { IMyDependency } from '@services/IMyDependency.js';
+import type { IFileSystem } from '@services/fs/IFileSystem.js';
+
+describe('MyService Integration', () => {
+  let context: TestContextDI; // For fixtures/FS access
+  let testContainer: DependencyContainer; // Our manual container
+  let myService: IMyService;
+  let mockDependency: IMyDependency;
+
+  beforeEach(async () => {
+    // 1. Setup TestContextDI *only* for FS/Fixtures if needed
+    context = TestContextDI.createIsolated();
+    await context.initialize(); // Creates context.fs
+
+    // 2. Create the manual child container
+    testContainer = container.createChildContainer();
+
+    // 3. Create Mocks (Manual Objects Preferred)
+    // Mock the dependency (manual object + spyOn)
+    mockDependency = {
+      someMethod: vi.fn(),
+      // other methods/props...
+    } as IMyDependency; 
+    vi.spyOn(mockDependency, 'someMethod').mockResolvedValue('mocked value');
+
+    // Mock the factory that creates the dependency (manual object + spyOn)
+    const mockDependencyFactory = {
+      create: vi.fn(),
+      // other factory methods...
+    } as unknown as MyDependencyFactory; // Use 'as unknown as' if needed
+    vi.spyOn(mockDependencyFactory, 'create').mockReturnValue(mockDependency);
+
+    // 4. Register Dependencies in Manual Container
+    //    Order: Infrastructure -> Mocks -> Real Services
+    
+    // Register Infrastructure (e.g., mock FS from TestContextDI)
+    testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
+    // Register other infrastructure mocks (like IURLContentResolver) if needed...
+
+    // Register Mocks (using the correct token - Class vs. String)
+    // Use the CLASS token for the factory registration
+    testContainer.registerInstance(MyDependencyFactory, mockDependencyFactory); 
+    // If MyService injected `IMyDependency` directly (not via factory), you would register the mock instance:
+    // testContainer.registerInstance<IMyDependency>('IMyDependency', mockDependency);
+
+    // Register REAL Service Implementation(s)
+    testContainer.register('IMyService', { useClass: MyService });
+    // Register other real services needed by MyService if they aren't globally registered
+
+    // 5. Resolve the Top-Level Service Under Test
+    myService = testContainer.resolve<IMyService>('IMyService');
+  });
+
+  afterEach(async () => {
+    // Clean up the manual container *first*
+    testContainer?.clearInstances();
+    // Then cleanup TestContextDI if used
+    await context?.cleanup();
+  });
+
+  it('should interact with its dependency', async () => {
+    const result = await myService.callDependencyMethod();
+    expect(mockDependencyFactory.create).toHaveBeenCalled(); // Verify factory was used
+    expect(mockDependency.someMethod).toHaveBeenCalled(); // Verify dependency method was called
+    expect(result).toBe('mocked value');
+  });
 });
-
-// Or use the mock helpers
-import { createServiceMock } from '@tests/utils/di';
-const mockService = createServiceMock();
-context.registerMock('IMyService', mockService);
 ```
 
-### Error Testing
+## Service Resolution
+
+Always use async resolution from the appropriate container (`context` or `testContainer`). Note: `resolve` itself is synchronous, but the setup (`initialize`) might be async.
+
+```typescript
+// Using TestContextDI
+const service = context.resolve<IMyService>('IMyService');
+
+// Using Manual Child Container (after async setup in beforeEach)
+const service = testContainer.resolve<IMyService>('IMyService');
+```
+
+## Dependency Registration and Mocking
+
+Register dependencies explicitly in the test container (`context.container` or `testContainer`).
+
+1.  **Token Matching:** The token used for registration (`register` or `registerInstance`) **must** match the token used in the `@inject()` decorator of the consuming service (Class vs. String). Mismatches cause the *real* dependency to be resolved instead of the mock.
+
+2.  **Manual Mock Objects + `vi.spyOn` (Recommended):** Create plain JavaScript objects implementing the interface/class structure, using `vi.fn()` for methods. Add any required properties (even if `undefined`). Then, use `vi.spyOn()` on these manual objects. This avoids issues observed with `mock<T>()` from `vitest-mock-extended` where methods might not exist when `vi.spyOn` is called.
+
+    ```typescript
+    // Manual Mock Object
+    const manualMock = {
+      methodToSpyOn: vi.fn(),
+      requiredProperty: undefined // Add properties required by the type
+    } as unknown as IMyDependency; // Cast if needed
+
+    // Spy on the method AFTER creating the object
+    vi.spyOn(manualMock, 'methodToSpyOn').mockResolvedValue('Success');
+
+    // Register the instance
+    testContainer.registerInstance<IMyDependency>('IMyDependency', manualMock);
+    ```
+
+3.  **Registering Real Services:** For the service under test, or dependencies you want to use the real implementation for, register the class:
+
+    ```typescript
+    import { MyService } from '@services/MyService.js';
+    
+    testContainer.register('IMyService', { useClass: MyService });
+    ```
+
+4.  **Registering Infrastructure Mocks:** Common mocks like `IFileSystem` are often needed by real services. Obtain these from `TestContextDI` (if used) or create/register them manually.
+
+    ```typescript
+    // Get from TestContextDI (after await context.initialize())
+    testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
+    ```
+
+5.  **Asserting Mock Calls:** Prefer asserting that mock methods were called (`toHaveBeenCalled`, `toHaveBeenCalledWith`) over asserting side effects in state, especially when dealing with complex state logic or potential cloning issues.
+
+## Error Testing
 
 Use the error testing utilities:
 
@@ -74,44 +184,27 @@ Use the error testing utilities:
 import { expectToThrowWithConfig } from '@tests/utils/errorTestUtils';
 
 it('should handle errors', async () => {
+  // Assuming 'myService' was resolved in beforeEach
   await expectToThrowWithConfig(async () => {
-    await service.methodThatThrows();
+    await myService.methodThatThrows();
   }, {
-    errorType: MeldError,
-    code: ErrorCode.VALIDATION_ERROR,
-    message: 'Expected error message'
+    errorType: MeldError, // Or specific MeldXxxError
+    code: 'EXPECTED_CODE', // Use specific error code string
+    message: /optional regex message pattern/ // Optional: Check message contains/matches
   });
 });
 ```
 
 ## Best Practices
 
-1. **Use Isolated Containers**: Always use `TestContextDI.createIsolated()` for test setup to prevent test interference.
-
-2. **Proper Cleanup**: Always clean up test contexts in `afterEach` blocks:
-   ```typescript
-   afterEach(async () => {
-     await context?.cleanup();
-   });
-   ```
-
-3. **Async Resolution**: Always use async/await with `context.resolve()`:
-   ```typescript
-   const service = await context.resolve<IMyService>('IMyService');
-   ```
-
-4. **Mock Registration**: Register mocks before resolving services that depend on them:
-   ```typescript
-   context.registerMock('IDependency', mockDependency);
-   const service = await context.resolve('IService');
-   ```
-
-5. **Error Handling**: Use the error testing utilities for consistent error validation:
-   ```typescript
-   await expectToThrowWithConfig(async () => {
-     await service.method();
-   }, expectedError);
-   ```
+1.  **Prefer Manual Child Containers**: Use `container.createChildContainer()` for integration tests or complex unit tests for better control and clarity. Use `TestContextDI` judiciously for simple cases or fixture/FS management.
+2.  **Explicit Dependency Registration**: Register mocks, real services, and infrastructure dependencies explicitly in the relevant test container.
+3.  **Verify Token Matching**: Ensure registration tokens (Class vs. String) match injection tokens.
+4.  **Use Manual Mock Objects + `vi.spyOn`**: Create mock objects manually before spying/configuring methods with `vi.spyOn` for reliability.
+5.  **Mock Direct Dependencies**: For unit/integration tests, aim to mock the direct dependencies of the service under test (unless testing the integration requires the real dependency).
+6.  **Proper Cleanup**: Always clean up the `testContainer` (using `clearInstances`) and `context` (using `cleanup`) in `afterEach` blocks, typically cleaning the testContainer first.
+7.  **Assert Mock Calls**: Prefer asserting mock interactions (`toHaveBeenCalledWith`, etc.) over state side-effects where state logic is complex or prone to test brittleness.
+8.  **Error Handling**: Use the `expectToThrowWithConfig` utility for consistent error validation, especially for async rejections.
 
 ## Common Patterns
 
@@ -181,17 +274,15 @@ const report = context.createDiagnosticReport();
 expect(report.leakDetection.enabled).toBe(true);
 ```
 
-## Migration Checklist
+## Checklist for Robust Tests
 
-When migrating existing tests:
-
-1. ✅ Replace `new TestContext()` with `TestContextDI.createIsolated()`
-2. ✅ Update imports to use `@tests/utils/di`
-3. ✅ Replace direct service creation with container resolution
-4. ✅ Add proper async/await for service resolution
-5. ✅ Add proper cleanup in afterEach blocks
-6. ✅ Update error testing to use `expectToThrowWithConfig`
-7. ✅ Replace manual mocking with `registerMock`
+1. ✅ **Choose Container Strategy**: Use Manual Child Container for complex tests, `TestContextDI` for simple ones.
+2. ✅ **Setup and Cleanup**: Initialize chosen container/context in `beforeEach`, clean up `testContainer` (`clearInstances`) and `context` (`cleanup`) in `afterEach`.
+3. ✅ **Register Dependencies Explicitly**: Register mocks (factories, services), real services, and infrastructure (FS, URLResolver) needed for the test.
+4. ✅ **Verify Token Matching**: Double-check registration tokens (Class vs. String) match `@inject` tokens.
+5. ✅ **Use Reliable Mocking**: Prefer manual mock objects (`{ method: vi.fn() }`) + `vi.spyOn` over `mock<T>()`.
+6. ✅ **Assert Mock Calls**: Favor `expect(mock.method).toHaveBeenCalledWith(...)` over checking resulting state values when possible.
+7. ✅ **Error Testing**: Use `expectToThrowWithConfig` for errors, especially async rejections.
 
 ## Known Issues & Troubleshooting
 

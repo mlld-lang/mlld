@@ -18,15 +18,36 @@ import {
 // Import run examples directly
 import runDirectiveExamplesModule from '@core/syntax/run.js';
 // Add imports for core services needed
+import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import { StateService } from '@services/state/StateService/StateService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js'; // Added for reading files
-import { unsafeCreateValidatedResourcePath, PathValidationContext, NormalizedAbsoluteDirectoryPath, createMeldPath, unsafeCreateNormalizedAbsoluteDirectoryPath } from '@core/types/paths.js'; // Import path helpers and types
-import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js'; // Correct import path
-import type { MeldNode, DirectiveNode } from '@core/syntax/types/index.js'; // Import AST node types
-import { processMeld } from '@api/index.js'; // Ensure processMeld is imported
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import { PathService } from '@services/fs/PathService/PathService.js'; // Import real PathService
+import type { IPathService } from '@services/fs/PathService/IPathService.js'; // Import real PathService
+import { unsafeCreateValidatedResourcePath, PathValidationContext, NormalizedAbsoluteDirectoryPath, createMeldPath, unsafeCreateNormalizedAbsoluteDirectoryPath } from '@core/types/paths.js';
+import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
+import type { MeldNode, DirectiveNode } from '@core/syntax/types/index.js';
+import { processMeld } from '@api/index.js';
+// === Manual DI Imports ===
+import { container, type DependencyContainer } from 'tsyringe';
+import { mock } from 'vitest-mock-extended';
+import { URL } from 'node:url';
+import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
+import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+import type { ILogger } from '@core/utils/logger.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js'; // Needed for PathService
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js'; // Needed for PathService
+// =========================
 
 // Define runDirectiveExamples from the module
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -36,41 +57,78 @@ function isDirectiveNode(node: MeldNode): node is DirectiveNode {
   return node.type === 'Directive';
 }
 
-// The centralized syntax examples above replace the need for getBackwardCompatibleExample
-// and getBackwardCompatibleInvalidExample from the old syntax-test-helpers.js
-
 describe('API Integration Tests', () => {
   let context: TestContextDI;
+  let testContainer: DependencyContainer; // Manual container
   let projectRoot: string;
-  // Add variable to hold resolved services for convenience
+  // Resolved services
   let parserService: IParserService;
   let interpreterService: IInterpreterService;
   let stateService: IStateService;
   let outputService: IOutputService;
   let fileSystemService: IFileSystemService;
+  let pathService: IPathService; // Add pathService
 
   beforeEach(async () => {
-    context = TestContextDI.create();
+    // 1. Setup TestContextDI for FS/Fixtures
+    context = TestContextDI.createIsolated();
     await context.initialize();
     projectRoot = '/project';
 
-    // Resolve services once for all tests in this describe block
-    parserService = context.resolveSync<IParserService>('IParserService');
-    interpreterService = context.resolveSync<IInterpreterService>('IInterpreterService');
-    stateService = context.resolveSync<IStateService>('IStateService');
-    outputService = context.resolveSync<IOutputService>('IOutputService');
-    fileSystemService = context.resolveSync<IFileSystemService>('IFileSystemService');
+    // 2. Create Manual Child Container
+    testContainer = container.createChildContainer();
 
-    // Add checks
-    if (!parserService || !interpreterService || !stateService || !outputService || !fileSystemService) {
+    // 3. Create Mocks
+    const mockDirectiveClient: IDirectiveServiceClient = { supportsDirective: vi.fn().mockReturnValue(true), handleDirective: vi.fn(async () => testContainer.resolve<IStateService>('IStateService')), getSupportedDirectives: vi.fn().mockReturnValue([]), validateDirective: vi.fn().mockReturnValue(undefined) };
+    vi.spyOn(mockDirectiveClient, 'supportsDirective'); vi.spyOn(mockDirectiveClient, 'handleDirective');
+    const mockDirectiveClientFactory = { createClient: vi.fn().mockReturnValue(mockDirectiveClient), directiveService: undefined } as unknown as DirectiveServiceClientFactory;
+    vi.spyOn(mockDirectiveClientFactory, 'createClient');
+    const mockResolutionService = mock<IResolutionService>();
+    const mockParserClientFactory = mock<ParserServiceClientFactory>();
+    // Mock FileSystemServiceClient for PathService dependency
+    const mockFsClient = mock<IFileSystemServiceClient>();
+    const mockFsClientFactory = { createClient: vi.fn().mockReturnValue(mockFsClient) } as unknown as FileSystemServiceClientFactory;
+    vi.spyOn(mockFsClientFactory, 'createClient');
+    const mockLogger = mock<ILogger>();
+    const mockURLContentResolver = { isURL: vi.fn().mockImplementation((path: string) => { try { new URL(path); return true; } catch { return false; } }), validateURL: vi.fn().mockImplementation(async (url: string) => url), fetchURL: vi.fn().mockImplementation(async (url: string) => ({ content: `Mock content for ${url}`})) };
+
+    // 4. Register Dependencies
+    // Infrastructure
+    testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
+    testContainer.registerInstance<IURLContentResolver>('IURLContentResolver', mockURLContentResolver);
+    testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger);
+    // Mocks for Services/Factories
+    testContainer.registerInstance(DirectiveServiceClientFactory, mockDirectiveClientFactory);
+    testContainer.registerInstance('IResolutionService', mockResolutionService);
+    testContainer.registerInstance('ParserServiceClientFactory', mockParserClientFactory);
+    testContainer.registerInstance(FileSystemServiceClientFactory, mockFsClientFactory); // Register FS Client Factory mock
+    // Real Services
+    testContainer.register('IStateService', { useClass: StateService });
+    testContainer.register('IParserService', { useClass: ParserService });
+    testContainer.register('IInterpreterService', { useClass: InterpreterService });
+    testContainer.register('IOutputService', { useClass: OutputService });
+    testContainer.register('IFileSystemService', { useClass: FileSystemService });
+    testContainer.register('IPathService', { useClass: PathService }); // Register real PathService
+
+    // 5. Resolve services from testContainer
+    parserService = testContainer.resolve<IParserService>('IParserService');
+    interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService');
+    stateService = testContainer.resolve<IStateService>('IStateService');
+    outputService = testContainer.resolve<IOutputService>('IOutputService');
+    fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
+    pathService = testContainer.resolve<IPathService>('IPathService'); // Resolve PathService
+
+    // Checks (optional but good practice)
+    if (!parserService || !interpreterService || !stateService || !outputService || !fileSystemService || !pathService) {
       throw new Error('Failed to resolve necessary services for tests');
     }
 
-    // Enable transformation - already done by setTransformationEnabled below
-    stateService.setTransformationEnabled(true);
+    // Enable transformation (Default behavior now, but keep if tests rely on specific state flags)
+    // stateService.setTransformationEnabled(true); // This method might be deprecated
   });
 
   afterEach(async () => {
+    testContainer?.clearInstances(); // Clear manual container first
     await context?.cleanup();
     vi.resetModules();
     vi.clearAllMocks();
@@ -116,7 +174,7 @@ Some text content with {{var1}} and {{message}}
         });
 
         // Convert the result using the resolved services
-        const nodesToProcess = resultState.getTransformedNodes();
+        const nodesToProcess = resultState.getNodes();
         const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {}); // Pass format and empty options
 
         // Log debug information
@@ -185,7 +243,7 @@ User info: {{user.name}} ({{user.id}})
           initialState: stateService,
           filePath: testFilePath
         });
-        const nodesToProcess = resultState.getTransformedNodes();
+        const nodesToProcess = resultState.getNodes();
         const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
 
         // Verify output contains the expected content with transformed directives
@@ -233,7 +291,7 @@ First feature: {{config.app.features.0}}
           initialState: stateService,
           filePath: testFilePath
         });
-        const nodesToProcess = resultState.getTransformedNodes();
+        const nodesToProcess = resultState.getNodes();
         const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
 
         // Verify output contains the expected content with transformed directives
@@ -279,7 +337,7 @@ Template result: {{template}}
           initialState: stateService,
           filePath: testFilePath
         });
-        const nodesToProcess = resultState.getTransformedNodes();
+        const nodesToProcess = resultState.getNodes();
         const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
 
         // Log debug information
@@ -376,7 +434,7 @@ Template result: {{template}}
           initialState: stateService,
           filePath: projectPathTestFilePath,
         });
-        const nodesToProcess = resultState.getTransformedNodes();
+        const nodesToProcess = resultState.getNodes();
         const projectPathResult = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
         
         console.log('Project path test result:', projectPathResult);
@@ -529,7 +587,7 @@ Docs are at $docs
       // pathService.setTestMode(false); // Method doesn't exist on interface
       
       try {
-        // Directly validate the path - this should PASS not fail since $PROJECTPATH is valid
+        // Directly validate the path - This should now work with real PathService and mocked FS Client Factory
         await expect(pathService.validatePath(structuredPath.raw, defaultValidationContext)).resolves.toBeDefined();
       } finally {
         // Restore original test mode setting
@@ -556,7 +614,7 @@ Docs are at $docs
             initialState: stateService,
             filePath: mainTestFilePath,
         });
-        const nodesToProcess = resultState.getTransformedNodes();
+        const nodesToProcess = resultState.getNodes();
         const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
 
         console.log('======= MAIN TEST RESULTS =======');
@@ -638,7 +696,7 @@ Docs are at $docs
           initialState: stateService,
           filePath: testFilePath,
         });
-        const nodesToProcess = resultState.getTransformedNodes();
+        const nodesToProcess = resultState.getNodes();
         const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
         
         console.log('Test result:', result);
@@ -720,7 +778,7 @@ Docs are at $docs
           initialState: stateService,
           filePath: testFilePath,
         });
-        const nodesToProcess = resultState.getTransformedNodes();
+        const nodesToProcess = resultState.getNodes();
         const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
         
         console.log('Test result:', result);
@@ -802,7 +860,7 @@ Docs are at $docs
           initialState: stateService,
           filePath: testFilePath,
         });
-        const nodesToProcess = resultState.getTransformedNodes();
+        const nodesToProcess = resultState.getNodes();
         const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
         
         console.log('Test result:', result);
@@ -877,7 +935,7 @@ Docs are at $docs
             initialState: stateService,
             filePath: mainFilePath,
         });
-        const nodesToProcess = resultState.getTransformedNodes();
+        const nodesToProcess = resultState.getNodes();
         // Use markdown format for simpler output checking
         const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {});
 
@@ -917,7 +975,7 @@ Docs are at $docs
                 initialState: stateService,
                 filePath: mainFilePath,
             });
-            const nodesToProcess = resultState.getTransformedNodes();
+            const nodesToProcess = resultState.getNodes();
             const result = await outputService.convert(nodesToProcess, resultState, 'markdown', {}); // Use markdown
 
             console.log('Nested import result:', result);
