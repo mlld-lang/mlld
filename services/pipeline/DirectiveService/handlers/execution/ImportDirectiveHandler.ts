@@ -251,7 +251,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           }
       } else {
           if (importDirectiveLocation) {
-            this.processStructuredImports(imports, resultState, targetState, importDirectiveLocation, resolvedIdentifier, currentFilePath);
+            await this.processStructuredImports(imports, resultState, targetState, importDirectiveLocation, resolvedIdentifier, currentFilePath);
           }
       }
 
@@ -332,7 +332,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             metadata: metadata
           };
           process.stdout.write(`\nDEBUG: importAllVariables - Target is stateService? ${Object.is(targetState, (globalThis as any).__test_state_service)} Key: ${key}\n`); 
-          targetState.setTextVar(key, newVar.value); 
+          targetState.setTextVar(key, newVar.value);
           process.stdout.write(`\nDEBUG: Called targetState.setTextVar for ${key}\n`);
         } catch (error) {
           process.stdout.write(`\nERROR in importAllVariables textVar loop: ${error}\n`);
@@ -428,14 +428,14 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     }
   }
 
-  private processStructuredImports(
+  private async processStructuredImports(
     imports: Array<{ name: string; alias?: string | null }>,
     sourceState: IStateService,
     targetState: IStateService,
     importLocation: SyntaxSourceLocation,
     sourcePath: string | undefined,
     currentFilePath: string | undefined
-  ): void {
+  ): Promise<void> {
     for (const item of imports) {
       process.stdout.write(`\nDEBUG: processStructuredImports - Processing item: ${item.name}\n`);
       try {
@@ -443,7 +443,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         const targetName = alias || name;
         let variableFound = false;
 
-        const textVar = sourceState.getTextVar(name);
+        const textVar = await sourceState.getTextVar(name);
         if (textVar) {
           const metadata: VariableMetadata = {
             origin: VariableOrigin.IMPORT,

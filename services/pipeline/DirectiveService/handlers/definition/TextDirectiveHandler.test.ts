@@ -118,7 +118,6 @@ describe('TextDirectiveHandler', () => {
   });
 
   describe('execute', () => {
-    // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('should handle a simple text assignment with string literal', async () => {
       const example = textDirectiveExamples.atomic.simpleString;
       const node = await createNodeFromExample(example.code);
@@ -137,7 +136,6 @@ describe('TextDirectiveHandler', () => {
       expect(result).toBe(stateService); // Handler should return the state
     });
 
-    // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('should handle text assignment with escaped characters', async () => {
       const example = textDirectiveExamples.atomic.escapedCharacters;
       const node = await createNodeFromExample(example.code);
@@ -157,7 +155,6 @@ describe('TextDirectiveHandler', () => {
       expect(result).toBe(stateService);
     });
 
-    // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('should handle a template literal in text directive', async () => {
       const example = textDirectiveExamples.atomic.templateLiteral;
       const node = await createNodeFromExample(example.code);
@@ -176,7 +173,6 @@ describe('TextDirectiveHandler', () => {
       expect(result).toBe(stateService);
     });
 
-    // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('should handle object property interpolation in text value', async () => {
       const example = textDirectiveExamples.combinations.objectInterpolation;
       const node = await createNodeFromExample(example.code.split('\n')[1]); // Get only the @text line
@@ -196,7 +192,6 @@ describe('TextDirectiveHandler', () => {
       expect(result).toBe(stateService);
     });
 
-    // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('should handle path referencing in text values', async () => {
       const example = textDirectiveExamples.combinations.pathReferencing;
       const node = await createNodeFromExample(example.code.split('\n')[5]); // Get only the @text configText line
@@ -216,7 +211,6 @@ describe('TextDirectiveHandler', () => {
       expect(result).toBe(stateService);
     });
 
-    // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('should throw DirectiveError if text interpolation contains undefined variables', async () => {
       const example = textDirectiveExamples.invalid.undefinedVariable;
       const node = await createNodeFromExample(example.code);
@@ -237,7 +231,6 @@ describe('TextDirectiveHandler', () => {
       expect(stateService.setTextVar).not.toHaveBeenCalled(); // State should not be updated
     });
 
-    // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('should handle basic variable interpolation', async () => {
       const example = textDirectiveExamples.combinations.basicInterpolation;
       const node = await createNodeFromExample(example.code.split('\n')[2]); // Get only the @text message line
