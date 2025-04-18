@@ -39,8 +39,19 @@ Refactor the core state management system (`StateNode`, `IStateService`, `StateF
 **Phase 5: Update Tests [NEXT]**
 
 *   **Objective:** Ensure unit tests reflect the new state structure and interface.
-*   **Files:** `services/state/StateService/StateService.test.ts`, *all other test files that mock or use `IStateService`*.
-*   **Status:** Pending.
+*   **Files:** 
+    *   `services/state/StateService/StateService.test.ts` (Updated)
+    *   `services/state/utilities/StateVariableCopier.test.ts` (Updated)
+    *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.edge.test.ts` (Needs update)
+    *   `services/resolution/ResolutionService/ResolutionService.test.ts` (Needs update)
+    *   `services/resolution/ResolutionService/resolvers/ContentResolver.test.ts` (Needs update)
+    *   `services/resolution/ResolutionService/resolvers/CommandResolver.test.ts` (Needs update)
+    *   `services/resolution/ResolutionService/resolvers/StringConcatenationHandler.test.ts` (Needs update)
+    *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts` (Needs update)
+    *   `services/cli/CLIService/CLIService.test.ts` (Needs update)
+    *   `services/pipeline/InterpreterService/InterpreterService.integration.test.ts` (Needs update)
+    *   *Potentially others implicitly affected by state changes.*
+*   **Status:** In Progress.
 
 **Phase 6: Refactor Codebase [PENDING]**
 
