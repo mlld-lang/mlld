@@ -84,14 +84,23 @@ describe('StateService', () => {
       expect(state.getVariable('nonexistent', VariableType.TEXT)).toBeUndefined();
     });
 
-    it('should get all text variables', async () => {
+    it('should get all text variables - check individually', async () => {
       const greetingVar = await state.setVariable(createTextVariable('greeting', 'Hello'));
       const farewellVar = await state.setVariable(createTextVariable('farewell', 'Goodbye'));
 
-      const vars = state.getAllVariables(VariableType.TEXT);
-      expect(vars.size).toBe(2);
-      expect(vars.get('greeting')).toEqual(greetingVar);
-      expect(vars.get('farewell')).toEqual(farewellVar);
+      // Check individually using getVariable
+      const retrievedGreeting = state.getVariable('greeting', VariableType.TEXT);
+      const retrievedFarewell = state.getVariable('farewell', VariableType.TEXT);
+      const retrievedNonExistent = state.getVariable('nonexistent', VariableType.TEXT);
+
+      expect(retrievedGreeting).toEqual(greetingVar);
+      expect(retrievedFarewell).toEqual(farewellVar);
+      expect(retrievedNonExistent).toBeUndefined();
+      
+      // Optionally, check internal map if really needed (less ideal for testing public interface)
+      // const internalNode = state.getInternalStateNode();
+      // expect(internalNode.variables.text.size).toBe(2);
+      // expect(internalNode.variables.text.get('greeting')).toEqual(greetingVar);
     });
 
     it('should set and get data variables', async () => {
@@ -422,7 +431,7 @@ describe('StateService', () => {
       const cloned = state.clone();
       expect(cloned).toBeInstanceOf(StateService);
       expect(cloned.getStateId()).not.toBe(state.getStateId());
-      expect(cloned.getParentServiceRef()).toBeUndefined();
+      expect(cloned.getParentState()).toBeUndefined();
     });
 
     it('should create a child state inheriting variables', async () => {

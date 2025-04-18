@@ -23,6 +23,7 @@ import readline from 'readline';
 import { inject, injectable, delay } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { CLIOptions, ICLIService, IPromptService } from '@services/cli/CLIService/ICLIService.js';
+import { PathContentType, IFilesystemPathState, createPathVariable, VariableOrigin } from '@core/types';
 
 /**
  * Default prompt service implementation using Node.js readline
@@ -332,13 +333,30 @@ export class CLIService implements ICLIService {
       
       // Set up project path
       const projectPath = await this.pathService!.resolveProjectPath();
-      state.setPathVar('PROJECTPATH', projectPath);
-      state.setPathVar('.', projectPath);
+      // Create a basic path state object for the project path
+      const projectPathState: IFilesystemPathState = {
+        contentType: PathContentType.FILESYSTEM,
+        originalValue: projectPath,
+        isValidSyntax: true, 
+        isSecure: true, 
+        isAbsolute: true, // Assuming resolveProjectPath returns absolute
+        validatedPath: projectPath as any // Cast needed as type might not match exactly
+      };
+      await state.setVariable(createPathVariable('PROJECTPATH', projectPathState, { origin: VariableOrigin.SYSTEM_DEFINED }));
+      await state.setVariable(createPathVariable('.', projectPathState, { origin: VariableOrigin.SYSTEM_DEFINED }));
       
       // Set up home path if specified
       if (options.homePath) {
-        state.setPathVar('HOMEPATH', options.homePath);
-        state.setPathVar('~', options.homePath);
+        const homePathState: IFilesystemPathState = {
+          contentType: PathContentType.FILESYSTEM,
+          originalValue: options.homePath,
+          isValidSyntax: true, 
+          isSecure: true, 
+          isAbsolute: true, // Assuming home path is absolute
+          validatedPath: options.homePath as any // Cast needed
+        };
+        await state.setVariable(createPathVariable('HOMEPATH', homePathState, { origin: VariableOrigin.SYSTEM_DEFINED }));
+        await state.setVariable(createPathVariable('~', homePathState, { origin: VariableOrigin.SYSTEM_DEFINED }));
       }
 
       // Configure logging based on options
