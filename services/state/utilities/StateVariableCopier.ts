@@ -72,13 +72,17 @@ export class StateVariableCopier {
 
     const sourceNode = sourceState.getInternalStateNode();
     const variableMaps = {
-      text: sourceNode.textVariables,
-      data: sourceNode.dataVariables,
-      path: sourceNode.pathVariables,
-      command: sourceNode.commandVariables,
+      text: sourceNode.variables?.text,
+      data: sourceNode.variables?.data,
+      path: sourceNode.variables?.path,
+      command: sourceNode.commands,
     };
 
     for (const [type, map] of Object.entries(variableMaps)) {
+      if (!map) {
+         logger.debug(`Variable map for type '${type}' is undefined in sourceNode, skipping.`);
+         continue;
+      }
       const varType = type as VariableType;
       for (const [name, variable] of map.entries()) {
         if (skipExisting && targetState.hasVariable(name, varType)) {

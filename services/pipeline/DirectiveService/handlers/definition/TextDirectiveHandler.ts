@@ -17,12 +17,13 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { VariableMetadata, TextVariable } from '@core/types/variables.js';
-import { VariableOrigin } from '@core/types/variables.js';
+import { VariableOrigin, VariableType, createTextVariable } from '@core/types/variables.js';
 import type { SourceLocation } from '@core/types/common.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js'; // Import guard
 import { ICommandDefinition, isBasicCommand } from '@core/types/define.js'; 
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
+import { isCommandVariable } from '@core/types/guards.js';
 
 // Define local interfaces mirroring expected AST structure for RHS
 // Consider moving these to a shared types file if used elsewhere
@@ -133,10 +134,11 @@ export class TextDirectiveHandler implements IDirectiveHandler {
              if (typeof commandInput !== 'object' || !('name' in commandInput)) {
                  throw new DirectiveError('Invalid command input structure for runDefined subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
              }
-             const cmdVar = state.getCommandVar(commandInput.name); // Use IStateService method
-             if (cmdVar && cmdVar.value && isBasicCommand(cmdVar.value)) { 
-                // Assuming commandTemplate holds the string to run for @text
-                resolvedCommandString = cmdVar.value.commandTemplate; 
+             // Get variable and check type
+             const cmdVar = await state.getVariable(commandInput.name, VariableType.Command);
+             if (cmdVar && isCommandVariable(cmdVar) && cmdVar.value && isBasicCommand(cmdVar.value)) {
+                // Assuming commandTemplate holds the string to run for @text/@run
+                resolvedCommandString = cmdVar.value.commandTemplate;
              } else {
                 const errorMsg = cmdVar ? `Command '${commandInput.name}' is not a basic command suitable for @text/@run` : `Command definition '${commandInput.name}' not found`;
                 throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, errorDetailsContext);
@@ -261,8 +263,10 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       };
       
       // Use IStateService method to set the variable
-      await state.setTextVar(identifier, resolvedValue);
-      process.stdout.write(`DEBUG: [TextDirectiveHandler] setTextVar completed for: ${identifier}. State ID: ${state.getStateId()}\n`);
+      // await state.setTextVar(identifier, resolvedValue);
+      // Use the factory and setVariable
+      await state.setVariable(createTextVariable(identifier, resolvedValue, metadata));
+      process.stdout.write(`DEBUG: [TextDirectiveHandler] setVariable completed for: ${identifier}. State ID: ${state.getStateId()}\n`);
 
       // Return the updated state
       return state as IStateService;
