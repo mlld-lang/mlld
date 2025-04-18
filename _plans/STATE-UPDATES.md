@@ -57,18 +57,24 @@ Refactor the core state management system (`StateNode`, `IStateService`, `StateF
 
 *   **Objective:** Update all service/handler code that uses the state service.
 *   **Files:** 
-    *   `services/state/StateService/factories/StateServiceClientFactory.ts`
-    *   `services/state/StateService/migration.ts`
-    *   `services/state/StateService/migration.test.ts`
-    *   `services/state/StateService/AlwaysTransformedStateService.ts`
-    *   `services/state/utilities/StateVariableCopier.ts`
-    *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.test.ts`
-    *   `services/pipeline/InterpreterService/InterpreterService.ts`
-    *   `services/resolution/ResolutionService/ResolutionService.ts` (Needs check - indirect usage via context)
-    *   `services/pipeline/DirectiveService/DirectiveService.ts` (Needs check - likely usage)
-    *   `services/pipeline/DirectiveService/handlers/*` (All handlers need checking)
-    *   `services/pipeline/OutputService/OutputService.ts` (Needs check - indirect usage)
-    *   `services/cli/CLIService/CLIService.ts` (Updated in Phase 5)
-*   **Status:** Pending.
+    *   ✅ `services/state/StateService/factories/StateServiceClientFactory.ts` - DONE
+    *   ✅ `services/state/StateService/migration.ts` - DONE (Deleted)
+    *   ✅ `services/state/StateService/migration.test.ts` - DONE (Deleted)
+    *   ✅ `services/state/StateService/AlwaysTransformedStateService.ts` - DONE
+    *   ✅ `services/state/utilities/StateVariableCopier.ts` - DONE
+    *   ✅ `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.test.ts` - DONE (and related tests)
+    *   ✅ `services/pipeline/InterpreterService/InterpreterService.ts` - CHECKED (No changes needed)
+    *   ✅ `services/resolution/ResolutionService/ResolutionService.ts` - CHECKED (Tests fixed)
+    *   ✅ `services/cli/CLIService/CLIService.ts` - DONE (Tests fixed)
+    *   ⏳ `services/pipeline/DirectiveService/DirectiveService.ts` (Needs check - likely usage)
+    *   ⏳ `services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.ts` (Needs update)
+    *   ⏳ `services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.ts` (Needs update)
+    *   ⏳ `services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.ts` (Needs update)
+    *   ⏳ `services/pipeline/DirectiveService/handlers/definition/VarDirectiveHandler.ts` (Needs update)
+    *   ⏳ `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.ts` (Needs update)
+    *   ⏳ `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.ts` (Needs update)
+    *   ⏳ `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.ts` (Needs update & test fixes)
+    *   ⏳ `services/pipeline/OutputService/OutputService.ts` (Needs check - indirect usage)
+*   **Status:** In Progress.
 
 ---
