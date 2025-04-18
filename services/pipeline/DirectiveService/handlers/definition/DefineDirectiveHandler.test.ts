@@ -33,7 +33,8 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { VariableMetadata } from '@core/types/variables.js';
 import { MockFactory } from '@tests/utils/mocks/MockFactory.js'; // Keep for state override if needed
 import type { CommandVariable as CoreCommandVariable } from '@core/types/variables.js';
-import { VariableType } from '@core/types/variables.js';
+import { VariableType, createCommandVariable } from '@core/types/variables.js';
+import crypto from 'crypto'; // <<< Import crypto for UUID >>>
 
 // Helper to extract state (keep as is)
 function getStateFromResult(result: DirectiveResult | IStateService): IStateService {
@@ -76,7 +77,7 @@ describe('DefineDirectiveHandler', () => {
             isMultiline: false // Add missing property
         } 
     }; 
-    vi.spyOn(stateService, 'setCommandVar').mockResolvedValue(mockCommandVar); 
+    vi.spyOn(stateService, 'setVariable');
     vi.spyOn(resolutionService, 'resolveNodes').mockImplementation(async (nodes, ctx) => {
       // Simple mock: join text content or variable placeholders
       return nodes.map((n: any) => n.content || `{{${n.identifier}}}`).join('');
@@ -101,7 +102,7 @@ describe('DefineDirectiveHandler', () => {
               name: name,
               command: {
                   subtype: 'runCommand', 
-                  command: [{ type: 'Text', content: value, location: createLocation(1,1) }], 
+                  command: [{ type: 'Text', content: value, location: createLocation(1,1), nodeId: crypto.randomUUID() }], 
                   isMultiLine: false 
               },
               value: undefined, 
@@ -120,7 +121,8 @@ describe('DefineDirectiveHandler', () => {
       return {
           type: 'Directive',
           directive: { kind: 'define', ...directiveData } as DefineDirectiveData, 
-          location: createLocation(1,1)
+          location: createLocation(1,1),
+          nodeId: crypto.randomUUID()
       };
   };
 
@@ -157,15 +159,17 @@ describe('DefineDirectiveHandler', () => {
 
       expect(resultState).toBe(stateService); 
       // Use the resolved stateService mock
-      expect(stateService.setCommandVar).toHaveBeenCalledWith('cmd1', 
-          expect.objectContaining({
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+          type: VariableType.COMMAND,
+          name: 'cmd1',
+          value: expect.objectContaining({
               type: 'basic',
               name: 'cmd1',
               commandTemplate: 'echo hello resolved', 
               parameters: [],
               isMultiline: false,
           })
-      );
+      }));
     });
 
     it('should handle command definition with parameters', async () => {
@@ -177,8 +181,10 @@ describe('DefineDirectiveHandler', () => {
       const resultState = getStateFromResult(result);
       
       expect(resultState).toBe(stateService);
-      expect(stateService.setCommandVar).toHaveBeenCalledWith('cmd2', 
-          expect.objectContaining({
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+          type: VariableType.COMMAND,
+          name: 'cmd2',
+          value: expect.objectContaining({
               type: 'basic',
               name: 'cmd2',
               commandTemplate: 'echo $p1 $p2 resolved',
@@ -187,7 +193,7 @@ describe('DefineDirectiveHandler', () => {
                   expect.objectContaining({ name: 'p2', position: 2 })
               ]),
           })
-      );
+      }));
     });
 
     it('should handle command definition with multiple parameters', async () => {
@@ -199,8 +205,10 @@ describe('DefineDirectiveHandler', () => {
       const resultState = getStateFromResult(result);
 
       expect(resultState).toBe(stateService);
-      expect(stateService.setCommandVar).toHaveBeenCalledWith('cmd3', 
-          expect.objectContaining({
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+          type: VariableType.COMMAND,
+          name: 'cmd3',
+          value: expect.objectContaining({
               type: 'basic',
               name: 'cmd3',
               commandTemplate: 'echo $a $b $c resolved',
@@ -210,12 +218,12 @@ describe('DefineDirectiveHandler', () => {
                   expect.objectContaining({ name: 'c', position: 3 })
               ]),
           })
-      );
+      }));
     });
     
     it('should handle command definition with literal value', async () => {
         const literalValue: InterpolatableValue = [
-            { type: 'Text', content: 'echo literal ', location: createLocation(1,1) },
+            { type: 'Text', content: 'echo literal ', location: createLocation(1,1), nodeId: crypto.randomUUID() },
             { type: 'VariableReference', identifier: 'var', valueType: 'text', isVariableReference: true, location: createLocation(1,15) }
         ];
         const node = createValidDefineNode('cmdLiteral', literalValue, [], false);
@@ -227,14 +235,16 @@ describe('DefineDirectiveHandler', () => {
 
         expect(resolutionService.resolveNodes).toHaveBeenCalledWith(literalValue, expect.any(Object));
         expect(resultState).toBe(stateService);
-        expect(stateService.setCommandVar).toHaveBeenCalledWith('cmdLiteral', 
-            expect.objectContaining({
+        expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+            type: VariableType.COMMAND,
+            name: 'cmdLiteral',
+            value: expect.objectContaining({
                 type: 'basic',
                 name: 'cmdLiteral',
                 commandTemplate: 'echo literal resolved_value', 
                 parameters: expect.arrayContaining([]),
             })
-        );
+        }));
     });
 
   });
@@ -246,11 +256,13 @@ describe('DefineDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('rm -rf / resolved');
 
       await handler.execute(processingContext);
-      expect(stateService.setCommandVar).toHaveBeenCalledWith('cmdRisk', 
-           expect.objectContaining({
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+          type: VariableType.COMMAND,
+          name: 'cmdRisk',
+          value: expect.objectContaining({
                riskLevel: 'high', 
            })
-      );
+      }));
     });
 
     it('should handle command about metadata', async () => {
@@ -259,11 +271,13 @@ describe('DefineDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('ls resolved');
 
       await handler.execute(processingContext);
-      expect(stateService.setCommandVar).toHaveBeenCalledWith('cmdAbout', 
-           expect.objectContaining({
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+          type: VariableType.COMMAND,
+          name: 'cmdAbout',
+          value: expect.objectContaining({
                description: 'A cool command', 
            })
-      );
+      }));
     });
   });
 
@@ -274,8 +288,12 @@ describe('DefineDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo test resolved');
 
       await handler.execute(processingContext);
-      expect(stateService.setCommandVar).toHaveBeenCalledWith('cmd6', expect.any(Object)); 
-      const storedDefinition = vi.mocked(stateService.setCommandVar).mock.calls[0][1] as ICommandDefinition;
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.COMMAND,
+        name: 'cmd6'
+      })); 
+      const storedCommandVariable = vi.mocked(stateService.setVariable).mock.calls[0][0] as CoreCommandVariable;
+      const storedDefinition = storedCommandVariable.value as ICommandDefinition;
       expect(storedDefinition.type).toBe('basic');
       expect(storedDefinition.name).toBe('cmd6');
     });
@@ -287,7 +305,7 @@ describe('DefineDirectiveHandler', () => {
       const processingContext = createMockProcessingContext(node);
       const stateError = new Error('State error');
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('test resolved');
-      vi.spyOn(stateService, 'setCommandVar').mockRejectedValueOnce(stateError);
+      vi.spyOn(stateService, 'setVariable').mockRejectedValueOnce(stateError);
 
       await expectToThrowWithConfig(
         async () => await handler.execute(processingContext),
@@ -301,7 +319,7 @@ describe('DefineDirectiveHandler', () => {
     
     it('should handle literal value resolution errors', async () => {
         const literalValue: InterpolatableValue = [
-            { type: 'Text', content: 'echo literal ', location: createLocation(1,1) },
+            { type: 'Text', content: 'echo literal ', location: createLocation(1,1), nodeId: crypto.randomUUID() },
             { type: 'VariableReference', identifier: 'unresolvable', valueType: 'text', isVariableReference: true, location: createLocation(1,15) }
         ];
         const node = createValidDefineNode('cmdResolveError', literalValue, [], false);

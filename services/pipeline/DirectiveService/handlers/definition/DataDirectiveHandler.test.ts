@@ -14,7 +14,7 @@ import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 // Import new context types
 import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
-import { JsonValue } from '@core/types'; // Import JsonValue
+import { JsonValue, VariableType, createDataVariable } from '@core/types'; // Import VariableType and createDataVariable
 // Import error type
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 // Import ErrorSeverity
@@ -101,7 +101,7 @@ describe('DataDirectiveHandler', () => {
         if (typeof value === 'string') return value.replace('${username}', 'Alice');
         return JSON.stringify(value);
     });
-    vi.spyOn(stateService, 'setDataVar'); // Spy for assertions
+    vi.spyOn(stateService, 'setVariable'); // Spy for assertions
 
     // Create base processing context using resolved mocks
     const mockResolutionContext: ResolutionContext = { strict: true, filePath: '/test.meld' };
@@ -133,7 +133,11 @@ describe('DataDirectiveHandler', () => {
       const result = await handler.execute(mockProcessingContext);
       const resultState = getStateFromResult(result);
       
-      expect(stateService.setDataVar).toHaveBeenCalledWith('user', { name: 'Alice', id: 123 });
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.DATA,
+        name: 'user',
+        value: { name: 'Alice', id: 123 }
+      }));
       expect(resultState).toBe(stateService);
       if (result && typeof result === 'object' && 'replacement' in result) {
           expect(result.replacement).toBeUndefined();
@@ -158,7 +162,11 @@ describe('DataDirectiveHandler', () => {
       const result = await handler.execute(mockProcessingContext);
       const resultState = getStateFromResult(result);
 
-      expect(stateService.setDataVar).toHaveBeenCalledWith('person', expectedData);
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.DATA,
+        name: 'person',
+        value: expectedData
+      }));
       expect(resultState).toBe(stateService);
       if (result && typeof result === 'object' && 'replacement' in result) {
           expect(result.replacement).toBeUndefined();
@@ -176,7 +184,11 @@ describe('DataDirectiveHandler', () => {
       const result = await handler.execute(mockProcessingContext);
       const resultState = getStateFromResult(result);
 
-      expect(stateService.setDataVar).toHaveBeenCalledWith('fruits', expectedData);
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.DATA,
+        name: 'fruits',
+        value: expectedData
+      }));
       expect(resultState).toBe(stateService);
       if (result && typeof result === 'object' && 'replacement' in result) {
           expect(result.replacement).toBeUndefined();
@@ -248,8 +260,8 @@ describe('DataDirectiveHandler', () => {
       const stateErrorMock = MockFactory.createStateService();
       // Configure necessary methods used before the error
       stateErrorMock.getCurrentFilePath.mockReturnValue('/test.meld'); 
-      // Configure setDataVar to throw
-      stateErrorMock.setDataVar.mockRejectedValue(new Error('State error'));
+      // Configure setVariable to throw
+      stateErrorMock.setVariable.mockRejectedValue(new Error('State error'));
 
       // Create a context specifically for this test using the throwing mock
       const errorTestContext: DirectiveProcessingContext = {
@@ -296,7 +308,11 @@ describe('DataDirectiveHandler', () => {
       const result = await handler.execute(mockProcessingContext);
       const resultState = getStateFromResult(result);
 
-      expect(stateService.setDataVar).toHaveBeenCalledWith('config', expectedResolvedData);
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.DATA,
+        name: 'config',
+        value: expectedResolvedData
+      }));
       expect(resultState).toBe(stateService);
       mockResolveInterpolatable.mockRestore();
     });
@@ -310,7 +326,11 @@ describe('DataDirectiveHandler', () => {
       const result = await handler.execute(mockProcessingContext);
       const resultState = getStateFromResult(result);
 
-      expect(stateService.setDataVar).toHaveBeenCalledWith('message', expectedResolvedData);
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.DATA,
+        name: 'message',
+        value: expectedResolvedData
+      }));
       expect(resultState).toBe(stateService);
       mockResolveInterpolatable.mockRestore();
     });
@@ -330,7 +350,11 @@ describe('DataDirectiveHandler', () => {
       const result = await handler.execute(mockProcessingContext);
       const resultState = getStateFromResult(result);
 
-      expect(stateService.setDataVar).toHaveBeenCalledWith('data', expectedResolvedData);
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.DATA,
+        name: 'data',
+        value: expectedResolvedData
+      }));
       expect(resultState).toBe(stateService);
       mockResolveInterpolatable.mockRestore();
     });

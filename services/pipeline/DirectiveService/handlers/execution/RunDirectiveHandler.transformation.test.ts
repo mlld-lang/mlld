@@ -104,7 +104,11 @@ describe('RunDirectiveHandler Transformation', () => {
         content: 'Error output'
       }));
       expect(result.state).toBe(fixture.stateService);
-      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('stderr', 'Error output');
+      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.TEXT,
+        name: 'stderr',
+        value: 'Error output'
+      }));
     });
 
     it('should handle both stdout and stderr in transformation', async () => {
@@ -120,8 +124,16 @@ describe('RunDirectiveHandler Transformation', () => {
         content: 'Out\nErr'
       }));
       expect(result.state).toBe(fixture.stateService);
-      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('stdout', 'Out');
-      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('stderr', 'Err');
+      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.TEXT,
+        name: 'stdout',
+        value: 'Out'
+      }));
+      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.TEXT,
+        name: 'stderr',
+        value: 'Err'
+      }));
     });
 
     it('should preserve error handling during transformation', async () => {

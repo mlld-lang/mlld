@@ -35,6 +35,8 @@ import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionS
 import { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
 import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
 import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
+import { VariableType } from '@core/types/variables.js';
+import { StateService } from '@services/state/StateService/StateService.js';
 
 /**
  * Tracking context for variable formatting to preserve formatting during substitution
@@ -1048,22 +1050,25 @@ export class OutputService implements IOutputService {
   private formatStateVariables(state: IStateService): string {
     let output = '';
 
+    // Cast state to StateService
+    const stateService = state as StateService;
+
     // Format text variables
-    const textVars = state.getAllTextVars();
+    const textVars = stateService.getAllTextVars();
     if (textVars.size > 0) {
       output += '# Text Variables\n\n';
-      for (const [name, value] of textVars) {
-        output += `@text ${name} = "${value}"\n`;
+      for (const textVar of textVars.values()) {
+        output += `@text ${textVar.name} = "${textVar.value}"\n`;
       }
     }
 
     // Format data variables
-    const dataVars = state.getAllDataVars();
+    const dataVars = stateService.getAllDataVars();
     if (dataVars.size > 0) {
-      if (output) output += '\n';
+      if (output) output += '\n\n';
       output += '# Data Variables\n\n';
-      for (const [name, value] of dataVars) {
-        output += `@data ${name} = ${JSON.stringify(value, null, 2)}\n`;
+      for (const dataVar of dataVars.values()) {
+        output += `@data ${dataVar.name} = ${JSON.stringify(dataVar.value, null, 2)}\n`;
       }
     }
 
@@ -1473,22 +1478,22 @@ Transformation enabled?: ${state.isTransformationEnabled()}
             let value;
             
             // Try data variable first
-            value = state.getDataVar(varName);
+            value = state.getVariable(varName, VariableType.DATA);
             fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
               'Data variable value: ' + JSON.stringify(value) + '\n'
             );
             
             // If not found as data variable, try text variable
             if (value === undefined) {
-              value = state.getTextVar(varName);
+              value = state.getVariable(varName, VariableType.TEXT);
               fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
                 'Text variable value: ' + JSON.stringify(value) + '\n'
               );
             }
             
             // If not found as text variable, try path variable
-            if (value === undefined && state.getPathVar) {
-              value = state.getPathVar(varName);
+            if (value === undefined) {
+              value = state.getVariable(varName, VariableType.PATH);
               fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
                 'Path variable value: ' + JSON.stringify(value) + '\n'
               );

@@ -29,7 +29,9 @@ import {
     VariableOrigin, 
     VariableMetadata, 
     DataVariable,
-    IPathVariable 
+    IPathVariable,
+    createDataVariable,
+    MeldVariable
 } from '@core/types/index.js'; 
 import { SourceLocation } from '@core/types/common.js'; // Import SourceLocation directly
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
@@ -307,7 +309,11 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       };
       
       // Call setDataVar with the *parsed* finalValue
-      await (state as IStateService).setDataVar(identifier, finalValue);
+      // await (state as IStateService).setDataVar(identifier, finalValue);
+      
+      // <<< NEW: Use setVariable with createDataVariable >>>
+      const dataVariable = createDataVariable(identifier, finalValue, metadata);
+      await state.setVariable(dataVariable);
       
       // Return DirectiveResult
       return { state: state as IStateService, replacement: undefined }; 

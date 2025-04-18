@@ -31,6 +31,7 @@ import { mock, mockDeep, DeepMockProxy } from 'vitest-mock-extended';
 import path from 'path';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { container, type DependencyContainer } from 'tsyringe';
+import { createTextVariable, createDataVariable, createPathVariable, createCommandVariable } from '@core/types/variables.js';
 
 /**
  * ImportDirectiveHandler Test Status
@@ -97,8 +98,7 @@ describe('ImportDirectiveHandler', () => {
     stateService.createChildState.mockResolvedValue(mockDeep<IStateService>({ setCurrentFilePath: vi.fn() })); 
     stateService.getCurrentFilePath.mockReturnValue('/project/current.meld');
     stateService.isTransformationEnabled.mockReturnValue(false);
-    stateService.setTextVar.mockResolvedValue({} as TextVariable); 
-    stateService.setDataVar.mockResolvedValue({} as DataVariable);
+    stateService.setVariable.mockResolvedValue({} as MeldVariable);
     stateService.mergeChildState.mockImplementation(() => {});
 
     (resolutionService.resolvePath as any).mockImplementation(async (p: string | StructuredPath, ctx?: ResolutionContext): Promise<MeldPath> => {
@@ -278,7 +278,11 @@ describe('ImportDirectiveHandler', () => {
       expect(parserService.parse).toHaveBeenCalledWith('mock content'); 
       expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(expect.any(Array));
       // This assertion might fail if interpreter mock returns empty state, adjust if needed
-      expect(stateService.setTextVar).toHaveBeenCalledWith('imported', 'mocked imported value'); 
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+          type: VariableType.TEXT,
+          name: 'imported',
+          value: 'mocked imported value',
+      }));
       expect(circularityService.beginImport).toHaveBeenCalledWith(resolvedProjectPath.replace(/\\/g, '/'));
       expect(circularityService.endImport).toHaveBeenCalledWith(resolvedProjectPath.replace(/\\/g, '/'));
     });
@@ -328,18 +332,16 @@ describe('ImportDirectiveHandler', () => {
       const importedTextVar: TextVariable = { name: 'greeting', type: VariableType.TEXT, value: 'Hello', metadata: { definedAt: createTestLocation(1, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
       const importedDataVar: any = { name: 'info', type: 'data', value: { val: 1 }, metadata: { definedAt: createTestLocation(2, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
       
-      // Use mockDeep for the result state
+      // Use mockDeep for the result state AND mock getAll...Vars
       const expectedResultState = mockDeep<IStateService>();
       expectedResultState.getAllTextVars.mockReturnValue(new Map([['greeting', importedTextVar]]));
       expectedResultState.getAllDataVars.mockReturnValue(new Map([['info', importedDataVar]]));
       expectedResultState.getAllPathVars.mockReturnValue(new Map());
       expectedResultState.getAllCommands.mockReturnValue(new Map());
       expectedResultState.getTransformedNodes.mockReturnValue([]);
-      // Ensure setCurrentFilePath is mocked if needed, though it might not be strictly necessary for the assertion
       expectedResultState.setCurrentFilePath.mockImplementation(() => {}); 
 
       interpreterServiceClient.interpret.mockResolvedValueOnce(expectedResultState);
-      // The createChildState mock seems okay, but let's ensure it's a deep mock too
       const mockChildState = mockDeep<IStateService>();
       stateService.createChildState.mockReset();
       stateService.createChildState.mockResolvedValueOnce(mockChildState); 
@@ -350,8 +352,19 @@ describe('ImportDirectiveHandler', () => {
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text greeting="Hello"\n@data info={ "val": 1 }');
-      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
-      expect(stateService.setDataVar).toHaveBeenCalledWith('info', { val: 1 });
+      // Assert setVariable calls
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.TEXT,
+        name: 'greeting',
+        value: 'Hello',
+        metadata: expect.objectContaining({ origin: VariableOrigin.IMPORT })
+      }));
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.DATA,
+        name: 'info',
+        value: { val: 1 },
+        metadata: expect.objectContaining({ origin: VariableOrigin.IMPORT })
+      }));
       expect(circularityService.beginImport).toHaveBeenCalledWith(finalPath.replace(/\\/g, '/'));
       expect(circularityService.endImport).toHaveBeenCalledWith(finalPath.replace(/\\/g, '/'));
     });
@@ -373,9 +386,9 @@ describe('ImportDirectiveHandler', () => {
       fileSystemService.exists.mockResolvedValue(true);
       fileSystemService.readFile.mockResolvedValue('@text var1="value1"\n@text var2="value2"\n@text var3="value3"');
       const parsedNodes: MeldNode[] = [
-        { type: 'Directive', directive: { kind: 'text', identifier: 'var1', source:'literal', value: [{ type: 'Text', content:'value1'}] }, location: createLocation(1,1) } as any,
-        { type: 'Directive', directive: { kind: 'text', identifier: 'var2', source:'literal', value: [{ type: 'Text', content:'value2'}] }, location: createLocation(2,1) } as any,
-        { type: 'Directive', directive: { kind: 'text', identifier: 'var3', source:'literal', value: [{ type: 'Text', content:'value3'}] }, location: createLocation(3,1) } as any
+        { type: 'Directive', directive: { kind: 'text', identifier: 'var1', source:'literal', value: [{ type: 'Text', content:'value1', nodeId: crypto.randomUUID() }] }, location: createLocation(1,1), nodeId: crypto.randomUUID() } as any,
+        { type: 'Directive', directive: { kind: 'text', identifier: 'var2', source:'literal', value: [{ type: 'Text', content:'value2', nodeId: crypto.randomUUID() }] }, location: createLocation(2,1), nodeId: crypto.randomUUID() } as any,
+        { type: 'Directive', directive: { kind: 'text', identifier: 'var3', source:'literal', value: [{ type: 'Text', content:'value3', nodeId: crypto.randomUUID() }] }, location: createLocation(3,1), nodeId: crypto.randomUUID() } as any
       ];
       parserService.parse.mockResolvedValue(parsedNodes as any);
       const nodeContentLocation1 = createLocation(1, 1, undefined, undefined, finalPath);
@@ -385,23 +398,20 @@ describe('ImportDirectiveHandler', () => {
       const importedVar2: TextVariable = { name: 'var2', type: VariableType.TEXT, value: 'value2', metadata: { definedAt: createTestLocation(2, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
       const importedVar3: TextVariable = { name: 'var3', type: VariableType.TEXT, value: 'value3', metadata: { definedAt: createTestLocation(3, 1), origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } };
       
-      // Use mockDeep for the result state
+      // Use mockDeep for the result state and mock getVariable
       const expectedResultState = mockDeep<IStateService>();
       expectedResultState.getTransformedNodes.mockReturnValue([]);
-      // Ensure getTextVar returns the full TextVariable object wrapped in a Promise
-      expectedResultState.getTextVar.mockImplementation((name): TextVariable | undefined => {
-        if (name === 'var1') return importedVar1;
-        if (name === 'var2') return importedVar2;
-        if (name === 'var3') return importedVar3;
+      expectedResultState.getVariable.mockImplementation((name, type?: VariableType): MeldVariable | undefined => {
+        if (type === VariableType.TEXT) {
+            if (name === 'var1') return importedVar1;
+            if (name === 'var2') return importedVar2;
+            if (name === 'var3') return importedVar3;
+        }
         return undefined;
       });
-      expectedResultState.getDataVar.mockResolvedValue(undefined);
-      expectedResultState.getPathVar.mockResolvedValue(undefined);
-      expectedResultState.getCommand.mockResolvedValue(undefined);
       expectedResultState.setCurrentFilePath.mockImplementation(() => {});
       
       interpreterServiceClient.interpret.mockResolvedValueOnce(expectedResultState);
-      // The createChildState mock seems okay, but let's ensure it's a deep mock too
       const mockChildState = mockDeep<IStateService>();
       stateService.createChildState.mockReset();
       stateService.createChildState.mockResolvedValueOnce(mockChildState);
@@ -412,10 +422,11 @@ describe('ImportDirectiveHandler', () => {
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text var1="value1"\n@text var2="value2"\n@text var3="value3"');
-      expect(stateService.setTextVar).toHaveBeenCalledTimes(2);
-      expect(stateService.setTextVar).toHaveBeenCalledWith('var1', 'value1');
-      expect(stateService.setTextVar).toHaveBeenCalledWith('aliasedVar2', 'value2');
-      expect(stateService.setTextVar).not.toHaveBeenCalledWith('var3', expect.any(String));
+      // Assert setVariable calls
+      expect(stateService.setVariable).toHaveBeenCalledTimes(2);
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({ type: VariableType.TEXT, name: 'var1', value: 'value1' }));
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({ type: VariableType.TEXT, name: 'aliasedVar2', value: 'value2' }));
+      expect(stateService.setVariable).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'var3' }));
       expect(circularityService.beginImport).toHaveBeenCalledWith(finalPath.replace(/\\/g, '/'));
       expect(circularityService.endImport).toHaveBeenCalledWith(finalPath.replace(/\\/g, '/'));
       expect(result.replacement).toBeDefined();

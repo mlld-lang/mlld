@@ -17,6 +17,7 @@ import type { ResolutionContext } from '@core/types/resolution.js';
 import type { PathDirectiveData } from '@core/syntax/types/directives.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { StructuredPath } from '@core/syntax/types/nodes.js';
+import { createPathVariable } from '@core/types';
 
 /**
  * Handler for @path directives
@@ -133,7 +134,8 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       };
       
       // Pass the adapted state object
-      await state.setPathVar(identifier, pathStateForStorage); 
+      const pathVariable = createPathVariable(identifier, pathStateForStorage, metadata);
+      await state.setVariable(pathVariable);
 
       logger.debug('Path directive processed successfully', {
         identifier,

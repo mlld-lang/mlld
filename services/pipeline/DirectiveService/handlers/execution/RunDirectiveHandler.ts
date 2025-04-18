@@ -21,10 +21,11 @@ import type { DirectiveProcessingContext, ResolutionContext } from '@core/types/
 import type { ICommandDefinition } from '@core/types/define.js';
 import { isBasicCommand } from '@core/types/define.js';
 import type { SourceLocation } from '@core/types/common.js';
-import type { VariableMetadata, VariableOrigin } from '@core/types/variables.js';
+import { type VariableMetadata, VariableOrigin } from '@core/types/variables.js';
 import * as os from 'os';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import { createTextVariable, VariableType } from '@core/types/variables.js';
 
 /**
  * Handler for @run directives
@@ -106,7 +107,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           } else if (subtype === 'runDefined') {
              const definedCommand = commandInput as { name: string; args?: InterpolatableValue };
              if (typeof definedCommand !== 'object' || !definedCommand.name) throw new DirectiveError('Invalid command input structure for runDefined', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
-             const cmdVar = state.getCommandVar(definedCommand.name);
+             const cmdVar = state.getVariable(definedCommand.name, VariableType.COMMAND);
              if (!cmdVar?.value || !isBasicCommand(cmdVar.value)) {
                  const errorMsg = cmdVar ? `Cannot run non-basic command '${definedCommand.name}'` : `Command definition '${definedCommand.name}' not found`;
                  throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.VARIABLE_NOT_FOUND, baseErrorDetails);
@@ -191,8 +192,16 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       }
 
       // Store results using correct variable names extracted from the directive data
-      await state.setTextVar(outputVariable, stdout || '');
-      await state.setTextVar(errorVariable, stderr || '');
+      const directiveSourceLocation: SourceLocation | undefined = node.location ? {
+         filePath: currentFilePath ?? 'unknown',
+         line: node.location.start.line,
+         column: node.location.start.column
+      } : undefined;
+      const outputMetadata: Partial<VariableMetadata> = { definedAt: directiveSourceLocation, origin: VariableOrigin.COMMAND_OUTPUT };
+      const errorMetadata: Partial<VariableMetadata> = { definedAt: directiveSourceLocation, origin: VariableOrigin.COMMAND_ERROR };
+      
+      await state.setVariable(createTextVariable(outputVariable, stdout || '', outputMetadata));
+      await state.setVariable(createTextVariable(errorVariable, stderr || '', errorMetadata));
 
       // Handle transformation mode
       if (state.isTransformationEnabled(this.kind)) {

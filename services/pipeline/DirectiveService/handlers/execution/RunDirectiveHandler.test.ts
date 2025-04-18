@@ -37,7 +37,7 @@ import {
   createVariableReferenceNode, 
   createLocation 
 } from '@tests/utils/testFactories.js';
-import { VariableType, CommandVariable, VariableOrigin, TextVariable } from '@core/types/variables.js';
+import { VariableType, CommandVariable, VariableOrigin, TextVariable, createTextVariable } from '@core/types/variables.js';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
@@ -95,10 +95,10 @@ describe('RunDirectiveHandler', () => {
     handler = await context.resolve(RunDirectiveHandler); 
 
     vi.spyOn(stateService, 'getCurrentFilePath').mockReturnValue('/workspace/test.meld');
-    vi.spyOn(stateService, 'setTextVar').mockResolvedValue({} as TextVariable);
-    vi.spyOn(stateService, 'getCommandVar').mockImplementation((name: string): CommandVariable | undefined => {
-        if (name === 'greet') {
-            return { type: VariableType.COMMAND, name: 'greet', value: { type:'basic', commandTemplate: 'echo \"Hello there!\"' } } as CommandVariable;
+    vi.spyOn(stateService, 'setVariable').mockResolvedValue({} as TextVariable);
+    vi.spyOn(stateService, 'getVariable').mockImplementation((name: string, type?: VariableType): MeldVariable | undefined => {
+        if (name === 'greet' && (!type || type === VariableType.COMMAND)) {
+            return { type: VariableType.COMMAND, name: 'greet', value: { type:'basic', commandTemplate: 'echo "Hello there!"' } } as CommandVariable;
         }
         return undefined;
     });
@@ -157,7 +157,11 @@ describe('RunDirectiveHandler', () => {
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo test', {
         cwd: '/workspace'
       });
-      expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'command output');
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.TEXT,
+        name: 'stdout',
+        value: 'command output'
+      }));
     });
 
     it('should handle commands with variables', async () => {
@@ -193,7 +197,11 @@ describe('RunDirectiveHandler', () => {
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo Hello World', {
         cwd: '/workspace'
       });
-      expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'Hello World');
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.TEXT,
+        name: 'stdout',
+        value: 'Hello World'
+      }));
     });
 
     it('should handle custom output variable', async () => {
@@ -206,7 +214,11 @@ describe('RunDirectiveHandler', () => {
       
       const result = await handler.execute(processingContext);
       
-      expect(stateService.setTextVar).toHaveBeenCalledWith('custom_output', 'command output');
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.TEXT,
+        name: 'custom_output',
+        value: 'command output'
+      }));
     });
 
     it('should properly expand command references with $', async () => {
@@ -218,12 +230,16 @@ describe('RunDirectiveHandler', () => {
        
        const result = await handler.execute(processingContext);
        
-       expect(stateService.getCommandVar).toHaveBeenCalledWith('greet'); 
+       expect(stateService.getVariable).toHaveBeenCalledWith('greet', VariableType.COMMAND);
        expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
-         'echo \"Hello there!\"', 
+         'echo "Hello there!"', 
          expect.objectContaining({ cwd: '/workspace' })
        );
-       expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'Hello there!');
+       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+         type: VariableType.TEXT,
+         name: 'stdout',
+         value: 'Hello there!'
+       }));
     });
   });
 
@@ -241,7 +257,11 @@ describe('RunDirectiveHandler', () => {
       
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(scriptContent, processingContext.resolutionContext);
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo "Inline script ran"', { cwd: '/workspace' });
-      expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'Inline script ran');
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.TEXT,
+        name: 'stdout',
+        value: 'Inline script ran'
+      }));
     });
 
     it('should execute script content with specified language using a temp file', async () => {
@@ -262,7 +282,11 @@ describe('RunDirectiveHandler', () => {
         expect.stringMatching(/^python .*?meld-script-.*?\.py$/),
         { cwd: '/workspace' }
       );
-      expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'Python script ran');
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.TEXT,
+        name: 'stdout',
+        value: 'Python script ran'
+      }));
       expect(fileSystemService.deleteFile).toHaveBeenCalledWith(expect.stringContaining('.py'));
     });
 
@@ -295,10 +319,14 @@ describe('RunDirectiveHandler', () => {
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(paramNode, processingContext.resolutionContext); 
       expect(fileSystemService.writeFile).toHaveBeenCalledWith(expect.stringContaining('.py'), 'import sys\nprint(f"Input: {sys.argv[1]}")');
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
-        expect.stringMatching(/^python .*?meld-script-.*?\.py \"TestParameter\"$/),
+        expect.stringMatching(/^python .*?meld-script-.*?\.py "TestParameter"$/),
         { cwd: '/workspace' }
       );
-      expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'Input: TestParameter');
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.TEXT,
+        name: 'stdout',
+        value: 'Input: TestParameter'
+      }));
       expect(fileSystemService.deleteFile).toHaveBeenCalled();
     });
      
@@ -396,7 +424,10 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective(commandRefObject, createLocation(), 'runDefined');
       const processingContext = createMockProcessingContext(node);
 
-      vi.spyOn(stateService, 'getCommandVar').mockReturnValue(undefined); 
+      vi.spyOn(stateService, 'getVariable').mockImplementation((name: string, type?: VariableType) => {
+        if (name === 'undefinedCommand' && type === VariableType.COMMAND) return undefined;
+        return undefined;
+      }); 
       
       await expectToThrowWithConfig(
           async () => await handler.execute(processingContext),
@@ -405,7 +436,7 @@ describe('RunDirectiveHandler', () => {
               messageContains: 'Command definition \'undefinedCommand\' not found',
           } as ErrorTestOptions 
       );
-      expect(stateService.getCommandVar).toHaveBeenCalledWith('undefinedCommand'); 
+      expect(stateService.getVariable).toHaveBeenCalledWith('undefinedCommand', VariableType.COMMAND);
     });
   });
 
@@ -420,8 +451,8 @@ describe('RunDirectiveHandler', () => {
       
       const result = await handler.execute(processingContext);
       
-      expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'Out');
-      expect(stateService.setTextVar).toHaveBeenCalledWith('stderr', 'Err');
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({ type: VariableType.TEXT, name: 'stdout', value: 'Out' }));
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({ type: VariableType.TEXT, name: 'stderr', value: 'Err' }));
     });
 
     it('should handle transformation mode (return replacement node)', async () => {
@@ -441,7 +472,11 @@ describe('RunDirectiveHandler', () => {
         type: 'Text',
         content: 'transformed output'
       }));
-      expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'transformed output');
+      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.TEXT,
+        name: 'stdout',
+        value: 'transformed output'
+      }));
     });
   });
 });

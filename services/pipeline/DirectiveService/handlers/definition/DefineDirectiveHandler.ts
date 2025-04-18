@@ -20,7 +20,7 @@ import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import { MeldResolutionError, FieldAccessError } from '@core/errors';
-import { VariableMetadata, VariableOrigin } from '@core/types/variables.js';
+import { VariableMetadata, VariableOrigin, VariableType, createCommandVariable } from '@core/types/variables.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
@@ -131,7 +131,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
                  if (typeof definedCommand !== 'object' || !definedCommand.name) {
                      throw new DirectiveError('Invalid command input structure for runDefined subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
                  }
-                 const cmdVar = state.getCommandVar(definedCommand.name);
+                 const cmdVar = state.getVariable(definedCommand.name, VariableType.COMMAND);
                  if (cmdVar?.value && isBasicCommand(cmdVar.value)) { 
                     resolvedCommandContent = cmdVar.value.commandTemplate; 
                  } else {
@@ -190,7 +190,9 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       logger.debug('Constructed command definition', { name: commandDefinition.name, type: commandDefinition.type });
 
       // Store the ICommandDefinition using setCommandVar on the provided state
-      await state.setCommandVar(commandDefinition.name, commandDefinition);
+      const commandVariable = createCommandVariable(commandDefinition.name, commandDefinition, baseMetadata);
+      await state.setVariable(commandVariable);
+      
       logger.debug(`Stored command '${commandDefinition.name}'`, { definition: commandDefinition });
 
       // Return the modified state

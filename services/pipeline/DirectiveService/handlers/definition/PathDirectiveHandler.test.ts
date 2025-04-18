@@ -5,7 +5,7 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { DirectiveNode, StructuredPath } from '@core/syntax/types/nodes.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, unsafeCreateValidatedResourcePath, createMeldPath } from '@core/types';
+import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, unsafeCreateValidatedResourcePath, createMeldPath, VariableType } from '@core/types';
 import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js'; // Added fixture import
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js'; // Keep for error tests
 
@@ -78,7 +78,7 @@ describe('PathDirectiveHandler', () => {
       // Mock service methods on fixture properties
       const resolveInContextSpy = vi.spyOn(fixture.resolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedString);
       const resolvePathSpy = vi.spyOn(fixture.resolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
-      const setPathVarSpy = vi.spyOn(fixture.stateService, 'setPathVar');
+      const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
       const validateSpy = vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
 
       console.log('NODE OBJECT BEFORE EXECUTE:', JSON.stringify(node, null, 2)); // Add console log
@@ -93,7 +93,11 @@ describe('PathDirectiveHandler', () => {
         expectedResolvedString, 
         expect.any(Object)
       );
-      expect(setPathVarSpy).toHaveBeenCalledWith(identifier, mockValidatedPath);
+      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.PATH,
+        name: identifier,
+        value: mockValidatedPath
+      }));
       expect(result).toBe(fixture.stateService); // Handler returns the state
     });
 
@@ -112,7 +116,7 @@ describe('PathDirectiveHandler', () => {
       
       const resolveInContextSpy = vi.spyOn(fixture.resolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedString);
       const resolvePathSpy = vi.spyOn(fixture.resolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
-      const setPathVarSpy = vi.spyOn(fixture.stateService, 'setPathVar');
+      const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
       const validateSpy = vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
 
       const result = await fixture.executeHandler(node);
@@ -125,7 +129,11 @@ describe('PathDirectiveHandler', () => {
         expect.any(Object) 
       );
       expect(resolvePathSpy).toHaveBeenCalledWith(expectedResolvedString, expect.any(Object));
-      expect(setPathVarSpy).toHaveBeenCalledWith(identifier, mockValidatedPath);
+      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.PATH,
+        name: identifier,
+        value: mockValidatedPath
+      }));
       expect(result).toBe(fixture.stateService);
     });
 
@@ -138,7 +146,7 @@ describe('PathDirectiveHandler', () => {
 
       const resolveInContextSpy = vi.spyOn(fixture.resolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedString);
       const resolvePathSpy = vi.spyOn(fixture.resolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
-      const setPathVarSpy = vi.spyOn(fixture.stateService, 'setPathVar');
+      const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
       const validateSpy = vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
 
       const result = await fixture.executeHandler(node);
@@ -146,7 +154,11 @@ describe('PathDirectiveHandler', () => {
       expect(validateSpy).toHaveBeenCalledWith(node);
       expect(resolveInContextSpy).toHaveBeenCalledWith(rawPathValue, expect.any(Object));
       expect(resolvePathSpy).toHaveBeenCalledWith(expectedResolvedString, expect.any(Object));
-      expect(setPathVarSpy).toHaveBeenCalledWith(identifier, mockValidatedPath);
+      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: VariableType.PATH,
+        name: identifier,
+        value: mockValidatedPath
+      }));
       expect(result).toBe(fixture.stateService);
     });
   });
@@ -201,7 +213,7 @@ describe('PathDirectiveHandler', () => {
       vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
       vi.spyOn(fixture.resolutionService, 'resolveInContext').mockResolvedValue(resolvedString);
       vi.spyOn(fixture.resolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
-      vi.spyOn(fixture.stateService, 'setPathVar').mockRejectedValueOnce(originalError);
+      vi.spyOn(fixture.stateService, 'setVariable').mockRejectedValueOnce(originalError);
 
       const executionPromise = fixture.executeHandler(node);
 
