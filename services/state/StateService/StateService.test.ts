@@ -75,20 +75,20 @@ describe('StateService', () => {
       expect(variable.metadata).toBeDefined();
       expect(variable.metadata?.origin).toBe(VariableOrigin.DIRECT_DEFINITION);
 
-      const retrieved = state.getTextVar('greeting');
+      const retrieved = state.getVariable('greeting', VariableType.TEXT);
       expect(retrieved).toBeDefined();
       expect(retrieved).toEqual(variable);
     });
 
     it('should return undefined for non-existent text variables', () => {
-      expect(state.getTextVar('nonexistent')).toBeUndefined();
+      expect(state.getVariable('nonexistent', VariableType.TEXT)).toBeUndefined();
     });
 
     it('should get all text variables', async () => {
       const greetingVar = await state.setTextVar('greeting', 'Hello');
       const farewellVar = await state.setTextVar('farewell', 'Goodbye');
 
-      const vars = state.getAllTextVars();
+      const vars = state.getAllVariables(VariableType.TEXT);
       expect(vars.size).toBe(2);
       expect(vars.get('greeting')).toEqual(greetingVar);
       expect(vars.get('farewell')).toEqual(farewellVar);
@@ -104,7 +104,7 @@ describe('StateService', () => {
       expect(variable.metadata).toBeDefined();
       expect(variable.metadata?.origin).toBe(VariableOrigin.DIRECT_DEFINITION);
 
-      const retrieved = state.getDataVar('config');
+      const retrieved = state.getVariable('config', VariableType.DATA);
       expect(retrieved).toBeDefined();
       expect(retrieved).toEqual(variable);
       expect(retrieved?.value).toEqual(dataValue);
@@ -131,7 +131,7 @@ describe('StateService', () => {
       expect(variable.value.contentType).toBe(PathContentType.FILESYSTEM);
       expect((variable.value as IFilesystemPathState).validatedPath).toEqual(fsPathValue.validatedPath);
       
-      const retrieved = state.getPathVar('local');
+      const retrieved = state.getVariable('local', VariableType.PATH);
       expect(retrieved).toBeDefined();
       expect(retrieved).toEqual(variable);
       expect(retrieved?.value.contentType).toBe(PathContentType.FILESYSTEM);
@@ -156,7 +156,7 @@ describe('StateService', () => {
       expect(variable.value.contentType).toBe(PathContentType.URL);
       expect((variable.value as IUrlPathState).fetchStatus).toBe('not_fetched');
       
-      const retrieved = state.getPathVar('remote');
+      const retrieved = state.getVariable('remote', VariableType.PATH);
       expect(retrieved).toBeDefined();
       expect(retrieved).toEqual(variable);
       expect(retrieved?.value.contentType).toBe(PathContentType.URL);
@@ -179,7 +179,7 @@ describe('StateService', () => {
       expect(variable.value.type).toBe('basic');
       expect(variable.value.command).toBe('echo "{{msg}}"');
 
-      const retrieved = state.getCommandVar('echoCmd');
+      const retrieved = state.getVariable('echoCmd', VariableType.COMMAND);
       expect(retrieved).toBeDefined();
       expect(retrieved).toEqual(variable);
       expect(retrieved?.value.parameters).toEqual(['msg']);
@@ -240,15 +240,15 @@ describe('StateService', () => {
       
       const child = state.createChildState();
       
-      expect(child.getTextVar('parentText')).toEqual(parentTextVar);
-      expect(child.getDataVar('parentData')).toEqual(parentDataVar);
-      expect(child.getPathVar('parentPath')).toEqual(parentPathVar);
-      expect(child.getCommandVar('parentCmd')).toEqual(parentCmdVar);
+      expect(child.getVariable('parentText', VariableType.TEXT)).toEqual(parentTextVar);
+      expect(child.getVariable('parentData', VariableType.DATA)).toEqual(parentDataVar);
+      expect(child.getVariable('parentPath', VariableType.PATH)).toEqual(parentPathVar);
+      expect(child.getVariable('parentCmd', VariableType.COMMAND)).toEqual(parentCmdVar);
       
       await child.setTextVar('childText', 'childValue');
-      expect(state.getTextVar('childText')).toBeUndefined();
+      expect(state.getVariable('childText', VariableType.TEXT)).toBeUndefined();
       await child.setTextVar('parentText', 'newValueInChild');
-      expect(state.getTextVar('parentText')?.value).toBe('value');
+      expect(state.getVariable('parentText', VariableType.TEXT)?.value).toBe('value');
     });
 
     it('should clone state properly (deep copy)', async () => {
@@ -268,42 +268,42 @@ describe('StateService', () => {
       expect(clone.isTransformationEnabled()).toBe(true);
       expect(clone.getTransformationOptions()).toEqual({ enabled: true, preserveOriginal: false, transformNested: false});
       
-      expect(clone.getTextVar('originalText')).toEqual(originalText);
-      expect(clone.getDataVar('originalData')).toEqual(originalData);
-      expect(clone.getPathVar('originalPath')).toEqual(originalPath);
-      expect(clone.getCommandVar('originalCmd')).toEqual(originalCmd);
+      expect(clone.getVariable('originalText', VariableType.TEXT)).toEqual(originalText);
+      expect(clone.getVariable('originalData', VariableType.DATA)).toEqual(originalData);
+      expect(clone.getVariable('originalPath', VariableType.PATH)).toEqual(originalPath);
+      expect(clone.getVariable('originalCmd', VariableType.COMMAND)).toEqual(originalCmd);
       
       await clone.setTextVar('originalText', 'clonedValue');
-      expect(state.getTextVar('originalText')?.value).toBe('value');
+      expect(state.getVariable('originalText', VariableType.TEXT)?.value).toBe('value');
       
-      const clonedDataVar = clone.getDataVar('originalData');
+      const clonedDataVar = clone.getVariable('originalData', VariableType.DATA);
       expect(clonedDataVar).toBeDefined();
       (clonedDataVar?.value as any).nested.val = 2;
-      expect((state.getDataVar('originalData')?.value as any).nested.val).toBe(1);
+      expect((state.getVariable('originalData', VariableType.DATA)?.value as any).nested.val).toBe(1);
       
-      const clonedPathVar = clone.getPathVar('originalPath');
+      const clonedPathVar = clone.getVariable('originalPath', VariableType.PATH) as IPathVariable;
       expect(clonedPathVar).toBeDefined();
       (clonedPathVar?.value as IFilesystemPathState).originalValue = './cloned';
       (clonedPathVar?.value as IFilesystemPathState).exists = true;
-      const originalPathCheck = state.getPathVar('originalPath');
+      const originalPathCheck = state.getVariable('originalPath', VariableType.PATH) as IPathVariable;
       expect((originalPathCheck?.value as IFilesystemPathState).originalValue).toBe('./orig');
       expect((originalPathCheck?.value as IFilesystemPathState).exists).toBe(false);
       expect((clonedPathVar?.value as IFilesystemPathState).originalValue).toBe('./cloned');
       expect((clonedPathVar?.value as IFilesystemPathState).exists).toBe(true);
       
-      const clonedCmdVar = clone.getCommandVar('originalCmd');
+      const clonedCmdVar = clone.getVariable('originalCmd', VariableType.COMMAND) as CommandVariable;
       expect(clonedCmdVar).toBeDefined();
       (clonedCmdVar?.value as ICommandDefinition).command = 'echo cloned';
       (clonedCmdVar?.value as ICommandDefinition).parameters?.push('b');
-      const originalCmdCheck = state.getCommandVar('originalCmd');
+      const originalCmdCheck = state.getVariable('originalCmd', VariableType.COMMAND) as CommandVariable;
       expect((originalCmdCheck?.value as ICommandDefinition).command).toBe('echo orig');
       expect((originalCmdCheck?.value as ICommandDefinition).parameters).toEqual(['a']);
       expect((clonedCmdVar?.value as ICommandDefinition).command).toBe('echo cloned');
       expect((clonedCmdVar?.value as ICommandDefinition).parameters).toEqual(['a', 'b']);
 
       await clone.setTextVar('newInClone', 'onlyInClone');
-      expect(state.getTextVar('newInClone')).toBeUndefined();
-      expect(clone.getTextVar('newInClone')?.value).toBe('onlyInClone');
+      expect(state.getVariable('newInClone', VariableType.TEXT)).toBeUndefined();
+      expect(clone.getVariable('newInClone', VariableType.TEXT)?.value).toBe('onlyInClone');
     });
   });
   
@@ -346,10 +346,10 @@ describe('StateService', () => {
     });
 
     it('setVariable should store variables correctly based on type', async () => {
-      expect(state.getTextVar('myText')).toEqual(textVar);
-      expect(state.getDataVar('myData')).toEqual(dataVar);
-      expect(state.getPathVar('myPath')).toEqual(pathVar);
-      expect(state.getCommandVar('myCmd')).toEqual(cmdVar);
+      expect(state.getVariable('myText', VariableType.TEXT)).toEqual(textVar);
+      expect(state.getVariable('myData', VariableType.DATA)).toEqual(dataVar);
+      expect(state.getVariable('myPath', VariableType.PATH)).toEqual(pathVar);
+      expect(state.getVariable('myCmd', VariableType.COMMAND)).toEqual(cmdVar);
 
       const newVar = createTextVariable('another', 'val');
       const setResult = await state.setVariable(newVar);
@@ -422,6 +422,7 @@ describe('StateService', () => {
       const cloned = state.clone();
       expect(cloned).toBeInstanceOf(StateService);
       expect(cloned.getStateId()).not.toBe(state.getStateId());
+      expect(cloned.getParentServiceRef()).toBeUndefined();
     });
 
     it('should create a child state inheriting variables', async () => {
@@ -438,15 +439,15 @@ describe('StateService', () => {
       
       const child = state.createChildState();
       
-      expect(child.getTextVar('parentText')).toEqual(parentTextVar);
-      expect(child.getDataVar('parentData')).toEqual(parentDataVar);
-      expect(child.getPathVar('parentPath')).toEqual(parentPathVar);
-      expect(child.getCommandVar('parentCmd')).toEqual(parentCmdVar);
+      expect(child.getVariable('parentText', VariableType.TEXT)).toEqual(parentTextVar);
+      expect(child.getVariable('parentData', VariableType.DATA)).toEqual(parentDataVar);
+      expect(child.getVariable('parentPath', VariableType.PATH)).toEqual(parentPathVar);
+      expect(child.getVariable('parentCmd', VariableType.COMMAND)).toEqual(parentCmdVar);
       
       await child.setTextVar('childText', 'childValue');
-      expect(state.getTextVar('childText')).toBeUndefined();
+      expect(state.getVariable('childText', VariableType.TEXT)).toBeUndefined();
       await child.setTextVar('parentText', 'newValueInChild');
-      expect(state.getTextVar('parentText')?.value).toBe('value');
+      expect(state.getVariable('parentText', VariableType.TEXT)?.value).toBe('value');
     });
 
     it('should merge variables from child state', async () => {
@@ -462,6 +463,7 @@ describe('StateService', () => {
             type: 'merge-source' 
         })
       );
+      expect(state.getVariable('childVar', VariableType.TEXT)?.value).toBe('childValue');
     });
 
     it('should overwrite existing parent variables and add new child variables on merge', async () => {
@@ -475,11 +477,11 @@ describe('StateService', () => {
       await state.mergeChildState(childState);
       
       // Assertions: Check parent state after merge
-      const childVarAfterMerge = state.getTextVar('childVar');
+      const childVarAfterMerge = state.getVariable('childVar', VariableType.TEXT);
       expect(childVarAfterMerge).toBeDefined();
       expect(childVarAfterMerge?.value).toBe('childValue'); // Child-only variable should now exist
 
-      const parentVarAfterMerge = state.getTextVar('parentVar');
+      const parentVarAfterMerge = state.getVariable('parentVar', VariableType.TEXT);
       expect(parentVarAfterMerge).toBeDefined();
       expect(parentVarAfterMerge?.value).toBe('childOverwritesParent'); // Parent variable should be overwritten
     });
