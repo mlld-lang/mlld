@@ -124,8 +124,10 @@ export class StateFactory implements IStateFactory {
       },
       commands,
       imports: new Set([...parent.imports, ...child.imports]),
-      nodes: parent.nodes,
-      transformedNodes: parent.transformedNodes,
+      nodes: [...parent.nodes, ...child.nodes],
+      transformedNodes: child.transformedNodes !== undefined 
+          ? [...(parent.transformedNodes || []), ...child.transformedNodes] 
+          : parent.transformedNodes ? [...parent.transformedNodes] : undefined,
       filePath: child.filePath ?? parent.filePath,
       stateId: parent.stateId,
       parentServiceRef: parent.parentServiceRef,

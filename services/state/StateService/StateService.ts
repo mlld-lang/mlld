@@ -419,15 +419,15 @@ export class StateService implements IStateService {
 
   getTransformedNodes(): MeldNode[] {
     const transformEnabled = this.isTransformationEnabled();
+    const transformedNodesExist = !!this.currentState.transformedNodes;
     
-    process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. isTransformationEnabled: ${transformEnabled}. transformedNodes is array: ${Array.isArray(this.currentState.transformedNodes)}\n`);
+    process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. isTransformationEnabled: ${transformEnabled}. transformedNodesExist: ${transformedNodesExist}\n`);
 
-    if (transformEnabled) {
-       const nodesToReturn = this.currentState.transformedNodes ?? [];
-       process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. RETURNING transformedNodes (or []) (Length: ${nodesToReturn.length})\n`);
-       return [...nodesToReturn]; 
+    if (transformEnabled && transformedNodesExist) {
+       process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. RETURNING transformedNodes (Length: ${this.currentState.transformedNodes?.length ?? 0})\n`);
+      return [...this.currentState.transformedNodes!]; // Use ! because we checked existence
     }
-    process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. Transformation DISABLED. RETURNING original nodes (Length: ${this.currentState.nodes?.length ?? 0})\n`);
+    process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. RETURNING original nodes (Length: ${this.currentState.nodes?.length ?? 0})\n`);
     return [...this.currentState.nodes]; 
   }
 
@@ -447,20 +447,11 @@ export class StateService implements IStateService {
     let transformedNodesUpdate: Partial<StateNode> = {};
 
     if (this.isTransformationEnabled()) {
-      // Ensure transformedNodes exists before adding to it.
-      // Initialize from current nodes if transformedNodes is not yet defined.
-      const baseTransformed = this.currentState.transformedNodes ?? [...this.currentState.nodes];
-      const newTransformedNodes = [...baseTransformed, nodeClone];
-      transformedNodesUpdate = { transformedNodes: newTransformedNodes };
+      const currentTransformed = this.currentState.transformedNodes ? [...this.currentState.transformedNodes] : [...this.currentState.nodes];
+      transformedNodesUpdate = { transformedNodes: [...currentTransformed, nodeClone] };
     }
 
-    // Create the updates object, always including the updated original nodes list.
-    const finalUpdates: Partial<Omit<StateNode, 'stateId' | 'createdAt' | 'parentServiceRef'>> = {
-        nodes, // Always update the original nodes list
-        ...transformedNodesUpdate // Include transformedNodes update if transformation is enabled
-    };
-
-    this.updateState(finalUpdates, `addNode:${node.nodeId}`);
+    this.updateState({ nodes, ...transformedNodesUpdate }, `addNode:${node.nodeId}`);
   }
 
   transformNode(index: number, replacement: MeldNode | MeldNode[] | undefined): void {

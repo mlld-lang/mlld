@@ -14,8 +14,6 @@ import type { IInterpreterService } from '@services/pipeline/InterpreterService/
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js'; // Import IOutputService
-import { StateService } from '@services/state/StateService/StateService.js'; // <<< Import for logging
-import { VariableType } from '@core/types/variables.js'; // <<< Import for logging
 
 // DI Container is configured by importing @core/di-config.js elsewhere
 
@@ -49,22 +47,8 @@ export async function processMeld(content: string, options?: Partial<ProcessOpti
       initialState: stateService, 
   });
 
-  // <<< Logging Point A >>>
-  const nodesForOutput = resultState.getTransformedNodes();
-  const stateIdForOutput = resultState.getStateId();
-  const varForOutput = resultState.getVariable('importedVar', VariableType.TEXT); // Check for var in simple import test
-  process.stdout.write(`DEBUG: [processMeld - POINT A] StateID: ${stateIdForOutput}. Nodes Count: ${nodesForOutput.length}. Nodes: ${JSON.stringify(nodesForOutput.map(n => ({type: n.type, kind: (n as any)?.directive?.kind, content: (n as any)?.content?.substring(0,20)})))}\n`);
-  process.stdout.write(`DEBUG: [processMeld - POINT A] StateID: ${stateIdForOutput}. Has importedVar? ${!!varForOutput}. Value: ${varForOutput?.value}\n`);
-  // <<< End Logging Point A >>>
-  
   const nodesToProcess = resultState.getTransformedNodes(); 
   const finalOutput = await outputService.convert(nodesToProcess, resultState, options?.format || 'xml'); 
-
-  // <<< Logging Point B >>>
-  const varAfterOutput = resultState.getVariable('importedVar', VariableType.TEXT);
-  process.stdout.write(`DEBUG: [processMeld - POINT B] StateID: ${stateIdForOutput}. Has importedVar? ${!!varAfterOutput}. Value: ${varAfterOutput?.value}\n`);
-  process.stdout.write(`DEBUG: [processMeld - POINT B] Final Output String: ${JSON.stringify(finalOutput)}\n`);
-  // <<< End Logging Point B >>>
 
   // <<< Dispose container ONLY if it was created internally >>>
   if (!isExternalContainer) { 
