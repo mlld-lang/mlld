@@ -9,6 +9,6 @@ import { ISourceLocation, NodeId } from './common';
  */
 export interface INode extends BaseNode {
   readonly type: NodeType;
-  readonly location: ISourceLocation;
+  readonly location?: ISourceLocation;
   readonly nodeId: NodeId;
 }

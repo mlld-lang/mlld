@@ -61,16 +61,20 @@ export interface SourceLocation {
  * service lead feedback to enable more explicit error flows without excessive
  * try/catch blocks.
  */
-export interface Result<T, E = Error> {
-  /** Whether the operation succeeded */
-  success: boolean;
-  
-  /** The value if the operation succeeded */
-  value?: T;
-  
-  /** The error if the operation failed */
-  error?: E;
+
+// <<< NEW Discriminated Union >>>
+interface Success<T> {
+  success: true;
+  value: T; // Non-optional value
 }
+
+interface Failure<E> {
+  success: false;
+  error: E; // Non-optional error
+}
+
+export type Result<T, E = Error> = Success<T> | Failure<E>;
+// <<< END NEW >>>
 
 /**
  * Create a successful result.

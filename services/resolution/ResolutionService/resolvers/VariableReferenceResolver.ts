@@ -145,7 +145,7 @@ export class VariableReferenceResolver {
    */
   async resolve(node: VariableReferenceNode, context: ResolutionContext): Promise<string> {
     const currentDepth = context.depth || 0;
-    process.stdout.write(`DEBUG: [VRefResolver.resolve ENTRY] NodeId: ${node.nodeId}, Resolving: ${node.identifier}, ValueType: ${node.valueType}, Fields: ${node.fields?.length ?? 0}, Strict: ${context.strict}, Depth: ${currentDepth}, State ID: ${context.state?.getStateId() ?? 'N/A'}\n`);
+    // process.stdout.write(`DEBUG: [VRefResolver.resolve ENTRY] NodeId: ${node.nodeId}, Resolving: ${node.identifier}, ValueType: ${node.valueType}, Fields: ${node.fields?.length ?? 0}, Strict: ${context.strict}, Depth: ${currentDepth}, State ID: ${context.state?.getStateId() ?? 'N/A'}\n`);
     if (currentDepth > this.MAX_RESOLUTION_DEPTH) {
       throw new VariableResolutionError('Maximum resolution depth exceeded', {
           code: 'E_MAX_DEPTH', 
@@ -156,35 +156,35 @@ export class VariableReferenceResolver {
     
     const newContext = context.withIncreasedDepth();
     // logger.debug(`[VRefResolver.resolve ENTRY] Resolving: ${node.identifier}, Fields: ${node.fields?.length ?? 0}, Strict: ${newContext.strict}, Depth: ${currentDepth}`);
-    process.stdout.write(`DEBUG: [VRefResolver.resolve ENTRY] Resolving: ${node.identifier}, Fields: ${node.fields?.length ?? 0}, Strict: ${newContext.strict}, Depth: ${currentDepth}\n`);
+    // process.stdout.write(`DEBUG: [VRefResolver.resolve ENTRY] Resolving: ${node.identifier}, Fields: ${node.fields?.length ?? 0}, Strict: ${newContext.strict}, Depth: ${currentDepth}\n`);
 
     try {
       const variable = await this.getVariable(node, newContext);
       // logger.debug(`[VRefResolver.resolve] getVariable result for ${node.identifier}: ${variable ? variable.type : 'undefined'}`);
-      process.stdout.write(`DEBUG: [VRefResolver.resolve] getVariable result for ${node.identifier}: ${variable ? variable.type : 'undefined'}\n`);
+      // process.stdout.write(`DEBUG: [VRefResolver.resolve] getVariable result for ${node.identifier}: ${variable ? variable.type : 'undefined'}\n`);
       
       if (!variable) {
           if (!newContext.strict) {
-             process.stdout.write(`WARN: [VRefResolver.resolve] Non-strict mode, variable "${node.identifier}" not found, returning empty string.\n`);
+            // process.stdout.write(`WARN: [VRefResolver.resolve] Non-strict mode, variable "${node.identifier}" not found, returning empty string.\n`);
              return '';
           }
-          process.stdout.write(`DEBUG: [VRefResolver.resolve] Variable not found & strict=true. Throwing E_VAR_NOT_FOUND for ${node.identifier}\n`);
+          // process.stdout.write(`DEBUG: [VRefResolver.resolve] Variable not found & strict=true. Throwing E_VAR_NOT_FOUND for ${node.identifier}\n`);
           // Log before throwing
           const errorToThrow = new VariableResolutionError(`Variable not found: ${node.identifier}`, {
               code: 'E_VAR_NOT_FOUND',
               severity: ErrorSeverity.Recoverable, 
               details: { variableName: node.identifier, valueType: node.valueType }
           });
-          process.stdout.write(`DEBUG: [VRefResolver.resolve] THROWING (Strict Mode, Var Not Found): ${errorToThrow.name} - ${errorToThrow.message}\n`);
+          // process.stdout.write(`DEBUG: [VRefResolver.resolve] THROWING (Strict Mode, Var Not Found): ${errorToThrow.name} - ${errorToThrow.message}\n`);
           throw errorToThrow;
       }
 
       // --- Check for InterpolatableValue first --- 
       // logger.debug(`[VRefResolver.resolve] Checking if value for ${node.identifier} is InterpolatableValueArray`);
-      process.stdout.write(`DEBUG: [VRefResolver.resolve] Checking if value for ${node.identifier} is InterpolatableValueArray\n`);
+      // process.stdout.write(`DEBUG: [VRefResolver.resolve] Checking if value for ${node.identifier} is InterpolatableValueArray\n`);
       if (isInterpolatableValueArray(variable.value)) {
           // logger.debug(`[VRefResolver.resolve] Value for ${node.identifier} IS InterpolatableValueArray. Type: ${typeof variable.value}, IsArray: ${Array.isArray(variable.value)}`);
-          process.stdout.write(`DEBUG: [VRefResolver.resolve] Value for ${node.identifier} IS InterpolatableValueArray. Type: ${typeof variable.value}, IsArray: ${Array.isArray(variable.value)}\n`);
+          // process.stdout.write(`DEBUG: [VRefResolver.resolve] Value for ${node.identifier} IS InterpolatableValueArray. Type: ${typeof variable.value}, IsArray: ${Array.isArray(variable.value)}\n`);
           if (!this.resolutionService) {
               throw new MeldResolutionError('Cannot recursively resolve variable: ResolutionService instance is missing.', {
                   code: 'E_SERVICE_UNAVAILABLE', 
@@ -192,15 +192,15 @@ export class VariableReferenceResolver {
               });
           }
           // logger.debug(`[VRefResolver.resolve] Variable '${node.identifier}' contains an InterpolatableValue array. Performing recursive resolution.`);
-          process.stdout.write(`DEBUG: [VRefResolver.resolve] Variable '${node.identifier}' contains an InterpolatableValue array. Performing recursive resolution.\n`);
+          // process.stdout.write(`DEBUG: [VRefResolver.resolve] Variable '${node.identifier}' contains an InterpolatableValue array. Performing recursive resolution.\n`);
           // Recursive Call
           const recursiveResult = await this.resolutionService.resolveNodes(variable.value, newContext);
           // logger.debug(`[VRefResolver.resolve EXIT - Recursive] Resolved ${node.identifier} recursively to: '${recursiveResult.substring(0, 50)}...'`);
-          process.stdout.write(`DEBUG: [VRefResolver.resolve EXIT - Recursive] Resolved ${node.identifier} recursively to: '${recursiveResult.substring(0, 50)}...'\n`);
+          // process.stdout.write(`DEBUG: [VRefResolver.resolve EXIT - Recursive] Resolved ${node.identifier} recursively to: '${recursiveResult.substring(0, 50)}...'\n`);
           return recursiveResult;
       } else {
            // logger.debug(`[VRefResolver.resolve] Value for ${node.identifier} is NOT InterpolatableValueArray. Type: ${typeof variable.value}, IsArray: ${Array.isArray(variable.value)}`);
-           process.stdout.write(`DEBUG: [VRefResolver.resolve] Value for ${node.identifier} is NOT InterpolatableValueArray. Type: ${typeof variable.value}, IsArray: ${Array.isArray(variable.value)}\n`);
+           // process.stdout.write(`DEBUG: [VRefResolver.resolve] Value for ${node.identifier} is NOT InterpolatableValueArray. Type: ${typeof variable.value}, IsArray: ${Array.isArray(variable.value)}\n`);
       }
 
       // --- Path Variable Handling --- 
@@ -236,7 +236,7 @@ export class VariableReferenceResolver {
           let baseValue: JsonValue | string | undefined = variable.value;
           let finalResolvedValue: JsonValue | string | undefined;
           // logger.debug(`[VRefResolver.resolve] Processing ${variable.type} variable ${node.identifier}. Has fields: ${!!node.fields?.length}. Base value type: ${typeof baseValue}`);
-          process.stdout.write(`DEBUG: [VRefResolver.resolve] Processing ${variable.type} variable ${node.identifier}. Has fields: ${!!node.fields?.length}. Base value type: ${typeof baseValue}\n`);
+          // process.stdout.write(`DEBUG: [VRefResolver.resolve] Processing ${variable.type} variable ${node.identifier}. Has fields: ${!!node.fields?.length}. Base value type: ${typeof baseValue}\n`);
           
           if (node.fields && node.fields.length > 0) {
              // Ensure field access is only attempted on data variables (or potentially objects from text vars)
@@ -249,8 +249,8 @@ export class VariableReferenceResolver {
                       // accessFields returned failure(FieldAccessError)
                       if (newContext.strict) {
                           // Log before throwing
-                          process.stdout.write(`DEBUG: [VRefResolver.resolve] Field access failed & strict=true. Throwing FieldAccessError for ${node.identifier}\n`);
-                          process.stdout.write(`DEBUG: [VRefResolver.resolve] THROWING (Strict Mode, Field Access Failed): ${fieldAccessResult.error.name} - ${fieldAccessResult.error.message}\n`);
+                          // process.stdout.write(`DEBUG: [VRefResolver.resolve] Field access failed & strict=true. Throwing FieldAccessError for ${node.identifier}\n`);
+                          // process.stdout.write(`DEBUG: [VRefResolver.resolve] THROWING (Strict Mode, Field Access Failed): ${fieldAccessResult.error.name} - ${fieldAccessResult.error.message}\n`);
                           throw fieldAccessResult.error; // Throw the FieldAccessError
                       }
                       finalResolvedValue = undefined; // Non-strict, treat as undefined
@@ -266,8 +266,8 @@ export class VariableReferenceResolver {
                          failedAtIndex: 0, 
                          failedKey: node.fields[0]?.value ?? "unknown" 
                       });
-                      process.stdout.write(`DEBUG: [VRefResolver.resolve] Field access on non-object & strict=true. Throwing FieldAccessError for ${node.identifier}\n`);
-                      process.stdout.write(`DEBUG: [VRefResolver.resolve] THROWING (Strict Mode, Field Access Non-Object): ${errorToThrow.name} - ${errorToThrow.message}\n`);
+                      // process.stdout.write(`DEBUG: [VRefResolver.resolve] Field access on non-object & strict=true. Throwing FieldAccessError for ${node.identifier}\n`);
+                      // process.stdout.write(`DEBUG: [VRefResolver.resolve] THROWING (Strict Mode, Field Access Non-Object): ${errorToThrow.name} - ${errorToThrow.message}\n`);
                       throw errorToThrow;
                   }
                   finalResolvedValue = undefined; // Non-strict
@@ -279,7 +279,7 @@ export class VariableReferenceResolver {
           // Convert the final resolved value (which might be primitive, object, array) to a string
           const finalString = this.convertToString(finalResolvedValue, newContext);
           // logger.debug(`[VRefResolver.resolve EXIT - ${variable.type}] Resolved ${node.identifier} to string: '${finalString.substring(0, 50)}...'`);
-          process.stdout.write(`DEBUG: [VRefResolver.resolve EXIT - ${variable.type}] Resolved ${node.identifier} to string: '${finalString.substring(0, 50)}...'\n`);
+          // process.stdout.write(`DEBUG: [VRefResolver.resolve EXIT - ${variable.type}] Resolved ${node.identifier} to string: '${finalString.substring(0, 50)}...'\n`);
           return finalString;
 
       } else {
@@ -360,7 +360,7 @@ export class VariableReferenceResolver {
     // process.stdout.write(`DEBUG: [VarRefResolver.getVariable] Calling context.state.getVariable for '${name}'. StateService Instance State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
     const variable: MeldVariable | undefined = await currentState.getVariable(name, specificType as VariableType | undefined); 
 
-    process.stdout.write(`DEBUG: [VRefResolver.getVariable] Looked up '${name}' (hint: ${specificType ?? 'any'}). Found: ${variable ? variable.type + ' variable' : 'nothing'}. State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
+    // process.stdout.write(`DEBUG: [VRefResolver.getVariable] Looked up '${name}' (hint: ${specificType ?? 'any'}). Found: ${variable ? variable.type + ' variable' : 'nothing'}. State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
     if (variable) {
         // --- Type checking is now redundant here as getVariable handles it --- 
         // if (specificType && variable.type !== specificType) { ... }
@@ -393,7 +393,7 @@ export class VariableReferenceResolver {
         if (this.resolutionTracker) {
            this.resolutionTracker.trackResolutionAttempt(name, `variable-not-found (type hint: ${specificType ?? 'any'})`, false); 
         }
-        process.stdout.write(`DEBUG: [VRefResolver.getVariable] EXIT for '${name}' - Not Found. State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
+        // process.stdout.write(`DEBUG: [VRefResolver.getVariable] EXIT for '${name}' - Not Found. State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
         return undefined;
     }
   }
@@ -409,13 +409,13 @@ export class VariableReferenceResolver {
   ): Promise<Result<JsonValue | undefined, FieldAccessError>> { // <<< Explicit error type
     let current: JsonValue | undefined = baseValue;
     // logger.debug(`[ACCESS FIELDS ENTRY] Starting accessFields`, { baseValue: JSON.stringify(baseValue), fields: JSON.stringify(fields), variableName });
-    process.stdout.write(`DEBUG: [VRefResolver.accessFields ENTRY] var=${variableName}, fields=${JSON.stringify(fields)}, State ID: ${context.state?.getStateId() ?? 'N/A'}\n`);
+    // process.stdout.write(`DEBUG: [VRefResolver.accessFields ENTRY] var=${variableName}, fields=${JSON.stringify(fields)}, State ID: ${context.state?.getStateId() ?? 'N/A'}\n`);
 
     for (let i = 0; i < fields.length; i++) {
       const field = fields[i];
       const currentPathString = fields.slice(0, i + 1).map(f => f.type === 'index' ? `[${f.value}]` : `.${f.value}`).join('');
       // logger.debug(`[ACCESS FIELDS] Accessing field: ${currentPathString}`, { currentValueType: typeof current });
-      process.stdout.write(`DEBUG: [VRefResolver.accessFields] Accessing: ${currentPathString}, currentType: ${typeof current}\n`);
+      // process.stdout.write(`DEBUG: [VRefResolver.accessFields] Accessing: ${currentPathString}, currentType: ${typeof current}\n`);
 
       try { // Wrap potential runtime errors
           if (current === undefined || current === null) {
@@ -475,7 +475,7 @@ export class VariableReferenceResolver {
       }
     }
     // logger.debug(`[ACCESS FIELDS EXIT] Completed successfully. Final value: ${JSON.stringify(current)}`);
-    process.stdout.write(`DEBUG: [VRefResolver.accessFields EXIT] var=${variableName}, result=${JSON.stringify(current)}\n`);
+    // process.stdout.write(`DEBUG: [VRefResolver.accessFields EXIT] var=${variableName}, result=${JSON.stringify(current)}\n`);
     return success(current);
   }
 
@@ -483,7 +483,7 @@ export class VariableReferenceResolver {
    * Converts a resolved value to its string representation for final output/use.
    */
   private convertToString(value: JsonValue | string | undefined, context: ResolutionContext): string {
-      process.stdout.write(`DEBUG: [VRefResolver.convertToString ENTRY] Type: ${typeof value}, Value: ${String(value).substring(0,50)}..., State ID: ${context.state?.getStateId() ?? 'N/A'}\n`);
+      // process.stdout.write(`DEBUG: [VRefResolver.convertToString ENTRY] Type: ${typeof value}, Value: ${String(value).substring(0,50)}..., State ID: ${context.state?.getStateId() ?? 'N/A'}\n`);
       if (value === undefined || value === null) {
           // Use strict mode to determine if null/undefined become empty string or throw?
           // For now, standard behavior is empty string.

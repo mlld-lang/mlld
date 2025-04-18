@@ -366,10 +366,8 @@ export class InterpreterService implements IInterpreterService {
         mergedToParent: opts.mergeState && opts.initialState
       });
 
-      process.stdout.write(`DEBUG: [InterpreterService.interpret EXIT] Completed. Final State ID: ${currentState?.getStateId() ?? 'N/A'}\n`);
       return currentState;
     } catch (error) {
-      process.stdout.write(`DEBUG: [InterpreterService.interpret ERROR] Error during interpretation: ${error instanceof Error ? error.message : String(error)}\n`);
       throw error; 
     }
   }
@@ -408,13 +406,14 @@ export class InterpreterService implements IInterpreterService {
     const opts = { ...DEFAULT_OPTIONS, ...options };
     let currentState = state;
     let resultState: IStateService | DirectiveResult | null = null;
-    let transformedNode: MeldNode | null = null; // Track potential replacement
+    let transformedNode: MeldNode | null = null; // For non-directive transforms
+    let replacementNode: MeldNode | MeldNode[] | undefined = undefined; // For directive results
 
     switch (node.type) {
       case 'Text':
         // Handle Text nodes
         const textNode = node as TextNode;
-        process.stdout.write(`DEBUG: [InterpreterService.interpretNode Text] Content: '${textNode.content.substring(0, 50)}...'. State ID: ${currentState.getStateId()}\n`);
+        process.stdout.write(`DEBUG: [InterpreterService.interpretNode Text] Content: '${textNode.content.substring(0, 50)}...'\n`);
         // --- Revert: Remove incorrect inline resolution --- 
         // The parser should create separate VariableReferenceNodes for {{...}}.
         // TextNodes should be treated as literal content.
@@ -425,7 +424,6 @@ export class InterpreterService implements IInterpreterService {
 
       case 'CodeFence':
         // Handle CodeFence nodes similar to Text nodes - preserve them exactly
-        process.stdout.write(`DEBUG: [InterpreterService.interpretNode CodeFence] State ID: ${currentState.getStateId()}\n`);
         const codeFenceState = currentState.clone();
         codeFenceState.addNode(node);
         currentState = codeFenceState;
@@ -443,7 +441,6 @@ export class InterpreterService implements IInterpreterService {
                  nodeId: crypto.randomUUID() // <<< ADDED
              };
              transformedNode = resolvedTextNode;
-             process.stdout.write(`DEBUG: [InterpreterService.interpretNode VariableReference] Resolved '${varNode.identifier}' to TextNode. State ID: ${currentState.getStateId()}\n`);
          } catch (error) {
               logger.error('Failed to resolve VariableReferenceNode during interpretation', {
                  error: error instanceof Error ? error.message : String(error),
@@ -457,11 +454,9 @@ export class InterpreterService implements IInterpreterService {
 
       case 'Comment':
         // Comments are ignored during interpretation
-        process.stdout.write(`DEBUG: [InterpreterService.interpretNode Comment] Ignoring. State ID: ${currentState.getStateId()}\n`);
         break;
 
       case 'Directive':
-        process.stdout.write(`DEBUG: [InterpreterService.interpretNode Directive] Kind: ${(node as DirectiveNode).directive.kind}. State ID: ${currentState.getStateId()}\n`);
         const directiveState = currentState.clone(); // Clone the loop's current state ONCE
         directiveState.addNode(node); // Add the node first to maintain order
         if (node.type !== 'Directive' || !('directive' in node) || !node.directive) {
@@ -508,7 +503,6 @@ export class InterpreterService implements IInterpreterService {
         const directiveResult = await this.callDirectiveHandleDirective(directiveNode, handlerContext);
 
         let resultState: IStateService;
-        let replacementNode: MeldNode | undefined = undefined;
         
         if (
           directiveResult &&
@@ -538,16 +532,16 @@ export class InterpreterService implements IInterpreterService {
         currentState = resultState;
         
         // --- Add logging before replacement logic ---
-        process.stdout.write(`DEBUG: [InterpreterService Directive Case] Before replacement check. replacementNode type: ${replacementNode?.type}, content: ${(replacementNode as any)?.content}\n`);
+        // process.stdout.write(`DEBUG: [InterpreterService Directive Case] Before replacement check. replacementNode type: ${replacementNode?.type}, content: ${(replacementNode as any)?.content}\n`);
 
         if (replacementNode) { 
-          process.stdout.write(`DEBUG: [InterpreterService Directive Case] replacementNode is defined. Checking transformation enabled.\n`);
+          // process.stdout.write(`DEBUG: [InterpreterService Directive Case] replacementNode is defined. Checking transformation enabled.\n`);
           // Check if transformation is enabled (always true now)
           if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) {
-            process.stdout.write(`DEBUG: [InterpreterService Directive Case] Transformation enabled. Getting nodes for replacement.\n`);
+            // process.stdout.write(`DEBUG: [InterpreterService Directive Case] Transformation enabled. Getting nodes for replacement.\n`);
             // Get the list of nodes currently being built for output
             const nodes = currentState.getTransformedNodes(); 
-            process.stdout.write(`DEBUG: [InterpreterService Directive Case] Current transformedNodes length: ${nodes?.length}. Nodes: ${JSON.stringify(nodes?.map(n => ({ type: n.type, loc: n.location?.start })))}`);
+            // process.stdout.write(`DEBUG: [InterpreterService Directive Case] Current transformedNodes length: ${nodes?.length}. Nodes: ${JSON.stringify(nodes?.map(n => ({ type: n.type, loc: n.location?.start })))}`);
             // Find the index of the original directive node we just processed
             const index = nodes.findIndex(n => 
                 n.type === node.type &&
@@ -557,20 +551,34 @@ export class InterpreterService implements IInterpreterService {
                 (n.location?.filePath === node.location?.filePath || 
                  (!n.location?.filePath && !node.location?.filePath)) // Handle cases where filePath might be undefined
             );
-            process.stdout.write(`DEBUG: [InterpreterService Directive Case] Found index for original node ${node.type} (${(node as DirectiveNode)?.directive?.kind}) by location: ${index}\n`);
+            // process.stdout.write(`DEBUG: [InterpreterService Directive Case] Found index for original node ${node.type} (${(node as DirectiveNode)?.directive?.kind}) by location: ${index}\n`);
             if (index !== -1) {
-              // If found, replace it with the replacementNode from the handler
-              process.stdout.write(`DEBUG: [InterpreterService Directive Case] Calling transformNode to replace index ${index} with ${replacementNode.type} node.\n`);
-              currentState.transformNode(index, replacementNode); // <<< USE WITHOUT Assertion
-              // Add log after transform to verify
-              const nodesAfter = currentState.getTransformedNodes();
-              process.stdout.write(`DEBUG: [InterpreterService Directive Case] After transformNode. New length: ${nodesAfter?.length}. Node at index ${index}: ${nodesAfter?.[index]?.type}\n`);
+              
+              // <<< FIX: Check if replacement is an array >>>
+              if (Array.isArray(replacementNode)) {
+                logger.warn('Directive handler returned an array for replacement, but transformNode currently only supports single nodes. Node not replaced.', {
+                   directiveKind: (node as DirectiveNode)?.directive?.kind,
+                   originalNodeLocation: node.location,
+                   replacementArrayLength: replacementNode.length
+                });
+              } else if (replacementNode) {
+                // If it's a single node, call transformNode
+                // Assign to explicitly typed variable to help linter
+                const singleReplacementNode: MeldNode = replacementNode;
+                currentState.transformNode(index, singleReplacementNode); // Pass the explicitly typed single node
+                // Add log after transform to verify
+                // const nodesAfter = currentState.getTransformedNodes();
+              } else {
+                // replacementNode is null or undefined, do nothing
+              }
+              // <<< END FIX >>>
+              
             } else {
                // logger.warn('Original node not found in transformed nodes for replacement', { node });
                process.stderr.write(`WARN: [InterpreterService Directive Case] Original node not found in transformed nodes for replacement. Node: ${JSON.stringify(node)}\n`);
             }
           } else {
-             process.stdout.write(`DEBUG: [InterpreterService Directive Case] Transformation NOT enabled (or check failed).\n`);
+             // process.stdout.write(`DEBUG: [InterpreterService Directive Case] Transformation NOT enabled (or check failed).\n`);
           }
         } // <<< END of replacement logic
         
@@ -584,9 +592,9 @@ export class InterpreterService implements IInterpreterService {
               currentState,
               state,
               {
-                skipExisting: false,
-                trackContextBoundary: false,
-                trackVariableCrossing: false
+                // skipExisting: false, // Removed based on previous analysis - leaving commented
+                trackContextBoundary: false, // <<< ADDED BACK
+                trackVariableCrossing: false // <<< ADDED BACK
               }
             );
           } catch (e) {
@@ -610,24 +618,17 @@ export class InterpreterService implements IInterpreterService {
     // If the node itself was transformed (e.g., TextNode with {{, VariableReference), 
     // add the transformed version to a clone of the finalState.
     if (transformedNode) {
-      process.stdout.write(`DEBUG: [InterpreterService.interpretNode] Applying transformedNode (Type: ${transformedNode.type}). Cloning state ${finalState.getStateId()}.\n`);
+      // process.stdout.write(`DEBUG: [InterpreterService.interpretNode] Applying transformedNode (Type: ${transformedNode.type}). Cloning state ${finalState.getStateId()}.\n`);
       finalState = finalState.clone(); // Clone the potentially modified state
       finalState.addNode(transformedNode); 
-      process.stdout.write(`DEBUG: [InterpreterService.interpretNode] Node added to cloned state. New State ID: ${finalState.getStateId()}\n`);
-    } else if (node.type !== 'Directive' && node.type !== 'Comment' && node.type !== 'VariableReference') { 
-      // Add original node if not a directive/comment/resolved varRef AND not replaced
-      // This handles Text, CodeFence, etc. that don't get transformed but need to be in output state
-      process.stdout.write(`DEBUG: [InterpreterService.interpretNode] Adding original untransformed node (Type: ${node.type}). Cloning state ${finalState.getStateId()}.\n`);
-      finalState = finalState.clone();
-      finalState.addNode(node);
-      process.stdout.write(`DEBUG: [InterpreterService.interpretNode] Original node added to cloned state. New State ID: ${finalState.getStateId()}\n`);
+      // process.stdout.write(`DEBUG: [InterpreterService.interpretNode] Node added to cloned state. New State ID: ${finalState.getStateId()}, Node Count: ${finalState.getNodes()?.length}\n`);
     } else {
-      // Node was a Directive, Comment, or successfully resolved VariableReference, and no replacement was needed.
-      // The current state (`currentState` or `finalState`) already reflects the result.
-      process.stdout.write(`DEBUG: [InterpreterService.interpretNode] No node added/transformed for type ${node.type}. Using State ID: ${finalState.getStateId()}.\n`);
+       // Log if no transformation occurred for this specific node
+       // Ensure we are returning the state potentially modified by a directive handler
+       // process.stdout.write(`DEBUG: [InterpreterService.interpretNode] No direct node transformation for ${node.type}. Using state potentially modified by handler (ID: ${finalState.getStateId()}).\n`);
     }
 
-    process.stdout.write(`DEBUG: [InterpreterService.interpretNode EXIT] Node Type: ${node.type}, Final State ID: ${finalState.getStateId() ?? 'N/A'}\n`);
+    // process.stdout.write(`DEBUG: [InterpreterService.interpretNode EXIT] Returning State ID: ${finalState.getStateId() ?? 'N/A'}\n`);
     return finalState;
   }
 

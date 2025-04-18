@@ -592,7 +592,6 @@ export class OutputService implements IOutputService {
   ): Promise<string> {
     const opts = { ...DEFAULT_OPTIONS, ...options };
     
-    process.stdout.write(`DEBUG: [OutputService.convert ENTRY] Format: ${format}, Node Count: ${nodes.length}, State ID: ${state?.getStateId() ?? 'N/A'}\n`);
     logger.debug('Converting output', {
       format,
       nodeCount: nodes.length,
@@ -606,7 +605,6 @@ export class OutputService implements IOutputService {
     const formatter = this.formatters.get(format);
     if (!formatter) {
       const supported = this.getSupportedFormats().join(', ');
-      process.stdout.write(`DEBUG: [OutputService.convert ERROR] Unsupported format: ${format}\n`);
       throw new Error(`Unsupported output format: ${format}. Supported formats: ${supported}`);
     }
 
@@ -634,10 +632,8 @@ export class OutputService implements IOutputService {
         pretty: opts.pretty
       });
 
-      process.stdout.write(`DEBUG: [OutputService.convert EXIT] Format: ${format} completed successfully.\n`);
       return result;
     } catch (error) {
-      process.stdout.write(`DEBUG: [OutputService.convert ERROR] Error during ${format} conversion: ${error instanceof Error ? error.message : String(error)}\n`);
       logger.error('Failed to convert output', {
         format,
         error,
@@ -951,7 +947,6 @@ export class OutputService implements IOutputService {
   ): Promise<string> {
     let output = '';
     const opts = { ...DEFAULT_OPTIONS, ...options };
-    process.stdout.write(`DEBUG: [OutputService.convertToMarkdown ENTRY] Node Count: ${nodes.length}, State ID: ${state?.getStateId() ?? 'N/A'}\n`);
 
     // Set the initial formatting context
     const initialContext = this.createFormattingContext('document', true);
@@ -959,7 +954,6 @@ export class OutputService implements IOutputService {
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
       const currentContext = this.getCurrentFormattingContext();
-      process.stdout.write(`DEBUG: [OutputService.convertToMarkdown LOOP ${i}] Node Type: ${node.type}. State ID: ${state?.getStateId() ?? 'N/A'}\n`);
       
       // Handle specific node types
       if (node.type === 'Text') {
@@ -973,13 +967,10 @@ export class OutputService implements IOutputService {
         let lastIndex = 0;
         let resolvedContent = '';
 
-        process.stdout.write(`DEBUG: [OutputService TextNode] Processing content: "${currentContent.substring(0, 100)}..." State ID: ${state.getStateId()}\n`);
-
         while ((match = variableRegex.exec(currentContent)) !== null) {
           // Append text before the variable
           resolvedContent += currentContent.substring(lastIndex, match.index);
           const variableExpression = match[1].trim();
-          process.stdout.write(`DEBUG: [OutputService TextNode] Found variable reference: {{${variableExpression}}}. State ID: ${state.getStateId()}\n`);
 
           try {
             // --- Resolve using VariableReferenceResolver --- 
@@ -997,12 +988,9 @@ export class OutputService implements IOutputService {
                   }
               });
               
-              process.stdout.write(`DEBUG: [OutputService TextNode] Calling resolver.resolve for {{${variableExpression}}}. State ID: ${state.getStateId()}\n`);
               const resolvedValue = await resolver.resolve(tempVarNode, resolutionContext);
-              process.stdout.write(`DEBUG: [OutputService TextNode] Resolved {{${variableExpression}}} to: "${resolvedValue}". State ID: ${state.getStateId()}\n`);
               resolvedContent += resolvedValue;
             } else {
-              process.stdout.write(`WARN: [OutputService TextNode] VariableResolver or VariableNodeFactory not available for {{${variableExpression}}}. State ID: ${state.getStateId()}\n`);
               // Fallback or throw error if resolver/factory is missing?
               // For now, append the original tag if resolver isn't ready
               resolvedContent += `{{${variableExpression}}}`;
@@ -1010,7 +998,7 @@ export class OutputService implements IOutputService {
             // --- End Resolve --- 
           } catch (error) {
             // Handle resolution errors gracefully in output (e.g., leave tag or show error)
-            process.stdout.write(`ERROR: [OutputService TextNode] Error resolving {{${variableExpression}}}: ${error instanceof Error ? error.message : String(error)}. State ID: ${state.getStateId()}\n`);
+            logger.warn(`OutputService: Error resolving {{${variableExpression}}} in TextNode`, { error }); // Keep logger warn
             // Optionally include the error message or original tag based on options
             resolvedContent += `{{${variableExpression}}}`; // Default: Keep original tag on error
           }
@@ -1043,7 +1031,6 @@ export class OutputService implements IOutputService {
       this.getCurrentFormattingContext().lastOutputEndedWithNewline = endsWithNewline;
     }
     
-    process.stdout.write(`DEBUG: [OutputService.convertToMarkdown EXIT] Final Output Length: ${output.length}\n`);
     return output;
   }
 

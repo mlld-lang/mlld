@@ -463,7 +463,9 @@ export class ResolutionService implements IResolutionService {
           }
         }
       } else {
-        logger.warn(`[ResolutionService.resolveNodes] Encountered unexpected node type ${node.type} in InterpolatableValue array.`);
+        // This block should theoretically be unreachable if InterpolatableValue type guard is correct
+        // process.stdout.write(`WARN: [ResService.resolveNodes] Encountered unexpected node type ${node.type} in InterpolatableValue array.\n`); // Removed .type access
+        logger.warn(`[ResolutionService.resolveNodes] Encountered unexpected node type in InterpolatableValue array.`);
       }
     }
     return result;
@@ -545,22 +547,38 @@ export class ResolutionService implements IResolutionService {
     // The accessFields method returns Promise<Result<JsonValue | undefined>>, need to map undefined to null?
     return resultPromise.then(result => {
       if (result.success) {
-        // Map undefined success value to null (assuming null is a valid JsonValue)
         const finalValue = result.value === undefined ? null : result.value;
         return success(finalValue as JsonValue);
       } else {
-        // Ensure the error is FieldAccessError
-        if (result.error instanceof FieldAccessError) {
-          return failure(result.error);
+        // result.success is false, so result.error SHOULD exist, but handle defensively.
+        const error = result.error;
+
+        if (error instanceof FieldAccessError) {
+          return failure(error);
         } else {
-          // Wrap unexpected errors
-          const wrapError = new FieldAccessError('Field access failed with unexpected error', {
-              baseValue: baseValue,
-              fieldAccessChain: fieldPath,
-              failedAtIndex: -1, // Indicate failure wasn't at a specific index
-              failedKey: '(unknown)'
-          });
-          // We need to return a failure Result, not throw
+          // If error is not FieldAccessError or is undefined
+          let cause: Error | undefined;
+          let errorMessage = 'Field access failed';
+
+          if (error instanceof Error) { // Check if it's an Error object
+            cause = error;
+            errorMessage += `: ${error.message}`;
+          } else if (error !== undefined && error !== null) { // Handle other non-null/undefined types
+             errorMessage += `: ${String(error)}`;
+          } else { // Handle undefined error case
+             errorMessage += ' with unexpected or undefined error';
+          }
+
+          const wrapError = new FieldAccessError(
+              errorMessage,
+              {
+                baseValue: baseValue,
+                fieldAccessChain: fieldPath,
+                failedAtIndex: -1, // Indicate failure wasn't at a specific index
+                failedKey: '(unknown)'
+              },
+              cause // Pass original error only if it was an Error instance
+          );
           return failure(wrapError);
         }
       }
@@ -707,11 +725,14 @@ export class ResolutionService implements IResolutionService {
       const commandVar = this.stateService.getVariable(commandName, VariableType.COMMAND);
       
       // 2. Check if found and handle errors/strict mode
-      if (!commandVar) {
-          const error = new VariableResolutionError(`Command variable '${commandName}' not found.`, {
-              code: 'E_VAR_NOT_FOUND',
-              details: { variableName: commandName, variableType: VariableType.COMMAND }
-          });
+      if (!commandVar || !isCommandVariable(commandVar)) {
+          const error = new VariableResolutionError(
+              `Command variable '${commandName}' not found or invalid.`,
+              {
+                code: 'E_VAR_NOT_FOUND',
+                details: { variableName: commandName, variableType: VariableType.COMMAND }
+              }
+          );
           if (context.strict) {
               throw error;
           }
@@ -719,20 +740,19 @@ export class ResolutionService implements IResolutionService {
           return ''; // Return empty string if not found and not strict
       }
       
-      // 3. Get the command definition
+      // 3. Get the command definition (now we know commandVar is ICommandVariable)
       const commandDef = commandVar.value; // value is ICommandDefinition
       
       // 4. Check command type and execute
       if (isBasicCommand(commandDef)) {
           // 5. Execute basic command using CommandResolver
           logger.debug(`Executing basic command '${commandName}' via CommandResolver`);
-          // Use non-null assertion as check on L732 guarantees commandResolver is defined
-          // @ts-ignore was here
-          return await commandResolver!.executeBasicCommand(commandDef, args, context);
-      } else {
+          // Ensure commandResolver is initialized (check added earlier)
+          return await this.commandResolver.executeBasicCommand(commandDef, args, context);
+      } else if (commandDef && typeof commandDef === 'object' && 'type' in commandDef) {
           // 6. Handle language commands (or other types)
           // TODO: Implement execution for language commands
-          const errorMsg = `Execution for language command '${commandName}' is not yet implemented.`;
+          const errorMsg = `Execution for ${commandDef.type} command '${commandName}' is not yet implemented.`;
           logger.error(errorMsg);
           if (context.strict) {
               throw new MeldResolutionError(errorMsg, {
@@ -741,6 +761,17 @@ export class ResolutionService implements IResolutionService {
                });
           }
           return ''; // Return empty for unsupported types in non-strict mode
+      } else {
+          // Handle cases where commandDef is null, undefined, or not an expected object structure
+          const errorMsg = `Invalid or unsupported command definition structure for '${commandName}'.`;
+          logger.error(errorMsg, { commandDef });
+          if (context.strict) {
+               throw new MeldResolutionError(errorMsg, {
+                   code: 'E_INVALID_COMMAND_DEF',
+                   details: { commandName }
+               });
+          }
+          return '';
       }
 
     } catch (error) {
