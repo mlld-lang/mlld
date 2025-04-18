@@ -125,14 +125,18 @@ describe('TextDirectiveHandler', () => {
       // --- Test Specific Mock Setup ---
       // Mock resolution service to return the direct literal value
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('Hello');
-      vi.spyOn(stateService, 'setTextVar'); // Spy to check the call
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
 
       // --- Execution ---
       const result = await fixture.executeHandler(node);
 
       // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
-      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
+      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'text',
+        name: 'greeting',
+        value: 'Hello'
+      }));
       expect(result).toBe(stateService); // Handler should return the state
     });
 
@@ -144,14 +148,18 @@ describe('TextDirectiveHandler', () => {
       // --- Test Specific Mock Setup ---
       // Mock resolveNodes to return the unescaped value
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce(expectedValue); 
-      vi.spyOn(stateService, 'setTextVar');
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
       
       // --- Execution ---
       const result = await fixture.executeHandler(node);
       
       // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
-      expect(stateService.setTextVar).toHaveBeenCalledWith('escaped', expectedValue);
+      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'text',
+        name: 'escaped',
+        value: expectedValue
+      }));
       expect(result).toBe(stateService);
     });
 
@@ -162,14 +170,18 @@ describe('TextDirectiveHandler', () => {
       
       // --- Test Specific Mock Setup ---
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce(expectedValue);
-      vi.spyOn(stateService, 'setTextVar');
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
 
       // --- Execution ---
       const result = await fixture.executeHandler(node);
       
       // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
-      expect(stateService.setTextVar).toHaveBeenCalledWith('message', expectedValue);
+      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'text',
+        name: 'message',
+        value: expectedValue
+      }));
       expect(result).toBe(stateService);
     });
 
@@ -181,14 +193,18 @@ describe('TextDirectiveHandler', () => {
       // --- Test Specific Mock Setup ---
       // Override the default mock to return the specific expected value for this test
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce(expectedValue); 
-      vi.spyOn(stateService, 'setTextVar');
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
       
       // --- Execution ---
       const result = await fixture.executeHandler(node);
       
       // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
-      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', expectedValue);
+      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'text',
+        name: 'greeting',
+        value: expectedValue
+      }));
       expect(result).toBe(stateService);
     });
 
@@ -200,14 +216,18 @@ describe('TextDirectiveHandler', () => {
       // --- Test Specific Mock Setup ---
       // Mock resolveNodes for this specific interpolation
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce(expectedValue);
-      vi.spyOn(stateService, 'setTextVar');
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
 
       // --- Execution ---
       const result = await fixture.executeHandler(node);
       
       // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
-      expect(stateService.setTextVar).toHaveBeenCalledWith('configText', expectedValue);
+      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'text',
+        name: 'configText',
+        value: expectedValue
+      }));
       expect(result).toBe(stateService);
     });
 
@@ -217,7 +237,8 @@ describe('TextDirectiveHandler', () => {
 
       // --- Test Specific Mock Setup ---
       // Default mock for resolveNodes in beforeEach already throws MeldResolutionError for 'undefined_var'
-      vi.spyOn(stateService, 'setTextVar'); // Ensure setTextVar is spied on
+      vi.spyOn(stateService, 'setVariable'); // Ensure setVariable is spied on
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
 
       // --- Execution & Assertion ---
       await expect(fixture.executeHandler(node))
@@ -228,7 +249,7 @@ describe('TextDirectiveHandler', () => {
         .rejects
         .toHaveProperty('cause.message', 'Variable not found: undefined_var'); // Check original cause
         
-      expect(stateService.setTextVar).not.toHaveBeenCalled(); // State should not be updated
+      expect(setVariableSpy).not.toHaveBeenCalled(); // State should not be updated
     });
 
     it('should handle basic variable interpolation', async () => {
@@ -238,14 +259,19 @@ describe('TextDirectiveHandler', () => {
       
       // --- Test Specific Mock Setup ---
       // Mock resolveNodes (uses default mock logic from beforeEach)
-      vi.spyOn(stateService, 'setTextVar');
+      vi.spyOn(stateService, 'setVariable');
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
 
       // --- Execution ---
       const result = await fixture.executeHandler(node);
       
       // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
-      expect(stateService.setTextVar).toHaveBeenCalledWith('message', expectedValue);
+      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'text',
+        name: 'message',
+        value: expectedValue
+      }));
       expect(result).toBe(stateService);
     });
   });
