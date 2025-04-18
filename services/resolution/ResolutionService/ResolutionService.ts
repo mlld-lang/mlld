@@ -465,8 +465,10 @@ export class ResolutionService implements IResolutionService {
           // logger.error(`[ResolutionService.resolveNodes] Error resolving VariableReference ${node.identifier}`, { error });
           process.stderr.write(`ERROR: [ResService.resolveNodes] Error resolving VariableReference ${node.identifier}: ${error instanceof Error ? error.message : String(error)}\n`);
           // Propagate error if strict mode
-          if (context.strict && error instanceof MeldResolutionError) {
-            throw error;
+          if (context.strict) {
+            // logger.error(`[ResolutionService.resolveNodes] Re-throwing error for ${node.identifier} in strict mode.`);
+            process.stderr.write(`ERROR: [ResService.resolveNodes] Re-throwing error for ${node.identifier} in strict mode.\n`);
+            throw error; // Re-throw the original error caught from resolver
           }
           // Otherwise, append nothing or potentially handle differently based on flags
         }
@@ -781,34 +783,18 @@ export class ResolutionService implements IResolutionService {
   }
 
   /**
-   * Resolve raw content nodes, preserving formatting but skipping comments
-   * Calls the internal resolveNodes after filtering for relevant node types.
+   * Resolve content nodes, preserving original formatting but skipping comments and directives
+   * Now uses resolveNodes internally for consistency.
    */
   async resolveContent(nodes: MeldNode[], context: ResolutionContext): Promise<string> {
-    logger.debug(`[ResService.resolveContent ENTRY] strict=${context.strict}`, { nodeCount: nodes.length }); // Log context
-    try {
-      const interpolatableNodes = nodes.filter(
+     // Filter out nodes that are not Text or VariableReference before passing to resolveNodes
+     const contentNodes = nodes.filter(
         (node): node is TextNode | VariableReferenceNode => 
-          node.type === 'Text' || node.type === 'VariableReference'
-      );
-      
-      return await this.resolveNodes(interpolatableNodes, context);
-
-    } catch (error) {
-       logger.error(`[ResService.resolveContent CATCH] Error caught, strict=${context.strict}`, { error }); // Log context
-       if (context.strict) {
-          const meldError = (error instanceof MeldError)
-            ? error
-            : new MeldResolutionError('Failed to resolve content from nodes', {
-                code: 'E_RESOLVE_CONTENT_FAILED',
-                details: { nodeCount: nodes.length, context },
-                cause: error
-            });
-          logger.debug('[ResService.resolveContent CATCH] Strict mode, re-throwing error'); // Log before throw
-          throw meldError; 
-       }
-       return ''; 
-    }
+           node.type === 'Text' || node.type === 'VariableReference'
+     );
+     // Delegate to resolveNodes which handles the actual resolution and errors
+     // resolveNodes already respects context.strict
+     return await this.resolveNodes(contentNodes, context);
   }
 
   /**

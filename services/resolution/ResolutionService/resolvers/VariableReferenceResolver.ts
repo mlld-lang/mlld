@@ -164,17 +164,18 @@ export class VariableReferenceResolver {
       
       if (!variable) {
           if (!newContext.strict) {
-             // logger.warn(`[VRefResolver.resolve] Non-strict mode, variable '${node.identifier}' not found, returning empty string.`);
-             process.stdout.write(`WARN: [VRefResolver.resolve] Non-strict mode, variable '${node.identifier}' not found, returning empty string.\n`);
+             process.stdout.write(`WARN: [VRefResolver.resolve] Non-strict mode, variable "${node.identifier}" not found, returning empty string.\n`);
              return '';
           }
-          // logger.debug(`[VRefResolver.resolve] Variable not found & strict=true. Throwing E_VAR_NOT_FOUND for ${node.identifier}`);
           process.stdout.write(`DEBUG: [VRefResolver.resolve] Variable not found & strict=true. Throwing E_VAR_NOT_FOUND for ${node.identifier}\n`);
-          throw new VariableResolutionError(`Variable not found: ${node.identifier}`, {
+          // Log before throwing
+          const errorToThrow = new VariableResolutionError(`Variable not found: ${node.identifier}`, {
               code: 'E_VAR_NOT_FOUND',
               severity: ErrorSeverity.Recoverable, 
               details: { variableName: node.identifier, valueType: node.valueType }
           });
+          process.stdout.write(`DEBUG: [VRefResolver.resolve] THROWING (Strict Mode, Var Not Found): ${errorToThrow.name} - ${errorToThrow.message}\n`);
+          throw errorToThrow;
       }
 
       // --- Check for InterpolatableValue first --- 
@@ -246,6 +247,9 @@ export class VariableReferenceResolver {
                   } else {
                       // accessFields returned failure(FieldAccessError)
                       if (newContext.strict) {
+                          // Log before throwing
+                          process.stdout.write(`DEBUG: [VRefResolver.resolve] Field access failed & strict=true. Throwing FieldAccessError for ${node.identifier}\n`);
+                          process.stdout.write(`DEBUG: [VRefResolver.resolve] THROWING (Strict Mode, Field Access Failed): ${fieldAccessResult.error.name} - ${fieldAccessResult.error.message}\n`);
                           throw fieldAccessResult.error; // Throw the FieldAccessError
                       }
                       finalResolvedValue = undefined; // Non-strict, treat as undefined
@@ -253,13 +257,17 @@ export class VariableReferenceResolver {
              } else {
                   // Tried to access fields on a non-object (e.g., primitive string from TextVariable)
                   if (newContext.strict) {
-                      const errorMsg = `Cannot access fields on non-object variable '${node.identifier}'`;
-                      throw new FieldAccessError(errorMsg, { 
+                      const errorMsg = `Cannot access fields on non-object variable "${node.identifier}"`;
+                      // Log before throwing
+                      const errorToThrow = new FieldAccessError(errorMsg, { 
                          baseValue: baseValue, 
                          fieldAccessChain: node.fields, 
                          failedAtIndex: 0, 
-                         failedKey: node.fields[0]?.value ?? 'unknown' 
+                         failedKey: node.fields[0]?.value ?? "unknown" 
                       });
+                      process.stdout.write(`DEBUG: [VRefResolver.resolve] Field access on non-object & strict=true. Throwing FieldAccessError for ${node.identifier}\n`);
+                      process.stdout.write(`DEBUG: [VRefResolver.resolve] THROWING (Strict Mode, Field Access Non-Object): ${errorToThrow.name} - ${errorToThrow.message}\n`);
+                      throw errorToThrow;
                   }
                   finalResolvedValue = undefined; // Non-strict
              }

@@ -855,6 +855,9 @@ describe('ResolutionService', () => {
 
   // ADD tests for resolveContent
   describe('resolveContent', () => {
+    // Define a mock location for nodes in this suite
+    const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } };
+
     let mockCommentNode: CommentNode;
     let mockDirectiveNode: DirectiveNode;
     let textNode1: TextNode;
@@ -863,7 +866,6 @@ describe('ResolutionService', () => {
 
     beforeEach(() => {
       // Create mock nodes of different types
-      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } };
       mockCommentNode = { type: 'Comment', content: 'a comment', location: mockLocation };
       mockDirectiveNode = { type: 'Directive', directive: { kind: 'text', identifier: 'ignore' }, location: mockLocation };
       textNode1 = { type: 'Text', content: 'Hello ', location: mockLocation };
@@ -884,15 +886,29 @@ describe('ResolutionService', () => {
     });
 
     it('should resolve a mix of TextNodes and resolvable VariableReferenceNodes', async () => {
-      const nodes: MeldNode[] = [textNode1, varNode1, textNode2];
+      const textNode1 = { type: 'Text', content: 'Hello ', location: mockLocation };
+      const varNode1 = { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation };
+      const textNode2 = { type: 'Text', content: '!', location: mockLocation };
+      const nodes: MeldNode[] = [textNode1 as TextNode, varNode1 as VariableReferenceNode, textNode2 as TextNode];
       const result = await service.resolveContent(nodes, defaultContext);
-      expect(result).toBe('Hello World!'); // Assumes varNode1 resolves to 'World' via state mock
+      expect(result).toBe('Hello Alice!');
     });
 
     it('should filter out non-Text and non-VariableReference nodes', async () => {
-      const nodes: MeldNode[] = [textNode1, mockCommentNode, varNode1, mockDirectiveNode, textNode2];
+      const textNode1 = { type: 'Text', content: 'Hello ', location: mockLocation };
+      const mockCommentNode = { type: 'Comment', content: 'ignore me', location: mockLocation };
+      const varNode1 = { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation };
+      const mockDirectiveNode = { type: 'Directive', directive: { kind: 'text' }, location: mockLocation };
+      const textNode2 = { type: 'Text', content: '!', location: mockLocation };
+      const nodes: MeldNode[] = [
+        textNode1 as TextNode, 
+        mockCommentNode as CommentNode, 
+        varNode1 as VariableReferenceNode, 
+        mockDirectiveNode as DirectiveNode, 
+        textNode2 as TextNode
+      ];
       const result = await service.resolveContent(nodes, defaultContext);
-      expect(result).toBe('Hello World!'); // Only text and resolved var should remain
+      expect(result).toBe('Hello Alice!');
     });
     
     it('should return empty string for empty input array', async () => {
