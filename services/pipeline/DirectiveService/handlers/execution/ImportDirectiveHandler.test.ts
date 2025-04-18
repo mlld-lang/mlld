@@ -334,6 +334,7 @@ describe('ImportDirectiveHandler', () => {
       expectedResultState.getAllDataVars.mockReturnValue(new Map([['info', importedDataVar]]));
       expectedResultState.getAllPathVars.mockReturnValue(new Map());
       expectedResultState.getAllCommands.mockReturnValue(new Map());
+      expectedResultState.getTransformedNodes.mockReturnValue([]);
       // Ensure setCurrentFilePath is mocked if needed, though it might not be strictly necessary for the assertion
       expectedResultState.setCurrentFilePath.mockImplementation(() => {}); 
 
@@ -386,6 +387,7 @@ describe('ImportDirectiveHandler', () => {
       
       // Use mockDeep for the result state
       const expectedResultState = mockDeep<IStateService>();
+      expectedResultState.getTransformedNodes.mockReturnValue([]);
       // Ensure getTextVar returns the full TextVariable object wrapped in a Promise
       expectedResultState.getTextVar.mockImplementation((name): TextVariable | undefined => {
         if (name === 'var1') return importedVar1;
