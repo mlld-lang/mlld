@@ -880,8 +880,10 @@ export class StateService implements IStateService {
 
     // If not found locally, check parent
     if (!variable && this.currentState.parentServiceRef) {
-      // logger.debug(`Variable \'${name}\' not found locally (State ID: ${this.getStateId()}), checking parent.`);
-      // Recursive call to parent\n      return this.currentState.parentServiceRef.getVariable(name, type);
+      // Add logging
+      process.stdout.write(`DEBUG: [StateService.getVariable] \\"${name}\\" not found locally (State ID: ${this.getStateId()}), checking parent (Parent ID: ${this.currentState.parentServiceRef.getStateId()})...\\n`);
+      // Recursive call to parent
+      return this.currentState.parentServiceRef.getVariable(name, type);
     }
     
     // If found locally, ensure the type matches if a specific type was requested
