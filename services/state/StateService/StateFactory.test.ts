@@ -1,7 +1,57 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import type { StateNode, IStateFactory } from '@services/state/StateService/types.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { TransformationOptions } from '@core/types/state.js';
+import { createTextVariable } from '@core/types';
+
+// Define the default options locally for the test file
+const DEFAULT_TRANSFORMATION_OPTIONS_TEST: TransformationOptions = {
+  enabled: false,
+  preserveOriginal: true,
+  transformNested: true,
+};
+
+// Helper to create a mock IStateService for testing parent references
+const createMockParentService = (stateNode?: StateNode): IStateService => ({
+  getTransformationOptions: vi.fn(() => stateNode?.transformationOptions ?? DEFAULT_TRANSFORMATION_OPTIONS_TEST),
+  getInternalStateNode: vi.fn(() => stateNode),
+  getStateId: vi.fn(() => stateNode?.stateId),
+  // Add other methods as needed by tests, mocking their return values
+  getVariable: vi.fn(), 
+  setVariable: vi.fn().mockResolvedValue(undefined), // Ensure promise resolution
+  hasVariable: vi.fn(),
+  removeVariable: vi.fn().mockResolvedValue(false), // Ensure promise resolution
+  getNodes: vi.fn(() => stateNode?.nodes ?? []),
+  addNode: vi.fn(),
+  appendContent: vi.fn(),
+  getTransformedNodes: vi.fn(() => stateNode?.transformedNodes ?? stateNode?.nodes ?? []),
+  setTransformedNodes: vi.fn(),
+  transformNode: vi.fn(),
+  isTransformationEnabled: vi.fn(() => stateNode?.transformationOptions?.enabled ?? false),
+  setTransformationEnabled: vi.fn(),
+  setTransformationOptions: vi.fn(),
+  addImport: vi.fn(),
+  removeImport: vi.fn(),
+  hasImport: vi.fn(() => false),
+  getImports: vi.fn(() => stateNode?.imports ?? new Set()),
+  getCurrentFilePath: vi.fn(() => stateNode?.filePath ?? null),
+  setCurrentFilePath: vi.fn(),
+  hasLocalChanges: vi.fn(() => true),
+  getLocalChanges: vi.fn(() => ['state']),
+  setImmutable: vi.fn(),
+  isImmutable: false,
+  createChildState: vi.fn(),
+  mergeChildState: vi.fn(),
+  clone: vi.fn(),
+  getParentState: vi.fn(),
+  getCommandOutput: vi.fn(),
+  hasTransformationSupport: vi.fn(() => true),
+  shouldTransform: vi.fn(() => false), // Default to false unless overridden
+  setEventService: vi.fn(), // Added missing methods from IStateService
+  setTrackingService: vi.fn(), // Added missing methods from IStateService
+});
 
 describe('StateFactory', () => {
   const helpers = TestContextDI.createTestHelpers(); // Define helpers
@@ -34,83 +84,114 @@ describe('StateFactory', () => {
       expect(state.imports.size).toBe(0);
       expect(state.nodes.length).toBe(0);
       expect(state.filePath).toBeUndefined();
-      expect(state.parentState).toBeUndefined();
+      expect(state.parentServiceRef).toBeUndefined();
+      expect(state.transformationOptions).toEqual(DEFAULT_TRANSFORMATION_OPTIONS_TEST); // Use local const
+      expect(state.createdAt).toBeTypeOf('number');
+      expect(state.modifiedAt).toBeTypeOf('number');
     });
 
     it('should create state with options', () => {
-      const parent = factory.createState();
+      const mockParentNode = factory.createState(); // Create a node to be wrapped
+      const mockParentService = createMockParentService(mockParentNode);
+
       const state = factory.createState({
-        parentState: parent,
+        parentServiceRef: mockParentService,
         filePath: '/test/file.md',
         source: 'test'
       });
 
-      expect(state.parentState).toBe(parent);
+      expect(state.parentServiceRef).toBe(mockParentService);
       expect(state.filePath).toBe('/test/file.md');
+      expect(state.transformationOptions).toEqual(mockParentService.getTransformationOptions());
     });
 
-    it('should inherit parent state', () => {
+    // This test is no longer valid as createState does not handle inheritance directly.
+    // Inheritance is handled by StateService.getVariable looking up the parent chain.
+    it.skip('should inherit parent state', () => { 
       // Create parent with some state
       const parentBase = factory.createState();
+      // Use createTextVariable for type safety
+      const parentTextVar = createTextVariable('inherited', 'value', {}); 
       const parent = factory.updateState(parentBase, {
         variables: {
-          text: new Map([['inherited', 'value']]),
-          data: new Map([['config', { inherited: true }]]),
-          path: new Map([['root', '/parent']])
+          text: new Map([['inherited', parentTextVar]]),
+          data: new Map([['config', { value: { inherited: true } } as any]]), // Adjust if DataVariable type is stricter
+          path: new Map([['root', { value: '/parent' } as any]]) // Adjust if PathVariable type is stricter
         },
         imports: new Set(['parent.md']),
-        nodes: [{ type: 'text', value: 'parent' } as any]
+        nodes: [{ type: 'Text', content: 'parent', location: {} as any, nodeId: 'test-node-1' } as any] // Use correct TextNode structure
       });
+      const mockParentService = createMockParentService(parent);
 
-      // Create child state
-      const child = factory.createState({ parentState: parent });
+      // Create child state using parentServiceRef
+      const child = factory.createState({ parentServiceRef: mockParentService });
 
-      // Verify inheritance
-      expect(child.variables.text.get('inherited')).toBe('value');
-      expect(child.variables.data.get('config')).toEqual({ inherited: true });
-      expect(child.variables.path.get('root')).toBe('/parent');
-      expect(child.imports.has('parent.md')).toBe(true);
-      expect(child.nodes[0].value).toBe('parent');
+      // Verify **NO** direct inheritance in the created node itself
+      expect(child.variables.text.size).toBe(0); 
+      expect(child.variables.data.size).toBe(0);
+      expect(child.variables.path.size).toBe(0);
+      expect(child.imports.size).toBe(0);
+      expect(child.nodes.length).toBe(0);
+      
+      // Assertions below are removed/skipped because createState doesn't inherit variables directly anymore.
+      // expect(child.variables.text.get('inherited')).toBe('value');
+      // expect(child.variables.data.get('config')).toEqual({ inherited: true });
+      // expect(child.variables.path.get('root')).toBe('/parent');
+      // expect(child.imports.has('parent.md')).toBe(true);
+      // expect(child.nodes[0].value).toBe('parent');
     });
   });
 
   describe('createChildState', () => {
     it('should create child state with parent reference', () => {
-      const parent = factory.createState();
-      const child = factory.createChildState(parent);
+      const parentNode = factory.createState();
+      const mockParentService = createMockParentService(parentNode);
+      const child = factory.createChildState(mockParentService); // Pass mock IStateService instance
 
-      expect(child.parentState).toBe(parent);
+      expect(child.parentServiceRef).toBe(mockParentService);
+      expect(mockParentService.getTransformationOptions).toHaveBeenCalled();
     });
 
-    it('should create empty child state that inherits parent values', () => {
-      // Create parent with some state
+    // This test might need adjustment. createChildState only sets up the parent link.
+    // Variable inheritance happens when StateService.getVariable is called.
+    it.skip('should create child state that **links** to parent (inheritance tested in StateService)', () => {
+      // Create parent state node with some values
       const parentBase = factory.createState();
-      const parent = factory.updateState(parentBase, {
+      const parentNode = factory.updateState(parentBase, {
         variables: {
-          text: new Map([['text', 'parent']]),
-          data: new Map([['data', { value: 'parent' }]]),
-          path: new Map([['path', '/parent']])
+          text: new Map([['text', createTextVariable('text', 'parent', {})]]),
+          data: new Map([['data', { value: { value: 'parent' } } as any]]),
+          path: new Map([['path', { value: '/parent' } as any]])
         }
       });
+      const mockParentService = createMockParentService(parentNode);
 
-      const child = factory.createChildState(parent);
+      // Create child state linked to the mock parent service
+      const childNode = factory.createChildState(mockParentService); // Pass mock IStateService instance
 
-      // Verify child inherits parent values
-      expect(child.variables.text.get('text')).toBe('parent');
-      expect(child.variables.data.get('data')).toEqual({ value: 'parent' });
-      expect(child.variables.path.get('path')).toBe('/parent');
+      // Verify child node itself is empty
+      expect(childNode.variables.text.size).toBe(0); 
+      expect(childNode.variables.data.size).toBe(0);
+      expect(childNode.variables.path.size).toBe(0);
+      expect(childNode.parentServiceRef).toBe(mockParentService);
+      
+      // Assertions checking direct variable presence in the child node are removed.
+      // expect(child.variables.text.get('text')).toBe('parent');
+      // expect(child.variables.data.get('data')).toEqual({ value: 'parent' });
+      // expect(child.variables.path.get('path')).toBe('/parent');
     });
   });
 
   describe('mergeStates', () => {
+    // ... mergeStates tests seem okay, but ensure they use valid StateNode structures ...
     it('should merge variables from child to parent', () => {
       // Create parent state
       const parentBase = factory.createState();
       const parent = factory.updateState(parentBase, {
         variables: {
-          text: new Map([['parentText', 'parent']]),
-          data: new Map([['parentData', { value: 'parent' }]]),
-          path: new Map([['parentPath', '/parent']])
+          text: new Map([['parentText', createTextVariable('parentText', 'parent', {})]]),
+          data: new Map([['parentData', { value: { value: 'parent' } } as any]]),
+          path: new Map([['parentPath', { value: '/parent' } as any]])
         }
       });
 
@@ -118,21 +199,21 @@ describe('StateFactory', () => {
       const childBase = factory.createState();
       const child = factory.updateState(childBase, {
         variables: {
-          text: new Map([['childText', 'child']]),
-          data: new Map([['childData', { value: 'child' }]]),
-          path: new Map([['childPath', '/child']])
+          text: new Map([['childText', createTextVariable('childText', 'child', {})]]),
+          data: new Map([['childData', { value: { value: 'child' } } as any]]),
+          path: new Map([['childPath', { value: '/child' } as any]])
         }
       });
 
       const merged = factory.mergeStates(parent, child);
 
-      // Check merged variables
-      expect(merged.variables.text.get('parentText')).toBe('parent');
-      expect(merged.variables.text.get('childText')).toBe('child');
-      expect(merged.variables.data.get('parentData')).toEqual({ value: 'parent' });
-      expect(merged.variables.data.get('childData')).toEqual({ value: 'child' });
-      expect(merged.variables.path.get('parentPath')).toBe('/parent');
-      expect(merged.variables.path.get('childPath')).toBe('/child');
+      // Check merged variables (access .value for Variable types)
+      expect(merged.variables.text.get('parentText')?.value).toBe('parent');
+      expect(merged.variables.text.get('childText')?.value).toBe('child');
+      expect(merged.variables.data.get('parentData')?.value).toEqual({ value: 'parent' });
+      expect(merged.variables.data.get('childData')?.value).toEqual({ value: 'child' });
+      expect(merged.variables.path.get('parentPath')?.value).toBe('/parent');
+      expect(merged.variables.path.get('childPath')?.value).toBe('/child');
     });
 
     it('should override parent variables with child values', () => {
@@ -140,7 +221,7 @@ describe('StateFactory', () => {
       const parentBase = factory.createState();
       const parent = factory.updateState(parentBase, {
         variables: {
-          text: new Map([['text', 'parent']])
+          text: new Map([['text', createTextVariable('text', 'parent', {})]])
         }
       });
 
@@ -148,15 +229,15 @@ describe('StateFactory', () => {
       const childBase = factory.createState();
       const child = factory.updateState(childBase, {
         variables: {
-          text: new Map([['text', 'child']])
+          text: new Map([['text', createTextVariable('text', 'child', {})]])
         }
       });
 
       const merged = factory.mergeStates(parent, child);
 
-      expect(merged.variables.text.get('text')).toBe('child');
+      expect(merged.variables.text.get('text')?.value).toBe('child');
       // Verify parent state wasn't modified
-      expect(parent.variables.text.get('text')).toBe('parent');
+      expect(parent.variables.text.get('text')?.value).toBe('parent');
     });
 
     it('should merge imports and nodes', () => {
@@ -164,14 +245,14 @@ describe('StateFactory', () => {
       const parentBase = factory.createState();
       const parent = factory.updateState(parentBase, {
         imports: new Set(['parent.md']),
-        nodes: [{ type: 'text', value: 'parent' } as any]
+        nodes: [{ type: 'Text', content: 'parent', location: {} as any, nodeId: 'test-node-p' } as any]
       });
 
       // Create child state
       const childBase = factory.createState();
       const child = factory.updateState(childBase, {
         imports: new Set(['child.md']),
-        nodes: [{ type: 'text', value: 'child' } as any]
+        nodes: [{ type: 'Text', content: 'child', location: {} as any, nodeId: 'test-node-c' } as any]
       });
 
       const merged = factory.mergeStates(parent, child);
@@ -179,8 +260,8 @@ describe('StateFactory', () => {
       expect(merged.imports.has('parent.md')).toBe(true);
       expect(merged.imports.has('child.md')).toBe(true);
       expect(merged.nodes).toHaveLength(2);
-      expect(merged.nodes[0].value).toBe('parent');
-      expect(merged.nodes[1].value).toBe('child');
+      expect((merged.nodes[0] as any).content).toBe('parent'); // Adjust access based on actual node type
+      expect((merged.nodes[1] as any).content).toBe('child');  // Adjust access based on actual node type
       
       // Verify original states weren't modified
       expect(parent.imports.size).toBe(1);
@@ -196,18 +277,18 @@ describe('StateFactory', () => {
       const updates: Partial<StateNode> = {
         filePath: '/updated/file.md',
         variables: {
-          text: new Map([['text', 'updated']]),
-          data: new Map([['data', { value: 'updated' }]]),
-          path: new Map([['path', '/updated']])
-        }
+          text: new Map([['text', createTextVariable('text', 'updated', {})]]),
+          data: new Map([['data', { value: { value: 'updated' } } as any]]),
+          path: new Map([['path', { value: '/updated' } as any]])
+        } as any // Cast needed as Partial<StateNode>['variables'] is complex
       };
 
       const updated = factory.updateState(initial, updates);
 
       expect(updated.filePath).toBe('/updated/file.md');
-      expect(updated.variables.text.get('text')).toBe('updated');
-      expect(updated.variables.data.get('data')).toEqual({ value: 'updated' });
-      expect(updated.variables.path.get('path')).toBe('/updated');
+      expect(updated.variables.text.get('text')?.value).toBe('updated');
+      expect(updated.variables.data.get('data')?.value).toEqual({ value: 'updated' });
+      expect(updated.variables.path.get('path')?.value).toBe('/updated');
       
       // Verify original state wasn't modified
       expect(initial.variables.text.size).toBe(0);
@@ -220,8 +301,8 @@ describe('StateFactory', () => {
       const baseState = factory.createState();
       const initial = factory.updateState(baseState, {
         variables: {
-          text: new Map([['preserved', 'value']])
-        }
+          text: new Map([['preserved', createTextVariable('preserved', 'value', {})]])
+        } as any // Cast needed
       });
       
       const updates: Partial<StateNode> = {
@@ -231,9 +312,9 @@ describe('StateFactory', () => {
       const updated = factory.updateState(initial, updates);
 
       expect(updated.filePath).toBe('/updated/file.md');
-      expect(updated.variables.text.get('preserved')).toBe('value');
+      expect(updated.variables.text.get('preserved')?.value).toBe('value');
       
-      // Verify values are copied, not referenced
+      // Verify values are copied, not referenced (this should pass now)
       expect(updated.variables.text).not.toBe(initial.variables.text);
     });
   });

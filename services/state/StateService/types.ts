@@ -3,8 +3,10 @@ import type {
   TextVariable,
   DataVariable,
   IPathVariable,
-  CommandVariable
+  CommandVariable,
+  TransformationOptions
 } from '@core/types/index.js';
+import type { IStateService } from './IStateService.js';
 
 /**
  * Command definition with optional configuration
@@ -31,7 +33,10 @@ export interface StateNode {
   readonly nodes: MeldNode[];
   readonly transformedNodes?: MeldNode[];
   readonly imports: Set<string>;
-  readonly parentState?: StateNode;
+  readonly parentServiceRef?: IStateService;
+  readonly transformationOptions: TransformationOptions;
+  readonly createdAt: number;
+  readonly modifiedAt: number;
 }
 
 /**

@@ -56,124 +56,6 @@ interface IStateService {
   getStateId(): string | undefined;
 
   /**
-   * Gets a text variable by name.
-   * 
-   * @param name - The name of the variable to retrieve
-   * @returns The full TextVariable object, or undefined if not found
-   */
-  getTextVar(name: string): TextVariable | undefined;
-  
-  /**
-   * Sets a text variable.
-   * 
-   * @param name - The name of the variable to set
-   * @param value - The string value to assign
-   * @param metadata - Optional metadata for the variable
-   * @returns The created TextVariable object
-   * @throws {MeldStateError} If the state is immutable
-   */
-  setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<TextVariable>;
-  
-  /**
-   * Gets all text variables, including inherited ones from parent states.
-   * 
-   * @returns A map of all text variables (name -> TextVariable)
-   */
-  getAllTextVars(): Map<string, TextVariable>;
-  
-  /**
-   * Gets only locally defined text variables (not inherited from parent states).
-   * 
-   * @returns A map of local text variables (name -> TextVariable)
-   */
-  getLocalTextVars(): Map<string, TextVariable>;
-
-  /**
-   * Gets a data variable by name.
-   * 
-   * @param name - The name of the variable to retrieve
-   * @returns The full DataVariable object, or undefined if not found
-   */
-  getDataVar(name: string): DataVariable | undefined;
-  
-  /**
-   * Sets a data variable.
-   * 
-   * @param name - The name of the variable to set
-   * @param value - The JSON-compatible value to assign
-   * @param metadata - Optional metadata for the variable
-   * @returns The created DataVariable object
-   * @throws {MeldStateError} If the state is immutable
-   */
-  setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): Promise<DataVariable>;
-  
-  /**
-   * Gets all data variables, including inherited ones from parent states.
-   * 
-   * @returns A map of all data variables (name -> DataVariable)
-   */
-  getAllDataVars(): Map<string, DataVariable>;
-  
-  /**
-   * Gets only locally defined data variables (not inherited from parent states).
-   * 
-   * @returns A map of local data variables (name -> DataVariable)
-   */
-  getLocalDataVars(): Map<string, DataVariable>;
-
-  /**
-   * Gets a path variable by name.
-   * 
-   * @param name - The name of the variable to retrieve
-   * @returns The full IPathVariable object, or undefined if not found
-   */
-  getPathVar(name: string): IPathVariable | undefined;
-  
-  /**
-   * Sets a path variable.
-   * 
-   * @param name - The name of the variable to set
-   * @param value - The filesystem or URL state object to assign
-   * @param metadata - Optional metadata for the variable
-   * @returns The created IPathVariable object
-   * @throws {MeldStateError} If the state is immutable
-   */
-  setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): Promise<IPathVariable>;
-  
-  /**
-   * Gets all path variables, including inherited ones from parent states.
-   * 
-   * @returns A map of all path variables (name -> IPathVariable)
-   */
-  getAllPathVars(): Map<string, IPathVariable>;
-
-  /**
-   * Gets a command variable by name.
-   * 
-   * @param name - The name of the command variable to retrieve
-   * @returns The full CommandVariable object, or undefined if not found
-   */
-  getCommandVar(name: string): CommandVariable | undefined;
-
-  /**
-   * Sets a command variable.
-   * 
-   * @param name - The name of the command variable to set
-   * @param value - The command definition or a raw command string
-   * @param metadata - Optional metadata
-   * @returns The created CommandVariable object
-   * @throws {MeldStateError} If the state is immutable
-   */
-  setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<CommandVariable>;
-
-  /**
-   * Gets all commands, including inherited ones from parent states.
-   * 
-   * @returns A map of all commands (name -> CommandVariable)
-   */
-  getAllCommands(): Map<string, CommandVariable>;
-
-  /**
    * Gets all document nodes (original or transformed depending on mode).
    * 
    * @returns An array of document nodes
@@ -409,14 +291,6 @@ interface IStateService {
   getInternalStateNode(): StateNode;
 
   /**
-   * Gets a command definition by name (preferred over getCommandVar).
-   * 
-   * @param name - The command name.
-   * @returns The command definition or undefined.
-   */
-  getCommand(name: string): ICommandDefinition | undefined;
-
-  /**
    * Checks if a specific transformation type should be applied.
    * Note: This seems less relevant if transformation is always enabled.
    * 
@@ -424,13 +298,6 @@ interface IStateService {
    * @returns true if the transformation should occur.
    */
   shouldTransform(type: string): boolean;
-
-  /**
-   * Enables or disables transformation.
-   * 
-   * @param enabled - Whether to enable transformation
-   */
-  enableTransformation?(enabled: boolean): void;
 }
 
 export type { TransformationOptions, IStateService, DataVariable }; 

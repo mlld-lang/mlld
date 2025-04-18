@@ -4,6 +4,27 @@ import { randomUUID } from 'crypto';
 import { Service } from '@core/ServiceProvider.js';
 import { injectable } from 'tsyringe';
 import { cloneDeep } from 'lodash';
+import type { IStateService } from './IStateService.js';
+import type { TransformationOptions } from '@core/types/state.js';
+
+/**
+ * Default transformation options
+ */
+const DEFAULT_TRANSFORMATION_OPTIONS: TransformationOptions = {
+  enabled: false,
+  preserveOriginal: true,
+  transformNested: true,
+};
+
+/**
+ * Options for creating a new state node
+ */
+export interface StateNodeOptions {
+  readonly parentServiceRef?: IStateService;
+  readonly transformationOptions?: TransformationOptions;
+  readonly filePath?: string;
+  readonly source?: string;
+}
 
 /**
  * Factory for creating and managing immutable state objects
@@ -16,38 +37,48 @@ export class StateFactory implements IStateFactory {
   private operations: StateOperation[] = [];
 
   createState(options?: StateNodeOptions): StateNode {
+    const now = Date.now();
+    const parentOptions = options?.parentServiceRef?.getInternalStateNode()?.transformationOptions;
+    const explicitOptions = options?.transformationOptions;
+
     const state: StateNode = {
       stateId: randomUUID(),
       variables: {
-        text: new Map(options?.parentState?.variables.text ?? []),
-        data: new Map(options?.parentState?.variables.data ?? []),
-        path: new Map(options?.parentState?.variables.path ?? [])
+        text: new Map(),
+        data: new Map(),
+        path: new Map()
       },
-      commands: new Map(options?.parentState?.commands ?? []),
-      imports: new Set(options?.parentState?.imports ?? []),
-      nodes: [...(options?.parentState?.nodes ?? [])],
-      transformedNodes: options?.parentState?.transformedNodes ? [...options.parentState.transformedNodes] : undefined,
-      filePath: options?.filePath ?? options?.parentState?.filePath,
-      parentState: options?.parentState
+      commands: new Map(),
+      imports: new Set(),
+      nodes: [],
+      transformedNodes: undefined,
+      filePath: options?.filePath,
+      parentServiceRef: options?.parentServiceRef,
+      transformationOptions: explicitOptions ?? parentOptions ?? DEFAULT_TRANSFORMATION_OPTIONS,
+      createdAt: now,
+      modifiedAt: now
     };
 
     this.logOperation({
       type: 'create',
-      timestamp: Date.now(),
+      timestamp: now,
       source: options?.source ?? 'createState',
       details: {
         operation: 'createState',
-        value: state
+        stateId: state.stateId
       }
     });
 
     return state;
   }
 
-  createChildState(parent: StateNode, options?: StateNodeOptions): StateNode {
+  createChildState(parentService: IStateService, options?: StateNodeOptions): StateNode {
+    const parentTransformationOptions = parentService.getTransformationOptions();
+
     const child = this.createState({
       ...options,
-      parentState: parent,
+      parentServiceRef: parentService,
+      transformationOptions: options?.transformationOptions ?? parentTransformationOptions,
       source: options?.source ?? 'createChildState'
     });
 
@@ -57,7 +88,8 @@ export class StateFactory implements IStateFactory {
       source: options?.source ?? 'createChildState',
       details: {
         operation: 'createChildState',
-        value: child
+        parentStateId: parentService.getStateId(),
+        stateId: child.stateId
       }
     });
 
@@ -65,27 +97,25 @@ export class StateFactory implements IStateFactory {
   }
 
   mergeStates(parent: StateNode, child: StateNode): StateNode {
-    // Create NEW maps by deep cloning the parent's maps first
-    const text = cloneDeep(new Map(parent.variables.text));
-    const data = cloneDeep(new Map(parent.variables.data));
-    const path = cloneDeep(new Map(parent.variables.path));
-    const commands = cloneDeep(new Map(parent.commands));
+    const now = Date.now();
+    const text = cloneDeep(parent.variables.text);
+    const data = cloneDeep(parent.variables.data);
+    const path = cloneDeep(parent.variables.path);
+    const commands = cloneDeep(parent.commands);
 
-    // Merge child variables - DEEP CLONE the child's value before setting
     for (const [key, value] of child.variables.text) {
-      text.set(key, cloneDeep(value)); // Deep clone the variable object
+      text.set(key, cloneDeep(value));
     }
     for (const [key, value] of child.variables.data) {
-      data.set(key, cloneDeep(value)); // Deep clone the variable object
+      data.set(key, cloneDeep(value));
     }
     for (const [key, value] of child.variables.path) {
-      path.set(key, cloneDeep(value)); // Deep clone the variable object
+      path.set(key, cloneDeep(value));
     }
     for (const [key, value] of child.commands) {
-      commands.set(key, cloneDeep(value)); // Deep clone the variable object
+      commands.set(key, cloneDeep(value));
     }
 
-    // Create new state with merged, deep-cloned values
     const merged: StateNode = {
       variables: {
         text,
@@ -94,114 +124,122 @@ export class StateFactory implements IStateFactory {
       },
       commands,
       imports: new Set([...parent.imports, ...child.imports]),
-      // Preserve node order by appending all child nodes
       nodes: [...parent.nodes, ...child.nodes],
-      // Merge transformed nodes if either parent or child has them
-      transformedNodes: child.transformedNodes !== undefined ? [...child.transformedNodes] :
-                       parent.transformedNodes !== undefined ? [...parent.transformedNodes] :
-                       undefined,
+      transformedNodes: child.transformedNodes !== undefined 
+          ? [...(parent.transformedNodes || []), ...child.transformedNodes] 
+          : parent.transformedNodes ? [...parent.transformedNodes] : undefined,
       filePath: child.filePath ?? parent.filePath,
-      parentState: parent.parentState,
-      // Preserve parent's stateId to maintain identity
       stateId: parent.stateId,
+      parentServiceRef: parent.parentServiceRef,
+      transformationOptions: parent.transformationOptions,
+      createdAt: parent.createdAt,
+      modifiedAt: now,
       source: 'merge'
     };
 
     this.logOperation({
       type: 'merge',
-      timestamp: Date.now(),
+      timestamp: now,
       source: 'mergeStates',
       details: {
         operation: 'mergeStates',
-        value: merged
+        parentStateId: parent.stateId,
+        childStateId: child.stateId,
+        stateId: merged.stateId
       }
     });
 
     return merged;
   }
 
-  updateState(state: StateNode, updates: Partial<StateNode>): StateNode {
-    // Create new maps, deep cloning values during creation
+  updateState(state: StateNode, updates: Partial<Omit<StateNode, 'stateId' | 'createdAt' | 'parentServiceRef'>>): StateNode {
+    const now = Date.now();
+    
+    // Always create new maps, cloning from updates if provided, otherwise from original state
     const newTextMap = new Map(
       Array.from(updates.variables?.text ?? state.variables.text,
-                 ([key, value]) => [key, cloneDeep(value)]) // Deep clone each value
+                 ([key, value]) => [key, cloneDeep(value)])
     );
     const newDataMap = new Map(
       Array.from(updates.variables?.data ?? state.variables.data,
-                 ([key, value]) => [key, cloneDeep(value)]) // Deep clone each value
+                 ([key, value]) => [key, cloneDeep(value)])
     );
     const newPathMap = new Map(
       Array.from(updates.variables?.path ?? state.variables.path,
-                 ([key, value]) => [key, cloneDeep(value)]) // Deep clone each value
+                 ([key, value]) => [key, cloneDeep(value)])
     );
     const newCommandsMap = new Map(
       Array.from(updates.commands ?? state.commands,
-                 ([key, value]) => [key, cloneDeep(value)]) // Deep clone each value
+                 ([key, value]) => [key, cloneDeep(value)])
     );
 
     const updated: StateNode = {
       stateId: state.stateId,
-      variables: { // Use the newly created maps
+      variables: {
         text: newTextMap,
         data: newDataMap,
         path: newPathMap
       },
-      commands: newCommandsMap, // Use new commands map
-      imports: new Set(updates.imports ?? state.imports),
-      nodes: [...(updates.nodes ?? state.nodes)],
-      // Ensure transformedNodes is always a new array copy if defined
+      commands: newCommandsMap,
+      imports: updates.imports ? new Set(updates.imports) : new Set(state.imports), // Ensure new Set
+      nodes: updates.nodes ? [...updates.nodes] : [...state.nodes], // Ensure new array
       transformedNodes: updates.transformedNodes !== undefined 
                           ? [...updates.transformedNodes] 
-                          : state.transformedNodes ? [...state.transformedNodes] : undefined,
+                          : state.transformedNodes ? [...state.transformedNodes] : undefined, // Ensure new array if exists
       filePath: updates.filePath ?? state.filePath,
-      parentState: updates.parentState ?? state.parentState
+      parentServiceRef: state.parentServiceRef,
+      transformationOptions: updates.transformationOptions ?? state.transformationOptions,
+      createdAt: state.createdAt,
+      modifiedAt: now,
+      source: state.source
     };
 
     this.logOperation({
       type: 'update',
-      timestamp: Date.now(),
+      timestamp: now,
       source: 'updateState',
       details: {
         operation: 'updateState',
-        value: updated
+        stateId: updated.stateId,
+        updatedKeys: Object.keys(updates)
       }
     });
 
     return updated;
   }
 
-  /**
-   * Creates a cloned state that is a deep copy of the original state
-   * but with a new stateId and no parentState reference
-   */
   createClonedState(originalState: StateNode, options?: StateNodeOptions): StateNode {
-    // Use lodash.cloneDeep for a true deep copy
-    const tempCloned = cloneDeep(originalState); // Deep clone everything first
+    const now = Date.now();
+    const clonedVariables = {
+        text: cloneDeep(originalState.variables.text),
+        data: cloneDeep(originalState.variables.data),
+        path: cloneDeep(originalState.variables.path)
+    };
+    const clonedCommands = cloneDeep(originalState.commands);
 
-    // Reconstruct the StateNode, preserving the original parent reference
     const clonedState: StateNode = {
-      stateId: randomUUID(), // New ID
-      variables: { // Use deep cloned maps
-        text: cloneDeep(tempCloned.variables.text),
-        data: cloneDeep(tempCloned.variables.data),
-        path: cloneDeep(tempCloned.variables.path)
-      },
-      commands: cloneDeep(tempCloned.commands),
-      imports: new Set(tempCloned.imports), // Sets are usually fine with spread/constructor copy
-      nodes: [...tempCloned.nodes], // Shallow copy nodes
-      transformedNodes: tempCloned.transformedNodes ? [...tempCloned.transformedNodes] : undefined, // Shallow copy transformed
-      filePath: options?.filePath ?? tempCloned.filePath, // Use override or cloned path
-      parentState: originalState.parentState, // <<< Explicitly use original parentState reference
-      source: 'clone' // Mark as clone
+      stateId: randomUUID(),
+      variables: clonedVariables,
+      commands: clonedCommands,
+      imports: new Set(originalState.imports),
+      nodes: [...originalState.nodes],
+      transformedNodes: originalState.transformedNodes ? [...originalState.transformedNodes] : undefined,
+      filePath: options?.filePath ?? originalState.filePath,
+      parentServiceRef: options?.parentServiceRef ?? originalState.parentServiceRef,
+      transformationOptions: options?.transformationOptions ?? originalState.transformationOptions,
+      createdAt: now,
+      modifiedAt: now,
+      source: 'clone'
     };
 
     this.logOperation({
       type: 'create',
-      timestamp: Date.now(),
+      timestamp: now,
       source: options?.source ?? 'createClonedState',
       details: {
         operation: 'createClonedState',
-        value: clonedState
+        originalStateId: originalState.stateId,
+        stateId: clonedState.stateId
       }
     });
 
@@ -210,6 +248,5 @@ export class StateFactory implements IStateFactory {
 
   private logOperation(operation: StateOperation): void {
     this.operations.push(operation);
-    logger.debug('State operation', operation);
   }
 } 
