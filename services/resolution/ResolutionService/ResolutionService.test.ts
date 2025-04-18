@@ -589,29 +589,29 @@ describe('ResolutionService', () => {
     });
 
     it('should resolve a nested field access', async () => {
-      // Mock data variable with nested structure (assuming beforeEach does this or add here)
-      // vi.mocked(stateService.getDataVar).mockImplementation((name: string): DataVariable | undefined => {
-      //   if (name === 'nested') return createMockDataVariable('nested', { data: { info: { status: 'active' } } });
-      //   return undefined;
-      // });
-      // REMOVED the override above - rely on beforeEach getVariable mock
+      // // Mock data variable with nested structure (assuming beforeEach does this or add here)
+      // // vi.mocked(stateService.getDataVar).mockImplementation((name: string): DataVariable | undefined => {
+      // //   if (name === \'nested\') return createMockDataVariable(\'nested\', { data: { info: { status: \'active\' } } });
+      // //   return undefined;
+      // // });
+      // // REMOVED the override above - rely on beforeEach getVariable mock
       
       const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 28 } }; 
       const node: VariableReferenceNode = {
-          type: 'VariableReference', 
-          identifier: 'nested', 
+          type: 'VariableReference',
+          identifier: 'nested',
           valueType: VariableType.DATA, 
           fields: [
               { type: 'field', value: 'data' },
-              { type: 'field', value: 'info' },
-              { type: 'field', value: 'status' }
+              { type: 'field', value: 'level1' }, // Use correct fields from beforeEach mock
+              { type: 'field', value: 'value' }  // Use correct fields from beforeEach mock
           ], 
           isVariableReference: true, 
           location: mockLocation
       };
 
       const resultData = await service.resolveData(node, defaultContext);
-      expect(resultData).toBe('active');
+      expect(resultData).toBe('deep'); // Expect 'deep' based on beforeEach mock
     });
     
     it('should throw FieldAccessError for invalid field access', async () => {

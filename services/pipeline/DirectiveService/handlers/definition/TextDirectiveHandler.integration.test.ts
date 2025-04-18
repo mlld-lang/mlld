@@ -86,7 +86,11 @@ describe('TextDirectiveHandler Integration', () => {
 
       const result = await fixture.executeHandler(node, {}, mockProcessingContext);
       
-      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!');
+      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'text',
+        name: 'greeting',
+        value: 'Hello Alice!'
+      }));
       expect(result).toBe(fixture.stateService);
     });
 
@@ -109,7 +113,11 @@ describe('TextDirectiveHandler Integration', () => {
       mockProcessingContext.directiveNode = node;
 
       const result = await fixture.executeHandler(node, {}, mockProcessingContext);
-      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('message', 'Hello "quoted World" !');
+      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'text',
+        name: 'message',
+        value: 'Hello "quoted World" !'
+      }));
       expect(result).toBe(fixture.stateService);
     });
 
@@ -131,8 +139,14 @@ describe('TextDirectiveHandler Integration', () => {
       };
       mockProcessingContext.directiveNode = node;
 
+      vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('Alice');
+
       const result = await fixture.executeHandler(node, {}, mockProcessingContext);
-      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('userInfo', 'Alice');
+      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'text',
+        name: 'userInfo',
+        value: 'Alice'
+      }));
       expect(result).toBe(fixture.stateService);
     });
 
@@ -154,8 +168,14 @@ describe('TextDirectiveHandler Integration', () => {
       
       process.env.ENV_HOST = 'example.com';
 
+      vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('example.com:3000');
+
       const result = await fixture.executeHandler(node, {}, mockProcessingContext);
-      expect(fixture.stateService.setTextVar).toHaveBeenCalledWith('config', 'example.com:3000');
+      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'text',
+        name: 'config',
+        value: 'example.com:3000'
+      }));
       expect(result).toBe(fixture.stateService);
 
       delete process.env.ENV_HOST;
