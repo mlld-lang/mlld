@@ -182,32 +182,33 @@ describe('ResolutionService', () => {
     // Configure StateService mocks (NEW: Use getVariable)
     stateService.getVariable.mockImplementation((name: string, typeHint?: VariableType): MeldVariable | undefined => {
       // Text Variables
-      if (name === 'greeting') return createMockTextVariable('greeting', 'Hello World');
-      if (name === 'subject') return createMockTextVariable('subject', 'Universe');
-      if (name === 'message') return createMockTextVariable('message', '`{{greeting}}, {{subject}}!`');
-      if (name === 'var1') return createMockTextVariable('var1', '{{var2}}'); // For circular tests
-      if (name === 'var2') return createMockTextVariable('var2', '{{var1}}'); // For circular tests
+      if (name === 'greeting' && (!typeHint || typeHint === VariableType.TEXT)) return createMockTextVariable('greeting', 'Hello World');
+      if (name === 'subject' && (!typeHint || typeHint === VariableType.TEXT)) return createMockTextVariable('subject', 'Universe');
+      if (name === 'name' && (!typeHint || typeHint === VariableType.TEXT)) return createMockTextVariable('name', 'Alice'); // Added for concatenation tests
+      if (name === 'message' && (!typeHint || typeHint === VariableType.TEXT)) return createMockTextVariable('message', '`{{greeting}}, {{subject}}!`');
+      if (name === 'var1' && (!typeHint || typeHint === VariableType.TEXT)) return createMockTextVariable('var1', '{{var2}}'); // For circular tests
+      if (name === 'var2' && (!typeHint || typeHint === VariableType.TEXT)) return createMockTextVariable('var2', '{{var1}}'); // For circular tests
       
       // Data Variables
-      if (name === 'user') return createMockDataVariable('user', { name: 'Alice', id: 123 });
-      if (name === 'config') return createMockDataVariable('config', { version: 1, active: true });
-      if (name === 'nested') return createMockDataVariable('nested', { data: { level1: { value: 'deep' } } });
-      if (name === 'primitive') return createMockDataVariable('primitive', 'a string'); // For field access tests
+      if (name === 'user' && (!typeHint || typeHint === VariableType.DATA)) return createMockDataVariable('user', { name: 'Alice', id: 123 });
+      if (name === 'config' && (!typeHint || typeHint === VariableType.DATA)) return createMockDataVariable('config', { version: 1, active: true });
+      if (name === 'nested' && (!typeHint || typeHint === VariableType.DATA)) return createMockDataVariable('nested', { data: { level1: { value: 'deep' } } });
+      if (name === 'primitive' && (!typeHint || typeHint === VariableType.DATA)) return createMockDataVariable('primitive', 'a string'); // For field access tests
       
       // Path Variables
-      if (name === 'home') {
-        const state: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: '/home/user/meld', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true };
+      if (name === 'home' && (!typeHint || typeHint === VariableType.PATH)) {
+        const state: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: '/home/user/meld', isValidSyntax: true, isSecure: true, /* exists: true, */ isAbsolute: true, validatedPath: unsafeCreateValidatedResourcePath('/home/user/meld') }; // Removed exists
         return createMockPathVariable('home', state);
       }
-      if (name === 'docs') {
-        const state: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: '/mock/project/root/docs', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true };
+      if (name === 'docs' && (!typeHint || typeHint === VariableType.PATH)) {
+        const state: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: '/mock/project/root/docs', isValidSyntax: true, isSecure: true, /* exists: true, */ isAbsolute: true, validatedPath: unsafeCreateValidatedResourcePath('/mock/project/root/docs') }; // Removed exists
         return createMockPathVariable('docs', state);
       }
       
       // Command Variables
-      if (name === 'echo') return createMockCommandVariable('echo', 'echo "$@"');
-      if (name === 'errorCmd') return createMockCommandVariable('errorCmd', 'exit 1');
-      if (name === 'greet') return createMockCommandVariable('greet', 'echo Hello there');
+      if (name === 'echo' && (!typeHint || typeHint === VariableType.COMMAND)) return createMockCommandVariable('echo', 'echo "$@"');
+      if (name === 'errorCmd' && (!typeHint || typeHint === VariableType.COMMAND)) return createMockCommandVariable('errorCmd', 'exit 1');
+      if (name === 'greet' && (!typeHint || typeHint === VariableType.COMMAND)) return createMockCommandVariable('greet', 'echo Hello there');
 
       // Fallback: variable not found
       return undefined;
