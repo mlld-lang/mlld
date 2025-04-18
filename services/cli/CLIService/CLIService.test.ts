@@ -83,10 +83,10 @@ describe('CLIService', () => {
   let mockOutputService: IOutputService;
   let mockFileSystemService: IFileSystemService;
   let mockPathService: IPathService;
-  let mockStateService: IStateService;
   let mockChildState: any;
   let mockReadline: any;
   let mockLogger: Logger;
+  let mockStateService: IStateService;
 
   beforeEach(async () => {
     // Reset the mock state
@@ -150,19 +150,20 @@ describe('CLIService', () => {
       setVariable: vi.fn(), // Use generic setVariable
       getVariable: vi.fn(), // Add generic getVariable
       getNodes: vi.fn().mockReturnValue([]),
-      setupTemplate: vi.fn(),
+      // setupTemplate: vi.fn(), // Remove potentially unused mocks
       // Remove old specific getters/setters
       // getTextVar: vi.fn(),
       // getDataVar: vi.fn(),
       // getPathVar: vi.fn(),
       // setPathVar: vi.fn(), 
-      getAllTextVars: vi.fn().mockReturnValue(new Map()),
-      getAllDataVars: vi.fn().mockReturnValue(new Map()),
-      getAllPathVars: vi.fn().mockReturnValue(new Map()),
-      getAllCommands: vi.fn().mockReturnValue(new Map()),
-      getStateId: vi.fn().mockReturnValue('test-state-id'),
+      // getAllTextVars: vi.fn().mockReturnValue(new Map()),
+      // getAllDataVars: vi.fn().mockReturnValue(new Map()),
+      // getAllPathVars: vi.fn().mockReturnValue(new Map()),
+      // getAllCommands: vi.fn().mockReturnValue(new Map()),
+      getStateId: vi.fn().mockReturnValue('test-child-state-id'), // Give distinct ID
       getCurrentFilePath: vi.fn().mockReturnValue('/test/file.meld'),
       isTransformationEnabled: vi.fn().mockReturnValue(false)
+      // Add other necessary IStateService methods if CLIService uses them on the child
     };
 
     // Create a StateService mock with a working createChildState method
@@ -172,7 +173,7 @@ describe('CLIService', () => {
 
     // Register mocks with the DI container
     context.registerMock('IPathService', mockPathService);
-    context.registerMock('IStateService', mockStateService);
+    context.registerMock('IStateService', mockStateService); // <<<< Register the parent mock again
     context.registerMock('IPromptService', mockPromptService);
     context.registerMock('IOutputService', mockOutputService);
     
@@ -183,7 +184,7 @@ describe('CLIService', () => {
       mockOutputService,
       mockFileSystemService,
       mockPathService,
-      mockStateService,
+      mockStateService, // <<<< Pass the parent mock again
       mockPromptService
     );
 
@@ -293,6 +294,7 @@ describe('CLIService', () => {
       const args = ['node', 'meld', 'test.mld'];
       await service.run(args);
       expect(mockPathService.resolveProjectPath).toHaveBeenCalled();
+      // Get the child state via the parent mock and check calls on it
       const state = mockStateService.createChildState();
       // Update to use setVariable with createPathVariable
       const projectPathVar = createPathVariable('PROJECTPATH', {
@@ -312,6 +314,7 @@ describe('CLIService', () => {
     it('should handle home path option', async () => {
       const args = ['node', 'meld', 'test.mld', '--home-path', '/home'];
       await service.run(args);
+      // Get the child state via the parent mock and check calls on it
       const state = mockStateService.createChildState();
       // Update to use setVariable with createPathVariable
       const homePathVar = createPathVariable('HOMEPATH', {
