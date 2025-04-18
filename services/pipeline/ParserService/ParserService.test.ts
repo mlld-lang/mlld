@@ -123,7 +123,8 @@ describe('ParserService', () => {
           location: {
             start: { line: 1, column: 1 },
             end: { line: 1, column: 36 }
-          }
+          },
+          nodeId: expect.any(String)
         }
       ];
 
@@ -140,12 +141,13 @@ describe('ParserService', () => {
         {
           type: 'Directive',
           location: mockLocation,
+          nodeId: expect.any(String),
           directive: {
             kind: 'text',
             identifier: 'greeting',
             source: 'literal',
             value: [
-              { type: 'Text', content: 'Hello', location: mockTextValueLocation }
+              { type: 'Text', content: 'Hello', location: mockTextValueLocation, nodeId: expect.any(String) }
             ]
           }
         }
@@ -166,6 +168,7 @@ describe('ParserService', () => {
             start: { line: 1, column: 1 },
             end: { line: 4, column: 4 },
           },
+          nodeId: expect.any(String)
         },
       ];
 
@@ -183,7 +186,8 @@ describe('ParserService', () => {
           location: {
             start: { line: 1, column: 1 },
             end: { line: 3, column: 4 }
-          }
+          },
+          nodeId: expect.any(String)
         }
       ];
       
@@ -333,12 +337,13 @@ describe('ParserService', () => {
         {
           type: 'Directive',
           location: mockLocation,
+          nodeId: expect.any(String),
           directive: {
             kind: 'text',
             identifier: 'greeting',
             source: 'literal',
             value: [
-              { type: 'Text', content: 'Hello', location: mockTextValueLocation }
+              { type: 'Text', content: 'Hello', location: mockTextValueLocation, nodeId: expect.any(String) }
             ]
           }
         }
@@ -399,7 +404,8 @@ describe('ParserService', () => {
         location: {
           start: { line: 1, column: 1 },
           end: { line: 1, column: 36 }
-        }
+        },
+        nodeId: expect.any(String)
       }]);
     });
 
