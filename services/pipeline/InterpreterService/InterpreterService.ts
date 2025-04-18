@@ -383,28 +383,37 @@ export class InterpreterService implements IInterpreterService {
       // Merge state back to parent if requested
       if (opts.initialState && opts.mergeState) {
         if (typeof opts.initialState.mergeChildState === 'function') {
-          (opts.initialState as IStateService).mergeChildState(currentState);
+          await (opts.initialState as IStateService).mergeChildState(currentState);
+          logger.debug('Merged final child state back to initial parent state', {
+             parentStateId: opts.initialState.getStateId(),
+             childStateId: currentState.getStateId()
+          });
+          // Return the parent state after merging
+          currentState = opts.initialState as IStateService; 
         } else {
-          logger.warn('Initial state does not support mergeChildState', { initialState: opts.initialState });
+          logger.warn('Initial state does not support mergeChildState, returning child state instead.', { initialState: opts.initialState });
+          // If merge is not supported, we still return the final child state (currentState)
         }
-      }
+      } 
+      // If mergeState was false or no initialState provided, currentState remains the final child state
 
       logger.debug('Interpretation completed successfully', {
         nodeCount: nodes?.length ?? 0,
-        filePath: currentState.getCurrentFilePath(),
-        finalStateNodes: currentState.getNodes()?.length ?? 0,
-        mergedToParent: opts.mergeState && opts.initialState
+        filePath: currentState.getCurrentFilePath(), // Log path from the state being returned
+        finalStateNodes: currentState.getNodes()?.length ?? 0, // Log node count from state being returned
+        returnedStateId: currentState.getStateId(), // Log ID of state being returned
+        mergedToParent: opts.mergeState && opts.initialState && typeof opts.initialState.mergeChildState === 'function' // Log if merge happened
       });
 
       // <<< Final Log before return >>>
       const finalStateId = currentState.getStateId();
-      const finalNodes = currentState.getTransformedNodes(); // Use getTransformedNodes
-      const finalVar = currentState.getVariable('importedVar', VariableType.TEXT); // Check var for simple import test
+      const finalNodes = currentState.getTransformedNodes(); 
+      const finalVar = currentState.getVariable('importedVar', VariableType.TEXT);
       process.stdout.write(`DEBUG: [InterpreterService.interpret FINAL] StateID: ${finalStateId}. Nodes Count: ${finalNodes.length}. Nodes: ${JSON.stringify(finalNodes.map(n => ({type: n.type, kind: (n as any)?.directive?.kind, content: (n as any)?.content?.substring(0,20)})))}\n`);
       process.stdout.write(`DEBUG: [InterpreterService.interpret FINAL] StateID: ${finalStateId}. Has importedVar? ${!!finalVar}. Value: ${finalVar?.value}\n`);
       // <<< End Final Log >>>
 
-      return currentState;
+      return currentState; // Returns PARENT if merged, otherwise the final child state
     } catch (error) {
       throw error; 
     }
