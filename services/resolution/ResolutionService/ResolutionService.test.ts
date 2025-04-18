@@ -590,10 +590,11 @@ describe('ResolutionService', () => {
 
     it('should resolve a nested field access', async () => {
       // Mock data variable with nested structure (assuming beforeEach does this or add here)
-      vi.mocked(stateService.getDataVar).mockImplementation((name: string): DataVariable | undefined => {
-        if (name === 'nested') return createMockDataVariable('nested', { data: { info: { status: 'active' } } });
-        return undefined;
-      });
+      // vi.mocked(stateService.getDataVar).mockImplementation((name: string): DataVariable | undefined => {
+      //   if (name === 'nested') return createMockDataVariable('nested', { data: { info: { status: 'active' } } });
+      //   return undefined;
+      // });
+      // REMOVED the override above - rely on beforeEach getVariable mock
       
       const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 28 } }; 
       const node: VariableReferenceNode = {

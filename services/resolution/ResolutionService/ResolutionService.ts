@@ -591,40 +591,63 @@ export class ResolutionService implements IResolutionService {
    * @throws {FieldAccessError} If field access fails.
    */
   async resolveData(node: VariableReferenceNode, context: ResolutionContext): Promise<JsonValue> {
-    // Use node.identifier directly, remove string 'ref' parameter
     logger.debug(`resolveData called for node`, { identifier: node.identifier, fieldCount: node.fields?.length, contextFlags: context.flags });
 
     try {
-      // 1. Get identifier and fields directly from the node
-      const varName = node.identifier;
-      const fields = node.fields || []; // Ensure fields is an array
-
-      // 2. Get the base variable value
-      const variable = this.stateService.getDataVar(varName);
+      // 1. Get the base variable value (expecting DataVariable)
+      const variable = this.stateService.getVariable(node.identifier, VariableType.DATA);
+      
       if (!variable) {
-         throw new VariableResolutionError(`Variable not found: ${varName}`, {
-             code: 'E_VAR_NOT_FOUND',
-             details: { variableName: varName }
-         });
+         // Explicitly check if we should throw or return null
+         if (context.strict) {
+            throw new VariableResolutionError(`Data variable not found: ${node.identifier}`, {
+               code: 'E_VAR_NOT_FOUND',
+               details: { variableName: node.identifier, valueType: VariableType.DATA }
+            });
+         } else {
+            logger.warn(`Data variable \\"${node.identifier}\\" not found in non-strict mode, returning null.`);
+            return null; // Return null for data type if not found and not strict
+         }
       }
-      const baseValue = variable.value;
+      
+      // Ensure it is actually a data variable (though getVariable should handle this with type hint)
+      if (!isDataVariable(variable)) {
+         // This case should ideally not be reached if getVariable(..., VariableType.DATA) works correctly
+         if (context.strict) {
+             throw new VariableResolutionError(`Variable \\"${node.identifier}\\" is not a data variable (type: ${variable.type})`, {
+                 code: 'E_VAR_TYPE_MISMATCH',
+                 details: { variableName: node.identifier, expectedType: VariableType.DATA, actualType: variable.type }
+             });
+         } else {
+             logger.warn(`Variable \\"${node.identifier}\\" is not a data variable (type: ${variable.type}), returning null in non-strict mode.`);
+             return null;
+         }
+      }
 
-      // 3. Access fields if necessary
+      const baseValue = variable.value;
+      const fields = node.fields || [];
+
+      // 2. Access fields if necessary
       let finalValue: JsonValue | undefined;
       if (fields.length > 0) {
-          // Ensure variableReferenceResolver is available
           if (!this.variableReferenceResolver) {
-              throw new Error('Internal Error: variableReferenceResolver not initialized before field access in resolveData');
+              throw new MeldResolutionError('Internal Error: variableReferenceResolver not initialized', { code: 'E_INTERNAL' });
           }
-          // Call accessFields with AstField[] from node
-          const result = await this.variableReferenceResolver.accessFields(baseValue, fields, varName, context);
+          // Directly call accessFields
+          const result = await this.variableReferenceResolver.accessFields(baseValue, fields, node.identifier, context);
           if (result.success) {
               finalValue = result.value;
           } else {
-              throw result.error; // Throw the FieldAccessError on failure
+              // Throw the FieldAccessError from the result if strict
+              if (context.strict) {
+                  throw result.error; 
+              } else {
+                  logger.warn(`Field access failed for \\"${node.identifier}\\" in non-strict mode, returning null.`, { error: result.error.message });
+                  return null; // Return null on field access error if not strict
+              }
           }
       } else {
-          // No fields, return the base value
+          // No fields, return the base value directly
           finalValue = baseValue;
       }
       
@@ -632,23 +655,18 @@ export class ResolutionService implements IResolutionService {
       return finalValue === undefined ? null : finalValue;
 
     } catch (error) {
-      // Keep existing error handling, but update logging context if needed
-      logger.error('resolveData failed', { error, identifier: node.identifier });
-      if (context.strict) {
-        if (error instanceof Error && 'code' in error && 'name' in error) { 
-            logger.debug('[resolveData CATCH] Re-throwing original MeldError (duck-typed)', { name: error.name, code: (error as MeldError).code });
-            throw error;
-        } else {
-            logger.warn('[resolveData CATCH] Wrapping non-MeldError (duck-typed)', { errorName: error instanceof Error ? error.name : 'Unknown Type' });
-            const meldError = new MeldResolutionError(`Failed to resolve data reference: ${node.identifier}`, {
-                code: 'E_RESOLVE_DATA_FAILED',
-                details: { identifier: node.identifier, context },
-                cause: error
-            });
-            throw meldError;
-        }
-      }
-      return null; // Return null if not strict and resolution fails
+       // Catch errors thrown (like VariableResolutionError from getVariable or FieldAccessError from above)
+       logger.error('resolveData failed', { error, identifier: node.identifier });
+       if (context.strict) {
+          // Re-throw MeldErrors directly, wrap others
+          if (error instanceof MeldError) throw error;
+          throw new MeldResolutionError(`Failed to resolve data reference: ${node.identifier}`, {
+              code: 'E_RESOLVE_DATA_FAILED',
+              details: { identifier: node.identifier, context },
+              cause: error
+          });
+       }
+       return null; // Return null if any error occurs and not strict
     }
   }
 
