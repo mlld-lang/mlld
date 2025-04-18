@@ -139,9 +139,8 @@ describe('VariableReferenceResolver Edge Cases', () => {
     // Ensure getVariable handles the raw string input AND undefined
     stateService.getVariable.mockImplementation((name: string): MeldVariable | undefined => {
         console.log(`[DEBUG MOCK FALLBACK getVariable] Called with: ${name}`);
-        if (name === '{{greeting}}') return mockGreetingVar;
+        if (name === 'greeting') return mockGreetingVar;
         // Handle the case where resolve might call with undefined identifier on fallback
-        if (typeof name === 'undefined') return mockGreetingVar; 
         return undefined;
     });
 
