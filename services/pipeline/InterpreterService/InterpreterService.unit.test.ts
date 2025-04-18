@@ -395,14 +395,11 @@ describe('InterpreterService Unit', () => {
         );
 
         // Verify addNode was called for the initial text and the resolved variable (as text)
-        expect(workingState.addNode).toHaveBeenCalledTimes(2);
+        expect(workingState.addNode).toHaveBeenCalledTimes(3); // Called for Text, Resolved VarRef, final Text
         expect(workingState.addNode).toHaveBeenCalledWith(textNode1);
         expect(workingState.addNode).toHaveBeenCalledWith(expect.objectContaining(expectedFinalTextNode));
-        // It should NOT add the original VariableReferenceNode or the final TextNode ('!') 
-        // because the current loop processes node-by-node
-        // TODO: Re-evaluate InterpreterService loop logic - it might need to handle adjacent text better.
-        // For now, test the current observed behavior.
-        // expect(workingState.addNode).toHaveBeenCalledWith(textNode2);
+        // It *should* add the final TextNode ('!') as well
+        expect(workingState.addNode).toHaveBeenCalledWith(textNode2); 
     });
   });
 

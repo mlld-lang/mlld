@@ -183,6 +183,7 @@ describe('ImportDirectiveHandler', () => {
       interpreterServiceClient.interpret.mockReset(); // Reset beforeEach rejection
       // Resolve with a state containing the variable expected by the test
       const mockResultState = mockDeep<IStateService>();
+      mockResultState.getTransformedNodes.mockReturnValue([]);
       // Match the structure expected by the setTextVar assertion in the failing test
       const mockImportedVar: TextVariable = {
         name: 'imported', // Match the expected name
