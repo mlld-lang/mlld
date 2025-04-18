@@ -3,7 +3,8 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldImportError } from '@core/errors/MeldImportError.js';
-import type { TextNode, MeldNode, DirectiveNode, DirectiveProcessingContext } from '@core/syntax/types.js';
+import type { TextNode, MeldNode, DirectiveNode } from '@core/syntax/types/nodes.js';
+import type { DirectiveProcessingContext } from '@core/types/index.js';
 // Import centralized syntax helpers
 import { createNodeFromExample } from '@core/syntax/helpers/index.js';
 // Import relevant examples
@@ -20,25 +21,34 @@ import { InterpreterService } from '@services/pipeline/InterpreterService/Interp
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { StateService } from '@services/state/StateService/StateService.js';
-import type { IParserService } from '@services/parser/IParserService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
 import { logger } from '@core/utils/logger.js';
 // Import necessary factories and clients
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 import { mock } from 'vitest-mock-extended';
-import { DirectiveResult } from '@core/syntax/DirectiveResult.js';
+import type { DirectiveResult } from '@services/pipeline/DirectiveService/interfaces/DirectiveTypes.js';
 import { container, type DependencyContainer } from 'tsyringe';
 // Import tokens and helpers for manual DI setup
-import type { IFileSystem } from '@services/fs/IFileSystem.js'; 
-import type { IURLContentResolver } from '@services/utils/IURLContentResolver.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
 import { URL } from 'node:url'; 
 // Import interfaces/classes to mock
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import { VariableType, PathContentType, IFilesystemPathState, IPathVariable } from '@core/syntax/types.js';
-import { createTextVariable, createDataVariable, createPathVariable } from '@core/syntax/helpers/variableHelpers.js';
+import { 
+  VariableType, 
+  PathContentType, 
+  type IFilesystemPathState, 
+  type IPathVariable, 
+  createTextVariable, 
+  createDataVariable, 
+  createPathVariable, 
+  type TextVariable,
+  type DataVariable 
+} from '@core/types';
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),
@@ -131,7 +141,7 @@ describe('InterpreterService Integration', () => {
     it('interprets text nodes', async () => {
       const content = 'Hello world';
       const nodes = await parser.parse(content);
-      const result = await interpreter.interpret(nodes);
+      const result = await interpreter.interpret(nodes as MeldNode[]);
       const resultNodes = result.getNodes();
       expect(resultNodes).toHaveLength(1);
       expect(resultNodes[0].type).toBe('Text');
@@ -145,16 +155,14 @@ describe('InterpreterService Integration', () => {
       const expectedValue = "Hello";
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
-          // Use setVariable with a created variable object
           const variable = createTextVariable(varName, expectedValue);
           await context.state.setVariable(variable);
           return context.state;
       });
 
-      const result = await interpreter.interpret([node]);
+      const result = await interpreter.interpret([node] as MeldNode[]);
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalled();
-      // Use getVariable and check type/value
       const variable = result.getVariable(varName);
       expect(variable).toBeDefined();
       expect(variable?.type).toBe(VariableType.TEXT);
@@ -168,15 +176,13 @@ describe('InterpreterService Integration', () => {
       const expectedData = { name: 'test', value: 123 };
 
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
-          // Use setVariable with a created variable object
           const variable = createDataVariable(varName, expectedData);
           await context.state.setVariable(variable);
           return context.state;
       });
       
-      const result = await interpreter.interpret([node]);
+      const result = await interpreter.interpret([node] as MeldNode[]);
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalled();
-      // Use getVariable and check type/value
       const variable = result.getVariable(varName);
       expect(variable).toBeDefined();
       expect(variable?.type).toBe(VariableType.DATA);
@@ -207,17 +213,14 @@ describe('InterpreterService Integration', () => {
         isAbsolute: true // Assume resolved is absolute
       };
       
-      // Configure the mock for this specific test
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
-         // Use setVariable with a created variable object
          const variable = createPathVariable(varName, expectedPathValue);
          await context.state.setVariable(variable);
          return context.state;
       });
       
-      const result = await interpreter.interpret([node], { filePath: 'test.meld' }); 
+      const result = await interpreter.interpret([node] as MeldNode[], { filePath: 'test.meld' }); 
       
-      // Use getVariable and check type/value
       const variable = result.getVariable(varName);
       
       expect(variable).toBeDefined();
@@ -237,13 +240,12 @@ describe('InterpreterService Integration', () => {
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementation(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
           const varName = node.directive.identifier;
           const value = `val_${varName}`;
-          // Use setVariable with a created variable object
           const variable = createTextVariable(varName, value);
           await context.state.setVariable(variable);
           return context.state;
       });
       
-      const result = await interpreter.interpret(nodes, {
+      const result = await interpreter.interpret(nodes as MeldNode[], {
         initialState: parentState,
         filePath: 'test.meld',
         mergeState: true
@@ -265,8 +267,8 @@ describe('InterpreterService Integration', () => {
   describe('State management', () => {
     it('creates isolated states for different interpretations', async () => {
       const node = context.factory.createTextDirective('test', 'value');
-      const result1 = await interpreter.interpret([node]);
-      const result2 = await interpreter.interpret([node]);
+      const result1 = await interpreter.interpret([node] as MeldNode[]);
+      const result2 = await interpreter.interpret([node] as MeldNode[]);
       expect(result1).not.toBe(result2);
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(2); // handleDirective called for each interpretation
     });
@@ -278,13 +280,12 @@ describe('InterpreterService Integration', () => {
       const expectedValue = 'value';
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
-         // Use setVariable with a created variable object
          const variable = createTextVariable(varName, expectedValue);
          await context.state.setVariable(variable);
          return context.state;
       });
       
-      await interpreter.interpret([node], { initialState: parentState, mergeState: true });
+      await interpreter.interpret([node] as MeldNode[], { initialState: parentState, mergeState: true });
       
       // Use getVariable on parentState and check type/value
       const variable = parentState.getVariable(varName);
@@ -301,13 +302,12 @@ describe('InterpreterService Integration', () => {
       const expectedValue = 'value';
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
-         // Use setVariable with a created variable object
          const variable = createTextVariable(varName, expectedValue);
          await context.state.setVariable(variable);
          return context.state;
       });
       
-      const childResultState = await interpreter.interpret([node], { initialState: parentState, mergeState: false });
+      const childResultState = await interpreter.interpret([node] as MeldNode[], { initialState: parentState, mergeState: false });
       
       // Check parent state - should be undefined
       expect(parentState.getVariable(varName)).toBeUndefined();
@@ -331,14 +331,13 @@ describe('InterpreterService Integration', () => {
       await parentState.setVariable(createTextVariable(originalVarName, originalValue));
 
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
-         // Use setVariable with a created variable object
          const variable = createTextVariable(varName, attemptedValue);
          await context.state.setVariable(variable); 
          return context.state; 
       });
 
       // Interpretation should succeed even if resolution would fail later
-      const finalState = await interpreter.interpret([node], { 
+      const finalState = await interpreter.interpret([node] as MeldNode[], { 
         initialState: parentState,
         filePath: 'test.meld',
         mergeState: true 
@@ -379,7 +378,7 @@ describe('InterpreterService Integration', () => {
         )
       );
       try {
-        await interpreter.interpret([node], { filePath: 'test.meld' });
+        await interpreter.interpret([node] as MeldNode[], { filePath: 'test.meld' });
         throw new Error('Should have thrown error');
       } catch (error: unknown) {
         expect(error).toBeInstanceOf(MeldInterpreterError);
@@ -395,13 +394,12 @@ describe('InterpreterService Integration', () => {
       const node = context.factory.createTextDirective(varName, '{{nonexistent}}', context.factory.createLocation(1, 2));
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
-         // Use setVariable with a created variable object
          const variable = createTextVariable(varName, expectedValue);
          await context.state.setVariable(variable);
          return context.state;
       });
       
-      const finalState = await interpreter.interpret([node], { filePath: 'test.meld' });
+      const finalState = await interpreter.interpret([node] as MeldNode[], { filePath: 'test.meld' });
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
       // Check the variable exists in the final state using getVariable
@@ -439,7 +437,7 @@ describe('InterpreterService Integration', () => {
          });
 
       // Interpretation should complete
-      const finalState = await interpreter.interpret([validNode, invalidNode], {
+      const finalState = await interpreter.interpret([validNode, invalidNode] as MeldNode[], {
         initialState: testState,
         filePath: 'test.meld'
       });
@@ -471,7 +469,7 @@ describe('InterpreterService Integration', () => {
       });
        
       // Interpretation itself succeeds
-      const finalState = await interpreter.interpret([node], { filePath: 'test.meld' });
+      const finalState = await interpreter.interpret([node] as MeldNode[], { filePath: 'test.meld' });
       // Check variable using getVariable
       const errorVar = finalState.getVariable(varName);
       expect(errorVar).toBeDefined();
@@ -516,7 +514,7 @@ describe('InterpreterService Integration', () => {
          });
 
       // Expect interpret to reject due to the DirectiveError
-      await expect(interpreter.interpret([beforeNode, errorNode, afterNode], {
+      await expect(interpreter.interpret([beforeNode, errorNode, afterNode] as MeldNode[], {
         initialState: testState,
         filePath: 'test.meld'
       })).rejects.toThrow(MeldInterpreterError); // Interpreter wraps DirectiveError
@@ -550,7 +548,7 @@ describe('InterpreterService Integration', () => {
         )
       );
       try {
-        await interpreter.interpret([node], { filePath: 'test.meld' });
+        await interpreter.interpret([node] as MeldNode[], { filePath: 'test.meld' });
         throw new Error('Should have thrown error');
       } catch (error: unknown) {
         expect(error).toBeInstanceOf(MeldInterpreterError);
@@ -569,7 +567,7 @@ describe('InterpreterService Integration', () => {
       const node = context.factory.createTextDirective('dummy', 'value', context.factory.createLocation(1,1));
       // Mock handler to do nothing but allow interpretation to proceed
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue(state); 
-      await interpreter.interpret([node], { filePath: 'some/dir/test.meld' });
+      await interpreter.interpret([node] as MeldNode[], { filePath: 'some/dir/test.meld' });
       // Check that the directive was processed
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalled(); 
       // We can't easily assert the internal filePath propagation without more complex mocking or exposing state
@@ -591,7 +589,7 @@ describe('InterpreterService Integration', () => {
          return context.state;
       });
       
-      const result = await interpreter.interpret([node]);
+      const result = await interpreter.interpret([node] as MeldNode[]);
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
       // Use getVariable and check type/value
@@ -613,7 +611,7 @@ describe('InterpreterService Integration', () => {
          return context.state;
       });
       
-      const result = await interpreter.interpret([node]);
+      const result = await interpreter.interpret([node] as MeldNode[]);
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
       // Use getVariable and check type/value
@@ -645,7 +643,7 @@ describe('InterpreterService Integration', () => {
          return context.state;
       });
       
-      const result = await interpreter.interpret([node], { filePath: 'test.meld' });
+      const result = await interpreter.interpret([node] as MeldNode[], { filePath: 'test.meld' });
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
       // Use getVariable and check type/value
@@ -667,7 +665,7 @@ describe('InterpreterService Integration', () => {
          return context.state;
       });
       
-      const result = await interpreter.interpret([node]);
+      const result = await interpreter.interpret([node] as MeldNode[]);
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
       // Use getVariable and check type/value
@@ -697,7 +695,7 @@ describe('InterpreterService Integration', () => {
             return context.state;
          });
 
-      const result = await interpreter.interpret([node1, node2, node3]);
+      const result = await interpreter.interpret([node1, node2, node3] as MeldNode[]);
       const stateNodes = result.getNodes();
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(3);

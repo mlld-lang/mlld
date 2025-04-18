@@ -12,7 +12,7 @@ export type NodeType = 'Directive' | 'Text' | 'CodeFence' | 'Variable' | 'Error'
 export interface MeldNode {
   type: NodeType;
   location?: SourceLocation;
-  id?: string;  // Unique identifier for the node
+  readonly nodeId: string; // Unique identifier for the node (MUST be readonly)
 }
 
 /**
