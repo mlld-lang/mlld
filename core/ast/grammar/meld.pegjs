@@ -4,6 +4,7 @@
 {
   // Add debug flag and logging - always enable for now
   const DEBUG = true; // process.env.MELD_DEBUG === 'true' || false;
+  const crypto = require('crypto');
 
   // --- START NEW HELPERS OBJECT ---
   const helpers = {
@@ -93,7 +94,8 @@
         location: {
           start: { line: loc.start.line, column: loc.start.column },
           end: { line: loc.end.line, column: loc.end.column }
-        }
+        },
+        nodeId: crypto.randomUUID()
       };
     },
 
@@ -1470,6 +1472,7 @@ PathDirective
       // unquoted values like `$HOMEPATH/file` here.
       // The issue of the test passing likely lies in the test runner/assertion logic.
     )
+    _ (LineTerminator / EOF) // <<< ADDED: Ensure RHS consumes whole line
     { return helpers.createDirective('path', rhs, location()); } // Wrap the result in a proper DirectiveNode
 
 VarDirective

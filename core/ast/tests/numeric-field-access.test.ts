@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parse } from '@core/ast.js';
+import { parse } from '@core/ast';
+import { expect, describe, it } from 'vitest';
 import { VariableReferenceNode } from '@core/syntax/types.js';
 
 describe('Numeric field access tests', () => {

@@ -1,5 +1,5 @@
 import { parse } from '@core/ast/parser.js';
-import type { MeldNode } from '@core/syntax/types.js';
+import type { MeldNode } from '@core/syntax/types';
 import { MeldAstError, ParseErrorCode } from '@core/ast/types.js';
 import type { ParseResult, ParserOptions } from '@core/ast/types.js';
 import { parse as grammarParse, SyntaxError } from '@core/ast/grammar/index.js';

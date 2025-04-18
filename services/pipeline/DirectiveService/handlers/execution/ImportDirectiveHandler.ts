@@ -234,7 +234,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
         resultState = await interpreterClient.interpret(
           nodesToInterpret
-        );
+        ) as IStateService;
       } catch (error) {
         if (error instanceof DirectiveError) { throw error; }
         throw new DirectiveError(`Failed to interpret imported file: ${error instanceof Error ? error.message : String(error)}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED);
@@ -244,6 +244,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       process.stdout.write(`\nDEBUG: Before import logic - imports: ${JSON.stringify(imports)}\n`);
       process.stdout.write(`DEBUG: Before import logic - resultState defined: ${!!resultState}\n`);
       // --- End Log ---
+
+      // --- Add log to inspect resultState --- 
+      process.stdout.write(`DEBUG: [ImportDirectiveHandler] Checking resultState before getTransformedNodes. Defined: ${!!resultState}, Keys: ${resultState ? Object.keys(resultState) : 'N/A'}\n`);
+      process.stdout.write(`DEBUG: [ImportDirectiveHandler] resultState.getTransformedNodes is function: ${typeof resultState?.getTransformedNodes === 'function'}\n`);
+      // --- End log --- 
 
       if (!imports || imports.length === 0 || imports.some((i: { name: string }) => i.name === '*')) {
           if (importDirectiveLocation) {
@@ -260,16 +265,23 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         this.circularityService.endImport(normalizedIdentifier);
       }
 
-      // Always return a DirectiveResult, use empty text node if no visual output
-      const replacement: TextNode = {
-        type: 'Text',
-        content: '',
-        location: node.location
-      };
+      // --- Restore intended logic: Return interpreted nodes as replacement ---
+      const replacementNodes = resultState.getTransformedNodes(); // Get nodes AFTER interpretation
+      process.stdout.write(`DEBUG: [ImportDirectiveHandler] Returning ${replacementNodes.length} nodes as replacement.\n`);
+      
+      // --- WORKAROUND v2 for type error --- 
+      let replacementValue: MeldNode | MeldNode[] | undefined = replacementNodes; // Default to array
+      if (replacementNodes.length === 1) {
+        replacementValue = replacementNodes[0]; // Assign single node if only one
+      } 
+      // If empty or > 1, replacementValue remains the MeldNode[] array
+      // --- END WORKAROUND --- 
+
       return {
-        state: targetState,
-        replacement
+        state: targetState, // Return the main state (now with copied vars)
+        replacement: replacementNodes as any // <<< Cast to any
       };
+      // --- End Restore ---
     } catch (error: unknown) {
       let errorObj: DirectiveError;
       if (error instanceof DirectiveError) {

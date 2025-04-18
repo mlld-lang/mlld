@@ -218,7 +218,7 @@ interface IStateService {
    * @param replacement - The node or nodes to insert
    * @throws {MeldStateError} If the state is immutable or index is out of bounds
    */
-  transformNode(index: number, replacement: MeldNode | MeldNode[]): void;
+  transformNode(index: number, replacement: MeldNode | MeldNode[] | undefined): void;
   
   /**
    * Checks if transformation is enabled.

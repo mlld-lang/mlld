@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parse } from '@core/ast.js';
+import { parse } from '@core/ast';
 
 describe('Line Start Directives', () => {
   it('should only recognize directives at the start of a line', async () => {

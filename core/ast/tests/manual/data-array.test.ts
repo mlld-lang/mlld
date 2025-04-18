@@ -1,5 +1,6 @@
 /// <reference types="vitest" />
-import { parse } from '@core/ast.js';
+import { parse } from '@core/ast';
+import { expect, describe, it } from 'vitest';
 
 describe('manual/data-array', () => {
   it('should parse @data with JSON object literal', async () => {

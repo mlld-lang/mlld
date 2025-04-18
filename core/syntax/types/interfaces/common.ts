@@ -25,3 +25,20 @@ export interface SourceLocation {
   end: Position;
   filePath?: string;
 }
+
+/**
+ * Describes the location of a node in the source file.
+ */
+export interface ISourceLocation {
+  start: ISourcePosition;
+  end: ISourcePosition;
+  filePath?: string;
+}
+
+export type NodeId = string;
+
+/**
+ * Base interface for all AST nodes.
+ * Specific node types should extend this interface.
+ */
+// Moved INode definition to INode.ts

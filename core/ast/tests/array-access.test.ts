@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
-import { parse } from '@core/ast.js';
-import { VariableReferenceNode } from '@core/syntax/types.js';
+import { parse } from '@core/ast';
+import { expect, describe, it } from 'vitest';
+import { VariableReferenceNode } from '@core/syntax/types/index.js';
 
 describe('Array access tests', () => {
   it('should parse array access with numeric index', async () => {

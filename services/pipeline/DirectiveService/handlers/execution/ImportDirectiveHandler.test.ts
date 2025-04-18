@@ -6,7 +6,7 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { ImportDirectiveData } from '@core/syntax/types/directives.js';
-import type { MeldNode, DirectiveNode, StructuredPath, SourceLocation, VariableReferenceNode, InterpolatableValue } from '@core/syntax/types/nodes.js';
+import type { MeldNode, DirectiveNode, StructuredPath, SourceLocation, VariableReferenceNode, InterpolatableValue, TextNode } from '@core/syntax/types/nodes.js';
 import { VariableOrigin, type TextVariable, type MeldVariable, type VariableMetadata, type IPathVariable, VariableType, type DataVariable } from '@core/types/variables.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
@@ -112,7 +112,10 @@ describe('ImportDirectiveHandler', () => {
      (resolutionService.resolveInContext as any).mockImplementation(async (value: any) => typeof value === 'string' ? value : value?.raw ?? '');
     (fileSystemService.exists as any).mockResolvedValue(true);
     (fileSystemService.readFile as any).mockResolvedValue('');
-    (parserService.parse as any).mockResolvedValue([]);
+    const mockParsedNodes: MeldNode[] = [
+      createDirectiveNode('text', { identifier: 'mockVar', value: 'mockValue', source: 'literal' })
+    ];
+    (parserService.parse as any).mockResolvedValue(mockParsedNodes);
     (urlContentResolver.validateURL as any).mockResolvedValue(undefined as any);
     (urlContentResolver.fetchURL as any).mockResolvedValue({ content: '', url: '', fromCache: false, metadata: {} } as URLResponse);
 
@@ -281,6 +284,26 @@ describe('ImportDirectiveHandler', () => {
   });
 
   describe('basic importing', () => {
+    beforeEach(() => {
+      // Override interpret mock for this block to succeed and return a state with nodes
+      const mockResultState = mockDeep<IStateService>();
+      const mockNodes: MeldNode[] = [ { type: 'Text', content: 'Imported Content', location: undefined } as TextNode ]; // Cast to TextNode
+      mockResultState.getTransformedNodes.mockReturnValue(mockNodes);
+      // Ensure other methods needed by importAllVariables/processStructuredImports are mocked
+      mockResultState.getAllTextVars.mockReturnValue(new Map([['importedVar', { name: 'importedVar', type: VariableType.TEXT, value: 'Imported Value'}]]));
+      mockResultState.getAllDataVars.mockReturnValue(new Map());
+      mockResultState.getAllPathVars.mockReturnValue(new Map());
+      mockResultState.getAllCommands.mockReturnValue(new Map());
+      
+      interpreterServiceClient.interpret.mockReset(); 
+      interpreterServiceClient.interpret.mockResolvedValue(mockResultState);
+      
+      // Mock createChildState for this block too
+      const mockChildState = mockDeep<IStateService>();
+      stateService.createChildState.mockReset();
+      stateService.createChildState.mockResolvedValueOnce(mockChildState);
+    });
+
     it('should import all variables with *', async () => {
       const importPathRaw = 'imported.meld';
       const finalPath = '/project/imported.meld';
@@ -363,11 +386,11 @@ describe('ImportDirectiveHandler', () => {
       // Use mockDeep for the result state
       const expectedResultState = mockDeep<IStateService>();
       // Ensure getTextVar returns the full TextVariable object wrapped in a Promise
-      expectedResultState.getTextVar.mockImplementation(async (name): Promise<TextVariable | undefined> => {
-        if (name === 'var1') return Promise.resolve(importedVar1);
-        if (name === 'var2') return Promise.resolve(importedVar2);
-        if (name === 'var3') return Promise.resolve(importedVar3);
-        return Promise.resolve(undefined);
+      expectedResultState.getTextVar.mockImplementation((name): TextVariable | undefined => {
+        if (name === 'var1') return importedVar1;
+        if (name === 'var2') return importedVar2;
+        if (name === 'var3') return importedVar3;
+        return undefined;
       });
       expectedResultState.getDataVar.mockResolvedValue(undefined);
       expectedResultState.getPathVar.mockResolvedValue(undefined);

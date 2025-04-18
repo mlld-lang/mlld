@@ -14,7 +14,7 @@ export interface DirectiveResult {
   /**
    * In transformation mode, this is the replacement node that the directive's node should be transformed into
    */
-  replacement?: MeldNode;
+  replacement?: MeldNode | MeldNode[] | undefined;
   
   /**
    * Optional formatting context that should be propagated to further processing.

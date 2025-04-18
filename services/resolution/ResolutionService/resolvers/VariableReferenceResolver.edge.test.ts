@@ -9,21 +9,20 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { MeldNode } from '@core/ast/ast/astTypes.js';
-import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import { MeldResolutionError, FieldAccessError, VariableResolutionError } from '@core/errors/index.js';
 import { VariableNodeFactory } from '@core/syntax/types/factories/index.js';
 import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
 import { TestContextDI } from '@tests/utils/di/index.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { VariableType, TextVariable, DataVariable, MeldVariable, JsonValue } from '@core/types/index.js';
-import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
-import { FieldAccessError } from '@core/errors/FieldAccessError.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { createStateServiceMock } from '@tests/utils/mocks/serviceMocks.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import type { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
+import type { VariableReferenceNode, TextNode } from '@core/ast/ast/astTypes.js';
 
 describe('VariableReferenceResolver Edge Cases', () => {
   let contextDI: TestContextDI;
@@ -71,7 +70,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     // parserService.parse.mockImplementation(async (input: string) => { ... });
 
     // --- Mock implementation for getVariable specifically for edge tests --- 
-    stateService.getVariable.mockImplementation((name: string): MeldVariable | undefined => {
+    stateService.getVariable.mockImplementation((name: string, type?: VariableType): MeldVariable | undefined => {
         // Add guard for undefined/null name
         if (name === null || typeof name === 'undefined') {
             console.warn(`[DEBUG MOCK EDGE getVariable] Received null or undefined name.`);
@@ -160,12 +159,12 @@ describe('VariableReferenceResolver Edge Cases', () => {
         return undefined;
     });
 
-    // Resolve the raw string
-    const result = await resolver.resolve('{{greeting}}', resolutionContext);
+    // Resolve the raw string - requires creating a mock node
+    const node = createVariableReferenceNode('greeting', VariableType.TEXT); // Add VariableType
+    const result = await resolver.resolve(node, resolutionContext);
     expect(result).toBe('Hello'); // Expect the resolved value of the greeting var
 
-    // Verify getVariable was called (might be with undefined or the raw string)
-    // Since the exact call arg is uncertain, just check if called.
+    // Verify getVariable was called
     expect(stateService.getVariable).toHaveBeenCalled();
   });
 
@@ -263,6 +262,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
       return undefined;
     });
 
+    /*
     // Mock the resolution service for nested calls - simulate failure for 'nested'
     resolutionService.resolveInContext.mockImplementation(async (value, ctx) => {
       // Ensure return is always Promise<string>
@@ -287,12 +287,16 @@ describe('VariableReferenceResolver Edge Cases', () => {
       }
       return stringValue; // Pass other values through as string
     });
+    */
     
     // Create the node for the outer variable
-    const node = createVariableReferenceNode('outer', VariableType.TEXT);
+    // Explicitly type the node
+    const node: VariableReferenceNode = createVariableReferenceNode('outer', VariableType.TEXT);
 
     // Expect resolution to succeed and return the outer variable's value
-    const result = await resolver.resolve(node, resolutionContext);
+    // Add log to check context
+    process.stdout.write(`DEBUG: [Nested Error Test] Context before resolve: ${resolutionContext ? 'Defined' : 'UNDEFINED'}\n`);
+    const result: string = await resolver.resolve(node, resolutionContext);
     expect(result).toBe(mockOuterVar.value);
         
     // Expect getVariable to be called for the initial identifier

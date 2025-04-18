@@ -621,14 +621,16 @@ Docs are at $docs
       
       // console.log('Simple import result:', result);
       
+      // --- REVERT Assertions ---
       // Check the final output string - expecting import directive to be removed
-      // expect(result.trim()).toBe('Main file content: Imported Value');
+      // expect(result.trim()).toBe('Main file content: Imported Value'); // Incorrect expectation
       expect(result.trim()).toBe('Main file content:');
       
       // Verify state after import
       const importedVar = stateService.getTextVar('importedVar');
       expect(importedVar).toBeDefined();
       expect(importedVar?.value).toBe('Imported Value');
+      // --- End REVERT ---
     });
     
     it('should handle nested imports with proper scope inheritance', async () => {
@@ -651,10 +653,11 @@ Docs are at $docs
         container: testContainer,
       });
 
+      // --- REVERT Assertions ---
       // Adjust expectation based on scope rules. Level 2 vars might not leak to main scope by default.
       // The output should reflect resolved content from nested levels.
       // Update: Check that the import directive is removed
-      // expect(result.trim()).toBe('Main: Level 1: Level 2 Value Level 2 Value'); // Check actual output based on service logic
+      // expect(result.trim()).toBe('Main: Level 1: Level 2 Value Level 2 Value'); // Incorrect expectation
       expect(result.trim()).toBe('Main:');
 
       // Check final state (variables might be scoped)
@@ -666,6 +669,7 @@ Docs are at $docs
       const level2Var = stateService.getTextVar('level2Var');
       expect(level2Var).toBeDefined();
       expect(level2Var?.value).toBe('Level 2 Value'); // Check if level2 var exists in main state
+      // --- End REVERT ---
     });
     
     it('should detect circular imports', async () => {

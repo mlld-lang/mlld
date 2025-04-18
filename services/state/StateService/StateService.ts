@@ -32,6 +32,7 @@ import {
 } from '@core/types/index.js';
 import { VariableType } from '@core/types/index.js';
 import { cloneDeep } from 'lodash';
+import * as crypto from 'crypto';
 
 // Helper function to get the container
 function getContainer() {
@@ -482,7 +483,7 @@ export class StateService implements IStateService {
     this.updateState({ nodes, transformedNodes }, 'addNode');
   }
 
-  transformNode(index: number, replacement: MeldNode | MeldNode[]): void {
+  transformNode(index: number, replacement: MeldNode | MeldNode[] | undefined): void {
     this.checkMutable();
     if (!this._transformationEnabled) {
       logger.debug('Transformation is disabled, skipping node transformation.');
@@ -511,7 +512,9 @@ export class StateService implements IStateService {
     if (Array.isArray(replacement)) {
       transformedNodes.splice(index, 1, ...replacement);
     } else {
-      transformedNodes.splice(index, 1, replacement);
+      if (replacement !== undefined) { 
+        transformedNodes.splice(index, 1, replacement);
+      }
     }
 
     // Update the state with the new transformed nodes array
@@ -579,7 +582,8 @@ export class StateService implements IStateService {
     const textNode: TextNode = {
       type: 'Text',
       content,
-      location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
+      location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+      nodeId: crypto.randomUUID()
     };
     this.addNode(textNode);
   }
@@ -1087,6 +1091,10 @@ export class StateService implements IStateService {
       }
     } else {
       // Check in order if type not specified
+      // --- Add Log --- 
+      const textMapKeys = Array.from(this.currentState.variables.text.keys());
+      process.stdout.write(`DEBUG: [StateService.getVariable] Checking state ${this.getStateId()}. Text keys: [${textMapKeys.join(', ')}]\n`);
+      // ---------------
       variable = this.currentState.variables.text.get(name) 
           ?? this.currentState.variables.data.get(name) 
           ?? this.currentState.variables.path.get(name) 

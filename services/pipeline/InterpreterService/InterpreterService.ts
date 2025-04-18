@@ -20,6 +20,7 @@ import { DirectiveResult } from '@services/pipeline/DirectiveService/interfaces/
 import type { DirectiveProcessingContext, ExecutionContext, OutputFormattingContext } from '@core/types/index.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import * as crypto from 'crypto';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -435,7 +436,8 @@ export class InterpreterService implements IInterpreterService {
              const resolvedTextNode: TextNode = {
                  type: 'Text',
                  content: resolvedStringValue,
-                 location: varNode.location // Use location from varNode
+                 location: varNode.location, // Use location from varNode
+                 nodeId: crypto.randomUUID() // <<< ADDED
              };
              transformedNode = resolvedTextNode;
          } catch (error) {
@@ -553,7 +555,7 @@ export class InterpreterService implements IInterpreterService {
             if (index !== -1) {
               // If found, replace it with the replacementNode from the handler
               process.stdout.write(`DEBUG: [InterpreterService Directive Case] Calling transformNode to replace index ${index} with ${replacementNode.type} node.\n`);
-              currentState.transformNode(index, replacementNode as MeldNode | MeldNode[]); // <<< STATE IS UPDATED
+              currentState.transformNode(index, replacementNode); // <<< USE WITHOUT Assertion
               // Add log after transform to verify
               const nodesAfter = currentState.getTransformedNodes();
               process.stdout.write(`DEBUG: [InterpreterService Directive Case] After transformNode. New length: ${nodesAfter?.length}. Node at index ${index}: ${nodesAfter?.[index]?.type}\n`);

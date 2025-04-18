@@ -8637,7 +8637,7 @@ function peg$parse(input, options) {
 
   function peg$parsePathDirective() {
     var startPos = peg$currPos;
-    var s0, s1, s2, s3, s4, s5, s6, s7, s8;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9;
 
     peg$tracer.trace({
       type: "rule.enter",
@@ -8687,8 +8687,18 @@ function peg$parse(input, options) {
                   s7 = s8;
                 }
                 if (s7 !== peg$FAILED) {
-                  peg$savedPos = s0;
-                  s0 = peg$f147(s3, s7);
+                  s8 = peg$parse_();
+                  s9 = peg$parseLineTerminator();
+                  if (s9 === peg$FAILED) {
+                    s9 = peg$parseEOF();
+                  }
+                  if (s9 !== peg$FAILED) {
+                    peg$savedPos = s0;
+                    s0 = peg$f147(s3, s7);
+                  } else {
+                    peg$currPos = s0;
+                    s0 = peg$FAILED;
+                  }
                 } else {
                   peg$currPos = s0;
                   s0 = peg$FAILED;
@@ -9612,6 +9622,7 @@ function peg$parse(input, options) {
 
   // Add debug flag and logging - always enable for now
   const DEBUG = true; // process.env.MELD_DEBUG === 'true' || false;
+  const crypto = require('crypto');
 
   // --- START NEW HELPERS OBJECT ---
   const helpers = {
@@ -9701,7 +9712,8 @@ function peg$parse(input, options) {
         location: {
           start: { line: loc.start.line, column: loc.start.column },
           end: { line: loc.end.line, column: loc.end.column }
-        }
+        },
+        nodeId: crypto.randomUUID()
       };
     },
 

@@ -14,7 +14,7 @@ Systematically investigate and fix the core service failures identified in `_pla
 
 ## Recommended Debugging Strategy
 
-*   **Extensive Logging:** Due to potential console output suppression in the test environment (see `docs/dev/TESTS.md`), rely heavily on **`process.stdout.write('DEBUG: [ServiceName] Message\n');`** for detailed tracing.
+*   **Extensive Logging:** Due to potential console output suppression in the test environment (see `docs/dev/TESTS.md`), DO NOT USE `logger.debug` or `console.log` -- instead rely heavily on **`process.stdout.write('DEBUG: [ServiceName] Message\n');`** for detailed tracing.
 *   **Trace Data Flow:** Log key inputs, intermediate values, state lookups/updates, and outputs as data moves between `InterpreterService`, `DirectiveService`, `ResolutionService`, `StateService`, and handlers.
 *   **Isolate:** Use the simplest failing test case for the specific issue being investigated.
 
@@ -27,17 +27,21 @@ Systematically investigate and fix the core service failures identified in `_pla
 -   Use small, targeted commits.
 -   Defer fixing unrelated failures in `tests/` until core functionality is stable.
 
-## Investigation Phases (Prioritized)
+## Refactoring & Investigation Phases (Revised Order)
 
-**Phase 0: Update Debugging Infrastructure [COMPLETED - Pragmatic]**
+**Phase 0: Foundational AST & State Refactor [NEXT]**
 
-*   **Rationale:** The existing state tracking and visualization tools (`tests/utils/debug/*`) are outdated but potentially very valuable for diagnosing the complex state interaction issues observed. Updating this infrastructure first should significantly accelerate the subsequent debugging phases.
-*   **Outcome:** Core debug services (`StateTrackingService`, `StateHistoryService`, `StateVisualizationService`) verified to be instantiable via DI in test setup (`api/debug-tools.integration.test.ts`). Basic visualization calls confirmed working. `VariableResolutionTracker` integration remains problematic and is deferred. The infrastructure is sufficiently ready for use in subsequent phases.
-*   **Target Files:** `StateTrackingService.ts`, `StateVisualizationService.ts`, `IStateTrackingService.ts` (likely location for type definitions), potentially others in `tests/utils/debug/`.
-*   **Investigation Steps:**
-    1.  ~**Fix Linter Errors (Define Types):** Address the linter errors in `StateTrackingService.ts` by defining the missing types (`ContextBoundary`, `VariableCrossing`, `StateRelationshipInfo`, `ContextHierarchyInfo`). Infer their structure based on usage and define them, likely within `IStateTrackingService.ts` or a dedicated `types.ts` file in the debug directory.~ [DONE]
-    2.  ~**Integrate Tracking Calls:** Review and update `StateService`, `InterpreterService`, and key directive handlers (`ImportDirectiveHandler`, etc.) to ensure they correctly call the relevant methods on the (potentially injected) `IStateTrackingService` (e.g., `registerState`, `addRelationship`, `trackContextBoundary`, `trackVariableCrossing`).~ [DEFERRED - Missing calls identified but adding them deferred]
-    3.  ~**Verify Infrastructure:** Run tests related to the debug services themselves, if they exist. Attempt to generate a simple visualization (e.g., `visualizeContextHierarchy` via `StateVisualizationService`) for a basic test case to confirm the infrastructure is functional after updates.~ [DONE - Verified via `api/debug-tools.integration.test.ts`]
+*   **Rationale:** Foundational issues with state cloning, parent lookups, node identification, and transformation context are hindering progress. Strengthening the state data model (`StateNode`) and AST (`MeldNode`) is crucial before debugging higher-level interactions.
+*   **Objectives:**
+    *   **AST:** Add unique `nodeId` to all AST nodes (Parser change).
+    *   **State Data (`StateNode`):** Enhance with `parentServiceRef`, `transformationOptions`, `createdAt`, `modifiedAt`. Remove redundant `parentState`.
+    *   **State Logic (`StateFactory`, `StateService`):** Refactor to correctly use the enhanced `StateNode`, preserve parent links during cloning, manage transformation options via state data, and implement reliable parent lookup in `getVariable`.
+    *   **State Interface (`IStateService`):** Remove outdated specific getters (`getTextVar`, `getDataVar`, etc.) and potentially redundant methods (`getCommand`). Remove unused `metadata` parameters from setters if confirmed.
+    *   **Debugging Tools (`tests/utils/debug/*`):** Update state tracking and visualization tools to be compatible with the new `StateNode` structure and `parentServiceRef`.
+    *   **Tests:** Update all tests related to State, AST, and services using State mocks to reflect the new structures and interfaces.
+*   **Detailed Plans:**
+    *   AST Node IDs: `_plans/AST-ID.md`
+    *   State System Enhancements: `_plans/STATE-UPDATES.md`
 
 **Phase 1: Variable Resolution Stability [NEXT]**
 
@@ -99,7 +103,3 @@ Systematically investigate and fix the core service failures identified in `_pla
 *   **Target Failures:** `api/api.test.ts` #3 (Example File Output).
 *   **Investigation Steps:** Once other issues are resolved, revisit this test. Analyze the expected vs. actual output. Trace `OutputService`.
 *   **Fix & Verify:** Implement fixes. Update relevant tests.
-
-## Next Steps
-
-Start with **Phase 0: Update Debugging Infrastructure**. Begin by fixing the linter errors in `StateTrackingService.ts`. 

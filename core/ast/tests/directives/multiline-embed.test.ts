@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
-import { parse } from '@core/ast.js';
+import { parse } from '@core/ast';
 import { expect, describe, it } from 'vitest';
-import type { MeldNode } from '@core/syntax/types.js';
+import type { MeldNode } from '@core/syntax/types';
 
 interface DirectiveNode extends MeldNode {
   directive: {

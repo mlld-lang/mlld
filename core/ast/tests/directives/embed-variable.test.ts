@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parse } from '@core/ast.js';
+import { parse } from '@core/ast';
 
 describe('embed directive with variable references', () => {
   it('should handle direct variable embedding with simple variables', async () => {

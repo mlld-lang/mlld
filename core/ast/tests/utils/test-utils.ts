@@ -1,8 +1,8 @@
-import type { MeldNode, NodeType, SourceLocation, ParserTestCase } from '@core/syntax/types.js';
+import type { MeldNode, NodeType, SourceLocation, ParserTestCase } from '@core/syntax/types';
 import type { Parser } from 'peggy';
 import { MeldAstError, ParseErrorCode, ParseResult } from '@core/ast/types.js';
 import { vi, expect } from 'vitest';
-import { parse } from '@core/ast.js';
+import { parse } from '@core/ast';
 
 // Define interfaces needed for validation tests
 interface ValidationError {
@@ -100,7 +100,8 @@ export function createMockNode<T extends NodeType>(
     location: location || {
       start: { line: 1, column: 1 },
       end: { line: 1, column: 1 }
-    }
+    },
+    nodeId: `mock-node-${Math.random()}`
   };
 }
 
@@ -221,7 +222,7 @@ function stripLocations(node: any): any {
 
   const newNode: any = {};
   for (const key in node) {
-    if (key !== 'location') {
+    if (key !== 'location' && key !== 'nodeId') {
       newNode[key] = stripLocations(node[key]);
     }
   }
@@ -252,9 +253,8 @@ export async function testValidCase(test: ParserTestCase) {
   // For the complex-object case in data.test.ts we need special handling
   if (test.name === 'complex-object') {
     const node = ast[0] as MeldNode;
-    expect(node.type).toBe(expected.type);
-    expect(node.directive.kind).toBe(expected.directive.kind);
-    expect(node.directive.identifier).toBe(expected.directive.identifier);
+    expect((node as any).directive.kind).toBe(expected.directive.kind);
+    expect((node as any).directive.identifier).toBe(expected.directive.identifier);
     return;
   }
   

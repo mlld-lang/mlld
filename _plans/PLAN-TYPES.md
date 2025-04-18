@@ -1,5 +1,9 @@
 # Plan: Implement Strict Types & Refactor Pipeline Services
 
+## Status
+
+We've done all of phase 1-5. We were working on _plans/PLAN-PHASE-5B.md when we detoured to _plans/NEW-MOCK-SETUP.md 
+
 ## Introduction
 
 This plan outlines the next major phase of refactoring for the Meld pipeline, following the successful grammar refactors (`PLAN.md`, `PLAN-RHS.md`). The goal is to leverage the improved AST structure (unified variables, explicit subtypes) and implement the stricter TypeScript types defined in the `_spec/*.md` files (specifically the **revised** `_spec/types/variables-spec.md`) across core services.

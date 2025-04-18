@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
 import { describe, expect, it } from 'vitest';
-import { parse } from '@core/ast.js';
-import { VariableReferenceNode } from '@core/syntax/types.js';
+import { parse } from '@core/ast';
+import { VariableReferenceNode } from '@core/syntax/types';
 
 describe('Unified variable syntax', () => {
   it('should parse text variables with {{variable}} syntax', async () => {

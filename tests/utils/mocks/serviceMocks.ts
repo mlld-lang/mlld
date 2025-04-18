@@ -65,7 +65,7 @@ export function createStateServiceMock() {
   service.removeImport.mockReturnValue(undefined);
   service.hasImport.mockReturnValue(false);
   service.getImports.mockReturnValue(new Set());
-  service.getCurrentFilePath.mockReturnValue(null);
+  service.getCurrentFilePath.mockReturnValue('/mock/file/path.meld');
   service.setCurrentFilePath.mockReturnValue(undefined);
   service.hasLocalChanges.mockReturnValue(false);
   service.getLocalChanges.mockReturnValue([]);

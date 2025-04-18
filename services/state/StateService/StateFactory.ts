@@ -176,32 +176,24 @@ export class StateFactory implements IStateFactory {
    */
   createClonedState(originalState: StateNode, options?: StateNodeOptions): StateNode {
     // Use lodash.cloneDeep for a true deep copy
-    const clonedState = cloneDeep(originalState);
+    const tempCloned = cloneDeep(originalState); // Deep clone everything first
 
-    // Explicitly deep clone the variable maps AGAIN to be absolutely sure
-    (clonedState as any).variables = {
-        text: cloneDeep(clonedState.variables.text),
-        data: cloneDeep(clonedState.variables.data),
-        path: cloneDeep(clonedState.variables.path)
+    // Reconstruct the StateNode, preserving the original parent reference
+    const clonedState: StateNode = {
+      stateId: randomUUID(), // New ID
+      variables: { // Use deep cloned maps
+        text: cloneDeep(tempCloned.variables.text),
+        data: cloneDeep(tempCloned.variables.data),
+        path: cloneDeep(tempCloned.variables.path)
+      },
+      commands: cloneDeep(tempCloned.commands),
+      imports: new Set(tempCloned.imports), // Sets are usually fine with spread/constructor copy
+      nodes: [...tempCloned.nodes], // Shallow copy nodes
+      transformedNodes: tempCloned.transformedNodes ? [...tempCloned.transformedNodes] : undefined, // Shallow copy transformed
+      filePath: options?.filePath ?? tempCloned.filePath, // Use override or cloned path
+      parentState: originalState.parentState, // <<< Explicitly use original parentState reference
+      source: 'clone' // Mark as clone
     };
-    (clonedState as any).commands = cloneDeep(clonedState.commands);
-    // nodes, imports, transformedNodes are usually shallow copied or handled ok by cloneDeep
-
-    // Ensure the cloned state has a unique ID and no parent linkage
-    clonedState.stateId = randomUUID();
-    // Explicitly remove parentState reference after deep clone
-    (clonedState as any).parentState = undefined; // Need 'as any' because parentState is readonly in the interface
-
-    // Set source and potentially override filePath based on options
-    clonedState.source = 'clone';
-    if (options?.filePath) {
-      clonedState.filePath = options.filePath;
-    }
-    
-    // Ensure transformedNodes exists if it should, even if empty (cloneDeep preserves absence)
-    if (originalState.transformedNodes && !clonedState.transformedNodes) {
-        (clonedState as any).transformedNodes = []; // Use 'as any' for readonly property
-    }
 
     this.logOperation({
       type: 'create',

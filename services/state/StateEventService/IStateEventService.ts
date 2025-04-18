@@ -72,7 +72,7 @@ interface StateEventHandlerOptions extends StateEventHandlerOptionsBase {
  * Service responsible for state event management and distribution.
  * Implements the observer pattern for state change notifications.
  */
-interface IStateEventService extends StateEventServiceBase {
+export interface IStateEventService extends StateEventServiceBase {
   /**
    * Register an event handler with optional filtering.
    * 

@@ -12,7 +12,7 @@ vi.mock('@core/utils/logger', () => ({
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
-import { DirectiveNode } from '@core/syntax/types.js';
+import { DirectiveNode } from '@core/syntax/types';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import {
   createValidationServiceMock,

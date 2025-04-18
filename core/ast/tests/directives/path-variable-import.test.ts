@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
-import { parse } from '@core/ast.js';
+import { parse } from '@core/ast';
 import { expect, describe, it } from 'vitest';
-import { DirectiveNode } from '../../src/types.js';
+import { DirectiveNode } from '@core/syntax/types';
 
 describe('directives/@import with path variables', () => {
   it('should correctly parse basic path variables in import directives', async () => {
