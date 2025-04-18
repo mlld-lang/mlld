@@ -91,6 +91,7 @@ interface IInterpreterService {
    * 
    * @param nodes - The nodes to interpret
    * @param options - Optional interpretation parameters
+   * @param initialState - Optional initial state to start interpretation from
    * @returns A promise resolving to the final state after interpretation
    * @throws {MeldInterpreterError} If interpretation fails
    * 
@@ -104,7 +105,11 @@ interface IInterpreterService {
    * });
    * ```
    */
-  interpret(nodes: MeldNode[], options?: InterpreterOptions): Promise<IStateService>;
+  interpret(
+    nodes: MeldNode[],
+    options?: InterpreterOptions,
+    initialState?: IStateService
+  ): Promise<IStateService>;
 
   /**
    * Interpret a single Meld node in the context of an existing state.

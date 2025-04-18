@@ -33,10 +33,12 @@ export interface IInterpreterServiceClient {
    * 
    * @param nodes - The nodes to interpret
    * @param options - Optional configuration options
+   * @param initialState - Optional initial state for interpretation
    * @returns The final state after interpretation
    */
   interpret(
     nodes: MeldNode[],
-    options?: InterpreterOptionsBase
+    options?: InterpreterOptionsBase,
+    initialState?: StateServiceLike
   ): Promise<StateServiceLike>;
 }

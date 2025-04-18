@@ -259,7 +259,8 @@ export class InterpreterService implements IInterpreterService {
 
   async interpret(
     nodes: MeldNode[],
-    options?: InterpreterOptions
+    options?: InterpreterOptions,
+    initialState?: IStateService
   ): Promise<IStateService> {
     this.ensureInitialized();
 
@@ -288,17 +289,22 @@ export class InterpreterService implements IInterpreterService {
 
     try {
       // Initialize state
-      if (opts.initialState) {
+      if (initialState) {
+        currentState = initialState;
+        logger.debug('Using provided initial state for interpretation', { stateId: currentState.getStateId() });
+      } else if (opts.initialState) {
         if (opts.mergeState) {
-          // When mergeState is true, create child state from initial state
           currentState = opts.initialState.createChildState();
         } else {
-          // When mergeState is false, create completely isolated state
           currentState = this.stateService!.createChildState();
         }
+        logger.warn('Using initialState from options (deprecated), prefer passing initialState parameter.');
       } else {
-        // No initial state, create fresh state
-        currentState = this.stateService!.createChildState();
+        if (!this.stateService) {
+           throw new MeldInterpreterError('StateService is not available for creating initial state', 'initialization', undefined, { severity: ErrorSeverity.Fatal });
+        }
+        currentState = this.stateService.createChildState();
+        logger.debug('Created new root state for interpretation', { stateId: currentState.getStateId() });
       }
 
       if (!currentState) {
@@ -314,14 +320,12 @@ export class InterpreterService implements IInterpreterService {
         currentState.setCurrentFilePath(opts.filePath);
       }
       
-      // <<< Explicitly ensure transformation is enabled >>>
       if (!currentState.isTransformationEnabled()) {
         logger.warn(`Transformation was initially disabled for state ${currentState.getStateId()}, explicitly enabling.`);
         currentState.setTransformationEnabled(true);
       } else {
         logger.debug(`Transformation is enabled for initial state ${currentState.getStateId()}.`);
       }
-      // <<< End explicit enable >>>
 
       logger.debug('Starting interpretation', {
         nodeCount: nodes?.length ?? 0,
@@ -336,14 +340,12 @@ export class InterpreterService implements IInterpreterService {
         try {
           process.stdout.write(`DEBUG: [InterpreterService.interpret LOOP] Processing node type: ${node.type}, Current State ID: ${currentState?.getStateId() ?? 'N/A'}\n`);
           
-          // <<< Track state before call >>>
           const stateBeforeNode: IStateService | null = currentState;
           const stateIdBefore = stateBeforeNode?.getStateId();
           const nodesBeforeCount = stateBeforeNode?.getTransformedNodes()?.length ?? -1;
 
           currentState = await this.interpretNode(node, currentState, opts);
           
-          // <<< Log state comparison >>>
           const stateIdAfter = currentState?.getStateId();
           const nodesAfterCount = currentState?.getTransformedNodes()?.length ?? -1;
           process.stdout.write(`DEBUG: [InterpreterService Loop] State Before: ${stateIdBefore} (Nodes: ${nodesBeforeCount}). State After: ${stateIdAfter} (Nodes: ${nodesAfterCount}). Same Object? ${stateBeforeNode === currentState}\n`);
@@ -354,7 +356,6 @@ export class InterpreterService implements IInterpreterService {
           } else if (nodesBeforeCount !== nodesAfterCount) {
              process.stdout.write(`DEBUG: [InterpreterService Loop] Node count changed but state instance SAME.\n`);
           }
-          // <<< End log state comparison >>>
 
           process.stdout.write(`DEBUG: [InterpreterService.interpret LOOP] Node processed. New State ID: ${currentState?.getStateId() ?? 'N/A'}, Node count: ${currentState?.getNodes()?.length ?? 0}\n`);
           lastGoodState = currentState.clone() as IStateService;
@@ -363,12 +364,8 @@ export class InterpreterService implements IInterpreterService {
             this.handleError(error instanceof Error ? error : new Error(String(error)), opts);
             currentState = lastGoodState.clone() as IStateService;
           } catch (fatalError) {
-            // If we get here, the error was fatal and should be propagated
-            // Restore to initial state before rethrowing
             if (opts.initialState && opts.mergeState) {
-              // Only attempt to merge back if we have a parent and mergeState is true
               if (typeof opts.initialState.mergeChildState === 'function') {
-                 // Ensure initialSnapshot is treated as IStateService here
                  (opts.initialState as IStateService).mergeChildState(initialSnapshot as IStateService);
               } else {
                   logger.warn('Initial state does not support mergeChildState', { initialState: opts.initialState });
@@ -379,7 +376,6 @@ export class InterpreterService implements IInterpreterService {
         }
       }
 
-      // Merge state back to parent if requested
       if (opts.initialState && opts.mergeState) {
         if (typeof opts.initialState.mergeChildState === 'function') {
           (opts.initialState as IStateService).mergeChildState(currentState);
@@ -440,21 +436,15 @@ export class InterpreterService implements IInterpreterService {
 
     switch (node.type) {
       case 'Text':
-        // Handle Text nodes
         const textNode = node as TextNode;
         process.stdout.write(`DEBUG: [InterpreterService.interpretNode Text] Content: '${textNode.content.substring(0, 50)}...'\n`);
-        // --- Revert: Remove incorrect inline resolution --- 
-        // The parser should create separate VariableReferenceNodes for {{...}}.
-        // TextNodes should be treated as literal content.
-        transformedNode = textNode; // Mark original node for adding
+        transformedNode = textNode;
         process.stdout.write(`DEBUG: [InterpreterService.interpretNode Text] Marking original TextNode for addition.\n`);
-        // --- End Revert --- 
-        currentState.addNode(transformedNode); // Add directly to current state
-        break; // End of Text case
+        currentState.addNode(transformedNode);
+        break;
 
       case 'CodeFence':
-        // Handle CodeFence nodes similar to Text nodes - preserve them exactly
-        currentState.addNode(node); // Add directly to current state
+        currentState.addNode(node);
         break;
 
       case 'VariableReference':
@@ -465,32 +455,31 @@ export class InterpreterService implements IInterpreterService {
              const resolvedTextNode: TextNode = {
                  type: 'Text',
                  content: resolvedStringValue,
-                 location: varNode.location, // Use location from varNode
-                 nodeId: crypto.randomUUID() // <<< ADDED
+                 location: varNode.location,
+                 nodeId: crypto.randomUUID()
              };
              transformedNode = resolvedTextNode;
          } catch (error) {
               logger.error('Failed to resolve VariableReferenceNode during interpretation', {
                  error: error instanceof Error ? error.message : String(error),
-                 identifier: varNode.identifier // Use identifier from varNode
+                 identifier: varNode.identifier
               });
               const errorState = currentState.clone();
-              errorState.addNode(varNode); // Add original varNode back
+              errorState.addNode(varNode);
               currentState = errorState;
          }
-         if (transformedNode) { // transformedNode is the resolved TextNode
-           currentState.addNode(transformedNode); // Add resolved node
+         if (transformedNode) {
+           currentState.addNode(transformedNode);
          } else {
-           currentState.addNode(node); // Add original if resolution failed
+           currentState.addNode(node);
          }
          break;
 
       case 'Comment':
-        // Comments are ignored during interpretation
         break;
 
       case 'Directive':
-        currentState.addNode(node); // Add original directive node first
+        currentState.addNode(node);
 
         if (node.type !== 'Directive' || !('directive' in node) || !node.directive) {
           throw new MeldInterpreterError(
@@ -502,34 +491,30 @@ export class InterpreterService implements IInterpreterService {
         const directiveNode = node as DirectiveNode;
         const isImportDirective = directiveNode.directive.kind === 'import';
         
-        // --- Create Context Objects --- 
         const baseResolutionContext = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
         const formattingContext: OutputFormattingContext = {
           isOutputLiteral: currentState.isTransformationEnabled?.() || false,
-          contextType: 'block', // Default to block context
+          contextType: 'block',
           nodeType: directiveNode.type,
-          atLineStart: true, // Default assumption
-          atLineEnd: false // Default assumption
+          atLineStart: true,
+          atLineEnd: false
         };
         let executionContext: ExecutionContext | undefined = undefined;
         if (directiveNode.directive.kind === 'run') {
           executionContext = {
              cwd: currentState.getCurrentFilePath() ? this.pathService.dirname(currentState.getCurrentFilePath()!) : process.cwd(),
-             // ... rest of executionContext
           };
         }
         const handlerContext: DirectiveProcessingContext = {
-          state: currentState, // Pass the current state directly
+          state: currentState,
           resolutionContext: baseResolutionContext, 
           formattingContext: formattingContext,
           executionContext: executionContext, 
           directiveNode: directiveNode, 
         };
-        // --- End Context Creation ---
 
         const directiveResult = await this.callDirectiveHandleDirective(directiveNode, handlerContext);
 
-        // Process the result (state and optional replacement)
         if (
           directiveResult &&
           typeof directiveResult === 'object' &&
@@ -555,18 +540,15 @@ export class InterpreterService implements IInterpreterService {
            );
         }
         
-        // *** CRITICAL CHANGE: Update currentState to the result from the handler ***
         currentState = resultStateFromHandler;
 
-        // Node replacement logic (operates on the NEW currentState)
-        if (replacementNode !== undefined) { // Handle null, undefined, [], node, nodes[]
+        if (replacementNode !== undefined) {
           if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) { 
             const nodesBefore = currentState.getTransformedNodes(); 
             process.stdout.write(`DEBUG: [InterpreterService Directive Case] Nodes BEFORE findIndex (length ${nodesBefore.length}): ${JSON.stringify(nodesBefore.map(n => ({ type: n.type, kind: (n as DirectiveNode)?.directive?.kind, loc_start: n.location?.start })))} \n`);
             
-            // Find the original directive node IN THE NEW STATE's list
             const index = nodesBefore.findIndex(n => 
-                n.nodeId === node.nodeId // <<< Use nodeId for reliable finding
+                n.nodeId === node.nodeId
             );
             
             process.stdout.write(`DEBUG: [InterpreterService Directive Case] findIndex result for node ${node.type} (${directiveNode.directive.kind} - ID: ${node.nodeId}): ${index}\n`);
@@ -574,30 +556,25 @@ export class InterpreterService implements IInterpreterService {
             if (index !== -1) {
               if (Array.isArray(replacementNode)) {
                 if (replacementNode.length === 0) {
-                  // Use transformNode with undefined to remove
                   currentState.transformNode(index, undefined); 
                   process.stdout.write(`DEBUG: [InterpreterService Directive Case] Called transformNode(index=${index}, undefined).\n`);
                   const nodesAfterRemove = currentState.getTransformedNodes(); 
                   process.stdout.write(`DEBUG: [InterpreterService Directive Case] Nodes AFTER remove (length ${nodesAfterRemove.length}): ${JSON.stringify(nodesAfterRemove.map(n => ({ type: n.type, kind: (n as DirectiveNode)?.directive?.kind, nodeId: n.nodeId, loc_start: n.location?.start })))} \n`);
                 } else {
-                  // Replace with multiple nodes using transformNode
                   currentState.transformNode(index, replacementNode); 
                   process.stdout.write(`DEBUG: [InterpreterService Directive Case] Called transformNode(index=${index}, [${replacementNode.length} nodes]).\n`);
                    const nodesAfterReplaceArray = currentState.getTransformedNodes();
                    process.stdout.write(`DEBUG: [InterpreterService Directive Case] Nodes AFTER array replace (length ${nodesAfterReplaceArray.length}): ${JSON.stringify(nodesAfterReplaceArray.map(n => ({ type: n.type, kind: (n as DirectiveNode)?.directive?.kind, nodeId: n.nodeId, loc_start: n.location?.start })))} \n`);
                 }
               } else if (replacementNode) {
-                // Replace with single node
                 const singleReplacementNode: MeldNode = replacementNode;
                 currentState.transformNode(index, singleReplacementNode);
                 process.stdout.write(`DEBUG: [InterpreterService Directive Case] Called transformNode(index=${index}, singleNode).\n`);
                  const nodesAfterReplaceSingle = currentState.getTransformedNodes();
                  process.stdout.write(`DEBUG: [InterpreterService Directive Case] Nodes AFTER single replace (length ${nodesAfterReplaceSingle.length}): ${JSON.stringify(nodesAfterReplaceSingle.map(n => ({ type: n.type, kind: (n as DirectiveNode)?.directive?.kind, nodeId: n.nodeId, loc_start: n.location?.start })))} \n`);
               } 
-              // If replacementNode is null/undefined, transformNode(index, undefined) is implicitly called by the logic structure (no specific else needed if transformNode handles undefined for removal)
                else { 
-                 // Explicitly handle null/undefined if needed, maybe remove is clearer?
-                  currentState.transformNode(index, undefined); // Or just let it fall through if transformNode handles undefined
+                 currentState.transformNode(index, undefined);
                   process.stdout.write(`DEBUG: [InterpreterService Directive Case] replacementNode is null/undefined. Called transformNode(index=${index}, undefined).\n`);
                     const nodesAfterNullRemove = currentState.getTransformedNodes(); 
                     process.stdout.write(`DEBUG: [InterpreterService Directive Case] Nodes AFTER null/undefined remove (length ${nodesAfterNullRemove.length}): ${JSON.stringify(nodesAfterNullRemove.map(n => ({ type: n.type, kind: (n as DirectiveNode)?.directive?.kind, nodeId: n.nodeId, loc_start: n.location?.start })))} \n`);
@@ -608,7 +585,7 @@ export class InterpreterService implements IInterpreterService {
           } 
         }
         
-        break; // End of Directive case
+        break;
 
       default:
         throw new MeldInterpreterError(
@@ -618,8 +595,6 @@ export class InterpreterService implements IInterpreterService {
         );
     }
 
-    // --- REMOVED REVISED LOGIC --- 
-    // Return the currentState as modified throughout the switch block
     process.stdout.write(`DEBUG: [InterpreterService.interpretNode EXIT] Returning State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
     return currentState;
   }
@@ -639,7 +614,6 @@ export class InterpreterService implements IInterpreterService {
     }
 
     try {
-      // Create child state from parent
       const childState = parentState.createChildState();
 
       if (!childState) {
@@ -655,7 +629,6 @@ export class InterpreterService implements IInterpreterService {
         );
       }
 
-      // Set file path if provided
       if (filePath) {
         childState.setCurrentFilePath(filePath);
       }
@@ -674,7 +647,6 @@ export class InterpreterService implements IInterpreterService {
         error
       });
 
-      // Preserve MeldInterpreterError or wrap other errors
       if (error instanceof MeldInterpreterError) {
         throw error;
       }

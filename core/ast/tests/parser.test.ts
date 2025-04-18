@@ -254,15 +254,18 @@ describe('Parser', () => {
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('import');
-      expect(node.directive.path).toEqual({
+      expect(node.directive.path).toEqual(expect.objectContaining({
         raw: 'path/to/file',
+        interpolatedValue: expect.arrayContaining([
+          expect.objectContaining({ type: 'Text', content: 'path/to/file' })
+        ]),
         normalized: 'path/to/file',
         structured: {
           base: '.',
           segments: ['path', 'to', 'file'],
           variables: {},
         },
-      });
+      }));
       expect(node.directive.subtype).toBe('importAll');
       expect(node.directive.imports).toEqual([{ name: '*', alias: null }]);
     });
@@ -380,7 +383,7 @@ describe('Parser', () => {
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.structured.base).toBe('$~');
+      expect(node.directive.path.structured.base).toBe('$HOMEPATH');
       expect(node.directive.path.structured.segments).toEqual(['config']);
     });
 

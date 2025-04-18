@@ -57,10 +57,10 @@ export class InterpreterServiceClientFactory {
     logger.debug('Creating InterpreterServiceClient');
     
     return {
-      interpret: async (nodes: MeldNode[], options?: InterpreterOptionsBase): Promise<StateServiceLike> => {
+      interpret: async (nodes: MeldNode[], options?: InterpreterOptionsBase, initialState?: StateServiceLike): Promise<StateServiceLike> => {
         if (!this.interpreterService) throw new Error('Interpreter service not available in client');
         // Return type matches IInterpreterServiceClient
-        return await this.interpreterService.interpret(nodes, options);
+        return await this.interpreterService.interpret(nodes, options, initialState);
       },
       createChildContext: async (
         parentState: StateServiceLike,

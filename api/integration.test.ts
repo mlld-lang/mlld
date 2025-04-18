@@ -48,6 +48,8 @@ import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/f
 // Import PathOperationsService for registration
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
+// <<< Add import for CircularityService >>>
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 // =========================
 
 // Define runDirectiveExamples from the module
@@ -94,6 +96,8 @@ describe('API Integration Tests', () => {
     testContainer.register('IFileSystemService', { useClass: FileSystemService });
     testContainer.register('IPathService', { useClass: PathService });
     testContainer.register('IPathOperationsService', { useClass: PathOperationsService });
+    // <<< Register CircularityService >>>
+    testContainer.register('ICircularityService', { useClass: CircularityService });
   });
 
   afterEach(async () => {
@@ -609,8 +613,8 @@ Docs are at $docs
       const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
       const stateService = testContainer.resolve<IStateService>('IStateService'); // Resolve state service
 
-      // Corrected Meld syntax
-      const mainContent = `Main file start.\\n@import "${importedFilePath}"\\nMain file end. Imported var: {{importedVar}}`;
+      // Use actual newlines \n instead of escaped \\n
+      const mainContent = `Main file start.\n@import [${importedFilePath}]\nMain file end. Imported var: {{importedVar}}`;
       const importedContent = `@text importedVar = "Imported Value"`;
 
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(mainFilePath), mainContent);
@@ -626,7 +630,7 @@ Docs are at $docs
 
       // --- Corrected Assertions ---
       // Check the final output string - expecting import directive to be removed and imported var resolved
-      const expectedOutput = 'Main file start.\\n\\nMain file end. Imported var: Imported Value';
+      const expectedOutput = 'Main file start.\n\nMain file end. Imported var: Imported Value';
       expect(result.trim()).toBe(expectedOutput.trim());
 
       // Verify state after import
@@ -643,10 +647,10 @@ Docs are at $docs
       const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
       const stateService = testContainer.resolve<IStateService>('IStateService'); // Resolve state service
 
-      // Corrected Meld Syntax
-      const mainContent = `Main file start.\\n@import "${level1FilePath}"\\nMain file end. Level1Var: {{level1Var}}, Level2Var: {{level2Var}}`;
-      const level1Content = `Level 1 Start.\\n@import "${level2FilePath}"\\nLevel 1 End. Level1Var: {{level1Var}}, Level2Var: {{level2Var}}`;
-      const level2Content = `@text level2Var = "Level 2 Value"\\n@text level1Var = "Value From Level 2 (using {{level2Var}})"\\nLevel 2 Text Node. Level2Var: {{level2Var}}`;
+      // Use actual newlines \n instead of escaped \\n
+      const mainContent = `Main file start.\n@import [${level1FilePath}]\nMain file end. Level1Var: {{level1Var}}, Level2Var: {{level2Var}}`;
+      const level1Content = `Level 1 Start.\n@import [${level2FilePath}]\nLevel 1 End. Level1Var: {{level1Var}}, Level2Var: {{level2Var}}`;
+      const level2Content = `@text level2Var = "Level 2 Value"\n@text level1Var = "Value From Level 2 (using {{level2Var}})"\nLevel 2 Text Node. Level2Var: {{level2Var}}`;
 
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(mainFilePath), mainContent);
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(level1FilePath), level1Content);
@@ -661,7 +665,7 @@ Docs are at $docs
       // console.log('Nested import result:', result);
 
       // --- Corrected Assertions ---
-      const expectedOutput = 'Main file start.\\n\\nMain file end. Level1Var: Value From Level 2 (using Level 2 Value), Level2Var: Level 2 Value';
+      const expectedOutput = 'Main file start.\n\nMain file end. Level1Var: Value From Level 2 (using Level 2 Value), Level2Var: Level 2 Value';
       expect(result.trim()).toBe(expectedOutput.trim());
 
       // Check final merged state
@@ -684,9 +688,9 @@ Docs are at $docs
       // const parserService = testContainer.resolve<IParserService>('IParserService'); // Not needed for processMeld call
       // const interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService'); // Not needed for processMeld call
 
-      // Corrected Meld Syntax
-      const fileAContent = `File A start.\\n@import "${fileBPath}"\\nFile A end.`;
-      const fileBContent = `File B start.\\n@import "${fileAPath}"\\nFile B end.`;
+      // Use actual newlines \n instead of escaped \\n
+      const fileAContent = `File A start.\n@import [${fileBPath}]\nFile A end.`;
+      const fileBContent = `File B start.\n@import [${fileAPath}]\nFile B end.`;
 
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(fileAPath), fileAContent);
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(fileBPath), fileBContent);

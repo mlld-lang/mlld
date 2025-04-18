@@ -194,16 +194,12 @@ export class CircularityService implements ICircularityService {
   isInStack(filePath: string): boolean {
     const normalizedPath = this.normalizePath(filePath);
     
-    // Add extra debug logging to help diagnose issues
-    logger.debug('Checking if path is in import stack', {
-      filePath,
-      normalizedPath,
-      importStack: this.importStack,
-      matches: this.importStack.filter(p => p === normalizedPath || p.endsWith('/' + normalizedPath))
-    });
+    process.stdout.write(`DEBUG: [CircularityService.isInStack] Checking filePath="${filePath}", normalizedPath="${normalizedPath}", stack=${JSON.stringify(this.importStack)}\n`);
     
     // First check exact match
-    if (this.importStack.includes(normalizedPath)) {
+    const exactMatchFound = this.importStack.includes(normalizedPath);
+    process.stdout.write(`DEBUG: [CircularityService.isInStack] Checking for exact match: normalizedPath="${normalizedPath}", stack=${JSON.stringify(this.importStack)}, found=${exactMatchFound}\n`);
+    if (exactMatchFound) {
       return true;
     }
     

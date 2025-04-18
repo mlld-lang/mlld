@@ -383,42 +383,33 @@ function peg$parse(input, options) {
   var peg$e66 = peg$classExpectation(["\r", ["\u2028", "\u2029"]], false, false);
 
   var peg$f0 = function(nodes) {
+    helpers.debug('Start: Entered');
     return nodes;
   };
   var peg$f1 = function() { 
-      // Only match comments at line start
       const pos = offset();
       const isAtLineStart = helpers.isLineStart(input, pos);
-      helpers.debug("LineStartComment check at pos", pos, "isAtLineStart:", isAtLineStart);
       return isAtLineStart;
     };
   var peg$f2 = function(content) {
-    helpers.debug("Creating comment node with content:", content);
     return helpers.createNode(NodeType.Comment, { content: content.trim() }, location());
   };
   var peg$f3 = function(content) {
-    helpers.debug("Creating non-line-start comment node with content:", content);
     return helpers.createNode(NodeType.Comment, { content: content.trim() }, location());
   };
   var peg$f4 = function(chars) {
-    helpers.debug("Comment content chars:", chars.join(''));
     return chars.join('');
   };
   var peg$f5 = function(first, rest) {
     return helpers.createNode(NodeType.Text, { content: first + rest.join('') }, location());
   };
   var peg$f6 = function() { 
-      // Only prevent @ directive interpretation at line start
       const pos = offset();
       const isAtLineStart = helpers.isLineStart(input, pos);
       const isDirective = isAtLineStart && input.substr(pos, 1) === '@' && 
-                         /[a-z]/.test(input.substr(pos+1, 1)); // Check if followed by lowercase letter
+                         /[a-z]/.test(input.substr(pos+1, 1));
       
-      // Also prevent consuming >> at line start (for comments)
       const isComment = isAtLineStart && input.substr(pos, 2) === '>>';
-      
-      helpers.debug("TextPart check at pos", pos, "isAtLineStart:", isAtLineStart, 
-            "isDirective:", isDirective, "isComment:", isComment);
       
       return isDirective || isComment;
     };
@@ -437,7 +428,6 @@ function peg$parse(input, options) {
     }, location());
   };
   var peg$f10 = function(id) {
-    // Check if the matched identifier is special
     const isSpecial = helpers.isSpecialPathIdentifier(id);
     return helpers.createVariableReferenceNode('path', {
       identifier: helpers.normalizePathVar(id),
@@ -468,7 +458,6 @@ function peg$parse(input, options) {
       return helpers.createNode('Text', { content: chars.join('') }, location());
     };
   var peg$f20 = function(parts) {
-      // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
       return parts;
     };
   var peg$f21 = function(result) {
@@ -511,82 +500,27 @@ function peg$parse(input, options) {
   var peg$f38 = function(content) { return content; };
   var peg$f39 = function(content) { return content; };
   var peg$f40 = function(content, options) {
-     // Multi-line template embed [[...]]
-     helpers.debug("EmbedRHS parsed multiline template: ", JSON.stringify(content));
      return {
        subtype: 'embedTemplate',
-       content: content, // Return the InterpolatableValue array
-       isTemplateContent: true, // Mark as template content
+       content: content,
+       isTemplateContent: true,
        ...(options ? { options } : {})
      };
    };
-  var peg$f41 = function(variable, options) {
-     // Variable embed {{...}} or $...
-     const variableText = variable.valueType === 'text'
-       ? `{{${variable.identifier}}}`
-       : variable.valueType === 'data'
-         ? `{{${variable.identifier}${variable.fields.map(f => {
-             if (f.type === 'field') return '.' + f.value;
-             if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
-             return '';
-           }).join('')}}}`
-         : variable.valueType === 'path'
-           ? `$${variable.identifier}`
-           : '';
-
-     if (variable.valueType === 'path') {
-       // Path variable $...
-       return {
-         subtype: 'embedVariable', // Keep subtype as variable for path vars too
-         path: helpers.validatePath(variableText),
-         ...(options ? { options } : {})
-       };
-     } else {
-       // Text/Data variable {{...}}
-       return {
-         subtype: 'embedVariable',
-         path: { // Maintain structure expected by downstream (temporary?)
-           raw: variableText,
-           isVariableReference: true,
-           variable: variable,
-           structured: {
-             variables: {
-               text: variable.valueType === 'text' ? [variable.identifier] :
-                     variable.valueType === 'data' ? [variable.identifier] : []
-             }
-           }
-         },
-         ...(options ? { options } : {})
-       };
-     }
-   };
-  var peg$f42 = function(content, options) {
-     // Path embed [...]
+  var peg$f41 = function(content, options) {
      const rawPath = helpers.reconstructRawString(content);
-     helpers.debug("EmbedRHS reconstructed raw path from bracket content:", rawPath);
-
-     // Split raw path for section (section itself cannot be interpolated)
      const [pathPart, section] = rawPath.split('#').map(s => s.trim());
-     helpers.validateEmbedPath(pathPart);
      const validationResult = helpers.validatePath(pathPart);
 
-     // Attach the interpolated array for the path part
-     // Create a NEW InterpolatableValue representing only the pathPart
-     // Use location() of the whole rule for this new node
-     const pathInterpolatedValue = [ 
-       helpers.createNode(NodeType.Text, { content: pathPart }, location())
-     ]; 
+     const pathInterpolatedValue = content; // Use the original parsed content array
 
      let finalPathObject = validationResult;
      if (finalPathObject && typeof finalPathObject === 'object') {
-       finalPathObject.interpolatedValue = pathInterpolatedValue; // Attach possibly filtered array
-       helpers.debug("Attached interpolatedValue to path object in EmbedRHS");
+       finalPathObject.interpolatedValue = pathInterpolatedValue;
      } else {
-       helpers.debug("Warning: validatePath did not return an object in EmbedRHS.");
        finalPathObject = { raw: pathPart, structured: {}, interpolatedValue: pathInterpolatedValue };
      }
 
-     // Reorder properties if necessary (consistent with standalone EmbedDirective)
      if (finalPathObject.normalized && finalPathObject.structured) {
        const { raw, normalized, structured, ...rest } = finalPathObject;
        finalPathObject = { raw, normalized, structured, ...rest };
@@ -594,17 +528,43 @@ function peg$parse(input, options) {
 
      return {
        subtype: 'embedPath',
-       path: finalPathObject, // Return the object with interpolatedValue
+       path: finalPathObject,
        ...(section ? { section } : {}),
        ...(options ? { options } : {})
      };
    };
+  var peg$f42 = function(variable, options) {
+     const variableText = helpers.reconstructRawString([variable]); 
+
+     if (variable.valueType === 'path') {
+       return {
+         subtype: 'embedVariable',
+         path: helpers.validatePath(variableText), // PathVar gets validated
+         ...(options ? { options } : {})
+       };
+     } else {
+       // Text/Data vars create a structure mimicking a path object for now
+       return {
+         subtype: 'embedVariable',
+         path: {
+           raw: variableText,
+           isVariableReference: true,
+           variable: variable,
+           structured: {
+             variables: {
+               text: [variable.identifier] // Treat both TextVar/DataVar as text source here
+             }
+           }
+         },
+         ...(options ? { options } : {})
+       };
+     }
+   };
   var peg$f43 = function(cmdRef) {
-      helpers.debug("RunRHS parsing CommandReference:", cmdRef);
       const commandObj = {
         raw: `$${cmdRef.name}${cmdRef.args.length > 0 ? `(${cmdRef.args.map(arg => {
           if (arg.type === 'string') return `\"${arg.value}\"`;
-          if (arg.type === 'variable') return arg.value.raw || ''; // Assuming Variable node has 'raw'
+          if (arg.type === 'variable') return arg.value.raw || '';
           return arg.value;
         }).join(', ')})` : ''}`,
         name: cmdRef.name,
@@ -616,28 +576,24 @@ function peg$parse(input, options) {
       };
     };
   var peg$f44 = function(lang, params, content) {
-      helpers.debug("RunRHS parsing Multi-line Run: Lang:", lang, "Params:", params, "Content:", JSON.stringify(content));
       return {
         subtype: params ? 'runCodeParams' : 'runCode',
-        command: content, // Return the InterpolatableValue array
+        command: content,
         ...(lang ? { language: lang } : {}),
         ...(params ? { parameters: params } : {}),
         isMultiLine: true
       };
     };
   var peg$f45 = function(content) {
-      helpers.debug("RunRHS parsing bracket content:", JSON.stringify(content));
       return {
         subtype: 'runCommand',
-        command: content // Return the InterpolatableValue array
+        command: content
       };
     };
-  var peg$f46 = function() { 
-       // Only match directive at line start
-       const pos = offset();
-       return helpers.isLineStart(input, pos);
+  var peg$f46 = function() { return helpers.isLineStart(input, offset()) && input.charAt(offset()) === '@'; };
+  var peg$f47 = function(directive) { 
+       return directive; 
      };
-  var peg$f47 = function(directive) { return directive; };
   var peg$f48 = function(name, args) {
       return {
         name,
@@ -657,37 +613,16 @@ function peg$parse(input, options) {
   var peg$f54 = function(chars) { return { type: 'raw', value: chars.join('').trim() }; };
   var peg$f55 = function(char) { return char; };
   var peg$f56 = function(runResult, header) {
-      helpers.debug("Standalone RunDirective parsed via RunRHS:", JSON.stringify(runResult));
-
-      // Create the final directive node using the result from RunRHS
-      // _RunRHS already contains the subtype and specific data (command, lang, params, etc.)
-      // We just need to add the underHeader if it exists.
       const directiveData = {
-        ...runResult, // Spread the result from _RunRHS ({ subtype, command, ... })
+        ...runResult,
         ...(header ? { underHeader: header } : {})
       };
 
       return helpers.createDirective('run', directiveData, location());
     };
-  var peg$f57 = function(variable, header) { 
-      // Handle direct variable embedding (without brackets)
-      // This allows syntax like @run {{variable}} or @run {{data.field}}
-      
-      // Get the variable text directly from the variable node
-      const variableText = variable.valueType === 'text' 
-        ? `{{${variable.identifier}}}` 
-        : variable.valueType === 'data' 
-          ? `{{${variable.identifier}${variable.fields.map(f => {
-              if (f.type === 'field') return '.' + f.value;
-              if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
-              return '';
-            }).join('')}}}` 
-          : ''; // Should not happen due to (TextVar / DataVar) constraint
-      
-      helpers.validateRunContent(variableText);
-      
-      // NOTE: This produces subtype 'runCommand' with the variable string as the command.
-      // This remains consistent with previous behavior.
+  var peg$f57 = function(variable, header) {
+      const variableText = helpers.reconstructRawString([variable]);
+      helpers.validateRunContent(variableText); 
       return helpers.createDirective('run', {
         subtype: 'runCommand',
         command: variableText,
@@ -703,125 +638,67 @@ function peg$parse(input, options) {
     };
   var peg$f61 = function(variable) { return variable; };
   var peg$f62 = function(identifier) { return identifier; };
-  var peg$f63 = function(imports, content) {
-      // Check if this is a path variable
-      const isPathVar = typeof content === 'string' && 
-        content.startsWith('$') && 
-        !content.startsWith('$HOMEPATH') && 
-        !content.startsWith('$~') && 
-        !content.startsWith('$PROJECTPATH') && 
-        !content.startsWith('$.') &&
-        content.match(/^\$[a-z][a-zA-Z0-9_]*/);
-      
-      helpers.debug("ImportDirective isPathVar:", isPathVar, "for path:", content);
-      
-      // Always validate the path
-      const validatedPath = helpers.validatePath(content);
-      
-      // If this is a path variable, ensure it has the isPathVariable flag
-      if (isPathVar && !validatedPath.isPathVariable) {
-        validatedPath.isPathVariable = true;
+  var peg$f63 = function(imports, pathParts) { 
+      const rawPath = helpers.reconstructRawString(pathParts); 
+      const validatedPath = helpers.validatePath(rawPath); 
+      if (validatedPath && typeof validatedPath === 'object') {
+        validatedPath.interpolatedValue = pathParts;
       }
-      
-      // Return the validated path and subtype
-      return helpers.createDirective('import', {
+      const isPathVar = validatedPath?.isPathVariable || (pathParts.length === 1 && pathParts[0].type === 'VariableReference' && pathParts[0].valueType === 'path');
+      if (isPathVar && validatedPath && !validatedPath.isPathVariable) {
+        validatedPath.isPathVar = true;
+      }
+      const directiveData = {
         subtype: helpers.getImportSubtype(imports),
         path: validatedPath,
         imports: imports
-      }, location());
+      };
+      return helpers.createDirective('import', directiveData, location());
     };
   var peg$f64 = function(imports, variable) {
-      // Get the variable text directly from the variable node
-      const variableText = variable.valueType === 'text' 
-        ? `{{${variable.identifier}}}` 
-        : variable.valueType === 'data' 
-          ? `{{${variable.identifier}${variable.fields.map(f => {
-              if (f.type === 'field') return '.' + f.value;
-              if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
-              return '';
-            }).join('')}}}` 
-          : variable.valueType === 'path' 
-            ? `$${variable.identifier}` 
-            : '';
-            
-      // Check if this is a path variable
-      const isPathVar = variable.valueType === 'path';
-      
-      // Validate the path (variableText)
+      const variableText = helpers.reconstructRawString([variable]); 
       const validatedPath = helpers.validatePath(variableText);
-
-      // For path variables, ensure the isPathVariable flag is set
-      if (isPathVar && !validatedPath.isPathVariable) {
+      if (variable.valueType === 'path' && validatedPath && !validatedPath.isPathVariable) {
           validatedPath.isPathVariable = true;
       }
-        
-      // Return the validated path and subtype
-      return helpers.createDirective('import', {
+      const directiveData = {
         subtype: helpers.getImportSubtype(imports),
         path: validatedPath,
         imports: imports
-      }, location());
+      };
+      return helpers.createDirective('import', directiveData, location());
     };
-  var peg$f65 = function(content) {
-      // Check if this is a path variable
-      const isPathVar = typeof content === 'string' && 
-        content.startsWith('$') && 
-        !content.startsWith('$HOMEPATH') && 
-        !content.startsWith('$~') && 
-        !content.startsWith('$PROJECTPATH') && 
-        !content.startsWith('$.') &&
-        content.match(/^\$[a-z][a-zA-Z0-9_]*/);
-      
-      helpers.debug("ImportDirective isPathVar:", isPathVar, "for path:", content);
-      
-      // Always validate the path
-      const validatedPath = helpers.validatePath(content);
-      
-      // If this is a path variable, ensure it has the isPathVariable flag
-      if (isPathVar && !validatedPath.isPathVariable) {
+  var peg$f65 = function(pathParts) { 
+      const rawPath = helpers.reconstructRawString(pathParts); 
+      const validatedPath = helpers.validatePath(rawPath); 
+      if (validatedPath && typeof validatedPath === 'object') {
+        validatedPath.interpolatedValue = pathParts;
+      }
+      const isPathVar = validatedPath?.isPathVariable || (pathParts.length === 1 && pathParts[0].type === 'VariableReference' && pathParts[0].valueType === 'path');
+      if (isPathVar && validatedPath && !validatedPath.isPathVariable) {
         validatedPath.isPathVariable = true;
       }
-      
       const implicitImports = [{name: "*", alias: null}];
-      // Return the validated path and subtype
-      return helpers.createDirective('import', {
-        subtype: helpers.getImportSubtype(implicitImports), // Always importAll
+      const directiveData = {
+        subtype: helpers.getImportSubtype(implicitImports),
         path: validatedPath,
         imports: implicitImports
-      }, location());
+      };
+      return helpers.createDirective('import', directiveData, location());
     };
   var peg$f66 = function(variable) {
-      // Get the variable text directly from the variable node
-      const variableText = variable.valueType === 'text' 
-        ? `{{${variable.identifier}}}` 
-        : variable.valueType === 'data' 
-          ? `{{${variable.identifier}${variable.fields.map(f => {
-              if (f.type === 'field') return '.' + f.value;
-              if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
-              return '';
-            }).join('')}}}` 
-          : variable.valueType === 'path' 
-            ? `$${variable.identifier}` 
-            : '';
-      
-      // Check if this is a path variable
-      const isPathVar = variable.valueType === 'path';
-
-      // Always validate the path (variableText)
+      const variableText = helpers.reconstructRawString([variable]); 
       const validatedPath = helpers.validatePath(variableText);
-        
-      // For path variables, ensure the isPathVariable flag is set
-      if (isPathVar && !validatedPath.isPathVariable) {
+      if (variable.valueType === 'path' && validatedPath && !validatedPath.isPathVariable) {
           validatedPath.isPathVariable = true;
       }
-        
       const implicitImports = [{name: "*", alias: null}];
-      // Return the validated path and subtype
-      return helpers.createDirective('import', {
-        subtype: helpers.getImportSubtype(implicitImports), // Always importAll
+      const directiveData = {
+        subtype: helpers.getImportSubtype(implicitImports),
         path: validatedPath,
         imports: implicitImports
-      }, location());
+      };
+      return helpers.createDirective('import', directiveData, location());
     };
   var peg$f67 = function() {
       return [{name: "*", alias: null}];
@@ -840,13 +717,8 @@ function peg$parse(input, options) {
       return alias;
     };
   var peg$f73 = function(embedResult, header, under) {
-      helpers.debug("Standalone EmbedDirective parsed via EmbedRHS:", JSON.stringify(embedResult));
-
-      // Create the final directive node using the result from EmbedRHS
-      // EmbedRHS already contains the subtype and specific data (path, content, etc.)
-      // We just need to add the header/underHeader if they exist.
       const directiveData = {
-        ...embedResult, // Spread the result from EmbedRHS ({ subtype, path/content, options, etc. })
+        ...embedResult,
         ...(header ? { headerLevel: header } : {}),
         ...(under ? { underHeader: under } : {})
       };
@@ -856,11 +728,10 @@ function peg$parse(input, options) {
   var peg$f74 = function(names, content, options, header, under) {
     const [path, section] = content.split('#').map(s => s.trim());
     
-    // Validate that the content is a path
     helpers.validateEmbedPath(path);
     
     return helpers.createDirective('embed', {
-      subtype: 'embedPath', // Added subtype
+      subtype: 'embedPath',
       path: helpers.validatePath(path),
       ...(section ? { section } : {}),
       names,
@@ -891,8 +762,6 @@ function peg$parse(input, options) {
       helpers.validateDefineContent(value.value);
     }
     
-    // For define directives, we need to structure it differently
-    // The command field should be at the top level
     if (value.type === "run") {
       return helpers.createDirective('define', {
         name: id.name,
@@ -919,7 +788,6 @@ function peg$parse(input, options) {
     return params;
   };
   var peg$f86 = function(runResult) {
-      helpers.debug("DefineValue parsed @run via RunRHS:", JSON.stringify(runResult));
       return {
         type: "run",
         value: runResult
@@ -932,7 +800,6 @@ function peg$parse(input, options) {
     };
   };
   var peg$f88 = function(content) {
-    helpers.debug("DirectiveContent parsed:", content);
     return content;
   };
   var peg$f89 = function(chars) {
@@ -972,9 +839,6 @@ function peg$parse(input, options) {
       return content.join(''); 
     };
   var peg$f113 = function(id, schema, value) {
-    // No longer check for specific inputs or callerInfo here
-    
-    // Always create the directive using the parsed value
     return helpers.createDirective('data', {
       identifier: id,
       ...(schema ? { schema } : {}),
@@ -982,22 +846,20 @@ function peg$parse(input, options) {
       ...(value.source === "embed" ? { embed: value.value } :
           value.source === "run" ? { run: value.value } :
           value.source === "call" ? { call: value.value } :
-          { value: value.value }) // Pass literal value directly
+          { value: value.value })
     }, location());
   };
   var peg$f114 = function(schema) { return schema; };
   var peg$f115 = function(embedResult) {
-      helpers.debug("DataValue parsed @embed via EmbedRHS:", JSON.stringify(embedResult));
       return {
         source: "embed",
-        embed: embedResult // EmbedRHS already returns the structured { subtype, ... }
+        embed: embedResult
       };
     };
   var peg$f116 = function(runResult) {
-      helpers.debug("DataValue parsed @run via RunRHS:", JSON.stringify(runResult));
       return {
         source: "run",
-        run: runResult // RunRHS already returns the structured { subtype, ... }
+        run: runResult
       };
     };
   var peg$f117 = function(api, method, content) {
@@ -1087,17 +949,15 @@ function peg$parse(input, options) {
     }, location());
   };
   var peg$f140 = function(embedResult) {
-      helpers.debug("TextValue parsed @embed via EmbedRHS:", JSON.stringify(embedResult));
       return {
         source: "embed",
-        embed: embedResult // EmbedRHS already returns the structured { subtype, ... }
+        embed: embedResult
       };
     };
   var peg$f141 = function(runResult) {
-      helpers.debug("TextValue parsed @run via RunRHS:", JSON.stringify(runResult));
       return {
         source: "run",
-        run: runResult // RunRHS already returns the structured { subtype, ... }
+        run: runResult
       };
     };
   var peg$f142 = function(api, method, content) {
@@ -1124,35 +984,24 @@ function peg$parse(input, options) {
     };
   };
   var peg$f145 = function(id, pv) {
-        helpers.debug("PathDirective parsed PathVar:", pv);
         const pathObject = helpers.validatePath(pv.identifier, { context: 'pathDirective' });
-        // Attach the original PathVar node
         if (pathObject && typeof pathObject === 'object') {
           pathObject.variableNode = pv;
         } else {
-          // Handle case where validatePath didn't return an object (shouldn't happen for vars)
-          // Return a basic structure if validation fails to provide context
           return { identifier: id, path: { raw: pv.identifier, isPathVariable: true, variableNode: pv, structured: {} } };
         }
         return { identifier: id, path: pathObject };
       };
   var peg$f146 = function(id, interpolatedArray) {
-        helpers.debug("PathDirective parsed InterpolatedStringLiteral:", interpolatedArray);
-        const rawString = helpers.reconstructRawString(interpolatedArray);
-        helpers.debug("PathDirective reconstructed raw string:", rawString);
-        const pathObject = helpers.validatePath(rawString, { context: 'pathDirective' });
-        // Attach the original interpolated array
-        if (pathObject && typeof pathObject === 'object') {
-          pathObject.interpolatedValue = interpolatedArray;
-          helpers.debug("Attached interpolatedValue to path object in PathDirective");
-        } else {
-          // Handle case where validatePath didn't return an object
-          helpers.debug("Warning: validatePath did not return an object in PathDirective.");
-          // Return a basic structure if validation fails to provide context
-          return { identifier: id, path: { raw: rawString, structured: {}, interpolatedValue: interpolatedArray } };
-        }
-        return { identifier: id, path: pathObject };
-      };
+      const rawString = helpers.reconstructRawString(interpolatedArray);
+      const pathObject = helpers.validatePath(rawString, { context: 'pathDirective' });
+      if (pathObject && typeof pathObject === 'object') {
+        pathObject.interpolatedValue = interpolatedArray;
+      } else {
+        return { identifier: id, path: { raw: rawString, structured: {}, interpolatedValue: interpolatedArray } };
+      }
+      return { identifier: id, path: pathObject };
+    };
   var peg$f147 = function(id, rhs) { return helpers.createDirective('path', rhs, location()); };
   var peg$f148 = function(id, value) {
     return helpers.createDirective('var', {
@@ -1170,16 +1019,14 @@ function peg$parse(input, options) {
   };
   var peg$f149 = function(opener, lang) { return true; };
   var peg$f150 = function(opener, lang, closer) {
-      return closer.length === opener.length;  // Only match exact length
+      return closer.length === opener.length;
     };
   var peg$f151 = function(opener, lang, c) { return c; };
   var peg$f152 = function(opener, lang, content, closer) {
-      // Fail if the closer doesn't match the opener
       return closer.length !== opener.length;
     };
   var peg$f153 = function(opener, lang, content, closer) {
       const rawContent = content.join('');
-      // Default to true unless explicitly set to false
       const preserveCodeFences = options?.preserveCodeFences !== false;
       const finalContent = preserveCodeFences 
         ? opener.join('') + (lang ? lang : '') + '\n' + rawContent + (rawContent ? '' : '\n') + closer.join('')
@@ -1196,42 +1043,28 @@ function peg$parse(input, options) {
     return backticks;
   };
   var peg$f156 = function(chars) { return chars.join(''); };
-  var peg$f157 = function(interpolatedArray) { // Changed from str:StringLiteral
-      // Reconstruct the raw string from the array of nodes
+  var peg$f157 = function(interpolatedArray) {
       const rawString = helpers.reconstructRawString(interpolatedArray);
-      helpers.debug("PathValue reconstructed raw string:", rawString, "from array:", JSON.stringify(interpolatedArray));
-
-      // Get the validated path from validatePath, passing context
       const validationResult = helpers.validatePath(rawString, { context: 'pathDirective' });
 
-      // Attach the interpolated array to the result
-      // Ensure validationResult is an object before attaching
       if (validationResult && typeof validationResult === 'object') {
         validationResult.interpolatedValue = interpolatedArray;
-        helpers.debug("Attached interpolatedValue to validationResult");
-      } else {
-        helpers.debug("Warning: validatePath did not return an object. Cannot attach interpolatedValue.");
-        // Consider how to handle this case - maybe wrap non-objects?
-        // For now, just return the original result if it wasn't an object.
       }
 
       return validationResult;
     };
-  var peg$f158 = function(variable) { // Allow PathVariables directly
-    helpers.debug("PathValue parsed PathVar:", JSON.stringify(variable));
-    // Return a structure consistent with validatePath for path variables
+  var peg$f158 = function(variable) {
     return {
         raw: `$${variable.identifier}`,
         isPathVariable: true,
         structured: {
-          base: '.', // Default base for path variables in PathDirective?
-          segments: [`$${variable.identifier}`], // Segment is the var itself
+          base: '.',
+          segments: [`$${variable.identifier}`],
           variables: {
             path: [variable.identifier]
           },
-          cwd: false // Path variables are not CWD relative
+          cwd: false
         }
-        // No interpolatedValue for a direct PathVar
       };
   };
   var peg$f159 = function(char) { return char; };
@@ -1239,13 +1072,31 @@ function peg$parse(input, options) {
       return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
     };
   var peg$f161 = function(part) { return part; };
-  var peg$f162 = function(parts) { // Repeat the guarded part
-      // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
+  var peg$f162 = function(parts) {
       return parts;
     };
   var peg$f163 = function(result) {
       return result || [];
     };
+  var peg$f164 = function(char) { return char; };
+  var peg$f165 = function(chars) {
+      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
+    };
+  var peg$f166 = function(part) { 
+      return part; 
+    };
+  var peg$f167 = function(parts) {
+      return parts;
+    };
+  var peg$f168 = function(result) {
+      return result || []; // Return empty array if no content
+    };
+  var peg$f169 = function() { helpers.debug('Import Trace: Matched \"import\"'); return true; };
+  var peg$f170 = function() { helpers.debug('Import Trace: Matched __'); return true; };
+  var peg$f171 = function() { helpers.debug('Import Trace: Matched \"[\"'); return true; };
+  var peg$f172 = function(pathParts) { helpers.debug('Import Trace: Matched pathParts', `length=${pathParts.length}`); return pathParts; };
+  var peg$f173 = function() { helpers.debug('Import Trace: Matched \"\"]\"'); return true; };
+  var peg$f174 = function() { helpers.debug('Import Trace: Matched End'); return true; };
   var peg$currPos = options.peg$currPos | 0;
   var peg$savedPos = peg$currPos;
   var peg$posDetailsCache = [{ line: 1, column: 1 }];
@@ -3732,16 +3583,30 @@ function peg$parse(input, options) {
     }
     if (s0 === peg$FAILED) {
       s0 = peg$currPos;
-      s1 = peg$parse__();
-      if (s1 !== peg$FAILED) {
-        s2 = peg$parseVariable();
-        if (s2 !== peg$FAILED) {
-          s3 = peg$parseDirectiveOptions();
-          if (s3 === peg$FAILED) {
-            s3 = null;
+      s1 = peg$parse_();
+      if (input.charCodeAt(peg$currPos) === 91) {
+        s2 = peg$c9;
+        peg$currPos++;
+      } else {
+        s2 = peg$FAILED;
+        if (peg$silentFails === 0) { peg$fail(peg$e17); }
+      }
+      if (s2 !== peg$FAILED) {
+        s3 = peg$parseBracketInterpolatableContentOrEmpty();
+        if (input.charCodeAt(peg$currPos) === 93) {
+          s4 = peg$c10;
+          peg$currPos++;
+        } else {
+          s4 = peg$FAILED;
+          if (peg$silentFails === 0) { peg$fail(peg$e18); }
+        }
+        if (s4 !== peg$FAILED) {
+          s5 = peg$parseDirectiveOptions();
+          if (s5 === peg$FAILED) {
+            s5 = null;
           }
           peg$savedPos = s0;
-          s0 = peg$f41(s2, s3);
+          s0 = peg$f41(s3, s5);
         } else {
           peg$currPos = s0;
           s0 = peg$FAILED;
@@ -3753,33 +3618,14 @@ function peg$parse(input, options) {
       if (s0 === peg$FAILED) {
         s0 = peg$currPos;
         s1 = peg$parse_();
-        if (input.charCodeAt(peg$currPos) === 91) {
-          s2 = peg$c9;
-          peg$currPos++;
-        } else {
-          s2 = peg$FAILED;
-          if (peg$silentFails === 0) { peg$fail(peg$e17); }
-        }
+        s2 = peg$parseVariable();
         if (s2 !== peg$FAILED) {
-          s3 = peg$parseBracketInterpolatableContentOrEmpty();
-          if (input.charCodeAt(peg$currPos) === 93) {
-            s4 = peg$c10;
-            peg$currPos++;
-          } else {
-            s4 = peg$FAILED;
-            if (peg$silentFails === 0) { peg$fail(peg$e18); }
+          s3 = peg$parseDirectiveOptions();
+          if (s3 === peg$FAILED) {
+            s3 = null;
           }
-          if (s4 !== peg$FAILED) {
-            s5 = peg$parseDirectiveOptions();
-            if (s5 === peg$FAILED) {
-              s5 = null;
-            }
-            peg$savedPos = s0;
-            s0 = peg$f42(s3, s5);
-          } else {
-            peg$currPos = s0;
-            s0 = peg$FAILED;
-          }
+          peg$savedPos = s0;
+          s0 = peg$f42(s2, s3);
         } else {
           peg$currPos = s0;
           s0 = peg$FAILED;
@@ -4333,7 +4179,7 @@ function peg$parse(input, options) {
 
   function peg$parseRunDirective() {
     var startPos = peg$currPos;
-    var s0, s1, s2, s3, s4;
+    var s0, s1, s2, s3, s4, s5;
 
     peg$tracer.trace({
       type: "rule.enter",
@@ -4376,19 +4222,29 @@ function peg$parse(input, options) {
         if (peg$silentFails === 0) { peg$fail(peg$e32); }
       }
       if (s1 !== peg$FAILED) {
-        s2 = peg$parse__();
-        if (s2 !== peg$FAILED) {
-          s3 = peg$parseTextVar();
-          if (s3 === peg$FAILED) {
-            s3 = peg$parseDataVar();
+        s2 = peg$parse_();
+        s3 = peg$parseTextVar();
+        if (s3 === peg$FAILED) {
+          s3 = peg$parseDataVar();
+        }
+        if (s3 !== peg$FAILED) {
+          s4 = peg$currPos;
+          peg$silentFails++;
+          s5 = peg$parseCommandReference();
+          peg$silentFails--;
+          if (s5 === peg$FAILED) {
+            s4 = undefined;
+          } else {
+            peg$currPos = s4;
+            s4 = peg$FAILED;
           }
-          if (s3 !== peg$FAILED) {
-            s4 = peg$parseUnderHeader();
-            if (s4 === peg$FAILED) {
-              s4 = null;
+          if (s4 !== peg$FAILED) {
+            s5 = peg$parseUnderHeader();
+            if (s5 === peg$FAILED) {
+              s5 = null;
             }
             peg$savedPos = s0;
-            s0 = peg$f57(s3, s4);
+            s0 = peg$f57(s3, s5);
           } else {
             peg$currPos = s0;
             s0 = peg$FAILED;
@@ -4621,7 +4477,7 @@ function peg$parse(input, options) {
 
   function peg$parseImportDirective() {
     var startPos = peg$currPos;
-    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14;
 
     peg$tracer.trace({
       type: "rule.enter",
@@ -4669,16 +4525,34 @@ function peg$parse(input, options) {
             }
             if (s9 !== peg$FAILED) {
               s10 = peg$parse_();
-              s11 = peg$parseDirectiveContent();
+              if (input.charCodeAt(peg$currPos) === 91) {
+                s11 = peg$c9;
+                peg$currPos++;
+              } else {
+                s11 = peg$FAILED;
+                if (peg$silentFails === 0) { peg$fail(peg$e17); }
+              }
               if (s11 !== peg$FAILED) {
-                s12 = peg$parse_();
-                s13 = peg$parseLineTerminator();
-                if (s13 === peg$FAILED) {
-                  s13 = peg$parseEOF();
+                s12 = peg$parseImportInterpolatablePathOrEmpty();
+                if (input.charCodeAt(peg$currPos) === 93) {
+                  s13 = peg$c10;
+                  peg$currPos++;
+                } else {
+                  s13 = peg$FAILED;
+                  if (peg$silentFails === 0) { peg$fail(peg$e18); }
                 }
                 if (s13 !== peg$FAILED) {
-                  peg$savedPos = s0;
-                  s0 = peg$f63(s5, s11);
+                  s14 = peg$parseLineTerminator();
+                  if (s14 === peg$FAILED) {
+                    s14 = peg$parseEOF();
+                  }
+                  if (s14 !== peg$FAILED) {
+                    peg$savedPos = s0;
+                    s0 = peg$f63(s5, s12);
+                  } else {
+                    peg$currPos = s0;
+                    s0 = peg$FAILED;
+                  }
                 } else {
                   peg$currPos = s0;
                   s0 = peg$FAILED;
@@ -4751,12 +4625,11 @@ function peg$parse(input, options) {
                 if (s10 !== peg$FAILED) {
                   s11 = peg$parseVariable();
                   if (s11 !== peg$FAILED) {
-                    s12 = peg$parse_();
-                    s13 = peg$parseLineTerminator();
-                    if (s13 === peg$FAILED) {
-                      s13 = peg$parseEOF();
+                    s12 = peg$parseLineTerminator();
+                    if (s12 === peg$FAILED) {
+                      s12 = peg$parseEOF();
                     }
-                    if (s13 !== peg$FAILED) {
+                    if (s12 !== peg$FAILED) {
                       peg$savedPos = s0;
                       s0 = peg$f64(s5, s11);
                     } else {
@@ -4802,16 +4675,34 @@ function peg$parse(input, options) {
         }
         if (s1 !== peg$FAILED) {
           s2 = peg$parse_();
-          s3 = peg$parseDirectiveContent();
+          if (input.charCodeAt(peg$currPos) === 91) {
+            s3 = peg$c9;
+            peg$currPos++;
+          } else {
+            s3 = peg$FAILED;
+            if (peg$silentFails === 0) { peg$fail(peg$e17); }
+          }
           if (s3 !== peg$FAILED) {
-            s4 = peg$parse_();
-            s5 = peg$parseLineTerminator();
-            if (s5 === peg$FAILED) {
-              s5 = peg$parseEOF();
+            s4 = peg$parseImportInterpolatablePathOrEmpty();
+            if (input.charCodeAt(peg$currPos) === 93) {
+              s5 = peg$c10;
+              peg$currPos++;
+            } else {
+              s5 = peg$FAILED;
+              if (peg$silentFails === 0) { peg$fail(peg$e18); }
             }
             if (s5 !== peg$FAILED) {
-              peg$savedPos = s0;
-              s0 = peg$f65(s3);
+              s6 = peg$parseLineTerminator();
+              if (s6 === peg$FAILED) {
+                s6 = peg$parseEOF();
+              }
+              if (s6 !== peg$FAILED) {
+                peg$savedPos = s0;
+                s0 = peg$f65(s4);
+              } else {
+                peg$currPos = s0;
+                s0 = peg$FAILED;
+              }
             } else {
               peg$currPos = s0;
               s0 = peg$FAILED;
@@ -4838,12 +4729,11 @@ function peg$parse(input, options) {
             if (s2 !== peg$FAILED) {
               s3 = peg$parseVariable();
               if (s3 !== peg$FAILED) {
-                s4 = peg$parse_();
-                s5 = peg$parseLineTerminator();
-                if (s5 === peg$FAILED) {
-                  s5 = peg$parseEOF();
+                s4 = peg$parseLineTerminator();
+                if (s4 === peg$FAILED) {
+                  s4 = peg$parseEOF();
                 }
-                if (s5 !== peg$FAILED) {
+                if (s4 !== peg$FAILED) {
                   peg$savedPos = s0;
                   s0 = peg$f66(s3);
                 } else {
@@ -8677,7 +8567,7 @@ function peg$parse(input, options) {
 
   function peg$parsePathDirective() {
     var startPos = peg$currPos;
-    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8;
 
     peg$tracer.trace({
       type: "rule.enter",
@@ -8727,12 +8617,11 @@ function peg$parse(input, options) {
                   s7 = s8;
                 }
                 if (s7 !== peg$FAILED) {
-                  s8 = peg$parse_();
-                  s9 = peg$parseLineTerminator();
-                  if (s9 === peg$FAILED) {
-                    s9 = peg$parseEOF();
+                  s8 = peg$parseLineTerminator();
+                  if (s8 === peg$FAILED) {
+                    s8 = peg$parseEOF();
                   }
-                  if (s9 !== peg$FAILED) {
+                  if (s8 !== peg$FAILED) {
                     peg$savedPos = s0;
                     s0 = peg$f147(s3, s7);
                   } else {
@@ -9659,6 +9548,516 @@ function peg$parse(input, options) {
     return s0;
   }
 
+  function peg$parseImportPathAllowedLiteralChar() {
+    var startPos = peg$currPos;
+    var s0, s1, s2;
+
+    peg$tracer.trace({
+      type: "rule.enter",
+      rule: "ImportPathAllowedLiteralChar",
+      location: peg$computeLocation(startPos, startPos, true)
+    });
+
+    s0 = peg$currPos;
+    s1 = peg$currPos;
+    peg$silentFails++;
+    if (input.charCodeAt(peg$currPos) === 93) {
+      s2 = peg$c10;
+      peg$currPos++;
+    } else {
+      s2 = peg$FAILED;
+      if (peg$silentFails === 0) { peg$fail(peg$e18); }
+    }
+    if (s2 === peg$FAILED) {
+      if (input.substr(peg$currPos, 2) === peg$c2) {
+        s2 = peg$c2;
+        peg$currPos += 2;
+      } else {
+        s2 = peg$FAILED;
+        if (peg$silentFails === 0) { peg$fail(peg$e7); }
+      }
+      if (s2 === peg$FAILED) {
+        if (input.charCodeAt(peg$currPos) === 36) {
+          s2 = peg$c4;
+          peg$currPos++;
+        } else {
+          s2 = peg$FAILED;
+          if (peg$silentFails === 0) { peg$fail(peg$e11); }
+        }
+      }
+    }
+    peg$silentFails--;
+    if (s2 === peg$FAILED) {
+      s1 = undefined;
+    } else {
+      peg$currPos = s1;
+      s1 = peg$FAILED;
+    }
+    if (s1 !== peg$FAILED) {
+      if (input.length > peg$currPos) {
+        s2 = input.charAt(peg$currPos);
+        peg$currPos++;
+      } else {
+        s2 = peg$FAILED;
+        if (peg$silentFails === 0) { peg$fail(peg$e10); }
+      }
+      if (s2 !== peg$FAILED) {
+        peg$savedPos = s0;
+        s0 = peg$f164(s2);
+      } else {
+        peg$currPos = s0;
+        s0 = peg$FAILED;
+      }
+    } else {
+      peg$currPos = s0;
+      s0 = peg$FAILED;
+    }
+
+    if (s0 !== peg$FAILED) {
+      peg$tracer.trace({
+        type: "rule.match",
+        rule: "ImportPathAllowedLiteralChar",
+        result: s0,
+        location: peg$computeLocation(startPos, peg$currPos, true)
+      });
+    } else {
+      peg$tracer.trace({
+        type: "rule.fail",
+        rule: "ImportPathAllowedLiteralChar",
+        location: peg$computeLocation(startPos, startPos, true)
+      });
+    }
+
+    return s0;
+  }
+
+  function peg$parseImportPathLiteralTextSegment() {
+    var startPos = peg$currPos;
+    var s0, s1, s2;
+
+    peg$tracer.trace({
+      type: "rule.enter",
+      rule: "ImportPathLiteralTextSegment",
+      location: peg$computeLocation(startPos, startPos, true)
+    });
+
+    s0 = peg$currPos;
+    s1 = [];
+    s2 = peg$parseImportPathAllowedLiteralChar();
+    if (s2 !== peg$FAILED) {
+      while (s2 !== peg$FAILED) {
+        s1.push(s2);
+        s2 = peg$parseImportPathAllowedLiteralChar();
+      }
+    } else {
+      s1 = peg$FAILED;
+    }
+    if (s1 !== peg$FAILED) {
+      peg$savedPos = s0;
+      s1 = peg$f165(s1);
+    }
+    s0 = s1;
+
+    if (s0 !== peg$FAILED) {
+      peg$tracer.trace({
+        type: "rule.match",
+        rule: "ImportPathLiteralTextSegment",
+        result: s0,
+        location: peg$computeLocation(startPos, peg$currPos, true)
+      });
+    } else {
+      peg$tracer.trace({
+        type: "rule.fail",
+        rule: "ImportPathLiteralTextSegment",
+        location: peg$computeLocation(startPos, startPos, true)
+      });
+    }
+
+    return s0;
+  }
+
+  function peg$parseImportPathPart() {
+    var startPos = peg$currPos;
+    var s0, s1, s2;
+
+    peg$tracer.trace({
+      type: "rule.enter",
+      rule: "ImportPathPart",
+      location: peg$computeLocation(startPos, startPos, true)
+    });
+
+    s0 = peg$currPos;
+    s1 = peg$currPos;
+    peg$silentFails++;
+    if (input.charCodeAt(peg$currPos) === 93) {
+      s2 = peg$c10;
+      peg$currPos++;
+    } else {
+      s2 = peg$FAILED;
+      if (peg$silentFails === 0) { peg$fail(peg$e18); }
+    }
+    if (s2 === peg$FAILED) {
+      s2 = peg$parseEOF();
+    }
+    peg$silentFails--;
+    if (s2 === peg$FAILED) {
+      s1 = undefined;
+    } else {
+      peg$currPos = s1;
+      s1 = peg$FAILED;
+    }
+    if (s1 !== peg$FAILED) {
+      s2 = peg$parseVariable();
+      if (s2 === peg$FAILED) {
+        s2 = peg$parseImportPathLiteralTextSegment();
+      }
+      if (s2 !== peg$FAILED) {
+        peg$savedPos = s0;
+        s0 = peg$f166(s2);
+      } else {
+        peg$currPos = s0;
+        s0 = peg$FAILED;
+      }
+    } else {
+      peg$currPos = s0;
+      s0 = peg$FAILED;
+    }
+
+    if (s0 !== peg$FAILED) {
+      peg$tracer.trace({
+        type: "rule.match",
+        rule: "ImportPathPart",
+        result: s0,
+        location: peg$computeLocation(startPos, peg$currPos, true)
+      });
+    } else {
+      peg$tracer.trace({
+        type: "rule.fail",
+        rule: "ImportPathPart",
+        location: peg$computeLocation(startPos, startPos, true)
+      });
+    }
+
+    return s0;
+  }
+
+  function peg$parseImportInterpolatablePath() {
+    var startPos = peg$currPos;
+    var s0, s1, s2;
+
+    peg$tracer.trace({
+      type: "rule.enter",
+      rule: "ImportInterpolatablePath",
+      location: peg$computeLocation(startPos, startPos, true)
+    });
+
+    s0 = peg$currPos;
+    s1 = [];
+    s2 = peg$parseImportPathPart();
+    if (s2 !== peg$FAILED) {
+      while (s2 !== peg$FAILED) {
+        s1.push(s2);
+        s2 = peg$parseImportPathPart();
+      }
+    } else {
+      s1 = peg$FAILED;
+    }
+    if (s1 !== peg$FAILED) {
+      peg$savedPos = s0;
+      s1 = peg$f167(s1);
+    }
+    s0 = s1;
+
+    if (s0 !== peg$FAILED) {
+      peg$tracer.trace({
+        type: "rule.match",
+        rule: "ImportInterpolatablePath",
+        result: s0,
+        location: peg$computeLocation(startPos, peg$currPos, true)
+      });
+    } else {
+      peg$tracer.trace({
+        type: "rule.fail",
+        rule: "ImportInterpolatablePath",
+        location: peg$computeLocation(startPos, startPos, true)
+      });
+    }
+
+    return s0;
+  }
+
+  function peg$parseImportInterpolatablePathOrEmpty() {
+    var startPos = peg$currPos;
+    var s0, s1;
+
+    peg$tracer.trace({
+      type: "rule.enter",
+      rule: "ImportInterpolatablePathOrEmpty",
+      location: peg$computeLocation(startPos, startPos, true)
+    });
+
+    s0 = peg$currPos;
+    s1 = peg$parseImportInterpolatablePath();
+    if (s1 === peg$FAILED) {
+      s1 = null;
+    }
+    peg$savedPos = s0;
+    s1 = peg$f168(s1);
+    s0 = s1;
+
+    if (s0 !== peg$FAILED) {
+      peg$tracer.trace({
+        type: "rule.match",
+        rule: "ImportInterpolatablePathOrEmpty",
+        result: s0,
+        location: peg$computeLocation(startPos, peg$currPos, true)
+      });
+    } else {
+      peg$tracer.trace({
+        type: "rule.fail",
+        rule: "ImportInterpolatablePathOrEmpty",
+        location: peg$computeLocation(startPos, startPos, true)
+      });
+    }
+
+    return s0;
+  }
+
+  function peg$parse_ImportKeyword() {
+    var startPos = peg$currPos;
+    var s0, s1;
+
+    peg$tracer.trace({
+      type: "rule.enter",
+      rule: "_ImportKeyword",
+      location: peg$computeLocation(startPos, startPos, true)
+    });
+
+    s0 = peg$currPos;
+    if (input.substr(peg$currPos, 6) === peg$c22) {
+      s1 = peg$c22;
+      peg$currPos += 6;
+    } else {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) { peg$fail(peg$e33); }
+    }
+    if (s1 !== peg$FAILED) {
+      peg$savedPos = s0;
+      s1 = peg$f169();
+    }
+    s0 = s1;
+
+    if (s0 !== peg$FAILED) {
+      peg$tracer.trace({
+        type: "rule.match",
+        rule: "_ImportKeyword",
+        result: s0,
+        location: peg$computeLocation(startPos, peg$currPos, true)
+      });
+    } else {
+      peg$tracer.trace({
+        type: "rule.fail",
+        rule: "_ImportKeyword",
+        location: peg$computeLocation(startPos, startPos, true)
+      });
+    }
+
+    return s0;
+  }
+
+  function peg$parse_ImportMandatoryWhitespace() {
+    var startPos = peg$currPos;
+    var s0, s1;
+
+    peg$tracer.trace({
+      type: "rule.enter",
+      rule: "_ImportMandatoryWhitespace",
+      location: peg$computeLocation(startPos, startPos, true)
+    });
+
+    s0 = peg$currPos;
+    s1 = peg$parse__();
+    if (s1 !== peg$FAILED) {
+      peg$savedPos = s0;
+      s1 = peg$f170();
+    }
+    s0 = s1;
+
+    if (s0 !== peg$FAILED) {
+      peg$tracer.trace({
+        type: "rule.match",
+        rule: "_ImportMandatoryWhitespace",
+        result: s0,
+        location: peg$computeLocation(startPos, peg$currPos, true)
+      });
+    } else {
+      peg$tracer.trace({
+        type: "rule.fail",
+        rule: "_ImportMandatoryWhitespace",
+        location: peg$computeLocation(startPos, startPos, true)
+      });
+    }
+
+    return s0;
+  }
+
+  function peg$parse_ImportOpeningBracket() {
+    var startPos = peg$currPos;
+    var s0, s1;
+
+    peg$tracer.trace({
+      type: "rule.enter",
+      rule: "_ImportOpeningBracket",
+      location: peg$computeLocation(startPos, startPos, true)
+    });
+
+    s0 = peg$currPos;
+    if (input.charCodeAt(peg$currPos) === 91) {
+      s1 = peg$c9;
+      peg$currPos++;
+    } else {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) { peg$fail(peg$e17); }
+    }
+    if (s1 !== peg$FAILED) {
+      peg$savedPos = s0;
+      s1 = peg$f171();
+    }
+    s0 = s1;
+
+    if (s0 !== peg$FAILED) {
+      peg$tracer.trace({
+        type: "rule.match",
+        rule: "_ImportOpeningBracket",
+        result: s0,
+        location: peg$computeLocation(startPos, peg$currPos, true)
+      });
+    } else {
+      peg$tracer.trace({
+        type: "rule.fail",
+        rule: "_ImportOpeningBracket",
+        location: peg$computeLocation(startPos, startPos, true)
+      });
+    }
+
+    return s0;
+  }
+
+  function peg$parse_ImportPathContent() {
+    var startPos = peg$currPos;
+    var s0, s1;
+
+    peg$tracer.trace({
+      type: "rule.enter",
+      rule: "_ImportPathContent",
+      location: peg$computeLocation(startPos, startPos, true)
+    });
+
+    s0 = peg$currPos;
+    s1 = peg$parseImportInterpolatablePathOrEmpty();
+    peg$savedPos = s0;
+    s1 = peg$f172(s1);
+    s0 = s1;
+
+    if (s0 !== peg$FAILED) {
+      peg$tracer.trace({
+        type: "rule.match",
+        rule: "_ImportPathContent",
+        result: s0,
+        location: peg$computeLocation(startPos, peg$currPos, true)
+      });
+    } else {
+      peg$tracer.trace({
+        type: "rule.fail",
+        rule: "_ImportPathContent",
+        location: peg$computeLocation(startPos, startPos, true)
+      });
+    }
+
+    return s0;
+  }
+
+  function peg$parse_ImportClosingBracket() {
+    var startPos = peg$currPos;
+    var s0, s1;
+
+    peg$tracer.trace({
+      type: "rule.enter",
+      rule: "_ImportClosingBracket",
+      location: peg$computeLocation(startPos, startPos, true)
+    });
+
+    s0 = peg$currPos;
+    if (input.charCodeAt(peg$currPos) === 93) {
+      s1 = peg$c10;
+      peg$currPos++;
+    } else {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) { peg$fail(peg$e18); }
+    }
+    if (s1 !== peg$FAILED) {
+      peg$savedPos = s0;
+      s1 = peg$f173();
+    }
+    s0 = s1;
+
+    if (s0 !== peg$FAILED) {
+      peg$tracer.trace({
+        type: "rule.match",
+        rule: "_ImportClosingBracket",
+        result: s0,
+        location: peg$computeLocation(startPos, peg$currPos, true)
+      });
+    } else {
+      peg$tracer.trace({
+        type: "rule.fail",
+        rule: "_ImportClosingBracket",
+        location: peg$computeLocation(startPos, startPos, true)
+      });
+    }
+
+    return s0;
+  }
+
+  function peg$parse_ImportEnd() {
+    var startPos = peg$currPos;
+    var s0, s1;
+
+    peg$tracer.trace({
+      type: "rule.enter",
+      rule: "_ImportEnd",
+      location: peg$computeLocation(startPos, startPos, true)
+    });
+
+    s0 = peg$currPos;
+    s1 = peg$parseLineTerminator();
+    if (s1 === peg$FAILED) {
+      s1 = peg$parseEOF();
+    }
+    if (s1 !== peg$FAILED) {
+      peg$savedPos = s0;
+      s1 = peg$f174();
+    }
+    s0 = s1;
+
+    if (s0 !== peg$FAILED) {
+      peg$tracer.trace({
+        type: "rule.match",
+        rule: "_ImportEnd",
+        result: s0,
+        location: peg$computeLocation(startPos, peg$currPos, true)
+      });
+    } else {
+      peg$tracer.trace({
+        type: "rule.fail",
+        rule: "_ImportEnd",
+        location: peg$computeLocation(startPos, startPos, true)
+      });
+    }
+
+    return s0;
+  }
+
 
   // Add debug flag and logging - always enable for now
   const DEBUG = true; // process.env.MELD_DEBUG === 'true' || false;
@@ -9668,7 +10067,14 @@ function peg$parse(input, options) {
   const helpers = {
     debug(msg, ...args) {
       if (DEBUG) {
-        console.log(`[DEBUG GRAMMAR] ${msg}`, ...args);
+        const formattedArgs = args.map(arg => {
+          try {
+            return typeof arg === 'string' ? arg : JSON.stringify(arg);
+          } catch (e) {
+            return '[Unserializable]';
+          }
+        }).join(' ');
+        process.stdout.write(`[DEBUG GRAMMAR] ${msg} ${formattedArgs}\n`);
       }
     },
 
@@ -9789,7 +10195,13 @@ function peg$parse(input, options) {
           if (node.fields && node.fields.length > 0) {
             fieldsStr = node.fields.map(f => {
               if (f.type === 'field') return '.' + f.value;
-              if (f.type === 'index') return '.' + f.value;
+              if (f.type === 'index') {
+                  if (typeof f.value === 'string') {
+                      return `[${f.value}]`;
+                  } else {
+                      return `[${f.value}]`;
+                  }
+              }
               return '';
             }).join('');
           }
@@ -10032,32 +10444,39 @@ function peg$parse(input, options) {
       // --- Start: Logic moved from PathValue ---
       if (context === 'pathDirective') {
         helpers.debug("Applying pathDirective context logic for:", path);
+        let originalBase = structured.base; // Keep track of original base for segment logic
+        let isBaseOnlyPath = false;
+
         // Determine base from the raw path specifically for PathDirective context
-        if (path.startsWith('$HOMEPATH')) {
+        // ALWAYS set base to canonical names
+        if (path.startsWith('$HOMEPATH') || path.startsWith('$~')) {
           structured.base = '$HOMEPATH';
-        } else if (path.startsWith('$~/') || path === '$~') {
-          structured.base = '$~';
-        } else if (path.startsWith('$PROJECTPATH')) {
+          originalBase = path.startsWith('$HOMEPATH') ? '$HOMEPATH' : '$'; // Use $~ for segment logic below if alias was used
+          isBaseOnlyPath = (path === '$HOMEPATH' || path === '$');
+        } else if (path.startsWith('$PROJECTPATH') || path.startsWith('.')) {
           structured.base = '$PROJECTPATH';
-        } else if (path.startsWith('$./') || path === '$.') {
-          structured.base = '$.';
+          originalBase = path.startsWith('$PROJECTPATH') ? '$PROJECTPATH' : '.'; // Use $. for segment logic below if alias was used
+          isBaseOnlyPath = (path === '$PROJECTPATH' || path === '.');
         } else {
-          // If none of the special prefixes match, keep the default base
-          // calculated earlier (usually '.')
           helpers.debug("PathDirective context: No special base override for:", path, "keeping base:", structured.base);
         }
 
         // Extract segments specifically for PathDirective context
-        let directiveSegments = path.split('/').filter(Boolean);
-        if (path === '$HOMEPATH' || path === '$~' || path === '$PROJECTPATH' || path === '$.') {
-          directiveSegments = [path];
-        } else if (path.startsWith('$HOMEPATH/') || path.startsWith('$~/') ||
-                   path.startsWith('$PROJECTPATH/') || path.startsWith('$./')) {
-          directiveSegments = directiveSegments.slice(1);
+        let directiveSegments = [];
+        if (isBaseOnlyPath) {
+          directiveSegments = []; // Segments are empty if path is just the base
         } else {
-          // If none of the special prefixes match, keep the default segments
-           helpers.debug("PathDirective context: No special segment override for:", path, "keeping segments:", structured.segments);
-           directiveSegments = structured.segments; // Keep existing segments
+          const pathParts = path.split('/').filter(Boolean);
+          // Check if the path starts with a special variable/alias that should be stripped for segments
+          if (path.startsWith('$HOMEPATH/') || path.startsWith('$~/')) {
+            directiveSegments = pathParts.slice(1);
+          } else if (path.startsWith('$PROJECTPATH/') || path.startsWith('.')) {
+            directiveSegments = pathParts.slice(1);
+          } else {
+            // If no special prefix, use segments calculated by main logic
+            helpers.debug("PathDirective context: No special segment override for:", path, "keeping segments:", structured.segments);
+            directiveSegments = structured.segments;
+          }
         }
         structured.segments = directiveSegments;
         helpers.debug("PathDirective context adjusted base:", structured.base, "segments:", structured.segments);

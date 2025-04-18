@@ -10,7 +10,14 @@
   const helpers = {
     debug(msg, ...args) {
       if (DEBUG) {
-        console.log(`[DEBUG GRAMMAR] ${msg}`, ...args);
+        const formattedArgs = args.map(arg => {
+          try {
+            return typeof arg === 'string' ? arg : JSON.stringify(arg);
+          } catch (e) {
+            return '[Unserializable]';
+          }
+        }).join(' ');
+        process.stdout.write(`[DEBUG GRAMMAR] ${msg} ${formattedArgs}\n`);
       }
     },
 
@@ -131,7 +138,13 @@
           if (node.fields && node.fields.length > 0) {
             fieldsStr = node.fields.map(f => {
               if (f.type === 'field') return '.' + f.value;
-              if (f.type === 'index') return '.' + f.value;
+              if (f.type === 'index') {
+                  if (typeof f.value === 'string') {
+                      return `[${f.value}]`;
+                  } else {
+                      return `[${f.value}]`;
+                  }
+              }
               return '';
             }).join('');
           }
@@ -374,32 +387,39 @@
       // --- Start: Logic moved from PathValue ---
       if (context === 'pathDirective') {
         helpers.debug("Applying pathDirective context logic for:", path);
+        let originalBase = structured.base; // Keep track of original base for segment logic
+        let isBaseOnlyPath = false;
+
         // Determine base from the raw path specifically for PathDirective context
-        if (path.startsWith('$HOMEPATH')) {
+        // ALWAYS set base to canonical names
+        if (path.startsWith('$HOMEPATH') || path.startsWith('$~')) {
           structured.base = '$HOMEPATH';
-        } else if (path.startsWith('$~/') || path === '$~') {
-          structured.base = '$~';
-        } else if (path.startsWith('$PROJECTPATH')) {
+          originalBase = path.startsWith('$HOMEPATH') ? '$HOMEPATH' : '$'; // Use $~ for segment logic below if alias was used
+          isBaseOnlyPath = (path === '$HOMEPATH' || path === '$');
+        } else if (path.startsWith('$PROJECTPATH') || path.startsWith('.')) {
           structured.base = '$PROJECTPATH';
-        } else if (path.startsWith('$./') || path === '$.') {
-          structured.base = '$.';
+          originalBase = path.startsWith('$PROJECTPATH') ? '$PROJECTPATH' : '.'; // Use $. for segment logic below if alias was used
+          isBaseOnlyPath = (path === '$PROJECTPATH' || path === '.');
         } else {
-          // If none of the special prefixes match, keep the default base
-          // calculated earlier (usually '.')
           helpers.debug("PathDirective context: No special base override for:", path, "keeping base:", structured.base);
         }
 
         // Extract segments specifically for PathDirective context
-        let directiveSegments = path.split('/').filter(Boolean);
-        if (path === '$HOMEPATH' || path === '$~' || path === '$PROJECTPATH' || path === '$.') {
-          directiveSegments = [path];
-        } else if (path.startsWith('$HOMEPATH/') || path.startsWith('$~/') ||
-                   path.startsWith('$PROJECTPATH/') || path.startsWith('$./')) {
-          directiveSegments = directiveSegments.slice(1);
+        let directiveSegments = [];
+        if (isBaseOnlyPath) {
+          directiveSegments = []; // Segments are empty if path is just the base
         } else {
-          // If none of the special prefixes match, keep the default segments
-           helpers.debug("PathDirective context: No special segment override for:", path, "keeping segments:", structured.segments);
-           directiveSegments = structured.segments; // Keep existing segments
+          const pathParts = path.split('/').filter(Boolean);
+          // Check if the path starts with a special variable/alias that should be stripped for segments
+          if (path.startsWith('$HOMEPATH/') || path.startsWith('$~/')) {
+            directiveSegments = pathParts.slice(1);
+          } else if (path.startsWith('$PROJECTPATH/') || path.startsWith('.')) {
+            directiveSegments = pathParts.slice(1);
+          } else {
+            // If no special prefix, use segments calculated by main logic
+            helpers.debug("PathDirective context: No special segment override for:", path, "keeping segments:", structured.segments);
+            directiveSegments = structured.segments;
+          }
         }
         structured.segments = directiveSegments;
         helpers.debug("PathDirective context adjusted base:", structured.base, "segments:", structured.segments);
@@ -447,30 +467,26 @@
 
 Start
   = nodes:(LineStartComment / Comment / CodeFence / Variable / Directive / TextBlock)* {
+    helpers.debug('Start: Entered');
     return nodes;
   }
 
 LineStartComment
   = &{ 
-      // Only match comments at line start
       const pos = offset();
       const isAtLineStart = helpers.isLineStart(input, pos);
-      helpers.debug("LineStartComment check at pos", pos, "isAtLineStart:", isAtLineStart);
       return isAtLineStart;
     } ">>" [ ] content:CommentContent {
-    helpers.debug("Creating comment node with content:", content);
     return helpers.createNode(NodeType.Comment, { content: content.trim() }, location());
   }
 
 Comment
   = ">>" [ ] content:CommentContent {
-    helpers.debug("Creating non-line-start comment node with content:", content);
     return helpers.createNode(NodeType.Comment, { content: content.trim() }, location());
   }
 
 CommentContent
   = chars:[^\n]* "\n"? {
-    helpers.debug("Comment content chars:", chars.join(''));
     return chars.join('');
   }
 
@@ -487,17 +503,12 @@ TextBlock
 
 TextPart
   = !{ 
-      // Only prevent @ directive interpretation at line start
       const pos = offset();
       const isAtLineStart = helpers.isLineStart(input, pos);
       const isDirective = isAtLineStart && input.substr(pos, 1) === '@' && 
-                         /[a-z]/.test(input.substr(pos+1, 1)); // Check if followed by lowercase letter
+                         /[a-z]/.test(input.substr(pos+1, 1));
       
-      // Also prevent consuming >> at line start (for comments)
       const isComment = isAtLineStart && input.substr(pos, 2) === '>>';
-      
-      helpers.debug("TextPart check at pos", pos, "isAtLineStart:", isAtLineStart, 
-            "isDirective:", isDirective, "isComment:", isComment);
       
       return isDirective || isComment;
     } !("{{" / "}}" / "[" / "]" / "{" / "}" / BacktickSequence) char:. { return char; }
@@ -526,7 +537,6 @@ DataVar
 
 PathVar
   = "$" id:PathIdentifier {
-    // Check if the matched identifier is special
     const isSpecial = helpers.isSpecialPathIdentifier(id);
     return helpers.createVariableReferenceNode('path', {
       identifier: helpers.normalizePathVar(id),
@@ -572,8 +582,8 @@ VarFormat
 
 // Double Quotes
 DoubleQuoteAllowedLiteralChar
-  = !('"' / '{{' / '\\\\') char:. { return char; } // Not quote, not var start, not escape
-  / '\\\\' esc:. { return '\\\\' + esc; }          // Allow escaped characters
+  = !('"' / '{{' / '\\\\') char:. { return char; }
+  / '\\\\' esc:. { return '\\\\' + esc; }
 
 DoubleQuoteLiteralTextSegment
   = chars:DoubleQuoteAllowedLiteralChar+ {
@@ -582,7 +592,6 @@ DoubleQuoteLiteralTextSegment
 
 DoubleQuoteInterpolatableContent
   = parts:(DoubleQuoteLiteralTextSegment / Variable)+ {
-      // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
       return parts;
     }
 
@@ -633,7 +642,7 @@ BacktickInterpolatableContentOrEmpty
 
 // Multiline [[...]]
 MultilineAllowedLiteralChar
-  = !']]' !'{{' char:. { return char; } // Not end delimiter, not var start
+  = !']]' !'{{' char:. { return char; }
 
 MultilineLiteralTextSegment
   = chars:MultilineAllowedLiteralChar+ {
@@ -668,82 +677,27 @@ InterpolatedMultilineTemplate "Multiline template with potential variable interp
 // Returns { subtype: '...', ... } structure without 'source' field.
 _EmbedRHS
    = _ "[[" content:MultilineInterpolatableContentOrEmpty "]]" options:DirectiveOptions? {
-     // Multi-line template embed [[...]]
-     helpers.debug("EmbedRHS parsed multiline template: ", JSON.stringify(content));
      return {
        subtype: 'embedTemplate',
-       content: content, // Return the InterpolatableValue array
-       isTemplateContent: true, // Mark as template content
+       content: content,
+       isTemplateContent: true,
        ...(options ? { options } : {})
      };
    }
-   / __ variable:Variable options:DirectiveOptions? {
-     // Variable embed {{...}} or $...
-     const variableText = variable.valueType === 'text'
-       ? `{{${variable.identifier}}}`
-       : variable.valueType === 'data'
-         ? `{{${variable.identifier}${variable.fields.map(f => {
-             if (f.type === 'field') return '.' + f.value;
-             if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
-             return '';
-           }).join('')}}}`
-         : variable.valueType === 'path'
-           ? `$${variable.identifier}`
-           : '';
-
-     if (variable.valueType === 'path') {
-       // Path variable $...
-       return {
-         subtype: 'embedVariable', // Keep subtype as variable for path vars too
-         path: helpers.validatePath(variableText),
-         ...(options ? { options } : {})
-       };
-     } else {
-       // Text/Data variable {{...}}
-       return {
-         subtype: 'embedVariable',
-         path: { // Maintain structure expected by downstream (temporary?)
-           raw: variableText,
-           isVariableReference: true,
-           variable: variable,
-           structured: {
-             variables: {
-               text: variable.valueType === 'text' ? [variable.identifier] :
-                     variable.valueType === 'data' ? [variable.identifier] : []
-             }
-           }
-         },
-         ...(options ? { options } : {})
-       };
-     }
-   }
    / _ "[" content:BracketInterpolatableContentOrEmpty "]" options:DirectiveOptions? {
-     // Path embed [...]
      const rawPath = helpers.reconstructRawString(content);
-     helpers.debug("EmbedRHS reconstructed raw path from bracket content:", rawPath);
-
-     // Split raw path for section (section itself cannot be interpolated)
      const [pathPart, section] = rawPath.split('#').map(s => s.trim());
-     helpers.validateEmbedPath(pathPart);
      const validationResult = helpers.validatePath(pathPart);
 
-     // Attach the interpolated array for the path part
-     // Create a NEW InterpolatableValue representing only the pathPart
-     // Use location() of the whole rule for this new node
-     const pathInterpolatedValue = [ 
-       helpers.createNode(NodeType.Text, { content: pathPart }, location())
-     ]; 
+     const pathInterpolatedValue = content; // Use the original parsed content array
 
      let finalPathObject = validationResult;
      if (finalPathObject && typeof finalPathObject === 'object') {
-       finalPathObject.interpolatedValue = pathInterpolatedValue; // Attach possibly filtered array
-       helpers.debug("Attached interpolatedValue to path object in EmbedRHS");
+       finalPathObject.interpolatedValue = pathInterpolatedValue;
      } else {
-       helpers.debug("Warning: validatePath did not return an object in EmbedRHS.");
        finalPathObject = { raw: pathPart, structured: {}, interpolatedValue: pathInterpolatedValue };
      }
 
-     // Reorder properties if necessary (consistent with standalone EmbedDirective)
      if (finalPathObject.normalized && finalPathObject.structured) {
        const { raw, normalized, structured, ...rest } = finalPathObject;
        finalPathObject = { raw, normalized, structured, ...rest };
@@ -751,24 +705,47 @@ _EmbedRHS
 
      return {
        subtype: 'embedPath',
-       path: finalPathObject, // Return the object with interpolatedValue
+       path: finalPathObject,
        ...(section ? { section } : {}),
        ...(options ? { options } : {})
      };
    }
-   // Note: Did not include the "{ names } from path" variant here,
-   // as it's less common on RHS and adds complexity. Can add later if needed.
+   / _ variable:Variable options:DirectiveOptions? {
+     const variableText = helpers.reconstructRawString([variable]); 
+
+     if (variable.valueType === 'path') {
+       return {
+         subtype: 'embedVariable',
+         path: helpers.validatePath(variableText), // PathVar gets validated
+         ...(options ? { options } : {})
+       };
+     } else {
+       // Text/Data vars create a structure mimicking a path object for now
+       return {
+         subtype: 'embedVariable',
+         path: {
+           raw: variableText,
+           isVariableReference: true,
+           variable: variable,
+           structured: {
+             variables: {
+               text: [variable.identifier] // Treat both TextVar/DataVar as text source here
+             }
+           }
+         },
+         ...(options ? { options } : {})
+       };
+     }
+   }
 
 // Helper rule for parsing RHS @run variations
 // Returns { subtype: '...', ... } structure without 'source' field.
 _RunRHS
-  // Command reference without brackets
   = _ cmdRef:CommandReference {
-      helpers.debug("RunRHS parsing CommandReference:", cmdRef);
       const commandObj = {
         raw: `$${cmdRef.name}${cmdRef.args.length > 0 ? `(${cmdRef.args.map(arg => {
           if (arg.type === 'string') return `\"${arg.value}\"`;
-          if (arg.type === 'variable') return arg.value.raw || ''; // Assuming Variable node has 'raw'
+          if (arg.type === 'variable') return arg.value.raw || '';
           return arg.value;
         }).join(', ')})` : ''}`,
         name: cmdRef.name,
@@ -779,37 +756,25 @@ _RunRHS
         command: commandObj
       };
     }
-  // Multi-line run directive with double brackets
   / _ lang:Identifier? _ params:RunVariableParams? _ "[[" content:MultilineInterpolatableContentOrEmpty "]]" {
-      helpers.debug("RunRHS parsing Multi-line Run: Lang:", lang, "Params:", params, "Content:", JSON.stringify(content));
       return {
         subtype: params ? 'runCodeParams' : 'runCode',
-        command: content, // Return the InterpolatableValue array
+        command: content,
         ...(lang ? { language: lang } : {}),
         ...(params ? { parameters: params } : {}),
         isMultiLine: true
       };
     }
-  // Standard run directive with content in brackets
   / _ "[" content:BracketInterpolatableContentOrEmpty "]" {
-      helpers.debug("RunRHS parsing bracket content:", JSON.stringify(content));
       return {
         subtype: 'runCommand',
-        command: content // Return the InterpolatableValue array
+        command: content
       };
     }
-  // Note: Direct variable variant @run {{var}} is handled by PropertyValue/VarValue
-  // and is not parsed explicitly *by* @run here in RHS context.
-  // The standalone RunDirective *does* handle it, consistency check needed later.
 
-// --- END EDIT --- >>>
-
- Directive
-   = &{ 
-       // Only match directive at line start
-       const pos = offset();
-       return helpers.isLineStart(input, pos);
-     } "@" directive:(
+Directive
+   = &{ return helpers.isLineStart(input, offset()) && input.charAt(offset()) === '@'; } 
+     "@" directive:(
        ImportDirective
      / EmbedDirective
      / RunDirective
@@ -818,7 +783,9 @@ _RunRHS
      / TextDirective
      / PathDirective
      / VarDirective
-   ) { return directive; }
+   ) { 
+       return directive; 
+     }
 
 // Command reference parsing rule
 CommandReference
@@ -849,48 +816,23 @@ RawArgChar
   = !("," / ")") char:. { return char; }
 
 RunDirective
-  // <<< START EDIT --- Reorder RunDirective Alternatives --- >>>
-  // Prioritize _RunRHS to handle $commandRef, [...], [[...]] variants first
   = "run" runResult:_RunRHS header:UnderHeader? {
-      helpers.debug("Standalone RunDirective parsed via RunRHS:", JSON.stringify(runResult));
-
-      // Create the final directive node using the result from RunRHS
-      // _RunRHS already contains the subtype and specific data (command, lang, params, etc.)
-      // We just need to add the underHeader if it exists.
       const directiveData = {
-        ...runResult, // Spread the result from _RunRHS ({ subtype, command, ... })
+        ...runResult,
         ...(header ? { underHeader: header } : {})
       };
 
       return helpers.createDirective('run', directiveData, location());
     }
-  // Handle direct non-command variables (TextVar, DataVar) - PathVar $... handled by _RunRHS now.
-  / "run" __ variable:(TextVar / DataVar) header:UnderHeader? { 
-      // Handle direct variable embedding (without brackets)
-      // This allows syntax like @run {{variable}} or @run {{data.field}}
-      
-      // Get the variable text directly from the variable node
-      const variableText = variable.valueType === 'text' 
-        ? `{{${variable.identifier}}}` 
-        : variable.valueType === 'data' 
-          ? `{{${variable.identifier}${variable.fields.map(f => {
-              if (f.type === 'field') return '.' + f.value;
-              if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
-              return '';
-            }).join('')}}}` 
-          : ''; // Should not happen due to (TextVar / DataVar) constraint
-      
-      helpers.validateRunContent(variableText);
-      
-      // NOTE: This produces subtype 'runCommand' with the variable string as the command.
-      // This remains consistent with previous behavior.
+  / "run" _ variable:(TextVar / DataVar) !CommandReference header:UnderHeader? {
+      const variableText = helpers.reconstructRawString([variable]);
+      helpers.validateRunContent(variableText); 
       return helpers.createDirective('run', {
         subtype: 'runCommand',
         command: variableText,
         ...(header ? { underHeader: header } : {})
       }, location());
     }
-  // Parameters for multi-line run directives (e.g., @run (param1, param2) [[...]])
   RunVariableParams
   = "(" _ params:RunParamsList? _ ")" {
       return params || [];
@@ -907,143 +849,80 @@ RunParam
   / identifier:Identifier { return identifier; }
 
 ImportDirective
-  // Named imports with from syntax
-  = "import" _ "[" _ imports:ImportsList _ "]" _ "from" _ content:DirectiveContent _ (LineTerminator / EOF) {
-      // Check if this is a path variable
-      const isPathVar = typeof content === 'string' && 
-        content.startsWith('$') && 
-        !content.startsWith('$HOMEPATH') && 
-        !content.startsWith('$~') && 
-        !content.startsWith('$PROJECTPATH') && 
-        !content.startsWith('$.') &&
-        content.match(/^\$[a-z][a-zA-Z0-9_]*/);
-      
-      helpers.debug("ImportDirective isPathVar:", isPathVar, "for path:", content);
-      
-      // Always validate the path
-      const validatedPath = helpers.validatePath(content);
-      
-      // If this is a path variable, ensure it has the isPathVariable flag
-      if (isPathVar && !validatedPath.isPathVariable) {
-        validatedPath.isPathVariable = true;
+  = "import" _ "[" _ imports:ImportsList _ "]" _ "from" _ "[" pathParts:ImportInterpolatablePathOrEmpty "]" (LineTerminator / EOF) { 
+      const rawPath = helpers.reconstructRawString(pathParts); 
+      const validatedPath = helpers.validatePath(rawPath); 
+      if (validatedPath && typeof validatedPath === 'object') {
+        validatedPath.interpolatedValue = pathParts;
       }
-      
-      // Return the validated path and subtype
-      return helpers.createDirective('import', {
+      const isPathVar = validatedPath?.isPathVariable || (pathParts.length === 1 && pathParts[0].type === 'VariableReference' && pathParts[0].valueType === 'path');
+      if (isPathVar && validatedPath && !validatedPath.isPathVariable) {
+        validatedPath.isPathVar = true;
+      }
+      const directiveData = {
         subtype: helpers.getImportSubtype(imports),
         path: validatedPath,
         imports: imports
-      }, location());
+      };
+      return helpers.createDirective('import', directiveData, location());
     }
-  / // Named imports with from syntax using variable
-    "import" _ "[" _ imports:ImportsList _ "]" _ "from" __ variable:Variable _ (LineTerminator / EOF) {
-      // Get the variable text directly from the variable node
-      const variableText = variable.valueType === 'text' 
-        ? `{{${variable.identifier}}}` 
-        : variable.valueType === 'data' 
-          ? `{{${variable.identifier}${variable.fields.map(f => {
-              if (f.type === 'field') return '.' + f.value;
-              if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
-              return '';
-            }).join('')}}}` 
-          : variable.valueType === 'path' 
-            ? `$${variable.identifier}` 
-            : '';
-            
-      // Check if this is a path variable
-      const isPathVar = variable.valueType === 'path';
-      
-      // Validate the path (variableText)
+  / "import" _ "[" _ imports:ImportsList _ "]" _ "from" __ variable:Variable (LineTerminator / EOF) {
+      const variableText = helpers.reconstructRawString([variable]); 
       const validatedPath = helpers.validatePath(variableText);
-
-      // For path variables, ensure the isPathVariable flag is set
-      if (isPathVar && !validatedPath.isPathVariable) {
+      if (variable.valueType === 'path' && validatedPath && !validatedPath.isPathVariable) {
           validatedPath.isPathVariable = true;
       }
-        
-      // Return the validated path and subtype
-      return helpers.createDirective('import', {
+      const directiveData = {
         subtype: helpers.getImportSubtype(imports),
         path: validatedPath,
         imports: imports
-      }, location());
+      };
+      return helpers.createDirective('import', directiveData, location());
     }
   / // Traditional import (backward compatibility)
-    "import" _ content:DirectiveContent _ (LineTerminator / EOF) {
-      // Check if this is a path variable
-      const isPathVar = typeof content === 'string' && 
-        content.startsWith('$') && 
-        !content.startsWith('$HOMEPATH') && 
-        !content.startsWith('$~') && 
-        !content.startsWith('$PROJECTPATH') && 
-        !content.startsWith('$.') &&
-        content.match(/^\$[a-z][a-zA-Z0-9_]*/);
-      
-      helpers.debug("ImportDirective isPathVar:", isPathVar, "for path:", content);
-      
-      // Always validate the path
-      const validatedPath = helpers.validatePath(content);
-      
-      // If this is a path variable, ensure it has the isPathVariable flag
-      if (isPathVar && !validatedPath.isPathVariable) {
+    "import" _ "[" pathParts:ImportInterpolatablePathOrEmpty "]" (LineTerminator / EOF) { 
+      const rawPath = helpers.reconstructRawString(pathParts); 
+      const validatedPath = helpers.validatePath(rawPath); 
+      if (validatedPath && typeof validatedPath === 'object') {
+        validatedPath.interpolatedValue = pathParts;
+      }
+      const isPathVar = validatedPath?.isPathVariable || (pathParts.length === 1 && pathParts[0].type === 'VariableReference' && pathParts[0].valueType === 'path');
+      if (isPathVar && validatedPath && !validatedPath.isPathVariable) {
         validatedPath.isPathVariable = true;
       }
-      
       const implicitImports = [{name: "*", alias: null}];
-      // Return the validated path and subtype
-      return helpers.createDirective('import', {
-        subtype: helpers.getImportSubtype(implicitImports), // Always importAll
+      const directiveData = {
+        subtype: helpers.getImportSubtype(implicitImports),
         path: validatedPath,
         imports: implicitImports
-      }, location());
+      };
+      return helpers.createDirective('import', directiveData, location());
     }
   / // Traditional import with variable (backward compatibility)
-    "import" __ variable:Variable _ (LineTerminator / EOF) {
-      // Get the variable text directly from the variable node
-      const variableText = variable.valueType === 'text' 
-        ? `{{${variable.identifier}}}` 
-        : variable.valueType === 'data' 
-          ? `{{${variable.identifier}${variable.fields.map(f => {
-              if (f.type === 'field') return '.' + f.value;
-              if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
-              return '';
-            }).join('')}}}` 
-          : variable.valueType === 'path' 
-            ? `$${variable.identifier}` 
-            : '';
-      
-      // Check if this is a path variable
-      const isPathVar = variable.valueType === 'path';
-
-      // Always validate the path (variableText)
+    "import" __ variable:Variable (LineTerminator / EOF) {
+      const variableText = helpers.reconstructRawString([variable]); 
       const validatedPath = helpers.validatePath(variableText);
-        
-      // For path variables, ensure the isPathVariable flag is set
-      if (isPathVar && !validatedPath.isPathVariable) {
+      if (variable.valueType === 'path' && validatedPath && !validatedPath.isPathVariable) {
           validatedPath.isPathVariable = true;
       }
-        
       const implicitImports = [{name: "*", alias: null}];
-      // Return the validated path and subtype
-      return helpers.createDirective('import', {
-        subtype: helpers.getImportSubtype(implicitImports), // Always importAll
+      const directiveData = {
+        subtype: helpers.getImportSubtype(implicitImports),
         path: validatedPath,
         imports: implicitImports
-      }, location());
+      };
+      return helpers.createDirective('import', directiveData, location());
     }
 
 // Rules for parsing import lists
 ImportsList
-  = // Wildcard import
-    "*" {
+  = "*" {
       return [{name: "*", alias: null}];
     }
-  / // Named imports (possibly with aliases)
-    first:ImportItem rest:(_ "," _ item:ImportItem { return item; })* {
+  / first:ImportItem rest:(_ "," _ item:ImportItem { return item; })* {
       return [first, ...rest];
     }
-  / // Empty list
-    _ {
+  / _ {
       return [];
     }
 
@@ -1059,13 +938,8 @@ ImportAlias
 
 EmbedDirective
   = "embed" embedResult:_EmbedRHS header:HeaderLevel? under:UnderHeader? {
-      helpers.debug("Standalone EmbedDirective parsed via EmbedRHS:", JSON.stringify(embedResult));
-
-      // Create the final directive node using the result from EmbedRHS
-      // EmbedRHS already contains the subtype and specific data (path, content, etc.)
-      // We just need to add the header/underHeader if they exist.
       const directiveData = {
-        ...embedResult, // Spread the result from EmbedRHS ({ subtype, path/content, options, etc. })
+        ...embedResult,
         ...(header ? { headerLevel: header } : {}),
         ...(under ? { underHeader: under } : {})
       };
@@ -1075,11 +949,10 @@ EmbedDirective
   / "embed" _ "{" _ names:NameList _ "}" _ "from" _ content:DirectiveContent options:DirectiveOptions? header:HeaderLevel? under:UnderHeader? {
     const [path, section] = content.split('#').map(s => s.trim());
     
-    // Validate that the content is a path
     helpers.validateEmbedPath(path);
     
     return helpers.createDirective('embed', {
-      subtype: 'embedPath', // Added subtype
+      subtype: 'embedPath',
       path: helpers.validatePath(path),
       ...(section ? { section } : {}),
       names,
@@ -1118,8 +991,6 @@ DefineDirective
       helpers.validateDefineContent(value.value);
     }
     
-    // For define directives, we need to structure it differently
-    // The command field should be at the top level
     if (value.type === "run") {
       return helpers.createDirective('define', {
         name: id.name,
@@ -1161,7 +1032,6 @@ DefineParams
 
 DefineValue
   = "@run" runResult:_RunRHS {
-      helpers.debug("DefineValue parsed @run via RunRHS:", JSON.stringify(runResult));
       return {
         type: "run",
         value: runResult
@@ -1176,7 +1046,6 @@ DefineValue
 
 DirectiveContent
   = "[" content:BracketContent "]" {
-    helpers.debug("DirectiveContent parsed:", content);
     return content;
   }
 
@@ -1240,9 +1109,6 @@ MultilineTemplateLiteral
 
 DataDirective
   = "data" _ id:Identifier schema:SchemaValidation? _ "=" _ value:DataValue {
-    // No longer check for specific inputs or callerInfo here
-    
-    // Always create the directive using the parsed value
     return helpers.createDirective('data', {
       identifier: id,
       ...(schema ? { schema } : {}),
@@ -1250,7 +1116,7 @@ DataDirective
       ...(value.source === "embed" ? { embed: value.value } :
           value.source === "run" ? { run: value.value } :
           value.source === "call" ? { call: value.value } :
-          { value: value.value }) // Pass literal value directly
+          { value: value.value })
     }, location());
   }
 
@@ -1259,17 +1125,15 @@ SchemaValidation
 
 DataValue
   = "@embed" embedResult:_EmbedRHS {
-      helpers.debug("DataValue parsed @embed via EmbedRHS:", JSON.stringify(embedResult));
       return {
         source: "embed",
-        embed: embedResult // EmbedRHS already returns the structured { subtype, ... }
+        embed: embedResult
       };
     }
   / "@run" runResult:_RunRHS {
-      helpers.debug("DataValue parsed @run via RunRHS:", JSON.stringify(runResult));
       return {
         source: "run",
-        run: runResult // RunRHS already returns the structured { subtype, ... }
+        run: runResult
       };
     }
   / "@call" _ api:Identifier "." method:Identifier _ content:DirectiveContent {
@@ -1396,17 +1260,15 @@ TextDirective
 
 TextValue
   = "@embed" embedResult:_EmbedRHS {
-      helpers.debug("TextValue parsed @embed via EmbedRHS:", JSON.stringify(embedResult));
       return {
         source: "embed",
-        embed: embedResult // EmbedRHS already returns the structured { subtype, ... }
+        embed: embedResult
       };
     }
   / "@run" runResult:_RunRHS {
-      helpers.debug("TextValue parsed @run via RunRHS:", JSON.stringify(runResult));
       return {
         source: "run",
-        run: runResult // RunRHS already returns the structured { subtype, ... }
+        run: runResult
       };
     }
   / "@call" _ api:Identifier "." method:Identifier _ content:DirectiveContent {
@@ -1435,45 +1297,28 @@ TextValue
 
 PathDirective
   = "path" __ id:Identifier __ "=" __ rhs:(
-      // Path Variable alternative
       pv:PathVar {
-        helpers.debug("PathDirective parsed PathVar:", pv);
         const pathObject = helpers.validatePath(pv.identifier, { context: 'pathDirective' });
-        // Attach the original PathVar node
         if (pathObject && typeof pathObject === 'object') {
           pathObject.variableNode = pv;
         } else {
-          // Handle case where validatePath didn't return an object (shouldn't happen for vars)
-          // Return a basic structure if validation fails to provide context
           return { identifier: id, path: { raw: pv.identifier, isPathVariable: true, variableNode: pv, structured: {} } };
         }
         return { identifier: id, path: pathObject };
       }
-    / // Interpolated String Literal alternative
-      interpolatedArray:InterpolatedStringLiteral {
-        helpers.debug("PathDirective parsed InterpolatedStringLiteral:", interpolatedArray);
-        const rawString = helpers.reconstructRawString(interpolatedArray);
-        helpers.debug("PathDirective reconstructed raw string:", rawString);
-        const pathObject = helpers.validatePath(rawString, { context: 'pathDirective' });
-        // Attach the original interpolated array
-        if (pathObject && typeof pathObject === 'object') {
-          pathObject.interpolatedValue = interpolatedArray;
-          helpers.debug("Attached interpolatedValue to path object in PathDirective");
-        } else {
-          // Handle case where validatePath didn't return an object
-          helpers.debug("Warning: validatePath did not return an object in PathDirective.");
-          // Return a basic structure if validation fails to provide context
-          return { identifier: id, path: { raw: rawString, structured: {}, interpolatedValue: interpolatedArray } };
-        }
-        return { identifier: id, path: pathObject };
+    / interpolatedArray:InterpolatedStringLiteral {
+      const rawString = helpers.reconstructRawString(interpolatedArray);
+      const pathObject = helpers.validatePath(rawString, { context: 'pathDirective' });
+      if (pathObject && typeof pathObject === 'object') {
+        pathObject.interpolatedValue = interpolatedArray;
+      } else {
+        return { identifier: id, path: { raw: rawString, structured: {}, interpolatedValue: interpolatedArray } };
       }
-      // NOTE: If neither PathVar nor InterpolatedStringLiteral matches the 'rhs',
-      // this rule will fail to parse, as intended. The grammar does NOT allow
-      // unquoted values like `$HOMEPATH/file` here.
-      // The issue of the test passing likely lies in the test runner/assertion logic.
-    )
-    _ (LineTerminator / EOF) // <<< ADDED: Ensure RHS consumes whole line
-    { return helpers.createDirective('path', rhs, location()); } // Wrap the result in a proper DirectiveNode
+      return { identifier: id, path: pathObject };
+    }
+  )
+   (LineTerminator / EOF)
+  { return helpers.createDirective('path', rhs, location()); }
 
 VarDirective
   = "var" _ id:Identifier _ "=" _ value:VarValue {
@@ -1502,14 +1347,12 @@ VarValue
 CodeFence
   = opener:BacktickSequence lang:CodeFenceLangID? "\n"
     content:(!(&{ return true; } closer:BacktickSequence &{
-      return closer.length === opener.length;  // Only match exact length
-    }) c:. { return c; })*  // Allow empty content
+      return closer.length === opener.length;
+    }) c:. { return c; })*
     closer:BacktickSequence !{
-      // Fail if the closer doesn't match the opener
       return closer.length !== opener.length;
     } "\n"? {
       const rawContent = content.join('');
-      // Default to true unless explicitly set to false
       const preserveCodeFences = options?.preserveCodeFences !== false;
       const finalContent = preserveCodeFences 
         ? opener.join('') + (lang ? lang : '') + '\n' + rawContent + (rawContent ? '' : '\n') + closer.join('')
@@ -1531,48 +1374,34 @@ CodeFenceLangID
   = chars:[^`\r\n]+ { return chars.join(''); }
 
 PathValue
-  = interpolatedArray:InterpolatedStringLiteral { // Changed from str:StringLiteral
-      // Reconstruct the raw string from the array of nodes
+  = interpolatedArray:InterpolatedStringLiteral {
       const rawString = helpers.reconstructRawString(interpolatedArray);
-      helpers.debug("PathValue reconstructed raw string:", rawString, "from array:", JSON.stringify(interpolatedArray));
-
-      // Get the validated path from validatePath, passing context
       const validationResult = helpers.validatePath(rawString, { context: 'pathDirective' });
 
-      // Attach the interpolated array to the result
-      // Ensure validationResult is an object before attaching
       if (validationResult && typeof validationResult === 'object') {
         validationResult.interpolatedValue = interpolatedArray;
-        helpers.debug("Attached interpolatedValue to validationResult");
-      } else {
-        helpers.debug("Warning: validatePath did not return an object. Cannot attach interpolatedValue.");
-        // Consider how to handle this case - maybe wrap non-objects?
-        // For now, just return the original result if it wasn't an object.
       }
 
       return validationResult;
     }
-  / variable:PathVar { // Allow PathVariables directly
-    helpers.debug("PathValue parsed PathVar:", JSON.stringify(variable));
-    // Return a structure consistent with validatePath for path variables
+  / variable:PathVar {
     return {
         raw: `$${variable.identifier}`,
         isPathVariable: true,
         structured: {
-          base: '.', // Default base for path variables in PathDirective?
-          segments: [`$${variable.identifier}`], // Segment is the var itself
+          base: '.',
+          segments: [`$${variable.identifier}`],
           variables: {
             path: [variable.identifier]
           },
-          cwd: false // Path variables are not CWD relative
+          cwd: false
         }
-        // No interpolatedValue for a direct PathVar
       };
   }
 
 // Brackets [...] Interpolation
 BracketAllowedLiteralChar
-  = !(']' / '{{' / '$') char:. { return char; } // Allow any char except ], {{, and $
+  = !(']' / '{{' / '$') char:. { return char; }
 
 BracketLiteralTextSegment
   = chars:BracketAllowedLiteralChar+ {
@@ -1584,8 +1413,7 @@ BracketPart
   = !( ']' / EOF ) part:(Variable / BracketLiteralTextSegment) { return part; }
 
 BracketInterpolatableContent
-  = parts:BracketPart+ { // Repeat the guarded part
-      // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
+  = parts:BracketPart+ {
       return parts;
     }
 
@@ -1605,3 +1433,51 @@ EOF
   = !.
 
 // --- End Whitespace & EOF Rules ---
+
+// <<< START NEW RULES for Import Path Interpolation >>>
+// Similar to BracketInterpolatableContent but specific chars disallowed
+
+ImportPathAllowedLiteralChar
+  = !(']' / '{{' / '$') char:. { return char; }
+
+ImportPathLiteralTextSegment
+  = chars:ImportPathAllowedLiteralChar+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
+    }
+
+// Define a single part that can appear inside import path brackets
+ImportPathPart
+  = !( ']' / EOF ) part:(Variable / ImportPathLiteralTextSegment) { 
+      return part; 
+    }
+
+ImportInterpolatablePath
+  = parts:ImportPathPart+ {
+      return parts;
+    }
+
+ImportInterpolatablePathOrEmpty
+  = result:ImportInterpolatablePath? {
+      return result || []; // Return empty array if no content
+    }
+// <<< END NEW RULES >>>
+
+// +++ START DECOMPOSED IMPORT RULES FOR LOGGING +++
+_ImportKeyword
+  = "import" { helpers.debug('Import Trace: Matched \"import\"'); return true; }
+
+_ImportMandatoryWhitespace
+  = __ { helpers.debug('Import Trace: Matched __'); return true; }
+
+_ImportOpeningBracket
+  = "[" { helpers.debug('Import Trace: Matched \"[\"'); return true; }
+
+_ImportPathContent
+  = pathParts:ImportInterpolatablePathOrEmpty { helpers.debug('Import Trace: Matched pathParts', `length=${pathParts.length}`); return pathParts; } // Return the matched parts
+
+_ImportClosingBracket
+  = "]" { helpers.debug('Import Trace: Matched \"\"]\"'); return true; }
+
+_ImportEnd
+  = (LineTerminator / EOF) { helpers.debug('Import Trace: Matched End'); return true; }
+// +++ END DECOMPOSED IMPORT RULES +++

@@ -680,8 +680,12 @@ export class ResolutionService implements IResolutionService {
    * Callers must resolve any variables in the path *before* calling this.
    */
   async resolvePath(resolvedPathString: string, context: ResolutionContext): Promise<MeldPath> {
+    // +++ Log Entry +++
+    process.stdout.write(`DEBUG: [ResolutionService.resolvePath ENTRY] pathString='${resolvedPathString}'\n`);
     logger.debug(`Validating resolved path string: '${resolvedPathString}'`, { context: context.flags });
     const validationContext = this.createValidationContext(context);
+    // +++ Log Context +++
+    process.stdout.write(`DEBUG: [ResolutionService.resolvePath] ValidationContext: ${JSON.stringify(validationContext)}\n`);
 
     try {
       // Directly validate the provided resolved string

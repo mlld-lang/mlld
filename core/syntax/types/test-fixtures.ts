@@ -165,7 +165,7 @@ export const embedTests: ParserTestCase[] = [
         path: {
           raw: 'file.md',
           interpolatedValue: [
-            { type: 'Text', content: 'file.md' }
+            { type: 'Text', content: 'file.md#section:2' }
           ],
           normalized: './file.md',
           structured: {
@@ -229,6 +229,9 @@ export const importTests: ParserTestCase[] = [
         imports: [{ name: '*', alias: null }],
         path: {
           raw: 'utilities.meld',
+          interpolatedValue: [
+            { type: 'Text', content: 'utilities.meld' }
+          ],
           normalized: './utilities.meld',
           structured: {
             base: '.',
@@ -252,6 +255,9 @@ export const importTests: ParserTestCase[] = [
         imports: [{ name: '*', alias: null }],
         path: {
           raw: '$pathvar',
+          interpolatedValue: [
+            { type: 'VariableReference', valueType: 'path', identifier: 'pathvar', isSpecial: false, isVariableReference: true }
+          ],
           normalized: './$pathvar',
           isPathVariable: true,
           structured: {
@@ -278,6 +284,10 @@ export const importTests: ParserTestCase[] = [
         imports: [{ name: '*', alias: null }],
         path: {
           raw: '$HOMEPATH/config.meld',
+          interpolatedValue: [
+            { type: 'VariableReference', valueType: 'path', identifier: 'HOMEPATH', isSpecial: true, isVariableReference: true },
+            { type: 'Text', content: '/config.meld' }
+          ],
           normalized: '$HOMEPATH/config.meld',
           structured: {
             base: '$HOMEPATH',
