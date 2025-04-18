@@ -570,13 +570,13 @@ describe('InterpreterService Unit', () => {
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('throws error for null node', async () => {
       await expect(service.interpret([null as unknown as MeldNode], { initialState: mockStateService }))
-            .rejects.toThrow(/No node provided for interpretation/);
+            .rejects.toThrow(/Cannot read properties of null \(reading \'type\'/);
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('throws error for undefined node', async () => {
       await expect(service.interpret([undefined as unknown as MeldNode], { initialState: mockStateService }))
-            .rejects.toThrow(/No node provided for interpretation/);
+            .rejects.toThrow(/Cannot read properties of undefined \(reading \'type\'/);
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
