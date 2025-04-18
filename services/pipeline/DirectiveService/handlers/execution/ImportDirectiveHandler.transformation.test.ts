@@ -265,7 +265,7 @@ describe('ImportDirectiveHandler Transformation', () => {
       interpreterServiceClient.interpret.mockResolvedValueOnce(expectedResultState);
 
       mockProcessingContext = createMockProcessingContext(node);
-      const result = await handler.execute(mockProcessingContext as DirectiveProcessingContext) as DirectiveResult;
+      const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext) as DirectiveResult;
 
       // Assertions
       expect(result.replacement).toEqual<TextNode>({
@@ -319,7 +319,7 @@ describe('ImportDirectiveHandler Transformation', () => {
       );
 
       mockProcessingContext = createMockProcessingContext(node);
-      const result = await handler.execute(mockProcessingContext as DirectiveProcessingContext) as DirectiveResult;
+      const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext) as DirectiveResult;
 
       expect(result.state).toBe(stateService);
       expect(result.replacement).toEqual<TextNode>({
@@ -349,7 +349,7 @@ describe('ImportDirectiveHandler Transformation', () => {
       mockProcessingContext = createMockProcessingContext(node);
 
       await expectToThrowWithConfig(
-        () => handler.execute(mockProcessingContext as DirectiveProcessingContext),
+        () => handler.handle(mockProcessingContext as DirectiveProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.FILE_NOT_FOUND, 

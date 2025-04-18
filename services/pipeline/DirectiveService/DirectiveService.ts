@@ -16,7 +16,7 @@ import { inject, delay, injectable } from 'tsyringe';
 import { container } from 'tsyringe';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
-import { DirectiveResult } from './interfaces/DirectiveTypes.js';
+import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
@@ -30,6 +30,16 @@ import type { SourceLocation as SyntaxSourceLocation } from '@core/syntax/types'
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { DirectiveLocation } from '@core/errors/MeldDirectiveError.js';
+import { 
+    VariableType, 
+    VariableMetadata, 
+    VariableDefinition, 
+    createTextVariable, 
+    createDataVariable, 
+    createPathVariable, 
+    createCommandVariable 
+} from '@core/types/variables.js';
+import { MeldVariable } from '@core/types/variables.js';
 
 // Import all handlers
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
@@ -372,7 +382,7 @@ export class DirectiveService implements IDirectiveService {
   /**
    * Handle a directive node
    */
-  public async handleDirective(node: DirectiveNode, context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
+  public async handleDirective(node: DirectiveNode, context: DirectiveProcessingContext): Promise<DirectiveResult> {
     this.ensureInitialized();
     this.ensureFactoryInitialized(); // Ensure Resolution Client Factory is ready
     
@@ -452,22 +462,47 @@ export class DirectiveService implements IDirectiveService {
       this.logger.debug(`Executing handler for directive: ${kind}`);
       
       // Use the specifically cast handler
-      const result = await specificHandler.execute(processingContext); 
+      const result: DirectiveResult = await specificHandler.handle(processingContext); 
       
-      // Check if the result looks like an IStateService instance (has key methods)
-      if (result && typeof (result as IStateService).getTextVar === 'function' && typeof (result as IStateService).setDataVar === 'function') {
-        this.logger.debug(`Handler for ${kind} returned original state service instance.`);
-        // No state update needed as it's the same object
-        return result; // Return the state service object itself
+      // <<< NEW LOGIC: Apply state changes >>>
+      if (result.stateChanges?.variables) {
+        this.logger.debug(`Applying state changes from ${kind} handler`, { count: Object.keys(result.stateChanges.variables).length });
+        for (const [name, varDef] of Object.entries(result.stateChanges.variables)) {
+          // Reconstruct the full variable object from the definition
+          let variableToSet: MeldVariable;
+          const metadata = varDef.metadata; // Metadata should be complete
+          
+          // Use type guards or switch statement for safety
+          switch (varDef.type) {
+            case VariableType.TEXT:
+              variableToSet = createTextVariable(name, varDef.value as string, metadata);
+              break;
+            case VariableType.DATA:
+              variableToSet = createDataVariable(name, varDef.value, metadata);
+              break;
+            case VariableType.PATH:
+              // Ensure value matches IFilesystemPathState | IUrlPathState
+              variableToSet = createPathVariable(name, varDef.value as any, metadata);
+              break;
+            case VariableType.COMMAND:
+              variableToSet = createCommandVariable(name, varDef.value as ICommandDefinition, metadata);
+              break;
+            default:
+              this.logger.warn(`Unknown variable type in stateChanges from ${kind} handler: ${varDef.type}`);
+              continue; // Skip unknown types
+          }
+          
+          // Apply the change to the state service from the *original context*
+          await context.state.setVariable(variableToSet);
+          this.logger.debug(`Applied variable change: ${name}`, { type: varDef.type });
+        }
       }
-      // NEW: Check for DirectiveResult-like object (structure check)
-      else if (result && typeof result === 'object' && 'state' in result) {
-        // It looks like a DirectiveResult, potentially with a replacement
-        this.logger.debug(`Handler for ${kind} returned DirectiveResult-like object.`);
-        // Transformation application (calling stateService.transformNode) should be handled
-        // by the caller (InterpreterService) which knows the node's index.
-        return result; // Return the result object
-      }
+      // <<< End state change application >>>
+
+      // <<< RETURN the result object unchanged >>>
+      // The caller (InterpreterService) will handle the replacement nodes
+      // and use the (potentially modified) context.state.
+      return result;
 
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown directive processing error';
@@ -669,24 +704,33 @@ export class DirectiveService implements IDirectiveService {
       };
 
       try {
+        // handleDirective now returns DirectiveResult { stateChanges?, replacement? }
         const result = await this.handleDirective(node, nodeProcessingContext);
-
-        // Correctly handle return type
-        let updatedState: IStateService;
-        if (result && typeof result === 'object' && 'replacement' in result && 'state' in result) {
-           // If it's a DirectiveResult, use its state
-           updatedState = result.state;
-        } else if (result && typeof result === 'object' && 'getVariable' in result) {
-           // If it's directly an IStateService
-           updatedState = result;
-        } else {
-           // Handle unexpected result type
-            this.logger.error('Unexpected result type from handleDirective', { result });
-            throw new DirectiveError('Invalid result from handler', node.directive.kind, DirectiveErrorCode.EXECUTION_FAILED, { node });
+        
+        // --- Apply state changes logic duplicated/moved from handleDirective --- 
+        // (Could be refactored into a helper method)
+        const stateToModify = nodeProcessingContext.state; // Get the state used for this node
+        if (result.stateChanges?.variables) {
+          this.logger.debug(`Applying state changes in processDirectives from ${node.directive.kind}`, { count: Object.keys(result.stateChanges.variables).length });
+          for (const [name, varDef] of Object.entries(result.stateChanges.variables)) {
+            let variableToSet: MeldVariable;
+            const metadata = varDef.metadata;
+            switch (varDef.type) {
+              case VariableType.TEXT: variableToSet = createTextVariable(name, varDef.value as string, metadata); break;
+              case VariableType.DATA: variableToSet = createDataVariable(name, varDef.value, metadata); break;
+              case VariableType.PATH: variableToSet = createPathVariable(name, varDef.value as any, metadata); break;
+              case VariableType.COMMAND: variableToSet = createCommandVariable(name, varDef.value as ICommandDefinition, metadata); break;
+              default: continue;
+            }
+            await stateToModify.setVariable(variableToSet);
+          }
         }
+        // --- End Apply state changes --- 
 
-        // Merge the updated state back into the current loop state
-        currentState.mergeChildState(updatedState);
+        // Merge the node's modified state back into the loop's current state
+        currentState.mergeChildState(stateToModify); 
+
+        // NOTE: Replacement node handling is deferred to InterpreterService
 
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown directive processing error';

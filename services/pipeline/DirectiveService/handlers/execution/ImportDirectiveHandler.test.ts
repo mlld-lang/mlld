@@ -208,7 +208,7 @@ describe('ImportDirectiveHandler', () => {
     it('should handle $. alias for project path', async () => {
       const node = createDirectiveNode('import', { path: { raw: '$./samples/nested.meld', structured: { base: '.', segments: ['samples', 'nested'], url: false }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' }) as DirectiveNode<ImportDirectiveData>;
       mockProcessingContext = createMockProcessingContext(node);
-      await handler.execute(mockProcessingContext);
+      await handler.handle(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path.raw, mockProcessingContext.resolutionContext);
       expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedProjectPath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(resolvedProjectPath);
@@ -219,7 +219,7 @@ describe('ImportDirectiveHandler', () => {
     it('should handle $PROJECTPATH for project path', async () => {
       const node = createDirectiveNode('import', { path: { raw: '$PROJECTPATH/samples/nested.meld', structured: { base: '.', segments: ['samples', 'nested'], url: false }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' }) as DirectiveNode<ImportDirectiveData>;
       mockProcessingContext = createMockProcessingContext(node);
-      await handler.execute(mockProcessingContext);
+      await handler.handle(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path.raw, mockProcessingContext.resolutionContext);
       expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedProjectPath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(resolvedProjectPath);
@@ -229,7 +229,7 @@ describe('ImportDirectiveHandler', () => {
     it('should handle $~ alias for home path', async () => {
       const node = createDirectiveNode('import', { path: { raw: '$~/examples/basic.meld', structured: { base: '.', segments: ['examples', 'basic'], url: false }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' }) as DirectiveNode<ImportDirectiveData>;
       mockProcessingContext = createMockProcessingContext(node);
-      await handler.execute(mockProcessingContext);
+      await handler.handle(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path.raw, mockProcessingContext.resolutionContext);
       expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedHomePath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(resolvedHomePath);
@@ -239,7 +239,7 @@ describe('ImportDirectiveHandler', () => {
     it('should handle $HOMEPATH for home path', async () => {
       const node = createDirectiveNode('import', { path: { raw: '$HOMEPATH/examples/basic.meld', structured: { base: '.', segments: ['examples', 'basic'], url: false }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' }) as DirectiveNode<ImportDirectiveData>;
       mockProcessingContext = createMockProcessingContext(node);
-      await handler.execute(mockProcessingContext);
+      await handler.handle(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path.raw, mockProcessingContext.resolutionContext);
       expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedHomePath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(resolvedHomePath);
@@ -251,7 +251,7 @@ describe('ImportDirectiveHandler', () => {
       const node = createDirectiveNode('import', { path: { raw: '$PROJECTPATH/nonexistent.meld', structured: { base: '.', segments: ['nonexistent'], url: false }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' }) as DirectiveNode<ImportDirectiveData>;
       mockProcessingContext = createMockProcessingContext(node);
       await expectToThrowWithConfig(
-        () => handler.execute(mockProcessingContext),
+        () => handler.handle(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.FILE_NOT_FOUND,
@@ -265,7 +265,7 @@ describe('ImportDirectiveHandler', () => {
       const importLocation = createLocation(5, 1, undefined, undefined, '/project/main.meld');
       const node = createDirectiveNode('import', { path: { raw: '$docs/file.meld', structured: { base: '.', segments: ['file.meld'], variables: { path: ['docs'] } }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' }, importLocation) as DirectiveNode<ImportDirectiveData>;
       mockProcessingContext = createMockProcessingContext(node);
-      await handler.execute(mockProcessingContext);
+      await handler.handle(mockProcessingContext);
       // Expect resolveInContext to be called with the raw path
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path.raw, mockProcessingContext.resolutionContext);
       // Expect resolvePath to be called with the *resolved* path based on the mock
@@ -346,6 +346,7 @@ describe('ImportDirectiveHandler', () => {
       stateService.createChildState.mockReset();
       stateService.createChildState.mockResolvedValueOnce(mockChildState); 
 
+      await handler.handle(mockProcessingContext);
       await handler.execute(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(importPathRaw, mockProcessingContext.resolutionContext);
       expect(resolutionService.resolvePath).toHaveBeenCalledWith(finalPath, mockProcessingContext.resolutionContext);
@@ -416,7 +417,7 @@ describe('ImportDirectiveHandler', () => {
       stateService.createChildState.mockReset();
       stateService.createChildState.mockResolvedValueOnce(mockChildState);
 
-      const result = await handler.execute(mockProcessingContext);
+      const result = await handler.handle(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(importPathRaw, mockProcessingContext.resolutionContext);
       expect(resolutionService.resolvePath).toHaveBeenCalledWith(finalPath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalPath);
@@ -440,7 +441,7 @@ describe('ImportDirectiveHandler', () => {
       const validationError = new DirectiveError('Mock validation error', 'import', DirectiveErrorCode.VALIDATION_FAILED);
       validationService.validate.mockImplementationOnce(async () => { throw validationError; }); 
       await expectToThrowWithConfig(
-        () => handler.execute(mockProcessingContext),
+        () => handler.handle(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.VALIDATION_FAILED,
@@ -457,7 +458,7 @@ describe('ImportDirectiveHandler', () => {
       (resolutionService.resolveInContext as any).mockReset();
       (resolutionService.resolveInContext as any).mockRejectedValueOnce(resolutionError);
       await expectToThrowWithConfig(
-        () => handler.execute(mockProcessingContext),
+        () => handler.handle(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.RESOLUTION_FAILED,
@@ -478,7 +479,7 @@ describe('ImportDirectiveHandler', () => {
       (fileSystemService.exists as any).mockReset();
       (fileSystemService.exists as any).mockResolvedValue(false);
       await expectToThrowWithConfig(
-        () => handler.execute(mockProcessingContext),
+        () => handler.handle(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.FILE_NOT_FOUND,
@@ -504,7 +505,7 @@ describe('ImportDirectiveHandler', () => {
       circularityService.beginImport.mockReset();
       circularityService.beginImport.mockImplementationOnce(() => { throw circularError; }); 
       await expectToThrowWithConfig(
-        () => handler.execute(mockProcessingContext),
+        () => handler.handle(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.CIRCULAR_REFERENCE,
@@ -531,7 +532,7 @@ describe('ImportDirectiveHandler', () => {
       (parserService.parse as any).mockReset();
       (parserService.parse as any).mockRejectedValueOnce(parseError);
       await expectToThrowWithConfig(
-        () => handler.execute(mockProcessingContext),
+        () => handler.handle(mockProcessingContext),
         {
           type: 'DirectiveError',
           code: DirectiveErrorCode.EXECUTION_FAILED,
@@ -570,7 +571,7 @@ describe('ImportDirectiveHandler', () => {
       // No need for spyOn stateService.createChildState here, already mocked above
       
       // Use rejects.toThrow for async error assertion
-      await expect(handler.execute(mockProcessingContext)).rejects.toThrowError(
+      await expect(handler.handle(mockProcessingContext)).rejects.toThrowError(
           expect.objectContaining({
               name: 'DirectiveError',
               code: DirectiveErrorCode.EXECUTION_FAILED,
@@ -597,7 +598,7 @@ describe('ImportDirectiveHandler', () => {
           (fileSystemService.readFile as any).mockReset();
           (fileSystemService.readFile as any).mockRejectedValueOnce(readError);
           await expectToThrowWithConfig(
-              () => handler.execute(mockProcessingContext),
+              () => handler.handle(mockProcessingContext),
               {
                   type: 'DirectiveError',
                   code: DirectiveErrorCode.EXECUTION_FAILED,

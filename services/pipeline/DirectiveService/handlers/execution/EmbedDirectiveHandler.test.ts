@@ -203,7 +203,7 @@ describe('EmbedDirectiveHandler', () => {
       vi.spyOn(fileSystemService, 'exists').mockResolvedValue(true);
       vi.spyOn(fileSystemService, 'readFile').mockResolvedValue('Some file content.');
 
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
 
       expect(validationService.validate).toHaveBeenCalledWith(node);
       // Expect resolvePath to be called with the string RETURNED BY resolveInContext
@@ -230,7 +230,7 @@ describe('EmbedDirectiveHandler', () => {
       vi.spyOn(fileSystemService, 'readFile').mockResolvedValue(fullFileContent);
       vi.spyOn(resolutionService, 'extractSection').mockResolvedValue(extractedContent);
 
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
 
       expect(validationService.validate).toHaveBeenCalledWith(node);
       expect(resolutionService.resolvePath).toHaveBeenCalledWith('./section.md', processingContext.resolutionContext);
@@ -254,11 +254,11 @@ describe('EmbedDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolvePath').mockResolvedValue(resolvedPath);
       vi.spyOn(fileSystemService, 'exists').mockResolvedValue(false);
       
-      await expect(handler.execute(processingContext))
+      await expect(handler.handle(processingContext))
         .rejects.toThrow(DirectiveError); 
       // Check the cause and its details
       try {
-        await handler.execute(processingContext);
+        await handler.handle(processingContext);
       } catch(e: any) {
         expect(e.cause).toBeInstanceOf(MeldFileNotFoundError);
         // Check details.filePath on the cause
@@ -277,10 +277,10 @@ describe('EmbedDirectiveHandler', () => {
       const extractionError = new Error('Section not found');
       vi.spyOn(resolutionService, 'extractSection').mockRejectedValue(extractionError);
       
-      await expectToThrowWithConfig(async () => { await handler.execute(processingContext); }, {
+      await expectToThrowWithConfig(async () => { await handler.handle(processingContext); }, {
           code: DirectiveErrorCode.EXECUTION_FAILED,
       });
-      try { await handler.execute(processingContext); } catch(e: any) { expect(e.cause).toBe(extractionError); }
+      try { await handler.handle(processingContext); } catch(e: any) { expect(e.cause).toBe(extractionError); }
     });
 
     it('should handle error during path resolution', async () => {
@@ -288,8 +288,8 @@ describe('EmbedDirectiveHandler', () => {
       const processingContext = createMockProcessingContext(node);
       const resolutionError = new Error('Cannot resolve path var');
       vi.spyOn(resolutionService, 'resolveInContext').mockRejectedValue(resolutionError);
-      await expect(handler.execute(processingContext)).rejects.toThrow(DirectiveError);
-      await expect(handler.execute(processingContext)).rejects.toHaveProperty('cause', resolutionError);
+      await expect(handler.handle(processingContext)).rejects.toThrow(DirectiveError);
+      await expect(handler.handle(processingContext)).rejects.toHaveProperty('cause', resolutionError);
     });
 
     it('should handle error during file reading', async () => {
@@ -300,8 +300,8 @@ describe('EmbedDirectiveHandler', () => {
       vi.spyOn(fileSystemService, 'exists').mockResolvedValue(true);
       const readError = new Error('Disk read failed');
       vi.spyOn(fileSystemService, 'readFile').mockRejectedValue(readError);
-      await expect(handler.execute(processingContext)).rejects.toThrow(DirectiveError);
-      await expect(handler.execute(processingContext)).rejects.toHaveProperty('cause', readError);
+      await expect(handler.handle(processingContext)).rejects.toThrow(DirectiveError);
+      await expect(handler.handle(processingContext)).rejects.toHaveProperty('cause', readError);
     });
 
     it('should handle variable resolution failure in path', async () => {
@@ -309,8 +309,8 @@ describe('EmbedDirectiveHandler', () => {
       const processingContext = createMockProcessingContext(node);
       const resolutionError = new Error('Var not found');
       vi.spyOn(resolutionService, 'resolveInContext').mockRejectedValue(resolutionError);
-      await expect(handler.execute(processingContext)).rejects.toThrow(DirectiveError);
-      await expect(handler.execute(processingContext)).rejects.toHaveProperty('cause', resolutionError);
+      await expect(handler.handle(processingContext)).rejects.toThrow(DirectiveError);
+      await expect(handler.handle(processingContext)).rejects.toHaveProperty('cause', resolutionError);
     });
     
     it('should handle variable resolution failure in template', async () => {
@@ -320,8 +320,8 @@ describe('EmbedDirectiveHandler', () => {
         const processingContext = createMockProcessingContext(node);
         const resolutionError = new Error('Var not found in template');
         vi.spyOn(resolutionService, 'resolveNodes').mockRejectedValue(resolutionError);
-        await expect(handler.execute(processingContext)).rejects.toThrow(DirectiveError);
-        await expect(handler.execute(processingContext)).rejects.toHaveProperty('cause', resolutionError);
+        await expect(handler.handle(processingContext)).rejects.toThrow(DirectiveError);
+        await expect(handler.handle(processingContext)).rejects.toHaveProperty('cause', resolutionError);
      });
   });
 
@@ -335,7 +335,7 @@ describe('EmbedDirectiveHandler', () => {
       const existsSpy = vi.spyOn(fileSystemService, 'exists');
       const readFileSpy = vi.spyOn(fileSystemService, 'readFile');
 
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith('$docsPath/file.txt', processingContext.resolutionContext);
       expect(existsSpy).not.toHaveBeenCalled();
@@ -353,7 +353,7 @@ describe('EmbedDirectiveHandler', () => {
       const resolvedValue = 'Resolved Text';
       vi.spyOn(resolutionService, 'resolveInContext').mockResolvedValue(resolvedValue);
       
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith('{{textVar}}', processingContext.resolutionContext);
       expect(result).toHaveProperty('replacement');
@@ -367,7 +367,7 @@ describe('EmbedDirectiveHandler', () => {
       const resolvedValue = 'Alice';
       vi.spyOn(resolutionService, 'resolveInContext').mockResolvedValue(resolvedValue);
       
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith('{{dataVar.user.name}}', processingContext.resolutionContext);
       expect(result).toHaveProperty('replacement');
@@ -396,7 +396,7 @@ describe('EmbedDirectiveHandler', () => {
         const resolvedValue = 'User: Alice'; 
         vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValue(resolvedValue);
 
-        const result = await handler.execute(processingContext);
+        const result = await handler.handle(processingContext);
 
         expect(resolutionService.resolveNodes).toHaveBeenCalledWith(templateNodes, processingContext.resolutionContext);
         expect(result).toHaveProperty('replacement');
@@ -417,7 +417,7 @@ describe('EmbedDirectiveHandler', () => {
         vi.spyOn(fileSystemService, 'exists').mockResolvedValue(true);
         vi.spyOn(fileSystemService, 'readFile').mockResolvedValue(fileContent);
 
-        const result = await handler.execute(processingContext);
+        const result = await handler.handle(processingContext);
 
         expect(result).toBeDefined();
         expect(result).not.toBe(stateService);
@@ -438,7 +438,7 @@ describe('EmbedDirectiveHandler', () => {
         vi.spyOn(fileSystemService, 'exists').mockResolvedValue(true);
         vi.spyOn(fileSystemService, 'readFile').mockResolvedValue(fileContent);
 
-        const result = await handler.execute(processingContext);
+        const result = await handler.handle(processingContext);
 
         expect(result).toBeDefined();
         expect(result).toHaveProperty('replacement');

@@ -14,6 +14,9 @@ import type { IInterpreterService } from '@services/pipeline/InterpreterService/
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js'; // Import IOutputService
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+// +++ Import the concrete class +++
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 
 // DI Container is configured by importing @core/di-config.js elsewhere
 
@@ -22,6 +25,9 @@ export { MeldError };
 export type { ProcessOptions };
 // Export other necessary types if needed, e.g.:
 export type { Location, Position } from '@core/types/index.js';
+export type { IResolutionService };
+// +++ Export the concrete class +++
+export { ResolutionService };
 
 // Export the main processing function
 export async function processMeld(content: string, options?: Partial<ProcessOptions>): Promise<string> {

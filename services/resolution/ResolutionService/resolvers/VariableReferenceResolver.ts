@@ -159,9 +159,11 @@ export class VariableReferenceResolver {
     // process.stdout.write(`DEBUG: [VRefResolver.resolve ENTRY] Resolving: ${node.identifier}, Fields: ${node.fields?.length ?? 0}, Strict: ${newContext.strict}, Depth: ${currentDepth}\n`);
 
     try {
+      // +++ Log Before getVariable +++
+      process.stdout.write(`DEBUG: [VRefResolver.resolve] Attempting to get variable: ${node.identifier}, TypeHint: ${node.valueType}, State ID: ${newContext.state?.getStateId() ?? 'N/A'}\n`);
       const variable = await this.getVariable(node, newContext);
-      // logger.debug(`[VRefResolver.resolve] getVariable result for ${node.identifier}: ${variable ? variable.type : 'undefined'}`);
-      // process.stdout.write(`DEBUG: [VRefResolver.resolve] getVariable result for ${node.identifier}: ${variable ? variable.type : 'undefined'}\n`);
+      // +++ Log After getVariable +++
+      process.stdout.write(`DEBUG: [VRefResolver.resolve] Got variable: ${variable ? variable.type : 'undefined'}\n`);
       
       if (!variable) {
           if (!newContext.strict) {
@@ -205,10 +207,16 @@ export class VariableReferenceResolver {
 
       // --- Path Variable Handling --- 
       if (isPathVariable(variable)) {
+          // +++ Log Path Var Handling +++
+          process.stdout.write(`DEBUG: [VRefResolver.resolve] Handling PathVariable: ${node.identifier}\n`);
           logger.debug(`Resolving PathVariable '${node.identifier}'`);
           const meldPathValueState = variable.value; // This is IFilesystemPathState or IUrlPathState
+          // +++ Log Path Value State +++
+          process.stdout.write(`DEBUG: [VRefResolver.resolve] PathValueState: ${JSON.stringify(meldPathValueState)}\n`);
           
           // Revert to returning originalValue. Validation/resolution should happen when path is used.
+          // +++ Log Path Return Value +++
+          process.stdout.write(`DEBUG: [VRefResolver.resolve PathVar EXIT] Returning originalValue: '${meldPathValueState.originalValue}'\n`);
           return meldPathValueState.originalValue; 
       }
       
@@ -348,19 +356,19 @@ export class VariableReferenceResolver {
     const specificType = node.valueType;
     const currentState = context.state; 
     if (!currentState) {
-        // logger.error(`[VarRefResolver.getVariable] No state found in ResolutionContext for '${name}'`);
         process.stderr.write(`ERROR: [VarRefResolver.getVariable] No state found in ResolutionContext for '${name}'\n`);
         return undefined;
     }
-    // process.stdout.write(`DEBUG: [VarRefResolver.getVariable] ENTER for '${name}'. Context State ID: ${currentState.getStateId() ?? 'N/A'}. Tracker: ${this.resolutionTracker ? 'exists' : 'null'}\n`);
-    process.stdout.write(`DEBUG: [VRefResolver.getVariable] ENTER for '${name}'. Specific Type: ${specificType ?? 'any'}, State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
+    // +++ Log getVariable Entry +++
+    process.stdout.write(`DEBUG: [VRefResolver.getVariable ENTRY] name='${name}', specificType=${specificType}, StateID=${currentState.getStateId() ?? 'N/A'}\n`);
 
     this.resolutionTracker?.trackAttemptStart(name, `getVariable (type hint: ${specificType ?? 'any'})`);
     
     // process.stdout.write(`DEBUG: [VarRefResolver.getVariable] Calling context.state.getVariable for '${name}'. StateService Instance State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
     const variable: MeldVariable | undefined = await currentState.getVariable(name, specificType as VariableType | undefined); 
 
-    // process.stdout.write(`DEBUG: [VRefResolver.getVariable] Looked up '${name}' (hint: ${specificType ?? 'any'}). Found: ${variable ? variable.type + ' variable' : 'nothing'}. State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
+    // +++ Log getVariable Success +++
+    process.stdout.write(`DEBUG: [VRefResolver.getVariable EXIT] Found var '${name}' (Type: ${variable?.type}). StateID=${currentState.getStateId() ?? 'N/A'}\n`);
     if (variable) {
         // --- Type checking is now redundant here as getVariable handles it --- 
         // if (specificType && variable.type !== specificType) { ... }
@@ -393,7 +401,8 @@ export class VariableReferenceResolver {
         if (this.resolutionTracker) {
            this.resolutionTracker.trackResolutionAttempt(name, `variable-not-found (type hint: ${specificType ?? 'any'})`, false); 
         }
-        // process.stdout.write(`DEBUG: [VRefResolver.getVariable] EXIT for '${name}' - Not Found. State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
+        // +++ Log getVariable Failure +++
+        process.stdout.write(`DEBUG: [VRefResolver.getVariable EXIT] Var '${name}' not found. StateID=${currentState.getStateId() ?? 'N/A'}\n`);
         return undefined;
     }
   }

@@ -191,6 +191,6 @@ export class DirectiveTestFixture {
       ...executionContextOverrides // Apply top-level context overrides
     };
 
-    return this.handler.execute(context);
+    return this.handler.handle(context);
   }
 } 

@@ -1,6 +1,5 @@
 import type { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types/index.js';
 import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
@@ -31,6 +30,7 @@ import type { EmbedDirectiveData } from '@core/syntax/types/directives.js';
 import { vi } from 'vitest';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 import type { SourceLocation } from '@core/types/common.js';
+import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
 
 export interface ILogger {
   debug: (message: string, ...args: any[]) => void;
@@ -170,7 +170,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
    * @param context - The context in which to execute the directive
    * @returns A DirectiveResult containing the replacement node and state
    */
-  async execute(context: DirectiveProcessingContext): Promise<DirectiveResult> {
+  async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
     const node = context.directiveNode as DirectiveNode;
     const state = context.state;
     const resolutionContext = context.resolutionContext;
@@ -407,14 +407,11 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       const replacementNode = this.createReplacementNode(content, node, context);
       this.logger.debug(`Created replacement node`, { type: replacementNode.type });
 
-      // NOTE: Removed complex interpretation logic that previously existed here.
-      // Embed primarily replaces content textually. The cloned `newState` is usually
-      // sufficient as the returned state. If transformations *after* embedding are
-      // needed, they should occur in the main interpreter loop.
-
+      // Return NEW DirectiveResult shape
+      // Embed doesn't change state variables, so stateChanges is undefined
       return {
-        state: state, // Return the original state from context
-        replacement: replacementNode
+        stateChanges: undefined, 
+        replacement: replacementNode ? [replacementNode] : undefined // Ensure array or undefined
       };
     } catch (error) {
       if (error instanceof DirectiveError) {
@@ -443,8 +440,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         }
       );
     } finally {
-      // Remove incorrect endImport call
-      // this.circularityService.endImport();
+      // Correctly no cleanup needed here for embed
     }
   }
 } 

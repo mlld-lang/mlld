@@ -7,7 +7,7 @@
     "_meld",
     "**/*.test.ts",
     "**/*.spec.ts",
-    "tests/**/*",
+    // "tests/**/*",
     "vitest.config.ts"
   ]
 } 

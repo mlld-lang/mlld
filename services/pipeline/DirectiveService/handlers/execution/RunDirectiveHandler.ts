@@ -5,7 +5,6 @@ import type { IResolutionService } from '@services/resolution/ResolutionService/
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
-import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { ErrorSeverity, MeldError, MeldResolutionError, FieldAccessError } from '@core/errors';
 import { inject, injectable } from 'tsyringe';
@@ -22,10 +21,12 @@ import type { ICommandDefinition } from '@core/types/define.js';
 import { isBasicCommand } from '@core/types/define.js';
 import type { SourceLocation } from '@core/types/common.js';
 import { type VariableMetadata, VariableOrigin } from '@core/types/variables.js';
+import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
 import * as os from 'os';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { createTextVariable, VariableType } from '@core/types/variables.js';
+import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
 
 /**
  * Handler for @run directives
@@ -42,14 +43,6 @@ export class RunDirectiveHandler implements IDirectiveHandler {
     @inject('IResolutionService') private resolutionService: IResolutionService,
     @inject('IFileSystemService') private fileSystemService: IFileSystemService
   ) {}
-
-  // Helper function to generate a temporary file path
-  private getTempFilePath(language?: string): string {
-    const tempDir = tmpdir();
-    const randomName = randomBytes(8).toString('hex');
-    const extension = language ? `.${language}` : '.sh'; // Default to .sh if no language
-    return join(tempDir, `meld-script-${randomName}${extension}`);
-  }
 
   // ADDED: Missing helper method to create and write to a temp file
   private async createTempScriptFile(content: string, language: string): Promise<string> {
@@ -70,7 +63,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
     }
   }
 
-  async execute(context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
+  async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
     const state: IStateService = context.state;
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
@@ -197,24 +190,37 @@ export class RunDirectiveHandler implements IDirectiveHandler {
          line: node.location.start.line,
          column: node.location.start.column
       } : undefined;
-      const outputMetadata: Partial<VariableMetadata> = { definedAt: directiveSourceLocation, origin: VariableOrigin.COMMAND_OUTPUT };
-      const errorMetadata: Partial<VariableMetadata> = { definedAt: directiveSourceLocation, origin: VariableOrigin.COMMAND_ERROR };
+      const outputMetadata: VariableMetadata = { definedAt: directiveSourceLocation, origin: VariableOrigin.COMMAND_OUTPUT, createdAt: Date.now(), modifiedAt: Date.now() };
+      const errorMetadata: VariableMetadata = { definedAt: directiveSourceLocation, origin: VariableOrigin.COMMAND_ERROR, createdAt: Date.now(), modifiedAt: Date.now() };
       
-      await state.setVariable(createTextVariable(outputVariable, stdout || '', outputMetadata));
-      await state.setVariable(createTextVariable(errorVariable, stderr || '', errorMetadata));
+      const stateChanges: StateChanges = { variables: {} };
+      stateChanges.variables[outputVariable] = {
+          type: VariableType.TEXT,
+          value: stdout || '',
+          metadata: outputMetadata
+      };
+      stateChanges.variables[errorVariable] = {
+          type: VariableType.TEXT,
+          value: stderr || '',
+          metadata: errorMetadata
+      };
 
       // Handle transformation mode
+      let replacementNode: TextNode | undefined = undefined;
       if (state.isTransformationEnabled(this.kind)) {
-        const replacementNode: TextNode = {
+        replacementNode = {
             type: 'Text',
             // Combine stdout and stderr, separated by newline, filtering empty strings
             content: [stdout, stderr].filter(s => s).join('\n'), 
             location: node.location
         };
-        return { state, replacement: replacementNode };
       }
 
-      return state;
+      // Return NEW DirectiveResult shape
+      return { 
+         stateChanges: stateChanges, 
+         replacement: replacementNode ? [replacementNode] : undefined // Ensure replacement is array or undefined
+      };
     } catch (error) {
       // Handle any remaining errors (like validation errors caught earlier)
       if (error instanceof DirectiveError) {

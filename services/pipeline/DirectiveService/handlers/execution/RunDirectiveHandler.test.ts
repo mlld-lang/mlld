@@ -152,7 +152,7 @@ describe('RunDirectiveHandler', () => {
       vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'command output', stderr: '' });
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo test');
       
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo test', {
         cwd: '/workspace'
@@ -192,7 +192,7 @@ describe('RunDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo Hello World');
       vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'Hello World', stderr: '' });
       
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo Hello World', {
         cwd: '/workspace'
@@ -212,7 +212,7 @@ describe('RunDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo test');
       vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'command output', stderr: '' });
       
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
         type: VariableType.TEXT,
@@ -228,7 +228,7 @@ describe('RunDirectiveHandler', () => {
        
        vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'Hello there!', stderr: '' });
        
-       const result = await handler.execute(processingContext);
+       const result = await handler.handle(processingContext);
        
        expect(stateService.getVariable).toHaveBeenCalledWith('greet', VariableType.COMMAND);
        expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
@@ -253,7 +253,7 @@ describe('RunDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo "Inline script ran"');
       vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'Inline script ran', stderr: '' });
       
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(scriptContent, processingContext.resolutionContext);
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo "Inline script ran"', { cwd: '/workspace' });
@@ -274,7 +274,7 @@ describe('RunDirectiveHandler', () => {
       vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'Python script ran', stderr: '' });
       vi.spyOn(fileSystemService, 'writeFile').mockResolvedValueOnce(undefined);
       
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(scriptContent, processingContext.resolutionContext);
       expect(fileSystemService.writeFile).toHaveBeenCalledWith(expect.stringContaining('.py'), 'print("Python script ran")');
@@ -314,7 +314,7 @@ describe('RunDirectiveHandler', () => {
       vi.spyOn(fileSystemService, 'writeFile').mockResolvedValueOnce(undefined);
       vi.spyOn(fileSystemService, 'deleteFile').mockResolvedValue(undefined);
       
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(paramNode, processingContext.resolutionContext); 
       expect(fileSystemService.writeFile).toHaveBeenCalledWith(expect.stringContaining('.py'), 'import sys\nprint(f"Input: {sys.argv[1]}")');
@@ -360,7 +360,7 @@ describe('RunDirectiveHandler', () => {
         });
 
         await expectToThrowWithConfig(
-            async () => await handler.execute(processingContext),
+            async () => await handler.handle(processingContext),
             {
                 code: DirectiveErrorCode.RESOLUTION_FAILED,
                 messageContains: 'Failed to resolve parameter variable: Variable not found by mock', 
@@ -388,7 +388,7 @@ describe('RunDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveNodes').mockRejectedValue(resolutionError);
       
       await expectToThrowWithConfig(
-          async () => await handler.execute(processingContext),
+          async () => await handler.handle(processingContext),
           {
               code: DirectiveErrorCode.RESOLUTION_FAILED,
               messageContains: 'Failed to resolve command string',
@@ -407,7 +407,7 @@ describe('RunDirectiveHandler', () => {
       vi.spyOn(fileSystemService, 'executeCommand').mockRejectedValue(executionError);
       
       await expectToThrowWithConfig(
-          async () => await handler.execute(processingContext),
+          async () => await handler.handle(processingContext),
           {
               code: DirectiveErrorCode.EXECUTION_FAILED,
               messageContains: 'Execution failed',
@@ -430,7 +430,7 @@ describe('RunDirectiveHandler', () => {
       }); 
       
       await expectToThrowWithConfig(
-          async () => await handler.execute(processingContext),
+          async () => await handler.handle(processingContext),
           {
               code: DirectiveErrorCode.VARIABLE_NOT_FOUND,
               messageContains: 'Command definition \'undefinedCommand\' not found',
@@ -449,7 +449,7 @@ describe('RunDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo "Out" && >&2 echo "Err"');
       vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'Out', stderr: 'Err' });
       
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({ type: VariableType.TEXT, name: 'stdout', value: 'Out' }));
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({ type: VariableType.TEXT, name: 'stderr', value: 'Err' }));
@@ -464,7 +464,7 @@ describe('RunDirectiveHandler', () => {
       vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'transformed output', stderr: '' });
       vi.spyOn(stateService, 'isTransformationEnabled').mockReturnValue(true);
       
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       
       expect(result).toHaveProperty('replacement'); 
       const directiveResult = result as DirectiveResult;

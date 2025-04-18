@@ -9,7 +9,7 @@ import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
-import type { DirectiveResult } from './interfaces/DirectiveTypes.js';
+import type { DirectiveResult } from '@core/directives/DirectiveHandler.ts';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 
 /**
@@ -20,15 +20,15 @@ export interface IDirectiveHandler {
   readonly kind: string;
 
   /**
-   * Execute the directive
+   * Handle the directive processing
    * 
    * @param context - The processing context containing state, resolution context, node, etc.
-   * @returns The updated state after directive execution, or a DirectiveResult containing both state and optional replacement node
-   * @throws {MeldDirectiveError} If directive execution fails
+   * @returns A DirectiveResult containing state changes and optional replacement nodes.
+   * @throws {MeldDirectiveError} If directive handling fails
    */
-  execute(
+  handle(
     context: DirectiveProcessingContext
-  ): Promise<DirectiveResult | IStateService>;
+  ): Promise<DirectiveResult>;
 }
 
 /**
@@ -87,13 +87,12 @@ export interface IDirectiveService {
 
   /**
    * Handle a directive node
-   * NOTE: This internal method still uses the old DirectiveContext for compatibility with registry
-   * The client interface uses the new DirectiveProcessingContext.
+   * Uses the new DirectiveProcessingContext.
    */
   handleDirective(
     node: DirectiveNode,
     context: DirectiveProcessingContext
-  ): Promise<IStateService | DirectiveResult>;
+  ): Promise<DirectiveResult>;
 
   /**
    * Register a new directive handler

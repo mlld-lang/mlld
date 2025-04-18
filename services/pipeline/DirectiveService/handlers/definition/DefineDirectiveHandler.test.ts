@@ -35,13 +35,20 @@ import { MockFactory } from '@tests/utils/mocks/MockFactory.js'; // Keep for sta
 import type { CommandVariable as CoreCommandVariable } from '@core/types/variables.js';
 import { VariableType, createCommandVariable } from '@core/types/variables.js';
 import crypto from 'crypto'; // <<< Import crypto for UUID >>>
+import { VariableDefinition } from '../../../../../core/variables/VariableTypes'; // Ensure this path is correct based on latest findings
 
 // Helper to extract state (keep as is)
-function getStateFromResult(result: DirectiveResult | IStateService): IStateService {
-    if (result && typeof result === 'object' && 'state' in result) {
-        return result.state as IStateService;
-    }
-    return result as IStateService;
+function getStateFromResult(result: any): IStateService | undefined {
+  if (result && typeof result === 'object') {
+    // Check for old DirectiveResult shape (for compatibility during refactor?)
+    if ('state' in result && result.state) return result.state as IStateService;
+    // Check if it IS an IStateService (less likely now)
+    if (typeof result.getVariable === 'function') return result as IStateService;
+  }
+  // Cannot determine state from the new DirectiveResult shape easily here
+  // Tests need to check result.stateChanges directly
+  console.warn('[getStateFromResult] Could not extract state from result. Test needs update.');
+  return undefined; 
 }
 
 describe('DefineDirectiveHandler', () => {
@@ -154,7 +161,7 @@ describe('DefineDirectiveHandler', () => {
       // Use the resolved resolutionService mock
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo hello resolved');
 
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       const resultState = getStateFromResult(result);
 
       expect(resultState).toBe(stateService); 
@@ -177,7 +184,7 @@ describe('DefineDirectiveHandler', () => {
       const processingContext = createMockProcessingContext(node);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $p1 $p2 resolved');
 
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       const resultState = getStateFromResult(result);
       
       expect(resultState).toBe(stateService);
@@ -201,7 +208,7 @@ describe('DefineDirectiveHandler', () => {
       const processingContext = createMockProcessingContext(node);
        vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $a $b $c resolved');
       
-      const result = await handler.execute(processingContext);
+      const result = await handler.handle(processingContext);
       const resultState = getStateFromResult(result);
 
       expect(resultState).toBe(stateService);
@@ -230,7 +237,7 @@ describe('DefineDirectiveHandler', () => {
         const processingContext = createMockProcessingContext(node);
         vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo literal resolved_value');
         
-        const result = await handler.execute(processingContext);
+        const result = await handler.handle(processingContext);
         const resultState = getStateFromResult(result);
 
         expect(resolutionService.resolveNodes).toHaveBeenCalledWith(literalValue, expect.any(Object));
@@ -247,6 +254,75 @@ describe('DefineDirectiveHandler', () => {
         }));
     });
 
+    it('should define a basic command using literal', async () => {
+      const node = createValidDefineNode('cmd1', 'echo hello'); 
+      const processingContext = createMockProcessingContext(node);
+      // Use the resolved resolutionService mock
+      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo hello resolved');
+
+      const result = await handler.handle(processingContext);
+      
+      // Assert on result.stateChanges
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('cmd1');
+      const cmdDef = result.stateChanges?.variables?.cmd1 as VariableDefinition | undefined;
+      expect(cmdDef?.type).toBe(VariableType.COMMAND);
+      expect(cmdDef?.value?.type).toBe('basic');
+      expect((cmdDef?.value as IBasicCommandDefinition).commandTemplate).toBe('echo hello resolved');
+      expect(cmdDef?.metadata?.origin).toBe(VariableOrigin.DIRECT_DEFINITION);
+      
+      // Remove assertion checking direct call to stateService
+      // expect(stateService.setVariable).toHaveBeenCalledWith(...);
+    });
+
+    it('should define a basic command with parameters using literal', async () => {
+      const node = createValidDefineNode('cmd2', 'echo $p1 $p2', ['p1', 'p2']);
+      const processingContext = createMockProcessingContext(node);
+      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $p1 $p2 resolved');
+
+      const result = await handler.handle(processingContext);
+
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('cmd2');
+      const cmdDef = result.stateChanges?.variables?.cmd2 as VariableDefinition | undefined;
+      expect(cmdDef?.type).toBe(VariableType.COMMAND);
+      expect(cmdDef?.value?.type).toBe('basic');
+      expect((cmdDef?.value as IBasicCommandDefinition).commandTemplate).toBe('echo $p1 $p2 resolved');
+      expect(cmdDef?.value?.parameters).toHaveLength(2);
+      expect(cmdDef?.value?.parameters?.[0]?.name).toBe('p1');
+      expect(cmdDef?.value?.parameters?.[1]?.name).toBe('p2');
+    });
+
+    it('should define a basic command using @run command', async () => {
+      const node = createValidDefineNode('cmd3', 'echo $a $b $c', ['a', 'b', 'c']);
+      const processingContext = createMockProcessingContext(node);
+       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $a $b $c resolved');
+      
+      const result = await handler.handle(processingContext);
+      
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('cmd3');
+      const cmdDef = result.stateChanges?.variables?.cmd3 as VariableDefinition | undefined;
+      expect(cmdDef?.type).toBe(VariableType.COMMAND);
+      expect(cmdDef?.value?.type).toBe('basic');
+      expect((cmdDef?.value as IBasicCommandDefinition).commandTemplate).toBe('echo $a $b $c resolved');
+    });
+
+    it('should define a language command using @run code', async () => {
+      const node = createValidDefineNode('cmdLang', 'print("hello python resolved")', [], false);
+      const processingContext = createMockProcessingContext(node);
+      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('print("hello python resolved")');
+      
+      const result = await handler.handle(processingContext);
+      
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('cmdLang');
+      const cmdDef = result.stateChanges?.variables?.cmdLang as VariableDefinition | undefined;
+      expect(cmdDef?.type).toBe(VariableType.COMMAND);
+      expect(cmdDef?.value?.type).toBe('language');
+      expect((cmdDef?.value as ILanguageCommandDefinition).language).toBe('python');
+      expect((cmdDef?.value as ILanguageCommandDefinition).codeBlock).toBe('print("hello python resolved")');
+    });
   });
 
   describe('metadata handling', () => {
@@ -255,7 +331,7 @@ describe('DefineDirectiveHandler', () => {
       const processingContext = createMockProcessingContext(node);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('rm -rf / resolved');
 
-      await handler.execute(processingContext);
+      await handler.handle(processingContext);
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
           type: VariableType.COMMAND,
           name: 'cmdRisk',
@@ -270,7 +346,7 @@ describe('DefineDirectiveHandler', () => {
       const processingContext = createMockProcessingContext(node);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('ls resolved');
 
-      await handler.execute(processingContext);
+      await handler.handle(processingContext);
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
           type: VariableType.COMMAND,
           name: 'cmdAbout',
@@ -287,7 +363,7 @@ describe('DefineDirectiveHandler', () => {
       const processingContext = createMockProcessingContext(node);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo test resolved');
 
-      await handler.execute(processingContext);
+      await handler.handle(processingContext);
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
         type: VariableType.COMMAND,
         name: 'cmd6'
@@ -308,13 +384,13 @@ describe('DefineDirectiveHandler', () => {
       vi.spyOn(stateService, 'setVariable').mockRejectedValueOnce(stateError);
 
       await expectToThrowWithConfig(
-        async () => await handler.execute(processingContext),
+        async () => await handler.handle(processingContext),
         {
           code: DirectiveErrorCode.EXECUTION_FAILED, 
         }
       );
       
-      try { await handler.execute(processingContext); } catch(e: any) { expect(e.cause).toBe(stateError); }
+      try { await handler.handle(processingContext); } catch(e: any) { expect(e.cause).toBe(stateError); }
     });
     
     it('should handle literal value resolution errors', async () => {
@@ -328,13 +404,13 @@ describe('DefineDirectiveHandler', () => {
         vi.spyOn(resolutionService, 'resolveNodes').mockRejectedValue(resolutionError);
                 
         await expectToThrowWithConfig(
-            async () => await handler.execute(processingContext),
+            async () => await handler.handle(processingContext),
             {
                 code: DirectiveErrorCode.RESOLUTION_FAILED,
             }
         );
         
-        try { await handler.execute(processingContext); } catch(e: any) { expect(e.cause).toBe(resolutionError); }
+        try { await handler.handle(processingContext); } catch(e: any) { expect(e.cause).toBe(resolutionError); }
     });
 
   });

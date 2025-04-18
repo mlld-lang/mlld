@@ -2,8 +2,8 @@
 // Meld grammar implementation
 
 {
-  // Add debug flag and logging - always enable for now
-  const DEBUG = true; // process.env.MELD_DEBUG === 'true' || false;
+  // Disable debug logging for grammar
+  const DEBUG = false; // process.env.MELD_DEBUG === 'true' || false;
   const crypto = require('crypto');
 
   // --- START NEW HELPERS OBJECT ---

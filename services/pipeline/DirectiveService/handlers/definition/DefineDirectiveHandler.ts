@@ -23,7 +23,8 @@ import { MeldResolutionError, FieldAccessError } from '@core/errors';
 import { VariableMetadata, VariableOrigin, VariableType, createCommandVariable } from '@core/types/variables.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
-import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
+import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
+import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
 
 @injectable()
 @Service({
@@ -37,7 +38,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
     @inject('IResolutionService') private resolutionService: IResolutionService
   ) {}
 
-  async execute(context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
+  async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
     const state: IStateService = context.state;
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
@@ -75,10 +76,12 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
           position: index + 1,
       }));
 
-      // Construct base metadata (origin will be set by StateService)
-      const baseMetadata: Partial<VariableMetadata> = {
+      // Construct base metadata
+      const baseMetadata: VariableMetadata = {
           definedAt: directiveSourceLocation,
-          origin: VariableOrigin.DIRECT_DEFINITION // Set origin here
+          origin: VariableOrigin.DIRECT_DEFINITION,
+          createdAt: Date.now(),
+          modifiedAt: Date.now()
       };
       
       if (value !== undefined) {
@@ -195,8 +198,22 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       
       logger.debug(`Stored command '${commandDefinition.name}'`, { definition: commandDefinition });
 
-      // Return the modified state
-      return state;
+      // Create VariableDefinition for StateChanges
+      const variableDefinition: VariableDefinition = {
+          type: VariableType.COMMAND,
+          value: commandDefinition,
+          metadata: baseMetadata
+      };
+
+      // Return NEW DirectiveResult shape
+      return { 
+         stateChanges: { 
+            variables: { 
+                [nameMetadata.name]: variableDefinition 
+            }
+         }
+         // No replacement nodes for @define
+      };
     } catch (error) {
       // Wrap in DirectiveError if needed
       if (error instanceof DirectiveError) {

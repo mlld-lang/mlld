@@ -16,13 +16,13 @@ import { ErrorSeverity, FieldAccessError, PathValidationError, MeldResolutionErr
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import type { VariableMetadata, TextVariable } from '@core/types/variables.js';
+import type { VariableMetadata } from '@core/types/variables.js';
 import { VariableOrigin, VariableType, createTextVariable } from '@core/types/variables.js';
 import type { SourceLocation } from '@core/types/common.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js'; // Import guard
 import { ICommandDefinition, isBasicCommand } from '@core/types/define.js'; 
 import type { DirectiveProcessingContext } from '@core/types/index.js';
-import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
+import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
 import { isCommandVariable } from '@core/types/guards.js';
 
 // Define local interfaces mirroring expected AST structure for RHS
@@ -66,7 +66,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
    */
   // private isStringLiteral(value: string): boolean { ... } // REMOVED
 
-  async execute(context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
+  async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
     const state = context.state;
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
@@ -136,7 +136,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
                  throw new DirectiveError('Invalid command input structure for runDefined subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
              }
              // Get variable and check type
-             const cmdVar = await state.getVariable(commandInput.name, VariableType.Command);
+             const cmdVar = await state.getVariable(commandInput.name, VariableType.COMMAND);
              if (cmdVar && isCommandVariable(cmdVar) && cmdVar.value && isBasicCommand(cmdVar.value)) {
                 // Assuming commandTemplate holds the string to run for @text/@run
                 resolvedCommandString = cmdVar.value.commandTemplate;
@@ -258,23 +258,31 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           );
       }
 
-      process.stdout.write(`DEBUG: [TextDirectiveHandler] Resolved value for ${identifier} (before set): "${resolvedValue}"\n`);
+      process.stdout.write(`DEBUG: [TextDirectiveHandler] Resolved value for ${identifier} (before creating change): "${resolvedValue}"\n`);
 
-      // Prepare metadata for the variable
-      const metadata: Partial<VariableMetadata> = {
+      const metadata: VariableMetadata = {
           origin: VariableOrigin.DIRECT_DEFINITION,
-          definedAt: directiveSourceLocation
+          definedAt: directiveSourceLocation,
+          createdAt: Date.now(),
+          modifiedAt: Date.now()
       };
       
-      // Use IStateService method to set the variable
-      // await state.setTextVar(identifier, resolvedValue);
-      // Use the factory and setVariable
-      await state.setVariable(createTextVariable(identifier, resolvedValue, metadata));
-      process.stdout.write(`DEBUG: [TextDirectiveHandler] setVariable completed for: ${identifier}. State ID: ${state.getStateId()}\n`);
+      // Create the variable definition structure directly for the state change
+      const variableChange = {
+          type: VariableType.TEXT,
+          value: resolvedValue,
+          metadata: metadata
+      };
 
-      process.stdout.write(`DEBUG: [TextDirectiveHandler EXIT] Completed for ${identifier}. Final State ID: ${state.getStateId()}\n`);
-      // Return the updated state
-      return state as IStateService;
+      process.stdout.write(`DEBUG: [TextDirectiveHandler EXIT] Completed for ${identifier}. Returning state changes.\n`);
+      
+      return { 
+        stateChanges: {
+          variables: { 
+            [identifier]: variableChange // Use the created structure
+          }
+        }
+      };
     } catch (error) {
       // Ensure all thrown errors are DirectiveErrors with consistent details
       if (error instanceof DirectiveError) {

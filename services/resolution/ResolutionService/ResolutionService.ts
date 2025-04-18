@@ -433,7 +433,7 @@ export class ResolutionService implements IResolutionService {
             details: { serviceName: 'ParserService/Client' }
         });
     }
-    return []; // Should not be reached if errors are thrown
+    // return []; // Should not be reached if errors are thrown // Commented out unreachable code
   }
 
   /**
@@ -441,33 +441,54 @@ export class ResolutionService implements IResolutionService {
    * This is the core logic for handling InterpolatableValue arrays.
    */
   public async resolveNodes(nodes: InterpolatableValue, context: ResolutionContext): Promise<string> {
-    // logger.debug(`[ResolutionService.resolveNodes ENTRY] Resolving ${nodes?.length ?? 0} nodes. Context: ${context.currentFilePath}, Strict: ${context.strict}, Depth: ${context.depth}`);
-    let result = '';
-    if (!nodes) {
-      // logger.warn('[ResolutionService.resolveNodes] Received null or undefined nodes array.');
-      return result;
+    // Refactored logic to avoid await inside the main loop
+    if (!nodes) return '';
+
+    const promises: Promise<string>[] = [];
+    const resolvedValues = new Map<VariableReferenceNode, string>(); // To store resolved var values
+
+    // First pass: Collect promises for variable resolutions
+    for (const node of nodes) {
+        if (node.type === 'VariableReference') {
+            const promise = this.variableReferenceResolver.resolve(node, context)
+                .catch(error => {
+                    if (context.strict) throw error;
+                    return ''; // Return empty string for failed optional vars
+                });
+            promises.push(promise.then(val => {
+                resolvedValues.set(node, val); // Store resolved value mapped to node
+                return val; // Still return value for Promise.all
+            }));
+        } else if (node.type === 'Text') {
+            // Do nothing in this pass for TextNodes
+        } else {
+            // This case should be unreachable due to InterpolatableValue type
+            // Log safely without accessing properties of potentially 'never' type
+             logger.warn(`[ResolutionService.resolveNodes] Encountered unexpected node type in first pass`);
+        }
     }
 
-    for (const node of nodes) {
-      if (node.type === 'Text') {
-        result += node.content;
-      } else if (node.type === 'VariableReference') {
-        try {
-          const resolvedValue = await this.variableReferenceResolver.resolve(node, context);
-          result += resolvedValue;
-        } catch (error) {
-          if (context.strict) {
-            throw error;
-          } else {
-            // In non-strict mode, append nothing for unresolved variables within a larger string
-          }
-        }
-      } else {
-        // This block should theoretically be unreachable if InterpolatableValue type guard is correct
-        // process.stdout.write(`WARN: [ResService.resolveNodes] Encountered unexpected node type ${node.type} in InterpolatableValue array.\n`); // Removed .type access
-        logger.warn(`[ResolutionService.resolveNodes] Encountered unexpected node type in InterpolatableValue array.`);
-      }
+    // Wait for all variable resolutions to complete
+    try {
+      await Promise.all(promises);
+    } catch (error) { 
+       // If any strict resolution failed, Promise.all will reject.
+       // Re-throw the original error which should be a MeldError.
+       logger.error('Error during Promise.all in resolveNodes (strict mode failure likely)', { error });
+       throw error; 
     }
+
+    // Second pass: Build the final string synchronously
+    let result = '';
+    for (const node of nodes) {
+        if (node.type === 'Text') {
+            result = result.concat(node.content);
+        } else if (node.type === 'VariableReference') {
+            result += resolvedValues.get(node) || ''; // Get resolved value from map, default to empty
+        }
+        // No need for the final else, already warned above
+    }
+    process.stdout.write(`DEBUG: [ResolutionService.resolveNodes EXIT - Refactored] Returning: '${result}'\\n`);
     return result;
   }
 
@@ -477,7 +498,8 @@ export class ResolutionService implements IResolutionService {
    * Primarily used for resolving string values that might contain further variables.
    */
   async resolveText(text: string, context: ResolutionContext): Promise<string> {
-    logger.debug(`[ResService.resolveText ENTRY] strict=${context.strict}`, { text: text.substring(0, 50) }); // Log context
+    // --- Revert temporary changes, use original async logic --- 
+    logger.debug(`[ResService.resolveText ENTRY] strict=${context.strict}`, { text: text.substring(0, 50) });
     
     if (!text.includes('{{') && !text.includes('$')) { 
         logger.debug('resolveText: Input contains no variable markers, returning original text.');
@@ -487,23 +509,24 @@ export class ResolutionService implements IResolutionService {
       const nodes: InterpolatableValue = await this.parseForResolution(text, context);
       logger.debug(`resolveText: Parsed into ${nodes.length} nodes. Delegating to resolveNodes.`);
       
-      return await this.resolveNodes(nodes, context)
+      const promise = this.resolveNodes(nodes, context)
         .catch(error => {
             logger.error(`[ResService.resolveText CATCH] Error caught, strict=${context.strict}`, { error }); // Log context
             if (context.strict) {
                 logger.debug('[ResService.resolveText CATCH] Strict mode, re-throwing error'); // Log before throw
-                // Re-throw the original error from resolveNodes if it's already a MeldError
                 if (error instanceof MeldError) throw error;
-                // Otherwise wrap it
                 throw new MeldResolutionError('Failed to resolve text', { 
                     code: 'E_RESOLVE_TEXT_FAILED',
                     details: { originalText: text, context },
                     cause: error 
                 });
             }
-            // If not strict, return original text (potentially configured via context flags in future)
             return text; 
         });
+
+    const finalResult = await promise;
+    process.stdout.write(`DEBUG: [ResolutionService.resolveText EXIT] Returning: '${finalResult}'\\n`);
+    return finalResult; 
   }
 
   /**
@@ -553,17 +576,18 @@ export class ResolutionService implements IResolutionService {
         // result.success is false, so result.error SHOULD exist, but handle defensively.
         const error = result.error;
 
-        if (error instanceof FieldAccessError) {
+        if (error && error instanceof FieldAccessError) {
           return failure(error);
         } else {
-          // If error is not FieldAccessError or is undefined
           let cause: Error | undefined;
           let errorMessage = 'Field access failed';
 
-          if (error instanceof Error) { // Check if it's an Error object
-            cause = error;
-            errorMessage += `: ${error.message}`;
-          } else if (error !== undefined && error !== null) { // Handle other non-null/undefined types
+          // FIX LINTER AGAIN: Cast to any before accessing message
+          if (typeof error === 'object' && error !== null && 'message' in error) { 
+            const errorAsAny = error as any; // Cast
+            cause = errorAsAny instanceof Error ? errorAsAny : undefined;
+            errorMessage += `: ${errorAsAny.message}`; // Access after cast
+          } else if (error !== undefined && error !== null) { 
              errorMessage += `: ${String(error)}`;
           } else { // Handle undefined error case
              errorMessage += ' with unexpected or undefined error';
@@ -681,15 +705,20 @@ export class ResolutionService implements IResolutionService {
    */
   async resolvePath(resolvedPathString: string, context: ResolutionContext): Promise<MeldPath> {
     // +++ Log Entry +++
-    process.stdout.write(`DEBUG: [ResolutionService.resolvePath ENTRY] pathString='${resolvedPathString}'\n`);
-    logger.debug(`Validating resolved path string: '${resolvedPathString}'`, { context: context.flags });
+    // Log the argument EXACTLY as received
+    process.stdout.write(`DEBUG: [ResolutionService.resolvePath ENTRY] Received pathString: '${resolvedPathString}' (Type: ${typeof resolvedPathString})\n`); 
+    // logger.debug(`Validating resolved path string: '${resolvedPathString}'`, { context: context.flags }); // Keep original logger debug if desired
     const validationContext = this.createValidationContext(context);
     // +++ Log Context +++
     process.stdout.write(`DEBUG: [ResolutionService.resolvePath] ValidationContext: ${JSON.stringify(validationContext)}\n`);
 
     try {
+      // +++ Log just before calling pathService.validatePath +++
+      process.stdout.write(`DEBUG: [ResolutionService.resolvePath] >>> Calling pathService.validatePath with pathString: '${resolvedPathString}'\n`);
       // Directly validate the provided resolved string
       const validatedPath = await this.pathService.validatePath(resolvedPathString, validationContext);
+      // +++ Log Result +++
+      process.stdout.write(`DEBUG: [ResolutionService.resolvePath] validatePath Result: ${JSON.stringify(validatedPath)}\n`);
       logger.debug(`resolvePath (validation only): Successfully validated '${resolvedPathString}'`);
       
       // Return the validated MeldPath object
@@ -706,7 +735,8 @@ export class ResolutionService implements IResolutionService {
             const wrapError = new PathValidationError('Unexpected error during path validation', {
               code: ResolutionErrorCode.SERVICE_UNAVAILABLE, 
               details: details,
-              cause: error
+              // FIX LINTER AGAIN: Cast to any if needed for cause
+              cause: (typeof error === 'object' && error !== null && error instanceof Error) ? error : undefined
             });
             throw wrapError;
         }
@@ -845,30 +875,49 @@ export class ResolutionService implements IResolutionService {
     value: string | StructuredPath, 
     context: ResolutionContext
   ): Promise<string> { 
+    // --- Revert temporary changes, use original async logic --- 
     logger.debug('resolveInContext called', { valueType: typeof value, contextFlags: context.flags });
+    let result: string = ''; 
 
-    if (typeof value === 'object' && value !== null && 'raw' in value && 'structured' in value) {
-      // Explicitly cast value to StructuredPath within this block
-      const pathObject = value as StructuredPath;
-      logger.debug(`resolveInContext: Value is StructuredPath`);
-      
-      // Access interpolatedValue from the cast object
-      if (Array.isArray(pathObject.interpolatedValue)) { 
-        logger.debug('Resolving interpolatedValue from StructuredPath');
-        return this.resolveNodes(pathObject.interpolatedValue, context);
+    try { 
+      if (typeof value === 'object' && value !== null && 'raw' in value && 'structured' in value) {
+        const pathObject = value as StructuredPath;
+        logger.debug(`resolveInContext: Value is StructuredPath`);
+        if (Array.isArray(pathObject.interpolatedValue)) { 
+          logger.debug('Resolving interpolatedValue from StructuredPath');
+          try { 
+            result = await this.resolveNodes(pathObject.interpolatedValue, context);
+            process.stdout.write(`DEBUG: [resolveInContext after await resolveNodes] result: '${result}'\\n`);
+          } catch (innerError) {
+            logger.error('Error inside resolveInContext -> resolveNodes await', { innerError });
+            result = ''; // Default to empty on inner error
+          }
+        } else {
+          logger.debug('No interpolatedValue on StructuredPath, returning raw string directly');
+          result = String(pathObject.raw); 
+          process.stdout.write(`DEBUG: [resolveInContext using raw string] result: '${result}'\\n`);
+        }
+      } else if (typeof value === 'string') {
+        logger.debug('resolveInContext: Value is plain string, calling resolveText');
+        try { 
+          result = await this.resolveText(value, context);
+          process.stdout.write(`DEBUG: [resolveInContext after await resolveText (string)] result: '${result}'\\n`);
+        } catch (innerError) {
+            logger.error('Error inside resolveInContext -> resolveText await', { innerError });
+            result = ''; // Default to empty on inner error
+        }
       } else {
-        logger.debug('No interpolatedValue on StructuredPath, resolving raw string');
-        return this.resolveText(String(pathObject.raw), context); 
+        logger.warn('resolveInContext received unexpected value type', { value });
+        result = ''; 
       }
-    } else if (typeof value === 'string') {
-      // Handle plain string input
-      logger.debug('resolveInContext: Value is plain string, calling resolveText');
-      return this.resolveText(value, context);
-    } else {
-      // Handle unexpected input types
-      logger.warn('resolveInContext received unexpected value type', { value });
-      return '';
+    } catch (outerError) {
+      logger.error('Outer error in resolveInContext', { outerError });
+      result = ''; // Default to empty on outer error
     }
+
+    // Log just before returning
+    process.stdout.write(`DEBUG: [ResolutionService.resolveInContext EXIT] Returning resolved string: '${result}'\\n`);
+    return result; 
   }
 
   /**
@@ -890,7 +939,8 @@ export class ResolutionService implements IResolutionService {
           const wrapError = new PathValidationError('Unexpected error during path validation', {
             code: ResolutionErrorCode.SERVICE_UNAVAILABLE, 
             details: details,
-            cause: error
+            // FIX LINTER AGAIN: Cast to any if needed for cause
+            cause: (typeof error === 'object' && error !== null && error instanceof Error) ? error : undefined
           });
           throw wrapError;
       }

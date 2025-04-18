@@ -9,15 +9,15 @@ import { directiveLogger as logger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { inject, injectable, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, VariableMetadata } from '@core/types';
+import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, VariableMetadata, VariableType, createPathVariable } from '@core/types';
+import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
 import { VariableOrigin } from '@core/types/variables.js';
 import type { SourceLocation } from '@core/types/common.js';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
 import type { PathDirectiveData } from '@core/syntax/types/directives.js';
-import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
+import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
 import type { StructuredPath } from '@core/syntax/types/nodes.js';
-import { createPathVariable } from '@core/types';
 
 /**
  * Handler for @path directives
@@ -35,7 +35,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
     @inject('IResolutionService') private resolutionService: IResolutionService
   ) {}
 
-  async execute(context: DirectiveProcessingContext): Promise<IStateService | DirectiveResult> {
+  async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
     const state = context.state;
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
@@ -128,9 +128,11 @@ export class PathDirectiveHandler implements IDirectiveHandler {
            throw new DirectiveError('Unexpected content type in validated path object', this.kind, DirectiveErrorCode.EXECUTION_FAILED, errorDetails);
       }
 
-      const metadata: Partial<VariableMetadata> = {
+      const metadata: VariableMetadata = {
           origin: VariableOrigin.DIRECT_DEFINITION,
-          definedAt: directiveSourceLocation
+          definedAt: directiveSourceLocation,
+          createdAt: Date.now(),
+          modifiedAt: Date.now()
       };
       
       // Pass the adapted state object
@@ -144,8 +146,19 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         location: node.location
       });
 
-      // Return IStateService or DirectiveResult (just state in this case)
-      return state;
+      // Return NEW DirectiveResult shape
+      return { 
+         stateChanges: { 
+            variables: { 
+                [identifier]: {
+                    type: VariableType.PATH,
+                    value: pathStateForStorage,
+                    metadata: metadata
+                }
+            }
+         }
+         // No replacement nodes for @path
+      };
     } catch (error) {
       // Handle errors
       if (error instanceof DirectiveError) {

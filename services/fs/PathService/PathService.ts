@@ -290,15 +290,6 @@ export class PathService implements IPathService {
    * @throws PathValidationError if path format is invalid or if input is a URL.
    */
   resolvePath(filePath: RawPath | StructuredPath, baseDir?: RawPath): AbsolutePath | RelativePath {
-    // Debug logging if enabled
-    if (process.env.DEBUG_PATH_VALIDATION === 'true') {
-      logger.debug(`[PathService][debug] resolvePath called with:`, {
-        filePath,
-        baseDir,
-        testMode: this.testMode
-      });
-    }
-
     const rawInputPath = isRawPath(filePath) ? filePath : filePath.raw;
 
     if (!rawInputPath) {
@@ -468,6 +459,10 @@ export class PathService implements IPathService {
     filePath: string | MeldPath, 
     context: PathValidationContext
   ): Promise<MeldPath> { 
+    // +++ Log Entry +++
+    // process.stdout.write(`DEBUG: [PathService.validatePath ENTRY] FilePath Type: ${typeof filePath}, Path: ${JSON.stringify(filePath)}\\n`); // Removed
+    // process.stdout.write(`DEBUG: [PathService.validatePath ENTRY] Context: ${JSON.stringify(context)}\\n`); // Removed
+
     let pathObj: MeldPath;
     let rawPathString: string;
     const location: Location | undefined = (context as any).location;
@@ -516,6 +511,8 @@ export class PathService implements IPathService {
       // Create pathObj for string input
       const baseDir = context.workingDirectory;
       const resolved = this.resolvePath(createRawPath(rawPathString), createRawPath(baseDir)); 
+      // +++ Log Resolved Path (from string input) +++
+      // process.stdout.write(`DEBUG: [PathService.validatePath] Resolved string input to: ${JSON.stringify(resolved)}\\n`); // Removed
       pathObj = { 
           contentType: PathContentType.FILESYSTEM, 
           originalValue: rawPathString, 
@@ -575,8 +572,13 @@ export class PathService implements IPathService {
     fsPathObj.isAbsolute = true; 
     fsPathObj.isDirectory = undefined; 
 
+    // +++ Log Absolute Path Before Checks +++
+    // process.stdout.write(`DEBUG: [PathService.validatePath] Absolute path for checks: ${absolutePathToCheck}\\n`); // Removed
+
     // Security checks
     fsPathObj.isSecure = this.checkSecurityBoundaries(absolutePathToCheck, context, location);
+    // +++ Log Security Check Result +++
+    // process.stdout.write(`DEBUG: [PathService.validatePath] Security check result: ${fsPathObj.isSecure}\\n`); // Removed
     if (!fsPathObj.isSecure) {
       throw new PathValidationError(PathErrorMessages.OUTSIDE_BASE_DIR, { 
         code: PathErrorCode.OUTSIDE_BASE_DIR,
@@ -589,6 +591,8 @@ export class PathService implements IPathService {
       const { exists, isDirectory } = await this.checkExistenceAndType(absolutePathToCheck, context, location);
       fsPathObj.exists = exists;
       fsPathObj.isDirectory = isDirectory; 
+      // +++ Log Existence Check Result +++
+      // process.stdout.write(`DEBUG: [PathService.validatePath] Existence check: exists=${exists}, isDirectory=${isDirectory}\\n`); // Removed
 
       if (context.rules.mustExist && !exists) {
         const isDirExpected = context.rules.mustBeDirectory; 
@@ -629,6 +633,8 @@ export class PathService implements IPathService {
       });
     }
 
+    // +++ Log Final Path Object +++
+    // process.stdout.write(`DEBUG: [PathService.validatePath EXIT] Returning: ${JSON.stringify(fsPathObj)}\\n`); // Removed
     return fsPathObj;
   }
   

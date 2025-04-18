@@ -31,19 +31,22 @@ import {
     DataVariable,
     IPathVariable,
     createDataVariable,
-    MeldVariable
+    MeldVariable,
+    VariableType
 } from '@core/types/index.js'; 
 import { SourceLocation } from '@core/types/common.js'; // Import SourceLocation directly
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { MeldResolutionError, FieldAccessError, PathValidationError, MeldError } from '@core/errors';
-import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
+import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 // Import command definition types and type guard
 import { ICommandDefinition, isBasicCommand } from '@core/types/define.js'; 
 // <<< Restore missing imports for path types >>>
 import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState } from '@core/types'; 
+import type { VariableDefinition } from '../../../../../core/variables/VariableTypes'; // Use relative path
+import { isCommandVariable } from '@core/types/guards.js'; // <-- Corrected path based on previous findings
 
 // Define local interfaces mirroring expected AST structure for type safety
 // Based on docs/dev/AST.md
@@ -85,8 +88,8 @@ export class DataDirectiveHandler implements IDirectiveHandler {
     @inject('IPathService') private pathService: IPathService
   ) {}
 
-  // Update execute signature
-  public async execute(context: DirectiveProcessingContext): Promise<DirectiveResult> {
+  // Rename execute to handle and update return type
+  public async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
     const state = context.state;
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
@@ -301,22 +304,30 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       }
       // --- End JSON Parsing Step --- 
 
-      logger.info('[DataDirectiveHandler] Setting data var:', { identifier, finalValue: JSON.stringify(finalValue) });
+      logger.info('[DataDirectiveHandler] Resolved data var:', { identifier, finalValue: JSON.stringify(finalValue) });
       
-      const metadata: Partial<VariableMetadata> = {
+      const metadata: VariableMetadata = {
           origin: VariableOrigin.DIRECT_DEFINITION, 
-          definedAt: directiveSourceLocation 
+          definedAt: directiveSourceLocation,
+          createdAt: Date.now(),
+          modifiedAt: Date.now()
       };
       
-      // Call setDataVar with the *parsed* finalValue
-      // await (state as IStateService).setDataVar(identifier, finalValue);
+      // <<< Create VariableDefinition for StateChanges >>>
+      const variableDefinition: VariableDefinition = {
+          type: VariableType.DATA,
+          value: finalValue,
+          metadata: metadata
+      };
       
-      // <<< NEW: Use setVariable with createDataVariable >>>
-      const dataVariable = createDataVariable(identifier, finalValue, metadata);
-      await state.setVariable(dataVariable);
-      
-      // Return DirectiveResult
-      return { state: state as IStateService, replacement: undefined }; 
+      // Return NEW DirectiveResult shape
+      return { 
+         stateChanges: { 
+            variables: { 
+                [identifier]: variableDefinition 
+            }
+         }
+      }; 
 
     } catch (error) {
       if (error instanceof DirectiveError) {

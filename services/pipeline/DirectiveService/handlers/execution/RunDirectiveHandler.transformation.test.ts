@@ -67,7 +67,7 @@ describe('RunDirectiveHandler Transformation', () => {
       vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('echo "output"');
       vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: 'output', stderr: '' });
       
-      const result = await handler.execute(mockProcessingContext as DirectiveProcessingContext);
+      const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
 
       expect(result.replacement).toEqual(expect.objectContaining({
         type: 'Text',
@@ -82,7 +82,7 @@ describe('RunDirectiveHandler Transformation', () => {
       vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('echo Hello World');
       vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: 'Hello World', stderr: '' });
 
-      const result = await handler.execute(mockProcessingContext as DirectiveProcessingContext);
+      const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
 
       expect(result.replacement).toEqual(expect.objectContaining({
         type: 'Text',
@@ -97,7 +97,7 @@ describe('RunDirectiveHandler Transformation', () => {
       vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('echo Err >&2');
       vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: '', stderr: 'Error output' });
 
-      const result = await handler.execute(mockProcessingContext as DirectiveProcessingContext);
+      const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
 
       expect(result.replacement).toEqual(expect.objectContaining({
         type: 'Text',
@@ -117,7 +117,7 @@ describe('RunDirectiveHandler Transformation', () => {
       vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('echo Out && echo Err >&2');
       vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: 'Out', stderr: 'Err' });
 
-      const result = await handler.execute(mockProcessingContext as DirectiveProcessingContext);
+      const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
 
       expect(result.replacement).toEqual(expect.objectContaining({
         type: 'Text',
@@ -143,8 +143,8 @@ describe('RunDirectiveHandler Transformation', () => {
       vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('bad-command');
       vi.spyOn(fixture.fileSystemService, 'executeCommand').mockRejectedValue(executionError);
 
-      await expect(handler.execute(mockProcessingContext as DirectiveProcessingContext)).rejects.toThrow(DirectiveError);
-      await expect(handler.execute(mockProcessingContext as DirectiveProcessingContext)).rejects.toHaveProperty(
+      await expect(handler.handle(mockProcessingContext as DirectiveProcessingContext)).rejects.toThrow(DirectiveError);
+      await expect(handler.handle(mockProcessingContext as DirectiveProcessingContext)).rejects.toHaveProperty(
           'message', 
           expect.stringContaining('Failed to execute command: Command failed')
       );

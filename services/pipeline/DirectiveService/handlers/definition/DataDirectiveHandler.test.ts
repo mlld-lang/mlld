@@ -130,7 +130,7 @@ describe('DataDirectiveHandler', () => {
       // Mock the recursive resolver specifically for this test case if needed
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue({ name: 'Alice', id: 123 });
 
-      const result = await handler.execute(mockProcessingContext);
+      const result = await handler.handle(mockProcessingContext);
       const resultState = getStateFromResult(result);
       
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
@@ -159,7 +159,7 @@ describe('DataDirectiveHandler', () => {
       };
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedData);
 
-      const result = await handler.execute(mockProcessingContext);
+      const result = await handler.handle(mockProcessingContext);
       const resultState = getStateFromResult(result);
 
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
@@ -181,7 +181,7 @@ describe('DataDirectiveHandler', () => {
       const expectedData = ['apple', 'banana', 'cherry'];
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedData);
 
-      const result = await handler.execute(mockProcessingContext);
+      const result = await handler.handle(mockProcessingContext);
       const resultState = getStateFromResult(result);
 
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
@@ -225,10 +225,10 @@ describe('DataDirectiveHandler', () => {
       vi.mocked(fsMock.executeCommand).mockResolvedValue(mockCommandResult);
 
       // Execute and assert
-      await expect(handler.execute(mockProcessingContext))
+      await expect(handler.handle(mockProcessingContext))
         .rejects
         .toThrow(DirectiveError); 
-      await expect(handler.execute(mockProcessingContext))
+      await expect(handler.handle(mockProcessingContext))
         .rejects
         .toThrow(/Failed to parse command output as JSON/);
         
@@ -249,8 +249,8 @@ describe('DataDirectiveHandler', () => {
               // No MeldErrorOptions type needed here
           }));
 
-      await expect(handler.execute(mockProcessingContext)).rejects.toThrow(DirectiveError); 
-      await expect(handler.execute(mockProcessingContext)).rejects.toThrow(/Variable not found: missing/);
+      await expect(handler.handle(mockProcessingContext)).rejects.toThrow(DirectiveError); 
+      await expect(handler.handle(mockProcessingContext)).rejects.toThrow(/Variable not found: missing/);
 
       mockResolveInterpolatable.mockRestore();
     });
@@ -277,8 +277,8 @@ describe('DataDirectiveHandler', () => {
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedData);
 
       // Execute with the context containing the throwing state mock
-      await expect(handler.execute(errorTestContext)).rejects.toThrow(DirectiveError);
-      await expect(handler.execute(errorTestContext)).rejects.toThrow(/State error/);
+      await expect(handler.handle(errorTestContext)).rejects.toThrow(DirectiveError);
+      await expect(handler.handle(errorTestContext)).rejects.toThrow(/State error/);
       mockResolveInterpolatable.mockRestore();
     });
   });
@@ -305,7 +305,7 @@ describe('DataDirectiveHandler', () => {
       // Mock the recursive resolver
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedResolvedData);
 
-      const result = await handler.execute(mockProcessingContext);
+      const result = await handler.handle(mockProcessingContext);
       const resultState = getStateFromResult(result);
 
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
@@ -323,7 +323,7 @@ describe('DataDirectiveHandler', () => {
       const expectedResolvedData = { text: 'Hello Alice!' };
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedResolvedData);
 
-      const result = await handler.execute(mockProcessingContext);
+      const result = await handler.handle(mockProcessingContext);
       const resultState = getStateFromResult(result);
 
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
@@ -347,7 +347,7 @@ describe('DataDirectiveHandler', () => {
       };
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedResolvedData);
 
-      const result = await handler.execute(mockProcessingContext);
+      const result = await handler.handle(mockProcessingContext);
       const resultState = getStateFromResult(result);
 
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
