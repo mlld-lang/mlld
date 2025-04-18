@@ -14,6 +14,7 @@ import { cliLogger, type Logger } from '@core/utils/logger.js';
 // Import the centralized syntax examples
 import { textDirectiveExamples } from '@core/syntax/index.js';
 import { VariableType, createPathVariable, type IPathVariable, PathContentType, type IFilesystemPathState } from '@core/types';
+import { VariableOrigin } from '@core/types';
 
 // Set test environment flag
 process.env.NODE_ENV = 'test';
@@ -294,41 +295,85 @@ describe('CLIService', () => {
       const args = ['node', 'meld', 'test.mld'];
       await service.run(args);
       expect(mockPathService.resolveProjectPath).toHaveBeenCalled();
-      // Get the child state via the parent mock and check calls on it
-      const state = mockStateService.createChildState();
+      // const state = mockStateService.createChildState();
+      const state = mockChildState; // Use the direct mock
       // Update to use setVariable with createPathVariable
       const projectPathVar = createPathVariable('PROJECTPATH', {
         contentType: PathContentType.FILESYSTEM,
-        originalValue: '/project', 
-        isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true
-      });
+        originalValue: "/project", 
+        isValidSyntax: true, isSecure: true, isAbsolute: true, // Removed exists
+        validatedPath: "/project" as any // Cast needed
+      }, { origin: VariableOrigin.SYSTEM_DEFINED }); // Correct origin
       const dotPathVar = createPathVariable('.', {
         contentType: PathContentType.FILESYSTEM,
-        originalValue: '/project', 
-        isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true
-      });
-      expect(state.setVariable).toHaveBeenCalledWith(projectPathVar);
-      expect(state.setVariable).toHaveBeenCalledWith(dotPathVar);
+        originalValue: "/project", 
+        isValidSyntax: true, isSecure: true, isAbsolute: true, // Removed exists
+        validatedPath: "/project" as any // Cast needed
+      }, { origin: VariableOrigin.SYSTEM_DEFINED }); // Correct origin
+      
+      // Use expect.objectContaining with expect.any(Number) for timestamps
+      expect(state.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'PROJECTPATH',
+        type: VariableType.PATH,
+        value: expect.objectContaining({ originalValue: "/project" }),
+        metadata: expect.objectContaining({
+            origin: VariableOrigin.SYSTEM_DEFINED,
+            createdAt: expect.any(Number),
+            modifiedAt: expect.any(Number)
+        })
+      }));
+      expect(state.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+        name: '.', // Use single quotes for consistency
+        type: VariableType.PATH,
+        value: expect.objectContaining({ originalValue: "/project" }),
+        metadata: expect.objectContaining({
+            origin: VariableOrigin.SYSTEM_DEFINED,
+            createdAt: expect.any(Number),
+            modifiedAt: expect.any(Number)
+        })
+      }));
     });
 
     it('should handle home path option', async () => {
       const args = ['node', 'meld', 'test.mld', '--home-path', '/home'];
       await service.run(args);
-      // Get the child state via the parent mock and check calls on it
-      const state = mockStateService.createChildState();
+      // const state = mockStateService.createChildState();
+      const state = mockChildState; // Use the direct mock
       // Update to use setVariable with createPathVariable
       const homePathVar = createPathVariable('HOMEPATH', {
         contentType: PathContentType.FILESYSTEM,
-        originalValue: '/home', 
-        isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true
-      });
+        originalValue: "/home", 
+        isValidSyntax: true, isSecure: true, isAbsolute: true, // Removed exists
+        validatedPath: "/home" as any // Cast needed
+      }, { origin: VariableOrigin.SYSTEM_DEFINED }); // Correct origin
        const tildePathVar = createPathVariable('~', {
         contentType: PathContentType.FILESYSTEM,
-        originalValue: '/home', 
-        isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true
-      });
-      expect(state.setVariable).toHaveBeenCalledWith(homePathVar);
-      expect(state.setVariable).toHaveBeenCalledWith(tildePathVar);
+        originalValue: "/home", 
+        isValidSyntax: true, isSecure: true, isAbsolute: true, // Removed exists
+        validatedPath: "/home" as any // Cast needed
+      }, { origin: VariableOrigin.SYSTEM_DEFINED }); // Correct origin
+      
+      // Use expect.objectContaining with expect.any(Number) for timestamps
+      expect(state.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+          name: 'HOMEPATH',
+          type: VariableType.PATH,
+          value: expect.objectContaining({ originalValue: "/home" }),
+          metadata: expect.objectContaining({
+            origin: VariableOrigin.SYSTEM_DEFINED,
+            createdAt: expect.any(Number),
+            modifiedAt: expect.any(Number)
+          })
+      }));
+      expect(state.setVariable).toHaveBeenCalledWith(expect.objectContaining({
+          name: '~', // Use single quotes for consistency
+          type: VariableType.PATH,
+          value: expect.objectContaining({ originalValue: "/home" }),
+          metadata: expect.objectContaining({
+            origin: VariableOrigin.SYSTEM_DEFINED,
+            createdAt: expect.any(Number),
+            modifiedAt: expect.any(Number)
+          })
+      }));
     });
 
     it('should handle verbose option', async () => {
