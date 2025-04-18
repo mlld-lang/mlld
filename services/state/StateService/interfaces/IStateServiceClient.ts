@@ -22,34 +22,6 @@ interface IStateServiceClient {
   getCurrentFilePath(): string | null;
   
   /**
-   * Gets all text variables, including inherited ones from parent states.
-   * 
-   * @returns A map of all text variables
-   */
-  getAllTextVars(): Map<string, string>;
-  
-  /**
-   * Gets all data variables, including inherited ones from parent states.
-   * 
-   * @returns A map of all data variables
-   */
-  getAllDataVars(): Map<string, unknown>;
-  
-  /**
-   * Gets all path variables, including inherited ones from parent states.
-   * 
-   * @returns A map of all path variables
-   */
-  getAllPathVars(): Map<string, string>;
-  
-  /**
-   * Gets all commands, including inherited ones from parent states.
-   * 
-   * @returns A map of all commands
-   */
-  getAllCommands(): Map<string, { command: string; options?: Record<string, unknown> }>;
-  
-  /**
    * Checks if transformation is enabled.
    * 
    * @returns true if transformation is enabled, false otherwise

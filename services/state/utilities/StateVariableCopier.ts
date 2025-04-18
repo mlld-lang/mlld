@@ -1,6 +1,8 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { stateLogger as logger } from '@core/utils/logger.js';
+import { VariableType, VariableCopyOptions } from '@core/types';
+import type { MeldVariable, VariableType } from '@core/types';
 
 /**
  * Variable type supported by the State service
@@ -51,167 +53,51 @@ export class StateVariableCopier {
    * @param options Additional options for copying
    * @returns Number of variables copied
    */
-  public copyAllVariables(
-    sourceState: IStateService, 
+  public async copyAllVariables(
+    sourceState: IStateService,
     targetState: IStateService,
     options: VariableCopyOptions = {}
-  ): number {
+  ): Promise<number> {
     const {
       skipExisting = false,
       trackContextBoundary = true,
-      trackVariableCrossing = true
+      trackVariableCrossing = true,
     } = options;
 
     let totalCopied = 0;
-    
-    // Track boundary if requested and tracking service exists
+
     if (trackContextBoundary && this.trackingService) {
-      let filePath: string | undefined;
-      try {
-        filePath = sourceState.getCurrentFilePath?.() || undefined;
-      } catch (error) {
-        logger.debug('Error getting current file path', { error });
-      }
-      this.trackContextBoundary(sourceState, targetState, filePath);
+      this.trackContextBoundary(sourceState, targetState, sourceState.getCurrentFilePath() ?? undefined);
     }
 
-    // Copy text variables
-    totalCopied += this.copyVariableType(
-      sourceState, 
-      targetState, 
-      'text', 
-      skipExisting,
-      trackVariableCrossing
-    );
-    
-    // Copy data variables
-    totalCopied += this.copyVariableType(
-      sourceState, 
-      targetState, 
-      'data', 
-      skipExisting,
-      trackVariableCrossing
-    );
-    
-    // Copy path variables
-    totalCopied += this.copyVariableType(
-      sourceState, 
-      targetState, 
-      'path', 
-      skipExisting,
-      trackVariableCrossing
-    );
-    
-    // Copy commands
-    totalCopied += this.copyVariableType(
-      sourceState, 
-      targetState, 
-      'command', 
-      skipExisting,
-      trackVariableCrossing
-    );
-    
-    // Track boundary again if requested and tracking service exists
-    if (trackContextBoundary && this.trackingService) {
-      let filePath: string | undefined;
-      try {
-        filePath = sourceState.getCurrentFilePath?.() || undefined;
-      } catch (error) {
-        logger.debug('Error getting current file path', { error });
+    const sourceNode = sourceState.getInternalStateNode();
+    const variableMaps = {
+      text: sourceNode.textVariables,
+      data: sourceNode.dataVariables,
+      path: sourceNode.pathVariables,
+      command: sourceNode.commandVariables,
+    };
+
+    for (const [type, map] of Object.entries(variableMaps)) {
+      const varType = type as VariableType;
+      for (const [name, variable] of map.entries()) {
+        if (skipExisting && targetState.hasVariable(name, varType)) {
+          continue;
+        }
+        // Directly use the existing MeldVariable object from the source map
+        await targetState.setVariable(variable);
+        totalCopied++;
+        if (trackVariableCrossing && this.trackingService) {
+          this.trackVariableCrossing(name, varType, sourceState, targetState);
+        }
       }
-      this.trackContextBoundary(sourceState, targetState, filePath);
+    }
+
+    if (trackContextBoundary && this.trackingService) {
+      this.trackContextBoundary(sourceState, targetState, sourceState.getCurrentFilePath() ?? undefined);
     }
 
     return totalCopied;
-  }
-
-  /**
-   * Copy variables of a specific type between states
-   */
-  private copyVariableType(
-    sourceState: IStateService,
-    targetState: IStateService,
-    variableType: VariableType,
-    skipExisting: boolean,
-    trackVariableCrossing: boolean
-  ): number {
-    let getMethod: keyof IStateService;
-    let setMethod: keyof IStateService;
-    let copied = 0;
-    
-    // Select the appropriate methods based on variable type
-    switch (variableType) {
-      case 'text':
-        getMethod = 'getAllTextVars';
-        setMethod = 'setTextVar';
-        break;
-      case 'data':
-        getMethod = 'getAllDataVars';
-        setMethod = 'setDataVar';
-        break;
-      case 'path':
-        getMethod = 'getAllPathVars';
-        setMethod = 'setPathVar';
-        break;
-      case 'command':
-        getMethod = 'getAllCommands';
-        setMethod = 'setCommand';
-        break;
-    }
-    
-    // Check if methods exist
-    if (typeof sourceState[getMethod] !== 'function' || 
-        typeof targetState[setMethod] !== 'function') {
-      return 0;
-    }
-    
-    try {
-      // Get all variables of the specified type
-      const variables = (sourceState[getMethod] as Function)();
-      
-      // Copy each variable
-      variables.forEach((value: any, name: string) => {
-        // Skip if variable exists and skipExisting is true
-        if (skipExisting) {
-          // Determine the appropriate get method for checking existence
-          let existsMethod: keyof IStateService;
-          switch (variableType) {
-            case 'text':
-              existsMethod = 'getTextVar';
-              break;
-            case 'data':
-              existsMethod = 'getDataVar';
-              break;
-            case 'path':
-              existsMethod = 'getPathVar';
-              break;
-            case 'command':
-              existsMethod = 'getCommand';
-              break;
-          }
-          
-          // Check if variable exists in target state
-          if (typeof targetState[existsMethod] === 'function' && 
-              (targetState[existsMethod] as Function)(name) !== undefined) {
-            return;
-          }
-        }
-        
-        // Set the variable
-        (targetState[setMethod] as Function)(name, value);
-        copied++;
-        
-        // Track variable crossing if requested and tracking service exists
-        if (trackVariableCrossing && this.trackingService) {
-          this.trackVariableCrossing(name, variableType, sourceState, targetState);
-        }
-      });
-      
-      return copied;
-    } catch (error) {
-      logger.debug(`Error copying ${variableType} variables`, { error });
-      return 0;
-    }
   }
 
   /**
@@ -222,110 +108,62 @@ export class StateVariableCopier {
    * @param options Additional options for copying
    * @returns Number of variables copied
    */
-  public copySpecificVariables(
+  public async copySpecificVariables(
     sourceState: IStateService,
     targetState: IStateService,
     variableNames: Array<{ name: string; alias?: string }>,
     options: VariableCopyOptions = {}
-  ): number {
+  ): Promise<number> {
     const {
       skipExisting = false,
       trackContextBoundary = true,
-      trackVariableCrossing = true
+      trackVariableCrossing = true,
     } = options;
 
     let totalCopied = 0;
 
-    // Track boundary if requested and tracking service exists
     if (trackContextBoundary && this.trackingService) {
-      let filePath: string | undefined;
-      try {
-        filePath = sourceState.getCurrentFilePath?.() || undefined;
-      } catch (error) {
-        logger.debug('Error getting current file path', { error });
-      }
-      this.trackContextBoundary(sourceState, targetState, filePath);
+      this.trackContextBoundary(sourceState, targetState, sourceState.getCurrentFilePath() ?? undefined);
     }
 
     for (const { name, alias } of variableNames) {
-      // Try to copy as a text variable
-      const textValue = sourceState.getTextVar?.(name);
-      if (textValue !== undefined) {
-        // Skip if variable exists and skipExisting is true
-        if (skipExisting && targetState.getTextVar?.(alias || name) !== undefined) {
-          continue;
-        }
-        
-        targetState.setTextVar(alias || name, textValue);
-        totalCopied++;
-        
-        if (trackVariableCrossing && this.trackingService) {
-          this.trackVariableCrossing(name, 'text', sourceState, targetState, alias);
-        }
-        continue;
-      }
+      const targetName = alias || name;
+      const sourceVariable = sourceState.getVariable(name); // Find variable regardless of type first
 
-      // Try to copy as a data variable
-      const dataValue = sourceState.getDataVar?.(name);
-      if (dataValue !== undefined) {
-        // Skip if variable exists and skipExisting is true
-        if (skipExisting && targetState.getDataVar?.(alias || name) !== undefined) {
+      if (sourceVariable) {
+        // Check existence in target using targetName and the source variable's type
+        if (skipExisting && targetState.hasVariable(targetName, sourceVariable.type)) {
           continue;
         }
-        
-        targetState.setDataVar(alias || name, dataValue);
-        totalCopied++;
-        
-        if (trackVariableCrossing && this.trackingService) {
-          this.trackVariableCrossing(name, 'data', sourceState, targetState, alias);
-        }
-        continue;
-      }
 
-      // Try to copy as a path variable
-      const pathValue = sourceState.getPathVar?.(name);
-      if (pathValue !== undefined) {
-        // Skip if variable exists and skipExisting is true
-        if (skipExisting && targetState.getPathVar?.(alias || name) !== undefined) {
-          continue;
+        // Create a copy for the target, potentially with a new name (alias)
+        // Use a structured clone or similar deep copy mechanism if available/necessary
+        // For now, assume a basic spread might suffice, but be wary of nested objects/metadata
+        // IMPORTANT: Need a proper deep cloning mechanism here, especially for metadata and complex values.
+        // Using structuredClone if available, otherwise a placeholder.
+        let targetVariable: MeldVariable;
+        try {
+           targetVariable = structuredClone(sourceVariable);
+           targetVariable.name = targetName; // Assign the alias/target name
+        } catch (e) { // structuredClone might fail on certain types or environments
+          logger.warn(`StructuredClone failed for variable ${name}, using shallow copy.`, { error: e });
+          targetVariable = { ...sourceVariable, name: targetName };
+          // Consider adding more robust deep copy logic here if needed
         }
-        
-        targetState.setPathVar(alias || name, pathValue);
-        totalCopied++;
-        
-        if (trackVariableCrossing && this.trackingService) {
-          this.trackVariableCrossing(name, 'path', sourceState, targetState, alias);
-        }
-        continue;
-      }
 
-      // Try to copy as a command
-      const commandValue = sourceState.getCommand?.(name);
-      if (commandValue !== undefined) {
-        // Skip if variable exists and skipExisting is true
-        if (skipExisting && targetState.getCommand?.(alias || name) !== undefined) {
-          continue;
-        }
-        
-        targetState.setCommand(alias || name, commandValue);
+        await targetState.setVariable(targetVariable);
         totalCopied++;
-        
+
         if (trackVariableCrossing && this.trackingService) {
-          this.trackVariableCrossing(name, 'command', sourceState, targetState, alias);
+          this.trackVariableCrossing(name, sourceVariable.type, sourceState, targetState, alias);
         }
-        continue;
+      } else {
+         logger.debug(`Variable '${name}' not found in source state ${sourceState.getStateId()}`);
       }
     }
 
-    // Track boundary again if requested and tracking service exists
     if (trackContextBoundary && this.trackingService) {
-      let filePath: string | undefined;
-      try {
-        filePath = sourceState.getCurrentFilePath?.() || undefined;
-      } catch (error) {
-        logger.debug('Error getting current file path', { error });
-      }
-      this.trackContextBoundary(sourceState, targetState, filePath);
+      this.trackContextBoundary(sourceState, targetState, sourceState.getCurrentFilePath() ?? undefined);
     }
 
     return totalCopied;

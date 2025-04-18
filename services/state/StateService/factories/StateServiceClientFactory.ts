@@ -29,10 +29,11 @@ export class StateServiceClientFactory {
     return {
       getStateId: () => this.stateService.getStateId(),
       getCurrentFilePath: () => this.stateService.getCurrentFilePath(),
-      getAllTextVars: () => this.stateService.getAllTextVars(),
-      getAllDataVars: () => this.stateService.getAllDataVars(),
-      getAllPathVars: () => this.stateService.getAllPathVars(),
-      getAllCommands: () => this.stateService.getAllCommands(),
+      // TODO: Re-implement these if StateTrackingService truly needs raw maps
+      // getAllTextVars: () => /* ... */,
+      // getAllDataVars: () => /* ... */,
+      // getAllPathVars: () => /* ... */,
+      // getAllCommands: () => /* ... */,
       isTransformationEnabled: () => this.stateService.isTransformationEnabled()
     };
   }

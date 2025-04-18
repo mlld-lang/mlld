@@ -36,7 +36,7 @@ Refactor the core state management system (`StateNode`, `IStateService`, `StateF
 *   **Files:** `services/state/StateService/StateService.ts`
 *   **Status:** Completed. Service refactored.
 
-**Phase 5: Update Tests [NEXT]**
+**Phase 5: Update Tests [COMPLETE]**
 
 *   **Objective:** Ensure unit tests reflect the new state structure and interface.
 *   **Files:** 
@@ -53,10 +53,22 @@ Refactor the core state management system (`StateNode`, `IStateService`, `StateF
     *   *Potentially others implicitly affected by state changes.*
 *   **Status:** Completed.
 
-**Phase 6: Refactor Codebase [PENDING]**
+**Phase 6: Refactor Codebase**
 
 *   **Objective:** Update all service/handler code that uses the state service.
-*   **Files:** Various files in `services/`
+*   **Files:** 
+    *   `services/state/StateService/factories/StateServiceClientFactory.ts`
+    *   `services/state/StateService/migration.ts`
+    *   `services/state/StateService/migration.test.ts`
+    *   `services/state/StateService/AlwaysTransformedStateService.ts`
+    *   `services/state/utilities/StateVariableCopier.ts`
+    *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.test.ts`
+    *   `services/pipeline/InterpreterService/InterpreterService.ts`
+    *   `services/resolution/ResolutionService/ResolutionService.ts` (Needs check - indirect usage via context)
+    *   `services/pipeline/DirectiveService/DirectiveService.ts` (Needs check - likely usage)
+    *   `services/pipeline/DirectiveService/handlers/*` (All handlers need checking)
+    *   `services/pipeline/OutputService/OutputService.ts` (Needs check - indirect usage)
+    *   `services/cli/CLIService/CLIService.ts` (Updated in Phase 5)
 *   **Status:** Pending.
 
 ---

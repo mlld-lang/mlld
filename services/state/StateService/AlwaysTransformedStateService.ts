@@ -27,10 +27,11 @@ import type { TransformationOptions } from './IStateService.js';
  * @returns A proxy that ensures transformation is always enabled
  */
 export function createAlwaysTransformedState(state: IStateService): IStateService {
-  // Make sure transformation is enabled
-  state.enableTransformation(true);
+  // Make sure transformation is enabled initially
+  state.setTransformationEnabled(true);
+  // Optionally set default transformation options if desired
+  // state.setTransformationOptions({ /* default options */ });
   
-  // Return a proxy that overrides the transformation-related methods
   return new Proxy(state, {
     get(target, prop, receiver) {
       // Override isTransformationEnabled to always return true
@@ -38,11 +39,11 @@ export function createAlwaysTransformedState(state: IStateService): IStateServic
         return () => true;
       }
       
-      // Override enableTransformation to ensure it's always enabled
-      if (prop === 'enableTransformation') {
-        return (options?: TransformationOptions | boolean) => {
-          // Call the original method with true to ensure it's enabled
-          target.enableTransformation(true);
+      // Override setTransformationEnabled to ignore input and always set true
+      if (prop === 'setTransformationEnabled') {
+        return (enabled: boolean) => {
+          // Call the original method, but always with true
+          target.setTransformationEnabled(true);
         };
       }
       
@@ -51,7 +52,7 @@ export function createAlwaysTransformedState(state: IStateService): IStateServic
         return () => true;
       }
       
-      // All other properties work as normal
+      // Forward other methods like getTransformationOptions, setTransformationOptions, etc.
       return Reflect.get(target, prop, receiver);
     }
   });
