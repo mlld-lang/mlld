@@ -21,19 +21,19 @@ import type {
   IUrlPathState,
   ICommandDefinition,
   MeldVariable,
-  MeldPath,
-  VariableMap,
-} from '@core/types/index.js';
+  MeldPath
+} from '@core/types';
 import { 
   VariableOrigin,
   createTextVariable,
   createDataVariable,
   createPathVariable,
   createCommandVariable
-} from '@core/types/index.js';
-import { VariableType } from '@core/types/index.js';
+} from '@core/types';
+import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/guards.js';
 import { cloneDeep } from 'lodash';
 import * as crypto from 'crypto';
+import { VariableType } from '@core/types';
 
 // Helper function to get the container
 function getContainer() {
@@ -168,9 +168,10 @@ export class StateService implements IStateService {
    * Initialize the state, either as a fresh state or as a child of a parent state
    */
   private initializeState(parentService?: IStateService): void {
+    const parentNode = parentService?.getInternalStateNode(); 
     this.currentState = this.stateFactory.createState({
       source: 'new',
-      parentServiceRef: parentService
+      parentState: parentNode
     });
     
     // Register state with tracking service if available
@@ -766,17 +767,12 @@ export class StateService implements IStateService {
    * Used primarily for testing
    */
   reset(): void {
-    // Reset to a fresh state
-    this.initializeState();
+    // Reset to a fresh state using the same initialization logic
+    this.initializeState(); // Re-initializes currentState
     
     // Reset flags
     this._isImmutable = false;
-    this._transformationEnabled = false;
-    this._transformationOptions = {
-      enabled: false,
-      preserveOriginal: true,
-      transformNested: true
-    };
+    // No need to reset transformation options here as initializeState creates a fresh node with defaults
   }
 
   /**
@@ -826,7 +822,7 @@ export class StateService implements IStateService {
             id: this.currentState.stateId,
             source: this.currentState.source || 'new',  // Use original source or default to 'new'
             filePath: this.getCurrentFilePath() || undefined,
-            transformationEnabled: this._transformationEnabled,
+            transformationEnabled: this.isTransformationEnabled(),
             createdAt: Date.now()
           });
           
@@ -842,7 +838,7 @@ export class StateService implements IStateService {
           id: this.currentState.stateId,
           source: this.currentState.source || 'new',  // Use original source or default to 'new'
           filePath: this.getCurrentFilePath() || undefined,
-          transformationEnabled: this._transformationEnabled,
+          transformationEnabled: this.isTransformationEnabled(),
           createdAt: Date.now()
         });
       } catch (error) {
@@ -858,145 +854,169 @@ export class StateService implements IStateService {
     return this.currentState;
   }
 
-  // Implement generic getVariable
+  /**
+   * Gets a variable by name, optionally specifying the expected type.
+   * Looks locally first, then traverses up the parent chain.
+   */
   getVariable(name: string, type?: VariableType): MeldVariable | undefined {
     let variable: MeldVariable | undefined = undefined;
 
-    // Check local state first based on type hint or by checking all types
+    // Look locally
     if (type) {
       switch (type) {
-        case VariableType.TEXT: 
-          variable = this.currentState.variables.text.get(name);
-          break;
-        case VariableType.DATA: 
-          variable = this.currentState.variables.data.get(name);
-          break;
-        case VariableType.PATH: 
-          variable = this.currentState.variables.path.get(name);
-          break;
-        case VariableType.COMMAND: 
-          variable = this.currentState.commands.get(name);
-          break;
+        case VariableType.TEXT: variable = this.currentState.variables.text.get(name); break;
+        case VariableType.DATA: variable = this.currentState.variables.data.get(name); break;
+        case VariableType.PATH: variable = this.currentState.variables.path.get(name); break;
+        case VariableType.COMMAND: variable = this.currentState.commands.get(name); break;
       }
     } else {
-      // Check in order if type not specified
-      // --- Add Log --- 
-      const textMapKeys = Array.from(this.currentState.variables.text.keys());
-      process.stdout.write(`DEBUG: [StateService.getVariable] Checking state ${this.getStateId()}. Text keys: [${textMapKeys.join(', ')}]\n`);
-      // ---------------
-      variable = this.currentState.variables.text.get(name) 
-          ?? this.currentState.variables.data.get(name) 
-          ?? this.currentState.variables.path.get(name) 
-          ?? this.currentState.commands.get(name);
-    }
-    
-    // If found locally, return it
-    if (variable) {
-        // Optional: Add log for local find
-        // process.stdout.write(`DEBUG: [StateService.getVariable] Found '${name}' locally in State ${this.getStateId()}\n`);
-        return variable;
+      // Check in preferred order if no type specified
+      variable =
+        this.currentState.variables.text.get(name) ??
+        this.currentState.variables.data.get(name) ??
+        this.currentState.variables.path.get(name) ??
+        this.currentState.commands.get(name);
     }
 
-    // If not found locally, check parent state (RECURSIVE)
-    const parentService = this.getParentState();
-    if (parentService) {
-       process.stdout.write(`DEBUG: [StateService.getVariable] '${name}' not found locally (State ${this.getStateId()}), checking parent (State ${parentService.getStateId()})...\n`);
-       // IMPORTANT: Pass the original type hint to the parent call
-       return parentService.getVariable(name, type); 
+    // If not found locally, check parent
+    if (!variable && this.currentState.parentServiceRef) {
+      // logger.debug(`Variable \'${name}\' not found locally (State ID: ${this.getStateId()}), checking parent.`);
+      // Recursive call to parent\n      return this.currentState.parentServiceRef.getVariable(name, type);
     }
     
-    process.stdout.write(`DEBUG: [StateService.getVariable] '${name}' not found locally (State ${this.getStateId()}) and no parent.\n`);
-    return undefined;
+    // If found locally, ensure the type matches if a specific type was requested
+    // (This check might be redundant if the initial lookup used the type correctly, but keeps logic clear)
+    if (variable && type && variable.type !== type) {
+        // logger.debug(`Variable \'${name}\' found locally but type mismatch (Found: ${variable.type}, Expected: ${type}). State ID: ${this.getStateId()}`);
+        return undefined; // Type mismatch
+    }
+
+    // Return the found variable (or undefined if not found anywhere)
+    return variable;
   }
 
-  // Implement generic setVariable
+  /**
+   * Sets a variable using a pre-constructed MeldVariable object.
+   */
   async setVariable(variable: MeldVariable): Promise<MeldVariable> {
     this.checkMutable();
-    switch (variable.type) {
-      case VariableType.TEXT:
-        // Pass variable.value (string) to setTextVar
-        return await this.setTextVar(variable.name, variable.value, variable.metadata);
-      case VariableType.DATA:
-        // Pass variable.value (JsonValue) to setDataVar
-        return await this.setDataVar(variable.name, variable.value, variable.metadata);
-      case VariableType.PATH:
-        // Pass variable.value (IFilesystemPathState | IUrlPathState) to setPathVar
-        return await this.setPathVar(variable.name, variable.value, variable.metadata);
-      case VariableType.COMMAND:
-        // Pass variable.value (ICommandDefinition) to setCommandVar
-        return await this.setCommandVar(variable.name, variable.value, variable.metadata);
-      default:
-        // Handle unexpected variable type if necessary, e.g., throw an error
-        // or log a warning. For exhaustive check, cast to `never`.
-        const exhaustiveCheck: never = variable;
-        throw new Error(`Unhandled variable type: ${(exhaustiveCheck as any)?.type}`);
-    }
-  }
+    const variableClone = cloneDeep(variable);
+    const { name, type } = variableClone;
+    let newVariables = { ...this.currentState.variables };
+    let newCommands = this.currentState.commands;
 
-  // Implement generic hasVariable
-  hasVariable(name: string, type?: VariableType): boolean {
-    if (type) {
-      switch (type) {
-        case VariableType.TEXT: return this.currentState.variables.text.has(name);
-        case VariableType.DATA: return this.currentState.variables.data.has(name);
-        case VariableType.PATH: return this.currentState.variables.path.has(name);
-        case VariableType.COMMAND: return this.currentState.commands.has(name);
-        default: return false;
-      }
+    if (isTextVariable(variableClone)) {
+        const textMap = new Map(newVariables.text);
+        textMap.set(name, variableClone);
+        newVariables = { ...newVariables, text: textMap };
+    } else if (isDataVariable(variableClone)) {
+        const dataMap = new Map(newVariables.data);
+        dataMap.set(name, variableClone);
+        newVariables = { ...newVariables, data: dataMap };
+    } else if (isPathVariable(variableClone)) {
+        const pathMap = new Map(newVariables.path);
+        pathMap.set(name, variableClone);
+        newVariables = { ...newVariables, path: pathMap };
+    } else if (isCommandVariable(variableClone)) {
+        newCommands = new Map(newCommands);
+        newCommands.set(name, variableClone);
     } else {
-      // Check across all types if no specific type is given
-      return this.currentState.variables.text.has(name) ||
-             this.currentState.variables.data.has(name) ||
-             this.currentState.variables.path.has(name) ||
-             this.currentState.commands.has(name);
+        // Handle potential future variable types or throw error
+        logger.error('Attempted to set unknown variable type', { variable });
+        throw new Error(`Unsupported variable type: ${ (variable as any)?.type }`);
     }
+
+    // Use generic source name for the event
+    await this.updateState({ variables: newVariables, commands: newCommands }, `setVariable:${name}`);
+    
+    // Return the original (or cloned) variable object as per interface
+    return variableClone;
   }
 
-  // Implement generic removeVariable
+  /**
+   * Checks if a variable exists, optionally specifying the type.
+   * Looks locally first, then traverses up the parent chain.
+   */
+  hasVariable(name: string, type?: VariableType): boolean {
+     // Use getVariable which handles the parent lookup logic
+     return !!this.getVariable(name, type);
+  }
+
+  /**
+   * Removes a variable, optionally specifying the type.
+   * Only removes from the local state, does not affect parents.
+   */
   async removeVariable(name: string, type?: VariableType): Promise<boolean> {
     this.checkMutable();
     let removed = false;
-    if (type === undefined || type === VariableType.TEXT) {
-      const text = new Map(this.currentState.variables.text);
-      if (text.delete(name)) {
-        await this.updateState({ variables: { ...this.currentState.variables, text }}, `removeVariable:${name}(text)`);
-        removed = true;
-      }
+    let newVariables = { ...this.currentState.variables };
+    let newCommands = this.currentState.commands;
+    const sourceAction = `removeVariable:${name}${type ? ":" + type : ""}`;
+
+    const varExistsLocally = (mapName: keyof StateNode['variables'] | 'commands') => {
+        if (mapName === 'commands') return this.currentState.commands.has(name);
+        return this.currentState.variables?.[mapName]?.has(name) ?? false;
+    };
+
+    if (type) {
+        // Remove specific type
+        switch (type) {
+            case VariableType.TEXT: 
+                if (varExistsLocally('text')) {
+                    const textMap = new Map(newVariables.text);
+                    removed = textMap.delete(name);
+                    newVariables = { ...newVariables, text: textMap };
+                }
+                break;
+            case VariableType.DATA: 
+                 if (varExistsLocally('data')) {
+                    const dataMap = new Map(newVariables.data);
+                    removed = dataMap.delete(name);
+                    newVariables = { ...newVariables, data: dataMap };
+                }
+                break;
+            case VariableType.PATH: 
+                 if (varExistsLocally('path')) {
+                    const pathMap = new Map(newVariables.path);
+                    removed = pathMap.delete(name);
+                    newVariables = { ...newVariables, path: pathMap };
+                }
+                break;
+            case VariableType.COMMAND: 
+                 if (varExistsLocally('commands')) {
+                    newCommands = new Map(newCommands);
+                    removed = newCommands.delete(name);
+                 }
+                 break;
+        }
+    } else {
+        // Remove first found type in order
+        if (varExistsLocally('text')) {
+             const textMap = new Map(newVariables.text);
+             removed = textMap.delete(name);
+             newVariables = { ...newVariables, text: textMap };
+        } else if (varExistsLocally('data')) {
+             const dataMap = new Map(newVariables.data);
+             removed = dataMap.delete(name);
+             newVariables = { ...newVariables, data: dataMap };
+        } else if (varExistsLocally('path')) {
+             const pathMap = new Map(newVariables.path);
+             removed = pathMap.delete(name);
+             newVariables = { ...newVariables, path: pathMap };
+        } else if (varExistsLocally('commands')) {
+             newCommands = new Map(newCommands);
+             removed = newCommands.delete(name);
+        }
     }
-    if (type === undefined || type === VariableType.DATA) {
-      const data = new Map(this.currentState.variables.data);
-      if (data.delete(name)) {
-        await this.updateState({ variables: { ...this.currentState.variables, data }}, `removeVariable:${name}(data)`);
-        removed = true;
-      }
+
+    if (removed) {
+        await this.updateState({ variables: newVariables, commands: newCommands }, sourceAction);
     }
-    if (type === undefined || type === VariableType.PATH) {
-      const path = new Map(this.currentState.variables.path);
-      if (path.delete(name)) {
-        await this.updateState({ variables: { ...this.currentState.variables, path }}, `removeVariable:${name}(path)`);
-        removed = true;
-      }
-    }
-    if (type === undefined || type === VariableType.COMMAND) {
-      const commands = new Map(this.currentState.commands);
-      if (commands.delete(name)) {
-        await this.updateState({ commands }, `removeVariable:${name}(command)`);
-        removed = true;
-      }
-    }
-    // If a specific type was requested and nothing was removed, return false.
-    // If no type was specified, return true if anything was removed.
     return removed;
   }
 
   // Add getParentState method to satisfy interface
   getParentState(): IStateService | undefined {
-    // This needs access to the original parentState passed to constructor/initializeState
-    // which is currently not stored directly. We need to modify how parent is tracked.
-    // For now, return undefined. This might need a bigger change if parent access is crucial.
-    // TODO: Revisit parent state tracking if needed for functionality.
-    // logger.warn('getParentState() is not fully implemented and may return undefined.');
-    // return undefined; 
-    return this._parentState;
+    return this.currentState.parentServiceRef;
   }
 } 

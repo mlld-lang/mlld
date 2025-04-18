@@ -129,6 +129,7 @@ export * from './define';
 export * from './state';
 export * from '../errors/index';
 export * from './dependencies.js';
+export * from './guards.js';
 
 // Explicitly export types from resolution and embed using aliases where needed
 export type { 
