@@ -54,12 +54,16 @@ describe('TextDirectiveHandler - Command Execution', () => {
     vi.spyOn(fixture.fileSystemService, 'getCwd').mockReturnValue('/test');
     vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: 'Hello Command\n', stderr: '' });
     vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue(command); // Assume command string is resolved directly
-    const setTextVarSpy = vi.spyOn(fixture.stateService, 'setTextVar');
+    const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
 
     await fixture.executeHandler(node);
 
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
-    expect(setTextVarSpy).toHaveBeenCalledWith(identifier, 'Hello Command'); // Handler removes trailing newline
+    expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'text',
+      name: identifier,
+      value: 'Hello Command'
+    }));
   });
   
   it('should handle variable references in command input', async () => {
@@ -83,13 +87,17 @@ describe('TextDirectiveHandler - Command Execution', () => {
     vi.spyOn(fixture.fileSystemService, 'getCwd').mockReturnValue('/test');
     const resolveNodesSpy = vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue(resolvedCommand);
     vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: 'Input: test value\n', stderr: '' });
-    const setTextVarSpy = vi.spyOn(fixture.stateService, 'setTextVar');
+    const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
 
     await fixture.executeHandler(node);
 
     expect(resolveNodesSpy).toHaveBeenCalledWith(commandTemplateNodes, expect.anything());
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(resolvedCommand, { cwd: '/test' });
-    expect(setTextVarSpy).toHaveBeenCalledWith(identifier, 'Input: test value');
+    expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'text',
+      name: identifier,
+      value: 'Input: test value'
+    }));
   });
   
   it('should handle special characters in command outputs', async () => {
@@ -109,12 +117,16 @@ describe('TextDirectiveHandler - Command Execution', () => {
     vi.spyOn(fixture.fileSystemService, 'getCwd').mockReturnValue('/test');
     const resolveNodesSpy = vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue(command);
     vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: `${expectedOutput}\n`, stderr: '' });
-    const setTextVarSpy = vi.spyOn(fixture.stateService, 'setTextVar');
+    const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
 
     await fixture.executeHandler(node);
 
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
-    expect(setTextVarSpy).toHaveBeenCalledWith(identifier, expectedOutput);
+    expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'text',
+      name: identifier,
+      value: expectedOutput
+    }));
   });
   
   it('should handle multi-line command outputs', async () => {
@@ -134,12 +146,16 @@ describe('TextDirectiveHandler - Command Execution', () => {
     vi.spyOn(fixture.fileSystemService, 'getCwd').mockReturnValue('/test');
     const resolveNodesSpy = vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue(command);
     vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: `${expectedOutput}\n`, stderr: '' });
-    const setTextVarSpy = vi.spyOn(fixture.stateService, 'setTextVar');
+    const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
 
     await fixture.executeHandler(node);
 
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
-    expect(setTextVarSpy).toHaveBeenCalledWith(identifier, expectedOutput); // Handler removes trailing newline
+    expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'text',
+      name: identifier,
+      value: expectedOutput
+    }));
   });
   
   it('should handle nested variable references across multiple levels', async () => {
@@ -165,12 +181,16 @@ describe('TextDirectiveHandler - Command Execution', () => {
     vi.spyOn(fixture.fileSystemService, 'getCwd').mockReturnValue('/test');
     const resolveNodesSpy = vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue(resolvedCommand);
     vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: `${finalOutput}\n`, stderr: '' });
-    const setTextVarSpy = vi.spyOn(fixture.stateService, 'setTextVar');
+    const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
 
     await fixture.executeHandler(node);
 
     expect(resolveNodesSpy).toHaveBeenCalledWith(commandTemplateNodes, expect.anything());
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(resolvedCommand, { cwd: '/test' });
-    expect(setTextVarSpy).toHaveBeenCalledWith(identifier, finalOutput);
+    expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'text',
+      name: identifier,
+      value: finalOutput
+    }));
   });
 }); 
