@@ -70,7 +70,12 @@ describe('CommandResolver', () => {
     parserService = await contextDI.resolve<IParserService>('IParserService');
 
     // Configure mocks using vi.spyOn for test-specific behavior
-    vi.spyOn(stateService, 'getCommandVar').mockImplementation((name: string): CommandVariable | undefined => {
+    vi.spyOn(stateService, 'getVariable').mockImplementation((name: string, typeHint?: VariableType): CommandVariable | undefined => {
+      // Verify the type hint if provided (CommandResolver likely provides it)
+      if (typeHint && typeHint !== VariableType.COMMAND) {
+        return undefined; // Only return command variables
+      }
+      
       let definition: IBasicCommandDefinition | undefined;
       if (name === 'simple') definition = mockSimpleCmdDef;
       if (name === 'echo') definition = mockEchoCmdDef;

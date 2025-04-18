@@ -96,20 +96,6 @@ describe('VariableReferenceResolver Edge Cases', () => {
         return undefined;
     });
 
-    // Setup specific mocks for getDataVar for edge cases where it might be needed
-    // (Though getVariable should be primary)
-    stateService.getDataVar.mockImplementation((name: string): DataVariable | undefined => {
-        if (name === 'data') {
-             // Similar logic as getVariable - default to base
-             return mockDataVarBase;
-        }
-        return undefined;
-    });
-    stateService.getTextVar.mockImplementation((name: string): TextVariable | undefined => {
-        if (name === 'greeting') return mockGreetingVar;
-        return undefined;
-    });
-
     // Explicitly resolve mocks (optional)
     await contextDI.resolve<IStateService>('IStateService');
     // ... resolve others if needed ...
