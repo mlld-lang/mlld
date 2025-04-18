@@ -119,6 +119,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           }
       } else if (source === 'run' && run) {
         const runDetails = run as RunRHSStructure;
+        process.stdout.write(`DEBUG: [TextDirectiveHandler RUN] Start. Identifier: ${identifier}\n`);
         process.stdout.write(`[TextDirectiveHandler LOG] Entered source=run block\n`);
         process.stdout.write(`[TextDirectiveHandler LOG] run object: ${JSON.stringify(runDetails)}\n`);
         process.stdout.write(`[TextDirectiveHandler LOG] runSubtype: ${runDetails.subtype}\n`);
@@ -182,6 +183,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         }
       } else if (source === 'embed' && embed) {
         const embedDetails = embed as EmbedRHSStructure;
+        process.stdout.write(`DEBUG: [TextDirectiveHandler EMBED] Start. Identifier: ${identifier}\n`);
         try {
           const embedSubtype = embedDetails.subtype;
           let fileContent: string;
@@ -256,6 +258,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           );
       }
 
+      process.stdout.write(`DEBUG: [TextDirectiveHandler] Resolved value for ${identifier} (before set): "${resolvedValue}"\n`);
+
       // Prepare metadata for the variable
       const metadata: Partial<VariableMetadata> = {
           origin: VariableOrigin.DIRECT_DEFINITION,
@@ -268,6 +272,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       await state.setVariable(createTextVariable(identifier, resolvedValue, metadata));
       process.stdout.write(`DEBUG: [TextDirectiveHandler] setVariable completed for: ${identifier}. State ID: ${state.getStateId()}\n`);
 
+      process.stdout.write(`DEBUG: [TextDirectiveHandler EXIT] Completed for ${identifier}. Final State ID: ${state.getStateId()}\n`);
       // Return the updated state
       return state as IStateService;
     } catch (error) {

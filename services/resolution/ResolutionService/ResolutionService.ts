@@ -450,32 +450,31 @@ export class ResolutionService implements IResolutionService {
       return result;
     }
 
+    process.stdout.write(`DEBUG: [ResService.resolveNodes] Processing ${nodes.length} nodes. Node types: ${nodes.map(n => n.type).join(', ')}\n`);
+
     for (const node of nodes) {
       if (node.type === 'Text') {
+        process.stdout.write(`DEBUG: [ResService.resolveNodes] Appending TextNode content: "${node.content.substring(0, 50)}..."\n`);
         result += node.content;
       } else if (node.type === 'VariableReference') {
-        // logger.debug(`[ResolutionService.resolveNodes] Resolving VariableReference: ${node.identifier}`);
         process.stdout.write(`DEBUG: [ResService.resolveNodes] Resolving VariableReference: ${node.identifier}\n`);
         try {
           const resolvedValue = await this.variableReferenceResolver.resolve(node, context);
-          // logger.debug(`[ResolutionService.resolveNodes] Resolved ${node.identifier} to: '${resolvedValue.substring(0,50)}...'`);
           process.stdout.write(`DEBUG: [ResService.resolveNodes] Resolved ${node.identifier} to: '${resolvedValue.substring(0,50)}...'\n`);
           result += resolvedValue;
         } catch (error) {
-          // logger.error(`[ResolutionService.resolveNodes] Error resolving VariableReference ${node.identifier}`, { error });
           process.stderr.write(`ERROR: [ResService.resolveNodes] Error resolving VariableReference ${node.identifier}: ${error instanceof Error ? error.message : String(error)}\n`);
-          // Propagate error if strict mode
           if (context.strict) {
-            // logger.error(`[ResolutionService.resolveNodes] Re-throwing error for ${node.identifier} in strict mode.`);
             process.stderr.write(`ERROR: [ResService.resolveNodes] Re-throwing error for ${node.identifier} in strict mode.\n`);
-            throw error; // Re-throw the original error caught from resolver
+            throw error;
+          } else {
+            process.stdout.write(`WARN: [ResService.resolveNodes] Non-strict mode. Error resolving ${node.identifier}. Appending empty string.\n`);
+            // In non-strict mode, append nothing for unresolved variables within a larger string
           }
-          // Otherwise, append nothing or potentially handle differently based on flags
         }
       } else {
         // This block should theoretically be unreachable if InterpolatableValue type guard is correct
-        // logger.warn(`[ResolutionService.resolveNodes] Encountered unexpected node type in InterpolatableValue array.`);
-        process.stdout.write(`WARN: [ResService.resolveNodes] Encountered unexpected node type in InterpolatableValue array.\n`);
+        process.stdout.write(`WARN: [ResService.resolveNodes] Encountered unexpected node type ${node.type} in InterpolatableValue array.\n`);
       }
     }
     // logger.debug(`[ResolutionService.resolveNodes EXIT] Final resolved string length: ${result.length}`);

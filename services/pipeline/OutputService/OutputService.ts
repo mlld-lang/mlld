@@ -592,6 +592,7 @@ export class OutputService implements IOutputService {
   ): Promise<string> {
     const opts = { ...DEFAULT_OPTIONS, ...options };
     
+    process.stdout.write(`DEBUG: [OutputService.convert ENTRY] Format: ${format}, Node Count: ${nodes.length}, State ID: ${state?.getStateId() ?? 'N/A'}\n`);
     logger.debug('Converting output', {
       format,
       nodeCount: nodes.length,
@@ -604,7 +605,9 @@ export class OutputService implements IOutputService {
 
     const formatter = this.formatters.get(format);
     if (!formatter) {
-      throw new MeldOutputError(`Unsupported format: ${format}`, format);
+      const supported = this.getSupportedFormats().join(', ');
+      process.stdout.write(`DEBUG: [OutputService.convert ERROR] Unsupported format: ${format}\n`);
+      throw new Error(`Unsupported output format: ${format}. Supported formats: ${supported}`);
     }
 
     try {
@@ -631,8 +634,10 @@ export class OutputService implements IOutputService {
         pretty: opts.pretty
       });
 
+      process.stdout.write(`DEBUG: [OutputService.convert EXIT] Format: ${format} completed successfully.\n`);
       return result;
     } catch (error) {
+      process.stdout.write(`DEBUG: [OutputService.convert ERROR] Error during ${format} conversion: ${error instanceof Error ? error.message : String(error)}\n`);
       logger.error('Failed to convert output', {
         format,
         error,
@@ -944,55 +949,102 @@ export class OutputService implements IOutputService {
     state: IStateService,
     options?: OutputOptions
   ): Promise<string> {
+    let output = '';
     const opts = { ...DEFAULT_OPTIONS, ...options };
-    try {
-      let output = '';
+    process.stdout.write(`DEBUG: [OutputService.convertToMarkdown ENTRY] Node Count: ${nodes.length}, State ID: ${state?.getStateId() ?? 'N/A'}\n`);
 
-      // Debug: Log node types
-      logger.debug('Converting nodes to markdown', {
-        nodeCount: nodes.length,
-        nodeTypes: nodes.map(n => n.type),
-        isOutputLiteral: true // Always true now
-      });
+    // Set the initial formatting context
+    const initialContext = this.createFormattingContext('document', true);
 
-      // Add state variables if requested
-      if (opts.includeState) {
-        output += this.formatStateVariables(state);
-        if (nodes.length > 0) {
-          output += '\n\n';
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      const currentContext = this.getCurrentFormattingContext();
+      process.stdout.write(`DEBUG: [OutputService.convertToMarkdown LOOP ${i}] Node Type: ${node.type}. State ID: ${state?.getStateId() ?? 'N/A'}\n`);
+      
+      // Handle specific node types
+      if (node.type === 'Text') {
+        // Process variable references within the text node
+        const textNode = node as TextNode;
+        let currentContent = textNode.content;
+        
+        // Regex to find {{...}} patterns (non-greedy)
+        const variableRegex = /\{\{(.*?)\}\}/g;
+        let match;
+        let lastIndex = 0;
+        let resolvedContent = '';
+
+        process.stdout.write(`DEBUG: [OutputService TextNode] Processing content: "${currentContent.substring(0, 100)}..." State ID: ${state.getStateId()}\n`);
+
+        while ((match = variableRegex.exec(currentContent)) !== null) {
+          // Append text before the variable
+          resolvedContent += currentContent.substring(lastIndex, match.index);
+          const variableExpression = match[1].trim();
+          process.stdout.write(`DEBUG: [OutputService TextNode] Found variable reference: {{${variableExpression}}}. State ID: ${state.getStateId()}\n`);
+
+          try {
+            // --- Resolve using VariableReferenceResolver --- 
+            const resolver = this.getVariableResolver();
+            if (resolver && this.variableNodeFactory) {
+              // Create a temporary VariableReferenceNode to pass to the resolver
+              const tempVarNode = this.variableNodeFactory.createVariableReferenceNodeFromString(variableExpression);
+              const resolutionContext = ResolutionContextFactory.create(state, state.getCurrentFilePath() ?? undefined, {
+                  strict: false, // Be permissive for final output resolution
+                  formattingContext: {
+                      isBlock: currentContext.contextType === 'block',
+                      nodeType: 'Text', 
+                      linePosition: 'middle',
+                      isTransformation: true
+                  }
+              });
+              
+              process.stdout.write(`DEBUG: [OutputService TextNode] Calling resolver.resolve for {{${variableExpression}}}. State ID: ${state.getStateId()}\n`);
+              const resolvedValue = await resolver.resolve(tempVarNode, resolutionContext);
+              process.stdout.write(`DEBUG: [OutputService TextNode] Resolved {{${variableExpression}}} to: "${resolvedValue}". State ID: ${state.getStateId()}\n`);
+              resolvedContent += resolvedValue;
+            } else {
+              process.stdout.write(`WARN: [OutputService TextNode] VariableResolver or VariableNodeFactory not available for {{${variableExpression}}}. State ID: ${state.getStateId()}\n`);
+              // Fallback or throw error if resolver/factory is missing?
+              // For now, append the original tag if resolver isn't ready
+              resolvedContent += `{{${variableExpression}}}`;
+            }
+            // --- End Resolve --- 
+          } catch (error) {
+            // Handle resolution errors gracefully in output (e.g., leave tag or show error)
+            process.stdout.write(`ERROR: [OutputService TextNode] Error resolving {{${variableExpression}}}: ${error instanceof Error ? error.message : String(error)}. State ID: ${state.getStateId()}\n`);
+            // Optionally include the error message or original tag based on options
+            resolvedContent += `{{${variableExpression}}}`; // Default: Keep original tag on error
+          }
+          lastIndex = match.index + match[0].length;
         }
-      }
-
-      // Process nodes with exact preservation of all formatting
-      for (const node of nodes) {
-        try {
-          // Get the node output
-          const nodeOutput = await this.nodeToMarkdown(node, state);
-          
-          // Skip empty outputs
-          if (!nodeOutput) continue;
-          
-          // Add to output buffer with NO modifications
-          output += nodeOutput;
-        } catch (nodeError) {
-          // Log detailed error for the specific node
-          logger.error('Error converting node to markdown', {
-            nodeType: node.type,
-            location: node.location,
-            error: nodeError
-          });
-          throw nodeError;
-        }
+        
+        // Append any remaining text after the last variable
+        resolvedContent += currentContent.substring(lastIndex);
+        
+        // Append the fully resolved or partially resolved content
+        output += this.handleNewlines(resolvedContent, currentContext);
+      
+      } else if (node.type === 'CodeFence') {
+        output += this.codeFenceToMarkdown(node);
+      } else if (node.type === 'Comment') {
+        // Comments are typically ignored in Markdown output
+        continue;
+      } else if (node.type === 'Directive') {
+        // Directives are typically ignored in final output unless they produce content
+        continue;
+      } else {
+        // Fallback for unknown node types (should not happen)
+        output += `[UNKNOWN NODE TYPE: ${node.type}]`;
       }
       
-      return output;
-    } catch (error) {
-      throw new MeldOutputError(
-        'Failed to convert to markdown',
-        'markdown',
-        { cause: error instanceof Error ? error : undefined }
-      );
+      // Update line start/end status based on the processed node's content
+      const endsWithNewline = output.endsWith('\n');
+      this.getCurrentFormattingContext().atLineStart = endsWithNewline;
+      this.getCurrentFormattingContext().atLineEnd = false; // Reset for next node
+      this.getCurrentFormattingContext().lastOutputEndedWithNewline = endsWithNewline;
     }
+    
+    process.stdout.write(`DEBUG: [OutputService.convertToMarkdown EXIT] Final Output Length: ${output.length}\n`);
+    return output;
   }
 
   private async convertToXML(

@@ -145,6 +145,7 @@ export class VariableReferenceResolver {
    */
   async resolve(node: VariableReferenceNode, context: ResolutionContext): Promise<string> {
     const currentDepth = context.depth || 0;
+    process.stdout.write(`DEBUG: [VRefResolver.resolve ENTRY] NodeId: ${node.nodeId}, Resolving: ${node.identifier}, ValueType: ${node.valueType}, Fields: ${node.fields?.length ?? 0}, Strict: ${context.strict}, Depth: ${currentDepth}, State ID: ${context.state?.getStateId() ?? 'N/A'}\n`);
     if (currentDepth > this.MAX_RESOLUTION_DEPTH) {
       throw new VariableResolutionError('Maximum resolution depth exceeded', {
           code: 'E_MAX_DEPTH', 
@@ -352,13 +353,14 @@ export class VariableReferenceResolver {
         return undefined;
     }
     // process.stdout.write(`DEBUG: [VarRefResolver.getVariable] ENTER for '${name}'. Context State ID: ${currentState.getStateId() ?? 'N/A'}. Tracker: ${this.resolutionTracker ? 'exists' : 'null'}\n`);
-    process.stdout.write(`DEBUG: [VarRefResolver.getVariable] ENTER for '${name}'. State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
+    process.stdout.write(`DEBUG: [VRefResolver.getVariable] ENTER for '${name}'. Specific Type: ${specificType ?? 'any'}, State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
 
     this.resolutionTracker?.trackAttemptStart(name, `getVariable (type hint: ${specificType ?? 'any'})`);
     
     // process.stdout.write(`DEBUG: [VarRefResolver.getVariable] Calling context.state.getVariable for '${name}'. StateService Instance State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
     const variable: MeldVariable | undefined = await currentState.getVariable(name, specificType as VariableType | undefined); 
 
+    process.stdout.write(`DEBUG: [VRefResolver.getVariable] Looked up '${name}' (hint: ${specificType ?? 'any'}). Found: ${variable ? variable.type + ' variable' : 'nothing'}. State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
     if (variable) {
         // --- Type checking is now redundant here as getVariable handles it --- 
         // if (specificType && variable.type !== specificType) { ... }
@@ -391,6 +393,7 @@ export class VariableReferenceResolver {
         if (this.resolutionTracker) {
            this.resolutionTracker.trackResolutionAttempt(name, `variable-not-found (type hint: ${specificType ?? 'any'})`, false); 
         }
+        process.stdout.write(`DEBUG: [VRefResolver.getVariable] EXIT for '${name}' - Not Found. State ID: ${currentState.getStateId() ?? 'N/A'}\n`);
         return undefined;
     }
   }
@@ -406,7 +409,7 @@ export class VariableReferenceResolver {
   ): Promise<Result<JsonValue | undefined, FieldAccessError>> { // <<< Explicit error type
     let current: JsonValue | undefined = baseValue;
     // logger.debug(`[ACCESS FIELDS ENTRY] Starting accessFields`, { baseValue: JSON.stringify(baseValue), fields: JSON.stringify(fields), variableName });
-    process.stdout.write(`DEBUG: [VRefResolver.accessFields ENTRY] var=${variableName}, fields=${JSON.stringify(fields)}\n`);
+    process.stdout.write(`DEBUG: [VRefResolver.accessFields ENTRY] var=${variableName}, fields=${JSON.stringify(fields)}, State ID: ${context.state?.getStateId() ?? 'N/A'}\n`);
 
     for (let i = 0; i < fields.length; i++) {
       const field = fields[i];
@@ -480,6 +483,7 @@ export class VariableReferenceResolver {
    * Converts a resolved value to its string representation for final output/use.
    */
   private convertToString(value: JsonValue | string | undefined, context: ResolutionContext): string {
+      process.stdout.write(`DEBUG: [VRefResolver.convertToString ENTRY] Type: ${typeof value}, Value: ${String(value).substring(0,50)}..., State ID: ${context.state?.getStateId() ?? 'N/A'}\n`);
       if (value === undefined || value === null) {
           // Use strict mode to determine if null/undefined become empty string or throw?
           // For now, standard behavior is empty string.

@@ -29,7 +29,7 @@ Systematically investigate and fix the core service failures identified in `_pla
 
 ## Refactoring & Investigation Phases (Revised Order)
 
-**Phase 0: Foundational AST & State Refactor [NEXT]**
+**Phase 0: Foundational AST & State Refactor [COMPLETE]**
 
 *   **Rationale:** Foundational issues with state cloning, parent lookups, node identification, and transformation context are hindering progress. Strengthening the state data model (`StateNode`) and AST (`MeldNode`) is crucial before debugging higher-level interactions.
 *   **Objectives:**

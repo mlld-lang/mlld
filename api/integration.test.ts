@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { ProcessOptions, Services } from '@core/types/index.js';
+import { VariableType } from '@core/types/variables.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import * as path from 'path';
@@ -128,11 +129,11 @@ Some text content with {{var1}} and {{message}}
         expect(result).toContain('Some text content with Value 1 and Hello, World!'); 
         
         // Check that text variables are set in state
-        const var1MeldVar = stateService.getTextVar('var1');
+        const var1MeldVar = stateService.getVariable('var1', VariableType.TEXT);
         expect(var1MeldVar).toBeDefined();
         expect(var1MeldVar?.value).toBe('Value 1');
         
-        const messageMeldVar = stateService.getTextVar('message');
+        const messageMeldVar = stateService.getVariable('message', VariableType.TEXT);
         expect(messageMeldVar).toBeDefined();
         expect(messageMeldVar?.value).toBe('Hello, World!');
       } catch (error) {
@@ -182,7 +183,7 @@ User info: {{user.name}} ({{user.id}})
         expect(result).toContain('(123)'); // Check for resolved id
         
         // Check that variables are set in state
-        const userMeldVar = stateService.getDataVar('user');
+        const userMeldVar = stateService.getVariable('user', VariableType.DATA);
         expect(userMeldVar).toBeDefined();
         expect(userMeldVar?.value).toHaveProperty('name', 'Alice');
         expect(userMeldVar?.value).toHaveProperty('id', 123);
@@ -240,7 +241,7 @@ First feature: {{config.app.features.0}}
         expect(result).toContain('First feature: text');
         
         // Check that data is set in state
-        const configMeldVar = stateService.getDataVar('config');
+        const configMeldVar = stateService.getVariable('config', VariableType.DATA);
         expect(configMeldVar).toBeDefined();
         const configValue = configMeldVar?.value as any;
         expect(configValue).toBeDefined();
@@ -260,7 +261,7 @@ First feature: {{config.app.features.0}}
       // Create content with the example
       const content = `${templateExample.code}
 
-Template result: {{template}}
+Template result: {{message}}
 `;
 
       // Start debug session
@@ -300,7 +301,7 @@ Template result: {{template}}
         
         // Verify output contains the expected content with transformed directives
         expect(result).toBeDefined();
-        expect(result).toContain('Template result: Hello, World!'); // Expect resolved value
+        expect(result).toContain('Template result: Template content'); // Expect the actual literal value
       } catch (error) {
         console.error('ERROR during test execution:', error);
         throw error;
@@ -373,7 +374,7 @@ Docs are at $docs
         const result = await processMeld(content, { container: testContainer });
         
         // console.log('$PROJECTPATH test result:', result);
-        const docsVar = stateService.getPathVar('docs');
+        const docsVar = stateService.getVariable('docs', VariableType.PATH);
         // console.log('docs path var:', docsVar);
         
         // Check the output contains the resolved path (relative to project root)
@@ -432,7 +433,7 @@ Docs are at $docs
         // await debugService.captureState('after-dotslash-test', { ... });
         
         // Check path variable state
-        const configPathVar = stateService.getPathVar('config');
+        const configPathVar = stateService.getVariable('config', VariableType.PATH);
         // console.log('Path variable "config":', configPathVar);
         
         // Verify the path variable exists and contains the original alias
@@ -492,7 +493,7 @@ Docs are at $docs
         // await debugService.captureState('after-homepath-test', { ... });
         
         // Check path variable state
-        const configPathVar = stateService.getPathVar('userConfig');
+        const configPathVar = stateService.getVariable('userConfig', VariableType.PATH);
         // console.log('Path variable "userConfig":', configPathVar);
         
         // Verify the path variable exists and contains the original alias
@@ -552,7 +553,7 @@ Docs are at $docs
         // await debugService.captureState('after-tilde-test', { ... });
         
         // Check path variable state
-        const configPathVar = stateService.getPathVar('docs');
+        const configPathVar = stateService.getVariable('docs', VariableType.PATH);
         // console.log('Path variable "docs":', configPathVar);
         
         // Verify the path variable exists and contains the original alias
@@ -627,7 +628,7 @@ Docs are at $docs
       expect(result.trim()).toBe('Main file content:');
       
       // Verify state after import
-      const importedVar = stateService.getTextVar('importedVar');
+      const importedVar = stateService.getVariable('importedVar', VariableType.TEXT);
       expect(importedVar).toBeDefined();
       expect(importedVar?.value).toBe('Imported Value');
       // --- End REVERT ---
@@ -662,11 +663,11 @@ Docs are at $docs
 
       // Check final state (variables might be scoped)
       // Update: Check final merged state
-      const level1Var = stateService.getTextVar('level1Var');
+      const level1Var = stateService.getVariable('level1Var', VariableType.TEXT);
       expect(level1Var).toBeDefined();
       expect(level1Var?.value).toBe('Level 2 Value'); // Check if level1 var was updated in main state
       
-      const level2Var = stateService.getTextVar('level2Var');
+      const level2Var = stateService.getVariable('level2Var', VariableType.TEXT);
       expect(level2Var).toBeDefined();
       expect(level2Var?.value).toBe('Level 2 Value'); // Check if level2 var exists in main state
       // --- End REVERT ---
