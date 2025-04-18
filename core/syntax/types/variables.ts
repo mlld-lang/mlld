@@ -39,7 +39,7 @@ export interface Field {
  * Base interface for variable references
  * This is the consolidated type that replaces TextVarNode, DataVarNode, and PathVarNode
  */
-export interface VariableReferenceNode {
+export interface VariableReferenceNode extends MeldNode {
   type: 'VariableReference';
   identifier: string;
   valueType: VariableType;
@@ -128,6 +128,7 @@ export function createVariableReferenceNode(
     valueType,
     fields,
     isVariableReference: true,
+    nodeId: crypto.randomUUID(),
     ...(format && { format }),
     ...(location && { location })
   };

@@ -442,43 +442,30 @@ export class ResolutionService implements IResolutionService {
    */
   public async resolveNodes(nodes: InterpolatableValue, context: ResolutionContext): Promise<string> {
     // logger.debug(`[ResolutionService.resolveNodes ENTRY] Resolving ${nodes?.length ?? 0} nodes. Context: ${context.currentFilePath}, Strict: ${context.strict}, Depth: ${context.depth}`);
-    process.stdout.write(`DEBUG: [ResService.resolveNodes ENTRY] Resolving ${nodes?.length ?? 0} nodes. Path: ${context.currentFilePath}, Strict: ${context.strict}, Depth: ${context.depth}\n`);
     let result = '';
     if (!nodes) {
       // logger.warn('[ResolutionService.resolveNodes] Received null or undefined nodes array.');
-      process.stdout.write(`WARN: [ResService.resolveNodes] Received null or undefined nodes array.\n`);
       return result;
     }
 
-    process.stdout.write(`DEBUG: [ResService.resolveNodes] Processing ${nodes.length} nodes. Node types: ${nodes.map(n => n.type).join(', ')}\n`);
-
     for (const node of nodes) {
       if (node.type === 'Text') {
-        process.stdout.write(`DEBUG: [ResService.resolveNodes] Appending TextNode content: "${node.content.substring(0, 50)}..."\n`);
         result += node.content;
       } else if (node.type === 'VariableReference') {
-        process.stdout.write(`DEBUG: [ResService.resolveNodes] Resolving VariableReference: ${node.identifier}\n`);
         try {
           const resolvedValue = await this.variableReferenceResolver.resolve(node, context);
-          process.stdout.write(`DEBUG: [ResService.resolveNodes] Resolved ${node.identifier} to: '${resolvedValue.substring(0,50)}...'\n`);
           result += resolvedValue;
         } catch (error) {
-          process.stderr.write(`ERROR: [ResService.resolveNodes] Error resolving VariableReference ${node.identifier}: ${error instanceof Error ? error.message : String(error)}\n`);
           if (context.strict) {
-            process.stderr.write(`ERROR: [ResService.resolveNodes] Re-throwing error for ${node.identifier} in strict mode.\n`);
             throw error;
           } else {
-            process.stdout.write(`WARN: [ResService.resolveNodes] Non-strict mode. Error resolving ${node.identifier}. Appending empty string.\n`);
             // In non-strict mode, append nothing for unresolved variables within a larger string
           }
         }
       } else {
-        // This block should theoretically be unreachable if InterpolatableValue type guard is correct
-        process.stdout.write(`WARN: [ResService.resolveNodes] Encountered unexpected node type ${node.type} in InterpolatableValue array.\n`);
+        logger.warn(`[ResolutionService.resolveNodes] Encountered unexpected node type ${node.type} in InterpolatableValue array.`);
       }
     }
-    // logger.debug(`[ResolutionService.resolveNodes EXIT] Final resolved string length: ${result.length}`);
-    process.stdout.write(`DEBUG: [ResService.resolveNodes EXIT] Final resolved string length: ${result.length}\n`);
     return result;
   }
 
@@ -717,7 +704,7 @@ export class ResolutionService implements IResolutionService {
       const commandResolver = this.commandResolver; // Assign AFTER the check
       
       // 1. Get the CommandVariable from state
-      const commandVar = this.stateService.getCommandVar(commandName);
+      const commandVar = this.stateService.getVariable(commandName, VariableType.COMMAND);
       
       // 2. Check if found and handle errors/strict mode
       if (!commandVar) {
@@ -1067,19 +1054,13 @@ export class ResolutionService implements IResolutionService {
    * @param config Configuration for the resolution tracker
    */
   enableResolutionTracking(config: Partial<ResolutionTrackingConfig>): void {
-    // process.stdout.write(`DEBUG: [ResService.enableTracking] Called. Current tracker: ${this.resolutionTracker ? 'exists' : 'null'}\n`);
     if (!this.resolutionTracker) {
       this.resolutionTracker = new VariableResolutionTracker();
-      // process.stdout.write(`DEBUG: [ResService.enableTracking] NEW tracker instance created.\n`);
       logger.info('Resolution tracking enabled.');
     } 
     this.resolutionTracker?.configure(config);
-    // process.stdout.write(`DEBUG: [ResService.enableTracking] Configuring tracker. Enabled: ${this.resolutionTracker.isEnabled()}\n`);
     if (this.variableReferenceResolver) {
         this.variableReferenceResolver.setTracker(this.resolutionTracker);
-        // process.stdout.write(`DEBUG: [ResService.enableTracking] Called resolver.setTracker()\n`);
-    } else {
-        // process.stdout.write(`DEBUG: [ResService.enableTracking] variableReferenceResolver is NULL, cannot set tracker yet.\n`);
     }
   }
 
