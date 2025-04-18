@@ -609,29 +609,31 @@ Docs are at $docs
       const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
       const stateService = testContainer.resolve<IStateService>('IStateService'); // Resolve state service
 
-      const mainContent = `Main file content: @import "${importedFilePath}"`;
-      const importedContent = `@text importedVar = "Imported Value"{{importedVar}}`;
-      
+      // Corrected Meld syntax
+      const mainContent = `Main file start.\\n@import "${importedFilePath}"\\nMain file end. Imported var: {{importedVar}}`;
+      const importedContent = `@text importedVar = "Imported Value"`;
+
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(mainFilePath), mainContent);
-      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(importedFilePath), importedContent); 
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(importedFilePath), importedContent);
 
       // Process using processMeld API
       const result = await processMeld(mainContent, {
         container: testContainer,
+        // filePath: mainFilePath // Removed to fix linter error - investigate options later
       });
-      
+
       // console.log('Simple import result:', result);
-      
-      // --- REVERT Assertions ---
-      // Check the final output string - expecting import directive to be removed
-      // expect(result.trim()).toBe('Main file content: Imported Value'); // Incorrect expectation
-      expect(result.trim()).toBe('Main file content:');
-      
+
+      // --- Corrected Assertions ---
+      // Check the final output string - expecting import directive to be removed and imported var resolved
+      const expectedOutput = 'Main file start.\\n\\nMain file end. Imported var: Imported Value';
+      expect(result.trim()).toBe(expectedOutput.trim());
+
       // Verify state after import
       const importedVar = stateService.getVariable('importedVar', VariableType.TEXT);
       expect(importedVar).toBeDefined();
       expect(importedVar?.value).toBe('Imported Value');
-      // --- End REVERT ---
+      // --- End Corrected Assertions ---
     });
     
     it('should handle nested imports with proper scope inheritance', async () => {
@@ -640,37 +642,37 @@ Docs are at $docs
       const level2FilePath = 'level2.meld';
       const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
       const stateService = testContainer.resolve<IStateService>('IStateService'); // Resolve state service
-      
-      const mainContent = `Main: @import "${level1FilePath}"`;
-      const level1Content = `Level 1: @import "${level2FilePath}" {{level1Var}}`;
-      const level2Content = `@text level2Var = "Level 2 Value"@text level1Var = "{{level2Var}}"{{level2Var}}`; // Level 1 var references Level 2
-      
+
+      // Corrected Meld Syntax
+      const mainContent = `Main file start.\\n@import "${level1FilePath}"\\nMain file end. Level1Var: {{level1Var}}, Level2Var: {{level2Var}}`;
+      const level1Content = `Level 1 Start.\\n@import "${level2FilePath}"\\nLevel 1 End. Level1Var: {{level1Var}}, Level2Var: {{level2Var}}`;
+      const level2Content = `@text level2Var = "Level 2 Value"\\n@text level1Var = "Value From Level 2 (using {{level2Var}})"\\nLevel 2 Text Node. Level2Var: {{level2Var}}`;
+
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(mainFilePath), mainContent);
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(level1FilePath), level1Content);
-      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(level2FilePath), level2Content); 
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(level2FilePath), level2Content);
 
       // Process using processMeld API
       const result = await processMeld(mainContent, {
         container: testContainer,
+        // filePath: mainFilePath // Keep removed for now
       });
+      
+      // console.log('Nested import result:', result);
 
-      // --- REVERT Assertions ---
-      // Adjust expectation based on scope rules. Level 2 vars might not leak to main scope by default.
-      // The output should reflect resolved content from nested levels.
-      // Update: Check that the import directive is removed
-      // expect(result.trim()).toBe('Main: Level 1: Level 2 Value Level 2 Value'); // Incorrect expectation
-      expect(result.trim()).toBe('Main:');
+      // --- Corrected Assertions ---
+      const expectedOutput = 'Main file start.\\n\\nMain file end. Level1Var: Value From Level 2 (using Level 2 Value), Level2Var: Level 2 Value';
+      expect(result.trim()).toBe(expectedOutput.trim());
 
-      // Check final state (variables might be scoped)
-      // Update: Check final merged state
+      // Check final merged state
       const level1Var = stateService.getVariable('level1Var', VariableType.TEXT);
       expect(level1Var).toBeDefined();
-      expect(level1Var?.value).toBe('Level 2 Value'); // Check if level1 var was updated in main state
-      
+      expect(level1Var?.value).toBe('Value From Level 2 (using Level 2 Value)'); // Check if level1 var was updated in main state
+
       const level2Var = stateService.getVariable('level2Var', VariableType.TEXT);
       expect(level2Var).toBeDefined();
       expect(level2Var?.value).toBe('Level 2 Value'); // Check if level2 var exists in main state
-      // --- End REVERT ---
+      // --- End Corrected Assertions ---
     });
     
     it('should detect circular imports', async () => {
@@ -682,11 +684,12 @@ Docs are at $docs
       // const parserService = testContainer.resolve<IParserService>('IParserService'); // Not needed for processMeld call
       // const interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService'); // Not needed for processMeld call
 
-      const fileAContent = `File A content @import "${fileBPath}"`;
-      const fileBContent = `File B content @import "${fileAPath}"`;
-      
+      // Corrected Meld Syntax
+      const fileAContent = `File A start.\\n@import "${fileBPath}"\\nFile A end.`;
+      const fileBContent = `File B start.\\n@import "${fileAPath}"\\nFile B end.`;
+
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(fileAPath), fileAContent);
-      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(fileBPath), fileBContent); 
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(fileBPath), fileBContent);
 
       // Use processMeld which internally handles interpretation
       // Expect it to throw due to circular dependency detected by CircularityService

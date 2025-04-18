@@ -908,7 +908,7 @@ RunParam
 
 ImportDirective
   // Named imports with from syntax
-  = "import" _ "[" _ imports:ImportsList _ "]" _ "from" _ content:DirectiveContent {
+  = "import" _ "[" _ imports:ImportsList _ "]" _ "from" _ content:DirectiveContent _ (LineTerminator / EOF) {
       // Check if this is a path variable
       const isPathVar = typeof content === 'string' && 
         content.startsWith('$') && 
@@ -936,7 +936,7 @@ ImportDirective
       }, location());
     }
   / // Named imports with from syntax using variable
-    "import" _ "[" _ imports:ImportsList _ "]" _ "from" __ variable:Variable {
+    "import" _ "[" _ imports:ImportsList _ "]" _ "from" __ variable:Variable _ (LineTerminator / EOF) {
       // Get the variable text directly from the variable node
       const variableText = variable.valueType === 'text' 
         ? `{{${variable.identifier}}}` 
@@ -969,7 +969,7 @@ ImportDirective
       }, location());
     }
   / // Traditional import (backward compatibility)
-    "import" _ content:DirectiveContent {
+    "import" _ content:DirectiveContent _ (LineTerminator / EOF) {
       // Check if this is a path variable
       const isPathVar = typeof content === 'string' && 
         content.startsWith('$') && 
@@ -998,7 +998,7 @@ ImportDirective
       }, location());
     }
   / // Traditional import with variable (backward compatibility)
-    "import" __ variable:Variable {
+    "import" __ variable:Variable _ (LineTerminator / EOF) {
       // Get the variable text directly from the variable node
       const variableText = variable.valueType === 'text' 
         ? `{{${variable.identifier}}}` 

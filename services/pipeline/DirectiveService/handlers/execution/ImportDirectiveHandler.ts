@@ -130,6 +130,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       if (!resolutionContext) {
         throw new DirectiveError('ResolutionContext not found in DirectiveProcessingContext', this.kind, DirectiveErrorCode.INVALID_CONTEXT, { location: node.location });
       }
+      
+      // Log incoming directive node
+      process.stdout.write(`DEBUG: [ImportDirectiveHandler] Processing node: ${JSON.stringify(node)}\\n`);
 
       let resolvedPath: MeldPath;
       try {
@@ -141,9 +144,13 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         resolvedPath = await this.resolutionService.resolvePath(resolvedPathString, resolutionContext);
         
         // Use the validated path string as the identifier
-        resolvedIdentifier = resolvedPath.validatedPath; 
+        resolvedIdentifier = resolvedPath.validatedPath;
         
-        isURLImport = resolvedPath.contentType === 'url'; 
+        // Log resolved path
+        process.stdout.write(`DEBUG: [ImportDirectiveHandler] Resolved path object: ${JSON.stringify(resolvedPath)}\\n`);
+        process.stdout.write(`DEBUG: [ImportDirectiveHandler] Resolved path identifier: ${resolvedIdentifier}\\n`);
+        
+        isURLImport = resolvedPath.contentType === 'url';
       } catch (error) {
           // Wrap resolution/validation errors
           throw new DirectiveError(
@@ -221,9 +228,15 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
         fileContent = await this.fileSystemService.readFile(resolvedPath.validatedPath);
       }
+      
+      // Log file content
+      process.stdout.write(`DEBUG: [ImportDirectiveHandler] Read file content:\\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n${fileContent}\\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n`);
 
       const parsedResults = await this.parserService.parse(fileContent);
       const nodesToInterpret = Array.isArray(parsedResults) ? parsedResults : [];
+      
+      // Log parsed AST
+      process.stdout.write(`DEBUG: [ImportDirectiveHandler] Parsed imported content AST: ${JSON.stringify(nodesToInterpret)}\\n`);
 
       const importedState = await context.state.createChildState();
       if (resolvedIdentifier) {
@@ -260,6 +273,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             await this.processStructuredImports(imports, resultState, targetState, importDirectiveLocation, resolvedIdentifier, currentFilePath);
           }
       }
+
+      // Log state after merging/copying (check for importedVar)
+      const finalImportedVar = targetState.getVariable('importedVar', VariableType.TEXT);
+      process.stdout.write(`DEBUG: [ImportDirectiveHandler] Target state (${targetState.getStateId()}) after merge. importedVar: ${JSON.stringify(finalImportedVar)}\\n`);
 
       if (resolvedIdentifier) {
         const normalizedIdentifier = resolvedIdentifier.replace(/\\\\/g, '/');

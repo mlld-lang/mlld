@@ -957,70 +957,22 @@ export class OutputService implements IOutputService {
       
       // Handle specific node types
       if (node.type === 'Text') {
-        // Process variable references within the text node
         const textNode = node as TextNode;
-        let currentContent = textNode.content;
-        
-        // Regex to find {{...}} patterns (non-greedy)
-        const variableRegex = /\{\{(.*?)\}\}/g;
-        let match;
-        let lastIndex = 0;
-        let resolvedContent = '';
-
-        while ((match = variableRegex.exec(currentContent)) !== null) {
-          // Append text before the variable
-          resolvedContent += currentContent.substring(lastIndex, match.index);
-          const variableExpression = match[1].trim();
-
-          try {
-            // --- Resolve using VariableReferenceResolver --- 
-            const resolver = this.getVariableResolver();
-            if (resolver && this.variableNodeFactory) {
-              // Create a temporary VariableReferenceNode to pass to the resolver
-              const tempVarNode = this.variableNodeFactory.createVariableReferenceNodeFromString(variableExpression);
-              const resolutionContext = ResolutionContextFactory.create(state, state.getCurrentFilePath() ?? undefined, {
-                  strict: false, // Be permissive for final output resolution
-                  formattingContext: {
-                      isBlock: currentContext.contextType === 'block',
-                      nodeType: 'Text', 
-                      linePosition: 'middle',
-                      isTransformation: true
-                  }
-              });
-              
-              const resolvedValue = await resolver.resolve(tempVarNode, resolutionContext);
-              resolvedContent += resolvedValue;
-            } else {
-              // Fallback or throw error if resolver/factory is missing?
-              // For now, append the original tag if resolver isn't ready
-              resolvedContent += `{{${variableExpression}}}`;
-            }
-            // --- End Resolve --- 
-          } catch (error) {
-            // Handle resolution errors gracefully in output (e.g., leave tag or show error)
-            logger.warn(`OutputService: Error resolving {{${variableExpression}}} in TextNode`, { error }); // Keep logger warn
-            // Optionally include the error message or original tag based on options
-            resolvedContent += `{{${variableExpression}}}`; // Default: Keep original tag on error
-          }
-          lastIndex = match.index + match[0].length;
-        }
-        
-        // Append any remaining text after the last variable
-        resolvedContent += currentContent.substring(lastIndex);
-        
-        // Append the fully resolved or partially resolved content
-        output += this.handleNewlines(resolvedContent, currentContext);
-      
+        output += this.handleNewlines(textNode.content, currentContext);
       } else if (node.type === 'CodeFence') {
-        output += this.codeFenceToMarkdown(node);
+        output += this.codeFenceToMarkdown(node as CodeFenceNode);
       } else if (node.type === 'Comment') {
         // Comments are typically ignored in Markdown output
         continue;
       } else if (node.type === 'Directive') {
-        // Directives are typically ignored in final output unless they produce content
-        continue;
+        const directive = node as DirectiveNode;
+        const kind = directive.directive.kind;
+        if (['text', 'data', 'path', 'import', 'define'].includes(kind)) {
+           output += ''; 
+        } else {
+           output += `[UNKNOWN NODE TYPE: Directive - Kind: ${kind}]`;
+        }
       } else {
-        // Fallback for unknown node types (should not happen)
         output += `[UNKNOWN NODE TYPE: ${node.type}]`;
       }
       

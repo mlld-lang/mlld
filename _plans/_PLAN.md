@@ -43,7 +43,7 @@ Systematically investigate and fix the core service failures identified in `_pla
     *   AST Node IDs: `_plans/AST-ID.md`
     *   State System Enhancements: `_plans/STATE-UPDATES.md`
 
-**Phase 1: Variable Resolution Stability [NEXT]**
+**Phase 1: Variable Resolution Stability [COMPLETE]**
 
 *   **Target Failures:** `api/integration.test.ts` #1 (Variable/Data Resolution Regression).
 *   **Hypothesized Services:** `InterpreterService`, `ResolutionService`, `StateService`, `VariableReferenceResolver`, `OutputService`.
@@ -55,7 +55,7 @@ Systematically investigate and fix the core service failures identified in `_pla
     5.  **Compare State Snapshots:** Compare the state (variables stored) just before the failing resolution attempt in `api/integration.test.ts` vs. a passing case. Is the variable correctly defined in the expected state instance?
 *   **Fix & Verify:** Implement fixes in the identified service(s). Update relevant unit tests (`ResolutionService.test.ts`, `InterpreterService.unit.test.ts`, `StateService.test.ts`) using the refactoring pattern. Re-run `api/integration.test.ts` to confirm the fix.
 
-**Phase 2: `@import` Directive Processing**
+**Phase 2: `@import` Directive Processing [NEXT]**
 
 *   **Target Failures:** `api/integration.test.ts` #3 (`@import` Directive Processing).
 *   **Hypothesized Services:** `InterpreterService`, `DirectiveService`, `ImportDirectiveHandler`, `StateService`, `ParserService`, `FileSystemService`.

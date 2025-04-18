@@ -418,10 +418,17 @@ export class StateService implements IStateService {
   }
 
   getTransformedNodes(): MeldNode[] {
-    if (this.isTransformationEnabled() && this.currentState.transformedNodes) {
-      return [...this.currentState.transformedNodes];
+    const transformEnabled = this.isTransformationEnabled();
+    const transformedNodesExist = !!this.currentState.transformedNodes;
+    
+    process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. isTransformationEnabled: ${transformEnabled}. transformedNodesExist: ${transformedNodesExist}\n`);
+
+    if (transformEnabled && transformedNodesExist) {
+       process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. RETURNING transformedNodes (Length: ${this.currentState.transformedNodes?.length ?? 0})\n`);
+      return [...this.currentState.transformedNodes!]; // Use ! because we checked existence
     }
-    return [...this.currentState.nodes];
+    process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. RETURNING original nodes (Length: ${this.currentState.nodes?.length ?? 0})\n`);
+    return [...this.currentState.nodes]; 
   }
 
   setTransformedNodes(nodes: MeldNode[]): void {
