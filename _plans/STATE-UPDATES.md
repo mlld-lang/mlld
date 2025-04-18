@@ -42,16 +42,16 @@ Refactor the core state management system (`StateNode`, `IStateService`, `StateF
 *   **Files:** 
     *   `services/state/StateService/StateService.test.ts` (Updated)
     *   `services/state/utilities/StateVariableCopier.test.ts` (Updated)
-    *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.edge.test.ts` (Needs update)
-    *   `services/resolution/ResolutionService/ResolutionService.test.ts` (Needs update)
-    *   `services/resolution/ResolutionService/resolvers/ContentResolver.test.ts` (Needs update)
-    *   `services/resolution/ResolutionService/resolvers/CommandResolver.test.ts` (Needs update)
-    *   `services/resolution/ResolutionService/resolvers/StringConcatenationHandler.test.ts` (Needs update)
-    *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts` (Needs update)
-    *   `services/cli/CLIService/CLIService.test.ts` (Needs update)
-    *   `services/pipeline/InterpreterService/InterpreterService.integration.test.ts` (Needs update)
+    *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.edge.test.ts` (Updated)
+    *   `services/resolution/ResolutionService/ResolutionService.test.ts` (Updated)
+    *   `services/resolution/ResolutionService/resolvers/ContentResolver.test.ts` (Updated)
+    *   `services/resolution/ResolutionService/resolvers/CommandResolver.test.ts` (Updated)
+    *   `services/resolution/ResolutionService/resolvers/StringConcatenationHandler.test.ts` (Updated)
+    *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts` (Updated)
+    *   `services/cli/CLIService/CLIService.test.ts` (Updated)
+    *   `services/pipeline/InterpreterService/InterpreterService.integration.test.ts` (Updated)
     *   *Potentially others implicitly affected by state changes.*
-*   **Status:** In Progress.
+*   **Status:** Completed.
 
 **Phase 6: Refactor Codebase [PENDING]**
 

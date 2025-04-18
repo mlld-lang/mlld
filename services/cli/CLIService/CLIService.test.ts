@@ -13,6 +13,7 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { cliLogger, type Logger } from '@core/utils/logger.js';
 // Import the centralized syntax examples
 import { textDirectiveExamples } from '@core/syntax/index.js';
+import { VariableType, createPathVariable, type IPathVariable, PathContentType, type IFilesystemPathState } from '@core/types';
 
 // Set test environment flag
 process.env.NODE_ENV = 'test';
@@ -144,14 +145,17 @@ describe('CLIService', () => {
       setProjectPath: vi.fn()
     } as unknown as IPathService;
 
-    // Create a child state mock with the needed methods
+    // Create a child state mock with the needed methods (Updated)
     mockChildState = {
-      setPathVar: vi.fn(),
+      setVariable: vi.fn(), // Use generic setVariable
+      getVariable: vi.fn(), // Add generic getVariable
       getNodes: vi.fn().mockReturnValue([]),
       setupTemplate: vi.fn(),
-      getTextVar: vi.fn(),
-      getDataVar: vi.fn(),
-      getPathVar: vi.fn(),
+      // Remove old specific getters/setters
+      // getTextVar: vi.fn(),
+      // getDataVar: vi.fn(),
+      // getPathVar: vi.fn(),
+      // setPathVar: vi.fn(), 
       getAllTextVars: vi.fn().mockReturnValue(new Map()),
       getAllDataVars: vi.fn().mockReturnValue(new Map()),
       getAllPathVars: vi.fn().mockReturnValue(new Map()),
@@ -290,16 +294,38 @@ describe('CLIService', () => {
       await service.run(args);
       expect(mockPathService.resolveProjectPath).toHaveBeenCalled();
       const state = mockStateService.createChildState();
-      expect(state.setPathVar).toHaveBeenCalledWith('PROJECTPATH', '/project');
-      expect(state.setPathVar).toHaveBeenCalledWith('.', '/project');
+      // Update to use setVariable with createPathVariable
+      const projectPathVar = createPathVariable('PROJECTPATH', {
+        contentType: PathContentType.FILESYSTEM,
+        originalValue: '/project', 
+        isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true
+      });
+      const dotPathVar = createPathVariable('.', {
+        contentType: PathContentType.FILESYSTEM,
+        originalValue: '/project', 
+        isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true
+      });
+      expect(state.setVariable).toHaveBeenCalledWith(projectPathVar);
+      expect(state.setVariable).toHaveBeenCalledWith(dotPathVar);
     });
 
     it('should handle home path option', async () => {
       const args = ['node', 'meld', 'test.mld', '--home-path', '/home'];
       await service.run(args);
       const state = mockStateService.createChildState();
-      expect(state.setPathVar).toHaveBeenCalledWith('HOMEPATH', '/home');
-      expect(state.setPathVar).toHaveBeenCalledWith('~', '/home');
+      // Update to use setVariable with createPathVariable
+      const homePathVar = createPathVariable('HOMEPATH', {
+        contentType: PathContentType.FILESYSTEM,
+        originalValue: '/home', 
+        isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true
+      });
+       const tildePathVar = createPathVariable('~', {
+        contentType: PathContentType.FILESYSTEM,
+        originalValue: '/home', 
+        isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true
+      });
+      expect(state.setVariable).toHaveBeenCalledWith(homePathVar);
+      expect(state.setVariable).toHaveBeenCalledWith(tildePathVar);
     });
 
     it('should handle verbose option', async () => {

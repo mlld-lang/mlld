@@ -101,15 +101,6 @@ describe('StateVariableCopier', () => {
          const variable = allSourceVariables.get(name);
          return !!variable && variable.type === type;
       }),
-      // Keep old specific getters just in case copier temporarily uses them (though it shouldn't)
-      getAllTextVars: vi.fn().mockReturnValue(new Map([['textVar1', 'old-val-1'], ['textVar2', 'old-val-2']])),
-      getTextVar: vi.fn(),
-      getAllDataVars: vi.fn(),
-      getDataVar: vi.fn(),
-      getAllPathVars: vi.fn(),
-      getPathVar: vi.fn(),
-      getAllCommands: vi.fn(),
-      getCommand: vi.fn(),
     });
     
     targetState = MockFactory.createStateService({
@@ -119,15 +110,6 @@ describe('StateVariableCopier', () => {
       // --- Mock Generic Getters/Checkers (for skipExisting) ---
       getVariable: vi.fn(), // Default to undefined
       hasVariable: vi.fn().mockReturnValue(false), // Default to false
-      // Keep old specific setters/getters for potential temporary use by copier (though it shouldn't)
-      setTextVar: vi.fn(),
-      setDataVar: vi.fn(),
-      setPathVar: vi.fn(),
-      setCommand: vi.fn(),
-      getTextVar: vi.fn(),
-      getDataVar: vi.fn(),
-      getPathVar: vi.fn(),
-      getCommand: vi.fn()
     });
     
     trackingService = {
