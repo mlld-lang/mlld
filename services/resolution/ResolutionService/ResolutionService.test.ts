@@ -179,69 +179,48 @@ describe('ResolutionService', () => {
     mockDirectiveClientFactory.createClient.mockReturnValue(mockDirectiveClient);
     mockFileSystemClientFactory.createClient.mockReturnValue(mockFileSystemClient);
 
-    // Configure StateService mocks (as before)
-    stateService.getTextVar.mockImplementation((name: string): TextVariable | undefined => {
+    // Configure StateService mocks (NEW: Use getVariable)
+    stateService.getVariable.mockImplementation((name: string, typeHint?: VariableType): MeldVariable | undefined => {
+      // Text Variables
       if (name === 'greeting') return createMockTextVariable('greeting', 'Hello World');
       if (name === 'subject') return createMockTextVariable('subject', 'Universe');
       if (name === 'message') return createMockTextVariable('message', '`{{greeting}}, {{subject}}!`');
-      // For circular tests
-      if (name === 'var1') return createMockTextVariable('var1', '{{var2}}');
-      if (name === 'var2') return createMockTextVariable('var2', '{{var1}}');
-      return undefined;
-    });
-    stateService.getDataVar.mockImplementation((name: string): DataVariable | undefined => {
+      if (name === 'var1') return createMockTextVariable('var1', '{{var2}}'); // For circular tests
+      if (name === 'var2') return createMockTextVariable('var2', '{{var1}}'); // For circular tests
+      
+      // Data Variables
       if (name === 'user') return createMockDataVariable('user', { name: 'Alice', id: 123 });
       if (name === 'config') return createMockDataVariable('config', { version: 1, active: true });
       if (name === 'nested') return createMockDataVariable('nested', { data: { level1: { value: 'deep' } } });
-      return undefined;
-    });
-    stateService.getPathVar.mockImplementation((name: string): IPathVariable | undefined => {
-      // Mock needs to return the correct state object for IPathVariable
+      if (name === 'primitive') return createMockDataVariable('primitive', 'a string'); // For field access tests
+      
+      // Path Variables
       if (name === 'home') {
-        const state: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: '/home/user/meld', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true }; // Example state adjusted
+        const state: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: '/home/user/meld', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true };
         return createMockPathVariable('home', state);
       }
       if (name === 'docs') {
-         const state: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: '/mock/project/root/docs', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true }; // Example state adjusted
+        const state: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: '/mock/project/root/docs', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true };
         return createMockPathVariable('docs', state);
       }
-      return undefined;
-    });
-    stateService.getCommandVar.mockImplementation((name: string): CommandVariable | undefined => {
-      // <<< Ensure this mock ALWAYS returns the variable if defined >>>
+      
+      // Command Variables
       if (name === 'echo') return createMockCommandVariable('echo', 'echo "$@"');
       if (name === 'errorCmd') return createMockCommandVariable('errorCmd', 'exit 1');
       if (name === 'greet') return createMockCommandVariable('greet', 'echo Hello there');
-      return undefined; // Return undefined ONLY if not defined
+
+      // Fallback: variable not found
+      return undefined;
     });
-    stateService.getVariable.mockImplementation((name: string, type?: VariableType): MeldVariable | undefined => {
-        const textVar = stateService.getTextVar(name);
-        if (textVar) return textVar;
-        const dataVar = stateService.getDataVar(name);
-        if (dataVar) return dataVar;
-        const pathVar = stateService.getPathVar(name);
-        if (pathVar) return pathVar;
-        const commandVar = stateService.getCommandVar(name);
-        if (commandVar) return commandVar;
-       return undefined;
-    });
-    stateService.getAllTextVars.mockReturnValue(new Map<string, TextVariable>([
-      ['greeting', createMockTextVariable('greeting', 'Hello World')],
-      ['subject', createMockTextVariable('subject', 'Universe')],
-    ]));
-    stateService.getAllDataVars.mockReturnValue(new Map<string, DataVariable>([
-      ['user', createMockDataVariable('user', { name: 'Alice', id: 123 })],
-    ]));
-    stateService.getAllPathVars.mockReturnValue(new Map<string, IPathVariable>([
-       ['home', createMockPathVariable('home', { contentType: PathContentType.FILESYSTEM, originalValue: '/home/user/meld', isValidSyntax: true, isSecure: true, exists: true, isAbsolute: true})]
-    ]));
+
+    // Keep mocks for methods potentially still used directly
     stateService.getCurrentFilePath.mockReturnValue('test.meld');
-    stateService.getTransformedNodes.mockReturnValue([]);
-    stateService.isTransformationEnabled.mockReturnValue(true);
+    stateService.getTransformedNodes.mockReturnValue([]); // Assume this might still be relevant
+    stateService.isTransformationEnabled.mockReturnValue(true); // Assume this might still be relevant
     stateService.getTransformationOptions.mockReturnValue({ 
-      enabled: true, // Example value
-      preserveOriginal: false, // Example value
-      transformNested: true // Example value
+      enabled: true, 
+      preserveOriginal: false, 
+      transformNested: true 
       // Add other fields if TransformationOptions requires them
     });
 

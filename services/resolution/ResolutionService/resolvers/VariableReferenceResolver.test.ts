@@ -134,8 +134,6 @@ describe('VariableReferenceResolver', () => {
   describe('resolve', () => {
     it('should resolve text variables using node.valueType', async () => {
       const node = createVariableReferenceNode('greeting', VariableType.TEXT);
-      const mockVar: TextVariable = { name: 'greeting', type: VariableType.TEXT, value: 'Hello World' };
-      stateService.getTextVar.calledWith('greeting').mockResolvedValue(mockVar);
       
       const result = await resolver.resolve(node, context);
       
@@ -146,9 +144,6 @@ describe('VariableReferenceResolver', () => {
     it('should resolve data variables using node.valueType', async () => {
       const node = createVariableReferenceNode('dataVar', VariableType.DATA);
       const mockData = { key: 'value' };
-      const mockVar: DataVariable = { name: 'dataVar', type: VariableType.DATA, value: mockData };
-      
-      stateService.getDataVar.calledWith('dataVar').mockResolvedValue(mockVar);
       
       const result = await resolver.resolve(node, context);
       
@@ -195,7 +190,7 @@ describe('VariableReferenceResolver', () => {
 
     it('should return empty string for undefined variables in non-strict mode', async () => {
       const node = createVariableReferenceNode('missing', VariableType.TEXT);
-      stateService.getTextVar.calledWith('missing').mockResolvedValue(undefined);
+      // No need to mock getTextVar separately, getVariable mock in beforeEach returns undefined
       
       const nonStrictContext = ResolutionContextFactory.create(stateService, 'test.meld')
                                  .withStrictMode(false);
@@ -227,7 +222,7 @@ describe('VariableReferenceResolver', () => {
           [{ type: 'field', value: 'user' }, { type: 'index', value: 10 }]
       );
 
-      stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar); // Ensure this mock remains if needed
+      // No need to mock getDataVar separately, getVariable mock in beforeEach handles dataObj
       const nonStrictContext = ResolutionContextFactory.create(stateService, 'test.meld')
                                  .withStrictMode(false);
 
