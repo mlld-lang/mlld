@@ -173,10 +173,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
       expect(result.replacement).toBeDefined();
       expect(result.stateChanges).toBeUndefined();
-      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
+      expect(result.replacement?.[0]).toMatchObject({
         type: 'Text',
         content: 'Embedded content'
-      }));
+      });
     });
 
     it('should handle section extraction in transformation', async () => {
@@ -193,10 +193,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
       expect(result.replacement).toBeDefined();
       expect(result.stateChanges).toBeUndefined();
-      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
+      expect(result.replacement?.[0]).toMatchObject({
         type: 'Text',
         content: 'Content 1'
-      }));
+      });
       expect(fixture.resolutionService.extractSection).toHaveBeenCalledWith(
         expect.any(String),
         'Section 1',
@@ -263,10 +263,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(fixture.fileSystemService.readFile).toHaveBeenCalledWith(resolvedMeldPath.validatedPath);
       expect(result.replacement).toBeDefined();
       expect(result.stateChanges).toBeUndefined();
-      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
+      expect(result.replacement?.[0]).toMatchObject({
         type: 'Text',
         content: 'Content from resolved path' 
-      }));
+      });
     });
     
     it('should handle variable reference embeds in transformation mode', async () => {
@@ -285,10 +285,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
       
       expect(result.replacement).toBeDefined();
       expect(result.stateChanges).toBeUndefined();
-      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
+      expect(result.replacement?.[0]).toMatchObject({
         type: 'Text',
         content: resolvedContent,
-      }));
+      });
       expect(fixture.fileSystemService.exists).not.toHaveBeenCalled();
     });
     
@@ -308,10 +308,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
       
       expect(result.replacement).toBeDefined();
       expect(result.stateChanges).toBeUndefined();
-      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
+      expect(result.replacement?.[0]).toMatchObject({
         type: 'Text',
         content: resolvedContent,
-      }));
+      });
       expect(fixture.fileSystemService.exists).not.toHaveBeenCalled();
     });
 
@@ -355,10 +355,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(fixture.fileSystemService.readFile).not.toHaveBeenCalled();
       expect(result.replacement).toBeDefined();
       expect(result.stateChanges).toBeUndefined();
-      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
+      expect(result.replacement?.[0]).toMatchObject({
         type: 'Text',
         content: 'actual/file.md'
-      }));
+      });
     });
 
     it('should properly transform variable-based embed directive with object field access', async () => {
@@ -383,10 +383,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(fixture.fileSystemService.readFile).not.toHaveBeenCalled();
       expect(result.replacement).toBeDefined();
       expect(result.stateChanges).toBeUndefined();
-      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
+      expect(result.replacement?.[0]).toMatchObject({
         type: 'Text',
         content: 'user@example.com'
-      }));
+      });
     });
   });
 }); 

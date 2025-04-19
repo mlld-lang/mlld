@@ -477,7 +477,7 @@ describe('RunDirectiveHandler', () => {
       expect(result.stateChanges?.variables?.stdout?.value).toBe('transformed output');
       
       const replacement = result.replacement;
-      expect(replacement?.[0]).toEqual(expect.objectContaining({
+      expect(replacement?.[0]).toMatchObject({
         type: 'Text',
         content: 'transformed output'
       }));

@@ -216,7 +216,7 @@ describe('EmbedDirectiveHandler', () => {
       expect(result).toHaveProperty('replacement');
       expect(result.stateChanges).toBeUndefined();
       const replacement = result.replacement;
-      expect(replacement?.[0]).toEqual(expect.objectContaining({ type: 'Text', content: 'Some file content.' }));
+      expect(replacement?.[0]).toMatchObject({ type: 'Text', content: 'Some file content.' });
     });
 
     it('should handle embed with section (subtype: embedPath)', async () => {
@@ -241,7 +241,7 @@ describe('EmbedDirectiveHandler', () => {
       expect(result).toHaveProperty('replacement');
       expect(result.stateChanges).toBeUndefined();
       const replacement = result.replacement;
-      expect(replacement?.[0]).toEqual(expect.objectContaining({ type: 'Text', content: extractedContent }));
+      expect(replacement?.[0]).toMatchObject({ type: 'Text', content: extractedContent });
     });
     it.skip('should handle heading level adjustment', async () => { /* ... */ });
     it.skip('should handle under header extraction', async () => { /* ... */ });
@@ -346,7 +346,7 @@ describe('EmbedDirectiveHandler', () => {
       expect(result).toHaveProperty('replacement');
       expect(result.stateChanges).toBeUndefined();
       const replacement = result.replacement;
-      expect(replacement?.[0]).toEqual(expect.objectContaining({ type: 'Text', content: resolvedContent }));
+      expect(replacement?.[0]).toMatchObject({ type: 'Text', content: resolvedContent });
     });
   });
   
@@ -363,7 +363,7 @@ describe('EmbedDirectiveHandler', () => {
       expect(result).toHaveProperty('replacement');
       expect(result.stateChanges).toBeUndefined();
       const replacement = result.replacement;
-      expect(replacement?.[0]).toEqual(expect.objectContaining({ type: 'Text', content: resolvedValue }));
+      expect(replacement?.[0]).toMatchObject({ type: 'Text', content: resolvedValue });
     });
 
     it('should handle data variable reference embeds (using dot notation)', async () => {
@@ -378,7 +378,7 @@ describe('EmbedDirectiveHandler', () => {
       expect(result).toHaveProperty('replacement');
       expect(result.stateChanges).toBeUndefined();
       const replacement = result.replacement;
-      expect(replacement?.[0]).toEqual(expect.objectContaining({ type: 'Text', content: resolvedValue }));
+      expect(replacement?.[0]).toMatchObject({ type: 'Text', content: resolvedValue });
     });
   });
 
@@ -408,7 +408,7 @@ describe('EmbedDirectiveHandler', () => {
         expect(result).toHaveProperty('replacement');
         expect(result.stateChanges).toBeUndefined();
         const replacement = result.replacement;
-        expect(replacement?.[0]).toEqual(expect.objectContaining({ type: 'Text', content: resolvedValue }));
+        expect(replacement?.[0]).toMatchObject({ type: 'Text', content: resolvedValue });
      });
   });
 
@@ -431,7 +431,7 @@ describe('EmbedDirectiveHandler', () => {
         expect(result).toHaveProperty('replacement');
         expect(result.stateChanges).toBeUndefined();
         const replacement = result.replacement;
-        expect(replacement?.[0]).toEqual(expect.objectContaining({ type: 'Text', content: fileContent }));
+        expect(replacement?.[0]).toMatchObject({ type: 'Text', content: fileContent });
     });
 
      it('should return only state when transformation is disabled', async () => {
@@ -451,7 +451,7 @@ describe('EmbedDirectiveHandler', () => {
         expect(result).toHaveProperty('replacement');
         expect(result.stateChanges).toBeUndefined();
         const replacement = result.replacement;
-        expect(replacement?.[0]).toEqual(expect.objectContaining({ type: 'Text', content: fileContent }));
+        expect(replacement?.[0]).toMatchObject({ type: 'Text', content: fileContent });
      });
   });
 }); 

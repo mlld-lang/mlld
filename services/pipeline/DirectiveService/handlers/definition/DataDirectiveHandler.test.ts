@@ -10,7 +10,7 @@ import type { StructuredPath } from '@core/types/paths.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { dataDirectiveExamples } from '@core/syntax/index.js';
 import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
-import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
+import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 // Import new context types
 import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
@@ -22,6 +22,7 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 // Import FS service type for casting
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js'; // Ensure IPathService is imported
+import type { VariableDefinition } from '../../../../../core/variables/VariableTypes'; // Added
 
 /**
  * DataDirectiveHandler Test Status
@@ -56,16 +57,6 @@ const createNodeFromExample = async (exampleCode: string): Promise<DirectiveNode
     throw error;
   }
 };
-
-/**
- * Helper to extract state from handler result
- */
-function getStateFromResult(result: DirectiveResult | IStateService): IStateService {
-    if (result && typeof result === 'object' && 'state' in result) {
-        return result.state as IStateService;
-    }
-    return result as IStateService;
-}
 
 describe('DataDirectiveHandler', () => {
   // Use helpers
@@ -130,18 +121,19 @@ describe('DataDirectiveHandler', () => {
       // Mock the recursive resolver specifically for this test case if needed
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue({ name: 'Alice', id: 123 });
 
-      const result = await handler.handle(mockProcessingContext);
-      const resultState = getStateFromResult(result);
+      const result = await handler.handle(mockProcessingContext) as DirectiveResult;
       
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
         type: VariableType.DATA,
         name: 'user',
         value: { name: 'Alice', id: 123 }
       }));
-      expect(resultState).toBe(stateService);
-      if (result && typeof result === 'object' && 'replacement' in result) {
-          expect(result.replacement).toBeUndefined();
-      }
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('user');
+      const varDef = result.stateChanges?.variables?.user as VariableDefinition | undefined;
+      expect(varDef?.type).toBe(VariableType.DATA);
+      expect(varDef?.value).toEqual({ name: 'Alice', id: 123 });
+      expect(result.replacement).toBeUndefined();
       mockResolveInterpolatable.mockRestore();
     });
 
@@ -159,18 +151,18 @@ describe('DataDirectiveHandler', () => {
       };
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedData);
 
-      const result = await handler.handle(mockProcessingContext);
-      const resultState = getStateFromResult(result);
+      const result = await handler.handle(mockProcessingContext) as DirectiveResult;
 
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
         type: VariableType.DATA,
         name: 'person',
         value: expectedData
       }));
-      expect(resultState).toBe(stateService);
-      if (result && typeof result === 'object' && 'replacement' in result) {
-          expect(result.replacement).toBeUndefined();
-      }
+      expect(result.stateChanges?.variables).toHaveProperty('person');
+      const varDef = result.stateChanges?.variables?.person as VariableDefinition | undefined;
+      expect(varDef?.type).toBe(VariableType.DATA);
+      expect(varDef?.value).toEqual(expectedData);
+      expect(result.replacement).toBeUndefined();
        mockResolveInterpolatable.mockRestore();
     });
 
@@ -181,18 +173,18 @@ describe('DataDirectiveHandler', () => {
       const expectedData = ['apple', 'banana', 'cherry'];
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedData);
 
-      const result = await handler.handle(mockProcessingContext);
-      const resultState = getStateFromResult(result);
+      const result = await handler.handle(mockProcessingContext) as DirectiveResult;
 
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
         type: VariableType.DATA,
         name: 'fruits',
         value: expectedData
       }));
-      expect(resultState).toBe(stateService);
-      if (result && typeof result === 'object' && 'replacement' in result) {
-          expect(result.replacement).toBeUndefined();
-      }
+      expect(result.stateChanges?.variables).toHaveProperty('fruits');
+      const varDef = result.stateChanges?.variables?.fruits as VariableDefinition | undefined;
+      expect(varDef?.type).toBe(VariableType.DATA);
+      expect(varDef?.value).toEqual(expectedData);
+      expect(result.replacement).toBeUndefined();
       mockResolveInterpolatable.mockRestore();
     });
 
@@ -305,15 +297,17 @@ describe('DataDirectiveHandler', () => {
       // Mock the recursive resolver
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedResolvedData);
 
-      const result = await handler.handle(mockProcessingContext);
-      const resultState = getStateFromResult(result);
+      const result = await handler.handle(mockProcessingContext) as DirectiveResult;
 
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
         type: VariableType.DATA,
         name: 'config',
         value: expectedResolvedData
       }));
-      expect(resultState).toBe(stateService);
+      expect(result.stateChanges?.variables).toHaveProperty('config');
+      const varDef = result.stateChanges?.variables?.config as VariableDefinition | undefined;
+      expect(varDef?.type).toBe(VariableType.DATA);
+      expect(varDef?.value).toEqual(expectedResolvedData);
       mockResolveInterpolatable.mockRestore();
     });
 
@@ -323,15 +317,17 @@ describe('DataDirectiveHandler', () => {
       const expectedResolvedData = { text: 'Hello Alice!' };
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedResolvedData);
 
-      const result = await handler.handle(mockProcessingContext);
-      const resultState = getStateFromResult(result);
+      const result = await handler.handle(mockProcessingContext) as DirectiveResult;
 
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
         type: VariableType.DATA,
         name: 'message',
         value: expectedResolvedData
       }));
-      expect(resultState).toBe(stateService);
+      expect(result.stateChanges?.variables).toHaveProperty('message');
+      const varDef = result.stateChanges?.variables?.message as VariableDefinition | undefined;
+      expect(varDef?.type).toBe(VariableType.DATA);
+      expect(varDef?.value).toEqual(expectedResolvedData);
       mockResolveInterpolatable.mockRestore();
     });
 
@@ -347,15 +343,17 @@ describe('DataDirectiveHandler', () => {
       };
       const mockResolveInterpolatable = vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedResolvedData);
 
-      const result = await handler.handle(mockProcessingContext);
-      const resultState = getStateFromResult(result);
+      const result = await handler.handle(mockProcessingContext) as DirectiveResult;
 
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
         type: VariableType.DATA,
         name: 'data',
         value: expectedResolvedData
       }));
-      expect(resultState).toBe(stateService);
+      expect(result.stateChanges?.variables).toHaveProperty('data');
+      const varDef = result.stateChanges?.variables?.data as VariableDefinition | undefined;
+      expect(varDef?.type).toBe(VariableType.DATA);
+      expect(varDef?.value).toEqual(expectedResolvedData);
       mockResolveInterpolatable.mockRestore();
     });
   });

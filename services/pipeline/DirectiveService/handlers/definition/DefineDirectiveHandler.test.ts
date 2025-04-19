@@ -29,7 +29,7 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 // Remove unused imports
 // import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 // import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import { VariableMetadata, VariableOrigin, VariableType, createCommandVariable } from '@core/types/variables.js';
+import { VariableMetadata, VariableOrigin, VariableType, createCommandVariable, MeldVariable } from '@core/types/variables.js';
 import { MockFactory } from '@tests/utils/mocks/MockFactory.js'; // Keep for state override if needed
 import type { CommandVariable as CoreCommandVariable } from '@core/types/variables.js';
 import type { 
@@ -40,6 +40,7 @@ import type {
 import { isBasicCommand } from '@core/types/define.js';
 import type { SourceLocation } from '@core/types/common.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { isCommandVariable } from '@core/types/guards.js';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler'; // Added correct imports
@@ -86,40 +87,37 @@ function createMockTextNode(content: string): TextNode {
 // Updated createValidDefineNode helper
 function createValidDefineNode(
     name: string, 
-    valueOrCommand: string | DirectiveData, // Accept DirectiveData
+    valueOrCommand: string | InterpolatableValue | DirectiveData, // Accept all possibilities
     params: string[] = [], 
-    useLiteralValue: boolean = true,
     isMultiline: boolean = false, 
     language?: string
 ): DirectiveNode {
-  let directiveContent: Partial<DirectiveData>; // Use DirectiveData
+  let directiveContent: Partial<DirectiveData>; 
   
-  if (useLiteralValue && typeof valueOrCommand === 'string') {
-    const literalValueNodes: InterpolatableValue = (
+  if (typeof valueOrCommand === 'string') {
+    // Handle simple string literal value
+    const literalValueNodes: InterpolatableValue = 
         valueOrCommand.split(/({{.*?}})/g).map(part => {
             if (part.startsWith('{{') && part.endsWith('}}')) {
-                return createMockVarRefNode(part.slice(2, -2)); // Uses updated helper
+                return createMockVarRefNode(part.slice(2, -2));
             } else if (part) { 
-                return createMockTextNode(part); // Uses updated helper
+                return createMockTextNode(part);
             }
             return null;
-        }).filter(node => node !== null) as InterpolatableValue
-    );
+        }).filter(node => node !== null) as InterpolatableValue;
     directiveContent = { value: literalValueNodes };
-  } else if (!useLiteralValue && typeof valueOrCommand === 'object' && valueOrCommand.kind === 'run') {
-    directiveContent = { command: valueOrCommand };
-  } else if (!useLiteralValue && typeof valueOrCommand === 'string') {
+
+  } else if (Array.isArray(valueOrCommand)) {
+    // Handle InterpolatableValue array directly
+    directiveContent = { value: valueOrCommand };
+
+  } else if (typeof valueOrCommand === 'object' && valueOrCommand.kind === 'run') {
+    // Handle @run DirectiveData object
      directiveContent = { 
-        command: {
-           kind: 'run', 
-           subtype: 'runCode', 
-           command: [createMockTextNode(valueOrCommand)], // Use updated helper
-           isMultiLine: isMultiline,
-           language: language
-        }
+        command: valueOrCommand // Assign the whole object
      };
   } else {
-     throw new Error('Invalid arguments for createValidDefineNode');
+     throw new Error(`Invalid valueOrCommand type (${typeof valueOrCommand}) in createValidDefineNode`);
   }
 
   return {
@@ -305,26 +303,19 @@ describe('DefineDirectiveHandler', () => {
     
     it('should handle command definition with literal value', async () => {
         const literalValue: InterpolatableValue = [
-            { type: 'Text', content: 'echo literal ', location: createLocation(1,1), nodeId: crypto.randomUUID() },
-            { type: 'VariableReference', identifier: 'var', valueType: 'text', isVariableReference: true, location: createLocation(1,15) }
+            createMockTextNode('echo literal '),
+            createMockVarRefNode('var')
         ];
-        const node = createValidDefineNode('cmdLiteral', literalValue, [], false);
+        const node = createValidDefineNode('cmdLiteral', literalValue, []);
         const processingContext = createMockProcessingContext(node, stateService, resolutionService);
         vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo literal resolved_value');
-        
         const result = await handler.handle(processingContext);
-
         expect(resolutionService.resolveNodes).toHaveBeenCalledWith(literalValue, expect.any(Object));
-        expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-            type: VariableType.COMMAND,
-            name: 'cmdLiteral',
-            value: expect.objectContaining({
-                type: 'basic',
-                name: 'cmdLiteral',
-                commandTemplate: 'echo literal resolved_value', 
-                parameters: expect.arrayContaining([]),
-            })
-        }));
+        expect(result.stateChanges?.variables).toHaveProperty('cmdLiteral');
+        const cmdDef = result.stateChanges?.variables?.cmdLiteral;
+        expect(cmdDef?.type).toBe(VariableType.COMMAND);
+        expect(cmdDef?.value?.type).toBe('basic');
+        expect((cmdDef?.value as IBasicCommandDefinition).commandTemplate).toBe('echo literal resolved_value');
     });
 
     it('should define a basic command using literal', async () => {
@@ -358,7 +349,7 @@ describe('DefineDirectiveHandler', () => {
 
     it('should define a basic command using @run command', async () => {
        const runDirectiveData: DirectiveData = { kind:'run', subtype: 'runCommand', command: [createMockTextNode('echo run test')] };
-       const node = createValidDefineNode('cmdRun', runDirectiveData, [], false);
+       const node = createValidDefineNode('cmdRun', runDirectiveData.command as InterpolatableValue, [], false); 
        const processingContext = createMockProcessingContext(node, stateService, resolutionService);
        vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo run test resolved');
        const result = await handler.handle(processingContext);
@@ -371,7 +362,7 @@ describe('DefineDirectiveHandler', () => {
 
     it('should define a language command using @run code', async () => {
          const runDirectiveData: DirectiveData = { kind:'run', subtype: 'runCode', command: [createMockTextNode('print("hello")')], language: 'python' };
-         const node = createValidDefineNode('cmdLang', runDirectiveData, [], false);
+         const node = createValidDefineNode('cmdLang', runDirectiveData.command as InterpolatableValue, [], false);
          const processingContext = createMockProcessingContext(node, stateService, resolutionService);
          vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('print("hello resolved")');
          const result = await handler.handle(processingContext);
@@ -381,6 +372,26 @@ describe('DefineDirectiveHandler', () => {
          expect(cmdDef?.value?.type).toBe('language');
          expect((cmdDef?.value as ILanguageCommandDefinition).language).toBe('python');
          expect((cmdDef?.value as ILanguageCommandDefinition).codeBlock).toBe('print("hello resolved")');
+    });
+
+    it('should handle literal value resolution errors', async () => {
+        const literalValue: InterpolatableValue = [
+            createMockTextNode('echo literal '), 
+            createMockVarRefNode('unresolvable')
+        ];
+        const node = createValidDefineNode('cmdResolveError', literalValue, []);
+        const processingContext = createMockProcessingContext(node, stateService, resolutionService);
+        const resolutionError = new MeldResolutionError('Variable not found', { code: 'VAR_NOT_FOUND' });
+        vi.spyOn(resolutionService, 'resolveNodes').mockRejectedValue(resolutionError);
+                
+        await expectToThrowWithConfig(
+            async () => await handler.handle(processingContext),
+            {
+                code: DirectiveErrorCode.RESOLUTION_FAILED,
+            }
+        );
+        
+        try { await handler.handle(processingContext); } catch(e: any) { expect(e.cause).toBe(resolutionError); }
     });
   });
 
@@ -454,26 +465,5 @@ describe('DefineDirectiveHandler', () => {
       
       try { await handler.handle(processingContext); } catch(e: any) { expect(e.cause).toBe(stateError); }
     });
-    
-    it('should handle literal value resolution errors', async () => {
-        const literalValue: InterpolatableValue = [
-            { type: 'Text', content: 'echo literal ', location: createLocation(1,1), nodeId: crypto.randomUUID() },
-            { type: 'VariableReference', identifier: 'unresolvable', valueType: 'text', isVariableReference: true, location: createLocation(1,15) }
-        ];
-        const node = createValidDefineNode('cmdResolveError', literalValue, [], false);
-        const processingContext = createMockProcessingContext(node, stateService, resolutionService);
-        const resolutionError = new MeldResolutionError('Variable not found', { code: 'VAR_NOT_FOUND' });
-        vi.spyOn(resolutionService, 'resolveNodes').mockRejectedValue(resolutionError);
-                
-        await expectToThrowWithConfig(
-            async () => await handler.handle(processingContext),
-            {
-                code: DirectiveErrorCode.RESOLUTION_FAILED,
-            }
-        );
-        
-        try { await handler.handle(processingContext); } catch(e: any) { expect(e.cause).toBe(resolutionError); }
-    });
-
   });
 });

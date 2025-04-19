@@ -69,11 +69,7 @@ describe('RunDirectiveHandler Transformation', () => {
       
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
 
-      expect(result.replacement).toEqual(expect.objectContaining({
-        type: 'Text',
-        content: 'output'
-      }));
-      expect(result.state).toBe(fixture.stateService);
+      expect(result.replacement?.[0]).toMatchObject({ type: 'Text', content: 'output' });
     });
 
     it('should handle variable interpolation in command during transformation', async () => {
@@ -84,11 +80,7 @@ describe('RunDirectiveHandler Transformation', () => {
 
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
 
-      expect(result.replacement).toEqual(expect.objectContaining({
-        type: 'Text',
-        content: 'Hello World'
-      }));
-      expect(result.state).toBe(fixture.stateService);
+      expect(result.replacement?.[0]).toMatchObject({ type: 'Text', content: 'Hello World' });
     });
 
     it('should handle stderr output in transformation', async () => {
@@ -99,11 +91,7 @@ describe('RunDirectiveHandler Transformation', () => {
 
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
 
-      expect(result.replacement).toEqual(expect.objectContaining({
-        type: 'Text',
-        content: 'Error output'
-      }));
-      expect(result.state).toBe(fixture.stateService);
+      expect(result.replacement?.[0]).toMatchObject({ type: 'Text', content: 'Error output' });
       expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
         type: VariableType.TEXT,
         name: 'stderr',
@@ -119,11 +107,7 @@ describe('RunDirectiveHandler Transformation', () => {
 
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
 
-      expect(result.replacement).toEqual(expect.objectContaining({
-        type: 'Text',
-        content: 'Out\nErr'
-      }));
-      expect(result.state).toBe(fixture.stateService);
+      expect(result.replacement?.[0]).toMatchObject({ type: 'Text', content: 'Out\nErr' });
       expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
         type: VariableType.TEXT,
         name: 'stdout',
