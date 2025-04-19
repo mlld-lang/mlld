@@ -15,7 +15,6 @@ import type {
 
 import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
@@ -45,8 +44,10 @@ import type { DirectiveProcessingContext } from '@core/types/index.js';
 import { ICommandDefinition, isBasicCommand } from '@core/types/define.js'; 
 // <<< Restore missing imports for path types >>>
 import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState } from '@core/types'; 
-import type { VariableDefinition } from '../../../../../core/variables/VariableTypes'; // Use relative path
+import type { VariableDefinition } from '@core/types/variables.js'; // Use relative path
 import { isCommandVariable } from '@core/types/guards.js'; // <-- Corrected path based on previous findings
+// Re-add IStateService import as it's needed for context.state type checking
+import type { IStateService } from '@services/state/StateService/IStateService.js'; 
 
 // Define local interfaces mirroring expected AST structure for type safety
 // Based on docs/dev/AST.md
@@ -160,11 +161,12 @@ export class DataDirectiveHandler implements IDirectiveHandler {
              if (typeof definedCommand !== 'object' || !definedCommand.name) {
                  throw new DirectiveError('Invalid command input structure for runDefined subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
              }
-             const cmdVar = state.getCommandVar(definedCommand.name); 
-             if (cmdVar?.value && isBasicCommand(cmdVar.value)) { 
+             // Use generic getVariable and type guard
+             const cmdVar = state.getVariable(definedCommand.name, VariableType.COMMAND); 
+             if (cmdVar && isCommandVariable(cmdVar) && isBasicCommand(cmdVar.value)) { 
                 resolvedCommandString = cmdVar.value.commandTemplate; 
              } else {
-                const errorMsg = cmdVar ? `Command '${definedCommand.name}' is not a basic command suitable for @data/@run` : `Command definition '${definedCommand.name}' not found`;
+                const errorMsg = !cmdVar ? `Command definition '${definedCommand.name}' not found` : `Command '${definedCommand.name}' is not a basic command suitable for @data/@run`;
                 throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, errorDetails);
              }
           } else if (runSubtype === 'runCommand' || runSubtype === 'runCode' || runSubtype === 'runCodeParams') {

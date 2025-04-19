@@ -41,6 +41,7 @@ This refactor was **independent** of the bug described in `BUG-RESOLUTION.md` (f
     *   It now correctly extracts `replacement` nodes and defers state modification application to `DirectiveService`.
 5.  **Tests Updated (Partially):**
     *   Calls in handler unit tests (`*.test.ts`) and the `DirectiveTestFixture` helper changed from `.execute` to `.handle`.
+    *   `DataDirectiveHandler.test.ts` assertions updated to check `result.stateChanges` and remove checks for direct `stateService.setVariable` calls (as of 2025-04-18).
 
 ## Current Status & Issues (As of 2025-04-18)
 
@@ -59,11 +60,9 @@ This refactor was **independent** of the bug described in `BUG-RESOLUTION.md` (f
 ## Remaining Work
 
 1.  **Fix `instanceof` Error:** Investigate and fix the `TypeError: Right-hand side of 'instanceof' is not an object` in `ImportDirectiveHandler.handle` related to processing `interpretationResult`.
-2.  **Update Test Assertions:** Systematically update assertions in **all** affected handler test files (`*.test.ts`, `*.integration.test.ts`, `*.transformation.test.ts` within `services/pipeline/DirectiveService/handlers/`) to:
+2.  **Update Test Assertions:** Systematically update assertions in **all other** affected handler test files (`Text`, `Path`, `Define`, `Run`, `Embed`, `Import` test files within `services/pipeline/DirectiveService/handlers/`) to:
     *   Remove checks expecting `IStateService` as the return value.
     *   Remove checks for direct `stateService.setVariable` calls.
-    *   Add checks for the content of `result.stateChanges.variables` where applicable.
-    *   Ensure assertions checking `result.replacement` are still correct.
 3.  **Address Pre-existing Bugs:**
     *   Investigate and fix the `resolveNodes` bug (`BUG-RESOLUTION.md`).
     *   Investigate and fix the `main is not a function` errors in `api/resolution-debug.test.ts`.
