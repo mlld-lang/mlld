@@ -482,12 +482,22 @@ export class ResolutionService implements IResolutionService {
     const segments: string[] = []; // Initialize an array for string parts
     for (const node of nodes) {
         if (node.type === 'Text') {
-            segments.push(node.content); // Push text content
+            const contentToPush = node.content;
+            // +++ Add Aggressive Logging +++
+            process.stdout.write(`DEBUG: [ResService.resolveNodes Loop Text] Pushing segment: '${contentToPush}' (Length: ${contentToPush?.length ?? 'N/A'})\n`);
+            segments.push(contentToPush); 
+            process.stdout.write(`DEBUG: [ResService.resolveNodes Loop Text] Segments array NOW: [${segments.map(s => `'${s}'`).join(', ')}]\n`);
         } else if (node.type === 'VariableReference') {
-            segments.push(resolvedValues.get(node) || ''); // Push resolved variable value
+            const resolvedVarValue = resolvedValues.get(node) || '';
+            // +++ Add Aggressive Logging +++
+            process.stdout.write(`DEBUG: [ResService.resolveNodes Loop Var] Pushing segment: '${resolvedVarValue}' (Length: ${resolvedVarValue?.length ?? 'N/A'})\n`);
+            segments.push(resolvedVarValue); 
+            process.stdout.write(`DEBUG: [ResService.resolveNodes Loop Var] Segments array NOW: [${segments.map(s => `'${s}'`).join(', ')}]\n`);
         }
         // No need for the final else, already warned above
     }
+    // +++ Add Aggressive Logging +++
+    process.stdout.write(`DEBUG: [ResService.resolveNodes Pre-Join] Segments array: [${segments.map(s => `'${s}'`).join(', ')}]\n`);
     const result = segments.join(''); // Join all segments at the end
     process.stdout.write(`DEBUG: [ResolutionService.resolveNodes EXIT - ArrayJoin] Returning: '${result}'\n`); // Update log message
     return result;
