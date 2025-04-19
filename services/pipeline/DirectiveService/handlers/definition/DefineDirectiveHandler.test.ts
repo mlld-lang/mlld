@@ -269,7 +269,7 @@ describe('DefineDirectiveHandler', () => {
     it('should handle command definition with multiple parameters', async () => {
       const node = createValidDefineNode('cmd3', 'echo $a $b $c', ['a', 'b', 'c']);
       const processingContext = createMockProcessingContext(node, stateService, resolutionService);
-      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $a $b $c resolved');
+       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $a $b $c resolved');
       const result = await handler.handle(processingContext) as DirectiveResult;
 
       expect(result.stateChanges).toBeDefined();

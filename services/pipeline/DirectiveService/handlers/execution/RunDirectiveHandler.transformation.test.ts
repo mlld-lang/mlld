@@ -89,14 +89,14 @@ describe('RunDirectiveHandler Transformation', () => {
       vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('echo Err >&2');
       vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: '', stderr: 'Error output' });
 
-      const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
-
+      const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext) as DirectiveResult;
       expect(result.replacement?.[0]).toMatchObject({ type: 'Text', content: 'Error output' });
-      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.TEXT,
-        name: 'stderr',
-        value: 'Error output'
-      }));
+      expect(result.stateChanges?.variables).toHaveProperty('stderr');
+      const stderrDef = result.stateChanges?.variables?.stderr;
+      expect(stderrDef?.type).toBe(VariableType.TEXT);
+      expect(stderrDef?.value).toBe('Error output');
+      expect(result.stateChanges?.variables).toHaveProperty('stdout');
+      expect(result.stateChanges?.variables?.stdout?.value).toBe('');
     });
 
     it('should handle both stdout and stderr in transformation', async () => {
@@ -105,19 +105,12 @@ describe('RunDirectiveHandler Transformation', () => {
       vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('echo Out && echo Err >&2');
       vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: 'Out', stderr: 'Err' });
 
-      const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
-
+      const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext) as DirectiveResult;
       expect(result.replacement?.[0]).toMatchObject({ type: 'Text', content: 'Out\nErr' });
-      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.TEXT,
-        name: 'stdout',
-        value: 'Out'
-      }));
-      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.TEXT,
-        name: 'stderr',
-        value: 'Err'
-      }));
+      expect(result.stateChanges?.variables).toHaveProperty('stdout');
+      expect(result.stateChanges?.variables?.stdout?.value).toBe('Out');
+      expect(result.stateChanges?.variables).toHaveProperty('stderr');
+      expect(result.stateChanges?.variables?.stderr?.value).toBe('Err');
     });
 
     it('should preserve error handling during transformation', async () => {

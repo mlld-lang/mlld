@@ -122,10 +122,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       } catch (resolutionError) {
         // Handle potential non-Error rejections
         const cause = resolutionError instanceof Error ? resolutionError : new Error(String(resolutionError));
-        throw new DirectiveError(
+          throw new DirectiveError(
           `Failed to resolve import path/identifier: ${pathObject.raw}. ${cause.message}`,
-          this.kind,
-          DirectiveErrorCode.RESOLUTION_FAILED,
+            this.kind,
+            DirectiveErrorCode.RESOLUTION_FAILED,
           { cause: cause }
         );
       }
@@ -221,13 +221,13 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // process.stdout.write(`DEBUG: [ImportDirectiveHandler.handle] Processing structured imports from source state associated with ${resolvedIdentifier}\n`);
         if (sourceStateChanges) {
           await this.processStructuredImports(importsList, sourceStateChanges, stateChangesAccumulator, importDirectiveLocation, resolvedIdentifier, currentFilePath ?? undefined);
-        } else {
+      } else {
            // process.stdout.write(`WARN: [ImportDirectiveHandler.handle] Skipping structured import because source interpretation yielded no state changes for ${resolvedIdentifier}.\n`);
         }
       }
 
       // 8. Mark Import as Completed
-      this.circularityService.endImport(normalizedIdentifier);
+        this.circularityService.endImport(normalizedIdentifier);
 
       if (this.debugEnabled) {
          // process.stdout.write(`DEBUG: [ImportDirectiveHandler.handle] EXIT. Success. Accumulated changes: ${Object.keys(stateChangesAccumulator).length}\n`);
@@ -245,7 +245,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // Check if error is an object before using instanceof
       if (error && typeof error === 'object') { 
-          if (error instanceof DirectiveError) {
+      if (error instanceof DirectiveError) {
             // If it's already a DirectiveError, use it directly
             errorToThrow = error;
             errorMessage = error.message; // Keep message consistent
@@ -278,7 +278,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
            { cause: new Error(errorMessage) } // Create a new Error as cause
          );
       }
-      
+
       // Cleanup: End import tracking if an identifier was resolved
       if (resolvedIdentifier) {
         try {
@@ -390,7 +390,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           // Add to the target state changes accumulator using the target name (alias or original)
           targetStateChanges[targetName] = newVarDef;
            // process.stdout.write(`DEBUG: [ImportDirectiveHandler.processStructuredImports] Copied var ${name} as ${targetName} to target state changes\n`);
-        } else {
+           } else {
            // process.stdout.write(`WARN: [ImportDirectiveHandler.processStructuredImports] Variable "${name}" not found in source state changes for structured import.\n`);
         }
       } catch (error) {
