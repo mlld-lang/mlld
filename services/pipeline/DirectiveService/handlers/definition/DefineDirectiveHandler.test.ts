@@ -18,13 +18,12 @@ import { MeldResolutionError, MeldError } from '@core/errors';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { ICommandDefinition } from '@core/types/define.js';
 import type { CommandVariable } from '@core/types/variables.js';
-import type { DirectiveNode, IDirectiveData as DefineDirectiveData, DirectiveData, VariableReferenceNode } from '@core/syntax/types/index.js';
+import type { DirectiveNode, IDirectiveData as DefineDirectiveData, DirectiveData, VariableReferenceNode, TextNode } from '@core/syntax/types';
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { DirectiveProcessingContext, OutputFormattingContext } from '@core/types/index.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
-import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { JsonValue } from '@core/types';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 // Remove unused imports
@@ -33,7 +32,6 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { VariableMetadata, VariableOrigin, VariableType, createCommandVariable } from '@core/types/variables.js';
 import { MockFactory } from '@tests/utils/mocks/MockFactory.js'; // Keep for state override if needed
 import type { CommandVariable as CoreCommandVariable } from '@core/types/variables.js';
-import { VariableDefinition } from '../../../../../core/variables/VariableTypes'; // Use relative path
 import type { 
     IBasicCommandDefinition,
     ILanguageCommandDefinition,
@@ -42,12 +40,10 @@ import type {
 import { isBasicCommand } from '@core/types/define.js';
 import type { SourceLocation } from '@core/types/common.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { ResolutionContextFactoryMock } from '@services/resolution/ResolutionService/ResolutionContextFactoryMock.js';
-import { DeepMockProxy } from 'vitest-mock';
-import { container } from '@core/di/container.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import { mockDeep } from 'vitest-mock';
 import { isCommandVariable } from '@core/types/guards.js';
+import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler'; // Added correct imports
+import crypto from 'crypto'; // Added crypto import
 
 // Helper to extract state (keep as is)
 function getStateFromResult(result: any): IStateService | undefined {
@@ -70,45 +66,60 @@ function createMockVarRefNode(identifier: string): VariableReferenceNode {
     return {
         type: 'VariableReference',
         identifier: identifier,
-        valueType: 'text', 
-        isVariableReference: true,
-        // location: createLocation() as unknown as Location, // Use test helper or mock location
-        nodeId: crypto.randomUUID() // <<< Added missing nodeId
+        location: createLocation(1,1), 
+        nodeId: crypto.randomUUID(), // Added nodeId
+        valueType: 'text',
+        isVariableReference: true
     };
 }
 
-// Helper function to create a valid @define directive node for testing
+// Added createMockTextNode helper
+function createMockTextNode(content: string): TextNode {
+    return {
+        type: 'Text',
+        content: content,
+        location: createLocation(1,1),
+        nodeId: crypto.randomUUID()
+    };
+}
+
+// Updated createValidDefineNode helper
 function createValidDefineNode(
     name: string, 
-    valueOrCommand: string | DirectiveData, 
+    valueOrCommand: string | DirectiveData, // Accept DirectiveData
     params: string[] = [], 
     useLiteralValue: boolean = true,
     isMultiline: boolean = false, 
     language?: string
 ): DirectiveNode {
-  let directiveContent: Partial<IDirectiveData>;
+  let directiveContent: Partial<DirectiveData>; // Use DirectiveData
   
-  if (useLiteralValue) {
-    // Simulate parser output for literal string value - might need adjustment based on actual parser output
+  if (useLiteralValue && typeof valueOrCommand === 'string') {
     const literalValueNodes: InterpolatableValue = (
-        (valueOrCommand as string).split(/({{.*?}})/g).map(part => {
+        valueOrCommand.split(/({{.*?}})/g).map(part => {
             if (part.startsWith('{{') && part.endsWith('}}')) {
-                return createMockVarRefNode(part.slice(2, -2));
-            } else {
-                return { type: 'Text', content: part, nodeId: crypto.randomUUID() };
+                return createMockVarRefNode(part.slice(2, -2)); // Uses updated helper
+            } else if (part) { 
+                return createMockTextNode(part); // Uses updated helper
             }
-        })
-    ) as InterpolatableValue;
+            return null;
+        }).filter(node => node !== null) as InterpolatableValue
+    );
     directiveContent = { value: literalValueNodes };
+  } else if (!useLiteralValue && typeof valueOrCommand === 'object' && valueOrCommand.kind === 'run') {
+    directiveContent = { command: valueOrCommand };
+  } else if (!useLiteralValue && typeof valueOrCommand === 'string') {
+     directiveContent = { 
+        command: {
+           kind: 'run', 
+           subtype: 'runCode', 
+           command: [createMockTextNode(valueOrCommand)], // Use updated helper
+           isMultiLine: isMultiline,
+           language: language
+        }
+     };
   } else {
-    // Simulate parser output for @run block
-    directiveContent = { 
-      command: { 
-        ...(typeof valueOrCommand === 'string' ? { subtype: 'runCode', command: [{type: 'Text', content: valueOrCommand, nodeId: crypto.randomUUID()}] } : valueOrCommand), // Adjust based on @run structure
-        isMultiLine: isMultiline,
-        language: language
-      }
-    };
+     throw new Error('Invalid arguments for createValidDefineNode');
   }
 
   return {
@@ -123,6 +134,23 @@ function createValidDefineNode(
     nodeId: crypto.randomUUID()
   } as DirectiveNode;
 }
+
+// Helper for processing context (Cast ResolutionContext)
+const createMockProcessingContext = (node: DirectiveNode, state: IStateService, resolution: IResolutionService): DirectiveProcessingContext => {
+    const mockResolutionContext = { 
+      state: state,
+      strict: false, depth: 0, allowedVariableTypes: [], flags: {}, 
+      formattingContext: {}, pathContext: {}, parserFlags: {}, 
+      currentFilePath: state.getCurrentFilePath()
+    } as unknown as ResolutionContext;
+
+    return {
+        state: state,
+        directiveNode: node,
+        resolutionContext: mockResolutionContext,
+        formattingContext: { isBlock: false } 
+    };
+};
 
 describe('DefineDirectiveHandler', () => {
   const helpers = TestContextDI.createTestHelpers();
@@ -207,32 +235,11 @@ describe('DefineDirectiveHandler', () => {
       };
   };
 
-  // Helper for processing context (Cast ResolutionContext)
-  const createMockProcessingContext = (node: DirectiveNode): DirectiveProcessingContext => {
-      // Add required state property, cast to satisfy type checker
-      const mockResolutionContext = { 
-          strict: true, 
-          state: stateService
-      } as ResolutionContext; // Cast to type
-      
-      const mockFormattingContext: OutputFormattingContext = { isBlock: false, preserveLiteralFormatting: false, preserveWhitespace: false };
-      if (!stateService) {
-        throw new Error('Test setup error: stateService is not defined when creating context');
-      }
-      return {
-          state: stateService, 
-          resolutionContext: mockResolutionContext,
-          formattingContext: mockFormattingContext,
-          directiveNode: node,
-      };
-  };
-
   // --- Tests remain largely the same, using resolved handler/mocks ---
   describe('command definition', () => {
     it('should handle basic command definition without parameters', async () => {
       const node = createValidDefineNode('cmd1', 'echo hello'); 
-      const processingContext = createMockProcessingContext(node);
-      // Use the resolved resolutionService mock
+      const processingContext = createMockProcessingContext(node, stateService, resolutionService);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo hello resolved');
 
       const result = await handler.handle(processingContext);
@@ -253,7 +260,7 @@ describe('DefineDirectiveHandler', () => {
 
     it('should handle command definition with parameters', async () => {
       const node = createValidDefineNode('cmd2', 'echo $p1 $p2', ['p1', 'p2']);
-      const processingContext = createMockProcessingContext(node);
+      const processingContext = createMockProcessingContext(node, stateService, resolutionService);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $p1 $p2 resolved');
 
       const result = await handler.handle(processingContext);
@@ -275,7 +282,7 @@ describe('DefineDirectiveHandler', () => {
 
     it('should handle command definition with multiple parameters', async () => {
       const node = createValidDefineNode('cmd3', 'echo $a $b $c', ['a', 'b', 'c']);
-      const processingContext = createMockProcessingContext(node);
+      const processingContext = createMockProcessingContext(node, stateService, resolutionService);
        vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $a $b $c resolved');
       
       const result = await handler.handle(processingContext);
@@ -302,7 +309,7 @@ describe('DefineDirectiveHandler', () => {
             { type: 'VariableReference', identifier: 'var', valueType: 'text', isVariableReference: true, location: createLocation(1,15) }
         ];
         const node = createValidDefineNode('cmdLiteral', literalValue, [], false);
-        const processingContext = createMockProcessingContext(node);
+        const processingContext = createMockProcessingContext(node, stateService, resolutionService);
         vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo literal resolved_value');
         
         const result = await handler.handle(processingContext);
@@ -322,7 +329,7 @@ describe('DefineDirectiveHandler', () => {
 
     it('should define a basic command using literal', async () => {
       const node = createValidDefineNode('cmd1', 'echo hello'); 
-      const processingContext = createMockProcessingContext(node);
+      const processingContext = createMockProcessingContext(node, stateService, resolutionService);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo hello resolved');
       const result = await handler.handle(processingContext);
       expect(result.stateChanges).toBeDefined();
@@ -336,7 +343,7 @@ describe('DefineDirectiveHandler', () => {
 
     it('should define a basic command with parameters using literal', async () => {
       const node = createValidDefineNode('cmd2', 'echo {{p1}} {{p2}}', ['p1', 'p2']);
-      const processingContext = createMockProcessingContext(node);
+      const processingContext = createMockProcessingContext(node, stateService, resolutionService);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo p1_resolved p2_resolved');
       const result = await handler.handle(processingContext);
       expect(result.stateChanges?.variables).toHaveProperty('cmd2');
@@ -352,7 +359,7 @@ describe('DefineDirectiveHandler', () => {
     it('should define a basic command using @run command', async () => {
        const runDirectiveData: DirectiveData = { kind:'run', subtype: 'runCommand', command: [createMockTextNode('echo run test')] };
        const node = createValidDefineNode('cmdRun', runDirectiveData, [], false);
-       const processingContext = createMockProcessingContext(node);
+       const processingContext = createMockProcessingContext(node, stateService, resolutionService);
        vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo run test resolved');
        const result = await handler.handle(processingContext);
        expect(result.stateChanges?.variables).toHaveProperty('cmdRun');
@@ -365,7 +372,7 @@ describe('DefineDirectiveHandler', () => {
     it('should define a language command using @run code', async () => {
          const runDirectiveData: DirectiveData = { kind:'run', subtype: 'runCode', command: [createMockTextNode('print("hello")')], language: 'python' };
          const node = createValidDefineNode('cmdLang', runDirectiveData, [], false);
-         const processingContext = createMockProcessingContext(node);
+         const processingContext = createMockProcessingContext(node, stateService, resolutionService);
          vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('print("hello resolved")');
          const result = await handler.handle(processingContext);
          expect(result.stateChanges?.variables).toHaveProperty('cmdLang');
@@ -415,7 +422,7 @@ describe('DefineDirectiveHandler', () => {
   describe('state management', () => {
     it('should store command in the provided state', async () => {
       const node = createValidDefineNode('cmd6', 'echo test');
-      const processingContext = createMockProcessingContext(node);
+      const processingContext = createMockProcessingContext(node, stateService, resolutionService);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo test resolved');
 
       await handler.handle(processingContext);
@@ -433,7 +440,7 @@ describe('DefineDirectiveHandler', () => {
   describe('error handling', () => {
     it('should handle state errors', async () => {
       const node = createValidDefineNode('cmdError', 'test'); 
-      const processingContext = createMockProcessingContext(node);
+      const processingContext = createMockProcessingContext(node, stateService, resolutionService);
       const stateError = new Error('State error');
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('test resolved');
       vi.spyOn(stateService, 'setVariable').mockRejectedValueOnce(stateError);
@@ -454,7 +461,7 @@ describe('DefineDirectiveHandler', () => {
             { type: 'VariableReference', identifier: 'unresolvable', valueType: 'text', isVariableReference: true, location: createLocation(1,15) }
         ];
         const node = createValidDefineNode('cmdResolveError', literalValue, [], false);
-        const processingContext = createMockProcessingContext(node);
+        const processingContext = createMockProcessingContext(node, stateService, resolutionService);
         const resolutionError = new MeldResolutionError('Variable not found', { code: 'VAR_NOT_FOUND' });
         vi.spyOn(resolutionService, 'resolveNodes').mockRejectedValue(resolutionError);
                 
