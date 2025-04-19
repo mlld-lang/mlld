@@ -19,6 +19,14 @@ import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
 import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js';
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
+import { PathPurpose } from '@core/types/paths.js';
+import * as path from 'path';
+import type { 
+    ResolutionFlags, 
+    PathResolutionContext, 
+    FormattingContext,
+    ParserFlags
+ } from '@core/types/resolution.js';
 
 /**
  * DataDirectiveHandler Test Status
@@ -41,7 +49,6 @@ describe('DataDirectiveHandler', () => {
     fixture.handler = handler;
 
     vi.spyOn(fixture.stateService, 'getCurrentFilePath').mockReturnValue('/test.meld');
-    vi.spyOn(fixture.stateService, 'setVariable').mockResolvedValue({} as MeldVariable);
     vi.spyOn(fixture.stateService, 'isTransformationEnabled').mockReturnValue(false);
     vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockImplementation(async (v) => v);
 
@@ -59,11 +66,64 @@ describe('DataDirectiveHandler', () => {
   });
 
   const createMockProcessingContext = (node: DirectiveNode): DirectiveProcessingContext => {
-    return {
+    if (!fixture?.stateService) {
+        throw new Error("Test setup error: fixture.stateService is undefined in createMockProcessingContext");
+    }
+    const currentFilePath = fixture.stateService.getCurrentFilePath() || undefined;
+    const resolutionContext: ResolutionContext = { 
         state: fixture.stateService, 
-        resolutionContext: { state: fixture.stateService, strict: true } as ResolutionContext,
+        strict: true,
+        currentFilePath: currentFilePath,
+        depth: 0, 
+        flags: {
+            isVariableEmbed: false,
+            isTransformation: false,
+            allowRawContentResolution: false,
+            isDirectiveHandler: false,
+            isImportContext: false,
+            processNestedVariables: true,
+            preserveUnresolved: false
+        }, 
+        pathContext: { 
+            purpose: PathPurpose.READ,
+            baseDir: currentFilePath ? path.dirname(currentFilePath) : '.',
+            allowTraversal: false
+        },
+        withIncreasedDepth: () => ({ ...resolutionContext, depth: resolutionContext.depth + 1 } as ResolutionContext),
+        withStrictMode: (strict: boolean) => ({ ...resolutionContext, strict } as ResolutionContext),
+        withPathContext: (ctx: Partial<PathResolutionContext>) => ({
+            ...resolutionContext, 
+            pathContext: { 
+                ...(resolutionContext.pathContext ?? { purpose: PathPurpose.READ, baseDir: '.', allowTraversal: false }),
+                ...ctx 
+            }
+        } as ResolutionContext),
+        withFlags: (flags: Partial<ResolutionFlags>) => ({
+            ...resolutionContext, 
+            flags: { ...resolutionContext.flags, ...flags }
+        } as ResolutionContext),
+        withAllowedTypes: (types: VariableType[]) => ({ ...resolutionContext, allowedVariableTypes: types } as ResolutionContext),
+        withFormattingContext: (formatting: Partial<FormattingContext>) => ({
+            ...resolutionContext, 
+            formattingContext: { 
+                ...(resolutionContext.formattingContext ?? { isBlock: false, preserveLiteralFormatting: false, preserveWhitespace: false }),
+                ...formatting 
+            }
+        } as ResolutionContext),
+        withParserFlags: (flags: Partial<ParserFlags>) => ({
+            ...resolutionContext, 
+            parserFlags: { 
+                ...(resolutionContext.parserFlags ?? { parseInRawContent: false, parseInCodeBlocks: true, resolveVariablesDuringParsing: false, parseLiteralTypes: [] }),
+                ...flags 
+            }
+        } as ResolutionContext),
+    };
+    return {
+        state: fixture.stateService,
+        resolutionContext: resolutionContext,
         formattingContext: { isBlock: false },
         directiveNode: node,
+        executionContext: { cwd: '/test/dir' },
     };
   };
 
@@ -102,9 +162,7 @@ describe('DataDirectiveHandler', () => {
       expect(varDef?.type).toBe(VariableType.DATA);
       expect(varDef?.value).toEqual(expectedData);
     });
-  });
 
-  describe('error handling', () => {
     it('should handle invalid JSON from run/embed', async () => {
       const node = createDirectiveNode('data', { identifier: 'invalidData', source: 'run', run: { subtype: 'runCommand', command: [{ type: 'Text', content: 'echo { invalid JSON' }] } });
       const processingContext = createMockProcessingContext(node);

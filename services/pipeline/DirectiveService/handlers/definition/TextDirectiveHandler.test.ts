@@ -11,12 +11,12 @@ import { ErrorSeverity, FieldAccessError, MeldResolutionError } from '@core/erro
 import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
-import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
-import { DirectiveHandler } from '@pipeline/DirectiveHandler';
-import { DirectiveProcessingContext } from '@pipeline/DirectiveProcessingContext';
-import { createMockDirectiveNode } from '@tests/utils/mocks/ASTNodeMocks';
-import { expectToThrowMeldError } from '@tests/utils/ErrorTestUtils';
-import { VariableType } from '@common/common';
+import type { VariableDefinition } from '@core/types/variables.js';
+import { DirectiveHandler } from '@services/pipeline/DirectiveService/DirectiveHandler.js';
+import { DirectiveProcessingContext } from '@services/pipeline/DirectiveService/DirectiveProcessingContext.js';
+import { createMockDirectiveNode } from '@tests/utils/mocks/ASTNodeMocks.js';
+import { expectToThrowMeldError } from '@tests/utils/ErrorTestUtils.js';
+import { VariableType } from '@core/types/variables.js';
 import {
   MeldError,
   MeldErrorCodes,
