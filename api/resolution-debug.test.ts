@@ -3,19 +3,24 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { processMeld } from '@api/index.js';
 import type { Services, ProcessOptions } from '@core/types/index.js';
 import logger from '@core/utils/logger.js';
+import { container, type DependencyContainer } from 'tsyringe';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 
 describe('Variable Resolution Debug Tests', () => {
   let context: TestContextDI;
+  let testContainer: DependencyContainer;
 
   beforeEach(async () => {
-    context = TestContextDI.create();
+    context = TestContextDI.createIsolated();
     await context.initialize();
-    context.enableTransformation();
-    context.registerMock('MainLogger', logger);
-    context.registerMock('ILogger', logger);
+    testContainer = container.createChildContainer();
+    testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
+    testContainer.registerInstance('MainLogger', logger);
+    testContainer.register('ILogger', { useToken: 'MainLogger' });
   });
 
   afterEach(async () => {
+    testContainer?.clearInstances();
     await context?.cleanup();
     vi.resetModules();
   });
@@ -27,27 +32,15 @@ describe('Variable Resolution Debug Tests', () => {
 
 {{greeting}}, {{subject}}!`;
     
-    await context.services.filesystem.writeFile('test.meld', content);
+    await context.fs.writeFile('test.meld', content);
     
-    // Add debug logging for parsed content
-    const parserService = context.services.parser;
-    const origParse = parserService.parse;
-    parserService.parse = async (content) => {
-      const result = await origParse.call(parserService, content);
-      console.log('PARSER RESULT:', JSON.stringify(result, null, 2));
-      return result;
-    };
-    
-    const result = await processMeld('test.meld', {
-      fs: context.services.filesystem,
-      services: context.services as unknown as Partial<Services>,
+    const result = await processMeld(content, {
+      container: testContainer,
       transformation: true
     });
     
-    // Log the content for debugging
     console.log('CONTENT:', content);
     console.log('RESULT:', result);
-    console.log('Transformation enabled:', context.services.state.isTransformationEnabled());
     
     expect(result.trim()).toBe('Hello, World!');
   });
@@ -58,24 +51,13 @@ describe('Variable Resolution Debug Tests', () => {
 
 First item: {{items.0}}`;
     
-    await context.services.filesystem.writeFile('test.meld', content);
+    await context.fs.writeFile('test.meld', content);
     
-    // Add debug logging for parsed content
-    const parserService = context.services.parser;
-    const origParse = parserService.parse;
-    parserService.parse = async (content) => {
-      const result = await origParse.call(parserService, content);
-      console.log('PARSER RESULT:', JSON.stringify(result, null, 2));
-      return result;
-    };
-    
-    const result = await processMeld('test.meld', {
-      fs: context.services.filesystem,
-      services: context.services as unknown as Partial<Services>,
+    const result = await processMeld(content, {
+      container: testContainer,
       transformation: true
     });
     
-    // Log the content for debugging
     console.log('CONTENT:', content);
     console.log('RESULT:', result);
     
@@ -91,15 +73,13 @@ First item: {{items.0}}`;
 
 User: {{users.0.name}}, Age: {{users.0.age}}`;
     
-    await context.services.filesystem.writeFile('test.meld', content);
+    await context.fs.writeFile('test.meld', content);
     
-    const result = await processMeld('test.meld', {
-      fs: context.services.filesystem,
-      services: context.services as unknown as Partial<Services>,
+    const result = await processMeld(content, {
+      container: testContainer,
       transformation: true
     });
     
-    // Log the content for debugging
     console.log('CONTENT:', content);
     console.log('RESULT:', result);
     
@@ -124,11 +104,10 @@ User: {{users.0.name}}, Age: {{users.0.age}}`;
 Name: {{nested.users.0.name}}
 Hobby: {{nested.users.0.hobbies.0}}`;
     
-    await context.services.filesystem.writeFile('test.meld', content);
+    await context.fs.writeFile('test.meld', content);
     
-    const result = await processMeld('test.meld', {
-      fs: context.services.filesystem,
-      services: context.services as unknown as Partial<Services>,
+    const result = await processMeld(content, {
+      container: testContainer,
       transformation: true
     });
     
