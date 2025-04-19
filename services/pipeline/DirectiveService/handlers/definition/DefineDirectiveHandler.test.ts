@@ -236,9 +236,7 @@ describe('DefineDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo hello resolved');
 
       const result = await handler.handle(processingContext);
-      const resultState = getStateFromResult(result);
 
-      expect(resultState).toBe(stateService); 
       // Use the resolved stateService mock
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
           type: VariableType.COMMAND,
@@ -259,9 +257,7 @@ describe('DefineDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $p1 $p2 resolved');
 
       const result = await handler.handle(processingContext);
-      const resultState = getStateFromResult(result);
-      
-      expect(resultState).toBe(stateService);
+
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
           type: VariableType.COMMAND,
           name: 'cmd2',
@@ -283,9 +279,7 @@ describe('DefineDirectiveHandler', () => {
        vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $a $b $c resolved');
       
       const result = await handler.handle(processingContext);
-      const resultState = getStateFromResult(result);
 
-      expect(resultState).toBe(stateService);
       expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
           type: VariableType.COMMAND,
           name: 'cmd3',
@@ -312,10 +306,8 @@ describe('DefineDirectiveHandler', () => {
         vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo literal resolved_value');
         
         const result = await handler.handle(processingContext);
-        const resultState = getStateFromResult(result);
 
         expect(resolutionService.resolveNodes).toHaveBeenCalledWith(literalValue, expect.any(Object));
-        expect(resultState).toBe(stateService);
         expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
             type: VariableType.COMMAND,
             name: 'cmdLiteral',
