@@ -159,6 +159,21 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         sourceContextPath = resolvedPath; // Use the resolved URL path as context
       } else if (resolvedPath.contentType === PathContentType.FILESYSTEM) {
         // process.stdout.write(`DEBUG: [ImportDirectiveHandler.handle] Importing from file: ${resolvedIdentifier}\n`);
+        
+        // --- ADD Exists Check --- 
+        const fileExists = await this.fileSystemService.exists(resolvedPath.validatedPath);
+        if (!fileExists) {
+            // Include the resolved path string in the error message
+            const errorMsg = `Import file not found: ${resolvedPath.validatedPath}`;
+            throw new DirectiveError(
+                errorMsg,
+                this.kind,
+                DirectiveErrorCode.FILE_NOT_FOUND,
+                { node: node, context: context } // Standard details
+            );
+        }
+        // --- End Exists Check --- 
+        
         content = await this.fileSystemService.readFile(resolvedPath.validatedPath);
         sourceStateId = `file:${resolvedIdentifier}`;
         // Use the resolved MeldPath directly as the source context path
@@ -228,6 +243,13 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           command: interpretedChildState.getAllCommands(),
         };
 
+        // --- DEBUG LOGGING START ---
+        process.stdout.write(`DEBUG [ImportHandler]: Type of allVars.text: ${typeof allVars.text}, isMap: ${allVars.text instanceof Map}\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: allVars.text keys: ${allVars.text ? JSON.stringify(Array.from(allVars.text.keys())) : 'undefined'}\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: Type of allVars.data: ${typeof allVars.data}, isMap: ${allVars.data instanceof Map}\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: allVars.data keys: ${allVars.data ? JSON.stringify(Array.from(allVars.data.keys())) : 'undefined'}\n`);
+        // --- DEBUG LOGGING END ---
+
         const accumulatedVariables: Record<string, VariableDefinition> = {};
         // Combine all variable types into the StateChanges format
         for (const [key, value] of allVars.text.entries()) {
@@ -242,6 +264,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         for (const [key, value] of allVars.command.entries()) {
           accumulatedVariables[key] = value;
         }
+
+        // --- DEBUG LOGGING START ---
+        process.stdout.write(`DEBUG [ImportHandler]: Accumulated variable keys: ${JSON.stringify(Object.keys(accumulatedVariables))}\n`);
+        // --- DEBUG LOGGING END ---
 
         if (Object.keys(accumulatedVariables).length > 0) {
            sourceStateChanges = { variables: accumulatedVariables };
@@ -303,17 +329,18 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // Check if error is an object before using instanceof
       if (error && typeof error === 'object') { 
       if (error instanceof DirectiveError) {
-            // If it's already a DirectiveError, use it directly
+            // If it's already a DirectiveError, re-throw it directly
+            // The specific code (e.g., FILE_NOT_FOUND) will be preserved.
             errorToThrow = error;
-            errorMessage = error.message; // Keep message consistent
+            // No need to update errorMessage here, the original message is kept.
           } else if (error instanceof Error) {
-            // If it's a standard Error, wrap it
+            // If it's a standard Error, wrap it with EXECUTION_FAILED (as specific cause is unknown)
             errorMessage = error.message;
             errorToThrow = new DirectiveError(
               `Import directive error: ${errorMessage}`,
               this.kind,
               DirectiveErrorCode.EXECUTION_FAILED,
-              { cause: error } // Keep the original Error as cause
+              { cause: error }
             );
           } else {
             // Handle other object types (e.g., plain error objects from services)
@@ -322,7 +349,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
               `Import directive error: ${errorMessage}`,
               this.kind,
               DirectiveErrorCode.EXECUTION_FAILED,
-              { cause: new Error(errorMessage) } // Create a new Error as cause
+              { cause: new Error(errorMessage) }
             );
           }
       } else {
@@ -332,7 +359,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
            `Import directive error: ${errorMessage}`,
            this.kind,
            DirectiveErrorCode.EXECUTION_FAILED,
-           { cause: new Error(errorMessage) } // Create a new Error as cause
+           { cause: new Error(errorMessage) }
          );
       }
 
@@ -346,7 +373,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
       }
       
-      // Throw the unified DirectiveError
+      // Throw the original DirectiveError or the newly wrapped one
       throw errorToThrow;
     }
   }
