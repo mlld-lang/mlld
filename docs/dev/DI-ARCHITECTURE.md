@@ -219,7 +219,7 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Routes directives to the correct directive handler  
    - Validates directives using ValidationService  
    - Calls ResolutionService for variable resolution  
-   - Updates StateService with directive execution results
+   - Interprets DirectiveResult from handlers and applies specified stateChanges to StateService
    - Supports node transformation through DirectiveResult interface
    - Handlers can provide replacement nodes for transformed output
    - Dependencies: ValidationService, StateService, PathService, FileSystemService, ParserService, InterpreterService, CircularityService, ResolutionService
@@ -245,6 +245,7 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Tracks both original and transformed MeldNodes
    - Provides transformation capabilities for directive processing
    - Maintains transformation state during cloning
+   - Updated by DirectiveService based on handler results (stateChanges)
    - Provides child states for nested imports  
    - Supports immutability toggles  
    - Dependencies: StateFactory, StateEventService, StateTrackingService

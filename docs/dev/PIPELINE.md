@@ -134,8 +134,8 @@ The pipeline is organized into logical service groups, with strict initializatio
           │            └─────────────┘
           ▼
    ┌─────────────┐
-   │    State    │
-   │   Service   │ ← Updated by handlers
+   │    State    │ ← Updated by DirectiveService applying stateChanges
+   │   Service   │   from handler's DirectiveResult
    │(Original &  │
    │Transformed) │ ← Stores final (transformed) AST
    └─────────────┘
@@ -143,8 +143,9 @@ The pipeline is organized into logical service groups, with strict initializatio
    - Processes each rich AST node sequentially
    - Routes directives to appropriate handlers via `DirectiveService`
    - Handlers process structured directive data (e.g., `InterpolatableValue`) and use `ResolutionService` as needed
-   - Handlers can provide replacement nodes for the transformed AST
-   - Updates `StateService` with results and the final transformed AST
+   - Handlers return a `DirectiveResult` which may include replacement nodes and/or `stateChanges`.
+   - `DirectiveService` applies the `stateChanges` from the `DirectiveResult` to the `StateService`.
+   - `InterpreterService` applies node replacements (if any) to the transformed AST.
    - Handles file imports and embedding
    - **Resolves `{{...}}` variable references within plain `TextNode` content**
 

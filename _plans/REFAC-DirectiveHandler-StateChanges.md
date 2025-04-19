@@ -50,9 +50,12 @@ This refactor was **independent** of the bug described in `BUG-RESOLUTION.md` (f
     - `npm test api`: ~16 failures.
 - **Primary Refactor-Induced Bug:**
     - `TypeError: Right-hand side of 'instanceof' is not an object` occurring in import-related tests (`ImportDirectiveHandler.test.ts`, `api/integration.test.ts`). This seems related to how `ImportDirectiveHandler` processes the result from its recursive `interpreterServiceClient.interpretNode` call, which now returns the new `DirectiveResult` structure.
-- **Assertion Failures:** Many handler tests fail due to outdated assertions:
+- **Regression in Refactored Handler:**
+    - `DataDirectiveHandler.test.ts` shows a `DirectiveError: ... Failed to parse value for @data directive 'message' as JSON...`, indicating the refactored handler incorrectly attempts to parse non-JSON string literals (Fixed as of YYYY-MM-DD, but noted here for context).
+- **Assertion Failures / Incomplete Test Updates:** Many handler tests (`Define`, `Text`, `Import`, integration tests) fail due to outdated assertions:
     - Expecting the handler to return `IStateService`.
     - Expecting `stateService.setVariable` (or specific variants) to have been called directly by the handler.
+- **Potential Test Setup Issues:** Failures in `DirectiveService.test.ts` (`specificHandler.handle is not a function`) and `InterpreterService.unit.test.ts` (`transformNode` not called) may indicate issues with test mocks/setup not aligning with the refactored interfaces/return types.
 - **Pre-existing Bugs Persist:**
     - The `resolveNodes` bug (`BUG-RESOLUTION.md`) causing "Path cannot be empty" errors remains unresolved.
     - `TypeError: main is not a function` errors in `api/resolution-debug.test.ts` persist.
@@ -60,15 +63,19 @@ This refactor was **independent** of the bug described in `BUG-RESOLUTION.md` (f
 ## Remaining Work
 
 1.  **Fix `instanceof` Error:** Investigate and fix the `TypeError: Right-hand side of 'instanceof' is not an object` in `ImportDirectiveHandler.handle` related to processing `interpretationResult`.
-2.  **Update Test Assertions:** Systematically update assertions in **all other** affected handler test files (`Text`, `Path`, `Define`, `Run`, `Embed`, `Import` test files within `services/pipeline/DirectiveService/handlers/`) to:
+2.  **Fix `DataDirectiveHandler` Regression:** Address the JSON parsing error identified in `DataDirectiveHandler.test.ts` where the handler incorrectly attempts to parse non-JSON string literals. (This might be resolved now, double-check test results).
+3.  **Update Test Assertions:** Systematically update assertions in **all other** affected handler test files (`Text`, `Path`, `Define`, `Run`, `Embed`, `Import` test files within `services/pipeline/DirectiveService/handlers/`) to:
     *   Remove checks expecting `IStateService` as the return value.
     *   Remove checks for direct `stateService.setVariable` calls.
-3.  **Address Pre-existing Bugs:**
+    *   Add checks for the content of `result.stateChanges.variables` where applicable.
+    *   Ensure assertions checking `result.replacement` are still correct.
+    *   Verify the handler's logic post-refactor (as highlighted by the `DataDirectiveHandler` regression initially).
+4.  **Address Pre-existing Bugs:**
     *   Investigate and fix the `resolveNodes` bug (`BUG-RESOLUTION.md`).
     *   Investigate and fix the `main is not a function` errors in `api/resolution-debug.test.ts`.
-4.  **Address Downstream Failures:** Resolve any remaining assertion failures or errors in `api` tests after the above steps are completed.
-5.  **Code Cleanup:** Remove the unused, old `DirectiveResult` definition from `services/pipeline/DirectiveService/interfaces/DirectiveTypes.ts` once all components reliably use the new one.
+5.  **Address Downstream Failures:** Resolve any remaining assertion failures or errors in `api` tests after the above steps are completed.
+6.  **Code Cleanup:** Remove the unused, old `DirectiveResult` definition from `services/pipeline/DirectiveService/interfaces/DirectiveTypes.ts` once all components reliably use the new one.
 
 ## Decision Point
 
-If Step 1 (fixing the `instanceof` error) proves overly complex or reveals fundamental flaws in the `StateChanges` approach for imports, a rollback of this entire refactor should be considered before investing further time in updating all test assertions. 
+If Step 1 (fixing the `instanceof`
