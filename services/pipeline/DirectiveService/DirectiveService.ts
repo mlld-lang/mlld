@@ -494,7 +494,21 @@ export class DirectiveService implements IDirectiveService {
           }
           
           // Apply the change to the state service from the *original context*
-          await context.state.setVariable(variableToSet);
+          switch (varDef.type) {
+            case VariableType.TEXT:
+              await context.state.setTextVar(name, varDef.value as string, metadata);
+              break;
+            case VariableType.DATA:
+              await context.state.setDataVar(name, varDef.value, metadata);
+              break;
+            case VariableType.PATH:
+              await context.state.setPathVar(name, varDef.value as any, metadata);
+              break;
+            case VariableType.COMMAND:
+              await context.state.setCommand(name, varDef.value as ICommandDefinition, metadata);
+              break;
+            // No default needed as we continue in the outer loop for unknown types
+          }
           this.logger.debug(`Applied variable change: ${name}`, { type: varDef.type });
         }
       }

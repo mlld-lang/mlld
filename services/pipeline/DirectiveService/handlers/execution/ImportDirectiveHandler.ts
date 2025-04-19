@@ -26,6 +26,7 @@ import { StateService } from '@services/state/StateService/StateService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { MeldPath, PathContentType, ValidatedResourcePath } from '@core/types/paths';
 import type { StateServiceLike } from '@core/shared-service-types.js';
+import { MeldResolutionError, MeldFileNotFoundError } from '@core/errors';
 
 /**
  * Handler for @import directives
@@ -132,7 +133,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         );
       }
 
-      resolvedIdentifier = resolvedPath.originalValue || resolvedPath.validatedPath || pathObject.raw;
+      // Prioritize validated path for the identifier used internally
+      resolvedIdentifier = resolvedPath.validatedPath || resolvedPath.originalValue || pathObject.raw;
 
       if (!resolvedIdentifier) {
         throw new DirectiveError(
@@ -334,12 +336,20 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             errorToThrow = error;
             // No need to update errorMessage here, the original message is kept.
           } else if (error instanceof Error) {
-            // If it's a standard Error, wrap it with EXECUTION_FAILED (as specific cause is unknown)
+            // If it's a standard Error, wrap it. Try to infer code.
             errorMessage = error.message;
+            let specificCode = DirectiveErrorCode.EXECUTION_FAILED;
+            // Add checks for specific error types that should map to specific codes
+            if (error instanceof MeldResolutionError || error.name === 'MeldResolutionError') {
+               specificCode = DirectiveErrorCode.RESOLUTION_FAILED;
+            } else if (error instanceof MeldFileNotFoundError || error.name === 'MeldFileNotFoundError') { // Assuming MeldFileNotFoundError exists
+               specificCode = DirectiveErrorCode.FILE_NOT_FOUND;
+            } // Add more checks here if needed (e.g., for PathValidationError)
+            
             errorToThrow = new DirectiveError(
               `Import directive error: ${errorMessage}`,
               this.kind,
-              DirectiveErrorCode.EXECUTION_FAILED,
+              specificCode, // Use inferred or fallback code
               { cause: error }
             );
           } else {

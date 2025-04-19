@@ -296,21 +296,14 @@ describe('ImportDirectiveHandler', () => {
 
   describe('basic importing', () => {
     beforeEach(() => {
-      // Override interpret mock for this block to succeed and return a state with nodes
-      const mockResultState = mockDeep<IStateService>();
-      const mockNodes: MeldNode[] = [ { type: 'Text', content: 'Imported Content', location: undefined } as TextNode ]; // Cast to TextNode
-      mockResultState.getTransformedNodes.mockReturnValue(mockNodes);
-      // Ensure other methods needed by importAllVariables/processStructuredImports are mocked
-      mockResultState.getAllTextVars.mockReturnValue(new Map([['importedVar', { name: 'importedVar', type: VariableType.TEXT, value: 'Imported Value'}]]));
-      mockResultState.getAllDataVars.mockReturnValue(new Map());
-      mockResultState.getAllPathVars.mockReturnValue(new Map());
-      mockResultState.getAllCommands.mockReturnValue(new Map());
-      
-      interpreterServiceClient.interpret.mockReset(); 
-      interpreterServiceClient.interpret.mockResolvedValue(mockResultState);
-      
       // Mock createChildState for this block too
       const mockChildState = mockDeep<IStateService>();
+      // --- ADD Mock getAll... methods on child state BEFORE interpret mock --- 
+      mockChildState.getAllTextVars.mockReturnValue(new Map());
+      mockChildState.getAllDataVars.mockReturnValue(new Map());
+      mockChildState.getAllPathVars.mockReturnValue(new Map());
+      mockChildState.getAllCommands.mockReturnValue(new Map());
+      mockChildState.getTransformedNodes.mockReturnValue([]); // Ensure this is mocked too
       stateService.createChildState.mockReset();
       stateService.createChildState.mockResolvedValueOnce(mockChildState);
     });
@@ -349,10 +342,8 @@ describe('ImportDirectiveHandler', () => {
       expectedResultState.getTransformedNodes.mockReturnValue([]);
       expectedResultState.setCurrentFilePath.mockImplementation(() => {}); 
 
+      // Set interpret mock specifically for this test 
       interpreterServiceClient.interpret.mockResolvedValueOnce(expectedResultState);
-      const mockChildState = mockDeep<IStateService>();
-      stateService.createChildState.mockReset();
-      stateService.createChildState.mockResolvedValueOnce(mockChildState); 
 
       const result = await handler.handle(mockProcessingContext);
       // Expect resolvePath to be called with the path object
@@ -432,10 +423,8 @@ describe('ImportDirectiveHandler', () => {
       expectedResultState.getAllCommands.mockReturnValue(new Map()); // Ensure empty Map
       expectedResultState.setCurrentFilePath.mockImplementation(() => {});
       
+      // Set interpret mock specifically for this test 
       interpreterServiceClient.interpret.mockResolvedValueOnce(expectedResultState);
-      const mockChildState = mockDeep<IStateService>();
-      stateService.createChildState.mockReset();
-      stateService.createChildState.mockResolvedValueOnce(mockChildState);
 
       const result = await handler.handle(mockProcessingContext) as DirectiveResult;
       // Assert resolvePath was called with the path object and any context
