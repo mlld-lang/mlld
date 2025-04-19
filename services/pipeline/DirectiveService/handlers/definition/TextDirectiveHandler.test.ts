@@ -12,6 +12,15 @@ import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
+import { DirectiveHandler } from '@pipeline/DirectiveHandler';
+import { DirectiveProcessingContext } from '@pipeline/DirectiveProcessingContext';
+import { createMockDirectiveNode } from '@tests/utils/mocks/ASTNodeMocks';
+import { expectToThrowMeldError } from '@tests/utils/ErrorTestUtils';
+import { VariableType } from '@common/common';
+import {
+  MeldError,
+  MeldErrorCodes,
+} from '@core/errors/index.js';
 
 /**
  * TextDirectiveHandler Test Status
