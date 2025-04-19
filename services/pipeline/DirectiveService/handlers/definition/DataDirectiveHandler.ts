@@ -285,23 +285,23 @@ export class DataDirectiveHandler implements IDirectiveHandler {
 
       // --- Modify JSON Parsing Step --- 
       let finalValue: JsonValue;
-      if (typeof valueToParse === 'string') {
+      // Only attempt to parse if the source was NOT literal AND the value is a string
+      if (source !== 'literal' && typeof valueToParse === 'string') { 
         try {
-          // Use standard JSON.parse()
+          // Use standard JSON.parse() for run/embed string results
           finalValue = JSON.parse(valueToParse); 
-          logger.debug('Successfully parsed resolved string as JSON', { identifier });
+          logger.debug('Successfully parsed resolved string from run/embed as JSON', { identifier });
         } catch (parseError) {
           // Update error details structure here too
           throw new DirectiveError(
-            `Failed to parse value for @data directive '${identifier}' as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`,
+            `Failed to parse value from source '${source}' for @data directive '${identifier}' as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`,
             this.kind, 
-            DirectiveErrorCode.VALIDATION_FAILED, 
+            DirectiveErrorCode.VALIDATION_FAILED, // Parsing failure is often a validation issue of the source content
             { ...errorDetails, cause: parseError instanceof Error ? parseError : undefined }
           );
         }
       } else {
-        // Assume non-string value is already valid JSON (or primitive)
-        // Remove JsonUtils.isValidJsonValue check
+        // Assume literal source OR non-string value (already parsed from run/embed) is the final intended value
         finalValue = valueToParse as JsonValue; 
       }
       // --- End JSON Parsing Step --- 

@@ -30,6 +30,7 @@ import { ResolutionService } from '@services/resolution/ResolutionService/Resolu
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import logger from '@core/utils/logger.js';
 
 describe('SDK Integration Tests', () => {
   let context: TestContextDI;
@@ -60,11 +61,15 @@ describe('SDK Integration Tests', () => {
     };
     */
    // Keep only Logger mock
-    const mockLogger = mock<ILogger>();
+    // const mockLogger = mock<ILogger>(); // Remove mock logger
 
     // Register essential mocks (FS, Logger)
     testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
-    testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger);
+    // Remove incorrect registration
+    // testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger); 
+    // Register the actual main logger using correct tokens
+    testContainer.registerInstance('MainLogger', logger); 
+    testContainer.register('ILogger', { useToken: 'MainLogger' });
     // testContainer.registerInstance<IURLContentResolver>('IURLContentResolver', mockURLContentResolver); // Remove registration
 
     // Register real factories

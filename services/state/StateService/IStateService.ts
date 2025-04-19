@@ -298,6 +298,28 @@ interface IStateService {
    * @returns true if the transformation should occur.
    */
   shouldTransform(type: string): boolean;
+
+  // Type-specific getters from StateServiceLike
+  getTextVar(name: string): TextVariable | undefined;
+  getDataVar(name: string): DataVariable | undefined;
+  getPathVar(name: string): IPathVariable | undefined;
+  getCommandVar(name: string): CommandVariable | undefined;
+
+  // Type-specific setters from StateServiceLike
+  setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<TextVariable>;
+  setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): Promise<DataVariable>;
+  setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): Promise<IPathVariable>;
+  setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<CommandVariable>;
+
+  // Get all variables by type from StateServiceLike
+  getAllTextVars(): Map<string, TextVariable>;
+  getAllDataVars(): Map<string, DataVariable>;
+  getAllPathVars(): Map<string, IPathVariable>;
+  getAllCommands(): Map<string, CommandVariable>;
+
+  // Get local variables by type from StateServiceLike
+  getLocalTextVars(): Map<string, TextVariable>;
+  getLocalDataVars(): Map<string, DataVariable>;
 }
 
 export type { TransformationOptions, IStateService, DataVariable }; 

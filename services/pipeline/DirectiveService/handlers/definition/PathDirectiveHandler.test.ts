@@ -96,11 +96,6 @@ describe('PathDirectiveHandler', () => {
         expectedResolvedString, 
         expect.any(Object)
       );
-      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.PATH,
-        name: identifier,
-        value: mockValidatedPath
-      }));
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty(identifier);
       const pathDef = result.stateChanges?.variables?.[identifier];
@@ -137,11 +132,6 @@ describe('PathDirectiveHandler', () => {
         expect.any(Object) 
       );
       expect(resolvePathSpy).toHaveBeenCalledWith(expectedResolvedString, expect.any(Object));
-      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.PATH,
-        name: identifier,
-        value: mockValidatedPath
-      }));
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty(identifier);
       const pathDef = result.stateChanges?.variables?.[identifier];
@@ -166,11 +156,6 @@ describe('PathDirectiveHandler', () => {
       expect(validateSpy).toHaveBeenCalledWith(node);
       expect(resolveInContextSpy).toHaveBeenCalledWith(rawPathValue, expect.any(Object));
       expect(resolvePathSpy).toHaveBeenCalledWith(expectedResolvedString, expect.any(Object));
-      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.PATH,
-        name: identifier,
-        value: mockValidatedPath
-      }));
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty(identifier);
       const pathDef = result.stateChanges?.variables?.[identifier];

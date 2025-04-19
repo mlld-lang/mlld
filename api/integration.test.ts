@@ -50,6 +50,8 @@ import { PathOperationsService } from '@services/fs/FileSystemService/PathOperat
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 // <<< Add import for CircularityService >>>
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+// Import the default logger instance
+import logger from '@core/utils/logger.js'; 
 // =========================
 
 // Define runDirectiveExamples from the module
@@ -75,12 +77,16 @@ describe('API Integration Tests', () => {
     testContainer = container.createChildContainer();
 
     // Keep only Logger mock
-    const mockLogger = mock<ILogger>();
+    // const mockLogger = mock<ILogger>(); // Remove mock logger
 
     // Register Dependencies
     // Infrastructure Mocks (FS, Logger)
     testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
-    testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger);
+    // Remove incorrect registration
+    // testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger);
+    // Register the actual main logger using correct tokens
+    testContainer.registerInstance('MainLogger', logger); 
+    testContainer.register('ILogger', { useToken: 'MainLogger' });
 
     // Register Real Factories
     testContainer.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });

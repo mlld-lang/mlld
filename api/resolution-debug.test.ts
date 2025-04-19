@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { main } from '@api/index.js';
+import { processMeld } from '@api/index.js';
 import type { Services, ProcessOptions } from '@core/types/index.js';
+import logger from '@core/utils/logger.js';
 
 describe('Variable Resolution Debug Tests', () => {
   let context: TestContextDI;
@@ -10,6 +11,8 @@ describe('Variable Resolution Debug Tests', () => {
     context = TestContextDI.create();
     await context.initialize();
     context.enableTransformation();
+    context.registerMock('MainLogger', logger);
+    context.registerMock('ILogger', logger);
   });
 
   afterEach(async () => {
@@ -35,7 +38,7 @@ describe('Variable Resolution Debug Tests', () => {
       return result;
     };
     
-    const result = await main('test.meld', {
+    const result = await processMeld('test.meld', {
       fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
@@ -66,7 +69,7 @@ First item: {{items.0}}`;
       return result;
     };
     
-    const result = await main('test.meld', {
+    const result = await processMeld('test.meld', {
       fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
@@ -90,7 +93,7 @@ User: {{users.0.name}}, Age: {{users.0.age}}`;
     
     await context.services.filesystem.writeFile('test.meld', content);
     
-    const result = await main('test.meld', {
+    const result = await processMeld('test.meld', {
       fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
@@ -123,7 +126,7 @@ Hobby: {{nested.users.0.hobbies.0}}`;
     
     await context.services.filesystem.writeFile('test.meld', content);
     
-    const result = await main('test.meld', {
+    const result = await processMeld('test.meld', {
       fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true

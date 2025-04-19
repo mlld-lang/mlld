@@ -21,6 +21,8 @@ import type { IURLContentResolver } from '@services/resolution/URLContentResolve
 import type { ILogger } from '@core/utils/logger.js';
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
+// Import the default logger instance
+import logger from '@core/utils/logger.js';
 
 describe('Array Access Tests', () => {
   let context: TestContextDI;
@@ -34,7 +36,7 @@ describe('Array Access Tests', () => {
     // Mocks: Keep ONLY the necessary IFileSystem mock
     // Remove other mocks (Logger, URLResolver)
     // Re-introduce mock Logger definition
-    const mockLogger = mock<ILogger>();
+    // const mockLogger = mock<ILogger>(); // Remove mock logger
     /*
     const mockURLContentResolver = { isURL: vi.fn().mockImplementation((path: string) => { try { new URL(path); return true; } catch { return false; } }), validateURL: vi.fn().mockImplementation(async (url: string) => url), fetchURL: vi.fn().mockImplementation(async (url: string) => ({ content: `Mock content for ${url}`})) };
     */
@@ -54,8 +56,11 @@ describe('Array Access Tests', () => {
     testContainer.register('IInterpreterService', { useClass: InterpreterService });
     // We will NOT register the logger or URL resolver, letting them resolve from the parent container
     // testContainer.registerInstance<IURLContentResolver>('IURLContentResolver', mockURLContentResolver);
-    // Re-introduce registration for the required DirectiveLogger
-    testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger);
+    // Remove incorrect registration
+    // testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger);
+    // Register the actual main logger using correct tokens
+    testContainer.registerInstance('MainLogger', logger);
+    testContainer.register('ILogger', { useToken: 'MainLogger' });
   });
 
   afterEach(async () => {

@@ -25,6 +25,7 @@ import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/I
 import { StateService } from '@services/state/StateService/StateService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { MeldPath, PathContentType, ValidatedResourcePath } from '@core/types/paths';
+import type { StateServiceLike } from '@core/shared-service-types.js';
 
 /**
  * Handler for @import directives
@@ -199,34 +200,53 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       try {
         // Create a new child state for the imported content
-        // Ensure sourceContextPath is a MeldPath object
         if (!sourceContextPath) {
            throw new Error('sourceContextPath is missing for interpretation');
         }
         
-        // Pass only the options object, StateService handles ID internally
-        const childState = await currentStateService.createChildState({
-          currentFilePath: sourceContextPath // Pass MeldPath here
-        });
+        // Create child state without options initially
+        const childState = await currentStateService.createChildState();
+        // Set the file path on the new child state
+        childState.setCurrentFilePath(sourceContextPath.validatedPath);
 
         // Log the state creation for debugging
         // process.stdout.write(`DEBUG: [ImportDirectiveHandler.handle] Created child state ID: ${childState.getId()}, Path: ${childState.getCurrentFilePath()?.originalValue ?? 'N/A'}\\n`);
 
         // Interpret the parsed nodes using the child state
-        // Call 'interpret' with nodes, options, and the initial childState
-        const interpretedChildState: StateServiceLike = await interpreterServiceClient.interpret(astNodes, {
-          // Pass options conforming to InterpreterOptionsBase
-          transformationMode: currentStateService.isTransformationEnabled()
-          // Removed incorrect featureFlags access
-        }, childState); // Pass childState as the initial state
+        // Call 'interpret' with nodes, options (undefined for now), and the initial childState
+        const interpretedChildState: StateServiceLike = await interpreterServiceClient.interpret(astNodes, 
+          undefined, // Pass undefined for options, as InterpreterOptionsBase doesn't have transformationMode
+          childState // Pass childState as the initial state
+        );
 
-        // Extract state changes from the RESULTING state
-        // TODO: Verify how to actually get StateChanges from interpretedChildState.
-        // Assuming a hypothetical getChanges() method for now.
-        sourceStateChanges = (interpretedChildState as any).getChanges ? (interpretedChildState as any).getChanges() : undefined;
+        // Construct StateChanges manually from the resulting state's variables
+        const allVars = {
+          text: interpretedChildState.getAllTextVars(),
+          data: interpretedChildState.getAllDataVars(),
+          path: interpretedChildState.getAllPathVars(),
+          command: interpretedChildState.getAllCommands(),
+        };
 
-        if (!sourceStateChanges) {
-            logger.warn(`[ImportDirectiveHandler] Interpretation of ${resolvedIdentifier} completed, but no state changes were extracted from the resulting state. Import might be empty.`);
+        const accumulatedVariables: Record<string, VariableDefinition> = {};
+        // Combine all variable types into the StateChanges format
+        for (const [key, value] of allVars.text.entries()) {
+          accumulatedVariables[key] = value;
+        }
+        for (const [key, value] of allVars.data.entries()) {
+          accumulatedVariables[key] = value;
+        }
+        for (const [key, value] of allVars.path.entries()) {
+          accumulatedVariables[key] = value;
+        }
+        for (const [key, value] of allVars.command.entries()) {
+          accumulatedVariables[key] = value;
+        }
+
+        if (Object.keys(accumulatedVariables).length > 0) {
+           sourceStateChanges = { variables: accumulatedVariables };
+        } else {
+            sourceStateChanges = undefined;
+            logger.warn(`[ImportDirectiveHandler] Interpretation of ${resolvedIdentifier} completed, but no variables were found in the resulting state. Import will be empty.`);
         }
 
       } catch (interpretError) {

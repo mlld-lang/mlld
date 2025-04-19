@@ -16,7 +16,7 @@ import { inject, delay, injectable } from 'tsyringe';
 import { container } from 'tsyringe';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
-import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
+import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
@@ -40,6 +40,7 @@ import {
     createCommandVariable 
 } from '@core/types/variables.js';
 import { MeldVariable } from '@core/types/variables.js';
+import type { ICommandDefinition } from '@core/types/define.js';
 
 // Import all handlers
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
@@ -119,7 +120,7 @@ export class DirectiveService implements IDirectiveService {
     @inject(delay(() => InterpreterServiceClientFactory)) interpreterServiceClientFactory?: InterpreterServiceClientFactory,
     @inject('ICircularityService') circularityService?: CircularityServiceLike,
     @inject('IResolutionService') resolutionService?: IResolutionService,
-    @inject('DirectiveLogger') logger?: ILogger
+    @inject('ILogger') logger?: ILogger
   ) {
     this.logger = logger || directiveLogger;
     

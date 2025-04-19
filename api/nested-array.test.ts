@@ -24,6 +24,7 @@ import { OutputService } from '@services/pipeline/OutputService/OutputService.js
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+import logger from '@core/utils/logger.js';
 
 describe('Nested Array Access Tests', () => {
   let context: TestContextDI;
@@ -34,10 +35,9 @@ describe('Nested Array Access Tests', () => {
     await context.initialize();
     testContainer = container.createChildContainer();
 
-    const mockLogger = mock<ILogger>();
-
     testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
-    testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger);
+    testContainer.registerInstance('MainLogger', logger);
+    testContainer.register('ILogger', { useToken: 'MainLogger' });
 
     testContainer.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
     testContainer.register('IResolutionService', { useClass: ResolutionService });

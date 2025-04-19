@@ -42,7 +42,9 @@ import type { IInterpreterService } from '@services/pipeline/InterpreterService/
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService';
 import type { IURLContentResolver, URLResponse } from '@services/resolution/URLContentResolver/IURLContentResolver'; 
 // Import the factory
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+// Import the default logger instance
+import logger from '@core/utils/logger.js'; 
 
 // Define a minimal logger interface if not found/imported
 interface IDirectiveLogger {
@@ -82,14 +84,18 @@ describe('Debug Tools Integration Test', () => {
     };
     testContainer.registerInstance<IURLContentResolver>('IURLContentResolver', mockUrlResolver);
 
-    // Register DirectiveLogger Mock
-    const mockLogger: IDirectiveLogger = { 
-      log: vi.fn(), 
-      warn: vi.fn(), 
-      error: vi.fn(),
-      debug: vi.fn(),
-    }; 
-    testContainer.registerInstance<IDirectiveLogger>('DirectiveLogger', mockLogger);
+    // Remove DirectiveLogger Mock registration
+    // const mockLogger: IDirectiveLogger = { 
+    //   log: vi.fn(), 
+    //   warn: vi.fn(), 
+    //   error: vi.fn(),
+    //   debug: vi.fn(),
+    // }; 
+    // testContainer.registerInstance<IDirectiveLogger>('DirectiveLogger', mockLogger);
+    
+    // Register the actual main logger using correct tokens
+    testContainer.registerInstance('MainLogger', logger); 
+    testContainer.register('ILogger', { useToken: 'MainLogger' });
 
     // Register Core Services 
     testContainer.registerSingleton('StateEventService', StateEventService);

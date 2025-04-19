@@ -278,13 +278,21 @@ describe('ImportDirectiveHandler', () => {
       expect(parserService.parse).toHaveBeenCalledWith('mock content'); 
       expect(interpreterServiceClient.interpret).toHaveBeenCalledWith(expect.any(Array));
       // This assertion might fail if interpreter mock returns empty state, adjust if needed
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-          type: VariableType.TEXT,
-          name: 'imported',
-          value: 'mocked imported value',
-      }));
+      const result = await handler.handle(mockProcessingContext) as DirectiveResult;
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path.raw, mockProcessingContext.resolutionContext);
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith(resolvedProjectPath, mockProcessingContext.resolutionContext);
+      expect(fileSystemService.exists).toHaveBeenCalledWith(resolvedProjectPath);
       expect(circularityService.beginImport).toHaveBeenCalledWith(resolvedProjectPath.replace(/\\/g, '/'));
-      expect(circularityService.endImport).toHaveBeenCalledWith(resolvedProjectPath.replace(/\\/g, '/'));
+      expect(interpreterServiceClient.interpret).toHaveBeenCalled();
+      // Check stateChanges content
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('imported');
+      const importedDef = result.stateChanges?.variables?.imported;
+      expect(importedDef?.type).toBe(VariableType.TEXT);
+      expect(importedDef?.value).toBe('mocked imported value');
+      expect(importedDef?.metadata?.origin).toBe(VariableOrigin.IMPORT);
+      // Check replacement
+      expect(result.replacement).toEqual([]);
     });
   });
 
@@ -417,20 +425,34 @@ describe('ImportDirectiveHandler', () => {
       stateService.createChildState.mockReset();
       stateService.createChildState.mockResolvedValueOnce(mockChildState);
 
-      const result = await handler.handle(mockProcessingContext);
+      const result = await handler.handle(mockProcessingContext) as DirectiveResult;
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(importPathRaw, mockProcessingContext.resolutionContext);
       expect(resolutionService.resolvePath).toHaveBeenCalledWith(finalPath, mockProcessingContext.resolutionContext);
       expect(fileSystemService.exists).toHaveBeenCalledWith(finalPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(finalPath);
       expect(parserService.parse).toHaveBeenCalledWith('@text var1="value1"\n@text var2="value2"\n@text var3="value3"');
-      // Assert setVariable calls
-      expect(stateService.setVariable).toHaveBeenCalledTimes(2);
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({ type: VariableType.TEXT, name: 'var1', value: 'value1' }));
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({ type: VariableType.TEXT, name: 'aliasedVar2', value: 'value2' }));
-      expect(stateService.setVariable).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'var3' }));
+      expect(interpreterServiceClient.interpret).toHaveBeenCalled(); // Verify interpret was called
+
+      // Assert stateChanges content
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('var1');
+      expect(result.stateChanges?.variables).toHaveProperty('aliasedVar2');
+      expect(result.stateChanges?.variables).not.toHaveProperty('var2'); // Original name not imported
+      expect(result.stateChanges?.variables).not.toHaveProperty('var3'); // Not requested
+      const var1Def = result.stateChanges?.variables?.var1;
+      const aliasedVar2Def = result.stateChanges?.variables?.aliasedVar2;
+      expect(var1Def?.type).toBe(VariableType.TEXT);
+      expect(var1Def?.value).toBe('value1');
+      expect(var1Def?.metadata?.origin).toBe(VariableOrigin.IMPORT);
+      expect(aliasedVar2Def?.type).toBe(VariableType.TEXT);
+      expect(aliasedVar2Def?.value).toBe('value2');
+      expect(aliasedVar2Def?.metadata?.origin).toBe(VariableOrigin.IMPORT);
+
+      // Assert replacement is empty
+      expect(result.replacement).toEqual([]);
+
       expect(circularityService.beginImport).toHaveBeenCalledWith(finalPath.replace(/\\/g, '/'));
       expect(circularityService.endImport).toHaveBeenCalledWith(finalPath.replace(/\\/g, '/'));
-      expect(result.replacement).toBeDefined();
     });
   });
 

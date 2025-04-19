@@ -167,7 +167,7 @@ export type MeldVariable =
 export type VariableDefinition = {
   type: VariableType;
   value: any; // Use 'any' for flexibility or refine later
-  metadata: VariableMetadata;
+  metadata?: VariableMetadata; // Make metadata optional
 };
 
 // =========================================================================

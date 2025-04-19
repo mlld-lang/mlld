@@ -478,17 +478,18 @@ export class ResolutionService implements IResolutionService {
        throw error; 
     }
 
-    // Second pass: Build the final string synchronously
-    let result = '';
+    // Second pass: Build the final string synchronously using an array and join
+    const segments: string[] = []; // Initialize an array for string parts
     for (const node of nodes) {
         if (node.type === 'Text') {
-            result = result.concat(node.content);
+            segments.push(node.content); // Push text content
         } else if (node.type === 'VariableReference') {
-            result += resolvedValues.get(node) || ''; // Get resolved value from map, default to empty
+            segments.push(resolvedValues.get(node) || ''); // Push resolved variable value
         }
         // No need for the final else, already warned above
     }
-    process.stdout.write(`DEBUG: [ResolutionService.resolveNodes EXIT - Refactored] Returning: '${result}'\\n`);
+    const result = segments.join(''); // Join all segments at the end
+    process.stdout.write(`DEBUG: [ResolutionService.resolveNodes EXIT - ArrayJoin] Returning: '${result}'\n`); // Update log message
     return result;
   }
 
