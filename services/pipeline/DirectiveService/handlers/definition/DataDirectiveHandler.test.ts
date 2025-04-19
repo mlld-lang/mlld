@@ -123,14 +123,9 @@ describe('DataDirectiveHandler', () => {
 
       const result = await handler.handle(mockProcessingContext) as DirectiveResult;
       
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.DATA,
-        name: 'user',
-        value: { name: 'Alice', id: 123 }
-      }));
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('user');
-      const varDef = result.stateChanges?.variables?.user as VariableDefinition | undefined;
+      const varDef = result.stateChanges?.variables?.user;
       expect(varDef?.type).toBe(VariableType.DATA);
       expect(varDef?.value).toEqual({ name: 'Alice', id: 123 });
       expect(result.replacement).toBeUndefined();
@@ -153,17 +148,12 @@ describe('DataDirectiveHandler', () => {
 
       const result = await handler.handle(mockProcessingContext) as DirectiveResult;
 
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.DATA,
-        name: 'person',
-        value: expectedData
-      }));
       expect(result.stateChanges?.variables).toHaveProperty('person');
-      const varDef = result.stateChanges?.variables?.person as VariableDefinition | undefined;
+      const varDef = result.stateChanges?.variables?.person;
       expect(varDef?.type).toBe(VariableType.DATA);
       expect(varDef?.value).toEqual(expectedData);
       expect(result.replacement).toBeUndefined();
-       mockResolveInterpolatable.mockRestore();
+      mockResolveInterpolatable.mockRestore();
     });
 
     it('should handle JSON arrays', async () => {
@@ -175,13 +165,8 @@ describe('DataDirectiveHandler', () => {
 
       const result = await handler.handle(mockProcessingContext) as DirectiveResult;
 
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.DATA,
-        name: 'fruits',
-        value: expectedData
-      }));
       expect(result.stateChanges?.variables).toHaveProperty('fruits');
-      const varDef = result.stateChanges?.variables?.fruits as VariableDefinition | undefined;
+      const varDef = result.stateChanges?.variables?.fruits;
       expect(varDef?.type).toBe(VariableType.DATA);
       expect(varDef?.value).toEqual(expectedData);
       expect(result.replacement).toBeUndefined();
@@ -299,13 +284,8 @@ describe('DataDirectiveHandler', () => {
 
       const result = await handler.handle(mockProcessingContext) as DirectiveResult;
 
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.DATA,
-        name: 'config',
-        value: expectedResolvedData
-      }));
       expect(result.stateChanges?.variables).toHaveProperty('config');
-      const varDef = result.stateChanges?.variables?.config as VariableDefinition | undefined;
+      const varDef = result.stateChanges?.variables?.config;
       expect(varDef?.type).toBe(VariableType.DATA);
       expect(varDef?.value).toEqual(expectedResolvedData);
       mockResolveInterpolatable.mockRestore();
@@ -319,13 +299,8 @@ describe('DataDirectiveHandler', () => {
 
       const result = await handler.handle(mockProcessingContext) as DirectiveResult;
 
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.DATA,
-        name: 'message',
-        value: expectedResolvedData
-      }));
       expect(result.stateChanges?.variables).toHaveProperty('message');
-      const varDef = result.stateChanges?.variables?.message as VariableDefinition | undefined;
+      const varDef = result.stateChanges?.variables?.message;
       expect(varDef?.type).toBe(VariableType.DATA);
       expect(varDef?.value).toEqual(expectedResolvedData);
       mockResolveInterpolatable.mockRestore();
@@ -345,13 +320,8 @@ describe('DataDirectiveHandler', () => {
 
       const result = await handler.handle(mockProcessingContext) as DirectiveResult;
 
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.DATA,
-        name: 'data',
-        value: expectedResolvedData
-      }));
       expect(result.stateChanges?.variables).toHaveProperty('data');
-      const varDef = result.stateChanges?.variables?.data as VariableDefinition | undefined;
+      const varDef = result.stateChanges?.variables?.data;
       expect(varDef?.type).toBe(VariableType.DATA);
       expect(varDef?.value).toEqual(expectedResolvedData);
       mockResolveInterpolatable.mockRestore();

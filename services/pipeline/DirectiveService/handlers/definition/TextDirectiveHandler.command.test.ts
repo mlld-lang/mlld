@@ -71,7 +71,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
     expect(result.stateChanges).toBeDefined();
     expect(result.stateChanges?.variables).toHaveProperty(identifier);
-    const varDef = result.stateChanges?.variables?.[identifier] as VariableDefinition | undefined;
+    const varDef = result.stateChanges?.variables?.[identifier];
     expect(varDef?.type).toBe(VariableType.TEXT);
     expect(varDef?.value).toBe('Hello Command');
   });
@@ -104,7 +104,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(resolvedCommand, { cwd: '/test' });
     expect(result.stateChanges).toBeDefined();
     expect(result.stateChanges?.variables).toHaveProperty(identifier);
-    const varDef = result.stateChanges?.variables?.[identifier] as VariableDefinition | undefined;
+    const varDef = result.stateChanges?.variables?.[identifier];
     expect(varDef?.type).toBe(VariableType.TEXT);
     expect(varDef?.value).toBe('Input: test value');
   });
@@ -132,7 +132,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
     expect(result.stateChanges).toBeDefined();
     expect(result.stateChanges?.variables).toHaveProperty(identifier);
-    const varDef = result.stateChanges?.variables?.[identifier] as VariableDefinition | undefined;
+    const varDef = result.stateChanges?.variables?.[identifier];
     expect(varDef?.type).toBe(VariableType.TEXT);
     expect(varDef?.value).toBe(expectedOutput);
   });
@@ -160,7 +160,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
     expect(result.stateChanges).toBeDefined();
     expect(result.stateChanges?.variables).toHaveProperty(identifier);
-    const varDef = result.stateChanges?.variables?.[identifier] as VariableDefinition | undefined;
+    const varDef = result.stateChanges?.variables?.[identifier];
     expect(varDef?.type).toBe(VariableType.TEXT);
     expect(varDef?.value).toBe(expectedOutput);
   });
@@ -195,7 +195,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(resolvedCommand, { cwd: '/test' });
     expect(result.stateChanges).toBeDefined();
     expect(result.stateChanges?.variables).toHaveProperty(identifier);
-    const varDef = result.stateChanges?.variables?.[identifier] as VariableDefinition | undefined;
+    const varDef = result.stateChanges?.variables?.[identifier];
     expect(varDef?.type).toBe(VariableType.TEXT);
     expect(varDef?.value).toBe(finalOutput);
   });

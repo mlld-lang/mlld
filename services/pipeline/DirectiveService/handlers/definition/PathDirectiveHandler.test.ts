@@ -8,8 +8,8 @@ import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/Directive
 import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, unsafeCreateValidatedResourcePath, createMeldPath, VariableType } from '@core/types';
 import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js'; // Added fixture import
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js'; // Keep for error tests
-import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
 import { VariableOrigin } from '@core/types/variables.js';
+import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import type { SourceLocation } from '@core/types/common.js';
 
 /**

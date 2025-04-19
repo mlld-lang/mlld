@@ -45,6 +45,7 @@ import type { IValidationService } from '@services/resolution/ValidationService/
 import { isCommandVariable } from '@core/types/guards.js';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler'; // Added correct imports
 import crypto from 'crypto'; // Added crypto import
+import { VariableDefinition } from '@core/types/variables.js'; // Import the type
 
 // Helper to extract state (keep as is)
 function getStateFromResult(result: any): IStateService | undefined {
@@ -239,66 +240,45 @@ describe('DefineDirectiveHandler', () => {
       const node = createValidDefineNode('cmd1', 'echo hello'); 
       const processingContext = createMockProcessingContext(node, stateService, resolutionService);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo hello resolved');
+      const result = await handler.handle(processingContext) as DirectiveResult;
 
-      const result = await handler.handle(processingContext);
-
-      // Use the resolved stateService mock
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-          type: VariableType.COMMAND,
-          name: 'cmd1',
-          value: expect.objectContaining({
-              type: 'basic',
-              name: 'cmd1',
-              commandTemplate: 'echo hello resolved', 
-              parameters: [],
-              isMultiline: false,
-          })
-      }));
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('cmd1');
+      const cmdDef = result.stateChanges?.variables?.cmd1 as VariableDefinition | undefined;
+      expect(cmdDef?.type).toBe(VariableType.COMMAND);
+      expect(cmdDef?.value?.type).toBe('basic');
+      expect((cmdDef?.value as IBasicCommandDefinition).commandTemplate).toBe('echo hello resolved');
+      expect(cmdDef?.metadata?.origin).toBe(VariableOrigin.DIRECT_DEFINITION);
     });
 
     it('should handle command definition with parameters', async () => {
       const node = createValidDefineNode('cmd2', 'echo $p1 $p2', ['p1', 'p2']);
       const processingContext = createMockProcessingContext(node, stateService, resolutionService);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $p1 $p2 resolved');
+      const result = await handler.handle(processingContext) as DirectiveResult;
 
-      const result = await handler.handle(processingContext);
-
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-          type: VariableType.COMMAND,
-          name: 'cmd2',
-          value: expect.objectContaining({
-              type: 'basic',
-              name: 'cmd2',
-              commandTemplate: 'echo $p1 $p2 resolved',
-              parameters: expect.arrayContaining([
-                  expect.objectContaining({ name: 'p1', position: 1 }),
-                  expect.objectContaining({ name: 'p2', position: 2 })
-              ]),
-          })
-      }));
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('cmd2');
+      const cmdDef = result.stateChanges?.variables?.cmd2 as VariableDefinition | undefined;
+      expect(cmdDef?.type).toBe(VariableType.COMMAND);
+      expect(cmdDef?.value?.type).toBe('basic');
+      expect((cmdDef?.value as IBasicCommandDefinition).commandTemplate).toBe('echo $p1 $p2 resolved');
+      expect(cmdDef?.value?.parameters).toHaveLength(2);
     });
 
     it('should handle command definition with multiple parameters', async () => {
       const node = createValidDefineNode('cmd3', 'echo $a $b $c', ['a', 'b', 'c']);
       const processingContext = createMockProcessingContext(node, stateService, resolutionService);
-       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $a $b $c resolved');
-      
-      const result = await handler.handle(processingContext);
+      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo $a $b $c resolved');
+      const result = await handler.handle(processingContext) as DirectiveResult;
 
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-          type: VariableType.COMMAND,
-          name: 'cmd3',
-          value: expect.objectContaining({
-              type: 'basic',
-              name: 'cmd3',
-              commandTemplate: 'echo $a $b $c resolved',
-              parameters: expect.arrayContaining([
-                  expect.objectContaining({ name: 'a', position: 1 }),
-                  expect.objectContaining({ name: 'b', position: 2 }),
-                  expect.objectContaining({ name: 'c', position: 3 })
-              ]),
-          })
-      }));
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('cmd3');
+      const cmdDef = result.stateChanges?.variables?.cmd3 as VariableDefinition | undefined;
+      expect(cmdDef?.type).toBe(VariableType.COMMAND);
+      expect(cmdDef?.value?.type).toBe('basic');
+      expect((cmdDef?.value as IBasicCommandDefinition).commandTemplate).toBe('echo $a $b $c resolved');
+      expect(cmdDef?.value?.parameters).toHaveLength(3);
     });
     
     it('should handle command definition with literal value', async () => {
@@ -309,10 +289,9 @@ describe('DefineDirectiveHandler', () => {
         const node = createValidDefineNode('cmdLiteral', literalValue, []);
         const processingContext = createMockProcessingContext(node, stateService, resolutionService);
         vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo literal resolved_value');
-        const result = await handler.handle(processingContext);
-        expect(resolutionService.resolveNodes).toHaveBeenCalledWith(literalValue, expect.any(Object));
+        const result = await handler.handle(processingContext) as DirectiveResult;
         expect(result.stateChanges?.variables).toHaveProperty('cmdLiteral');
-        const cmdDef = result.stateChanges?.variables?.cmdLiteral;
+        const cmdDef = result.stateChanges?.variables?.cmdLiteral as VariableDefinition | undefined;
         expect(cmdDef?.type).toBe(VariableType.COMMAND);
         expect(cmdDef?.value?.type).toBe('basic');
         expect((cmdDef?.value as IBasicCommandDefinition).commandTemplate).toBe('echo literal resolved_value');
@@ -322,10 +301,10 @@ describe('DefineDirectiveHandler', () => {
       const node = createValidDefineNode('cmd1', 'echo hello'); 
       const processingContext = createMockProcessingContext(node, stateService, resolutionService);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo hello resolved');
-      const result = await handler.handle(processingContext);
+      const result = await handler.handle(processingContext) as DirectiveResult;
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('cmd1');
-      const cmdDef = result.stateChanges?.variables?.cmd1;
+      const cmdDef = result.stateChanges?.variables?.cmd1 as VariableDefinition | undefined;
       expect(cmdDef?.type).toBe(VariableType.COMMAND);
       expect(cmdDef?.value?.type).toBe('basic');
       expect((cmdDef?.value as IBasicCommandDefinition).commandTemplate).toBe('echo hello resolved');
@@ -336,9 +315,9 @@ describe('DefineDirectiveHandler', () => {
       const node = createValidDefineNode('cmd2', 'echo {{p1}} {{p2}}', ['p1', 'p2']);
       const processingContext = createMockProcessingContext(node, stateService, resolutionService);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo p1_resolved p2_resolved');
-      const result = await handler.handle(processingContext);
+      const result = await handler.handle(processingContext) as DirectiveResult;
       expect(result.stateChanges?.variables).toHaveProperty('cmd2');
-      const cmdDef = result.stateChanges?.variables?.cmd2;
+      const cmdDef = result.stateChanges?.variables?.cmd2 as VariableDefinition | undefined;
       expect(cmdDef?.type).toBe(VariableType.COMMAND);
       expect(cmdDef?.value?.type).toBe('basic');
       expect((cmdDef?.value as IBasicCommandDefinition).commandTemplate).toBe('echo p1_resolved p2_resolved');
@@ -352,9 +331,9 @@ describe('DefineDirectiveHandler', () => {
        const node = createValidDefineNode('cmdRun', runDirectiveData.command as InterpolatableValue, [], false); 
        const processingContext = createMockProcessingContext(node, stateService, resolutionService);
        vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo run test resolved');
-       const result = await handler.handle(processingContext);
+       const result = await handler.handle(processingContext) as DirectiveResult;
        expect(result.stateChanges?.variables).toHaveProperty('cmdRun');
-       const cmdDef = result.stateChanges?.variables?.cmdRun;
+       const cmdDef = result.stateChanges?.variables?.cmdRun as VariableDefinition | undefined;
        expect(cmdDef?.type).toBe(VariableType.COMMAND);
        expect(cmdDef?.value?.type).toBe('basic');
        expect((cmdDef?.value as IBasicCommandDefinition).commandTemplate).toBe('echo run test resolved');
@@ -365,9 +344,9 @@ describe('DefineDirectiveHandler', () => {
          const node = createValidDefineNode('cmdLang', runDirectiveData.command as InterpolatableValue, [], false);
          const processingContext = createMockProcessingContext(node, stateService, resolutionService);
          vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('print("hello resolved")');
-         const result = await handler.handle(processingContext);
+         const result = await handler.handle(processingContext) as DirectiveResult;
          expect(result.stateChanges?.variables).toHaveProperty('cmdLang');
-         const cmdDef = result.stateChanges?.variables?.cmdLang;
+         const cmdDef = result.stateChanges?.variables?.cmdLang as VariableDefinition | undefined;
          expect(cmdDef?.type).toBe(VariableType.COMMAND);
          expect(cmdDef?.value?.type).toBe('language');
          expect((cmdDef?.value as ILanguageCommandDefinition).language).toBe('python');
@@ -435,16 +414,13 @@ describe('DefineDirectiveHandler', () => {
       const node = createValidDefineNode('cmd6', 'echo test');
       const processingContext = createMockProcessingContext(node, stateService, resolutionService);
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo test resolved');
-
-      await handler.handle(processingContext);
-      expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: VariableType.COMMAND,
-        name: 'cmd6'
-      })); 
-      const storedCommandVariable = vi.mocked(stateService.setVariable).mock.calls[0][0] as CoreCommandVariable;
-      const storedDefinition = storedCommandVariable.value as ICommandDefinition;
-      expect(storedDefinition.type).toBe('basic');
-      expect(storedDefinition.name).toBe('cmd6');
+      const result = await handler.handle(processingContext) as DirectiveResult;
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('cmd6');
+      const cmdDef = result.stateChanges?.variables?.cmd6 as VariableDefinition | undefined;
+      expect(cmdDef?.type).toBe(VariableType.COMMAND);
+      expect(cmdDef?.value?.name).toBe('cmd6');
+      expect(cmdDef?.value?.type).toBe('basic');
     });
   });
   

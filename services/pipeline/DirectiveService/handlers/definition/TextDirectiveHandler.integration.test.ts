@@ -13,7 +13,7 @@ import type { DirectiveProcessingContext, FormattingContext } from '@core/types/
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js';
 import { DirectiveResult } from '@core/directives/DirectiveHandler';
-import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
+import { VariableDefinition } from '@core/types/variables.js';
 
 /**
  * TextDirectiveHandler Integration Test Status
