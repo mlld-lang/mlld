@@ -13,7 +13,7 @@ import { parse } from '@core/ast';
 import type { MeldNode } from '@core/syntax/types';
 import { NodeType, StructuredPath } from '@core/syntax/types/nodes.js';
 import { SourceLocation as SyntaxSourceLocation, JsonValue } from '@core/types/common';
-import { VariableOrigin, VariableType, VariableMetadata, IPathVariable, CommandVariable, TextVariable, DataVariable, MeldVariable } from '@core/types/variables';
+import { VariableOrigin, VariableType, VariableMetadata, IPathVariable, CommandVariable, TextVariable, DataVariable, MeldVariable, VariableDefinition } from '@core/types/variables';
 import { createTextVariable, createDataVariable, createPathVariable, createCommandVariable } from '@core/types/variables';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
@@ -97,7 +97,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     let resolvedPath: MeldPath | undefined;
     let errorObj: DirectiveError | undefined;
 
-    const stateChangesAccumulator: Record<string, any> = {};
+    const stateChangesAccumulator: Record<string, VariableDefinition> = {};
 
     try {
       // 1. Validate directive structure
@@ -147,7 +147,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // 4. Get Content (File or URL)
       let content: string | undefined;
       let sourceStateId: string | undefined; // State ID for the context of the imported content
-      let sourceContextPath: StructuredPath | MeldPath | undefined; // Context path for the imported file
+      let sourceContextPath: MeldPath | undefined; // Context path for the imported file
 
       if (resolvedPath.contentType === PathContentType.URL && this.urlContentResolver) {
         // process.stdout.write(`DEBUG: [ImportDirectiveHandler.handle] Importing from URL: ${resolvedIdentifier}\n`);
@@ -180,10 +180,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // 5. Parse the imported content
       // process.stdout.write(`DEBUG: [ImportDirectiveHandler.handle] Parsing content from: ${resolvedIdentifier}\n`);
       const parseResult = await this.parserService.parse(content);
-      const astNodes = parseResult as MeldNode[]; // Adjust cast based on actual return type if known
+      const astNodes = parseResult.ast; // Access ast property
       if (!Array.isArray(astNodes)) {
-         const errorMsg = 'Parsing did not return a valid AST node array.';
-         throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.EXECUTION_FAILED);
+         const errorMsg = parseResult?.errors?.[0]?.message ?? 'Parsing did not return a valid AST node array.';
+         throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { cause: parseResult?.errors?.[0] });
       }
 
       // 6. Interpret the parsed content to get its state
@@ -192,11 +192,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // Use a dedicated state for interpretation, potentially seeded if needed later
       let sourceStateChanges: StateChanges | undefined;
       try {
-        // Placeholder: Assume interpret might throw or return something we can work with
-        // const interpretationState = await interpreterServiceClient.interpret(parseResult.ast, { /* options */ });
-        // sourceStateChanges = extractStateChangesFromState(interpretationState); // Hypothetical function
-        // TEMP: Simulate finding stateChanges, otherwise skip import logic
-        // sourceStateChanges = { variables: { 'tempVar': { type: VariableType.TEXT, value: 'temp', metadata: {} as VariableMetadata } } }; 
+        const interpretedState = await interpreterServiceClient.interpret(astNodes, { /* options? */ }, currentStateService.createChildState());
+        // TODO: How to get StateChanges from StateServiceLike?
         logger.warn('InterpreterService client API mismatch - Skipping variable import step');
       } catch (interpretError) {
           const cause = interpretError instanceof Error ? interpretError : new Error(String(interpretError));
@@ -301,7 +298,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
   private importAllVariables(
       sourceStateChanges: StateChanges,
-      targetStateChanges: Record<string, any>,
+      targetStateChanges: Record<string, VariableDefinition>,
       importLocation: SyntaxSourceLocation | undefined,
       sourcePath: string | undefined,
       currentFilePath: string | undefined
@@ -330,7 +327,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           };
 
           // Create the variable structure directly
-          const newVarDef = {
+          const newVarDef: VariableDefinition = {
             type: originalVarDef.type,
             value: originalVarDef.value, 
             metadata: metadata,
@@ -352,7 +349,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   private async processStructuredImports(
     imports: Array<{ name: string; alias?: string | null }>,
     sourceStateChanges: StateChanges,
-    targetStateChanges: Record<string, any>,
+    targetStateChanges: Record<string, VariableDefinition>,
     importLocation: SyntaxSourceLocation | undefined,
     sourcePath: string | undefined,
     currentFilePath: string | undefined
@@ -386,7 +383,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           };
 
           // Create the variable structure directly
-          const newVarDef = {
+          const newVarDef: VariableDefinition = {
             type: originalVarDef.type,
             value: originalVarDef.value, 
             metadata: metadata,
@@ -396,11 +393,4 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           targetStateChanges[targetName] = newVarDef;
            // process.stdout.write(`DEBUG: [ImportDirectiveHandler.processStructuredImports] Copied var ${name} as ${targetName} to target state changes\n`);
         } else {
-           // process.stdout.write(`WARN: [ImportDirectiveHandler.processStructuredImports] Variable "${name}" not found in source state changes for structured import.\n`);
-        }
-      } catch (error) {
-         process.stderr.write(`ERROR: [ImportDirectiveHandler.processStructuredImports] Failed to import variable ${item.name} as ${item.alias || item.name}: ${error instanceof Error ? error.message : String(error)}\n`);
-      }
-    }
-  }
-}
+           // process.stdout.write(`
