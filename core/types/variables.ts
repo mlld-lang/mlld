@@ -160,6 +160,16 @@ export type MeldVariable =
   | IPathVariable // Use the revised path variable type
   | CommandVariable; 
 
+/**
+ * Structure representing a variable definition for state changes.
+ * Used when returning results from directive handlers.
+ */
+export type VariableDefinition = {
+  type: VariableType;
+  value: any; // Use 'any' for flexibility or refine later
+  metadata: VariableMetadata;
+};
+
 // =========================================================================
 // FACTORY FUNCTIONS
 // =========================================================================

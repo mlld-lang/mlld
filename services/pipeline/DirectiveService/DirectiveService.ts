@@ -706,7 +706,7 @@ export class DirectiveService implements IDirectiveService {
       try {
         // handleDirective now returns DirectiveResult { stateChanges?, replacement? }
         const result = await this.handleDirective(node, nodeProcessingContext);
-        
+
         // --- Apply state changes logic duplicated/moved from handleDirective --- 
         // (Could be refactored into a helper method)
         const stateToModify = nodeProcessingContext.state; // Get the state used for this node

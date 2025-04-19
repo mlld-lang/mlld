@@ -10,6 +10,8 @@ import { textDirectiveExamples } from '@core/syntax/index.js';
 import { ErrorSeverity, FieldAccessError, MeldResolutionError } from '@core/errors/index.js';
 import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { DirectiveResult } from '@core/directives/DirectiveHandler';
+import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
 
 /**
  * TextDirectiveHandler Test Status
@@ -128,16 +130,15 @@ describe('TextDirectiveHandler', () => {
       const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
 
       // --- Execution ---
-      const result = await fixture.executeHandler(node);
+      const result = await fixture.executeHandler(node) as DirectiveResult;
 
       // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
-      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'text',
-        name: 'greeting',
-        value: 'Hello'
-      }));
-      expect(result).toBe(stateService); // Handler should return the state
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('greeting');
+      const varDef = result.stateChanges?.variables?.greeting;
+      expect(varDef?.type).toBe(VariableType.TEXT);
+      expect(varDef?.value).toBe('Hello');
     });
 
     it('should handle text assignment with escaped characters', async () => {
@@ -151,16 +152,15 @@ describe('TextDirectiveHandler', () => {
       const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
       
       // --- Execution ---
-      const result = await fixture.executeHandler(node);
+      const result = await fixture.executeHandler(node) as DirectiveResult;
       
       // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
-      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'text',
-        name: 'escaped',
-        value: expectedValue
-      }));
-      expect(result).toBe(stateService);
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('escaped');
+      const varDef = result.stateChanges?.variables?.escaped;
+      expect(varDef?.type).toBe(VariableType.TEXT);
+      expect(varDef?.value).toBe(expectedValue);
     });
 
     it('should handle a template literal in text directive', async () => {
@@ -173,16 +173,15 @@ describe('TextDirectiveHandler', () => {
       const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
 
       // --- Execution ---
-      const result = await fixture.executeHandler(node);
+      const result = await fixture.executeHandler(node) as DirectiveResult;
       
       // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
-      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'text',
-        name: 'message',
-        value: expectedValue
-      }));
-      expect(result).toBe(stateService);
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('message');
+      const varDef = result.stateChanges?.variables?.message;
+      expect(varDef?.type).toBe(VariableType.TEXT);
+      expect(varDef?.value).toBe(expectedValue);
     });
 
     it('should handle object property interpolation in text value', async () => {
@@ -196,16 +195,15 @@ describe('TextDirectiveHandler', () => {
       const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
       
       // --- Execution ---
-      const result = await fixture.executeHandler(node);
+      const result = await fixture.executeHandler(node) as DirectiveResult;
       
       // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
-      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'text',
-        name: 'greeting',
-        value: expectedValue
-      }));
-      expect(result).toBe(stateService);
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('greeting');
+      const varDef = result.stateChanges?.variables?.greeting;
+      expect(varDef?.type).toBe(VariableType.TEXT);
+      expect(varDef?.value).toBe(expectedValue);
     });
 
     it('should handle path referencing in text values', async () => {
@@ -219,16 +217,15 @@ describe('TextDirectiveHandler', () => {
       const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
 
       // --- Execution ---
-      const result = await fixture.executeHandler(node);
+      const result = await fixture.executeHandler(node) as DirectiveResult;
       
       // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
-      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'text',
-        name: 'configText',
-        value: expectedValue
-      }));
-      expect(result).toBe(stateService);
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('configText');
+      const varDef = result.stateChanges?.variables?.configText;
+      expect(varDef?.type).toBe(VariableType.TEXT);
+      expect(varDef?.value).toBe(expectedValue);
     });
 
     it('should throw DirectiveError if text interpolation contains undefined variables', async () => {
@@ -263,16 +260,15 @@ describe('TextDirectiveHandler', () => {
       const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
 
       // --- Execution ---
-      const result = await fixture.executeHandler(node);
+      const result = await fixture.executeHandler(node) as DirectiveResult;
       
       // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
-      expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'text',
-        name: 'message',
-        value: expectedValue
-      }));
-      expect(result).toBe(stateService);
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('message');
+      const varDef = result.stateChanges?.variables?.message;
+      expect(varDef?.type).toBe(VariableType.TEXT);
+      expect(varDef?.value).toBe(expectedValue);
     });
   });
 }); 

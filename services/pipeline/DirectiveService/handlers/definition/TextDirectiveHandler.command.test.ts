@@ -9,6 +9,17 @@ import type { DirectiveProcessingContext, FormattingContext } from '@core/types/
 import type { ResolutionContext } from '@core/types/resolution.js';
 import { VariableType, TextVariable, createTextVariable } from '@core/types/variables.js';
 import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js';
+import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils.js';
+import { VariableMetadata } from '@core/types/variables.js';
+import { MeldResolutionError, FieldAccessError, PathValidationError } from '@core/errors';
+import { MeldPath } from '@core/types';
+import type { ValidatedResourcePath } from '@core/types/paths.js';
+import type { Stats } from 'fs-extra';
+import { Field as AstField } from '@core/syntax/types/shared-types.js';
+import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { DirectiveResult } from '@core/directives/DirectiveHandler';
+import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
 
 /**
  * TextDirectiveHandler Command Test Status
@@ -56,14 +67,13 @@ describe('TextDirectiveHandler - Command Execution', () => {
     vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue(command); // Assume command string is resolved directly
     const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
 
-    await fixture.executeHandler(node);
-
+    const result = await fixture.executeHandler(node) as DirectiveResult;
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
-    expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'text',
-      name: identifier,
-      value: 'Hello Command'
-    }));
+    expect(result.stateChanges).toBeDefined();
+    expect(result.stateChanges?.variables).toHaveProperty(identifier);
+    const varDef = result.stateChanges?.variables?.[identifier] as VariableDefinition | undefined;
+    expect(varDef?.type).toBe(VariableType.TEXT);
+    expect(varDef?.value).toBe('Hello Command');
   });
   
   it('should handle variable references in command input', async () => {
@@ -89,15 +99,14 @@ describe('TextDirectiveHandler - Command Execution', () => {
     vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: 'Input: test value\n', stderr: '' });
     const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
 
-    await fixture.executeHandler(node);
-
+    const result = await fixture.executeHandler(node) as DirectiveResult;
     expect(resolveNodesSpy).toHaveBeenCalledWith(commandTemplateNodes, expect.anything());
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(resolvedCommand, { cwd: '/test' });
-    expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'text',
-      name: identifier,
-      value: 'Input: test value'
-    }));
+    expect(result.stateChanges).toBeDefined();
+    expect(result.stateChanges?.variables).toHaveProperty(identifier);
+    const varDef = result.stateChanges?.variables?.[identifier] as VariableDefinition | undefined;
+    expect(varDef?.type).toBe(VariableType.TEXT);
+    expect(varDef?.value).toBe('Input: test value');
   });
   
   it('should handle special characters in command outputs', async () => {
@@ -119,14 +128,13 @@ describe('TextDirectiveHandler - Command Execution', () => {
     vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: `${expectedOutput}\n`, stderr: '' });
     const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
 
-    await fixture.executeHandler(node);
-
+    const result = await fixture.executeHandler(node) as DirectiveResult;
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
-    expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'text',
-      name: identifier,
-      value: expectedOutput
-    }));
+    expect(result.stateChanges).toBeDefined();
+    expect(result.stateChanges?.variables).toHaveProperty(identifier);
+    const varDef = result.stateChanges?.variables?.[identifier] as VariableDefinition | undefined;
+    expect(varDef?.type).toBe(VariableType.TEXT);
+    expect(varDef?.value).toBe(expectedOutput);
   });
   
   it('should handle multi-line command outputs', async () => {
@@ -148,14 +156,13 @@ describe('TextDirectiveHandler - Command Execution', () => {
     vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: `${expectedOutput}\n`, stderr: '' });
     const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
 
-    await fixture.executeHandler(node);
-
+    const result = await fixture.executeHandler(node) as DirectiveResult;
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(command, { cwd: '/test' });
-    expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'text',
-      name: identifier,
-      value: expectedOutput
-    }));
+    expect(result.stateChanges).toBeDefined();
+    expect(result.stateChanges?.variables).toHaveProperty(identifier);
+    const varDef = result.stateChanges?.variables?.[identifier] as VariableDefinition | undefined;
+    expect(varDef?.type).toBe(VariableType.TEXT);
+    expect(varDef?.value).toBe(expectedOutput);
   });
   
   it('should handle nested variable references across multiple levels', async () => {
@@ -183,14 +190,13 @@ describe('TextDirectiveHandler - Command Execution', () => {
     vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: `${finalOutput}\n`, stderr: '' });
     const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
 
-    await fixture.executeHandler(node);
-
+    const result = await fixture.executeHandler(node) as DirectiveResult;
     expect(resolveNodesSpy).toHaveBeenCalledWith(commandTemplateNodes, expect.anything());
     expect(fixture.fileSystemService.executeCommand).toHaveBeenCalledWith(resolvedCommand, { cwd: '/test' });
-    expect(setVariableSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'text',
-      name: identifier,
-      value: finalOutput
-    }));
+    expect(result.stateChanges).toBeDefined();
+    expect(result.stateChanges?.variables).toHaveProperty(identifier);
+    const varDef = result.stateChanges?.variables?.[identifier] as VariableDefinition | undefined;
+    expect(varDef?.type).toBe(VariableType.TEXT);
+    expect(varDef?.value).toBe(finalOutput);
   });
 }); 

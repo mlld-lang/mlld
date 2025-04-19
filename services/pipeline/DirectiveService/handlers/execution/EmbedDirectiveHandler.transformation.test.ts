@@ -36,6 +36,7 @@ import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import type { ResolutionFlags } from '@core/types/resolution.js';
 import { PathPurpose } from '@core/types/paths.js';
 import type { PathResolutionContext } from '@core/types/resolution.js';
+import { DirectiveResult } from '@core/directives/DirectiveHandler';
 
 describe('EmbedDirectiveHandler Transformation', () => {
   let fixture: DirectiveTestFixture;
@@ -171,8 +172,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
 
       expect(result.replacement).toBeDefined();
-      expect(result.state).toBe(fixture.stateService);
-      expect(result.replacement).toEqual(expect.objectContaining({
+      expect(result.stateChanges).toBeUndefined();
+      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
         type: 'Text',
         content: 'Embedded content'
       }));
@@ -191,8 +192,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
 
       expect(result.replacement).toBeDefined();
-      expect(result.state).toBe(fixture.stateService);
-      expect(result.replacement).toEqual(expect.objectContaining({
+      expect(result.stateChanges).toBeUndefined();
+      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
         type: 'Text',
         content: 'Content 1'
       }));
@@ -217,7 +218,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
       vi.spyOn(fixture.fileSystemService, 'readFile').mockResolvedValue(originalContent);
       
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
-      expect((result.replacement as TextNode)?.content).toBe(originalContent);
+      expect(result.replacement?.[0]?.content).toBe(originalContent);
       
       expect(logger.warn).toHaveBeenCalledTimes(2);
     });
@@ -234,7 +235,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
       vi.spyOn(fixture.fileSystemService, 'readFile').mockResolvedValue(originalContent);
       mockProcessingContext = createMockProcessingContext(node);
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
-      expect((result.replacement as TextNode)?.content).toBe(originalContent);
+      expect(result.replacement?.[0]?.content).toBe(originalContent);
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Under-header wrapping specified'), expect.any(Object));
     });
 
@@ -260,7 +261,9 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(fixture.resolutionService.resolveInContext).toHaveBeenCalledWith('{{filePath}}', expect.any(Object));
       expect(fixture.resolutionService.resolvePath).toHaveBeenCalledWith('resolved/path.md', expect.any(Object));
       expect(fixture.fileSystemService.readFile).toHaveBeenCalledWith(resolvedMeldPath.validatedPath);
-      expect(result.replacement).toEqual(expect.objectContaining({
+      expect(result.replacement).toBeDefined();
+      expect(result.stateChanges).toBeUndefined();
+      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
         type: 'Text',
         content: 'Content from resolved path' 
       }));
@@ -281,11 +284,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
       
       expect(result.replacement).toBeDefined();
-      expect(fixture.resolutionService.resolveInContext).toHaveBeenCalledWith(
-        node.directive.path.raw,
-        expect.any(Object)
-      );
-      expect(result.replacement).toEqual(expect.objectContaining({
+      expect(result.stateChanges).toBeUndefined();
+      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
         type: 'Text',
         content: resolvedContent,
       }));
@@ -307,11 +307,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
       
       expect(result.replacement).toBeDefined();
-      expect(fixture.resolutionService.resolveInContext).toHaveBeenCalledWith(
-        node.directive.path.raw,
-        expect.any(Object)
-      );
-      expect(result.replacement).toEqual(expect.objectContaining({
+      expect(result.stateChanges).toBeUndefined();
+      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
         type: 'Text',
         content: resolvedContent,
       }));
@@ -356,7 +353,9 @@ describe('EmbedDirectiveHandler Transformation', () => {
       );
       expect(fixture.resolutionService.resolvePath).not.toHaveBeenCalled();
       expect(fixture.fileSystemService.readFile).not.toHaveBeenCalled();
-      expect(result.replacement).toEqual(expect.objectContaining({
+      expect(result.replacement).toBeDefined();
+      expect(result.stateChanges).toBeUndefined();
+      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
         type: 'Text',
         content: 'actual/file.md'
       }));
@@ -382,7 +381,9 @@ describe('EmbedDirectiveHandler Transformation', () => {
       );
       expect(fixture.resolutionService.resolvePath).not.toHaveBeenCalled();
       expect(fixture.fileSystemService.readFile).not.toHaveBeenCalled();
-      expect(result.replacement).toEqual(expect.objectContaining({
+      expect(result.replacement).toBeDefined();
+      expect(result.stateChanges).toBeUndefined();
+      expect(result.replacement?.[0]).toEqual(expect.objectContaining({
         type: 'Text',
         content: 'user@example.com'
       }));

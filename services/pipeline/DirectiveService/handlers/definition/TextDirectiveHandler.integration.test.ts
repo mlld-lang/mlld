@@ -12,6 +12,8 @@ import { mock } from 'vitest-mock-extended';
 import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js';
+import { DirectiveResult } from '@core/directives/DirectiveHandler';
+import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
 
 /**
  * TextDirectiveHandler Integration Test Status
@@ -84,14 +86,13 @@ describe('TextDirectiveHandler Integration', () => {
       };
       mockProcessingContext.directiveNode = node;
 
-      const result = await fixture.executeHandler(node, {}, mockProcessingContext);
+      const result = await fixture.executeHandler(node, {}, mockProcessingContext) as DirectiveResult;
       
-      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'text',
-        name: 'greeting',
-        value: 'Hello Alice!'
-      }));
-      expect(result).toBe(fixture.stateService);
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('greeting');
+      const varDef = result.stateChanges?.variables?.greeting as VariableDefinition | undefined;
+      expect(varDef?.type).toBe(VariableType.TEXT);
+      expect(varDef?.value).toBe('Hello Alice!');
     });
 
     it('should handle mixed string literals and variables', async () => {
@@ -112,13 +113,12 @@ describe('TextDirectiveHandler Integration', () => {
       };
       mockProcessingContext.directiveNode = node;
 
-      const result = await fixture.executeHandler(node, {}, mockProcessingContext);
-      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'text',
-        name: 'message',
-        value: 'Hello "quoted World" !'
-      }));
-      expect(result).toBe(fixture.stateService);
+      const result = await fixture.executeHandler(node, {}, mockProcessingContext) as DirectiveResult;
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('message');
+      const varDef = result.stateChanges?.variables?.message as VariableDefinition | undefined;
+      expect(varDef?.type).toBe(VariableType.TEXT);
+      expect(varDef?.value).toBe('Hello "quoted World" !');
     });
 
     it('should handle complex data structure access', async () => {
@@ -141,13 +141,12 @@ describe('TextDirectiveHandler Integration', () => {
 
       vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('Alice');
 
-      const result = await fixture.executeHandler(node, {}, mockProcessingContext);
-      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'text',
-        name: 'userInfo',
-        value: 'Alice'
-      }));
-      expect(result).toBe(fixture.stateService);
+      const result = await fixture.executeHandler(node, {}, mockProcessingContext) as DirectiveResult;
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('userInfo');
+      const varDef = result.stateChanges?.variables?.userInfo as VariableDefinition | undefined;
+      expect(varDef?.type).toBe(VariableType.TEXT);
+      expect(varDef?.value).toBe('Alice');
     });
 
     it('should handle environment variables with fallbacks', async () => {
@@ -170,14 +169,12 @@ describe('TextDirectiveHandler Integration', () => {
 
       vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('example.com:3000');
 
-      const result = await fixture.executeHandler(node, {}, mockProcessingContext);
-      expect(fixture.stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'text',
-        name: 'config',
-        value: 'example.com:3000'
-      }));
-      expect(result).toBe(fixture.stateService);
-
+      const result = await fixture.executeHandler(node, {}, mockProcessingContext) as DirectiveResult;
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('config');
+      const varDef = result.stateChanges?.variables?.config as VariableDefinition | undefined;
+      expect(varDef?.type).toBe(VariableType.TEXT);
+      expect(varDef?.value).toBe('example.com:3000');
       delete process.env.ENV_HOST;
     });
 

@@ -8,6 +8,9 @@ import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/Directive
 import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, unsafeCreateValidatedResourcePath, createMeldPath, VariableType } from '@core/types';
 import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js'; // Added fixture import
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js'; // Keep for error tests
+import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
+import { VariableOrigin } from '@core/types/variables.js';
+import type { SourceLocation } from '@core/types/common.js';
 
 /**
  * PathDirectiveHandler Test Status
@@ -82,7 +85,7 @@ describe('PathDirectiveHandler', () => {
       const validateSpy = vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
 
       console.log('NODE OBJECT BEFORE EXECUTE:', JSON.stringify(node, null, 2)); // Add console log
-      const result = await fixture.executeHandler(node); // Use fixture helper
+      const result = await fixture.executeHandler(node) as DirectiveResult; // Cast result
 
       expect(validateSpy).toHaveBeenCalledWith(node);
       expect(resolveInContextSpy).toHaveBeenCalledWith(
@@ -98,7 +101,12 @@ describe('PathDirectiveHandler', () => {
         name: identifier,
         value: mockValidatedPath
       }));
-      expect(result).toBe(fixture.stateService); // Handler returns the state
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty(identifier);
+      const pathDef = result.stateChanges?.variables?.[identifier];
+      expect(pathDef?.type).toBe(VariableType.PATH);
+      expect(pathDef?.value).toEqual(mockValidatedPath);
+      expect(pathDef?.metadata?.origin).toBe(VariableOrigin.DIRECT_DEFINITION);
     });
 
     it('should handle paths with variables', async () => {
@@ -119,7 +127,7 @@ describe('PathDirectiveHandler', () => {
       const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
       const validateSpy = vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
 
-      const result = await fixture.executeHandler(node);
+      const result = await fixture.executeHandler(node) as DirectiveResult; // Cast result
 
       expect(validateSpy).toHaveBeenCalledWith(node);
       // Handler logic should pass the interpolatedValue array (or raw if none) to resolveInContext
@@ -134,7 +142,11 @@ describe('PathDirectiveHandler', () => {
         name: identifier,
         value: mockValidatedPath
       }));
-      expect(result).toBe(fixture.stateService);
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty(identifier);
+      const pathDef = result.stateChanges?.variables?.[identifier];
+      expect(pathDef?.type).toBe(VariableType.PATH);
+      expect(pathDef?.value).toEqual(mockValidatedPath);
     });
 
     it('should handle relative paths', async () => {
@@ -149,7 +161,7 @@ describe('PathDirectiveHandler', () => {
       const setVariableSpy = vi.spyOn(fixture.stateService, 'setVariable');
       const validateSpy = vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
 
-      const result = await fixture.executeHandler(node);
+      const result = await fixture.executeHandler(node) as DirectiveResult;
 
       expect(validateSpy).toHaveBeenCalledWith(node);
       expect(resolveInContextSpy).toHaveBeenCalledWith(rawPathValue, expect.any(Object));
@@ -159,7 +171,11 @@ describe('PathDirectiveHandler', () => {
         name: identifier,
         value: mockValidatedPath
       }));
-      expect(result).toBe(fixture.stateService);
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty(identifier);
+      const pathDef = result.stateChanges?.variables?.[identifier];
+      expect(pathDef?.type).toBe(VariableType.PATH);
+      expect(pathDef?.value).toEqual(mockValidatedPath);
     });
   });
 

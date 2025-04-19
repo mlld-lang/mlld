@@ -24,7 +24,6 @@ import { VariableMetadata, VariableOrigin, VariableType, createCommandVariable }
 import type { ResolutionContext } from '@core/types/resolution.js';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
-import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
 
 @injectable()
 @Service({
