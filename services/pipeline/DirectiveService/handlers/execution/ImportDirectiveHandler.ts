@@ -192,18 +192,54 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           // Decide if this is an error or okay. For now, treat as okay, import nothing.
       }
 
-      // 6. Interpret Content - Commented out
+      // 6. Interpret Content - Now Active
       const interpreterServiceClient = this.ensureInterpreterServiceClient();
       let sourceStateChanges: StateChanges | undefined;
-      logger.warn('[ImportDirectiveHandler] InterpreterService client API mismatch - Skipping variable import step.');
-      /* 
+      // logger.warn('[ImportDirectiveHandler] InterpreterService client API mismatch - Skipping variable import step.'); // REMOVED Warning
+
       try {
-         const interpretedState = await interpreterServiceClient.interpret(astNodes, { ... }, ...);
-         // sourceStateChanges = extractStateChanges(interpretedState);
-      } catch (interpretError) { ... }
-      */
-      
-      // 7. Process Imports (will likely import nothing as sourceStateChanges is undefined)
+        // Create a new child state for the imported content
+        // Ensure sourceContextPath is a MeldPath object
+        if (!sourceContextPath) {
+           throw new Error('sourceContextPath is missing for interpretation');
+        }
+        
+        // Pass only the options object, StateService handles ID internally
+        const childState = await currentStateService.createChildState({
+          currentFilePath: sourceContextPath // Pass MeldPath here
+        });
+
+        // Log the state creation for debugging
+        // process.stdout.write(`DEBUG: [ImportDirectiveHandler.handle] Created child state ID: ${childState.getId()}, Path: ${childState.getCurrentFilePath()?.originalValue ?? 'N/A'}\\n`);
+
+        // Interpret the parsed nodes using the child state
+        // Call 'interpret' with nodes, options, and the initial childState
+        const interpretedChildState: StateServiceLike = await interpreterServiceClient.interpret(astNodes, {
+          // Pass options conforming to InterpreterOptionsBase
+          transformationMode: currentStateService.isTransformationEnabled()
+          // Removed incorrect featureFlags access
+        }, childState); // Pass childState as the initial state
+
+        // Extract state changes from the RESULTING state
+        // TODO: Verify how to actually get StateChanges from interpretedChildState.
+        // Assuming a hypothetical getChanges() method for now.
+        sourceStateChanges = (interpretedChildState as any).getChanges ? (interpretedChildState as any).getChanges() : undefined;
+
+        if (!sourceStateChanges) {
+            logger.warn(`[ImportDirectiveHandler] Interpretation of ${resolvedIdentifier} completed, but no state changes were extracted from the resulting state. Import might be empty.`);
+        }
+
+      } catch (interpretError) {
+        const cause = interpretError instanceof Error ? interpretError : new Error(String(interpretError));
+        throw new DirectiveError(
+          `Failed to interpret imported content from ${resolvedIdentifier}. ${cause.message}`,
+          this.kind,
+          DirectiveErrorCode.EXECUTION_FAILED,
+          { cause }
+        );
+      }
+
+      // 7. Process Imports (Using extracted sourceStateChanges)
       const importDirectiveLocation: SyntaxSourceLocation | undefined = location ? {
           filePath: currentFilePath ?? 'unknown',
           line: location.start.line, // Assuming location has start.line/column
