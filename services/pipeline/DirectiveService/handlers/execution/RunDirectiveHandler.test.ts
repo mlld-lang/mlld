@@ -56,7 +56,7 @@ import { Field as AstField } from '@core/syntax/types/shared-types.js';
 import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
-import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
+import type { VariableDefinition } from '@core/types/variables.js';
 
 /**
  * RunDirectiveHandler Test Status
@@ -480,7 +480,7 @@ describe('RunDirectiveHandler', () => {
       expect(replacement?.[0]).toMatchObject({
         type: 'Text',
         content: 'transformed output'
-      }));
+      });
     });
   });
 });
