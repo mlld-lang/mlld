@@ -1,6 +1,6 @@
 import type { DirectiveNode } from '@core/syntax/types/index.js';
 import type { StateServiceLike } from '@core/shared-service-types.js';
-import type { DirectiveResult } from './DirectiveTypes.js';
+import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 
@@ -36,7 +36,7 @@ export interface IDirectiveServiceClient {
   handleDirective(
     node: DirectiveNode,
     context: DirectiveProcessingContext
-  ): Promise<IStateService | DirectiveResult>;
+  ): Promise<DirectiveResult>;
 
   /**
    * Validates a directive node.

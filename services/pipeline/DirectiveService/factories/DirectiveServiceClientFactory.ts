@@ -6,7 +6,7 @@ import { Service } from '@core/ServiceProvider.js';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 import type { MeldNode, DirectiveNode } from '@core/syntax/types/index.js';
 import type { StateServiceLike } from '@core/shared-service-types.js';
-import type { DirectiveResult } from '../interfaces/DirectiveTypes.js';
+import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 /**
@@ -39,7 +39,7 @@ export class DirectiveServiceClientFactory implements IDirectiveServiceClientFac
       handleDirective: (
         node: DirectiveNode,
         context: DirectiveProcessingContext
-      ): Promise<IStateService | DirectiveResult> => {
+      ): Promise<DirectiveResult> => {
         return this.directiveService.handleDirective(node, context);
       },
       validateDirective: (node: DirectiveNode): Promise<void> => {

@@ -285,23 +285,19 @@ export class DataDirectiveHandler implements IDirectiveHandler {
 
       // --- Modify JSON Parsing Step --- 
       let finalValue: JsonValue;
-      // Only attempt to parse if the source was NOT literal AND the value is a string
-      if (source !== 'literal' && typeof valueToParse === 'string') { 
+      
+      // Always attempt to parse if the resolved value is a string
+      if (typeof valueToParse === 'string') { 
         try {
-          // Use standard JSON.parse() for run/embed string results
           finalValue = JSON.parse(valueToParse); 
-          logger.debug('Successfully parsed resolved string from run/embed as JSON', { identifier });
+          logger.debug('Successfully parsed resolved string value as JSON', { identifier, source });
         } catch (parseError) {
-          // Update error details structure here too
-          throw new DirectiveError(
-            `Failed to parse value from source '${source}' for @data directive '${identifier}' as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`,
-            this.kind, 
-            DirectiveErrorCode.VALIDATION_FAILED, // Parsing failure is often a validation issue of the source content
-            { ...errorDetails, cause: parseError instanceof Error ? parseError : undefined }
-          );
+          // If parsing fails, treat the resolved string as the final value (e.g., for non-JSON strings)
+          logger.warn(`Could not parse resolved string value for @data directive '${identifier}' as JSON. Using the raw string value.`, { parseError: parseError instanceof Error ? parseError.message : String(parseError) });
+          finalValue = valueToParse; // Use the string itself
         }
       } else {
-        // Assume literal source OR non-string value (already parsed from run/embed) is the final intended value
+        // If not a string, assume it's already the intended JSON value (e.g., from @run/@embed parsing, or a literal number/boolean/null/object/array)
         finalValue = valueToParse as JsonValue; 
       }
       // --- End JSON Parsing Step --- 

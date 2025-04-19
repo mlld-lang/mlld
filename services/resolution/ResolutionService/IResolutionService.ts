@@ -61,13 +61,13 @@ export interface IResolutionService {
    * Handles special paths like $HOMEPATH, $PROJECTPATH, etc.
    * This primarily resolves the path string and validates it.
    * 
-   * @param pathString - The path string with potential variables to resolve
+   * @param pathInput - The path string with potential variables to resolve
    * @param context - The resolution context with state and path validation rules
    * @returns The resolved MeldPath object (which could be Normalized or Raw, File or Directory)
    * @throws {MeldResolutionError} If resolution fails and context.strict is true
    * @throws {PathValidationError} If the path violates security rules specified in context.pathContext
    */
-  resolvePath(pathString: string, context: ResolutionContext): Promise<MeldPath>;
+  resolvePath(pathInput: string | StructuredPath, context: ResolutionContext): Promise<MeldPath>;
 
   /**
    * Resolve command references ($command(args)) to their execution results.

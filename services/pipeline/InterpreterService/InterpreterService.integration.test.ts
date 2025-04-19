@@ -28,7 +28,7 @@ import { logger } from '@core/utils/logger.js';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 import { mock } from 'vitest-mock-extended';
-import type { DirectiveResult } from '@services/pipeline/DirectiveService/interfaces/DirectiveTypes.js';
+import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import { container, type DependencyContainer } from 'tsyringe';
 // Import tokens and helpers for manual DI setup
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';

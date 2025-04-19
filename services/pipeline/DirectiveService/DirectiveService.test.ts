@@ -13,7 +13,7 @@ import { ErrorSeverity, MeldError } from '@core/errors/MeldError.js';
 import { createTextDirective, createDataDirective, createImportDirective } from '@tests/utils/testFactories.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import type { DirectiveProcessingContext, ExecutionContext } from '@core/types/index.js';
-import type { DirectiveResult } from '@services/pipeline/DirectiveService/interfaces/DirectiveTypes.js';
+import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import type { ResolutionContext } from '@core/types/resolution.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
@@ -27,6 +27,7 @@ import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { InterpolatableValue, VariableReferenceNode, StructuredPath } from '@core/syntax/types/nodes.js';
 import type { JsonValue } from '@core/types/index.js';
 import { createRawPath, unsafeCreateAbsolutePath, RawPath, AbsolutePath, RelativePath } from '@core/types/paths.js';
+import crypto from 'crypto';
 
 // Define a simple mock OutputFormattingContext
 const mockFormattingContext: OutputFormattingContext = {
@@ -124,7 +125,7 @@ describe('DirectiveService', () => {
     testContainer.registerInstance('InterpreterServiceClientFactory', mockInterpreterClientFactory); // Use string token
     testContainer.registerInstance('ICircularityService', mockCircularityService);
     testContainer.registerInstance('IResolutionService', mockResolutionService);
-    testContainer.registerInstance('DirectiveLogger', { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() }); // Basic logger mock
+    testContainer.registerInstance('ILogger', { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() }); // Basic logger mock
 
     // --- Resolve Service Under Test ---
     service = testContainer.resolve(DirectiveService);
@@ -135,11 +136,10 @@ describe('DirectiveService', () => {
     // Re-define mock handlers
     mockTextHandler = {
         kind: 'text',
-        execute: vi.fn().mockImplementation(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult | IStateService> => {
-            // Simulate handler calling ResolutionService then StateService
+        handle: vi.fn(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult> => {
+            let resolvedValue = 'DefaultResolvedText'; // Default value
             if (ctx.directiveNode.directive) {
               const directiveValue = ctx.directiveNode.directive.value;
-              let resolvedValue: string;
               if (isInterpolatableValueArray(directiveValue)) {
                 resolvedValue = await mockResolutionService.resolveNodes(directiveValue, ctx.resolutionContext);
               } else if (typeof directiveValue === 'string') {
@@ -147,35 +147,47 @@ describe('DirectiveService', () => {
               } else {
                 resolvedValue = String(directiveValue);
               }
-              await ctx.state.setTextVar(ctx.directiveNode.directive.identifier, resolvedValue);
+              // Return DirectiveResult with state changes
+              return { 
+                stateChanges: { 
+                  variables: { 
+                    [ctx.directiveNode.directive.identifier]: { type: VariableType.TEXT, value: resolvedValue }
+                  }
+                }
+              }; 
             }
-            return ctx.state; 
-        }),
+            return { stateChanges: undefined, replacement: undefined }; 
+        })
     };
     mockDataHandler = {
         kind: 'data',
-        execute: vi.fn().mockImplementation(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult | IStateService> => {
-            // Simulate resolving value before setting
-            if (ctx.directiveNode.directive) {
+        handle: vi.fn(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult> => {
+           let resolvedValue: unknown = 'DefaultResolvedData'; // Default value
+           if (ctx.directiveNode.directive) {
                const directiveValue = ctx.directiveNode.directive.value;
-               let resolvedValue: unknown;
                if (isInterpolatableValueArray(directiveValue)) {
                   resolvedValue = await mockResolutionService.resolveNodes(directiveValue, ctx.resolutionContext);
                } else {
-                  resolvedValue = directiveValue; // Assume non-arrays are pre-resolved/literal for mock
+                  resolvedValue = directiveValue; 
                }
-               // NOTE: Real handler might try JSON.parse here. Mock doesn't yet.
-               await ctx.state.setDataVar(ctx.directiveNode.directive.identifier, resolvedValue as JsonValue);
+               // Return DirectiveResult with state changes
+               return { 
+                 stateChanges: { 
+                   variables: { 
+                     [ctx.directiveNode.directive.identifier]: { type: VariableType.DATA, value: resolvedValue as JsonValue }
+                   }
+                 }
+               }; 
             }
-            return { state: ctx.state }; // Return DirectiveResult for data
-        }),
+            return { stateChanges: undefined, replacement: undefined }; 
+        })
     };
     mockImportHandler = {
         kind: 'import',
-        execute: vi.fn().mockImplementation(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult | IStateService> => {
-            // Basic implementation for now
-            return { state: ctx.state }; // Return DirectiveResult for import
-        }),
+        handle: async (ctx: DirectiveProcessingContext): Promise<DirectiveResult> => {
+            // Return the new DirectiveResult shape
+            return { stateChanges: undefined, replacement: [] }; // Import usually has empty replacement
+        }
     };
 
     // Register our mock handlers, overwriting any potential defaults
@@ -267,13 +279,12 @@ describe('DirectiveService', () => {
       it('should use resolution service for interpolated text value', async () => {
           const directiveNode = createTextDirective('greeting', 'Hello, {{name}}');
           const currentFilePath = 'interpolate.meld';
-          const resolvedValue = 'Hello, World';
+          const expectedResolvedValue = 'ResolvedContextValue_Global'; // Value from global mock
 
           vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue(currentFilePath);
-          vi.spyOn(mockStateService, 'clone').mockImplementation(() => mockStateService);
           vi.spyOn(mockValidationService, 'validate').mockImplementation(vi.fn());
-          // REMOVED: Use global mock from beforeEach
-          // vi.spyOn(mockResolutionService, 'resolveInContext').mockResolvedValue(resolvedValue);
+          // Ensure resolveInContext mock is set (it should be by global setup)
+          // vi.spyOn(mockResolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedValue);
 
           const processingContext: DirectiveProcessingContext = {
               state: mockStateService,
@@ -281,11 +292,14 @@ describe('DirectiveService', () => {
               resolutionContext: ResolutionContextFactory.create(mockStateService, currentFilePath),
               formattingContext: mockFormattingContext,
           };
-          await service.handleDirective(directiveNode, processingContext);
+          const result = await service.handleDirective(directiveNode, processingContext);
 
           expect(mockValidationService.validate).toHaveBeenCalledWith(directiveNode);
-          // Expect name and the RESOLVED value (from the global beforeEach mock)
-          expect(mockStateService.setTextVar).toHaveBeenCalledWith('greeting', 'ResolvedContextValue_Global');
+          // Assert that the mock handler was called
+          expect(mockTextHandler.handle).toHaveBeenCalled();
+          // Assert the returned DirectiveResult contains the correct state change
+          expect(result?.stateChanges?.variables?.greeting).toBeDefined();
+          expect(result?.stateChanges?.variables?.greeting?.value).toBe(expectedResolvedValue);
       });
     });
 
@@ -296,11 +310,7 @@ describe('DirectiveService', () => {
         if (directiveNode?.directive) { directiveNode.directive.source = 'literal'; }
         
         vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue('test-data.meld');
-        vi.spyOn(mockStateService, 'clone').mockImplementation(() => mockStateService);
-        vi.spyOn(mockStateService, 'getDataVar').mockReturnValue(undefined);
-        vi.spyOn(mockStateService, 'setDataVar').mockImplementation(async (name, value) => {
-            return { type: VariableType.DATA, name, value };
-        });
+        // No longer need to mock setDataVar, we check the result
 
         const processingContext: DirectiveProcessingContext = { 
             state: mockStateService, 
@@ -309,23 +319,28 @@ describe('DirectiveService', () => {
             formattingContext: mockFormattingContext,
         };
 
-        const resultState = await service.handleDirective(directiveNode, processingContext) as IStateService;
+        const result = await service.handleDirective(directiveNode, processingContext);
 
         // Verify the correct handler was called
-        expect(mockDataHandler.execute).toHaveBeenCalledWith(expect.objectContaining({ 
+        expect(mockDataHandler.handle).toHaveBeenCalledWith(expect.objectContaining({ 
           directiveNode: directiveNode 
         }));
-        // We cannot reliably assert on setDataVar due to mock lifecycle issues
-        // expect(mockStateService.setDataVar).toHaveBeenCalledWith(directiveNode.directive!.identifier, dataValue);
+        // Assert the returned DirectiveResult contains the correct state change
+        expect(result?.stateChanges?.variables?.config).toBeDefined();
+        expect(result?.stateChanges?.variables?.config?.value).toEqual(dataValue);
       });
 
       it('should process data directive with variable interpolation', async () => { 
-        // TODO: Implement test logic using similar patterns
-        const interpolatableValue: InterpolatableValue = [{ type: 'Text', content: 'Value: '}, { type: 'VariableReference', identifier: 'sourceVar', valueType: 'text' } as VariableReferenceNode];
+        const interpolatableValue: InterpolatableValue = [
+          { type: 'Text', content: 'Value: ', nodeId: crypto.randomUUID() }, 
+          { type: 'VariableReference', identifier: 'sourceVar', valueType: 'text' } as VariableReferenceNode
+        ];
         const directiveNode = createDataDirective('config', interpolatableValue );
+        const expectedResolvedValue = 'Value: ResolvedSource';
 
         // Mock necessary services (ResolutionService needed here)
-        vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue('Value: ResolvedSource');
+        vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue(expectedResolvedValue);
+        // No longer need to mock setDataVar
 
         const processingContext: DirectiveProcessingContext = { 
             state: mockStateService, 
@@ -334,11 +349,12 @@ describe('DirectiveService', () => {
             formattingContext: mockFormattingContext,
         };
 
-        await service.handleDirective(directiveNode, processingContext);
+        const result = await service.handleDirective(directiveNode, processingContext);
 
-        // Assert setDataVar was called with the *resolved and parsed* value
-        // Assuming the DataHandler resolves nodes and parses string as JSON if possible
-        expect(mockStateService.setDataVar).toHaveBeenCalledWith('config', 'Value: ResolvedSource'); // Adjust expected value based on parsing
+        // Assert the returned DirectiveResult contains the *resolved* value
+        expect(mockDataHandler.handle).toHaveBeenCalled(); // Verify handler called
+        expect(result?.stateChanges?.variables?.config).toBeDefined();
+        expect(result?.stateChanges?.variables?.config?.value).toBe(expectedResolvedValue);
       });
     });
 

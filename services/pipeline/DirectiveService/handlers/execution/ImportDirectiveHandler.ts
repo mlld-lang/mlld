@@ -119,7 +119,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // 2. Resolve the path/identifier
       const resolvePathContext = ResolutionContextFactory.create(currentStateService, currentFilePath);
       try {
-        resolvedPath = await this.resolutionService.resolvePath(pathObject.raw, resolvePathContext);
+        // Revert: Pass the whole pathObject
+        resolvedPath = await this.resolutionService.resolvePath(pathObject, resolvePathContext);
       } catch (resolutionError) {
         // Handle potential non-Error rejections
         const cause = resolutionError instanceof Error ? resolutionError : new Error(String(resolutionError));

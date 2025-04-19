@@ -94,7 +94,7 @@ describe('DirectiveService Integration Tests', () => {
         level: 'info' 
     };
     // Register using the interface type
-    testContainer.register<ITestLogger>('DirectiveLogger', { useValue: mockLogger });
+    testContainer.register<ITestLogger>('ILogger', { useValue: mockLogger });
     
     // Resolve services from the test container AFTER registration
     directiveService = testContainer.resolve(DirectiveService);
@@ -137,12 +137,12 @@ describe('DirectiveService Integration Tests', () => {
 
     // Call handleDirective
     const result = await directiveService.handleDirective(textNode, processingContext);
-    // Explicitly check return type - should be IStateService for @text
-    expect(result).toHaveProperty('getTextVar'); // Basic check for IStateService
-    const resultState = result as IStateService; 
-
-    const resolvedValue = await resultState.getTextVar('greeting');
-    expect(resolvedValue?.value).toBe('Hello World!'); // Check resolved value
+    
+    // Assert on the DirectiveResult
+    expect(result).toBeDefined();
+    expect(result.stateChanges).toBeDefined();
+    expect(result.stateChanges?.variables?.greeting).toBeDefined();
+    expect(result.stateChanges?.variables?.greeting?.value).toBe('Hello World!');
   });
 
   it('should correctly process @data directive with interpolation in string value', async () => {
@@ -169,19 +169,13 @@ describe('DirectiveService Integration Tests', () => {
 
     // Call handleDirective
     const result = await directiveService.handleDirective(dataNode, processingContext);
-    // Handle both IStateService and DirectiveResult return types
-    let resultState: IStateService;
-    if ('state' in result && 'replacement' in result) { 
-      resultState = result.state;
-    } else {
-      resultState = result as IStateService; 
-    }
-    expect(resultState).toBeDefined();
-    expect(resultState).toHaveProperty('getDataVar'); // Check state has method
 
-    const resolvedValue = await resultState.getDataVar('config');
+    // Assert on the DirectiveResult
+    expect(result).toBeDefined();
+    expect(result.stateChanges).toBeDefined();
+    expect(result.stateChanges?.variables?.config).toBeDefined();
     // The data handler should resolve the value string and parse it
-    expect(resolvedValue?.value).toEqual({ key: 'dynamic' }); 
+    expect(result.stateChanges?.variables?.config?.value).toEqual({ key: 'dynamic' }); 
   });
 
   it('should correctly process @data directive with interpolation in object key (if supported) and value', async () => {
@@ -210,19 +204,13 @@ describe('DirectiveService Integration Tests', () => {
 
     // Call handleDirective
     const result = await directiveService.handleDirective(dataNode, processingContext);
-    // Handle both IStateService and DirectiveResult return types
-    let resultState: IStateService;
-    if ('state' in result && 'replacement' in result) { 
-      resultState = result.state;
-    } else {
-      resultState = result as IStateService; 
-    }
-    expect(resultState).toBeDefined();
-    expect(resultState).toHaveProperty('getDataVar'); // Check state has method
-    
-    const resolvedValue = await resultState.getDataVar('dynamicConfig');
+
+    // Assert on the DirectiveResult
+    expect(result).toBeDefined();
+    expect(result.stateChanges).toBeDefined();
+    expect(result.stateChanges?.variables?.dynamicConfig).toBeDefined();
     // If keys ARE NOT interpolated by the data handler/resolver, this should pass.
     // If keys ARE interpolated, the expected result would need to change.
-    expect(resolvedValue?.value).toEqual({ user: 'active' }); // EXPECTATION UPDATED ASSUMING KEY IS RESOLVED
+    expect(result.stateChanges?.variables?.dynamicConfig?.value).toEqual({ user: 'active' }); // EXPECTATION UPDATED ASSUMING KEY IS RESOLVED
   });
 }); 

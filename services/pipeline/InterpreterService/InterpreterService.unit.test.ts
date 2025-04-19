@@ -23,7 +23,7 @@ import type { OutputFormattingContext, JsonValue } from '@core/types/index.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import { DirectiveResult } from '@services/pipeline/DirectiveService/interfaces/DirectiveTypes.js';
+import { DirectiveResult } from '@core/directives/DirectiveHandler';
 
 // Define a minimal logger interface for testing
 interface ITestLogger {
