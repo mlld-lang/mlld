@@ -26,7 +26,6 @@ import { ResolutionContextFactory } from '@services/resolution/ResolutionService
 import { MeldPath, PathContentType, ValidatedResourcePath } from '@core/types/paths';
 import type { StateServiceLike } from '@core/shared-service-types.js';
 import { MeldResolutionError, MeldFileNotFoundError, MeldError } from '@core/errors';
-import type { DependencyContainer } from 'tsyringe';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 
 /**
@@ -47,7 +46,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     @inject('IFileSystemService') private fileSystemService: IFileSystemService,
     @inject('IParserService') private parserService: IParserService,
     @inject('IPathService') private pathService: IPathService,
-    @inject('DependencyContainer') private container: DependencyContainer,
+    @inject('ICircularityService') private circularityService: ICircularityService,
     @inject(InterpreterServiceClientFactory) private interpreterServiceClientFactory: InterpreterServiceClientFactory,
     @inject('IURLContentResolver') private urlContentResolver?: IURLContentResolver,
     @inject('StateTrackingService') stateTrackingService?: IStateTrackingService
@@ -57,25 +56,6 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     if (stateTrackingService) {
       this.stateTrackingService = stateTrackingService;
       this.debugEnabled = !!stateTrackingService && process.env.MELD_DEBUG === 'true';
-    }
-  }
-
-  private getCircularityService(): ICircularityService {
-    try {
-      const service = this.container.resolve<ICircularityService>('ICircularityService');
-      process.stdout.write(`DEBUG [ImportHandler GetCirc]: Resolved ICircularityService. Type: ${typeof service}, Keys: ${JSON.stringify(service ? Object.keys(service) : null)}\n`);
-      if (!service || typeof service.beginImport !== 'function') {
-        throw new Error('Resolved ICircularityService is invalid or missing beginImport method.');
-      }
-      return service;
-    } catch (error) {
-      process.stdout.write(`ERROR [ImportHandler GetCirc]: Failed to resolve ICircularityService from container: ${error}\n`);
-      throw new DirectiveError(
-        `Failed to resolve ICircularityService dependency: ${error instanceof Error ? error.message : String(error)}`,
-        this.kind,
-        DirectiveErrorCode.INVALID_CONTEXT,
-        { cause: error instanceof Error ? error : undefined }
-      );
     }
   }
 
@@ -158,8 +138,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // 3. Circularity Check
       const normalizedIdentifier = resolvedIdentifier.replace(/\\/g, '/'); // Normalize for consistency
 
-      const circularityService = this.getCircularityService();
-      circularityService.beginImport(normalizedIdentifier);
+      this.circularityService.beginImport(normalizedIdentifier);
 
       // 4. Get Content (File or URL)
       let content: string | undefined;
@@ -390,7 +369,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       }
 
       // 8. Mark Import as Completed
-        this.getCircularityService().endImport(normalizedIdentifier);
+        this.circularityService.endImport(normalizedIdentifier);
 
       if (this.debugEnabled) {
          logger.debug(`[ImportDirectiveHandler.handle] EXIT. Success. Accumulated changes: ${Object.keys(accumulatedStateChanges).length}\n`);
@@ -462,7 +441,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       if (resolvedIdentifier) {
         try {
           const normalizedIdentifier = resolvedIdentifier.replace(/\\/g, '/'); // Use original normalization
-          this.getCircularityService().endImport(normalizedIdentifier);
+          this.circularityService.endImport(normalizedIdentifier);
         } catch (cleanupError) {
           logger.warn('Error during import cleanup on error path', { error: cleanupError });
         }
