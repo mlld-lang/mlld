@@ -229,35 +229,19 @@ describe('InterpreterService Unit', () => {
 
     it('processes directive nodes by calling directiveService.handleDirective client', async () => {
       const directiveNode: DirectiveNode = createDirectiveNode('text', { identifier: 'test', value: 'value' });
-      
-      // Use the main mock state service from beforeEach
-      const initialTestState = mockStateService; 
-      
-      // Ensure necessary spies/mocks are set on the main mock
+      const initialTestState = mockStateService;
       vi.spyOn(initialTestState, 'createChildState').mockReturnValue(mockStateService);
       vi.spyOn(initialTestState, 'clone').mockReturnValue(mockStateService);
-
-      // Configure the handleDirective mock on the CLIENT to return a VALID empty result
-      vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue({ stateChanges: undefined, replacement: undefined });
-
-      // Reset call counts from beforeEach if necessary
+      vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue({ stateChanges: undefined, replacement: [] });
       vi.mocked(mockDirectiveClient.handleDirective).mockClear();
       vi.mocked(initialTestState.createChildState).mockClear();
       vi.mocked(initialTestState.clone).mockClear();
-
       await service.interpret([directiveNode], { initialState: initialTestState });
-      
-      expect(initialTestState.createChildState).toHaveBeenCalled(); 
-      expect(initialTestState.clone).toHaveBeenCalled(); // Clone is called within the loop
-      
-      // Assert call on the *client* mock (mockDirectiveClient from beforeEach)
+      expect(initialTestState.createChildState).toHaveBeenCalled();
+      expect(initialTestState.clone).toHaveBeenCalled();
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledWith(
         directiveNode,
-        expect.objectContaining({ 
-          // The state passed to the handler is the *working* state created at the start
-          state: mockStateService, 
-          directiveNode: directiveNode 
-        })
+        expect.objectContaining({ state: mockStateService, directiveNode: directiveNode })
       );
     });
 
@@ -318,24 +302,19 @@ describe('InterpreterService Unit', () => {
       const location = createLocation(1, 1, 1, 12);
       const directiveNode: DirectiveNode = createDirectiveNode('text', {}, location);
       const options: InterpreterOptions = { initialState: mockStateService, mergeState: true, filePath: 'test.mld' };
-      
-      // Ensure necessary spies/mocks are set on the main mockStateService
       vi.spyOn(mockStateService, 'clone').mockReturnValue(mockStateService);
-      vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue(options.filePath ?? null); 
-      vi.spyOn(mockPathService, 'dirname').mockReturnValue('/test'); 
-      // Ensure handleDirective returns a valid empty result
-      vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue({ stateChanges: undefined, replacement: undefined });
-
+      vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue(options.filePath ?? null);
+      vi.spyOn(mockPathService, 'dirname').mockReturnValue('/test');
+      vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue({ stateChanges: undefined, replacement: [] });
       await service.interpret([directiveNode], options);
-      
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledWith(
         directiveNode,
-        expect.objectContaining({ 
-            state: mockStateService, // Expect the main mock state instance
+        expect.objectContaining({
+            state: mockStateService,
             directiveNode: directiveNode,
             resolutionContext: expect.objectContaining({ currentFilePath: options.filePath }),
             formattingContext: expect.objectContaining({ nodeType: 'Directive' }),
-            executionContext: undefined 
+            executionContext: undefined
         })
       );
     });
@@ -513,13 +492,15 @@ describe('InterpreterService Unit', () => {
 
     // REMOVE SKIP
     it('handles empty node arrays (returns final working state)', async () => {
-      const result = await service.interpret([], { initialState: mockStateService });
+      // Setup spies BEFORE calling the function
       vi.spyOn(mockStateService, 'createChildState'); // Ensure spy is active
       vi.spyOn(mockStateService, 'clone'); // Ensure spy is active
       
-      // Fix 4: Verify createChildState is called (before loop)
+      const result = await service.interpret([], { initialState: mockStateService });
+      
+      // Verify createChildState is called (during initialization before loop)
       expect(mockStateService.createChildState).toHaveBeenCalled(); 
-      // Fix 4: Clone should NOT be called as the loop doesn't run
+      // Clone should NOT be called as the loop doesn't run
       expect(mockStateService.clone).not.toHaveBeenCalled(); 
       expect(result).toBe(mockStateService);
     });
@@ -703,37 +684,27 @@ describe('InterpreterService Unit', () => {
     it('passes correctly structured context to directive client', async () => {
       const location = createLocation(1,1);
       const directiveNode = createDirectiveNode('run', { subtype: 'runCommand', command: 'echo hello' }, location);
-      // Use mock from beforeEach
-      const initialTestState = mockStateService; 
-      const workingState = mockStateService; // Default createChildState returns mockStateService
-      const clonedState = mockStateService;  // Default clone returns mockStateService
-      
-      // Ensure spies from beforeEach are sufficient or re-spy if needed
-      vi.spyOn(mockPathService, 'dirname').mockReturnValue('/test'); 
-      // Set specific file path for this test's state
+      const initialTestState = mockStateService;
+      const workingState = mockStateService;
+      const clonedState = mockStateService;
+      vi.spyOn(mockPathService, 'dirname').mockReturnValue('/test');
       vi.spyOn(clonedState, 'getCurrentFilePath').mockReturnValue('/test/working-p5-manual.mld');
-      vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue({ stateChanges: undefined, replacement: undefined }); // Return empty DirectiveResult
-      
+      vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue({ stateChanges: undefined, replacement: [] });
       await service.interpret([directiveNode], { initialState: initialTestState });
-
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
-      const handlerCall = (mockDirectiveClient.handleDirective as Mock).mock.calls[0]; 
+      const handlerCall = (mockDirectiveClient.handleDirective as Mock).mock.calls[0];
       const passedNode = handlerCall[0];
       const passedContext = handlerCall[1];
-
       expect(passedNode).toBe(directiveNode);
       expect(passedContext).toBeDefined();
-      expect(passedContext.state).toBe(clonedState); 
+      expect(passedContext.state).toBe(clonedState);
       expect(passedContext.directiveNode).toBe(directiveNode);
-      
       expect(passedContext.resolutionContext).toBeDefined();
-      expect(passedContext.resolutionContext.currentFilePath).toBe('/test/working-p5-manual.mld'); 
-      
+      expect(passedContext.resolutionContext.currentFilePath).toBe('/test/working-p5-manual.mld');
       expect(passedContext.formattingContext).toBeDefined();
       expect(passedContext.formattingContext.nodeType).toBe('Directive');
-      
       expect(passedContext.executionContext).toBeDefined();
-      expect(passedContext.executionContext?.cwd).toBe('/test'); 
+      expect(passedContext.executionContext?.cwd).toBe('/test');
     });
 
     // REMOVE SKIP

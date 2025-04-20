@@ -363,10 +363,16 @@ export class InterpreterService implements IInterpreterService {
         mergeState: opts.mergeState
       });
 
-      initialSnapshot = currentState!.clone() as IStateService; 
-      lastGoodState = initialSnapshot;
+      initialSnapshot = currentState!.clone() as IStateService; // Keep initial snapshot for potential error rollback
+      lastGoodState = currentState; // Initialize lastGoodState *before* the loop without cloning
 
       for (const node of nodes) {
+        // If we enter the loop, *now* clone the lastGoodState for the first time if it hasn't been cloned yet
+        // This ensures clone isn't called for empty node arrays.
+        if (lastGoodState === currentState && nodes.length > 0) { 
+             lastGoodState = currentState.clone() as IStateService; 
+        }
+        
         let nodeResult: DirectiveResult | undefined;
         try {
           const stateBeforeNode: IStateService | null = currentState;
@@ -375,6 +381,17 @@ export class InterpreterService implements IInterpreterService {
           const [intermediateState, nodeResult] = await this.interpretNode(node, currentState, opts);
           currentState = intermediateState;
           
+          // <<< ADDED: Validate DirectiveResult structure >>>
+          if (node.type === 'Directive' && nodeResult && (typeof nodeResult !== 'object' || (nodeResult.stateChanges === undefined && nodeResult.replacement === undefined))) {
+            logger.error('Invalid result type returned from directive handler client after interpretNode', { nodeResult, nodeId: node.nodeId, kind: (node as DirectiveNode).directive.kind });
+            throw new MeldInterpreterError(
+              `Invalid result type returned from directive handler client for directive '${(node as DirectiveNode).directive.kind}'`, 
+              'directive_client_error', 
+              convertLocation(node.location),
+              { severity: ErrorSeverity.Fatal }
+            );
+          }
+
           // Apply state changes if present and supported
           if (nodeResult?.stateChanges && currentState && typeof currentState.applyStateChanges === 'function') {
             logger.debug(`Applying state changes from directive result for node ${node.nodeId}`);
@@ -406,11 +423,13 @@ export class InterpreterService implements IInterpreterService {
           if (!currentState) { // Add null check before cloning
              throw new MeldInterpreterError('State became null unexpectedly before cloning last good state.', 'internal_error', convertLocation(node.location), { severity: ErrorSeverity.Fatal });
           }
-          lastGoodState = currentState.clone() as IStateService;
+          // Clone at the end of successful processing within the loop
+          lastGoodState = currentState.clone() as IStateService; 
         } catch (error) {
           try {
             this.handleError(error instanceof Error ? error : new Error(String(error)), opts);
-            currentState = lastGoodState.clone() as IStateService;
+            // Rollback to the last known good state *before* the failed node processing
+            currentState = lastGoodState; // No clone needed here, revert to the state before the try block for this node
           } catch (fatalError) {
             if (opts.initialState && opts.mergeState) {
               if (typeof opts.initialState.mergeChildState === 'function') {
