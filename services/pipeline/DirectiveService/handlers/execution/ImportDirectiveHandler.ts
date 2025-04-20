@@ -240,20 +240,30 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         childState.setCurrentFilePath(sourceContextPath.validatedPath);
 
         // Log the state creation for debugging
-        // process.stdout.write(`DEBUG: [ImportDirectiveHandler.handle] Created child state ID: ${childState.getId()}, Path: ${childState.getCurrentFilePath()?.originalValue ?? 'N/A'}\\n`);
+        process.stdout.write(`DEBUG: [ImportDirectiveHandler.handle] Created child state ID: ${childState.getStateId()}, Path: ${childState.getCurrentFilePath() ?? 'N/A'}\n`);
 
         // ---> Log Before Interpret <-----
-        // process.stdout.write(`DEBUG [ImportHandler.handle PRE-INTERPRET] Interpreting AST for: ${resolvedIdentifier}\n`);
+        process.stdout.write(`DEBUG [ImportHandler.handle PRE-INTERPRET] Interpreting AST for: ${resolvedIdentifier}. Node count: ${astNodes.length}\n`);
+        process.stdout.write(`DEBUG [ImportHandler.handle PRE-INTERPRET] Calling interpreterServiceClient.interpret...\n`);
         
         // Use client (now guaranteed to be defined)
         const interpretedChildState: StateServiceLike = await this.interpreterServiceClient.interpret(astNodes, 
           undefined, 
           childState 
         );
+        
+        // ---> Log After Interpret <-----
+        process.stdout.write(`DEBUG [ImportHandler.handle POST-INTERPRET] Call completed. Type of result: ${typeof interpretedChildState}, Is null/undefined: ${interpretedChildState == null}\n`);
+        if (interpretedChildState) {
+          process.stdout.write(`DEBUG [ImportHandler.handle POST-INTERPRET] Result keys: ${Object.keys(interpretedChildState).join(', ')}\n`);
+          process.stdout.write(`DEBUG [ImportHandler.handle POST-INTERPRET] typeof getAllTextVars: ${typeof interpretedChildState.getAllTextVars}\n`);
+        }
 
         // <<< ADD CHECK for interpretedChildState >>>
         if (!interpretedChildState || typeof interpretedChildState.getAllTextVars !== 'function') {
           logger.error('Interpreter service client returned invalid state object', { interpretedChildState });
+          // Log before throwing
+          process.stdout.write(`ERROR [ImportHandler.handle] Invalid state received from interpret! Type: ${typeof interpretedChildState}, Has getAllTextVars: ${!!interpretedChildState?.getAllTextVars}\n`);
           throw new DirectiveError(
             'Internal error: Failed to get valid state from interpreted import content.',
             this.kind,
@@ -532,6 +542,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       logger.warn(`[ImportDirectiveHandler.processStructuredImports] Cannot import variables - sourceStateChanges or sourceStateChanges.variables is null or undefined`);
       return targetStateChanges; // Return empty map
     }
+
+    // Add logging for the source variables being processed
+    process.stdout.write(`DEBUG [processStructuredImports]: Processing ${Object.keys(sourceStateChanges.variables).length} variables from source state against ${imports.length} requested imports...\n`);
 
     for (const item of imports) {
       // ---> Log loop iteration
