@@ -1,5 +1,5 @@
 import { inject, injectable } from 'tsyringe';
-import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
+import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
 import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { DirectiveProcessingContext } from '@core/types/index.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
@@ -86,6 +86,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   }
 
   async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
+    // ---> Log Entry <-----
+    process.stdout.write(`DEBUG [ImportHandler.handle ENTER] Node Kind: ${context.directiveNode?.directive?.kind}\n`);
+
     const { directiveNode: baseNode, state: currentStateService, resolutionContext: inputResolutionContext } = context;
     const node = baseNode as DirectiveNode;
     const location = node.location;
@@ -230,6 +233,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // Log the state creation for debugging
         // process.stdout.write(`DEBUG: [ImportDirectiveHandler.handle] Created child state ID: ${childState.getId()}, Path: ${childState.getCurrentFilePath()?.originalValue ?? 'N/A'}\\n`);
 
+        // ---> Log Before Interpret <-----
+        process.stdout.write(`DEBUG [ImportHandler.handle PRE-INTERPRET] Interpreting AST for: ${resolvedIdentifier}\n`);
         // Interpret the parsed nodes using the child state
         // Call 'interpret' with nodes, options (undefined for now), and the initial childState
         const interpretedChildState: StateServiceLike = await interpreterServiceClient.interpret(astNodes, 
@@ -323,10 +328,16 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       }
 
       // Return success with accumulated state changes (if any)
-      return {
-        stateChanges: Object.keys(stateChangesAccumulator).length > 0 ? { variables: stateChangesAccumulator } : undefined,
+      const finalStateChanges = Object.keys(stateChangesAccumulator).length > 0 ? { variables: stateChangesAccumulator } : undefined;
+      // ---> Log Final StateChanges <-----
+      process.stdout.write(`DEBUG [ImportHandler.handle RETURN] finalStateChanges defined: ${!!finalStateChanges}, keys: ${finalStateChanges ? JSON.stringify(Object.keys(finalStateChanges.variables)) : 'N/A'}\n`);
+      
+      // ---> FIX: Return OBJECT LITERAL, not constructor <-----
+      const result: DirectiveResult = {
+        stateChanges: finalStateChanges,
         replacement: [] // Import directives generally don't replace themselves with nodes
       };
+      return result;
 
     } catch (error) {
       let errorMessage = 'Unknown error during import execution';

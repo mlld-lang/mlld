@@ -310,7 +310,7 @@ describe('DefineDirectiveHandler', () => {
 
     it('should define a language command using @run code', async () => {
          const runDirectiveData: DirectiveData = { kind:'run', subtype: 'runCode', command: [createMockTextNode('print("hello")')], language: 'python' };
-         const node = createValidDefineNode('cmdLang', runDirectiveData.command as InterpolatableValue, [], false);
+         const node = createValidDefineNode('cmdLang', runDirectiveData, [], false, 'python');
          const processingContext = createMockProcessingContext(node, stateService, resolutionService);
          vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('print("hello resolved")');
          const result = await handler.handle(processingContext) as DirectiveResult;

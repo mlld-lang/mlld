@@ -158,6 +158,8 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
              throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, details);
         }
 
+        // ---> ADD DEBUG LOG <-----
+        process.stdout.write(`DEBUG [DefineHandler]: runSubtype = ${runSubtype}, commandLanguage = ${commandLanguage}\n`);
         // Now create the definition based on the @run subtype
         if (runSubtype === 'runCommand' || runSubtype === 'runDefined') {
             commandDefinition = {
