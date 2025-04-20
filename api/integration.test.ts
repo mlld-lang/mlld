@@ -101,7 +101,7 @@ describe('API Integration Tests', () => {
 
     // Register Real Services (Singleton State)
     testContainer.registerSingleton('IStateService', StateService);
-    testContainer.register('IResolutionService', { useClass: ResolutionService });
+    testContainer.registerSingleton('IResolutionService', ResolutionService);
     testContainer.register('IParserService', { useClass: ParserService });
     testContainer.register('IInterpreterService', { useClass: InterpreterService });
     testContainer.register('IOutputService', { useClass: OutputService });
