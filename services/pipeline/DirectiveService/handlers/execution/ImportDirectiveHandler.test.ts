@@ -236,17 +236,36 @@ describe('ImportDirectiveHandler', () => {
         createMeldPath(node.directive.path.raw, unsafeCreateValidatedResourcePath(resolvedProjectPath), true)
       );
       
-      const plainMockState = {
+      const mockInterpretedState = {
           getStateId: vi.fn().mockReturnValue('mock-interpreted-state-id-project'), 
           getAllTextVars: vi.fn().mockReturnValue(new Map()), 
           getAllDataVars: vi.fn().mockReturnValue(new Map()), 
           getAllPathVars: vi.fn().mockReturnValue(new Map()), 
           getAllCommands: vi.fn().mockReturnValue(new Map()), 
-          getTransformedNodes: vi.fn().mockReturnValue([]), 
+          getVariable: vi.fn(),
+          setVariable: vi.fn(),
+          hasVariable: vi.fn().mockReturnValue(false),
+          removeVariable: vi.fn().mockResolvedValue(false),
+          getCurrentFilePath: vi.fn().mockReturnValue('/project/path/test.meld'),
+          setCurrentFilePath: vi.fn(),
+          getNodes: vi.fn().mockReturnValue([]),
+          addNode: vi.fn(),
+          getTransformedNodes: vi.fn().mockReturnValue([]),
+          setTransformedNodes: vi.fn(),
+          transformNode: vi.fn(),
+          isTransformationEnabled: vi.fn().mockReturnValue(true),
+          setTransformationEnabled: vi.fn(),
+          getTransformationOptions: vi.fn().mockReturnValue({ enabled: true }),
+          setTransformationOptions: vi.fn(),
+          clone: vi.fn(),
+          createChildState: vi.fn(),
+          mergeChildState: vi.fn(),
+          getParentState: vi.fn().mockReturnValue(undefined),
+          getInternalStateNode: vi.fn(), // Mock essential methods
       };
       const interpretSpy = vi.spyOn(interpreterServiceClient, 'interpret');
       interpretSpy.mockReset();
-      interpretSpy.mockResolvedValue(plainMockState as unknown as IStateService);
+      interpretSpy.mockResolvedValue(mockInterpretedState as unknown as IStateService);
       
       await handler.handle(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path, expect.anything());      
@@ -261,17 +280,17 @@ describe('ImportDirectiveHandler', () => {
       
       vi.spyOn(resolutionService, 'resolveInContext').mockResolvedValueOnce('$~/examples/basic.meld'); 
       
-      const plainMockState = {
+      const mockInterpretedState = {
           getStateId: vi.fn().mockReturnValue('mock-interpreted-state-id-tilde'), 
           getAllTextVars: vi.fn().mockReturnValue(new Map()), 
           getAllDataVars: vi.fn().mockReturnValue(new Map()), 
           getAllPathVars: vi.fn().mockReturnValue(new Map()), 
           getAllCommands: vi.fn().mockReturnValue(new Map()), 
-          getTransformedNodes: vi.fn().mockReturnValue([]), 
+          getVariable: vi.fn(), setVariable: vi.fn(), hasVariable: vi.fn().mockReturnValue(false), removeVariable: vi.fn().mockResolvedValue(false), getCurrentFilePath: vi.fn().mockReturnValue('/home/user/test.meld'), setCurrentFilePath: vi.fn(), getNodes: vi.fn().mockReturnValue([]), addNode: vi.fn(), getTransformedNodes: vi.fn().mockReturnValue([]), setTransformedNodes: vi.fn(), transformNode: vi.fn(), isTransformationEnabled: vi.fn().mockReturnValue(true), setTransformationEnabled: vi.fn(), getTransformationOptions: vi.fn().mockReturnValue({ enabled: true }), setTransformationOptions: vi.fn(), clone: vi.fn(), createChildState: vi.fn(), mergeChildState: vi.fn(), getParentState: vi.fn().mockReturnValue(undefined), getInternalStateNode: vi.fn(),
       };
       const interpretSpy = vi.spyOn(interpreterServiceClient, 'interpret');
       interpretSpy.mockReset();
-      interpretSpy.mockResolvedValue(plainMockState as unknown as IStateService);
+      interpretSpy.mockResolvedValue(mockInterpretedState as unknown as IStateService);
       
       await handler.handle(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path, expect.anything());      
@@ -286,17 +305,17 @@ describe('ImportDirectiveHandler', () => {
       
       vi.spyOn(resolutionService, 'resolveInContext').mockResolvedValueOnce('$HOMEPATH/examples/basic.meld'); 
       
-      const plainMockState = {
+      const mockInterpretedState = {
           getStateId: vi.fn().mockReturnValue('mock-interpreted-state-id-home'), 
           getAllTextVars: vi.fn().mockReturnValue(new Map()), 
           getAllDataVars: vi.fn().mockReturnValue(new Map()), 
           getAllPathVars: vi.fn().mockReturnValue(new Map()), 
           getAllCommands: vi.fn().mockReturnValue(new Map()), 
-          getTransformedNodes: vi.fn().mockReturnValue([]), 
+          getVariable: vi.fn(), setVariable: vi.fn(), hasVariable: vi.fn().mockReturnValue(false), removeVariable: vi.fn().mockResolvedValue(false), getCurrentFilePath: vi.fn().mockReturnValue('/home/user/test.meld'), setCurrentFilePath: vi.fn(), getNodes: vi.fn().mockReturnValue([]), addNode: vi.fn(), getTransformedNodes: vi.fn().mockReturnValue([]), setTransformedNodes: vi.fn(), transformNode: vi.fn(), isTransformationEnabled: vi.fn().mockReturnValue(true), setTransformationEnabled: vi.fn(), getTransformationOptions: vi.fn().mockReturnValue({ enabled: true }), setTransformationOptions: vi.fn(), clone: vi.fn(), createChildState: vi.fn(), mergeChildState: vi.fn(), getParentState: vi.fn().mockReturnValue(undefined), getInternalStateNode: vi.fn(),
       };
       const interpretSpy = vi.spyOn(interpreterServiceClient, 'interpret');
       interpretSpy.mockReset();
-      interpretSpy.mockResolvedValue(plainMockState as unknown as IStateService);
+      interpretSpy.mockResolvedValue(mockInterpretedState as unknown as IStateService);
       
       await handler.handle(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path, expect.anything());      
