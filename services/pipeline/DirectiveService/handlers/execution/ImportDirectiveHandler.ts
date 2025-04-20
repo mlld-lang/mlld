@@ -1,4 +1,4 @@
-import { inject, injectable } from 'tsyringe';
+import { inject, injectable, delay } from 'tsyringe';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
 import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { DirectiveProcessingContext } from '@core/types/index.js';
@@ -16,8 +16,7 @@ import { SourceLocation as SyntaxSourceLocation, JsonValue } from '@core/types/c
 import { VariableOrigin, VariableType, VariableMetadata, IPathVariable, CommandVariable, TextVariable, DataVariable, MeldVariable, VariableDefinition } from '@core/types/variables';
 import { createTextVariable, createDataVariable, createPathVariable, createCommandVariable } from '@core/types/variables';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
-import { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
-import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
+import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import logger from '@core/utils/logger.js';
 import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
@@ -37,7 +36,6 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'import';
   private debugEnabled: boolean = false;
   private stateTrackingService?: IStateTrackingService;
-  private interpreterServiceClient?: IInterpreterServiceClient;
 
   constructor(
     @inject('IValidationService') private validationService: IValidationService,
@@ -46,43 +44,13 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     @inject('IFileSystemService') private fileSystemService: IFileSystemService,
     @inject('IParserService') private parserService: IParserService,
     @inject('IPathService') private pathService: IPathService,
-    @inject('InterpreterServiceClientFactory') private interpreterServiceClientFactory: InterpreterServiceClientFactory,
+    @inject(delay('IInterpreterService')) private interpreterService: IInterpreterService,
     @inject('ICircularityService') private circularityService: ICircularityService,
     @inject('IURLContentResolver') private urlContentResolver?: IURLContentResolver,
     @inject('StateTrackingService') trackingService?: IStateTrackingService
   ) {
     this.stateTrackingService = trackingService;
     this.debugEnabled = !!trackingService && (process.env.MELD_DEBUG === 'true');
-    try {
-      this.interpreterServiceClient = this.interpreterServiceClientFactory.createClient();
-    } catch (error) {
-       logger.warn('Failed to get interpreter service client from factory during construction', { error });
-    }
-  }
-
-  private ensureInterpreterServiceClient(): IInterpreterServiceClient {
-    // First try to get the client from the factory
-    if (!this.interpreterServiceClient && this.interpreterServiceClientFactory) {
-      try {
-        this.interpreterServiceClient = this.interpreterServiceClientFactory.createClient();
-      } catch (error) {
-        logger.warn('Failed to get interpreter service client from factory', {
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    }
-    
-    // If we still don't have a client (because factory failed or wasn't available),
-    // throw an error. Tests MUST provide a mock via TestContextDI.
-    if (!this.interpreterServiceClient) {
-      throw new DirectiveError(
-        'Interpreter service client is not available. Ensure InterpreterServiceClientFactory is registered and resolvable, or provide a mock in tests.',
-        this.kind,
-        DirectiveErrorCode.EXECUTION_FAILED
-      );
-    }
-    
-    return this.interpreterServiceClient;
   }
 
   async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
@@ -122,17 +90,31 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // 2. Resolve the path/identifier
       const resolvePathContext = ResolutionContextFactory.create(currentStateService, currentFilePath);
+      let resolvedPathString: string | undefined;
       try {
-        // Revert: Pass the whole pathObject
-        resolvedPath = await this.resolutionService.resolvePath(pathObject, resolvePathContext);
+        // --- Step 1: Resolve the path object/string to a string ---
+        resolvedPathString = await this.resolutionService.resolveInContext(pathObject, resolvePathContext);
+
+        // --- Step 2: Validate the resolved string and get MeldPath ---
+        // Check if resolvedPathString is empty before validating
+        if (!resolvedPathString) {
+          throw new MeldResolutionError(`Path resolved to an empty string for input: ${pathObject.raw}`, { 
+              code: 'E_RESOLVE_EMPTY_PATH', 
+              details: { originalPath: pathObject.raw }
+          });
+        }
+        resolvedPath = await this.resolutionService.resolvePath(resolvedPathString, resolvePathContext);
+
       } catch (resolutionError) {
         // Handle potential non-Error rejections
         const cause = resolutionError instanceof Error ? resolutionError : new Error(String(resolutionError));
-          throw new DirectiveError(
-          `Failed to resolve import path/identifier: ${pathObject.raw}. ${cause.message}`,
-            this.kind,
-            DirectiveErrorCode.RESOLUTION_FAILED,
-          { cause: cause }
+        // Include the potentially resolved string in the error if available
+        const pathForError = resolvedPathString !== undefined ? resolvedPathString : pathObject.raw;
+        throw new DirectiveError(
+          `Failed to resolve import path/identifier: ${pathForError}. ${cause.message}`,
+          this.kind,
+          DirectiveErrorCode.RESOLUTION_FAILED,
+          { cause }
         );
       }
 
@@ -201,6 +183,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // 5. Parse Content 
       const astNodes = await this.parserService.parse(content) as MeldNode[]; // Expect MeldNode[] directly
+      process.stdout.write(`DEBUG [ImportHandler]: Parsed ${astNodes.length} nodes from ${resolvedIdentifier}\n`);
       
       // Check if the result is a valid array
       if (!Array.isArray(astNodes)) { 
@@ -214,10 +197,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           // Decide if this is an error or okay. For now, treat as okay, import nothing.
       }
 
-      // 6. Interpret Content - Now Active
-      const interpreterServiceClient = this.ensureInterpreterServiceClient();
+      // 6. Interpret Content
       let sourceStateChanges: StateChanges | undefined;
-      // logger.warn('[ImportDirectiveHandler] InterpreterService client API mismatch - Skipping variable import step.'); // REMOVED Warning
 
       try {
         // Create a new child state for the imported content
@@ -235,11 +216,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
         // ---> Log Before Interpret <-----
         process.stdout.write(`DEBUG [ImportHandler.handle PRE-INTERPRET] Interpreting AST for: ${resolvedIdentifier}\n`);
-        // Interpret the parsed nodes using the child state
-        // Call 'interpret' with nodes, options (undefined for now), and the initial childState
-        const interpretedChildState: StateServiceLike = await interpreterServiceClient.interpret(astNodes, 
-          undefined, // Pass undefined for options, as InterpreterOptionsBase doesn't have transformationMode
-          childState // Pass childState as the initial state
+        
+        // <<< Use injected interpreterService directly >>>
+        const interpretedChildState: StateServiceLike = await this.interpreterService.interpret(astNodes, 
+          undefined, 
+          childState 
         );
 
         // --- DEBUG LOGGING START ---
@@ -280,6 +261,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         process.stdout.write(`DEBUG [ImportHandler]: Accumulated variable keys: ${JSON.stringify(Object.keys(accumulatedVariables))}\n`);
         // --- DEBUG LOGGING END ---
 
+        const totalVars = (allVars.text?.size || 0) + (allVars.data?.size || 0) + (allVars.path?.size || 0) + (allVars.command?.size || 0);
+        process.stdout.write(`DEBUG [ImportHandler]: Extracted ${totalVars} total variables from interpreted state.\n`);
+
         if (Object.keys(accumulatedVariables).length > 0) {
            sourceStateChanges = { variables: accumulatedVariables };
         } else {
@@ -287,7 +271,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             logger.warn(`[ImportDirectiveHandler] Interpretation of ${resolvedIdentifier} completed, but no variables were found in the resulting state. Import will be empty.`);
         }
         // ---> Log sourceStateChanges before passing to helpers
-        process.stdout.write(`DEBUG [ImportHandler]: Constructed sourceStateChanges: ${JSON.stringify(sourceStateChanges)}\n`);
+        const approxSize = JSON.stringify(sourceStateChanges).length;
+        process.stdout.write(`DEBUG [ImportHandler]: Constructed sourceStateChanges (approx size: ${approxSize} chars): ${JSON.stringify(sourceStateChanges).substring(0, 200)}...\n`);
 
       } catch (interpretError) {
         const cause = interpretError instanceof Error ? interpretError : new Error(String(interpretError));

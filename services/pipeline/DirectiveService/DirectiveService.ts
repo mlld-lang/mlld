@@ -12,7 +12,7 @@ import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/Directive
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import type { ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import { Service } from '@core/ServiceProvider.js';
-import { inject, delay, injectable } from 'tsyringe';
+import { inject, injectable, delay } from 'tsyringe';
 import { container } from 'tsyringe';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';

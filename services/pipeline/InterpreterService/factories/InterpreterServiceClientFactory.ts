@@ -1,4 +1,4 @@
-import { injectable, inject, container } from 'tsyringe';
+import { injectable, inject, container as globalContainer, DependencyContainer } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { IInterpreterService } from '../IInterpreterService.js';
 import type { IInterpreterServiceClient } from '../interfaces/IInterpreterServiceClient.js';
@@ -17,15 +17,21 @@ import type { StateServiceLike, InterpreterOptionsBase, ClientFactory, Interpret
 })
 export class InterpreterServiceClientFactory {
   private interpreterService?: InterpreterServiceLike;
+  private container: DependencyContainer;
 
   /**
    * Creates a new InterpreterServiceClientFactory
-   * No longer directly depends on IInterpreterService to break circular dependency
+   * Injects the container using the 'DependencyContainer' token.
    */
-  constructor() {
-    // No direct dependency injection in constructor
+  constructor(
+    @inject('DependencyContainer') container: DependencyContainer
+  ) {
+    this.container = container || globalContainer; // Fallback just in case
+    if (this.container === globalContainer) {
+      logger.warn('InterpreterServiceClientFactory resolved using global container, might cause issues in tests.');
+    }
   }
-  
+
   /**
    * Sets the interpreter service directly - use only in tests
    * This method is specifically for test scenarios where we need to directly
@@ -38,13 +44,14 @@ export class InterpreterServiceClientFactory {
   }
   
   /**
-   * Lazily initializes the interpreter service when needed
-   * This breaks the circular dependency by deferring the resolution
+   * Lazily initializes the interpreter service when needed using the factory's container.
+   * This breaks the circular dependency by deferring the resolution.
    */
   private getInterpreterService(): InterpreterServiceLike {
     if (!this.interpreterService) {
-      logger.debug('Lazily initializing IInterpreterService');
-      this.interpreterService = container.resolve<IInterpreterService>('IInterpreterService');
+      logger.debug('Lazily initializing IInterpreterService using factory container', { containerId: (this.container as any).id || 'global' });
+      // Use the injected container instance
+      this.interpreterService = this.container.resolve<IInterpreterService>('IInterpreterService');
     }
     return this.interpreterService;
   }
@@ -55,21 +62,23 @@ export class InterpreterServiceClientFactory {
    */
   createClient(): IInterpreterServiceClient {
     logger.debug('Creating InterpreterServiceClient');
+    // Ensure the service is fetched using the correct container before creating client methods
+    const service = this.getInterpreterService(); 
     
     return {
       interpret: async (nodes: MeldNode[], options?: InterpreterOptionsBase, initialState?: StateServiceLike): Promise<StateServiceLike> => {
-        if (!this.interpreterService) throw new Error('Interpreter service not available in client');
-        // Return type matches IInterpreterServiceClient
-        return await this.interpreterService.interpret(nodes, options, initialState);
+        // Use the already fetched service instance
+        if (!service) throw new Error('Interpreter service not available in client (factory failed to resolve)');
+        return await service.interpret(nodes, options, initialState);
       },
       createChildContext: async (
         parentState: StateServiceLike,
         filePath?: string,
         options?: InterpreterOptionsBase
       ): Promise<StateServiceLike> => {
-        if (!this.interpreterService) throw new Error('Interpreter service not available in client');
-        // Return type matches IInterpreterServiceClient
-        return await this.interpreterService.createChildContext(parentState, filePath, options);
+        // Use the already fetched service instance
+        if (!service) throw new Error('Interpreter service not available in client (factory failed to resolve)');
+        return await service.createChildContext(parentState, filePath, options);
       }
     };
   }

@@ -40,6 +40,7 @@ import { container, type DependencyContainer } from 'tsyringe';
 import { mock } from 'vitest-mock-extended';
 import { URL } from 'node:url';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
@@ -50,8 +51,12 @@ import { PathOperationsService } from '@services/fs/FileSystemService/PathOperat
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 // <<< Add import for CircularityService >>>
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+// <<< ADDED: Import ValidationService >>>
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
 // Import the default logger instance
 import logger from '@core/utils/logger.js'; 
+// <<< ADDED: Import DirectiveService >>>
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 // =========================
 
 // Define runDirectiveExamples from the module
@@ -92,6 +97,7 @@ describe('API Integration Tests', () => {
     testContainer.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
     testContainer.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
     testContainer.register(FileSystemServiceClientFactory, { useClass: FileSystemServiceClientFactory });
+    testContainer.register(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory });
 
     // Register Real Services (Singleton State)
     testContainer.registerSingleton('IStateService', StateService);
@@ -104,6 +110,13 @@ describe('API Integration Tests', () => {
     testContainer.register('IPathOperationsService', { useClass: PathOperationsService });
     // <<< Register CircularityService >>>
     testContainer.register('ICircularityService', { useClass: CircularityService });
+    // <<< ADDED: Register DirectiveService >>>
+    testContainer.register('IDirectiveService', { useClass: DirectiveService });
+    // <<< ADDED: Register ValidationService >>>
+    testContainer.register('IValidationService', { useClass: ValidationService });
+
+    // <<< ADDED: Register the container itself >>>
+    testContainer.registerInstance('DependencyContainer', testContainer);
   });
 
   afterEach(async () => {

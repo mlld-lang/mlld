@@ -100,7 +100,11 @@ export class InterpreterService implements IInterpreterService {
     
     if (this.directiveClientFactory && this.stateService && this.pathService) {
       this.initializeDirectiveClient();
-      this.initializeParserClient();
+      if (this.parserClientFactory) { 
+        this.initializeParserClient();
+      } else {
+        logger.warn('ParserClientFactory not available during InterpreterService construction');
+      }
       this.initialized = true;
       logger.debug('InterpreterService initialized via DI');
     } else {
@@ -427,18 +431,25 @@ export class InterpreterService implements IInterpreterService {
             logger.debug(`[InterpreterService] TextNode content might need resolution: ${textNode.content.substring(0, 50)}...`);
             try {
                 // 1. Parse the string content into an InterpolatableValue array
-                // Assuming parseString exists and returns InterpolatableValue or throws
-                const parsedNodes: InterpolatableValue = await this.parserClient.parseString(
+                // Assuming parseString exists and returns INode[] - Needs Filtering
+                const parsedNodesRaw = await this.parserClient.parseString(
                     textNode.content, 
                     { 
-                        filePath: currentState.getCurrentFilePath() ?? 'unknown',
-                        startRule: 'InterpolatableContentOrEmpty' // Assuming this rule exists and is suitable
+                        // Linter Fix 3: Ensure filePath is string | undefined
+                        filePath: currentState.getCurrentFilePath() ?? undefined, 
+                        // Linter Fix 2: Removed unsupported 'startRule' option
                     }
                 );
+                // Linter Fix 1: Filter/Cast the result to InterpolatableValue
+                const parsedNodes: InterpolatableValue = parsedNodesRaw.filter(
+                  (node): node is TextNode | VariableReferenceNode => 
+                    node.type === 'Text' || node.type === 'VariableReference'
+                );
+
                 logger.debug(`[InterpreterService] Parsed TextNode content into ${parsedNodes?.length ?? 0} nodes.`);
 
                 // 2. Resolve the parsed nodes
-                const context = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath());
+                const context = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
                 const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, context);
                 logger.debug(`[InterpreterService] Resolved TextNode content to: ${resolvedContent.substring(0, 50)}...`);
 

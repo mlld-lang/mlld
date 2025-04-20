@@ -88,7 +88,7 @@ describe('ImportDirectiveHandler', () => {
     resolutionService = {
         resolvePath: vi.fn(),
         resolveNodes: vi.fn(),
-        resolveInContext: vi.fn(),
+        resolveInContext: vi.fn().mockResolvedValue('/project/resolved/mock_path.meld'),
         resolveVariableReference: vi.fn(),
         extractSection: vi.fn()
     } as unknown as IResolutionService;
