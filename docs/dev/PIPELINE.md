@@ -30,7 +30,7 @@ The pipeline is organized into logical service groups, with strict initializatio
       │                    │                    │                    │
       ▼                    ▼                    ▼                    ▼
 ┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│Initialize & │     │Validate &   │     │Transform &   │     │Format &     │
+│Initialize & │     │Validate &   │     │Interpret AST │     │Format &     │
 │  Validate   │     │Process Dirs │     │Update State  │     │Generate Out │
 └─────────────┘     └─────────────┘     └──────────────┘     └──────────────┘
 ```
@@ -110,13 +110,14 @@ The pipeline is organized into logical service groups, with strict initializatio
          ▼
    ┌─────────────┐
    │ MeldNode[]  │
-   │  Rich AST   │  ← Contains structured directive data,
-   └─────────────┘    `InterpolatableValue` arrays, `Field[]` access paths
+   │  Rich AST   │  ← Context-aware: `{{...}}` only becomes `VariableReferenceNode`
+   └─────────────┘    where allowed. Directives contain `InterpolatableValue` arrays.
    ```
    - Reads the input file content
-   - Parses into a rich AST using `@core/ast`
-   - AST nodes include structured data for directives (e.g., `InterpolatableValue` arrays, `Field[]` paths for variables)
-   - Adds source location information
+   - Parses into a rich, **context-aware** AST using `@core/ast`.
+   - Variable syntax (`{{...}}`, `$var`) is parsed as `VariableReferenceNode` only in contexts where interpolation is allowed (e.g., directive values, certain string literals). Otherwise, it remains literal text within `TextNode`s.
+   - Directive values (like strings, paths) that support interpolation are parsed into `InterpolatableValue` arrays (sequences of `TextNode` and `VariableReferenceNode`).
+   - Adds source location information.
    - **Adds a unique `nodeId` to every AST node.**
 
 4. **Interpretation** (`InterpreterService`)
@@ -127,27 +128,36 @@ The pipeline is organized into logical service groups, with strict initializatio
    └─────────────┘     └──────┬──────┘
                               │
                               ▼
-   ┌─────────────┐     ┌─────────────┐
-   │ Resolution  │◄────┤   Handler   │ ← Resolves variables within directive logic
-   │   Service   │     │(with node   │
-   └──────┬──────┘     │replacements)│
-          │            └─────────────┘
-          ▼
-   ┌─────────────┐
-   │    State    │ ← Updated by DirectiveService applying stateChanges
-   │   Service   │   from handler's DirectiveResult
-   │(Original &  │
-   │Transformed) │ ← Stores final (transformed) AST
-   └─────────────┘
+   ┌─────────────┐     ┌─────────────┐     ┌─────────────────────┐
+   │ Resolution  │◄────┤   Handler   │     │ ParserServiceClient │ ← Used by Interpreter
+   │   Service   │     │(with node   │     └─────────────────────┘   to parse TextNode content
+   └──────┬──────┘     │replacements)│               ▲
+          │            └──────┬──────┘               │
+          │                   │                      │
+          ▼                   ▼                      ▼
+   ┌─────────────┐     ┌────────────────────────────────────────────────────────────┐
+   │    State    │     │ Interpreter Service                                        │
+   │   Service   │◄────┤ - Applies stateChanges from DirectiveResult                │
+   │(Original &  │     │ - Handles node replacements from DirectiveResult           │
+   │Transformed) │     │ - **Resolves `{{...}}` in TextNode content (using Parser + │
+   └─────────────┘     │   Resolution) BEFORE adding node to state**                │
+                       └────────────────────────────────────────────────────────────┘
+
    ```
-   - Processes each rich AST node sequentially
-   - Routes directives to appropriate handlers via `DirectiveService`
-   - Handlers process structured directive data (e.g., `InterpolatableValue`) and use `ResolutionService` as needed
-   - Handlers return a `DirectiveResult` which may include replacement nodes and/or `stateChanges`.
-   - `DirectiveService` applies the `stateChanges` from the `DirectiveResult` to the `StateService`.
-   - `InterpreterService` applies node replacements (if any) to the transformed AST.
-   - Handles file imports and embedding
-   - **Resolves `{{...}}` variable references within plain `TextNode` content**
+   - Processes each rich AST node sequentially.
+   - For `TextNode`s:
+     - Checks if `content` contains `{{...}}`.
+     - If yes, uses `ParserServiceClient` to parse the content into an `InterpolatableValue` array.
+     - Uses `ResolutionService` to resolve the `InterpolatableValue` array to a final string.
+     - Adds a new `TextNode` with the *resolved* content to the state.
+     - If no `{{...}}`, adds the original `TextNode` to the state.
+   - For `DirectiveNode`s:
+     - Routes directives to appropriate handlers via `DirectiveService`.
+     - Handlers process structured directive data (e.g., `InterpolatableValue`) and use `ResolutionService` as needed.
+     - Handlers return a `DirectiveResult` which may include replacement nodes and/or `stateChanges`.
+     - `DirectiveService` applies the `stateChanges` from the `DirectiveResult` to the `StateService`.
+     - `InterpreterService` applies node replacements (if any) to the transformed AST.
+   - Handles file imports and embedding.
 
 5. **Output Generation** (`OutputService`)
    ```ascii
@@ -158,16 +168,16 @@ The pipeline is organized into logical service groups, with strict initializatio
    └─────────────┘            │
                               ▼
    ┌─────────────┐     ┌─────────────┐
-   │Clean Output │◄────┤  Formatted  │ ← Final text variable substitution (`{{...}}`) occurs here
+   │Clean Output │◄────┤  Formatted  │ ← TextNode content is PRE-RESOLVED now
    │(No Directive│     │   Output    │
    │Definitions) │     └─────────────┘
    └─────────────┘
    ```
-   - Takes the final (transformed) rich AST and state
-   - Converts to requested format (markdown, llm-xml)
-   - **Treats `TextNode` content as pre-resolved (resolution handled by InterpreterService)**
-   - Uses `VariableReferenceResolverClient` for detailed field/value processing during conversion.
-   - Writes output to file or stdout
+   - Takes the final (transformed) rich AST and state.
+   - Converts to requested format (markdown, llm-xml).
+   - **Treats `TextNode` content as pre-resolved (resolution handled by `InterpreterService`)**. It focuses on formatting, not variable substitution within text.
+   - Uses `VariableReferenceResolverClient` for detailed field/value processing during conversion (e.g., formatting complex objects/arrays).
+   - Writes output to file or stdout.
 
 ## Transformation Mode and Variable Resolution
 
@@ -177,18 +187,18 @@ When transformation mode is enabled, the pipeline handles directives and variabl
 ┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
 │  Directive  │     │Interpretation│     │   State      │     │   Output     │
 │  Handlers   ├────►│  & Node     ├────►│  Variable    ├────►│  Generation  │
-│(with replace│     │Transformation│     │  Resolution  │     │              │
-│  nodes)     │     │              │     │              │     │              │
+│(with replace│     │Transformation│     │  Resolution  │     │ (Formatting) │
+│  nodes)     │     │              │     │ (TextNodes)  │     │              │
 └─────────────┘     └─────────────┘     └──────────────┘     └──────────────┘
 ```
 
 ### Key Transformation Pipeline Concepts
 
 1. **Directive Handler Replacement Nodes**
-   - Directive handlers can return replacement nodes when in transformation mode
-   - The InterpreterService must properly apply these replacements in the transformed nodes array
-   - For import directives, the replacement is typically an empty text node
-   - For embed directives, the replacement node contains the embedded content
+   - Directive handlers can return replacement nodes when in transformation mode.
+   - The InterpreterService must properly apply these replacements in the transformed nodes array.
+   - For import directives, the replacement is typically an empty text node.
+   - For embed directives, the replacement node contains the embedded content.
 
 2. **State Propagation Across Boundaries**
    - Variables must be explicitly copied between parent and child states using mechanisms like `StateVariableCopier`.
@@ -196,7 +206,6 @@ When transformation mode is enabled, the pipeline handles directives and variabl
 
 3. **Variable Resolution Process**
    - Variables can be resolved at multiple stages:
-     - During directive processing by handlers (using `ResolutionService`).
-     - During final output generation (`OutputService` resolves `{{...}}` in `TextNode` content).
-     - Potentially during post-processing steps if needed.
-   - `OutputService`
+     - During directive processing by handlers (using `ResolutionService` on `InterpolatableValue` arrays or `VariableReferenceNode`s from the AST).
+     - **During interpretation (`InterpreterService`) for `{{...}}` references within plain `TextNode` content.**
+   - `OutputService` **does not** perform variable resolution on `TextNode` content; it expects pre-resolved text. It may use `VariableReferenceResolverClient` for formatting complex values during final output generation.

@@ -211,14 +211,16 @@ Below are the key "services" in the codebase. Each follows the single responsibi
 ### ParserService  
    - Wraps the meld-ast parse(content) function
    - Adds location information with file paths (parseWithLocations)
-   - Produces an array of MeldNode objects, including structured directive data (like `InterpolatableValue` arrays and `Field[]` for variable references)
+   - Produces a rich, context-aware AST:
+     - Variable syntax (`{{...}}`) is only parsed as `VariableReferenceNode` where allowed.
+     - Interpolatable directive values become `InterpolatableValue` arrays (`TextNode | VariableReferenceNode`).
    - Conditionally uses `ResolutionServiceClient` via a factory for reading file content in `parseFile`.
    - Dependencies: (Optional) `ResolutionServiceClientFactory`, `VariableNodeFactory`
 
 ### DirectiveService  
    - Routes directives to the correct directive handler  
    - Validates directives using ValidationService  
-   - Calls ResolutionService for variable resolution  
+   - Calls ResolutionService for variable resolution within directives
    - Interprets DirectiveResult from handlers and applies specified stateChanges to StateService
    - Supports node transformation through DirectiveResult interface
    - Handlers can provide replacement nodes for transformed output
@@ -227,14 +229,16 @@ Below are the key "services" in the codebase. Each follows the single responsibi
 ### InterpreterService  
    - Orchestrates the main interpret(nodes) pipeline  
    - For each AST node:
-       a) If it's text, store it or pass it along  
+       a) If it's text:
+          - Resolves `{{...}}` variables within the text content (using `ParserServiceClient` and `ResolutionService`).
+          - Adds the (potentially resolved) `TextNode` to the state.
        b) If it's a directive:
-          - Calls DirectiveService for processing
-          - Handles node transformations if provided
-          - Updates state with transformed nodes
+          - Calls DirectiveService for processing.
+          - Handles node transformations based on `DirectiveResult`.
+          - Applies state changes from `DirectiveResult`.
    - Maintains the top-level process flow
    - Supports transformation mode through feature flags
-   - Dependencies: DirectiveService, StateService, ParserService, FileSystemService, PathService, CircularityService
+   - Dependencies: DirectiveService, StateService, ParserService, FileSystemService, PathService, CircularityService, `ParserServiceClientFactory`
 
 ### StateService  
    - Stores variables in maps:
@@ -251,15 +255,16 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Dependencies: StateFactory, StateEventService, StateTrackingService
 
 ### ResolutionService  
-   - Handles all variable interpolation:
-       • Variables ("{{var}}", "{{data.field}}", etc., operating on `VariableReferenceNode` from AST)
+   - Handles variable interpolation **within directives** based on the AST:
+       • Processes `VariableReferenceNode`s found in `InterpolatableValue` arrays.
        • Path expansions ("$HOMEPATH/path")
        • Command references
    - Processes structured field access paths (`Field[]` from AST).
-   - Operates primarily on AST nodes (`MeldNode[]`), minimizing string re-parsing.
+   - Operates primarily on **structured AST nodes** (`InterpolatableValue`, `VariableReferenceNode`), minimizing string re-parsing.
    - Context-aware resolution using `ResolutionContext`.
    - Circular reference detection.
    - Conditionally uses `ParserServiceClient` via a factory for internal string parsing needs (e.g., resolving nested content).
+   - **Note:** Does *not* directly resolve `{{...}}` in plain `TextNode` content anymore (this is handled by `InterpreterService`).
    - Dependencies: `StateService`, `FileSystemService`, `PathService`, (Optional) `ParserServiceClientFactory`
 
 ### CircularityService  
@@ -292,8 +297,8 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Converts final AST and state to desired format (markdown, llm-xml).
    - Uses transformed nodes when available.
    - Handles the rich AST structures containing `InterpolatableValue` arrays.
-   - Performs final resolution of variable references (`{{...}}`) within `TextNode` content before output.
-   - Uses `VariableReferenceResolverClient` via a factory for detailed field access resolution and context-aware value-to-string conversion.
+   - Expects `TextNode` content to be **pre-resolved** by `InterpreterService`.
+   - Uses `VariableReferenceResolverClient` via a factory for detailed field access resolution and context-aware value-to-string conversion during formatting.
    - Dependencies: `StateService`, (Optional) `ResolutionServiceClientFactory` or `IResolutionService`, (optional) `VariableReferenceResolverClientFactory`
 
 ## TESTING INFRASTRUCTURE
@@ -414,7 +419,7 @@ Services in Meld follow a dependency graph managed through the DI container:
 
 4. Pipeline Orchestration:
    - DirectiveService (depends on multiple services)
-   - InterpreterService (orchestrates others)
+   - InterpreterService (orchestrates others, depends on `ParserServiceClientFactory`)
 
 5. Output Generation:
    - OutputService (depends on `StateService`, (optional) `ResolutionServiceClientFactory` or `IResolutionService`, (optional) `VariableReferenceResolverClientFactory`)
