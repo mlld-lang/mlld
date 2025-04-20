@@ -505,15 +505,15 @@ describe('InterpreterService Unit', () => {
       createChildSpy.mockClear();
       
       // >>> Add Debugging <<<
-      console.log(`[DEBUG TEST] Before interpret: createChildSpy calls = ${createChildSpy.mock.calls.length}`);
-      console.log(`[DEBUG TEST] Before interpret: cloneSpy calls = ${cloneSpy.mock.calls.length}`);
+      process.stdout.write(`[DEBUG TEST - handles empty node arrays] Before interpret: createChildSpy calls = ${createChildSpy.mock.calls.length}\n`);
+      process.stdout.write(`[DEBUG TEST - handles empty node arrays] Before interpret: cloneSpy calls = ${cloneSpy.mock.calls.length}\n`);
       // >>> End Debugging <<<
 
       const result = await service.interpret([], { initialState: inputState });
       
       // >>> Add Debugging <<<
-      console.log(`[DEBUG TEST] After interpret: createChildSpy calls = ${createChildSpy.mock.calls.length}`);
-      console.log(`[DEBUG TEST] After interpret: cloneSpy calls = ${cloneSpy.mock.calls.length}`);
+      process.stdout.write(`[DEBUG TEST - handles empty node arrays] After interpret: createChildSpy calls = ${createChildSpy.mock.calls.length}\n`);
+      process.stdout.write(`[DEBUG TEST - handles empty node arrays] After interpret: cloneSpy calls = ${cloneSpy.mock.calls.length}\n`);
       // >>> End Debugging <<<
 
       // Verify createChildState was NOT called on the inputState *during* this interpret call
