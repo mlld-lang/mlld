@@ -571,13 +571,17 @@ describe('InterpreterService Unit', () => {
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('throws error for null node', async () => {
       await expect(service.interpret([null as unknown as MeldNode], { initialState: mockStateService }))
-            .rejects.toThrow(/Cannot read properties of null \(reading \'type\'/);
+            .rejects.toThrow(MeldInterpreterError); // Check for the specific error type
+      await expect(service.interpret([null as unknown as MeldNode], { initialState: mockStateService }))
+            .rejects.toThrow(/No node provided for interpretation/); // Check message
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
     it('throws error for undefined node', async () => {
       await expect(service.interpret([undefined as unknown as MeldNode], { initialState: mockStateService }))
-            .rejects.toThrow(/Cannot read properties of undefined \(reading \'type\'/);
+            .rejects.toThrow(MeldInterpreterError); // Check for the specific error type
+      await expect(service.interpret([undefined as unknown as MeldNode], { initialState: mockStateService }))
+            .rejects.toThrow(/No node provided for interpretation/); // Check message
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
@@ -678,7 +682,7 @@ describe('InterpreterService Unit', () => {
       const mockReplacementNode = createTextNode('Replaced Content', directiveNode.location);
       const directiveResult = {
         state: workingState, 
-        replacement: mockReplacementNode
+        replacement: [mockReplacementNode] // Provide as an array
       };
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue(directiveResult); 
@@ -686,7 +690,8 @@ describe('InterpreterService Unit', () => {
       const finalState = await service.interpret([directiveNode], { initialState: initialTestState });
 
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
-      expect(workingState.transformNode).toHaveBeenCalledWith(0, mockReplacementNode); 
+      // Expect the second argument to be the array containing the replacement node
+      expect(workingState.transformNode).toHaveBeenCalledWith(0, [mockReplacementNode]); 
       expect(finalState).toBe(workingState); 
     });
 
