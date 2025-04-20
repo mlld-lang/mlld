@@ -27,6 +27,7 @@ import { MeldPath, PathContentType, ValidatedResourcePath } from '@core/types/pa
 import type { StateServiceLike } from '@core/shared-service-types.js';
 import { MeldResolutionError, MeldFileNotFoundError, MeldError } from '@core/errors';
 import type { DependencyContainer } from 'tsyringe';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 
 /**
  * Handler for @import directives
@@ -37,6 +38,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'import';
   private debugEnabled: boolean = false;
   private stateTrackingService?: IStateTrackingService;
+  private interpreterServiceClient: IInterpreterServiceClient;
 
   constructor(
     @inject('IValidationService') private validationService: IValidationService,
@@ -46,12 +48,16 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     @inject('IParserService') private parserService: IParserService,
     @inject('IPathService') private pathService: IPathService,
     @inject('DependencyContainer') private container: DependencyContainer,
-    @inject('IInterpreterServiceClient') private interpreterServiceClient?: IInterpreterServiceClient,
+    @inject(InterpreterServiceClientFactory) private interpreterServiceClientFactory: InterpreterServiceClientFactory,
     @inject('IURLContentResolver') private urlContentResolver?: IURLContentResolver,
-    @inject('StateTrackingService') trackingService?: IStateTrackingService
+    @inject('StateTrackingService') stateTrackingService?: IStateTrackingService
   ) {
-    this.stateTrackingService = trackingService;
-    this.debugEnabled = !!trackingService && (process.env.MELD_DEBUG === 'true');
+    this.interpreterServiceClient = this.interpreterServiceClientFactory.createClient();
+    this.debugEnabled = false;
+    if (stateTrackingService) {
+      this.stateTrackingService = stateTrackingService;
+      this.debugEnabled = !!stateTrackingService && process.env.MELD_DEBUG === 'true';
+    }
   }
 
   private getCircularityService(): ICircularityService {
@@ -220,14 +226,6 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       }
 
       // 6. Interpret Content
-      const interpreterServiceClient = this.interpreterServiceClient;
-      if (!interpreterServiceClient) {
-        throw new DirectiveError(
-          'Interpreter service client is not available (injection failed).',
-          this.kind,
-          DirectiveErrorCode.INVALID_CONTEXT
-        );
-      }
       let sourceStateChanges: StateChanges | undefined;
 
       try {
@@ -245,17 +243,17 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // process.stdout.write(`DEBUG: [ImportDirectiveHandler.handle] Created child state ID: ${childState.getId()}, Path: ${childState.getCurrentFilePath()?.originalValue ?? 'N/A'}\\n`);
 
         // ---> Log Before Interpret <-----
-        process.stdout.write(`DEBUG [ImportHandler.handle PRE-INTERPRET] Interpreting AST for: ${resolvedIdentifier}\n`);
+        // process.stdout.write(`DEBUG [ImportHandler.handle PRE-INTERPRET] Interpreting AST for: ${resolvedIdentifier}\n`);
         
         // Use client (now guaranteed to be defined)
-        const interpretedChildState: StateServiceLike = await interpreterServiceClient.interpret(astNodes, 
+        const interpretedChildState: StateServiceLike = await this.interpreterServiceClient.interpret(astNodes, 
           undefined, 
           childState 
         );
 
         // --- DEBUG LOGGING START ---
-        process.stdout.write(`DEBUG [ImportHandler]: Interpreted State ID: ${interpretedChildState.getStateId ? interpretedChildState.getStateId() : 'N/A'}\n`);
-        process.stdout.write(`DEBUG [ImportHandler]: Type of interpretedChildState: ${typeof interpretedChildState}, Keys: ${JSON.stringify(Object.keys(interpretedChildState || {}))}\n`);
+        // process.stdout.write(`DEBUG [ImportHandler]: Interpreted State ID: ${interpretedChildState.getStateId ? interpretedChildState.getStateId() : 'N/A'}\n`);
+        // process.stdout.write(`DEBUG [ImportHandler]: Type of interpretedChildState: ${typeof interpretedChildState}, Keys: ${JSON.stringify(Object.keys(interpretedChildState || {}))}\n`);
         // --- DEBUG LOGGING END ---
 
         // Construct StateChanges manually from the resulting state's variables
@@ -274,23 +272,23 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         };
         // <<< END TRY/CATCH SECTION >>>
         
-        process.stdout.write(`DEBUG [ImportHandler]: allVars object constructed. Keys: ${JSON.stringify(Object.keys(allVars))}\n`);
-        process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.text = ${typeof allVars.text}, isMap: ${allVars.text instanceof Map}\n`);
-        process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.data = ${typeof allVars.data}, isMap: ${allVars.data instanceof Map}\n`);
-        process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.path = ${typeof allVars.path}, isMap: ${allVars.path instanceof Map}\n`);
-        process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.command = ${typeof allVars.command}, isMap: ${allVars.command instanceof Map}\n`);
-        process.stdout.write(`DEBUG [ImportHandler]: allVars.text value = ${JSON.stringify(allVars.text)}\n`);
+        // process.stdout.write(`DEBUG [ImportHandler]: allVars object constructed. Keys: ${JSON.stringify(Object.keys(allVars))}\n`);
+        // process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.text = ${typeof allVars.text}, isMap: ${allVars.text instanceof Map}\n`);
+        // process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.data = ${typeof allVars.data}, isMap: ${allVars.data instanceof Map}\n`);
+        // process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.path = ${typeof allVars.path}, isMap: ${allVars.path instanceof Map}\n`);
+        // process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.command = ${typeof allVars.command}, isMap: ${allVars.command instanceof Map}\n`);
+        // process.stdout.write(`DEBUG [ImportHandler]: allVars.text value = ${JSON.stringify(allVars.text)}\n`);
         // --- DEBUG LOGGING END ---
         
         // Log variable sizes/types before accumulation
-        process.stdout.write(`DEBUG [ImportHandler Var Check]: Text Vars (${allVars.text?.size ?? 0}):\n`);
-        allVars.text?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, length=${JSON.stringify(v.value).length}\n`));
-        process.stdout.write(`DEBUG [ImportHandler Var Check]: Data Vars (${allVars.data?.size ?? 0}):\n`);
-        allVars.data?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, length=${JSON.stringify(v.value).length}\n`));
-        process.stdout.write(`DEBUG [ImportHandler Var Check]: Path Vars (${allVars.path?.size ?? 0}):\n`);
-        allVars.path?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, value=${JSON.stringify(v.value)}\n`));
-        process.stdout.write(`DEBUG [ImportHandler Var Check]: Command Vars (${allVars.command?.size ?? 0}):\n`);
-        allVars.command?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, value=${JSON.stringify(v.value)}\n`));
+        // process.stdout.write(`DEBUG [ImportHandler Var Check]: Text Vars (${allVars.text?.size ?? 0}):\n`);
+        // allVars.text?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, length=${JSON.stringify(v.value).length}\n`));
+        // process.stdout.write(`DEBUG [ImportHandler Var Check]: Data Vars (${allVars.data?.size ?? 0}):\n`);
+        // allVars.data?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, length=${JSON.stringify(v.value).length}\n`));
+        // process.stdout.write(`DEBUG [ImportHandler Var Check]: Path Vars (${allVars.path?.size ?? 0}):\n`);
+        // allVars.path?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, value=${JSON.stringify(v.value)}\n`));
+        // process.stdout.write(`DEBUG [ImportHandler Var Check]: Command Vars (${allVars.command?.size ?? 0}):\n`);
+        // allVars.command?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, value=${JSON.stringify(v.value)}\n`));
 
         // <<< Ensure accumulatedVariables is declared >>>
         const accumulatedVariables: Record<string, VariableDefinition> = {};
@@ -318,7 +316,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // }
 
         // --- DEBUG LOGGING START ---
-        process.stdout.write(`DEBUG [ImportHandler]: Accumulated variable keys: ${JSON.stringify(Object.keys(accumulatedVariables))}\n`);
+        // process.stdout.write(`DEBUG [ImportHandler]: Accumulated variable keys: ${JSON.stringify(Object.keys(accumulatedVariables))}\n`);
         // --- DEBUG LOGGING END ---
 
         if (Object.keys(accumulatedVariables).length > 0) {
@@ -328,8 +326,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             logger.warn(`[ImportDirectiveHandler] Interpretation of ${resolvedIdentifier} completed, but no variables were found in the resulting state. Import will be empty.`);
         }
         // ---> Log sourceStateChanges before passing to helpers
-        const approxSize = JSON.stringify(sourceStateChanges).length;
-        process.stdout.write(`DEBUG [ImportHandler]: Constructed sourceStateChanges (approx size: ${approxSize} chars): ${JSON.stringify(sourceStateChanges).substring(0, 200)}...\n`);
+        // const approxSize = JSON.stringify(sourceStateChanges).length;
+        // process.stdout.write(`DEBUG [ImportHandler]: Constructed sourceStateChanges (approx size: ${approxSize} chars): ${JSON.stringify(sourceStateChanges).substring(0, 200)}...\n`);
 
       } catch (interpretError) {
         const cause = interpretError instanceof Error ? interpretError : new Error(String(interpretError));
@@ -355,21 +353,21 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         if (sourceStateChanges) {
           // Treat [{ name: '*' }] the same as importsList === '*'
           accumulatedStateChanges = this.importAllVariables(sourceStateChanges, importDirectiveLocation, resolvedIdentifier, currentFilePath ?? undefined);
-          process.stdout.write(`DEBUG [ImportHandler]: (Array *) Received from importAllVariables: ${JSON.stringify(accumulatedStateChanges)}\n`);
+          // process.stdout.write(`DEBUG [ImportHandler]: (Array *) Received from importAllVariables: ${JSON.stringify(accumulatedStateChanges)}\n`);
         } else {
            logger.warn(`[ImportDirectiveHandler.handle] Skipping import * (array format) because source interpretation yielded no state changes for ${resolvedIdentifier}.\n`);
         }
       } else if (importsList === '*') { // Handle the simple string case
         if (sourceStateChanges) {
           accumulatedStateChanges = this.importAllVariables(sourceStateChanges, importDirectiveLocation, resolvedIdentifier, currentFilePath ?? undefined);
-          process.stdout.write(`DEBUG [ImportHandler]: (String *) Received from importAllVariables: ${JSON.stringify(accumulatedStateChanges)}\n`);
+          // process.stdout.write(`DEBUG [ImportHandler]: (String *) Received from importAllVariables: ${JSON.stringify(accumulatedStateChanges)}\n`);
         } else {
            logger.warn(`[ImportDirectiveHandler.handle] Skipping import * (string format) because source interpretation yielded no state changes for ${resolvedIdentifier}.\n`);
         }
       } else if (Array.isArray(importsList)) { // Handle named imports
         if (sourceStateChanges) {
           accumulatedStateChanges = await this.processStructuredImports(importsList, sourceStateChanges, importDirectiveLocation, resolvedIdentifier, currentFilePath ?? undefined);
-          process.stdout.write(`DEBUG [ImportHandler]: Received from processStructuredImports: ${JSON.stringify(accumulatedStateChanges)}\n`);
+          // process.stdout.write(`DEBUG [ImportHandler]: Received from processStructuredImports: ${JSON.stringify(accumulatedStateChanges)}\n`);
         } else {
            logger.warn(`[ImportDirectiveHandler.handle] Skipping structured import because source interpretation yielded no state changes for ${resolvedIdentifier}.\n`);
         }
@@ -466,7 +464,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       currentFilePath: string | undefined
     ): Record<string, VariableDefinition> { 
     // ---> Log entry and input
-    process.stdout.write(`DEBUG [importAllVariables]: ENTER. sourceStateChanges.variables: ${JSON.stringify(sourceStateChanges?.variables)}\n`);
+    // process.stdout.write(`DEBUG [importAllVariables]: ENTER. sourceStateChanges.variables: ${JSON.stringify(sourceStateChanges?.variables)}\n`);
     const targetStateChanges: Record<string, VariableDefinition> = {}; 
 
     if (!sourceStateChanges || !sourceStateChanges.variables) {
@@ -477,7 +475,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     try {
       for (const [key, originalVarDef] of Object.entries(sourceStateChanges.variables)) {
          // ---> Log loop iteration
-         process.stdout.write(`DEBUG [importAllVariables]: Processing key: ${key}, Def: ${JSON.stringify(originalVarDef)}\n`);
+         // process.stdout.write(`DEBUG [importAllVariables]: Processing key: ${key}, Def: ${JSON.stringify(originalVarDef)}\n`);
         try {
           // Create new metadata for the imported variable
           const metadata: VariableMetadata = {
@@ -509,7 +507,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       logger.warn('Error during importAllVariables outer try', { error });
     }
     // ---> Log return value
-    process.stdout.write(`DEBUG [importAllVariables]: RETURN. targetStateChanges: ${JSON.stringify(targetStateChanges)}\n`);
+    // process.stdout.write(`DEBUG [importAllVariables]: RETURN. targetStateChanges: ${JSON.stringify(targetStateChanges)}\n`);
     return targetStateChanges; // Return the populated map
   }
 
@@ -521,7 +519,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     currentFilePath: string | undefined
   ): Promise<Record<string, VariableDefinition>> { 
     // ---> Log entry and input
-    process.stdout.write(`DEBUG [processStructuredImports]: ENTER. sourceStateChanges.variables: ${JSON.stringify(sourceStateChanges?.variables)}\n`);
+    // process.stdout.write(`DEBUG [processStructuredImports]: ENTER. sourceStateChanges.variables: ${JSON.stringify(sourceStateChanges?.variables)}\n`);
     const targetStateChanges: Record<string, VariableDefinition> = {}; 
 
      if (!sourceStateChanges || !sourceStateChanges.variables) {
@@ -531,14 +529,14 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
     for (const item of imports) {
       // ---> Log loop iteration
-      process.stdout.write(`DEBUG [processStructuredImports]: Processing item: ${JSON.stringify(item)}\n`);
+      // process.stdout.write(`DEBUG [processStructuredImports]: Processing item: ${JSON.stringify(item)}\n`);
       try {
         const { name, alias } = item;
         const targetName = alias || name;
 
         const originalVarDef = sourceStateChanges.variables[name];
         // ---> Log found definition
-        process.stdout.write(`DEBUG [processStructuredImports]: Found originalVarDef for ${name}: ${JSON.stringify(originalVarDef)}\n`);
+        // process.stdout.write(`DEBUG [processStructuredImports]: Found originalVarDef for ${name}: ${JSON.stringify(originalVarDef)}\n`);
 
         if (originalVarDef) {
           // Create new metadata
@@ -571,7 +569,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       }
     }
     // ---> Log return value
-    process.stdout.write(`DEBUG [processStructuredImports]: RETURN. targetStateChanges: ${JSON.stringify(targetStateChanges)}\n`);
+    // process.stdout.write(`DEBUG [processStructuredImports]: RETURN. targetStateChanges: ${JSON.stringify(targetStateChanges)}\n`);
     return targetStateChanges; // Return the populated map
   }
 }

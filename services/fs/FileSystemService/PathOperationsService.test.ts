@@ -1,29 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import path from 'path';
 
 describe('PathOperationsService', () => {
-  const helpers = TestContextDI.createTestHelpers();
   let service: IPathOperationsService;
-  let context: TestContextDI;
 
-  beforeEach(async () => {
-    // Use the helper
-    context = helpers.setupWithStandardMocks();
-    // Await initialization implicitly
-    await context.resolve('IFileSystemService');
-
-    // Resolve the service (expecting real implementation)
-    service = await context.resolve('IPathOperationsService');
-    
-    // Verify we got the real service
-    expect(service).toBeInstanceOf(PathOperationsService);
-  });
-
-  afterEach(async () => {
-    await context?.cleanup();
+  beforeEach(() => {
+    // Instantiate service directly
+    service = new PathOperationsService();
   });
 
   describe('Path operations', () => {

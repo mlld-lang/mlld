@@ -209,6 +209,28 @@ export class TestContainerHelper {
   }
   
   /**
+   * Disposes the underlying container, cleaning up all registrations and instances.
+   * This is the preferred method for full cleanup after tests.
+   */
+  dispose(): void {
+    try {
+      if (this.childContainer && typeof this.childContainer.dispose === 'function') {
+        this.childContainer.dispose();
+      } else {
+        console.warn('[TestContainerHelper] Underlying container does not have a dispose method or is not available.');
+        // Fallback or alternative cleanup if needed
+        this.clearInstances(); // Or potentially reset() depending on desired behavior
+      }
+      
+      // Clear tracked tokens and instances after disposal
+      this.registeredTokens.clear();
+      this.instanceTracker.clear();
+    } catch (error) {
+      console.error('[TestContainerHelper] Error during container disposal:', error);
+    }
+  }
+  
+  /**
    * Resolves a service from the container
    * 
    * @param token The token to resolve

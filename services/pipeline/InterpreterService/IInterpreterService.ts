@@ -69,7 +69,7 @@ export interface InterpreterOptions {
  * - DirectiveServiceLike: For handling individual directives
  * - StateServiceLike: For maintaining state during interpretation
  */
-interface IInterpreterService {
+export interface IInterpreterService {
   /**
    * Check if this service can handle transformations.
    * 
@@ -123,7 +123,7 @@ interface IInterpreterService {
     node: MeldNode,
     state: IStateService,
     options?: InterpreterOptions
-  ): Promise<IStateService>;
+  ): Promise<[IStateService, DirectiveResult | undefined]>;
 
   /**
    * Create a child interpretation context (state) from a parent state.

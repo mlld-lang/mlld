@@ -28,7 +28,8 @@ export class CircularityService implements ICircularityService {
   private readonly MAX_SAME_FILE_IMPORTS = 3;
 
   constructor() {
-    process.stdout.write(`DEBUG [CONSTRUCTOR]: CircularityService - Instance created.\n`);
+    // this.debugEnabled = process.env.MELD_DEBUG === 'true';
+    // process.stdout.write(`DEBUG [CONSTRUCTOR]: CircularityService - Instance created.\n`);
   }
 
   /**
@@ -198,11 +199,14 @@ export class CircularityService implements ICircularityService {
   isInStack(filePath: string): boolean {
     const normalizedPath = this.normalizePath(filePath);
     
-    process.stdout.write(`DEBUG: [CircularityService.isInStack] Checking filePath="${filePath}", normalizedPath="${normalizedPath}", stack=${JSON.stringify(this.importStack)}\n`);
-    
-    // First check exact match
-    const exactMatchFound = this.importStack.includes(normalizedPath);
-    process.stdout.write(`DEBUG: [CircularityService.isInStack] Checking for exact match: normalizedPath="${normalizedPath}", stack=${JSON.stringify(this.importStack)}, found=${exactMatchFound}\n`);
+    // process.stdout.write(`DEBUG: [CircularityService.isInStack] Checking filePath="${filePath}", normalizedPath="${normalizedPath}", stack=${JSON.stringify(this.importStack)}\n`);
+
+    const exactMatchFound = this.importStack.some(
+      (item) => item.replace(/\\/g, '/') === normalizedPath
+    );
+
+    // process.stdout.write(`DEBUG: [CircularityService.isInStack] Checking for exact match: normalizedPath="${normalizedPath}", stack=${JSON.stringify(this.importStack)}, found=${exactMatchFound}\n`);
+
     if (exactMatchFound) {
       return true;
     }

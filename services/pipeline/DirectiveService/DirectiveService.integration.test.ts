@@ -93,9 +93,10 @@ describe('DirectiveService Integration Tests', () => {
         error: vi.fn(),
         level: 'info' 
     };
-    // Register using the interface type
     testContainer.register<ITestLogger>('ILogger', { useValue: mockLogger });
     
+    testContainer.registerInstance('DependencyContainer', testContainer);
+
     // Resolve services from the test container AFTER registration
     directiveService = testContainer.resolve(DirectiveService);
     stateService = testContainer.resolve<IStateService>('IStateService');

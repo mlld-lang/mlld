@@ -76,10 +76,6 @@ export class StateService implements IStateService {
     @inject('StateTrackingServiceClientFactory') trackingServiceClientFactory?: StateTrackingServiceClientFactory,
     parentState?: IStateService
   ) {
-    // ---> Constructor Log <---
-    process.stdout.write(`DEBUG [CONSTRUCTOR]: StateService - Instance created.\n`);
-    // ---> End Constructor Log <---
-
     if (stateFactory) {
       this.stateFactory = stateFactory;
       this.eventService = eventService;

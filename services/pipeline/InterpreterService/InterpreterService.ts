@@ -84,8 +84,6 @@ export class InterpreterService implements IInterpreterService {
     @inject('IStateService') stateService?: IStateService,
     @inject(ParserServiceClientFactory) parserClientFactory?: ParserServiceClientFactory
   ) {
-    process.stdout.write(`DEBUG [CONSTRUCTOR]: InterpreterService - Instance created.\n`);
-
     this.resolutionService = resolutionService;
     this.pathService = pathService;
     this.directiveClientFactory = directiveServiceClientFactory;
@@ -297,34 +295,56 @@ export class InterpreterService implements IInterpreterService {
     let lastGoodState: IStateService | undefined = undefined;
 
     try {
-      // Initialize state
-      if (initialState) {
-        currentState = initialState;
-        logger.debug('Using provided initial state for interpretation', { stateId: currentState.getStateId() });
-      } else if (opts.initialState) {
-        if (opts.mergeState) {
-          currentState = opts.initialState.createChildState();
+      // Initialize state - Move initialization into its own try block
+      try {
+        if (initialState) {
+          currentState = initialState;
+          logger.debug('Using provided initial state for interpretation', { stateId: currentState.getStateId() });
+        } else if (opts.initialState) {
+          if (opts.mergeState) {
+            currentState = opts.initialState.createChildState();
+          } else {
+            currentState = this.stateService!.createChildState();
+          }
+          logger.warn('Using initialState from options (deprecated), prefer passing initialState parameter.');
         } else {
-          currentState = this.stateService!.createChildState();
+          if (!this.stateService) {
+             throw new MeldInterpreterError('StateService is not available for creating initial state', 'initialization', undefined, { severity: ErrorSeverity.Fatal });
+          }
+          currentState = this.stateService.createChildState();
+          logger.debug('Created new root state for interpretation', { stateId: currentState.getStateId() });
         }
-        logger.warn('Using initialState from options (deprecated), prefer passing initialState parameter.');
-      } else {
-        if (!this.stateService) {
-           throw new MeldInterpreterError('StateService is not available for creating initial state', 'initialization', undefined, { severity: ErrorSeverity.Fatal });
+
+        if (!currentState) {
+          throw new MeldInterpreterError(
+            'Failed to initialize state for interpretation',
+            'initialization',
+            undefined,
+            { severity: ErrorSeverity.Fatal }
+          );
         }
-        currentState = this.stateService.createChildState();
-        logger.debug('Created new root state for interpretation', { stateId: currentState.getStateId() });
+      } catch (initializationError) {
+        // Fix 6 & 7: Catch errors during initialization and re-throw immediately
+        logger.error('Fatal error during interpreter state initialization', { error: initializationError });
+        // Re-throw the original error to preserve its type (Error or MeldInterpreterError)
+        throw initializationError; 
       }
 
-      if (!currentState) {
+      // --- Proceed only if state initialization was successful ---
+      // <<< ADD CHECK FOR VALID currentState >>>
+      if (!currentState || typeof currentState.isTransformationEnabled !== 'function') {
+        // If state initialization failed but didn't throw in a way caught above,
+        // or if initialState was invalid, throw a specific error here.
+        logger.error('InterpreterService: currentState is invalid after initialization attempt.', { state: currentState });
         throw new MeldInterpreterError(
-          'Failed to initialize state for interpretation',
+          'Invalid state after initialization attempt. Cannot proceed.',
           'initialization',
           undefined,
           { severity: ErrorSeverity.Fatal }
         );
       }
-
+      
+      // Fix 6 & 7: Move these checks after successful initialization AND validation
       if (opts.filePath) {
         currentState.setCurrentFilePath(opts.filePath);
       }
@@ -346,10 +366,42 @@ export class InterpreterService implements IInterpreterService {
       lastGoodState = initialSnapshot;
 
       for (const node of nodes) {
+        let nodeResult: DirectiveResult | undefined;
         try {
           const stateBeforeNode: IStateService | null = currentState;
 
-          currentState = await this.interpretNode(node, currentState, opts);
+          // Step 1: Modify interpretNode call to receive tuple
+          const [newState, result] = await this.interpretNode(node, currentState, opts);
+          currentState = newState;
+          nodeResult = result; // Store result for potential state changes
+          
+          // Step 1: Apply state changes AFTER interpretNode returns
+          if (nodeResult?.stateChanges?.variables) {
+            const changes = nodeResult.stateChanges.variables;
+            logger.debug(`Applying ${Object.keys(changes).length} state changes from node ${node.nodeId}`);
+            for (const [key, variable] of Object.entries(changes)) {
+              // We assume variable is already a valid MeldVariable structure here
+              // as constructed by the handler/DirectiveService
+              currentState.setVariable(variable);
+            }
+          }
+
+          // Step 1: Handle replacements AFTER interpretNode returns (moved from interpretNode)
+          if (nodeResult?.replacement !== undefined) {
+            if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) { 
+              const nodesBefore = currentState.getTransformedNodes(); 
+              const index = nodesBefore.findIndex(n => n.nodeId === node.nodeId);
+  
+              if (index !== -1) {
+                // Use replacementNodes directly (already Array<MeldNode> | undefined)
+                const replacementNodes = nodeResult.replacement;
+                currentState.transformNode(index, replacementNodes.length > 0 ? replacementNodes : undefined);
+                logger.debug(`Applied ${replacementNodes.length} replacement nodes for original node ${node.nodeId} at index ${index}`);
+              } else {
+                 process.stderr.write(`WARN: [InterpreterService Loop] Original node (ID: ${node.nodeId}) not found for replacement.\n`);
+              }
+            } 
+          } 
           
           lastGoodState = currentState.clone() as IStateService;
         } catch (error) {
@@ -369,6 +421,18 @@ export class InterpreterService implements IInterpreterService {
         }
       }
 
+      // <<< ADD CHECK FOR VALID currentState BEFORE MERGE >>>
+      if (!currentState || typeof currentState.mergeChildState !== 'function') {
+        // This shouldn't happen if the loop completed, but adds safety
+        logger.error('InterpreterService: currentState is invalid before final merge.', { state: currentState });
+        throw new MeldInterpreterError(
+          'Invalid final state before merging.',
+          'internal_error',
+          undefined,
+          { severity: ErrorSeverity.Fatal }
+        );
+      }
+      
       if (opts.initialState && opts.mergeState) {
         if (typeof opts.initialState.mergeChildState === 'function') {
           (opts.initialState as IStateService).mergeChildState(currentState);
@@ -394,7 +458,7 @@ export class InterpreterService implements IInterpreterService {
     node: MeldNode,
     state: IStateService,
     options?: InterpreterOptions
-  ): Promise<IStateService> {
+  ): Promise<[IStateService, DirectiveResult | undefined]> {
     this.ensureInitialized();
 
     if (!node) {
@@ -421,7 +485,7 @@ export class InterpreterService implements IInterpreterService {
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
     let currentState = state;
-    let replacementNodes: MeldNode[] | undefined = undefined;
+    let directiveResult: DirectiveResult | undefined = undefined;
 
     switch (node.type) {
       case 'Text':
@@ -541,25 +605,7 @@ export class InterpreterService implements IInterpreterService {
         };
 
         // Call the directive handler (now returns new DirectiveResult)
-        const directiveResult: DirectiveResult = await this.callDirectiveHandleDirective(directiveNode, handlerContext);
-        
-        // Extract replacement nodes directly from the result
-        replacementNodes = directiveResult.replacement;
-
-        // Apply replacement nodes if transformation is enabled
-        if (replacementNodes !== undefined) {
-          if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) { 
-            const nodesBefore = currentState.getTransformedNodes(); 
-            const index = nodesBefore.findIndex(n => n.nodeId === node.nodeId);
-
-            if (index !== -1) {
-              // Use replacementNodes directly (already Array<MeldNode> | undefined)
-              currentState.transformNode(index, replacementNodes.length > 0 ? replacementNodes : undefined);
-            } else {
-               process.stderr.write(`WARN: [InterpreterService Directive Case] Original node (ID: ${node.nodeId}) not found for replacement.\n`);
-            }
-          } 
-        }
+        directiveResult = await this.callDirectiveHandleDirective(directiveNode, handlerContext);
         
         break;
 
@@ -571,7 +617,8 @@ export class InterpreterService implements IInterpreterService {
         );
     }
 
-    return currentState;
+    // Step 1: Return the tuple
+    return [currentState, directiveResult];
   }
 
   async createChildContext(

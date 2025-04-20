@@ -97,12 +97,14 @@ describe('PathService', () => {
 
     // Create child container and register mocks directly
     testContainer = container.createChildContainer();
-    testContainer.registerInstance(ProjectPathResolver, projectPathResolver); // Register instance
-    testContainer.registerInstance(FileSystemServiceClientFactory, mockFileSystemClientFactory); // Register instance using CLASS token
-    testContainer.registerInstance('IURLContentResolver', mockUrlContentResolver); // Register instance
-
-    // Deeper mocks (IFileSystemService etc.) are no longer needed here, 
-    // because the mock factory above prevents the real factory and its dependencies from being resolved.
+    testContainer.registerInstance(ProjectPathResolver, projectPathResolver); 
+    testContainer.registerInstance(FileSystemServiceClientFactory, mockFileSystemClientFactory); 
+    testContainer.registerInstance('IURLContentResolver', mockUrlContentResolver); 
+    // Register a basic logger mock
+    testContainer.registerInstance('ILogger', { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() });
+    
+    // >>> ADD CONTAINER REGISTRATION <<<
+    testContainer.registerInstance('DependencyContainer', testContainer);
     
     // Resolve the service using the test container
     service = testContainer.resolve(PathService);
@@ -113,6 +115,8 @@ describe('PathService', () => {
   });
 
   afterEach(async () => {
+    // >>> ADD CONTAINER DISPOSAL <<<
+    testContainer?.dispose();
     vi.restoreAllMocks();
   });
 

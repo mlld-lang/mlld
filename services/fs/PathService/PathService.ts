@@ -76,10 +76,6 @@ export class PathService implements IPathService {
     @inject(delay(() => FileSystemServiceClientFactory)) private readonly fsClientFactory: FileSystemServiceClientFactory,
     @inject('IURLContentResolver') private readonly urlContentResolver?: IURLContentResolver
   ) {
-    // ---> Constructor Log <---
-    process.stdout.write(`DEBUG [CONSTRUCTOR]: PathService - Instance created.\n`);
-    // ---> End Constructor Log <---
-
     const homeEnv = process.env.HOME || process.env.USERPROFILE;
     if (!homeEnv && !this.testMode) {
       throw new Error('Unable to determine home directory: HOME or USERPROFILE environment variables are not set');

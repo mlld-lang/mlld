@@ -3,18 +3,13 @@ import { mockDeep, mockReset } from 'vitest-mock-extended';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import type * as fs from 'fs/promises';
 import type * as path from 'path';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
 describe('ProjectPathResolver', () => {
   let resolver: ProjectPathResolver;
-  let context: TestContextDI;
   let mockFs: ReturnType<typeof mockDeep<typeof fs>>;
   let mockPath: ReturnType<typeof mockDeep<typeof path>>;
   
   beforeEach(async () => {
-    // Create isolated test context
-    context = TestContextDI.createIsolated();
-    
     // Create mocks using vitest-mock-extended
     mockFs = mockDeep<typeof fs>();
     mockPath = mockDeep<typeof path>();
@@ -22,10 +17,6 @@ describe('ProjectPathResolver', () => {
     // Reset mocks
     mockReset(mockFs);
     mockReset(mockPath);
-    
-    // Register mocks with the context
-    context.registerMock('fs/promises', mockFs);
-    context.registerMock('path', mockPath);
     
     // Setup path mocks with default implementations
     mockPath.join.mockImplementation((...args) => args.join('/'));
@@ -41,15 +32,8 @@ describe('ProjectPathResolver', () => {
     mockPath.parse.mockReturnValue({ root: '/' } as any);
     mockPath.isAbsolute.mockImplementation((p) => p.startsWith('/'));
     
-    // Initialize context
-    await context.initialize();
-    
-    // Get service instance using DI
-    resolver = await context.container.resolve('ProjectPathResolver');
-  });
-  
-  afterEach(async () => {
-    await context?.cleanup();
+    // Instantiate resolver directly
+    resolver = new ProjectPathResolver();
   });
   
   it('should use meld.json directory when found', async () => {

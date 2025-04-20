@@ -155,7 +155,7 @@ export class DirectiveService implements IDirectiveService {
     // this.registerDefaultHandlers();
 
     // ---> Constructor Log <---
-    process.stdout.write(`DEBUG [CONSTRUCTOR]: DirectiveService - Instance created.\n`);
+    // process.stdout.write(`DEBUG [CONSTRUCTOR]: DirectiveService - Instance created.\n`);
     // ---> End Constructor Log <---
 
     // Assign services with checks

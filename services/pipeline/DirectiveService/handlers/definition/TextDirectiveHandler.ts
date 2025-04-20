@@ -104,10 +104,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
               resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
           } else if (isInterpolatableValueArray(value)) {
               // Resolve the array of nodes into a single string
-              // logger.debug('Text value is InterpolatableValue, resolving nodes...');
               process.stdout.write(`DEBUG: [TextDirectiveHandler] Value is InterpolatableValue Array for identifier: ${identifier}\n`);
               resolvedValue = await this.resolutionService.resolveNodes(value, resolutionContext);
-              // logger.debug('Resolved InterpolatableValue to string:', resolvedValue);
               process.stdout.write(`DEBUG: [TextDirectiveHandler] Resolved InterpolatableValue for ${identifier} to: \"${resolvedValue}\"\n`);
           } else {
              throw new DirectiveError(
@@ -257,8 +255,6 @@ export class TextDirectiveHandler implements IDirectiveHandler {
               errorDetailsContext
           );
       }
-
-      process.stdout.write(`DEBUG: [TextDirectiveHandler] Resolved value for ${identifier} (before creating change): "${resolvedValue}"\n`);
 
       const metadata: VariableMetadata = {
           origin: VariableOrigin.DIRECT_DEFINITION,

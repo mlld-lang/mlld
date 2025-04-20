@@ -126,6 +126,9 @@ describe('DirectiveService', () => {
     testContainer.registerInstance('ICircularityService', mockCircularityService);
     testContainer.registerInstance('IResolutionService', mockResolutionService);
     testContainer.registerInstance('ILogger', { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() }); // Basic logger mock
+    testContainer.registerInstance('IInterpreterService', { interpret: vi.fn(), createChildContext: vi.fn() }); // Basic mock
+
+    testContainer.registerInstance('DependencyContainer', testContainer);
 
     // --- Resolve Service Under Test ---
     service = testContainer.resolve(DirectiveService);
