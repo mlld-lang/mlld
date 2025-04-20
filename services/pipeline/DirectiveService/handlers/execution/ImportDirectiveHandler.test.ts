@@ -8,7 +8,7 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { ImportDirectiveData } from '@core/syntax/types/directives.js';
 import type { MeldNode, DirectiveNode, StructuredPath, SourceLocation, VariableReferenceNode, InterpolatableValue, TextNode } from '@core/syntax/types/nodes.js';
-import { VariableOrigin, type TextVariable, type MeldVariable, type VariableMetadata, type IPathVariable, VariableType, type DataVariable } from '@core/types/variables.js';
+import { VariableOrigin, type TextVariable, type DataVariable, type IPathVariable, type CommandVariable, type MeldVariable, type VariableMetadata, VariableType } from '@core/types/variables.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError, ResolutionErrorDetails } from '@core/errors/MeldResolutionError.js';
@@ -236,36 +236,20 @@ describe('ImportDirectiveHandler', () => {
         createMeldPath(node.directive.path.raw, unsafeCreateValidatedResourcePath(resolvedProjectPath), true)
       );
       
-      const mockInterpretedState = {
+      // <<< Use Manual Mock Object for interpret result >>>
+      const mockInterpretedState: IStateService = {
           getStateId: vi.fn().mockReturnValue('mock-interpreted-state-id-project'), 
-          getAllTextVars: vi.fn().mockReturnValue(new Map()), 
-          getAllDataVars: vi.fn().mockReturnValue(new Map()), 
-          getAllPathVars: vi.fn().mockReturnValue(new Map()), 
-          getAllCommands: vi.fn().mockReturnValue(new Map()), 
-          getVariable: vi.fn(),
-          setVariable: vi.fn(),
-          hasVariable: vi.fn().mockReturnValue(false),
-          removeVariable: vi.fn().mockResolvedValue(false),
-          getCurrentFilePath: vi.fn().mockReturnValue('/project/path/test.meld'),
-          setCurrentFilePath: vi.fn(),
-          getNodes: vi.fn().mockReturnValue([]),
-          addNode: vi.fn(),
+          getAllTextVars: vi.fn().mockReturnValue(new Map<string, TextVariable>()), 
+          getAllDataVars: vi.fn().mockReturnValue(new Map<string, DataVariable>()), 
+          getAllPathVars: vi.fn().mockReturnValue(new Map<string, IPathVariable>()), 
+          getAllCommands: vi.fn().mockReturnValue(new Map<string, CommandVariable>()), 
           getTransformedNodes: vi.fn().mockReturnValue([]),
-          setTransformedNodes: vi.fn(),
-          transformNode: vi.fn(),
-          isTransformationEnabled: vi.fn().mockReturnValue(true),
-          setTransformationEnabled: vi.fn(),
-          getTransformationOptions: vi.fn().mockReturnValue({ enabled: true }),
-          setTransformationOptions: vi.fn(),
-          clone: vi.fn(),
-          createChildState: vi.fn(),
-          mergeChildState: vi.fn(),
-          getParentState: vi.fn().mockReturnValue(undefined),
-          getInternalStateNode: vi.fn(), // Mock essential methods
-      };
+          createChildState: vi.fn(), getCurrentFilePath: vi.fn().mockReturnValue('/project/path/test.meld'), isTransformationEnabled: vi.fn().mockReturnValue(false), setVariable: vi.fn(), mergeChildState: vi.fn(), getVariable: vi.fn(), setCurrentFilePath: vi.fn(), clone: vi.fn(), getNodes: vi.fn().mockReturnValue([]), addNode: vi.fn(), setTransformedNodes: vi.fn(), transformNode: vi.fn(), setTransformationEnabled: vi.fn(), getTransformationOptions: vi.fn().mockReturnValue({ enabled: false }), setTransformationOptions: vi.fn(), getParentState: vi.fn().mockReturnValue(undefined), getInternalStateNode: vi.fn(), hasVariable: vi.fn().mockReturnValue(false), removeVariable: vi.fn().mockResolvedValue(false), setCommandVar: vi.fn(), setDataVar: vi.fn(), setPathVar: vi.fn(), setTextVar: vi.fn(), hasTransformationSupport: vi.fn().mockReturnValue(true), getCommand: vi.fn(), getCommandVar: vi.fn(), getDataVar: vi.fn(), getPathVar: vi.fn(), getTextVar: vi.fn(), getLocalChanges: vi.fn().mockReturnValue([]), hasLocalChanges: vi.fn().mockReturnValue(false), addImport: vi.fn(), getImports: vi.fn().mockReturnValue(new Set()), hasImport: vi.fn().mockReturnValue(false), removeImport: vi.fn(), reset: vi.fn(), setEventService: vi.fn(), setImmutable: vi.fn(), get isImmutable(): boolean { return false; }, setTrackingService: vi.fn(),
+      } as unknown as IStateService;
+
       const interpretSpy = vi.spyOn(interpreterServiceClient, 'interpret');
       interpretSpy.mockReset();
-      interpretSpy.mockResolvedValue(mockInterpretedState as unknown as IStateService);
+      interpretSpy.mockResolvedValue(mockInterpretedState);
       
       await handler.handle(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path, expect.anything());      
@@ -280,17 +264,20 @@ describe('ImportDirectiveHandler', () => {
       
       vi.spyOn(resolutionService, 'resolveInContext').mockResolvedValueOnce('$~/examples/basic.meld'); 
       
-      const mockInterpretedState = {
+      // <<< Use Manual Mock Object for interpret result >>>
+      const mockInterpretedState: IStateService = {
           getStateId: vi.fn().mockReturnValue('mock-interpreted-state-id-tilde'), 
-          getAllTextVars: vi.fn().mockReturnValue(new Map()), 
-          getAllDataVars: vi.fn().mockReturnValue(new Map()), 
-          getAllPathVars: vi.fn().mockReturnValue(new Map()), 
-          getAllCommands: vi.fn().mockReturnValue(new Map()), 
-          getVariable: vi.fn(), setVariable: vi.fn(), hasVariable: vi.fn().mockReturnValue(false), removeVariable: vi.fn().mockResolvedValue(false), getCurrentFilePath: vi.fn().mockReturnValue('/home/user/test.meld'), setCurrentFilePath: vi.fn(), getNodes: vi.fn().mockReturnValue([]), addNode: vi.fn(), getTransformedNodes: vi.fn().mockReturnValue([]), setTransformedNodes: vi.fn(), transformNode: vi.fn(), isTransformationEnabled: vi.fn().mockReturnValue(true), setTransformationEnabled: vi.fn(), getTransformationOptions: vi.fn().mockReturnValue({ enabled: true }), setTransformationOptions: vi.fn(), clone: vi.fn(), createChildState: vi.fn(), mergeChildState: vi.fn(), getParentState: vi.fn().mockReturnValue(undefined), getInternalStateNode: vi.fn(),
-      };
+          getAllTextVars: vi.fn().mockReturnValue(new Map<string, TextVariable>()), 
+          getAllDataVars: vi.fn().mockReturnValue(new Map<string, DataVariable>()), 
+          getAllPathVars: vi.fn().mockReturnValue(new Map<string, IPathVariable>()), 
+          getAllCommands: vi.fn().mockReturnValue(new Map<string, CommandVariable>()), 
+          getTransformedNodes: vi.fn().mockReturnValue([]),
+          createChildState: vi.fn(), getCurrentFilePath: vi.fn().mockReturnValue('/home/user/test.meld'), isTransformationEnabled: vi.fn().mockReturnValue(false), setVariable: vi.fn(), mergeChildState: vi.fn(), getVariable: vi.fn(), setCurrentFilePath: vi.fn(), clone: vi.fn(), getNodes: vi.fn().mockReturnValue([]), addNode: vi.fn(), setTransformedNodes: vi.fn(), transformNode: vi.fn(), setTransformationEnabled: vi.fn(), getTransformationOptions: vi.fn().mockReturnValue({ enabled: false }), setTransformationOptions: vi.fn(), getParentState: vi.fn().mockReturnValue(undefined), getInternalStateNode: vi.fn(), hasVariable: vi.fn().mockReturnValue(false), removeVariable: vi.fn().mockResolvedValue(false), setCommandVar: vi.fn(), setDataVar: vi.fn(), setPathVar: vi.fn(), setTextVar: vi.fn(), hasTransformationSupport: vi.fn().mockReturnValue(true), getCommand: vi.fn(), getCommandVar: vi.fn(), getDataVar: vi.fn(), getPathVar: vi.fn(), getTextVar: vi.fn(), getLocalChanges: vi.fn().mockReturnValue([]), hasLocalChanges: vi.fn().mockReturnValue(false), addImport: vi.fn(), getImports: vi.fn().mockReturnValue(new Set()), hasImport: vi.fn().mockReturnValue(false), removeImport: vi.fn(), reset: vi.fn(), setEventService: vi.fn(), setImmutable: vi.fn(), get isImmutable(): boolean { return false; }, setTrackingService: vi.fn(),
+      } as unknown as IStateService;
+
       const interpretSpy = vi.spyOn(interpreterServiceClient, 'interpret');
       interpretSpy.mockReset();
-      interpretSpy.mockResolvedValue(mockInterpretedState as unknown as IStateService);
+      interpretSpy.mockResolvedValue(mockInterpretedState);
       
       await handler.handle(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path, expect.anything());      
@@ -305,17 +292,20 @@ describe('ImportDirectiveHandler', () => {
       
       vi.spyOn(resolutionService, 'resolveInContext').mockResolvedValueOnce('$HOMEPATH/examples/basic.meld'); 
       
-      const mockInterpretedState = {
+      // <<< Use Manual Mock Object for interpret result >>>
+      const mockInterpretedState: IStateService = {
           getStateId: vi.fn().mockReturnValue('mock-interpreted-state-id-home'), 
-          getAllTextVars: vi.fn().mockReturnValue(new Map()), 
-          getAllDataVars: vi.fn().mockReturnValue(new Map()), 
-          getAllPathVars: vi.fn().mockReturnValue(new Map()), 
-          getAllCommands: vi.fn().mockReturnValue(new Map()), 
-          getVariable: vi.fn(), setVariable: vi.fn(), hasVariable: vi.fn().mockReturnValue(false), removeVariable: vi.fn().mockResolvedValue(false), getCurrentFilePath: vi.fn().mockReturnValue('/home/user/test.meld'), setCurrentFilePath: vi.fn(), getNodes: vi.fn().mockReturnValue([]), addNode: vi.fn(), getTransformedNodes: vi.fn().mockReturnValue([]), setTransformedNodes: vi.fn(), transformNode: vi.fn(), isTransformationEnabled: vi.fn().mockReturnValue(true), setTransformationEnabled: vi.fn(), getTransformationOptions: vi.fn().mockReturnValue({ enabled: true }), setTransformationOptions: vi.fn(), clone: vi.fn(), createChildState: vi.fn(), mergeChildState: vi.fn(), getParentState: vi.fn().mockReturnValue(undefined), getInternalStateNode: vi.fn(),
-      };
+          getAllTextVars: vi.fn().mockReturnValue(new Map<string, TextVariable>()), 
+          getAllDataVars: vi.fn().mockReturnValue(new Map<string, DataVariable>()), 
+          getAllPathVars: vi.fn().mockReturnValue(new Map<string, IPathVariable>()), 
+          getAllCommands: vi.fn().mockReturnValue(new Map<string, CommandVariable>()), 
+          getTransformedNodes: vi.fn().mockReturnValue([]),
+          createChildState: vi.fn(), getCurrentFilePath: vi.fn().mockReturnValue('/home/user/test.meld'), isTransformationEnabled: vi.fn().mockReturnValue(false), setVariable: vi.fn(), mergeChildState: vi.fn(), getVariable: vi.fn(), setCurrentFilePath: vi.fn(), clone: vi.fn(), getNodes: vi.fn().mockReturnValue([]), addNode: vi.fn(), setTransformedNodes: vi.fn(), transformNode: vi.fn(), setTransformationEnabled: vi.fn(), getTransformationOptions: vi.fn().mockReturnValue({ enabled: false }), setTransformationOptions: vi.fn(), getParentState: vi.fn().mockReturnValue(undefined), getInternalStateNode: vi.fn(), hasVariable: vi.fn().mockReturnValue(false), removeVariable: vi.fn().mockResolvedValue(false), setCommandVar: vi.fn(), setDataVar: vi.fn(), setPathVar: vi.fn(), setTextVar: vi.fn(), hasTransformationSupport: vi.fn().mockReturnValue(true), getCommand: vi.fn(), getCommandVar: vi.fn(), getDataVar: vi.fn(), getPathVar: vi.fn(), getTextVar: vi.fn(), getLocalChanges: vi.fn().mockReturnValue([]), hasLocalChanges: vi.fn().mockReturnValue(false), addImport: vi.fn(), getImports: vi.fn().mockReturnValue(new Set()), hasImport: vi.fn().mockReturnValue(false), removeImport: vi.fn(), reset: vi.fn(), setEventService: vi.fn(), setImmutable: vi.fn(), get isImmutable(): boolean { return false; }, setTrackingService: vi.fn(),
+      } as unknown as IStateService;
+
       const interpretSpy = vi.spyOn(interpreterServiceClient, 'interpret');
       interpretSpy.mockReset();
-      interpretSpy.mockResolvedValue(mockInterpretedState as unknown as IStateService);
+      interpretSpy.mockResolvedValue(mockInterpretedState);
       
       await handler.handle(mockProcessingContext);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path, expect.anything());      

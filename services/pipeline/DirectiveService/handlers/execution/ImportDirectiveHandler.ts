@@ -233,22 +233,32 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
         // --- DEBUG LOGGING START ---
         process.stdout.write(`DEBUG [ImportHandler]: Interpreted State ID: ${interpretedChildState.getStateId ? interpretedChildState.getStateId() : 'N/A'}\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: Type of interpretedChildState: ${typeof interpretedChildState}, Keys: ${JSON.stringify(Object.keys(interpretedChildState || {}))}\n`);
         // --- DEBUG LOGGING END ---
 
         // Construct StateChanges manually from the resulting state's variables
         const allVars = {
-          text: interpretedChildState.getAllTextVars(),
-          data: interpretedChildState.getAllDataVars(),
-          path: interpretedChildState.getAllPathVars(),
-          command: interpretedChildState.getAllCommands(),
+          text: interpretedChildState.getAllTextVars() ?? new Map(), // Ensure Map
+          data: interpretedChildState.getAllDataVars() ?? new Map(), // Ensure Map
+          path: interpretedChildState.getAllPathVars() ?? new Map(), // Ensure Map
+          command: interpretedChildState.getAllCommands() ?? new Map(), // Ensure Map
         };
-
-        // --- DEBUG LOGGING START ---
-        process.stdout.write(`DEBUG [ImportHandler]: Type of allVars.text: ${typeof allVars.text}, isMap: ${allVars.text instanceof Map}\n`);
-        process.stdout.write(`DEBUG [ImportHandler]: allVars.text keys: ${allVars.text ? JSON.stringify(Array.from(allVars.text.keys())) : 'undefined'}\n`);
-        process.stdout.write(`DEBUG [ImportHandler]: Type of allVars.data: ${typeof allVars.data}, isMap: ${allVars.data instanceof Map}\n`);
-        process.stdout.write(`DEBUG [ImportHandler]: allVars.data keys: ${allVars.data ? JSON.stringify(Array.from(allVars.data.keys())) : 'undefined'}\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: allVars object constructed. Keys: ${JSON.stringify(Object.keys(allVars))}\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.text = ${typeof allVars.text}, isMap: ${allVars.text instanceof Map}\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.data = ${typeof allVars.data}, isMap: ${allVars.data instanceof Map}\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.path = ${typeof allVars.path}, isMap: ${allVars.path instanceof Map}\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.command = ${typeof allVars.command}, isMap: ${allVars.command instanceof Map}\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: allVars.text value = ${JSON.stringify(allVars.text)}\n`);
         // --- DEBUG LOGGING END ---
+        
+        // <<< Simplified totalVars calculation to avoid .size on potential non-Map >>>
+        const totalVars = 
+            (allVars.text ? Object.keys(allVars.text).length : 0) + 
+            (allVars.data ? Object.keys(allVars.data).length : 0) + 
+            (allVars.path ? Object.keys(allVars.path).length : 0) + 
+            (allVars.command ? Object.keys(allVars.command).length : 0);
+        // const totalVars = (allVars.text?.size || 0) + (allVars.data?.size || 0) + (allVars.path?.size || 0) + (allVars.command?.size || 0);
+        process.stdout.write(`DEBUG [ImportHandler]: Extracted ${totalVars} total variables from interpreted state.\n`);
 
         const accumulatedVariables: Record<string, VariableDefinition> = {};
         // Combine all variable types into the StateChanges format
@@ -268,9 +278,6 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // --- DEBUG LOGGING START ---
         process.stdout.write(`DEBUG [ImportHandler]: Accumulated variable keys: ${JSON.stringify(Object.keys(accumulatedVariables))}\n`);
         // --- DEBUG LOGGING END ---
-
-        const totalVars = (allVars.text?.size || 0) + (allVars.data?.size || 0) + (allVars.path?.size || 0) + (allVars.command?.size || 0);
-        process.stdout.write(`DEBUG [ImportHandler]: Extracted ${totalVars} total variables from interpreted state.\n`);
 
         if (Object.keys(accumulatedVariables).length > 0) {
            sourceStateChanges = { variables: accumulatedVariables };
