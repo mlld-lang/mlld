@@ -80,7 +80,7 @@ export class InterpreterService implements IInterpreterService {
   constructor(
     @inject('IResolutionService') resolutionService: IResolutionService,
     @inject('IPathService') pathService: IPathService,
-    @inject(DirectiveServiceClientFactory) directiveServiceClientFactory?: DirectiveServiceClientFactory,
+    @inject(delay(() => DirectiveServiceClientFactory)) directiveServiceClientFactory?: DirectiveServiceClientFactory,
     @inject('IStateService') stateService?: IStateService,
     @inject(ParserServiceClientFactory) parserClientFactory?: ParserServiceClientFactory
   ) {

@@ -33,16 +33,23 @@ import { container, DependencyContainer } from 'tsyringe';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 
 // Mock the logger using vi.mock
-const mockLoggerObject = {
-  debug: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn()
-};
-vi.mock('@core/utils/logger', () => ({
-  directiveLogger: mockLoggerObject,
-  importLogger: mockLoggerObject
-}));
+vi.mock('@core/utils/logger', () => {
+  // DEFINE the mock object INSIDE the factory function
+  const mockLoggerObject = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
+  };
+  return { 
+    // Ensure all exported loggers are mocked if needed by the SUT
+    importLogger: mockLoggerObject, 
+    directiveLogger: mockLoggerObject, // Add other loggers if imported directly
+    logger: mockLoggerObject, // Add default logger if imported directly
+    default: mockLoggerObject // ADD default export
+    // ... add other exported loggers as needed
+  };
+});
 
 /**
  * ImportDirectiveHandler Transformation Test Status
@@ -285,7 +292,12 @@ describe('ImportDirectiveHandler Transformation', () => {
     context.registerMock(InterpreterServiceClientFactory, interpreterServiceClientFactory);
     context.registerMock('IURLContentResolver', urlContentResolver);
     context.registerMock('IStateTrackingService', stateTrackingService);
-    context.registerMock('ILogger', mockLoggerObject);
+    context.registerMock('ILogger', { 
+      debug: vi.fn(), 
+      info: vi.fn(), 
+      warn: vi.fn(), 
+      error: vi.fn() 
+    });
     context.registerMock('DependencyContainer', context.container.getContainer());
     // <<< ADD MISSING DEPENDENCIES for Factory/Lazy Resolution >>>
     const mockInterpreterService = mockDeep<IInterpreterService>(); // Basic mock
