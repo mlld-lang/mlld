@@ -17,6 +17,8 @@ import type { IOutputService } from '@services/pipeline/OutputService/IOutputSer
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 // +++ Import the concrete class +++
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
+// +++ Import logger and ILogger +++
+import logger, { ILogger } from '@core/utils/logger.js';
 
 // DI Container is configured by importing @core/di-config.js elsewhere
 
@@ -33,11 +35,25 @@ export { ResolutionService };
 export async function processMeld(content: string, options?: Partial<ProcessOptions>): Promise<string> {
   // <<< Restore original container logic >>>
   const isExternalContainer = !!options?.container;
-  const executionContainer = options?.container ?? container.createChildContainer();
+  // <<< FIX: Create child container FIRST >>>
+  const internalContainer = container.createChildContainer(); 
+  // <<< FIX: Register internal container with itself >>>
+  internalContainer.registerInstance('DependencyContainer', internalContainer);
+  
+  const executionContainer = options?.container ?? internalContainer; // Use external if provided, else the configured internal one
 
-  // If a custom filesystem is provided, register it ONLY if we created the container internally
-  if (options?.fs && !isExternalContainer) { 
-    executionContainer.registerInstance<IFileSystem>('IFileSystem', options.fs);
+  // If a custom filesystem OR logger is needed, register it ONLY if we created the container internally
+  if (!isExternalContainer) { 
+    if (options?.fs) { // Register FS if provided *and* container is internal
+      executionContainer.registerInstance<IFileSystem>('IFileSystem', options.fs);
+    }
+    // <<< Explicitly register logger in internal container >>>
+    if (!executionContainer.isRegistered('MainLogger')) { 
+      executionContainer.registerInstance('MainLogger', logger); 
+    }
+    if (!executionContainer.isRegistered('ILogger')) { 
+      executionContainer.register('ILogger', { useToken: 'MainLogger' }); 
+    }
   }
 
   // Resolve services from the determined execution container

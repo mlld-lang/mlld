@@ -43,6 +43,7 @@ import type { IOutputService } from '@services/pipeline/OutputService/IOutputSer
 import type { IURLContentResolver, URLResponse } from '@services/resolution/URLContentResolver/IURLContentResolver'; 
 // Import the factory
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 // Import the default logger instance
 import logger from '@core/utils/logger.js'; 
 
@@ -97,42 +98,45 @@ describe('Debug Tools Integration Test', () => {
     testContainer.registerInstance('MainLogger', logger); 
     testContainer.register('ILogger', { useToken: 'MainLogger' });
 
-    // Register Core Services 
-    testContainer.registerSingleton('StateEventService', StateEventService);
-    testContainer.registerSingleton<IStateEventService>('IStateEventService', StateEventService);
-    testContainer.registerSingleton('StateTrackingService', StateTrackingService);
-    testContainer.registerSingleton<IStateTrackingService>('IStateTrackingService', StateTrackingService);
-    testContainer.registerSingleton('StateHistoryService', StateHistoryService);
-    testContainer.registerSingleton<IStateHistoryService>('IStateHistoryService', StateHistoryService);
-    testContainer.registerSingleton('VariableResolutionTracker', VariableResolutionTracker);
-    testContainer.registerSingleton('StateVisualizationService', StateVisualizationService);
-    testContainer.registerSingleton<IStateVisualizationService>('IStateVisualizationService', StateVisualizationService);
-    testContainer.registerSingleton('StateService', StateService);
-    testContainer.registerSingleton<IStateService>('IStateService', StateService);
-    testContainer.registerSingleton('PathOperationsService', PathOperationsService);
-    testContainer.registerSingleton<IPathOperationsService>('IPathOperationsService', PathOperationsService);
-    testContainer.registerSingleton('FileSystemService', FileSystemService);
-    testContainer.registerSingleton<IFileSystemService>('IFileSystemService', FileSystemService);
-    testContainer.registerSingleton('PathService', PathService);
-    testContainer.registerSingleton<IPathService>('IPathService', PathService);
-    testContainer.registerSingleton('ResolutionService', ResolutionService);
-    testContainer.registerSingleton<IResolutionService>('IResolutionService', ResolutionService);
-    testContainer.registerSingleton('ValidationService', ValidationService);
-    testContainer.registerSingleton<IValidationService>('IValidationService', ValidationService);
-    testContainer.registerSingleton('CircularityService', CircularityService);
-    testContainer.registerSingleton<ICircularityService>('ICircularityService', CircularityService);
-    testContainer.registerSingleton('ParserService', ParserService);
-    testContainer.registerSingleton<IParserService>('IParserService', ParserService);
-    testContainer.registerSingleton('DirectiveService', DirectiveService);
-    testContainer.registerSingleton<IDirectiveService>('IDirectiveService', DirectiveService);
-    testContainer.registerSingleton('InterpreterService', InterpreterService);
-    testContainer.registerSingleton<IInterpreterService>('IInterpreterService', InterpreterService);
-    testContainer.registerSingleton('OutputService', OutputService);
-    testContainer.registerSingleton<IOutputService>('IOutputService', OutputService);
+    // *** ADDED: Register the container itself ***
+    testContainer.registerInstance('DependencyContainer', testContainer); 
 
-    // --- Register ResolutionServiceClientFactory --- 
-    // It depends on IResolutionService, which is registered above
-    testContainer.registerSingleton(ResolutionServiceClientFactory);
+    // Register Core Services 
+    testContainer.register('StateEventService', { useClass: StateEventService });
+    testContainer.register<IStateEventService>('IStateEventService', { useClass: StateEventService });
+    testContainer.register('StateTrackingService', { useClass: StateTrackingService });
+    testContainer.register<IStateTrackingService>('IStateTrackingService', { useClass: StateTrackingService });
+    testContainer.register('StateHistoryService', { useClass: StateHistoryService });
+    testContainer.register<IStateHistoryService>('IStateHistoryService', { useClass: StateHistoryService });
+    testContainer.register('VariableResolutionTracker', { useClass: VariableResolutionTracker });
+    testContainer.register('StateVisualizationService', { useClass: StateVisualizationService });
+    testContainer.register<IStateVisualizationService>('IStateVisualizationService', { useClass: StateVisualizationService });
+    testContainer.register('StateService', { useClass: StateService });
+    testContainer.register<IStateService>('IStateService', { useClass: StateService });
+    testContainer.register('PathOperationsService', { useClass: PathOperationsService });
+    testContainer.register<IPathOperationsService>('IPathOperationsService', { useClass: PathOperationsService });
+    testContainer.register('FileSystemService', { useClass: FileSystemService });
+    testContainer.register<IFileSystemService>('IFileSystemService', { useClass: FileSystemService });
+    testContainer.register('PathService', { useClass: PathService });
+    testContainer.register<IPathService>('IPathService', { useClass: PathService });
+    testContainer.register('ResolutionService', { useClass: ResolutionService });
+    testContainer.register<IResolutionService>('IResolutionService', { useClass: ResolutionService });
+    testContainer.register('ValidationService', { useClass: ValidationService });
+    testContainer.register<IValidationService>('IValidationService', { useClass: ValidationService });
+    testContainer.register('CircularityService', { useClass: CircularityService });
+    testContainer.register<ICircularityService>('ICircularityService', { useClass: CircularityService });
+    testContainer.register('ParserService', { useClass: ParserService });
+    testContainer.register<IParserService>('IParserService', { useClass: ParserService });
+    testContainer.register('DirectiveService', { useClass: DirectiveService });
+    testContainer.register<IDirectiveService>('IDirectiveService', { useClass: DirectiveService });
+    testContainer.register('InterpreterService', { useClass: InterpreterService });
+    testContainer.register<IInterpreterService>('IInterpreterService', { useClass: InterpreterService });
+    testContainer.register('OutputService', { useClass: OutputService });
+    testContainer.register<IOutputService>('IOutputService', { useClass: OutputService });
+
+    // --- Register Factories --- 
+    testContainer.register(ResolutionServiceClientFactory, { useClass: ResolutionServiceClientFactory });
+    testContainer.register(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory });
     // --- End Factory Registration --- 
 
     // Register MeldProcessor (Commented out)
@@ -153,7 +157,7 @@ describe('Debug Tools Integration Test', () => {
   });
 
   afterEach(async () => {
-    testContainer?.clearInstances(); 
+    testContainer?.dispose();
     await context?.cleanup(); 
   });
 

@@ -17,6 +17,7 @@ import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveServi
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { ILogger } from '@core/utils/logger.js';
@@ -39,12 +40,15 @@ describe('Nested Array Access Tests', () => {
     testContainer.registerInstance('MainLogger', logger);
     testContainer.register('ILogger', { useToken: 'MainLogger' });
 
+    testContainer.registerInstance('DependencyContainer', testContainer);
+
     testContainer.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
+    testContainer.register(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory });
     testContainer.register('IResolutionService', { useClass: ResolutionService });
     testContainer.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
     testContainer.register('IPathService', { useClass: PathService });
     
-    testContainer.registerSingleton('IStateService', StateService);
+    testContainer.register('IStateService', { useClass: StateService });
     
     testContainer.register('IParserService', { useClass: ParserService });
     testContainer.register('IInterpreterService', { useClass: InterpreterService });
@@ -52,7 +56,7 @@ describe('Nested Array Access Tests', () => {
   });
 
   afterEach(async () => {
-    testContainer?.clearInstances();
+    testContainer?.dispose();
     await context?.cleanup();
   });
 

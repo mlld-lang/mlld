@@ -16,11 +16,26 @@ import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveServi
 import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import { StateServiceClientFactory } from '@services/state/StateService/factories/StateServiceClientFactory.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
 import type { ILogger } from '@core/utils/logger.js';
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
+import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
+import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import { StateFactory } from '@services/state/StateService/StateFactory.js';
+import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
+
 // Import the default logger instance
 import logger from '@core/utils/logger.js';
 
@@ -30,42 +45,45 @@ describe('Array Access Tests', () => {
 
   beforeEach(async () => {
     context = TestContextDI.createIsolated();
-    await context.initialize();
+    // await context.initialize(); // Commented out: Avoid double registration/init
     testContainer = container.createChildContainer();
 
-    // Mocks: Keep ONLY the necessary IFileSystem mock
-    // Remove other mocks (Logger, URLResolver)
-    // Re-introduce mock Logger definition
-    // const mockLogger = mock<ILogger>(); // Remove mock logger
-    /*
-    const mockURLContentResolver = { isURL: vi.fn().mockImplementation((path: string) => { try { new URL(path); return true; } catch { return false; } }), validateURL: vi.fn().mockImplementation(async (url: string) => url), fetchURL: vi.fn().mockImplementation(async (url: string) => ({ content: `Mock content for ${url}`})) };
-    */
-
-    // --- Registrations in testContainer ---
-    // 1. Essential Mocks
+    // Register instances
     testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
-    
-    // 2. Register REAL services and factories needed by processMeld or its core dependencies
-    //    (Rely on parent container inheritance for others)
-    testContainer.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
-    testContainer.register('IResolutionService', { useClass: ResolutionService });
-    testContainer.register('ParserServiceClientFactory', { useClass: ParserServiceClientFactory });
-    testContainer.register('IPathService', { useClass: PathService });
-    testContainer.registerSingleton('IStateService', StateService);
-    testContainer.register('IParserService', { useClass: ParserService });
-    testContainer.register('IInterpreterService', { useClass: InterpreterService });
-    // We will NOT register the logger or URL resolver, letting them resolve from the parent container
-    // testContainer.registerInstance<IURLContentResolver>('IURLContentResolver', mockURLContentResolver);
-    // Remove incorrect registration
-    // testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger);
-    // Register the actual main logger using correct tokens
+    testContainer.registerInstance('DependencyContainer', testContainer); 
     testContainer.registerInstance('MainLogger', logger);
     testContainer.register('ILogger', { useToken: 'MainLogger' });
+
+    // Register concrete classes (Transient)
+    // Core Services needed by processMeld or Interpreter chain
+    testContainer.register(StateEventService, StateEventService);
+    testContainer.register(StateFactory, StateFactory);
+    testContainer.register(StateService, StateService);
+    testContainer.register(PathOperationsService, PathOperationsService);
+    testContainer.register(FileSystemService, FileSystemService);
+    testContainer.register(PathService, PathService);
+    testContainer.register(ParserService, ParserService);
+    testContainer.register(ResolutionService, ResolutionService);
+    testContainer.register(ValidationService, ValidationService);
+    testContainer.register(CircularityService, CircularityService);
+    testContainer.register(DirectiveService, DirectiveService);
+    testContainer.register(InterpreterService, InterpreterService);
+    testContainer.register(OutputService, OutputService);
+
+    // Factories (Transient)
+    testContainer.register(StateServiceClientFactory, StateServiceClientFactory);
+    testContainer.register(FileSystemServiceClientFactory, FileSystemServiceClientFactory);
+    testContainer.register(PathServiceClientFactory, PathServiceClientFactory);
+    testContainer.register(ResolutionServiceClientFactory, ResolutionServiceClientFactory);
+    testContainer.register(ParserServiceClientFactory, ParserServiceClientFactory);
+    testContainer.register(InterpreterServiceClientFactory, InterpreterServiceClientFactory); 
+    testContainer.register(DirectiveServiceClientFactory, DirectiveServiceClientFactory);
+
   });
 
   afterEach(async () => {
-    testContainer?.clearInstances();
-    await context?.cleanup();
+    testContainer?.dispose();
+    // await context?.cleanup(); // Keep context cleanup commented out
   });
 
   it('should handle direct array access with dot notation', async () => {
@@ -78,7 +96,7 @@ Third item: {{items.2}}`;
     
     const options: Partial<ProcessOptions> = {
       format: 'markdown',
-      container: testContainer
+      container: testContainer // Pass the minimally configured container
     };
 
     const result = await processMeld(content, options);

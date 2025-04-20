@@ -362,9 +362,8 @@ export class TestContainerHelper {
           });
         }
         
-        // Clear instances and reset
-        helper.clearInstances();
-        helper.reset();
+        // Changed to use dispose() for full cleanup
+        helper.dispose(); 
       }
     };
   }
