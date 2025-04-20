@@ -84,6 +84,8 @@ export class InterpreterService implements IInterpreterService {
     @inject('IStateService') stateService?: IStateService,
     @inject(ParserServiceClientFactory) parserClientFactory?: ParserServiceClientFactory
   ) {
+    process.stdout.write(`DEBUG [CONSTRUCTOR]: InterpreterService - Instance created.\n`);
+
     this.resolutionService = resolutionService;
     this.pathService = pathService;
     this.directiveClientFactory = directiveServiceClientFactory;

@@ -153,6 +153,74 @@ export class DirectiveService implements IDirectiveService {
     
     // Register default handlers
     // this.registerDefaultHandlers();
+
+    // ---> Constructor Log <---
+    process.stdout.write(`DEBUG [CONSTRUCTOR]: DirectiveService - Instance created.\n`);
+    // ---> End Constructor Log <---
+
+    // Assign services with checks
+    if (validationService) {
+        this.validationService = validationService;
+    } else {
+        console.error('ERROR: ValidationService not provided to DirectiveService constructor!');
+    }
+    if (resolutionService) {
+        this.resolutionService = resolutionService;
+    } else {
+        console.error('ERROR: ResolutionService not provided to DirectiveService constructor!');
+    }
+    if (stateService) {
+        this.stateService = stateService;
+    } else {
+        console.error('ERROR: StateService not provided to DirectiveService constructor!');
+    }
+    if (pathService) {
+        this.pathService = pathService;
+    } else {
+        console.error('ERROR: PathService not provided to DirectiveService constructor!');
+    }
+    if (fileSystemService) {
+        this.fileSystemService = fileSystemService;
+    } else {
+        console.error('ERROR: FileSystemService not provided to DirectiveService constructor!');
+    }
+    if (parserService) {
+        this.parserService = parserService;
+    } else {
+        console.error('ERROR: ParserService not provided to DirectiveService constructor!');
+    }
+    if (circularityService) {
+        this.circularityService = circularityService;
+    } else {
+        console.error('ERROR: CircularityService not provided to DirectiveService constructor!');
+    }
+    
+    // Initialize client using factory
+    if (interpreterServiceClientFactory) {
+      this.interpreterClient = interpreterServiceClientFactory.createClient();
+    } else {
+      this.logger.warn('InterpreterServiceClientFactory not provided to DirectiveService');
+    }
+
+    // Register default handlers (Example - replace with actual DI resolution if applicable)
+    // If not using DI for handlers, they need manual instantiation
+    // This section likely needs adjustment based on how handlers are managed (DI vs. manual)
+    // this.directiveHandlers.set('import', new ImportDirectiveHandler(
+    //     this.validationService!,
+    //     this.resolutionService!,
+    //     this.stateService!,
+    //     this.fileSystemService!,
+    //     this.parserService!,
+    //     this.pathService!,
+    //     // Pass the container instead of factory
+    //     container, // Assuming global container for now, this NEEDS review for proper scoping
+    //     this.interpreterServiceClient,
+    //     undefined, // No URL resolver in this context? Needs review
+    //     undefined  // No tracking service in this context? Needs review
+    //   ));
+    // ... register other handlers ...
+
+    this.initialized = true;
   }
   
   /**
@@ -349,8 +417,10 @@ export class DirectiveService implements IDirectiveService {
                   this.fileSystemService,
                   this.parserService,
                   this.pathService,
-                  this.interpreterClientFactory,
-                  this.circularityService
+                  container,
+                  this.interpreterClient,
+                  undefined,
+                  undefined
                 );
                 this.registerHandler(importHandler);
             }
@@ -505,7 +575,7 @@ export class DirectiveService implements IDirectiveService {
               await context.state.setPathVar(name, varDef.value as any, metadata);
               break;
             case VariableType.COMMAND:
-              await context.state.setCommand(name, varDef.value as ICommandDefinition, metadata);
+              await context.state.setCommandVar(name, varDef.value as ICommandDefinition, metadata);
               break;
             // No default needed as we continue in the outer loop for unknown types
           }

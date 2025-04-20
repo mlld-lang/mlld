@@ -625,7 +625,40 @@ Docs are at $docs
     });
   });
 
-  describe('Import Handling', () => {
+  // <<< Use describe.only to isolate Import tests >>>
+  describe.only('Import Handling', () => {
+    // <<< ADD Minimal beforeEach for import tests >>>
+    beforeEach(async () => {
+      // Minimal container setup for import tests
+      testContainer = container.createChildContainer();
+      testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
+      testContainer.registerInstance('MainLogger', logger); 
+      testContainer.register('ILogger', { useToken: 'MainLogger' });
+
+      // --- Essential Factories ---
+      testContainer.register(FileSystemServiceClientFactory, { useClass: FileSystemServiceClientFactory }); 
+      testContainer.register(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory });
+      // Only register DirectiveServiceClientFactory if DirectiveService is needed directly by test assertions (unlikely for import)
+      // testContainer.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory }); 
+      testContainer.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
+      
+      // --- Essential Services ---
+      testContainer.registerSingleton('IStateService', StateService);
+      testContainer.register('IPathService', { useClass: PathService });
+      testContainer.register('IFileSystemService', { useClass: FileSystemService });
+      testContainer.register('IParserService', { useClass: ParserService });
+      testContainer.register('IResolutionService', { useClass: ResolutionService });
+      testContainer.register('ICircularityService', { useClass: CircularityService });
+      testContainer.register('IDirectiveService', { useClass: DirectiveService }); // Needed for handler resolution
+      testContainer.register('IInterpreterService', { useClass: InterpreterService }); // Needed for import recursion
+      testContainer.register('IValidationService', { useClass: ValidationService }); // Needed by DirectiveService
+      testContainer.register('IPathOperationsService', { useClass: PathOperationsService }); // Dep for FileSystemService
+
+      // --- Register Container Itself --- 
+      testContainer.registerInstance('DependencyContainer', testContainer);
+    });
+    // <<< End Minimal beforeEach >>>
+
     it('should handle simple imports', async () => {
       const mainFilePath = 'main.meld';
       const importedFilePath = 'imported.meld';

@@ -331,8 +331,9 @@ export class TestContextDI extends TestContext {
     await Promise.all(this.childContexts.map(child => child.cleanup()));
     this.childContexts = [];
     
-    // Clean up container instances
-    this.container.clearInstances();
+    // Clean up container instances and registrations
+    // this.container.clearInstances(); // <<< Replace with dispose >>>
+    this.container.dispose(); // <<< Use dispose for full cleanup >>>
     
     // Clear registered mocks
     this.registeredMocks.clear();

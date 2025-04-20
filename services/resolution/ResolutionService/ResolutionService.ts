@@ -161,6 +161,10 @@ export class ResolutionService implements IResolutionService {
     @inject('IPathService') pathService?: IPathService,
     @inject('IParserService') parserService?: IParserService
   ) {
+    // ---> Constructor Log <---
+    process.stdout.write(`DEBUG [CONSTRUCTOR]: ResolutionService - Instance created.\n`);
+    // ---> End Constructor Log <---
+
     this.initializeFromParams(stateService, fileSystemService, pathService, parserService);
     
     // Move factory initialization here to ensure clients are ready earlier

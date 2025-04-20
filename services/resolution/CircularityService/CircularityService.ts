@@ -27,6 +27,10 @@ export class CircularityService implements ICircularityService {
   // Maximum number of imports with the same filename
   private readonly MAX_SAME_FILE_IMPORTS = 3;
 
+  constructor() {
+    process.stdout.write(`DEBUG [CONSTRUCTOR]: CircularityService - Instance created.\n`);
+  }
+
   /**
    * Normalize a path to ensure consistent handling across the application
    * Replaces backslashes with forward slashes for cross-platform compatibility

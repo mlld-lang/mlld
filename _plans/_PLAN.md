@@ -55,53 +55,56 @@ Systematically investigate and fix the core service failures identified in `_pla
     5.  **Compare State Snapshots:** Compare the state (variables stored) just before the failing resolution attempt in `api/integration.test.ts` vs. a passing case. Is the variable correctly defined in the expected state instance?
 *   **Fix & Verify:** Implement fixes in the identified service(s). Update relevant unit tests (`ResolutionService.test.ts`, `InterpreterService.unit.test.ts`, `StateService.test.ts`) using the refactoring pattern. Re-run `api/integration.test.ts` to confirm the fix.
 
-**Phase 2: `@import` Directive Processing [In Progress - DI Issues]**
+**Phase 2: `@import` Directive Processing [In Progress - OOM Blocker]**
 
-*   **Target Failures:** `api/integration.test.ts` #3 (`@import` Directive Processing), #4 (Circular Import Detection - Error Message).
-*   **Hypothesized Services:** `InterpreterService`, `DirectiveService`, `ImportDirectiveHandler`, `StateService`, `ParserService`, `FileSystemService`, `InterpreterServiceClientFactory`, DI Container (`api/integration.test.ts`).
+*   **Target Failures:** `api/integration.test.ts` #3 (`@import` Directive Processing), #4 (Circular Import Detection - Error Message). Original DI errors now masked by OOM.
+*   **Hypothesized Services:** `InterpreterService`, `DirectiveService`, `ImportDirectiveHandler`, `StateService`, `ParserService`, `FileSystemService`, `InterpreterServiceClientFactory`, `CircularityService`, DI Container (`api/integration.test.ts`).
 *   **Investigation Steps & Findings:**
     1.  **Initial Error:** `@import` tests initially failed with "Path validation failed for resolved path "": Path cannot be empty".
     2.  **Fix 1:** Modified `ImportDirectiveHandler` to perform two-step path resolution: first call `resolutionService.resolveInContext` on the `pathObject`, then pass the resulting *string* to `resolutionService.resolvePath`. This fixed the "Path cannot be empty" error for imports.
-    3.  **New Error:** This unmasked a new failure in the same integration tests: "Interpreter service client is not available. Ensure InterpreterServiceClientFactory is registered and resolvable, or provide a mock in tests." This error originates from within `ImportDirectiveHandler` when it tries to use the `InterpreterServiceClient` (obtained via `InterpreterServiceClientFactory`) to interpret the imported file's content.
-    4.  **Extensive DI Debugging:** Investigated the DI setup in `api/integration.test.ts` thoroughly:
-        *   Confirmed registration of `InterpreterServiceClientFactory`, `IInterpreterService`, `IDirectiveService`, `IValidationService`, and all other known direct/indirect dependencies for `InterpreterService` and `DirectiveService`.
-        *   Corrected the container usage within `InterpreterServiceClientFactory` to use the test-specific container instance instead of the global one.
-        *   Experimented with adding/removing `delay()` for the circular dependency between `DirectiveService` and `InterpreterServiceClientFactory`.
-        *   **Result:** None of these DI configuration changes resolved the "Interpreter service client is not available" error in the integration tests.
-    5.  **Unit Test Validation:** Switched focus to `ImportDirectiveHandler.unit.test.ts`:
-        *   Fixed several issues with test mocks (methods returning `{}` instead of `Map`, interactions with `delay()`).
-        *   Modified tests to directly inject a mocked `IInterpreterServiceClient`, bypassing the factory.
-        *   **Result:** The unit tests now pass (12/15), confirming the handler's *isolated* logic for parsing, interpreting (via mock), and merging state changes is mostly correct. The remaining 3 failures relate to mocking special path variable resolution in specific scenarios. (Update: These 3 were subsequently fixed by improving the mock state object). (Final Update: Unit tests now pass except for one minor assertion on circular error code).
-    6.  **Current Status:** The handler logic appears sound in isolation. The persistent "Interpreter service client is not available" error in `api/integration.test.ts` strongly suggests a complex DI resolution failure specific to that test environment's container setup, possibly due to an unidentified transitive dependency or configuration interaction. The Heap OOM errors seen earlier were likely red herrings or masked by the DI failures.
+    3.  **New Error (DI Related):** This unmasked a new failure: `TypeError: this.circularityService.beginImport is not a function` during import execution within integration tests (`api/integration.test.ts`). This occurred despite `ICircularityService` being correctly registered in the test container setup (`beforeEach`).
+    4.  **DI Debugging:** Added logging inside `ImportDirectiveHandler` confirming that the instance injected via the constructor for `ICircularityService` was incorrect (it was an `InterpreterServiceClientFactory` instance). However, explicitly resolving `ICircularityService` from the injected container *within the handler's `handle` method* yielded the correct service instance.
+    5.  **Fix 2 (DI Workaround):** Modified `ImportDirectiveHandler` to remove `ICircularityService` from constructor injection and instead resolve it lazily from the injected `DependencyContainer` within the `handle` method just before use.
+    6.  **Result:** This workaround resolved the `this.circularityService.beginImport is not a function` error, and the `@import` integration tests (`simple`, `nested`, `circular`) now appear to execute the core import logic correctly before the test process crashes due to Heap OOM.
+    7.  **Unit Test Validation:** Unit tests (`ImportDirectiveHandler.unit.test.ts`) pass, confirming the handler's isolated logic.
+*   **OOM Investigation Summary (Post-Fix 2):**
+    *   **Initial State:** After applying the lazy-resolution workaround for `ICircularityService` in `ImportDirectiveHandler`, the OOM error became the primary blocker in `api/integration.test.ts`. Initial hypotheses focused on state cloning or import recursion depth.
+    *   **DI Instability Identified:** Further investigation revealed inconsistent DI behavior across different test files (`api/*.test.ts`). While `api/integration.test.ts` correctly resolved dependencies (after the lazy-resolution fix), other files (`api/api.test.ts`, `api/resolution-debug.test.ts`, etc.) failed with errors like `Attempted to resolve unregistered dependency token: 'DependencyContainer'`.
+    *   **Root Cause - Test Setup:** The inconsistency stemmed from incomplete/incorrect DI setup in the `beforeEach` blocks of the failing test files. They were missing registrations for core services, factories, and crucially, the 'DependencyContainer' token itself, which is required by factories like `InterpreterServiceClientFactory`. Standardizing the DI setup across these files resolved the 'DependencyContainer' errors.
+    *   **`TestContextDI` Cleanup Issue:** Deeper investigation into the test utilities revealed that `TestContextDI.cleanup` used `clearInstances()` instead of `dispose()`. This likely caused container state leakage between test files, contributing to the DI instability and potentially the OOM error due to excessive object creation/retention.
+    *   **Revised OOM Hypothesis:** The OOM is likely caused by the combination of recursive interpretation (`@import`), numerous service instantiations driven by inconsistent/leaky test container setups, and potentially inefficient state cloning (`StateFactory.createClonedState` deep-cloning variable maps).
+    *   **Refactoring Plan:** A dedicated plan (`_plans/REFAC-SERVICE-TEST-DI.md`) was created to address the systemic test isolation issues by refactoring all service tests (`tests/services/**/*.test.ts`) to use the recommended "Manual Child Container" pattern with proper setup and `dispose()` cleanup. Addressing this is crucial for overall test suite stability and likely necessary to fully resolve the OOM error.
+*   **Current Status:** The `@import` directive logic appears functional, but testing is blocked by the persistent Heap OOM error, which is now suspected to be linked to fundamental issues in the test DI lifecycle management. The `@run` and `@path` errors also persist and need separate investigation as per Phases 3 & 4.
 *   **Next Steps:**
-    1.  Fix the minor assertion logic for the circular import error code in `ImportDirectiveHandler.test.ts`.
-    2.  Re-run `npm test api` to confirm the DI error ("Interpreter service client not available") is the primary remaining blocker for `@import` integration tests.
-    3.  Systematically debug the DI resolution within `api/integration.test.ts` for `IInterpreterService`:
-        *   Temporarily simplify the container setup (remove less critical registrations).
-        *   Add logging *during* tsyringe's resolution process if possible (might require modifying tsyringe or using advanced techniques).
-        *   Consider if any other core services (`ResolutionService`, `PathService`, etc.) also need to be singletons within the `testContainer`. (Tried `ResolutionService` singleton - no change).
+    1.  **(High Priority)** Execute the plan in `_plans/REFAC-SERVICE-TEST-DI.md` to refactor service tests for proper DI isolation.
+    2.  **(Contingent on OOM resolution)** Re-run `api/integration.test.ts` after service test refactoring. If OOM persists, add detailed logging to `StateFactory.createClonedState` and `StateService.setVariable` to analyze object sizes during cloning/setting.
+    3.  **(Deferred)** Address `@path` errors (Phase 4).
+    4.  **(Deferred)** Address `@run` errors (Phase 3).
+    5.  **(Deferred)** Remove the lazy-resolution workaround for `ICircularityService` in `ImportDirectiveHandler` if the root cause is confirmed to be fixed by the broader test refactoring.
 
 **Phase 3: `@run` Directive Processing**
 
-*   **Target Failures:** `api/api.test.ts` #1 (`@run` Directive Execution), #2 (Variable Resolution within `@run`).
+*   **Target Failures:** `api/api.test.ts` #1 (`@run` Directive Execution), #2 (Variable Resolution within `@run`). Tests fail with "Run directive command cannot be empty".
 *   **Hypothesized Services:** `InterpreterService`, `DirectiveService`, `RunDirectiveHandler`, `ResolutionService`, `ParserService`.
 *   **Investigation Steps:**
-    1.  **Command Parsing:** Add logging inside `RunDirectiveHandler.execute` to inspect the parsed command string *before* any variable resolution attempt. Why is it perceived as empty in the failing `api.test.ts` cases? Is the AST structure for `@run` correct or being misinterpreted?
+    1.  **Command Parsing:** Add logging inside `RunDirectiveHandler.handle` to inspect the parsed command *before* any variable resolution attempt. Why is it perceived as empty in the failing `api.test.ts` cases? Is the AST structure for `@run` correct or being misinterpreted?
     2.  **Variable Resolution in Command:** Add logging *before* command execution to trace the resolution of variables within the command string (e.g., `{{greeting}}` in `echo {{greeting}}`). Does it call `ResolutionService.resolveNodes` (or similar) on the command string/nodes? What is the result?
     3.  **Execution Logic:** Trace the actual command execution logic within the handler.
-*   **Fix & Verify:** Implement fixes. Refactor/update `RunDirectiveHandler.test.ts`. Re-run failing `@run` tests in `api/api.test.ts`.
+*   **Fix & Verify:** Implement fixes. Refactor/update `RunDirectiveHandler.test.ts`. Re-run failing `@run` tests in `api/api.test.ts` (after OOM is fixed).
 
-**Phase 4: Special Path Variable Resolution (`@path`)**
+**Phase 4: Special Path Variable Resolution (`@path`) [Blocked by OOM]**
 
-*   **Target Failures:** `api/integration.test.ts` #2 (Special Path Variable Resolution).
+*   **Target Failures:** `api/integration.test.ts` tests for `$PROJECTPATH`, `$.`, `$HOMEPATH`, `$~` fail with "Path validation failed for resolved path "": Path cannot be empty".
 *   **Hypothesized Services:** `PathService`, `ResolutionService`, `PathDirectiveHandler`, `FileSystemServiceClientFactory` (and underlying client/FS).
-*   **Investigation Steps:**
-    1.  **Focus on `$PROJECTPATH`:** Use the `should handle path variables with special $PROJECTPATH syntax` test.
-    2.  **Trace `PathDirectiveHandler`:** Log the path value received by the handler and the value passed to `ResolutionService` or `PathService`.
-    3.  **Trace `ResolutionService` Path Alias Handling:** Add logging within `ResolutionService` (or `VariableReferenceResolver`) where `$PROJECTPATH`, `$.`, etc., should be identified and resolved. What value is being returned?
-    4.  **Trace `PathService.validatePath`:** Log the `resolvedPath` value being received just before the "Path cannot be empty" error is thrown. Why is it empty?
-    5.  **Verify `FileSystemServiceClient` Interaction:** Although we use the real factory, ensure the underlying `MemfsTestFileSystem` (mock `IFileSystem`) behaves as expected when `PathService` uses its client to check existence (this shouldn't cause an empty path, but good to confirm).
-*   **Fix & Verify:** Implement fixes in `PathService` or `ResolutionService`. Refactor/update `PathDirectiveHandler.test.ts`, `PathService.test.ts`, `ResolutionService.test.ts`. Re-run failing path tests in `api/integration.test.ts`.
+*   **Investigation Steps & Findings:**
+    1.  **Logging Added:** Added logging to `ResolutionService.resolvePath` and `PathDirectiveHandler`.
+    2.  **Empty String Input:** Logs confirm that `ResolutionService.resolvePath` is receiving an empty string `""` as input for `resolvedPathString` in the failing tests, before the OOM crash occurs when running the isolated test suite.
+    3.  **Premature Resolution:** The empty string originates from the call to `resolutionService.resolveInContext(valueToResolve, ...)` within `PathDirectiveHandler`. This indicates `resolveInContext` (or its delegate `resolveText`) is incorrectly attempting to resolve variable-like strings starting with `$PROJECTPATH`, `$HOMEPATH`, `$.`, or `$~` when called in contexts where these should be treated as path literals (like within `@path` directives). It should return the string literal in these cases.
+*   **Next Steps:**
+    1.  **(Blocked by OOM)** Fix `resolveInContext`/`resolveText`: Modify `ResolutionService.resolveText` (or its use of `parseForResolution`) to ensure it does *not* attempt to resolve variable-like strings starting with `$PROJECTPATH`, `$HOMEPATH`, `$.`, or `$~` when called in contexts where these should be treated as path literals (like within `@path` directives). It should return the string literal in these cases.
+    2.  **(Blocked by OOM)** Re-run isolated `@path` tests (`describe.only`) after fixing the resolution logic (and resolving the OOM) to confirm the "Path cannot be empty" errors are fixed and the paths are stored correctly.
+    3.  **(Blocked by OOM)** Verify the correct alias expansion occurs during final output rendering (if applicable, or ensure `PathService` handles them correctly later).
+    4.  Refactor/update `PathDirectiveHandler.test.ts`, `PathService.test.ts`, `ResolutionService.test.ts`.
 
 **Phase 5: Circular Import Detection**
 

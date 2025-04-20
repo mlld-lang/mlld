@@ -26,6 +26,7 @@ import { ResolutionContextFactory } from '@services/resolution/ResolutionService
 import { MeldPath, PathContentType, ValidatedResourcePath } from '@core/types/paths';
 import type { StateServiceLike } from '@core/shared-service-types.js';
 import { MeldResolutionError, MeldFileNotFoundError, MeldError } from '@core/errors';
+import type { DependencyContainer } from 'tsyringe';
 
 /**
  * Handler for @import directives
@@ -44,13 +45,32 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     @inject('IFileSystemService') private fileSystemService: IFileSystemService,
     @inject('IParserService') private parserService: IParserService,
     @inject('IPathService') private pathService: IPathService,
-    @inject('ICircularityService') private circularityService: ICircularityService,
+    @inject('DependencyContainer') private container: DependencyContainer,
     @inject('IInterpreterServiceClient') private interpreterServiceClient?: IInterpreterServiceClient,
     @inject('IURLContentResolver') private urlContentResolver?: IURLContentResolver,
     @inject('StateTrackingService') trackingService?: IStateTrackingService
   ) {
     this.stateTrackingService = trackingService;
     this.debugEnabled = !!trackingService && (process.env.MELD_DEBUG === 'true');
+  }
+
+  private getCircularityService(): ICircularityService {
+    try {
+      const service = this.container.resolve<ICircularityService>('ICircularityService');
+      process.stdout.write(`DEBUG [ImportHandler GetCirc]: Resolved ICircularityService. Type: ${typeof service}, Keys: ${JSON.stringify(service ? Object.keys(service) : null)}\n`);
+      if (!service || typeof service.beginImport !== 'function') {
+        throw new Error('Resolved ICircularityService is invalid or missing beginImport method.');
+      }
+      return service;
+    } catch (error) {
+      process.stdout.write(`ERROR [ImportHandler GetCirc]: Failed to resolve ICircularityService from container: ${error}\n`);
+      throw new DirectiveError(
+        `Failed to resolve ICircularityService dependency: ${error instanceof Error ? error.message : String(error)}`,
+        this.kind,
+        DirectiveErrorCode.INVALID_CONTEXT,
+        { cause: error instanceof Error ? error : undefined }
+      );
+    }
   }
 
   async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
@@ -131,7 +151,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // 3. Circularity Check
       const normalizedIdentifier = resolvedIdentifier.replace(/\\/g, '/'); // Normalize for consistency
-      this.circularityService.beginImport(normalizedIdentifier);
+
+      const circularityService = this.getCircularityService();
+      circularityService.beginImport(normalizedIdentifier);
 
       // 4. Get Content (File or URL)
       let content: string | undefined;
@@ -260,6 +282,16 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         process.stdout.write(`DEBUG [ImportHandler]: allVars.text value = ${JSON.stringify(allVars.text)}\n`);
         // --- DEBUG LOGGING END ---
         
+        // Log variable sizes/types before accumulation
+        process.stdout.write(`DEBUG [ImportHandler Var Check]: Text Vars (${allVars.text?.size ?? 0}):\n`);
+        allVars.text?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, length=${JSON.stringify(v.value).length}\n`));
+        process.stdout.write(`DEBUG [ImportHandler Var Check]: Data Vars (${allVars.data?.size ?? 0}):\n`);
+        allVars.data?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, length=${JSON.stringify(v.value).length}\n`));
+        process.stdout.write(`DEBUG [ImportHandler Var Check]: Path Vars (${allVars.path?.size ?? 0}):\n`);
+        allVars.path?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, value=${JSON.stringify(v.value)}\n`));
+        process.stdout.write(`DEBUG [ImportHandler Var Check]: Command Vars (${allVars.command?.size ?? 0}):\n`);
+        allVars.command?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, value=${JSON.stringify(v.value)}\n`));
+
         // <<< Ensure accumulatedVariables is declared >>>
         const accumulatedVariables: Record<string, VariableDefinition> = {};
         // Combine all variable types into the StateChanges format
@@ -344,7 +376,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       }
 
       // 8. Mark Import as Completed
-        this.circularityService.endImport(normalizedIdentifier);
+        this.getCircularityService().endImport(normalizedIdentifier);
 
       if (this.debugEnabled) {
          logger.debug(`[ImportDirectiveHandler.handle] EXIT. Success. Accumulated changes: ${Object.keys(accumulatedStateChanges).length}\n`);
@@ -416,7 +448,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       if (resolvedIdentifier) {
         try {
           const normalizedIdentifier = resolvedIdentifier.replace(/\\/g, '/'); // Use original normalization
-          this.circularityService.endImport(normalizedIdentifier);
+          this.getCircularityService().endImport(normalizedIdentifier);
         } catch (cleanupError) {
           logger.warn('Error during import cleanup on error path', { error: cleanupError });
         }

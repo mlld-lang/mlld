@@ -31,6 +31,10 @@ import { PathService } from '@services/fs/PathService/PathService.js';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import logger from '@core/utils/logger.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
 
 describe('SDK Integration Tests', () => {
   let context: TestContextDI;
@@ -44,48 +48,34 @@ describe('SDK Integration Tests', () => {
 
     testContainer = container.createChildContainer();
 
-    // Remove mocks for DirectiveServiceClient, DirectiveServiceClientFactory, ParserServiceClientFactory, URLContentResolver
-    /*
-    const mockDirectiveClient: IDirectiveServiceClient = { supportsDirective: vi.fn().mockReturnValue(true), handleDirective: vi.fn(async () => testContainer.resolve<IStateService>('IStateService')), getSupportedDirectives: vi.fn().mockReturnValue([]), validateDirective: vi.fn().mockReturnValue(undefined) };
-    vi.spyOn(mockDirectiveClient, 'supportsDirective');
-    vi.spyOn(mockDirectiveClient, 'handleDirective');
-
-    const mockDirectiveClientFactory = { createClient: vi.fn().mockReturnValue(mockDirectiveClient), directiveService: undefined } as unknown as DirectiveServiceClientFactory; 
-    vi.spyOn(mockDirectiveClientFactory, 'createClient');
-    
-    const mockParserClientFactory = mock<ParserServiceClientFactory>();
-    const mockURLContentResolver = {
-      isURL: vi.fn().mockImplementation((path: string) => { try { new URL(path); return true; } catch { return false; } }),
-      validateURL: vi.fn().mockImplementation(async (url: string) => url),
-      fetchURL: vi.fn().mockImplementation(async (url: string) => ({ content: `Mock content for ${url}` }))
-    };
-    */
-   // Keep only Logger mock
-    // const mockLogger = mock<ILogger>(); // Remove mock logger
-
-    // Register essential mocks (FS, Logger)
+    // Register Dependencies
+    // Infrastructure Mocks (FS, Logger)
     testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
-    // Remove incorrect registration
-    // testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger); 
     // Register the actual main logger using correct tokens
     testContainer.registerInstance('MainLogger', logger); 
     testContainer.register('ILogger', { useToken: 'MainLogger' });
-    // testContainer.registerInstance<IURLContentResolver>('IURLContentResolver', mockURLContentResolver); // Remove registration
 
-    // Register real factories
+    // Register Real Factories
     testContainer.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
     testContainer.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
+    testContainer.register(FileSystemServiceClientFactory, { useClass: FileSystemServiceClientFactory });
+    testContainer.register(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory });
 
-    // Register core services (ensure singleton StateService)
+    // Register Real Services (Singleton State)
     testContainer.registerSingleton('IStateService', StateService);
+    testContainer.registerSingleton('IResolutionService', ResolutionService);
     testContainer.register('IParserService', { useClass: ParserService });
     testContainer.register('IInterpreterService', { useClass: InterpreterService });
     testContainer.register('IOutputService', { useClass: OutputService });
-    testContainer.register('IResolutionService', { useClass: ResolutionService });
-    testContainer.register('IPathService', { useClass: PathService });
     testContainer.register('IFileSystemService', { useClass: FileSystemService });
+    testContainer.register('IPathService', { useClass: PathService });
     testContainer.register('IPathOperationsService', { useClass: PathOperationsService });
+    testContainer.register('ICircularityService', { useClass: CircularityService });
+    testContainer.register('IDirectiveService', { useClass: DirectiveService });
+    testContainer.register('IValidationService', { useClass: ValidationService });
 
+    // Register the container itself
+    testContainer.registerInstance('DependencyContainer', testContainer);
   });
 
   afterEach(async () => {
