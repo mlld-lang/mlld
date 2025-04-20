@@ -116,7 +116,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
         // Defined using @run syntax
         const runData = command as DirectiveData;
         const runSubtype = runData.subtype;
-        const commandInput = runData.command; 
+        const commandInput = runData.command;
 
         if (!commandInput) {
            throw new DirectiveError('Missing command value within @run for @define directive', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
@@ -175,7 +175,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
               type: 'language',
               name: nameMetadata.name,
               parameters: mappedParameters,
-              language: commandLanguage || '', 
+              language: commandLanguage || '',
               codeBlock: resolvedCommandContent, 
               languageParameters: runData.parameters?.map((p: any) => typeof p === 'string' ? p : p.identifier), 
               sourceLocation: directiveSourceLocation,

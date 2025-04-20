@@ -114,8 +114,15 @@ function createValidDefineNode(
 
   } else if (typeof valueOrCommand === 'object' && valueOrCommand.kind === 'run') {
     // Handle @run DirectiveData object
-     directiveContent = { 
-        command: valueOrCommand // Assign the whole object
+    // Ensure subtype and language are correctly set if provided
+    const runData = valueOrCommand as any; // Cast for easier access
+    directiveContent = { 
+        command: {
+            subtype: language ? 'runCode' : (runData.subtype || 'runCommand'), // Determine subtype
+            command: runData.command, // command property holds the InterpolatableValue
+            language: language || runData.language, // Use provided language or from data
+            isMultiLine: isMultiline || runData.isMultiLine || false
+        }
      };
   } else {
      throw new Error(`Invalid valueOrCommand type (${typeof valueOrCommand}) in createValidDefineNode`);
@@ -197,44 +204,6 @@ describe('DefineDirectiveHandler', () => {
     vi.clearAllMocks();
   });
 
-  // Helper to create nodes (use corrected DefineDirectiveData type)
-  const createValidDefineNode = (
-      name: string, 
-      value: string | InterpolatableValue, 
-      parameters: string[] = [],
-      isRunSyntax: boolean = true
-  ): DirectiveNode => {
-      let directiveData: Omit<DefineDirectiveData, 'kind'>;
-      if (isRunSyntax && typeof value === 'string') {
-          directiveData = {
-              name: name,
-              command: {
-                  subtype: 'runCommand', 
-                  command: [{ type: 'Text', content: value, location: createLocation(1,1), nodeId: crypto.randomUUID() }], 
-                  isMultiLine: false 
-              },
-              value: undefined, 
-              parameters: parameters
-          };
-      } else if (!isRunSyntax && isInterpolatableValueArray(value)) {
-          directiveData = {
-              name: name,
-              command: undefined,
-              value: value,
-              parameters: parameters
-          };
-      } else {
-          throw new Error(`Invalid combination of value type (${typeof value}) and isRunSyntax (${isRunSyntax}) in createValidDefineNode`);
-      }
-      return {
-          type: 'Directive',
-          directive: { kind: 'define', ...directiveData } as DefineDirectiveData, 
-          location: createLocation(1,1),
-          nodeId: crypto.randomUUID()
-      };
-  };
-
-  // --- Tests remain largely the same, using resolved handler/mocks ---
   describe('command definition', () => {
     it('should handle basic command definition without parameters', async () => {
       const node = createValidDefineNode('cmd1', 'echo hello'); 
@@ -372,41 +341,6 @@ describe('DefineDirectiveHandler', () => {
         
         try { await handler.handle(processingContext); } catch(e: any) { expect(e.cause).toBe(resolutionError); }
     });
-  });
-
-  describe('metadata handling', () => {
-    // Metadata and State Management tests were already mostly assertion-based on setVariable, 
-    // which isn't correct now. They need full rewrite or removal if covered by above.
-    // For now, commenting them out. 
-    // describe('command risk metadata', async () => {
-    //   const node = createValidDefineNode('cmdRisk.risk.high', 'rm -rf /'); 
-    //   const processingContext = createMockProcessingContext(node);
-    //   vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('rm -rf / resolved');
-
-    //   await handler.handle(processingContext);
-    //   expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-    //       type: VariableType.COMMAND,
-    //       name: 'cmdRisk',
-    //       value: expect.objectContaining({
-    //            riskLevel: 'high', 
-    //        })
-    //   }));
-    // });
-
-    // describe('command about metadata', async () => {
-    //   const node = createValidDefineNode('cmdAbout.about.A cool command', 'ls'); 
-    //   const processingContext = createMockProcessingContext(node);
-    //   vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('ls resolved');
-
-    //   await handler.handle(processingContext);
-    //   expect(stateService.setVariable).toHaveBeenCalledWith(expect.objectContaining({
-    //       type: VariableType.COMMAND,
-    //       name: 'cmdAbout',
-    //       value: expect.objectContaining({
-    //            description: 'A cool command', 
-    //        })
-    //   }));
-    // });
   });
 
   describe('state management', () => {
