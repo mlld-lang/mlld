@@ -320,6 +320,14 @@ interface IStateService {
   // Get local variables by type from StateServiceLike
   getLocalTextVars(): Map<string, TextVariable>;
   getLocalDataVars(): Map<string, DataVariable>;
+
+  /**
+   * Applies the given state changes to the current state, returning a new state instance.
+   * @param changes The state changes to apply.
+   * @returns A new IStateService instance reflecting the applied changes.
+   * @throws MeldError if changes are invalid or cannot be applied.
+   */
+  applyStateChanges(changes: StateChanges): Promise<IStateService>;
 }
 
 export type { TransformationOptions, IStateService, DataVariable }; 

@@ -251,10 +251,16 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           childState 
         );
 
-        // --- DEBUG LOGGING START ---
-        // process.stdout.write(`DEBUG [ImportHandler]: Interpreted State ID: ${interpretedChildState.getStateId ? interpretedChildState.getStateId() : 'N/A'}\n`);
-        // process.stdout.write(`DEBUG [ImportHandler]: Type of interpretedChildState: ${typeof interpretedChildState}, Keys: ${JSON.stringify(Object.keys(interpretedChildState || {}))}\n`);
-        // --- DEBUG LOGGING END ---
+        // <<< ADD CHECK for interpretedChildState >>>
+        if (!interpretedChildState || typeof interpretedChildState.getAllTextVars !== 'function') {
+          logger.error('Interpreter service client returned invalid state object', { interpretedChildState });
+          throw new DirectiveError(
+            'Internal error: Failed to get valid state from interpreted import content.',
+            this.kind,
+            DirectiveErrorCode.EXECUTION_FAILED
+          );
+        }
+        // <<< END CHECK >>>
 
         // Construct StateChanges manually from the resulting state's variables
         // <<< Add individual try/catch for each getAll call >>>

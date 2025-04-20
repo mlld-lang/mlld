@@ -1028,4 +1028,50 @@ export class StateService implements IStateService {
   getParentState(): IStateService | undefined {
     return this.currentState.parentServiceRef;
   }
+
+  /**
+   * Applies the given state changes to the current state, returning a new state instance.
+   * @param changes The state changes to apply.
+   * @returns A new IStateService instance reflecting the applied changes.
+   * @throws MeldError if changes are invalid or cannot be applied.
+   */
+  async applyStateChanges(changes: StateChanges): Promise<IStateService> {
+    this.checkMutable();
+
+    // Create a new state instance based on the current one to apply changes to
+    const newStateService = this.clone();
+
+    // Apply removals first
+    if (changes.remove && changes.remove.length > 0) {
+      for (const removal of changes.remove) {
+        logger.debug(`Applying removal change for variable: ${removal.name} (Type: ${removal.type ?? 'any'})`, { stateId: newStateService.getStateId() });
+        // Use the existing removeVariable logic on the new state instance
+        // Note: removeVariable is already async
+        await newStateService.removeVariable(removal.name, removal.type);
+      }
+    }
+
+    // Apply settings/updates next
+    if (changes.set && changes.set.length > 0) {
+      for (const variable of changes.set) {
+        logger.debug(`Applying set change for variable: ${variable.name} (Type: ${variable.type})`, { stateId: newStateService.getStateId() });
+        // Use the existing setVariable logic on the new state instance
+        // Note: setVariable is already async
+        await newStateService.setVariable(variable);
+      }
+    }
+
+    // No need to call updateState here, as clone() creates a new node
+    // and setVariable/removeVariable on the cloned instance already update its internal node
+    // We might want to emit a specific 'stateChangesApplied' event here if needed.
+    
+    logger.debug('Finished applying state changes.', { 
+      stateId: newStateService.getStateId(), 
+      removals: changes.remove?.length ?? 0, 
+      sets: changes.set?.length ?? 0 
+    });
+
+    // Return the new state instance with changes applied
+    return newStateService;
+  }
 } 

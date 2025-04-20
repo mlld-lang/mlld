@@ -372,29 +372,28 @@ export class InterpreterService implements IInterpreterService {
           const stateBeforeNode: IStateService | null = currentState;
 
           // Step 1: Modify interpretNode call to receive tuple
-          const [newState, result] = await this.interpretNode(node, currentState, opts);
-          currentState = newState;
-          nodeResult = result; // Store result for potential state changes
+          const [intermediateState, nodeResult] = await this.interpretNode(node, currentState, opts);
+          currentState = intermediateState;
           
-          // Step 1: Apply state changes AFTER interpretNode returns
-          if (nodeResult?.stateChanges?.variables) {
-            const changes = nodeResult.stateChanges.variables;
-            logger.debug(`Applying ${Object.keys(changes).length} state changes from node ${node.nodeId}`);
-            for (const [key, variable] of Object.entries(changes)) {
-              // We assume variable is already a valid MeldVariable structure here
-              // as constructed by the handler/DirectiveService
-              currentState.setVariable(variable);
+          // Apply state changes if present and supported
+          if (nodeResult?.stateChanges && currentState && typeof currentState.applyStateChanges === 'function') {
+            logger.debug(`Applying state changes from directive result for node ${node.nodeId}`);
+            currentState = await currentState.applyStateChanges(nodeResult.stateChanges);
+            // Add null check after potential reassignment
+            if (!currentState) {
+              throw new MeldInterpreterError('State became null after applying changes.', 'internal_error', convertLocation(node.location), { severity: ErrorSeverity.Fatal });
             }
+          } else if (nodeResult?.stateChanges) {
+            logger.warn(`State object doesn't support applyStateChanges or currentState is null, skipping changes for node ${node.nodeId}`);
           }
-
-          // Step 1: Handle replacements AFTER interpretNode returns (moved from interpretNode)
-          if (nodeResult?.replacement !== undefined) {
+          
+          // Handle replacements
+          if (nodeResult?.replacement !== undefined && currentState) { // Add null check for currentState
             if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) { 
               const nodesBefore = currentState.getTransformedNodes(); 
               const index = nodesBefore.findIndex(n => n.nodeId === node.nodeId);
   
               if (index !== -1) {
-                // Use replacementNodes directly (already Array<MeldNode> | undefined)
                 const replacementNodes = nodeResult.replacement;
                 currentState.transformNode(index, replacementNodes.length > 0 ? replacementNodes : undefined);
                 logger.debug(`Applied ${replacementNodes.length} replacement nodes for original node ${node.nodeId} at index ${index}`);
@@ -404,6 +403,9 @@ export class InterpreterService implements IInterpreterService {
             } 
           } 
           
+          if (!currentState) { // Add null check before cloning
+             throw new MeldInterpreterError('State became null unexpectedly before cloning last good state.', 'internal_error', convertLocation(node.location), { severity: ErrorSeverity.Fatal });
+          }
           lastGoodState = currentState.clone() as IStateService;
         } catch (error) {
           try {
