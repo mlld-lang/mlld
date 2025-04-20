@@ -237,6 +237,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           childState // Pass childState as the initial state
         );
 
+        // --- DEBUG LOGGING START ---
+        process.stdout.write(`DEBUG [ImportHandler]: Interpreted State ID: ${interpretedChildState.getStateId ? interpretedChildState.getStateId() : 'N/A'}\n`);
+        // --- DEBUG LOGGING END ---
+
         // Construct StateChanges manually from the resulting state's variables
         const allVars = {
           text: interpretedChildState.getAllTextVars(),
