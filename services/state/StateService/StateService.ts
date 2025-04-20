@@ -313,7 +313,7 @@ export class StateService implements IStateService {
     }, `setTextVar:${name}`);
     
     const checkVar = this.getTextVar(name);
-    process.stdout.write(`DEBUG: [StateService.setTextVar POST-UPDATE] Var '${name}' read back: ${checkVar ? JSON.stringify(checkVar.value) : 'NOT FOUND'}. State ID: ${this.getStateId()}\n`);
+    // process.stdout.write(`DEBUG: [StateService.setTextVar POST-UPDATE] Var '${name}' read back: ${checkVar ? JSON.stringify(checkVar.value) : 'NOT FOUND'}. State ID: ${this.getStateId()}\n`);
 
     return variable;
   }
@@ -421,13 +421,13 @@ export class StateService implements IStateService {
     const transformEnabled = this.isTransformationEnabled();
     const transformedNodesExist = !!this.currentState.transformedNodes;
     
-    process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. isTransformationEnabled: ${transformEnabled}. transformedNodesExist: ${transformedNodesExist}\n`);
+    // process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. isTransformationEnabled: ${transformEnabled}. transformedNodesExist: ${transformedNodesExist}\n`);
 
     if (transformEnabled && transformedNodesExist) {
-       process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. RETURNING transformedNodes (Length: ${this.currentState.transformedNodes?.length ?? 0})\n`);
+       // process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. RETURNING transformedNodes (Length: ${this.currentState.transformedNodes?.length ?? 0})\n`);
       return [...this.currentState.transformedNodes!]; // Use ! because we checked existence
     }
-    process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. RETURNING original nodes (Length: ${this.currentState.nodes?.length ?? 0})\n`);
+    // process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. RETURNING original nodes (Length: ${this.currentState.nodes?.length ?? 0})\n`);
     return [...this.currentState.nodes]; 
   }
 
@@ -888,7 +888,7 @@ export class StateService implements IStateService {
     // If not found locally, check parent
     if (!variable && this.currentState.parentServiceRef) {
       // Add logging
-      process.stdout.write(`DEBUG: [StateService.getVariable] \\"${name}\\" not found locally (State ID: ${this.getStateId()}), checking parent (Parent ID: ${this.currentState.parentServiceRef.getStateId()})...\\n`);
+      // process.stdout.write(`DEBUG: [StateService.getVariable] \\"${name}\\" not found locally (State ID: ${this.getStateId()}), checking parent (Parent ID: ${this.currentState.parentServiceRef.getStateId()})...\\n`);
       // Recursive call to parent
       return this.currentState.parentServiceRef.getVariable(name, type);
     }
