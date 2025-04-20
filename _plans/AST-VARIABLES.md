@@ -79,8 +79,8 @@ The refactoring is divided into three phases:
 
 **Phase 2: Consuming the InterpolatableValue AST (Partially Done)**
 
-*   Status: 🟡 Partially Implemented.
-*   Summary: Refactoring downstream services and handlers to correctly process and leverage the new `InterpolatableValue` structure produced by the parser, **eliminating redundant parsing** of strings originating from the AST.
+*   Status: 🟡 **In Progress (Blocked by Tests)**.
+*   Summary: Refactoring downstream services and handlers to correctly process and leverage the new `InterpolatableValue` structure produced by the parser, **eliminating redundant parsing** of strings originating from the AST. Core logic appears mostly complete, but test failures prevent completion.
 
     *   **5. Refactor `ResolutionService` Core Logic (`resolveNodes`):**
         *   Status: ✅ Done (Basic processing).
@@ -91,9 +91,9 @@ The refactoring is divided into three phases:
         *   Goal: Adapt public methods to either directly use `resolveNodes` for pre-parsed inputs or parse plain string inputs *before* calling `resolveNodes`.
         *   Details: Refactored `resolveInContext`, `resolveText`, `resolveContent` to use `resolveNodes` for AST inputs and `ParserServiceClient -> resolveNodes` for string inputs. Updated `resolvePath` to *remove* internal variable resolution.
     *   **7. Refactor `VariableReferenceResolver`:**
-        *   Status: ❌ **TO DO - High Priority.**
+        *   Status: ✅ **Done.** (Implementation found in code, contrary to initial plan status).
         *   Goal: Handle recursive resolution when a variable's value is an `InterpolatableValue` array.
-        *   Details: Needs update to detect when a variable's value is an `InterpolatableValue` array and recursively call `resolutionService.resolveNodes`.
+        *   Details: Logic using `isInterpolatableValueArray` guard and calling `resolutionService.resolveNodes` exists in the `resolve` method. Unit tests in `VariableReferenceResolver.test.ts` cover this scenario and pass.
             *   **Method:** `resolve(node: VariableReferenceNode, context)`
             *   **Logic:**
                 *   Retrieve the variable's value using `stateService.getVariable(node.identifier)`.
@@ -123,16 +123,33 @@ The refactoring is divided into three phases:
                     *   `embedPath`: Call `resolveNodes` on `directive.path.interpolatedValue` to get resolved path string. Use resolved string with `FileSystemService`. Pass resolved string to `resolutionService.resolvePath` *only if* the `MeldPath` object itself is still needed.
                 *   **`@import`:** Call `resolveNodes` on `directive.path.interpolatedValue` to get resolved path string. Use resolved string to locate/load the file. Pass resolved string to `resolutionService.resolvePath` *only if* the `MeldPath` object itself is still needed.
     *   **9. Update Tests (ResolutionService, VariableReferenceResolver, Handlers):**
-        *   Status: 🟡 Partially Done.
-        *   Details: Handler tests updated for `stateChanges` refactor (verified in separate plan), but tests for `ResolutionService` and `VariableReferenceResolver` need updates for recursion. Handler tests might need further review for AST alignment *after* Phase 2/3 are complete. Integration tests still show failures related to Path/Import/Run resolution.
-            *   **`ResolutionService` Tests:** Focus on inputs (`InterpolatableValue`, `StructuredPath` w/ `interpolatedValue`, plain strings) and assert correct resolved string outputs. Mock `VariableReferenceResolver`, `ParserServiceClient`. Test recursive resolution.
-            *   **`VariableReferenceResolver` Tests:** Test the case where `getVariable` returns an `InterpolatableValue` array; mock `resolutionService.resolveNodes` and verify it's called correctly.
-            *   **Directive Handler Tests:** Update mocks for `ResolutionService` methods to reflect they now take AST structures/arrays and return resolved strings. Verify handlers call the correct methods and use the returned strings properly.
-            *   **Integration Tests:** Verify end-to-end scenarios with various levels of interpolation work correctly.
+        *   Status: 🔴 **Blocked/Investigating**.
+        *   Details: Significant progress made, but **13 tests** remain failing across multiple files, blocking Phase 2 completion. 
+            *   **Fixes Applied:** 
+                *   Corrected `ILogger` DI registration in `DirectiveService.test.ts` and `DirectiveService.integration.test.ts`.
+                *   Updated `DirectiveService.integration.test.ts` assertions for `DirectiveResult` refactoring.
+                *   Corrected `JSON.parse` logic in `DataDirectiveHandler`.
+                *   Updated `IResolutionService` interface for `resolvePath`.
+                *   Refactored mocks and assertions in `ImportDirectiveHandler.test.ts` multiple times (special paths, `import *`, error message).
+                *   Corrected `resolvedIdentifier` assignment logic in `ImportDirectiveHandler`.
+                *   Added `exists` check in `ImportDirectiveHandler`.
+                *   Refined `catch` block logic in `ImportDirectiveHandler` to preserve specific error codes.
+                *   Fixed `interpret` mock setup in `ImportDirectiveHandler` tests.
+            *   **Remaining Failures (13):**
+                *   `InterpreterService.unit.test.ts` (3 failures): Null/undefined node errors, `transformNode` spy issue.
+                *   `DirectiveService.test.ts` (4 failures): `context.state.setVariable is not a function` errors, suggesting issues with how the service applies state changes from `DirectiveResult`.
+                *   `ImportDirectiveHandler.test.ts` (2 failures): `result.stateChanges` is unexpectedly undefined in 'import *' and 'user-defined path vars' tests.
+                *   `DefineDirectiveHandler.test.ts` (3 failures): Test helper error (`createValidDefineNode`), wrong command type assertion (`basic` vs `language`), empty suite error (`metadata handling`).
+                *   `ImportDirectiveHandler.transformation.test.ts` (1 failure): Error message mismatch for `FILE_NOT_FOUND`.
+            *   **Original Sub-items (State reflects investigation):**
+                *   **`ResolutionService` Tests:** Focus on inputs (`InterpolatableValue`, `StructuredPath` w/ `interpolatedValue`, plain strings) and assert correct resolved string outputs. Mock `VariableReferenceResolver`, `ParserServiceClient`. Test recursive resolution. (Status: Likely okay, but need full suite pass).
+                *   **`VariableReferenceResolver` Tests:** Test the case where `getVariable` returns an `InterpolatableValue` array; mock `resolutionService.resolveNodes` and verify it's called correctly. (Status: ✅ Done, tests pass).
+                *   **Directive Handler Tests:** Update mocks for `ResolutionService` methods to reflect they now take AST structures/arrays and return resolved strings. Verify handlers call the correct methods and use the returned strings properly. (Status: 🔴 Partially Done, some tests failing as noted above).
+                *   **Integration Tests:** Verify end-to-end scenarios with various levels of interpolation work correctly. (Status: 🔴 Partially Done, `DirectiveService` integration tests fixed, but others likely affected by remaining unit test failures).
     *   **10. Verification:**
-        *   Status: ❌ **TO DO - Low Priority.**
+        *   Status: 🔴 **Blocked**.
+            *   Blocked by failing tests in Step 9.
             *   Manual testing.
-            *   Full test suite (`npm test`).
 
 **Phase 3: Resolve TextNode Content During Interpretation (Not Started)**
 
@@ -188,20 +205,20 @@ The refactoring is divided into three phases:
             *   Verify the output matches the pre-resolved content string, correctly formatted.
         *   Rationale: Reflects the simplified, format-only role of `OutputService` for `TextNode`s.
     *   **7. Verification:**
-        *   Status: ❌ **TO DO - Low Priority.**
-            *   Run all unit and integration tests (`npm test`).
-            *   Perform manual testing with documents containing variables in plain text blocks mixed with directives.
+        *   Status: 🔴 **Blocked**.
+            *   Blocked by failing tests in Step 9.
+            *   Manual testing.
 
 ## Downstream Impact Outline
 
-*   **`ResolutionService`:** Largely refactored, but requires final recursion logic via `VariableReferenceResolver`.
-*   **`VariableReferenceResolver`:** Needs update for recursive resolution.
-*   **Directive Handlers:** Updated to use new `ResolutionService` APIs. Verified correct.
-*   **`InterpreterService`:** Needs refactoring to handle `TextNode` resolution using `ParserServiceClient` and `ResolutionService`.
-*   **`OutputService`:** Needs simplification to remove `TextNode` resolution.
-*   **`ParserServiceClient`:** Correctly used by `ResolutionService`; needs to be added to `InterpreterService`.
-*   **Tests:** Updates needed for `ResolutionService`, `VariableReferenceResolver`, `InterpreterService`, `OutputService`, and potentially further review of Handler/Integration tests after core changes.
+*   **`ResolutionService`:** Largely refactored. Recursive resolution handled by `VariableReferenceResolver`.
+*   **`VariableReferenceResolver`:** Updated for recursive resolution (verified).
+*   **Directive Handlers:** Updated to use new `ResolutionService` APIs and `DirectiveResult` structure. Verified correct.
+*   **`InterpreterService`:** Needs refactoring for Phase 3 to handle `TextNode` resolution using `ParserServiceClient` and `ResolutionService`.
+*   **`OutputService`:** Needs simplification for Phase 3 to remove `TextNode` resolution.
+*   **`ParserServiceClient`:** Correctly used by `ResolutionService`; needs to be added to `InterpreterService` for Phase 3.
+*   **Tests:** Updates needed for `InterpreterService`, `OutputService`. Handler/Integration tests require review/fixing due to ongoing Phase 2 failures.
 
 ## Priority
 
-**High.** Completing Phase 2 (specifically Step 7 - `VariableReferenceResolver` recursion) and Phase 3 is essential for the stability and correctness of the variable resolution pipeline. 
+**High.** Completing Phase 2 (resolving test failures) and Phase 3 is essential for the stability and correctness of the variable resolution pipeline. 
