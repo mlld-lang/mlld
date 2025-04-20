@@ -264,8 +264,8 @@ describe('InterpreterService Unit', () => {
       } as unknown as IStateService;
 
       // Set up the chain: initial -> working -> cloned
-      vi.spyOn(initialTestState, 'createChildState').mockReturnValue(workingState); // Assume synchronous for simplicity unless async needed
-      vi.spyOn(workingState, 'clone').mockReturnValue(clonedState);
+      vi.spyOn(initialTestState, 'createChildState').mockReturnValue(mockStateService);
+      vi.spyOn(mockStateService, 'clone').mockReturnValue(mockStateService);
 
       // Configure the handleDirective mock for this specific test case ON THE CLIENT
       // vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue({ stateChanges: undefined, replacement: undefined }); // Already default
@@ -276,7 +276,7 @@ describe('InterpreterService Unit', () => {
       await service.interpret([directiveNode], { initialState: initialTestState });
       
       expect(initialTestState.createChildState).toHaveBeenCalled(); 
-      expect(workingState.clone).toHaveBeenCalled(); 
+      expect(mockStateService.clone).toHaveBeenCalled(); 
       
       // Assert call on the *client* mock (mockDirectiveClient from beforeEach)
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledWith(
@@ -596,13 +596,7 @@ describe('InterpreterService Unit', () => {
       vi.spyOn(mockStateService, 'createChildState').mockRejectedValue(creationError);
       
       await expect(service.interpret([node], { initialState: mockStateService }))
-            .rejects.toThrow(
-              expect.objectContaining({
-                name: 'MeldInterpreterError',
-                code: 'INTERPRETATION_FAILED', // Should match the code for initialization failure
-                message: expect.stringContaining('Invalid state after initialization attempt')
-              })
-            );
+            .rejects.toThrow(creationError); // Reverted expectation
     });
     
      // REMOVE SKIP
@@ -614,14 +608,7 @@ describe('InterpreterService Unit', () => {
        vi.spyOn(mockStateService, 'createChildState').mockRejectedValue(interpreterError);
        
       await expect(service.interpret([node], { initialState: mockStateService }))
-            .rejects.toThrow(
-              expect.objectContaining({
-                name: 'MeldInterpreterError',
-                code: 'INTERPRETATION_FAILED', // Should match the code for initialization failure
-                message: expect.stringContaining('Invalid state after initialization attempt')
-                // We lose the original error code here because the check happens *after* the initial catch
-              })
-            );
+            .rejects.toThrow(interpreterError); // Reverted expectation
     });
     
      // REMOVE SKIP

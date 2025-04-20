@@ -295,39 +295,40 @@ export class InterpreterService implements IInterpreterService {
     let lastGoodState: IStateService | undefined = undefined;
 
     try {
-      // Initialize state - Move initialization into its own try block
+      let baseState: IStateService;
+      // Determine the base state to create the working state from
       try {
         if (initialState) {
-          currentState = initialState;
-          logger.debug('Using provided initial state for interpretation', { stateId: currentState.getStateId() });
+          baseState = initialState;
+          logger.debug('Using provided initial state as base for interpretation', { stateId: baseState.getStateId() });
         } else if (opts.initialState) {
-          if (opts.mergeState) {
-            currentState = opts.initialState.createChildState();
-          } else {
-            currentState = this.stateService!.createChildState();
-          }
+          baseState = opts.initialState; // Use the one from options
           logger.warn('Using initialState from options (deprecated), prefer passing initialState parameter.');
         } else {
           if (!this.stateService) {
              throw new MeldInterpreterError('StateService is not available for creating initial state', 'initialization', undefined, { severity: ErrorSeverity.Fatal });
           }
-          currentState = this.stateService.createChildState();
-          logger.debug('Created new root state for interpretation', { stateId: currentState.getStateId() });
+          baseState = this.stateService; // Use the injected service as base
+          logger.debug('Using injected StateService as base for interpretation');
         }
+
+        // <<< ALWAYS Create a working child state >>>
+        currentState = await baseState.createChildState();
+        logger.debug('Created working child state for interpretation', { stateId: currentState?.getStateId() });
 
         if (!currentState) {
           throw new MeldInterpreterError(
-            'Failed to initialize state for interpretation',
+            'Failed to create working child state for interpretation',
             'initialization',
             undefined,
             { severity: ErrorSeverity.Fatal }
           );
         }
+        
       } catch (initializationError) {
-        // Fix 6 & 7: Catch errors during initialization and re-throw immediately
+        // Catch errors during base state determination or child state creation
         logger.error('Fatal error during interpreter state initialization', { error: initializationError });
-        // Re-throw the original error to preserve its type (Error or MeldInterpreterError)
-        throw initializationError; 
+        throw initializationError; // Re-throw original error
       }
 
       // --- Proceed only if state initialization was successful ---
