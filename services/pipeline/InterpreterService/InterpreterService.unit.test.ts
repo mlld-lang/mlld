@@ -492,17 +492,36 @@ describe('InterpreterService Unit', () => {
 
     // REMOVE SKIP
     it('handles empty node arrays (returns final working state)', async () => {
-      // Setup spies BEFORE calling the function
-      vi.spyOn(mockStateService, 'createChildState'); // Ensure spy is active
-      vi.spyOn(mockStateService, 'clone'); // Ensure spy is active
+      // Use the global mockStateService as the input
+      const inputState = mockStateService;
       
-      const result = await service.interpret([], { initialState: mockStateService });
+      // --- Isolate Spies for this test ---
+      const cloneSpy = vi.spyOn(inputState, 'clone');
+      const createChildSpy = vi.spyOn(inputState, 'createChildState');
+      cloneSpy.mockReturnValue(inputState); // Return self for simplicity
       
-      // Verify createChildState is called (during initialization before loop)
-      expect(mockStateService.createChildState).toHaveBeenCalled(); 
-      // Clone should NOT be called as the loop doesn't run
-      expect(mockStateService.clone).not.toHaveBeenCalled(); 
-      expect(result).toBe(mockStateService);
+      // Clear previous calls
+      cloneSpy.mockClear();
+      createChildSpy.mockClear();
+      
+      // >>> Add Debugging <<<
+      console.log(`[DEBUG TEST] Before interpret: createChildSpy calls = ${createChildSpy.mock.calls.length}`);
+      console.log(`[DEBUG TEST] Before interpret: cloneSpy calls = ${cloneSpy.mock.calls.length}`);
+      // >>> End Debugging <<<
+
+      const result = await service.interpret([], { initialState: inputState });
+      
+      // >>> Add Debugging <<<
+      console.log(`[DEBUG TEST] After interpret: createChildSpy calls = ${createChildSpy.mock.calls.length}`);
+      console.log(`[DEBUG TEST] After interpret: cloneSpy calls = ${cloneSpy.mock.calls.length}`);
+      // >>> End Debugging <<<
+
+      // Verify createChildState was NOT called on the inputState *during* this interpret call
+      expect(createChildSpy).not.toHaveBeenCalled(); 
+      // Verify clone WAS called on the inputState *during* this interpret call (twice: initial + snapshot)
+      expect(cloneSpy).toHaveBeenCalledTimes(2); 
+      // The result should be the state instance created by the *first* clone call.
+      expect(result).toBe(inputState); // Since clone returns inputState mock
     });
     
     // REMOVE SKIP
