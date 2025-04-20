@@ -182,11 +182,35 @@ describe('ImportDirectiveHandler', () => {
       resolutionService.resolvePath.mockResolvedValueOnce(
         createMeldPath(node.directive.path.raw, unsafeCreateValidatedResourcePath(resolvedProjectPath), true)
       );
-      await handler.handle(mockProcessingContext);
+      
+      // Ensure the mocked interpreted state contains variables
+      const importedVarDef: VariableDefinition = { name: 'sampleVar', type: VariableType.TEXT, value: 'sampleValue', metadata: { origin: VariableOrigin.DIRECT_DEFINITION } };
+      const mockInterpretedState = {
+          getStateId: vi.fn().mockReturnValue('interpreted-state-projectpath'),
+          getAllTextVars: vi.fn().mockReturnValue(new Map([['sampleVar', importedVarDef]])),
+          getAllDataVars: vi.fn().mockReturnValue(new Map()),
+          getAllPathVars: vi.fn().mockReturnValue(new Map()),
+          getAllCommands: vi.fn().mockReturnValue(new Map()),
+          getTransformedNodes: vi.fn().mockReturnValue([]),
+          // Add other methods if needed by the handler's state processing logic
+      };
+      interpreterServiceClient.interpret.mockReset(); // Reset before setting new mock behavior
+      interpreterServiceClient.interpret.mockResolvedValue(mockInterpretedState as unknown as IStateService);
+      
+      // Expect the handler to produce stateChanges containing the imported variable
+      const result = await handler.handle(mockProcessingContext);
+      
       expect(resolutionService.resolvePath).toHaveBeenCalledWith(node.directive.path, expect.anything());
       expect(fileSystemService.exists).toHaveBeenCalledWith(resolvedProjectPath);
       expect(circularityService.beginImport).toHaveBeenCalledWith(resolvedProjectPath.replace(/\\/g, '/'));
       expect(circularityService.endImport).toHaveBeenCalledWith(resolvedProjectPath.replace(/\\/g, '/'));
+      
+      // Verify stateChanges includes the imported variable
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('sampleVar');
+      const sampleVarResult = result.stateChanges?.variables?.sampleVar;
+      expect(sampleVarResult?.value).toBe('sampleValue');
+      expect(sampleVarResult?.metadata?.origin).toBe(VariableOrigin.IMPORT); 
     });
 
     it('should handle $PROJECTPATH for project path', async () => {

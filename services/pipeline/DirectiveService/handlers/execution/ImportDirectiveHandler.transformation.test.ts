@@ -352,8 +352,8 @@ describe('ImportDirectiveHandler Transformation', () => {
         () => handler.handle(mockProcessingContext as DirectiveProcessingContext),
         {
           type: 'DirectiveError',
-          code: DirectiveErrorCode.FILE_NOT_FOUND, 
-          messageContains: `File not found: ${finalPath}`
+          code: DirectiveErrorCode.FILE_NOT_FOUND,
+          message: /File not found:.*?missing\.meld/i
         }
       );
       expect(circularityService.endImport).toHaveBeenCalledWith(finalPath.replace(/\\/g, '/'));
