@@ -442,64 +442,85 @@ export class ResolutionService implements IResolutionService {
    */
   public async resolveNodes(nodes: InterpolatableValue, context: ResolutionContext): Promise<string> {
     // Refactored logic to avoid await inside the main loop
-    if (!nodes) return '';
+    // +++ USE process.stdout.write +++
+    const fnName = 'ResolutionService.resolveNodes';
+    process.stdout.write(`DEBUG: [${fnName} ENTRY] NodeCount: ${nodes?.length ?? 0}, StateID: ${context.state?.getStateId() ?? 'N/A'}, Strict: ${context.strict}\n`);
+    // logger.debug(`[${fnName} ENTRY]`, { nodeCount: nodes?.length, contextFlags: context.flags });
+    if (!nodes || nodes.length === 0) {
+      // logger.debug(`[${fnName} EXIT] Empty node array input.`);
+      process.stdout.write(`DEBUG: [${fnName} EXIT] Empty node array input.\n`);
+      return '';
+    }
+    // +++ End Added Logging +++
 
     const promises: Promise<string>[] = [];
-    const resolvedValues = new Map<VariableReferenceNode, string>(); // To store resolved var values
+    // Change map to use nodeId (string) as key
+    const resolvedValues = new Map<string, string>(); 
 
     // First pass: Collect promises for variable resolutions
+    process.stdout.write(`DEBUG: [${fnName} Pass 1] Collecting variable resolution promises...\n`);
     for (const node of nodes) {
         if (node.type === 'VariableReference') {
+            process.stdout.write(`DEBUG: [${fnName} Pass 1] Found VariableReference: ${node.identifier}\n`);
             const promise = this.variableReferenceResolver.resolve(node, context)
                 .catch(error => {
+                    process.stderr.write(`WARN: [${fnName} Pass 1] Variable resolution failed for ${node.identifier}. Strict=${context.strict}. Error: ${error?.message ?? error}\n`);
                     if (context.strict) throw error;
                     return ''; // Return empty string for failed optional vars
                 });
             promises.push(promise.then(val => {
-                resolvedValues.set(node, val); // Store resolved value mapped to node
+                process.stdout.write(`DEBUG: [${fnName} Pass 1] Resolved ${node.identifier} to: '${val}'\n`);
+                // Use nodeId as the key
+                resolvedValues.set(node.nodeId, val); 
                 return val; // Still return value for Promise.all
             }));
         } else if (node.type === 'Text') {
-            // Do nothing in this pass for TextNodes
+            process.stdout.write(`DEBUG: [${fnName} Pass 1] Found TextNode: '${node.content?.substring(0, 30)}...'\n`);
         } else {
-            // This case should be unreachable due to InterpolatableValue type
-            // Log safely without accessing properties of potentially 'never' type
-             logger.warn(`[ResolutionService.resolveNodes] Encountered unexpected node type in first pass`);
+             process.stderr.write(`WARN: [${fnName} Pass 1] Encountered unexpected node type\n`);
         }
     }
 
     // Wait for all variable resolutions to complete
+    process.stdout.write(`DEBUG: [${fnName} Pass 1] Awaiting ${promises.length} promises...\n`);
     try {
       await Promise.all(promises);
+      process.stdout.write(`DEBUG: [${fnName} Pass 1] All promises resolved.\n`);
     } catch (error) { 
-       // If any strict resolution failed, Promise.all will reject.
-       // Re-throw the original error which should be a MeldError.
-       logger.error('Error during Promise.all in resolveNodes (strict mode failure likely)', { error });
+       process.stderr.write(`ERROR: Error during Promise.all in resolveNodes (strict mode failure likely). Error: ${error?.message ?? error}\n`);
        throw error; 
     }
 
     // Second pass: Build the final string synchronously using an array and join
+    process.stdout.write(`DEBUG: [${fnName} Pass 2] Building final string...\n`);
     const segments: string[] = []; // Initialize an array for string parts
+    const mapKeys = Array.from(resolvedValues.keys()).join(', '); // Log node IDs directly
+    process.stdout.write(`DEBUG: [${fnName} Pass 2] Map keys (nodeIds): [${mapKeys}]\n`);
     for (const node of nodes) {
+        process.stdout.write(`DEBUG: [${fnName} Pass 2] Processing node with ID: ${node.nodeId}\n`);
         if (node.type === 'Text') {
             const contentToPush = node.content;
-            // +++ Add Aggressive Logging +++
-            process.stdout.write(`DEBUG: [ResService.resolveNodes Loop Text] Pushing segment: '${contentToPush}' (Length: ${contentToPush?.length ?? 'N/A'})\n`);
-            segments.push(contentToPush); 
-            process.stdout.write(`DEBUG: [ResService.resolveNodes Loop Text] Segments array NOW: [${segments.map(s => `'${s}'`).join(', ')}]\n`);
+            process.stdout.write(`DEBUG: [${fnName} Pass 2 Text] Pushing segment: '${contentToPush}'\n`);
+            segments.push(contentToPush);
+            process.stdout.write(`DEBUG: [${fnName} Pass 2 Text] Segments array NOW: [${segments.map(s => `'${s}'`).join(', ')}]\n`);
         } else if (node.type === 'VariableReference') {
-            const resolvedVarValue = resolvedValues.get(node) || '';
-            // +++ Add Aggressive Logging +++
-            process.stdout.write(`DEBUG: [ResService.resolveNodes Loop Var] Pushing segment: '${resolvedVarValue}' (Length: ${resolvedVarValue?.length ?? 'N/A'})\n`);
-            segments.push(resolvedVarValue); 
-            process.stdout.write(`DEBUG: [ResService.resolveNodes Loop Var] Segments array NOW: [${segments.map(s => `'${s}'`).join(', ')}]\n`);
+            // Use nodeId as the key for lookup
+            const mapHasKey = resolvedValues.has(node.nodeId);
+            const valueFromMap = resolvedValues.get(node.nodeId);
+            process.stdout.write(`DEBUG: [${fnName} Pass 2 Var(${node.identifier})] Map has node key (${node.nodeId})? ${mapHasKey}. Value from map: '${valueFromMap}'\n`);
+            const resolvedVarValue = valueFromMap || ''; // Use value retrieved from map
+            process.stdout.write(`DEBUG: [${fnName} Pass 2 Var(${node.identifier})] Pushing segment: '${resolvedVarValue}'\n`);
+            segments.push(resolvedVarValue);
+            process.stdout.write(`DEBUG: [${fnName} Pass 2 Var(${node.identifier})] Segments array NOW: [${segments.map(s => `'${s}'`).join(', ')}]\n`);
         }
-        // No need for the final else, already warned above
     }
-    // +++ Add Aggressive Logging +++
-    process.stdout.write(`DEBUG: [ResService.resolveNodes Pre-Join] Segments array: [${segments.map(s => `'${s}'`).join(', ')}]\n`);
+    // +++ MODIFY Logging +++
+    process.stdout.write(`DEBUG: [${fnName} Pass 2] Pre-Join Segments array: [${segments.map(s => `'${s}'`).join(', ')}]\n`);
+    // logger.debug(`[${fnName} Pass 2] Pre-Join Segments array:`, segments);
     const result = segments.join(''); // Join all segments at the end
-    process.stdout.write(`DEBUG: [ResolutionService.resolveNodes EXIT - ArrayJoin] Returning: '${result}'\n`); // Update log message
+    // +++ MODIFY Logging +++
+    process.stdout.write(`DEBUG: [${fnName} EXIT] Returning: '${result}'\n`);
+    // logger.debug(`[${fnName} EXIT] Returning: '${result}'`);
     return result;
   }
 

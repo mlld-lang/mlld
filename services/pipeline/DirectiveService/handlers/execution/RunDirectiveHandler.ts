@@ -96,7 +96,9 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       try {
           if (subtype === 'runCommand') {
             if (!isInterpolatableValueArray(commandInput)) throw new DirectiveError('Invalid command input for runCommand', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+            process.stdout.write(`DEBUG: [RunHandler runCommand] BEFORE resolveNodes. Input: ${JSON.stringify(commandInput)}, StateID: ${resolutionContext?.state?.getStateId() ?? 'N/A'}, Strict: ${resolutionContext?.strict}\n`);
             commandToExecute = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
+            process.stdout.write(`DEBUG: [RunHandler runCommand] AFTER resolveNodes. Result: '${commandToExecute}'\n`);
           } else if (subtype === 'runDefined') {
              const definedCommand = commandInput as { name: string; args?: InterpolatableValue };
              if (typeof definedCommand !== 'object' || !definedCommand.name) throw new DirectiveError('Invalid command input structure for runDefined', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
@@ -113,7 +115,9 @@ export class RunDirectiveHandler implements IDirectiveHandler {
              }
           } else if (subtype === 'runCode' || subtype === 'runCodeParams') {
             if (!isInterpolatableValueArray(commandInput)) throw new DirectiveError('Invalid command input for runCode/runCodeParams', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+            process.stdout.write(`DEBUG: [RunHandler runCode] BEFORE resolveNodes. Input: ${JSON.stringify(commandInput)}, StateID: ${resolutionContext?.state?.getStateId() ?? 'N/A'}, Strict: ${resolutionContext?.strict}\n`);
             const scriptContent = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
+            process.stdout.write(`DEBUG: [RunHandler runCode] AFTER resolveNodes. Result: '${scriptContent}'\n`);
               if (language) {
               tempFilePath = await this.createTempScriptFile(scriptContent, language);
               commandToExecute = `${language} ${this.escapePath(tempFilePath)}`;
@@ -158,7 +162,14 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       // --- Execution Block --- 
       let stdout: string, stderr: string;
       try {
-          logger.debug(`Executing command: ${commandToExecute}`, { cwd: execOptions.cwd, args: commandArgs });
+          process.stdout.write(`DEBUG: [RunHandler] Attempting to execute: '${commandToExecute}' (Subtype: ${subtype}, Lang: ${language ?? 'N/A'}, CWD: ${execOptions.cwd})\n`);
+          
+          // Check if command is empty AFTER resolution
+          if (!commandToExecute || commandToExecute.trim() === '') {
+            // Use a more specific error code if desired, or keep VALIDATION_FAILED
+            throw new DirectiveError('Run directive command resolved to an empty string', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+          }
+
           const result = await this.fileSystemService.executeCommand(commandToExecute, execOptions);
           stdout = result.stdout;
           stderr = result.stderr;

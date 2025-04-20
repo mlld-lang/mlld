@@ -37,22 +37,15 @@ describe('Nested Array Access Tests', () => {
     testContainer = container.createChildContainer();
 
     testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
-    testContainer.registerInstance('MainLogger', logger);
-    testContainer.register('ILogger', { useToken: 'MainLogger' });
+    testContainer.registerInstance<ILogger>('ILogger', {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      level: 'silent'
+    });
 
     testContainer.registerInstance('DependencyContainer', testContainer);
-
-    testContainer.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
-    testContainer.register(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory });
-    testContainer.register('IResolutionService', { useClass: ResolutionService });
-    testContainer.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
-    testContainer.register('IPathService', { useClass: PathService });
-    
-    testContainer.register('IStateService', { useClass: StateService });
-    
-    testContainer.register('IParserService', { useClass: ParserService });
-    testContainer.register('IInterpreterService', { useClass: InterpreterService });
-    testContainer.register('IOutputService', { useClass: OutputService });
   });
 
   afterEach(async () => {

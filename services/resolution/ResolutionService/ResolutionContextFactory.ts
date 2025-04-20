@@ -9,6 +9,7 @@ import { VariableType } from '@core/types/variables';
 import type { ParserFlags } from '@core/types/resolution';
 import { StringLiteralType } from '@core/types/common';
 import type { IStateService } from '@services/state/StateService/IStateService';
+import { logger } from '@core/utils/logger.js';
 
 // Define the type for the context object without the methods
 type ResolutionContextBase = Omit<ResolutionContext, 
@@ -136,6 +137,16 @@ export class ResolutionContextFactory {
    * Create a generic resolution context.
    */
   static create(state: IStateService, filePath?: string): ResolutionContext {
+    // +++ USE process.stdout.write +++
+    try {
+      const stateId = state?.getStateId ? state.getStateId() : 'UNKNOWN_OR_MISSING_STATE';
+      // logger.debug(`[ResolutionContextFactory.create ENTRY]`, { stateId, filePath });
+      process.stdout.write(`DEBUG: [ResolutionContextFactory.create ENTRY] StateID=${stateId}, FilePath=${filePath ?? 'N/A'}\n`);
+    } catch (logError) {
+      console.error('Error logging in ResolutionContextFactory.create:', logError);
+    }
+    // +++ END LOGGING +++
+    
     const baseProps: ResolutionContextBase = {
       state,
       strict: false, 

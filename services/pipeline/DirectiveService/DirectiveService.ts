@@ -372,8 +372,12 @@ export class DirectiveService implements IDirectiveService {
     const specificHandler = handler as IDirectiveHandler;
 
     try {
-      // Clone state *before* validation/circularity checks if needed by them
-      const state = context.state?.clone() || this.stateService!.createChildState(); 
+      // REMOVE STATE CLONE: Operate directly on the context state
+      // const state = context.state?.clone() || this.stateService!.createChildState(); 
+      const state = context.state; // Use the state from the incoming context
+      if (!state) { // Add check if context.state could be null/undefined
+        throw new MeldError('State service is missing in the directive processing context.', { code: 'INTERNAL_ERROR', severity: ErrorSeverity.Fatal });
+      }
       const currentFilePath = state.getCurrentFilePath() ?? undefined;
 
       // Perform validation first
@@ -421,58 +425,12 @@ export class DirectiveService implements IDirectiveService {
 
       this.logger.debug(`Executing handler for directive: ${kind}`);
       
+      // <<< ADD LOGGING HERE >>>
+      process.stdout.write(`DEBUG: [DirectiveService.handleDirective] BEFORE calling handler '${kind}'. Node: ${JSON.stringify(node)}\n`);
+
       // Use the specifically cast handler
       const result: DirectiveResult = await specificHandler.handle(processingContext); 
       
-      // <<< NEW LOGIC: Apply state changes >>>
-      if (result.stateChanges?.variables) {
-        this.logger.debug(`Applying state changes from ${kind} handler`, { count: Object.keys(result.stateChanges.variables).length });
-        for (const [name, varDef] of Object.entries(result.stateChanges.variables)) {
-          // Reconstruct the full variable object from the definition
-          let variableToSet: MeldVariable;
-          const metadata = varDef.metadata; // Metadata should be complete
-          
-          // Use type guards or switch statement for safety
-          switch (varDef.type) {
-            case VariableType.TEXT:
-              variableToSet = createTextVariable(name, varDef.value as string, metadata);
-              break;
-            case VariableType.DATA:
-              variableToSet = createDataVariable(name, varDef.value, metadata);
-              break;
-            case VariableType.PATH:
-              // Ensure value matches IFilesystemPathState | IUrlPathState
-              variableToSet = createPathVariable(name, varDef.value as any, metadata);
-              break;
-            case VariableType.COMMAND:
-              variableToSet = createCommandVariable(name, varDef.value as ICommandDefinition, metadata);
-              break;
-            default:
-              this.logger.warn(`Unknown variable type in stateChanges from ${kind} handler: ${varDef.type}`);
-              continue; // Skip unknown types
-          }
-          
-          // Apply the change to the state service from the *original context*
-          switch (varDef.type) {
-            case VariableType.TEXT:
-              await context.state.setTextVar(name, varDef.value as string, metadata);
-              break;
-            case VariableType.DATA:
-              await context.state.setDataVar(name, varDef.value, metadata);
-              break;
-            case VariableType.PATH:
-              await context.state.setPathVar(name, varDef.value as any, metadata);
-              break;
-            case VariableType.COMMAND:
-              await context.state.setCommandVar(name, varDef.value as ICommandDefinition, metadata);
-              break;
-            // No default needed as we continue in the outer loop for unknown types
-          }
-          this.logger.debug(`Applied variable change: ${name}`, { type: varDef.type });
-        }
-      }
-      // <<< End state change application >>>
-
       // <<< RETURN the result object unchanged >>>
       // The caller (InterpreterService) will handle the replacement nodes
       // and use the (potentially modified) context.state.
@@ -482,7 +440,6 @@ export class DirectiveService implements IDirectiveService {
         const message = error instanceof Error ? error.message : 'Unknown directive processing error';
         const code = (error instanceof DirectiveError) ? error.code : DirectiveErrorCode.EXECUTION_FAILED;
         // Create a simplified context for the error details
-        const currentFilePath = context.state?.getCurrentFilePath() ?? undefined;
         const errorContext: Partial<DirectiveProcessingContext> = {
            state: context.state, // Keep state if available
            resolutionContext: context.resolutionContext, // Keep context if available
@@ -681,28 +638,8 @@ export class DirectiveService implements IDirectiveService {
         // handleDirective now returns DirectiveResult { stateChanges?, replacement? }
         const result = await this.handleDirective(node, nodeProcessingContext);
 
-        // --- Apply state changes logic duplicated/moved from handleDirective --- 
-        // (Could be refactored into a helper method)
-        const stateToModify = nodeProcessingContext.state; // Get the state used for this node
-        if (result.stateChanges?.variables) {
-          this.logger.debug(`Applying state changes in processDirectives from ${node.directive.kind}`, { count: Object.keys(result.stateChanges.variables).length });
-          for (const [name, varDef] of Object.entries(result.stateChanges.variables)) {
-            let variableToSet: MeldVariable;
-            const metadata = varDef.metadata;
-            switch (varDef.type) {
-              case VariableType.TEXT: variableToSet = createTextVariable(name, varDef.value as string, metadata); break;
-              case VariableType.DATA: variableToSet = createDataVariable(name, varDef.value, metadata); break;
-              case VariableType.PATH: variableToSet = createPathVariable(name, varDef.value as any, metadata); break;
-              case VariableType.COMMAND: variableToSet = createCommandVariable(name, varDef.value as ICommandDefinition, metadata); break;
-              default: continue;
-            }
-            await stateToModify.setVariable(variableToSet);
-          }
-        }
-        // --- End Apply state changes --- 
-
         // Merge the node's modified state back into the loop's current state
-        currentState.mergeChildState(stateToModify); 
+        currentState.mergeChildState(nodeProcessingContext.state); 
 
         // NOTE: Replacement node handling is deferred to InterpreterService
 

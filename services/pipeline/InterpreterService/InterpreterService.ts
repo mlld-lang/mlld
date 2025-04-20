@@ -208,12 +208,8 @@ export class InterpreterService implements IInterpreterService {
         process.stdout.write(`DEBUG: [callDirectiveHandleDirective] AFTER await client.handleDirective for ${node.directive.kind}. Result type: ${typeof result}\n`);
         return result as DirectiveResult;
       } catch (error) {
-        throw new MeldInterpreterError(
-          `Failed to handle directive '${node.directive.kind}' via client: ${getErrorMessage(error)}`,
-          'directive_client_error',
-          convertLocation(node.location),
-          { cause: error instanceof Error ? error : undefined, severity: ErrorSeverity.Fatal }
-        );
+        // Re-throw the original error to preserve its type and details
+        throw error;
       }
     }
     

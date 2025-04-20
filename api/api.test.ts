@@ -51,31 +51,21 @@ describe('SDK Integration Tests', () => {
     // Register Dependencies
     // Infrastructure Mocks (FS, Logger)
     testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
-    // Register the actual main logger using correct tokens
-    testContainer.registerInstance('MainLogger', logger); 
-    testContainer.register('ILogger', { useToken: 'MainLogger' });
-
-    // Register Real Factories
-    testContainer.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
-    testContainer.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
-    testContainer.register(FileSystemServiceClientFactory, { useClass: FileSystemServiceClientFactory });
-    testContainer.register(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory });
-
-    // Register Real Services (Singleton State)
-    testContainer.registerSingleton('IStateService', StateService);
-    testContainer.registerSingleton('IResolutionService', ResolutionService);
-    testContainer.register('IParserService', { useClass: ParserService });
-    testContainer.register('IInterpreterService', { useClass: InterpreterService });
-    testContainer.register('IOutputService', { useClass: OutputService });
-    testContainer.register('IFileSystemService', { useClass: FileSystemService });
-    testContainer.register('IPathService', { useClass: PathService });
-    testContainer.register('IPathOperationsService', { useClass: PathOperationsService });
-    testContainer.register('ICircularityService', { useClass: CircularityService });
-    testContainer.register('IDirectiveService', { useClass: DirectiveService });
-    testContainer.register('IValidationService', { useClass: ValidationService });
+    // Register a silent mock logger
+    testContainer.registerInstance<ILogger>('ILogger', {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      trace: vi.fn(),
+      level: 'silent'
+    });
 
     // Register the container itself
     testContainer.registerInstance('DependencyContainer', testContainer);
+
+    // +++ ADD BACK IParserService registration +++
+    testContainer.register('IParserService', { useClass: ParserService });
   });
 
   afterEach(async () => {
@@ -286,7 +276,7 @@ More text`;
 @run [echo {{greeting}}]`;
       await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
-      const result = await processMeld(testFilePath, {
+      const result = await processMeld(content, {
         fs: context.fs as unknown as NodeFileSystem,
         transformation: true,
         container: testContainer
@@ -304,7 +294,7 @@ More text`;
 @run [echo {{greeting}}, {{name}}!]`;
       await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
-      const result = await processMeld(testFilePath, {
+      const result = await processMeld(content, {
         fs: context.fs as unknown as NodeFileSystem,
         transformation: true,
         container: testContainer
@@ -329,7 +319,7 @@ More text`;
 @run [echo "This is a simple example"]`;
       await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
-      const result = await processMeld(testFilePath, {
+      const result = await processMeld(content, {
         fs: context.fs as unknown as NodeFileSystem,
         transformation: true,
         container: testContainer

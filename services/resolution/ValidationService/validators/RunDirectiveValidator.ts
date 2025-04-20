@@ -20,21 +20,4 @@ export async function validateRunDirective(node: DirectiveNode): Promise<void> {
       }
     );
   }
-  
-  // Get the command value for validation
-  const commandValue = typeof directive.command === 'string' 
-    ? directive.command 
-    : directive.command.raw;
-  
-  // Command cannot be empty
-  if (!commandValue || commandValue.trim() === '') {
-    throw new MeldDirectiveError(
-      'Run directive command cannot be empty',
-      'run',
-      { 
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
-      }
-    );
-  }
 } 
