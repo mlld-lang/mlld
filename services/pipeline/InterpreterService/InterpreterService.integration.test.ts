@@ -615,8 +615,8 @@ describe('InterpreterService Integration', () => {
 
     it('maintains correct file paths during interpretation', async () => {
       const node = context.factory.createTextDirective('dummy', 'value', context.factory.createLocation(1,1));
-      // Mock handler to return a valid empty DirectiveResult
-      vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue({ stateChanges: undefined, replacement: undefined });
+      // Re-apply the mock explicitly for this test to ensure it returns the correct structure
+      vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue({ stateChanges: undefined, replacement: [] }); // Use empty array for replacement
       const resultState = await interpreter.interpret([node] as MeldNode[], { filePath: 'some/dir/test.meld' });
       // Check that the directive was processed
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalled();
