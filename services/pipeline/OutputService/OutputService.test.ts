@@ -104,6 +104,21 @@ describe('OutputService', () => {
       expect(output).toBe('Hello world\n');
     });
 
+    // Added test to verify handling of pre-resolved content
+    it('should output pre-resolved text nodes correctly', async () => {
+      // Simulate a node that ORIGINALLY was 'Hello {{user}}!' but was resolved by InterpreterService
+      const preResolvedContent = 'Hello Alice!';
+      const nodes: MeldNode[] = [
+        createTextNode(preResolvedContent, createLocation(1, 1)) 
+      ];
+      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      // No need to mock resolutionService for this node type
+
+      const output = await service.convert(nodes, state, 'markdown');
+      // Expect the output service to use the content directly
+      expect(output).toBe(preResolvedContent); 
+    });
+
     it.skip('should include state variables when requested', async () => { // <<< SKIP TEST
       // Mock state variable getters
       vi.mocked(state as any).getAllTextVars.mockReturnValue(new Map([['greeting', { name: 'greeting', type: VariableType.TEXT, value: 'hello' }]]));

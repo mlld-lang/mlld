@@ -357,50 +357,63 @@ describe('InterpreterService Unit', () => {
     });
 
     // TODO(mock-issue): Skipping due to complex DI/mock interaction issues (see Issue #39).
-    it('processes text nodes with interpolation via parser and resolution services', async () => {
-        // Input nodes as parser would generate them
-        const initialNodes: MeldNode[] = [
-            createTextNode('Hello ', createLocation(1, 1)),
-            { type: 'VariableReference', identifier: 'name', valueType: 'text', isVariableReference: true, location: createLocation(1, 8) } as VariableReferenceNode,
-            createTextNode('!', createLocation(1, 14))
-        ];
-        const textNode1 = initialNodes[0];
-        const varNode = initialNodes[1] as VariableReferenceNode;
-        const textNode2 = initialNodes[2];
+    // --- REVISED TEST for Phase 3 TextNode Resolution ---
+    it('processes TextNode with interpolation via parser and resolution services', async () => {
+        const originalContent = 'Hello {{name}}!';
+        const textNode: TextNode = createTextNode(originalContent, createLocation(1, 1));
         
         const initialTestState = mockStateService; 
         const workingState = mockStateService; // createChildState returns mockStateService
         
         const resolvedName = 'Alice'; // Mock resolved value for 'name'
-        const resolvedFinalTextNodeContent = resolvedName; // What resolveNodes returns for the VarRef
-        const expectedFinalTextNode: TextNode = {
-             type: 'Text',
-             content: resolvedFinalTextNodeContent,
-             location: varNode.location, // Should likely use location from VarRef
-             nodeId: expect.any(String)
-        };
+        const expectedFinalContent = `Hello ${resolvedName}!`;
+
+        // Mock nodes returned by parserClient.parseString
+        const parsedInterpolatableValue: InterpolatableValue = [
+            { type: 'Text', content: 'Hello ', nodeId: 'text-1' } as TextNode,
+            { type: 'VariableReference', identifier: 'name', valueType: 'text', isVariableReference: true, nodeId: 'var-1' } as VariableReferenceNode,
+            { type: 'Text', content: '!', nodeId: 'text-2' } as TextNode
+        ];
 
         // Configure mocks
         vi.spyOn(workingState, 'addNode');
         vi.spyOn(workingState, 'getCurrentFilePath').mockReturnValue('/interpolate/path.mld');
-        vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue(resolvedFinalTextNodeContent);
-        // No need to mock parserClient for this logic path
+        // Mock parserClient.parseString
+        const parseStringSpy = vi.spyOn(mockParserClient, 'parseString');
+        parseStringSpy.mockResolvedValue(parsedInterpolatableValue);
+        // Mock resolutionService.resolveNodes
+        const resolveNodesSpy = vi.spyOn(mockResolutionService, 'resolveNodes');
+        resolveNodesSpy.mockResolvedValue(expectedFinalContent);
 
-        await service.interpret(initialNodes, { initialState: initialTestState });
+        // --- Execute ---
+        await service.interpretNode(textNode, workingState, { initialState: initialTestState });
 
-        // Verify resolution was called for the VariableReferenceNode
-        expect(mockResolutionService.resolveNodes).toHaveBeenCalledTimes(1);
-        expect(mockResolutionService.resolveNodes).toHaveBeenCalledWith(
-            [varNode], // Should be called with just the variable node
+        // --- Assert --- 
+        // Verify parserClient was called correctly
+        expect(parseStringSpy).toHaveBeenCalledTimes(1);
+        expect(parseStringSpy).toHaveBeenCalledWith(
+            originalContent,
+            expect.objectContaining({ 
+                filePath: '/interpolate/path.mld',
+                startRule: 'InterpolatableContentOrEmpty' // Match the startRule used in InterpreterService
+            })
+        );
+
+        // Verify resolutionService was called correctly
+        expect(resolveNodesSpy).toHaveBeenCalledTimes(1);
+        expect(resolveNodesSpy).toHaveBeenCalledWith(
+            parsedInterpolatableValue, // Expect the array returned by the parser mock
             expect.objectContaining({ state: workingState })
         );
 
-        // Verify addNode was called for the initial text and the resolved variable (as text)
-        expect(workingState.addNode).toHaveBeenCalledTimes(3); // Called for Text, Resolved VarRef, final Text
-        expect(workingState.addNode).toHaveBeenCalledWith(textNode1);
-        expect(workingState.addNode).toHaveBeenCalledWith(expect.objectContaining(expectedFinalTextNode));
-        // It *should* add the final TextNode ('!') as well
-        expect(workingState.addNode).toHaveBeenCalledWith(textNode2); 
+        // Verify addNode was called with the new TextNode containing resolved content
+        expect(workingState.addNode).toHaveBeenCalledTimes(1); 
+        expect(workingState.addNode).toHaveBeenCalledWith(expect.objectContaining({
+            type: 'Text',
+            content: expectedFinalContent, // Check for resolved content
+            location: textNode.location // Check location is preserved
+            // nodeId will be different, so don't check it strictly unless necessary
+        }));
     });
   });
 

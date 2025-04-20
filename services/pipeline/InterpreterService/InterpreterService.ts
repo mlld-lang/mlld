@@ -420,7 +420,46 @@ export class InterpreterService implements IInterpreterService {
     switch (node.type) {
       case 'Text':
         const textNode = node as TextNode;
-        currentState.addNode(textNode);
+        let nodeToAdd: TextNode = textNode; // Start with the original node
+
+        // Check if content potentially needs resolution and parser client is available
+        if (textNode.content.includes('{{') && this.parserClient && this.resolutionService) {
+            logger.debug(`[InterpreterService] TextNode content might need resolution: ${textNode.content.substring(0, 50)}...`);
+            try {
+                // 1. Parse the string content into an InterpolatableValue array
+                // Assuming parseString exists and returns InterpolatableValue or throws
+                const parsedNodes: InterpolatableValue = await this.parserClient.parseString(
+                    textNode.content, 
+                    { 
+                        filePath: currentState.getCurrentFilePath() ?? 'unknown',
+                        startRule: 'InterpolatableContentOrEmpty' // Assuming this rule exists and is suitable
+                    }
+                );
+                logger.debug(`[InterpreterService] Parsed TextNode content into ${parsedNodes?.length ?? 0} nodes.`);
+
+                // 2. Resolve the parsed nodes
+                const context = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath());
+                const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, context);
+                logger.debug(`[InterpreterService] Resolved TextNode content to: ${resolvedContent.substring(0, 50)}...`);
+
+                // 3. Create a new node with resolved content
+                nodeToAdd = {
+                    ...textNode, // Copy original properties (location, nodeId, etc.)
+                    content: resolvedContent, // Use the resolved content
+                };
+
+            } catch (resolutionError) {
+                logger.warn('[InterpreterService] Failed to parse/resolve TextNode content, adding original node instead.', {
+                    error: resolutionError instanceof Error ? resolutionError.message : String(resolutionError),
+                    originalContent: textNode.content.substring(0, 100),
+                    filePath: currentState.getCurrentFilePath()
+                });
+                // Fallback to adding the original node if resolution fails
+                nodeToAdd = textNode;
+            }
+        }
+        // Add either the original node or the newly resolved node
+        currentState.addNode(nodeToAdd);
         break;
 
       case 'CodeFence':
