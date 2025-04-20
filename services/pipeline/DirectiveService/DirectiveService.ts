@@ -12,7 +12,7 @@ import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/Directive
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import type { ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import { Service } from '@core/ServiceProvider.js';
-import { inject, injectable, delay } from 'tsyringe';
+import { inject, injectable, delay, injectAll } from 'tsyringe';
 import { container } from 'tsyringe';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
@@ -41,15 +41,16 @@ import {
 } from '@core/types/variables.js';
 import { MeldVariable } from '@core/types/variables.js';
 import type { ICommandDefinition } from '@core/types/define.js';
+import { isBasicCommand } from '@core/types/define.js';
 
 // Import all handlers
-import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
-import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
-import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
-import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
-import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
-import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
-import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
+// import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
+// import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
+// import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
+// import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
+// import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
+// import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
+// import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
 
 export class MeldLLMXMLError extends Error {
   constructor(
@@ -95,35 +96,52 @@ export class DirectiveService implements IDirectiveService {
   private initialized = false;
   private logger: ILogger;
 
-  private handlers: Map<string, IDirectiveHandler> = new Map();
+  private handlers: Map<string, IDirectiveHandler>;
 
   /**
    * Creates a new DirectiveService instance.
    * Uses dependency injection for service dependencies.
    * 
+   * @param allHandlers All registered IDirectiveHandler instances (injected)
    * @param validationService Validation service for directives (injected)
    * @param stateService State service for managing variables (injected)
    * @param pathService Path service for handling file paths (injected)
    * @param fileSystemService File system service for file operations (injected)
    * @param parserService Parser service for parsing Meld files (injected)
-   * @param interpreterServiceClientFactory Factory for creating interpreter clients (injected)
    * @param circularityService Circularity service for detecting circular imports (injected)
    * @param resolutionService Resolution service for variable resolution (injected)
+   * @param interpreterServiceClientFactory Factory for creating interpreter clients (injected)
    * @param logger Logger for directive operations (optional)
    */
   constructor(
+    @injectAll('IDirectiveHandler') private allHandlers: IDirectiveHandler[],
     @inject('IValidationService') validationService?: IValidationService,
     @inject('IStateService') stateService?: IStateService,
     @inject('IPathService') private pathService?: IPathService,
     @inject('IFileSystemService') fileSystemService?: IFileSystemService,
     @inject('IParserService') parserService?: ParserServiceLike,
-    @inject(delay(() => InterpreterServiceClientFactory)) interpreterServiceClientFactory?: InterpreterServiceClientFactory,
     @inject('ICircularityService') circularityService?: CircularityServiceLike,
     @inject('IResolutionService') resolutionService?: IResolutionService,
+    @inject(delay(() => InterpreterServiceClientFactory)) interpreterServiceClientFactory?: InterpreterServiceClientFactory,
     @inject('ILogger') logger?: ILogger
   ) {
     this.logger = logger || directiveLogger;
     
+    // Initialize handlers map from injected array FIRST
+    this.handlers = new Map();
+    if (this.allHandlers) {
+      this.allHandlers.forEach(handler => {
+        if (handler && handler.kind) {
+          this.handlers.set(handler.kind, handler);
+          this.logger.debug(`Registered injected handler for directive: ${handler.kind}`);
+        } else {
+          this.logger.warn('Received an invalid handler during injection.', { handler });
+        }
+      });
+    } else {
+      this.logger.warn('No handlers were injected via @injectAll(\'IDirectiveHandler\'). Handler map will be empty.');
+    }
+
     // Initialize interpreter client factory first if available
     this.interpreterClientFactory = interpreterServiceClientFactory;
     if (this.interpreterClientFactory) {
@@ -148,16 +166,9 @@ export class DirectiveService implements IDirectiveService {
        this.logger.debug('DirectiveService constructed but dependencies incomplete. Call initialize() manually if needed.');
     }
     
-    // Set initialized to true before registering handlers
+    // Set initialized to true after handler map is populated
     // this.initialized = true; 
     
-    // Register default handlers
-    // this.registerDefaultHandlers();
-
-    // ---> Constructor Log <---
-    // process.stdout.write(`DEBUG [CONSTRUCTOR]: DirectiveService - Instance created.\n`);
-    // ---> End Constructor Log <---
-
     // Assign services with checks
     if (validationService) {
         this.validationService = validationService;
@@ -258,7 +269,7 @@ export class DirectiveService implements IDirectiveService {
     this.initialized = true;
     
     // Register default handlers AFTER setting initialized
-    this.registerDefaultHandlers();
+    // this.registerDefaultHandlers();
         
     // Handle the interpreter client factory (if provided via DI)
     if (interpreterServiceClientFactory) {
@@ -304,7 +315,7 @@ export class DirectiveService implements IDirectiveService {
     }
 
     // Register default handlers AFTER setting initialized
-    this.registerDefaultHandlers();
+    // this.registerDefaultHandlers();
 
     this.logger.debug('DirectiveService initialized manually', {
       handlers: Array.from(this.handlers.keys())
@@ -312,130 +323,8 @@ export class DirectiveService implements IDirectiveService {
   }
 
   /**
-   * Register all default directive handlers
-   * This is public to allow tests to explicitly initialize handlers in both DI and non-DI modes
-   */
-  public registerDefaultHandlers(): void {
-    // Add checks for required services before registering handlers that depend on them
-    if (!this.validationService || !this.stateService || !this.resolutionService) {
-        this.logger.warn('Skipping registration of definition handlers due to missing core services.');
-        // Skip definition handlers if core services missing
-    } else {
-        // Definition handlers (require Validation, State, Resolution)
-        try {
-          // Check for FileSystemService needed by TextDirectiveHandler
-          if (!this.fileSystemService) {
-            this.logger.warn('FileSystemService not available for TextDirectiveHandler injection');
-          }
-          const textHandler = new TextDirectiveHandler(
-            this.resolutionService,
-            this.fileSystemService
-          );
-          this.registerHandler(textHandler);
-
-          // Check for services needed by DataDirectiveHandler
-          if (!this.fileSystemService) {
-            this.logger.warn('FileSystemService not available for DataDirectiveHandler injection');
-          } else if (!this.pathService) {
-            this.logger.warn('PathService not available for DataDirectiveHandler injection');
-          } else {
-            const dataHandler = new DataDirectiveHandler(
-              this.resolutionService,
-              this.fileSystemService,
-              this.pathService
-            );
-            this.registerHandler(dataHandler);
-          }
-          
-          // Check for PathService needed by PathDirectiveHandler
-          if (!this.pathService) {
-             this.logger.warn('PathService not available for PathDirectiveHandler injection');
-          }
-          const pathHandler = new PathDirectiveHandler(
-            this.validationService,
-            this.resolutionService
-          );
-          this.registerHandler(pathHandler);
-
-          const defineHandler = new DefineDirectiveHandler(
-            this.validationService,
-            this.resolutionService
-          );
-          this.registerHandler(defineHandler);
-        } catch (error) {
-          this.logger.error('Error registering definition directive handlers', { error });
-        }
-    }
-
-    // Execution handlers (have additional dependencies)
-    if (!this.fileSystemService) {
-        this.logger.warn('Skipping registration of Run handler due to missing FileSystemService.');
-    } else {
-        try {
-            const runHandler = new RunDirectiveHandler(
-              this.resolutionService,
-              this.fileSystemService
-            );
-            this.registerHandler(runHandler);
-        } catch(error) {
-            this.logger.error('Error registering Run directive handler', { error });
-        }
-    }
-
-    if (!this.circularityService || !this.parserService || !this.pathService || !this.interpreterClientFactory) {
-        this.logger.warn('Skipping registration of Embed/Import handlers due to missing dependencies.');
-    } else {
-        try {
-            // Check for services needed by EmbedDirectiveHandler
-            if (!this.fileSystemService) {
-                this.logger.warn('Skipping Embed handler due to missing FileSystemService.');
-            } else {
-                const embedHandler = new EmbedDirectiveHandler(
-                  this.validationService,
-                  this.resolutionService,
-                  this.circularityService,
-                  this.fileSystemService,
-                  this.pathService,
-                  this.interpreterClientFactory,
-                  this.logger
-                );
-                this.registerHandler(embedHandler);
-            }
-        } catch (error) {
-             this.logger.error('Error registering Embed directive handler', { error });
-        }
-
-        try {
-             // Check for services needed by ImportDirectiveHandler
-            if (!this.circularityService || !this.parserService || !this.pathService || !this.interpreterClientFactory) {
-                 this.logger.warn('Skipping Import handler due to missing dependencies.');
-            } else {
-                const importHandler = new ImportDirectiveHandler(
-                  this.validationService,
-                  this.resolutionService,
-                  this.stateService,
-                  this.fileSystemService,
-                  this.parserService,
-                  this.pathService,
-                  container,
-                  this.interpreterClient,
-                  undefined,
-                  undefined
-                );
-                this.registerHandler(importHandler);
-            }
-        } catch (error) {
-             this.logger.error('Error registering Import directive handler', { error });
-        }
-    }
-
-    this.logger.debug('Default handlers registration completed.', {
-      registeredHandlers: Array.from(this.handlers.keys())
-    });
-  }
-
-  /**
    * Register a new directive handler
+   * @deprecated Handlers should be registered via DI using the 'IDirectiveHandler' token and @injectAll.
    */
   registerHandler(handler: IDirectiveHandler): void {
     if (!this.initialized) {

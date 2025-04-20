@@ -130,13 +130,7 @@ describe('DirectiveService', () => {
 
     testContainer.registerInstance('DependencyContainer', testContainer);
 
-    // --- Resolve Service Under Test ---
-    service = testContainer.resolve(DirectiveService);
-
-    // Prevent real handlers from registering
-    vi.spyOn(service as any, 'registerDefaultHandlers').mockImplementation(() => {});
-
-    // Re-define mock handlers
+    // --- Define Mock Handlers FIRST ---
     mockTextHandler = {
         kind: 'text',
         handle: vi.fn(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult> => {
@@ -151,15 +145,15 @@ describe('DirectiveService', () => {
                 resolvedValue = String(directiveValue);
               }
               // Return DirectiveResult with state changes
-              return { 
-                stateChanges: { 
-                  variables: { 
+              return {
+                stateChanges: {
+                  variables: {
                     [ctx.directiveNode.directive.identifier]: { type: VariableType.TEXT, value: resolvedValue }
                   }
                 }
-              }; 
+              };
             }
-            return { stateChanges: undefined, replacement: undefined }; 
+            return { stateChanges: undefined, replacement: undefined };
         })
     };
     mockDataHandler = {
@@ -171,18 +165,18 @@ describe('DirectiveService', () => {
                if (isInterpolatableValueArray(directiveValue)) {
                   resolvedValue = await mockResolutionService.resolveNodes(directiveValue, ctx.resolutionContext);
                } else {
-                  resolvedValue = directiveValue; 
+                  resolvedValue = directiveValue;
                }
                // Return DirectiveResult with state changes
-               return { 
-                 stateChanges: { 
-                   variables: { 
+               return {
+                 stateChanges: {
+                   variables: {
                      [ctx.directiveNode.directive.identifier]: { type: VariableType.DATA, value: resolvedValue as JsonValue }
                    }
                  }
-               }; 
+               };
             }
-            return { stateChanges: undefined, replacement: undefined }; 
+            return { stateChanges: undefined, replacement: undefined };
         })
     };
     mockImportHandler = {
@@ -193,10 +187,13 @@ describe('DirectiveService', () => {
         }
     };
 
-    // Register our mock handlers, overwriting any potential defaults
-    service.registerHandler(mockTextHandler);
-    service.registerHandler(mockDataHandler);
-    service.registerHandler(mockImportHandler);
+    // --- Register Mock Handlers BEFORE Resolving Service ---
+    testContainer.registerInstance('IDirectiveHandler', mockTextHandler);
+    testContainer.registerInstance('IDirectiveHandler', mockDataHandler);
+    testContainer.registerInstance('IDirectiveHandler', mockImportHandler);
+
+    // --- Resolve Service Under Test AFTER Registering Handlers ---
+    service = testContainer.resolve(DirectiveService);
   });
 
   afterEach(async () => {

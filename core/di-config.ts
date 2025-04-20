@@ -44,6 +44,15 @@ import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFa
 import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNodeFactory.js';
 // ... other AST factories ...
 
+// Import Directive Handlers
+import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
+import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
+import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
+import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
+import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
+
 // Import IFileSystem type
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 
@@ -137,3 +146,12 @@ container.register(CLIService, { useClass: CLIService });
 container.register('ICLIService', { useToken: CLIService }); // Use Class as token
 container.register(DefaultPromptService, { useClass: DefaultPromptService });
 container.register('IPromptService', { useToken: DefaultPromptService }); // Use Class as token
+
+// --- Register Directive Handlers for @injectAll ---
+container.register('IDirectiveHandler', { useClass: TextDirectiveHandler });
+container.register('IDirectiveHandler', { useClass: DataDirectiveHandler });
+container.register('IDirectiveHandler', { useClass: PathDirectiveHandler });
+container.register('IDirectiveHandler', { useClass: DefineDirectiveHandler });
+container.register('IDirectiveHandler', { useClass: RunDirectiveHandler });
+container.register('IDirectiveHandler', { useClass: EmbedDirectiveHandler });
+container.register('IDirectiveHandler', { useClass: ImportDirectiveHandler });

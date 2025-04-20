@@ -197,9 +197,6 @@ export class TestContext {
     // Initialize interpreter service
     interpreter.initialize(directive, state);
 
-    // Register default handlers after all services are initialized
-    directive.registerDefaultHandlers();
-
     // Initialize output service last, after all other services are ready
     const output = new OutputService();
     output.initialize(state, resolution);
