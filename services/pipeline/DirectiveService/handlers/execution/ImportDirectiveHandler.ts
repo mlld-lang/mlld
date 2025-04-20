@@ -332,9 +332,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // ---> Log Final StateChanges <-----
       process.stdout.write(`DEBUG [ImportHandler.handle RETURN] finalStateChanges defined: ${!!finalStateChanges}, keys: ${finalStateChanges ? JSON.stringify(Object.keys(finalStateChanges.variables)) : 'N/A'}\n`);
       
-      // ---> FIX: Return OBJECT LITERAL, not constructor <-----
+      // ---> FIX: Always return stateChanges, even if empty <-----
       const result: DirectiveResult = {
-        stateChanges: finalStateChanges,
+        // Always include the variables object, even if empty. Tests check specific properties.
+        stateChanges: { variables: stateChangesAccumulator }, 
         replacement: [] // Import directives generally don't replace themselves with nodes
       };
       return result;
