@@ -271,9 +271,13 @@ describe('DirectiveService', () => {
         const result = await service.handleDirective(directiveNode, processingContext);
 
         expect(mockValidationService.validate).toHaveBeenCalledWith(directiveNode);
-        // Assert that the setTextVar mock was called with the correct arguments
-        expect(mockStateService.setTextVar).toHaveBeenCalledWith('greeting', 'ResolvedContextValue_Global');
-        expect(result).toBe(mockStateService);
+        // Assert that the setTextVar mock was called with the correct arguments, including metadata
+        expect(mockStateService.setTextVar).toHaveBeenCalledWith('greeting', 'ResolvedContextValue_Global', undefined); // Expect 3 args now
+        expect(result).toBeDefined(); // DirectiveResult should be returned
+        // We now expect the handler to return a DirectiveResult, not the state itself.
+        // Check the stateChanges within the result
+        expect(result.stateChanges?.variables?.greeting).toBeDefined();
+        expect(result.stateChanges?.variables?.greeting?.value).toBe('ResolvedContextValue_Global');
       });
 
       it('should use resolution service for interpolated text value', async () => {
