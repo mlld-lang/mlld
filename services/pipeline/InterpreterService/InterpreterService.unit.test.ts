@@ -222,9 +222,10 @@ describe('InterpreterService Unit', () => {
 
       const finalState = await service.interpret([textNode], { initialState: initialTestState });
 
-      expect(initialTestState.createChildState).toHaveBeenCalledTimes(1);
+      // FIX: Expect clone 4 times (init current, init snapshot, applyStateChanges, update lastGoodState)
+      expect(initialTestState.clone).toHaveBeenCalledTimes(4); 
       expect(workingState.addNode).toHaveBeenCalledWith(textNode);
-      expect(finalState).toBe(workingState); // Should return the working state
+      expect(finalState).toBe(workingState); // Should return the working state (which is the clone)
     });
 
     it('processes directive nodes by calling directiveService.handleDirective client', async () => {
@@ -237,8 +238,11 @@ describe('InterpreterService Unit', () => {
       vi.mocked(initialTestState.createChildState).mockClear();
       vi.mocked(initialTestState.clone).mockClear();
       await service.interpret([directiveNode], { initialState: initialTestState });
-      expect(initialTestState.createChildState).toHaveBeenCalled();
-      expect(initialTestState.clone).toHaveBeenCalled();
+      
+      // FIX: Expect clone 4 times (init current, init snapshot, applyStateChanges, update lastGoodState)
+      expect(initialTestState.clone).toHaveBeenCalledTimes(4); 
+      
+      // Assert call on the *client* mock (mockDirectiveClient from beforeEach)
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledWith(
         directiveNode,
         expect.objectContaining({ state: mockStateService, directiveNode: directiveNode })
@@ -293,8 +297,9 @@ describe('InterpreterService Unit', () => {
 
       await service.interpret([textNode], { initialState: mockStateService, filePath: filePath });
       
-      expect(mockStateService.createChildState).toHaveBeenCalled();
-      // Check that setCurrentFilePath was called on the *child* state
+      // FIX: Expect clone 4 times (init current, init snapshot, applyStateChanges, update lastGoodState)
+      expect(mockStateService.clone).toHaveBeenCalledTimes(4); 
+      // Check that setCurrentFilePath was called on the *cloned* working state
       expect(mockStateService.setCurrentFilePath).toHaveBeenCalledWith(filePath);
     });
 
@@ -477,9 +482,8 @@ describe('InterpreterService Unit', () => {
 
       await service.interpret([textNode], { initialState: initialTestState });
 
-      expect(initialTestState.createChildState).toHaveBeenCalled();
-      // interpret loop calls clone on the *working* state for each node
-      expect(mockStateService.clone).toHaveBeenCalled(); 
+      // FIX: Expect clone 4 times (init current, init snapshot, applyStateChanges, update lastGoodState)
+      expect(initialTestState.clone).toHaveBeenCalledTimes(4); 
     });
 
     // REMOVE SKIP
@@ -560,25 +564,23 @@ describe('InterpreterService Unit', () => {
     // REMOVE SKIP
     it('does NOT wrap generic errors during state creation (when initialState provided)', async () => {
       const node: TextNode = createTextNode('Test content');
-      // Use mockStateService from beforeEach for initialState
       const creationError = new Error('Generic state creation error');
-      // Mock rejection for this specific test case
-      vi.spyOn(mockStateService, 'createChildState').mockRejectedValue(creationError);
+      // FIX: Mock clone() to reject because initialState is provided
+      vi.spyOn(mockStateService, 'clone').mockImplementation(() => { throw creationError; });
       
       await expect(service.interpret([node], { initialState: mockStateService }))
-            .rejects.toThrow(creationError); // Reverted expectation
+            .rejects.toThrow(creationError); // Expect the raw error
     });
     
      // REMOVE SKIP
      it('preserves interpreter errors during state creation (when initialState provided)', async () => {
       const node: TextNode = createTextNode('Test content');
-      // Use mockStateService from beforeEach for initialState
       const interpreterError = new MeldInterpreterError('State creation failed', 'STATE_ERROR');
-       // Mock rejection for this specific test case
-       vi.spyOn(mockStateService, 'createChildState').mockRejectedValue(interpreterError);
+       // FIX: Mock clone() to reject because initialState is provided
+       vi.spyOn(mockStateService, 'clone').mockImplementation(() => { throw interpreterError; });
        
       await expect(service.interpret([node], { initialState: mockStateService }))
-            .rejects.toThrow(interpreterError); // Reverted expectation
+            .rejects.toThrow(interpreterError); // Expect the original MeldInterpreterError
     });
     
      // REMOVE SKIP
@@ -640,8 +642,8 @@ describe('InterpreterService Unit', () => {
       
       await expect(service.interpret(nodes, { initialState: mockStateService })).rejects.toThrow(MeldInterpreterError);
       
-      expect(mockStateService.createChildState).toHaveBeenCalled();
-      expect(mockStateService.clone).toHaveBeenCalled();
+      // FIX: Expect clone to be called (initial state, initial snapshot, AND after first node succeeds before error)
+      expect(mockStateService.clone).toHaveBeenCalled(); // At least once is sufficient here
     });
 
     // REMOVE SKIP

@@ -296,29 +296,44 @@ export class InterpreterService implements IInterpreterService {
 
     try {
       let baseState: IStateService;
+      let isBasedOnInitialState = false; // Flag to track origin
       // Determine the base state to create the working state from
       try {
-        if (initialState) {
+        if (initialState) { // Check parameter first
           baseState = initialState;
-          logger.debug('Using provided initial state as base for interpretation', { stateId: baseState.getStateId() });
-        } else if (opts.initialState) {
-          baseState = opts.initialState; // Use the one from options
+          isBasedOnInitialState = true;
+          logger.debug('Using provided initialState parameter as base for interpretation', { stateId: baseState.getStateId() });
+        } else if (opts.initialState) { // Check deprecated option second
+          baseState = opts.initialState;
+          isBasedOnInitialState = true;
           logger.warn('Using initialState from options (deprecated), prefer passing initialState parameter.');
-        } else {
+        } else { // Fallback to internal state service
           if (!this.stateService) {
              throw new MeldInterpreterError('StateService is not available for creating initial state', 'initialization', undefined, { severity: ErrorSeverity.Fatal });
           }
           baseState = this.stateService; // Use the injected service as base
+          isBasedOnInitialState = false;
           logger.debug('Using injected StateService as base for interpretation');
         }
 
-        // <<< ALWAYS Create a working child state >>>
-        currentState = await baseState.createChildState();
-        logger.debug('Created working child state for interpretation', { stateId: currentState?.getStateId() });
+        // <<< FIX: Clone if based on initial state, otherwise create child >>>
+        if (isBasedOnInitialState) {
+           if (typeof baseState.clone !== 'function') {
+             throw new MeldInterpreterError('Provided initial state does not support clone()', 'initialization', undefined, { severity: ErrorSeverity.Fatal });
+           }
+           currentState = baseState.clone(); // CLONE the provided initial state
+           logger.debug('Cloned initial state for interpretation', { stateId: currentState?.getStateId() });
+        } else {
+           if (typeof baseState.createChildState !== 'function') {
+             throw new MeldInterpreterError('Internal StateService does not support createChildState()', 'initialization', undefined, { severity: ErrorSeverity.Fatal });
+           }
+           currentState = await baseState.createChildState(); // CREATE CHILD from internal service
+           logger.debug('Created working child state from internal service for interpretation', { stateId: currentState?.getStateId() });
+        }
 
         if (!currentState) {
           throw new MeldInterpreterError(
-            'Failed to create working child state for interpretation',
+            'Failed to create working state (clone or child) for interpretation',
             'initialization',
             undefined,
             { severity: ErrorSeverity.Fatal }
