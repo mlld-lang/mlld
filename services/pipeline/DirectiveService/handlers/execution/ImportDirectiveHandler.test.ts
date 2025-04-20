@@ -237,7 +237,7 @@ describe('ImportDirectiveHandler', () => {
       );
       
       const plainMockState = {
-          getStateId: vi.fn().mockReturnValue('mock-interpreted-state-id'), 
+          getStateId: vi.fn().mockReturnValue('mock-interpreted-state-id-project'), 
           getAllTextVars: vi.fn().mockReturnValue(new Map()), 
           getAllDataVars: vi.fn().mockReturnValue(new Map()), 
           getAllPathVars: vi.fn().mockReturnValue(new Map()), 
@@ -262,7 +262,7 @@ describe('ImportDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveInContext').mockResolvedValueOnce('$~/examples/basic.meld'); 
       
       const plainMockState = {
-          getStateId: vi.fn().mockReturnValue('mock-interpreted-state-id'), 
+          getStateId: vi.fn().mockReturnValue('mock-interpreted-state-id-tilde'), 
           getAllTextVars: vi.fn().mockReturnValue(new Map()), 
           getAllDataVars: vi.fn().mockReturnValue(new Map()), 
           getAllPathVars: vi.fn().mockReturnValue(new Map()), 
@@ -287,7 +287,7 @@ describe('ImportDirectiveHandler', () => {
       vi.spyOn(resolutionService, 'resolveInContext').mockResolvedValueOnce('$HOMEPATH/examples/basic.meld'); 
       
       const plainMockState = {
-          getStateId: vi.fn().mockReturnValue('mock-interpreted-state-id'), 
+          getStateId: vi.fn().mockReturnValue('mock-interpreted-state-id-home'), 
           getAllTextVars: vi.fn().mockReturnValue(new Map()), 
           getAllDataVars: vi.fn().mockReturnValue(new Map()), 
           getAllPathVars: vi.fn().mockReturnValue(new Map()), 
