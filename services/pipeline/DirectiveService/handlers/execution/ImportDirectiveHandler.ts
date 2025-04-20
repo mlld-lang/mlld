@@ -17,7 +17,6 @@ import { VariableOrigin, VariableType, VariableMetadata, IPathVariable, CommandV
 import { createTextVariable, createDataVariable, createPathVariable, createCommandVariable } from '@core/types/variables';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
-import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import logger from '@core/utils/logger.js';
 import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
@@ -26,7 +25,7 @@ import { StateService } from '@services/state/StateService/StateService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { MeldPath, PathContentType, ValidatedResourcePath } from '@core/types/paths';
 import type { StateServiceLike } from '@core/shared-service-types.js';
-import { MeldResolutionError, MeldFileNotFoundError } from '@core/errors';
+import { MeldResolutionError, MeldFileNotFoundError, MeldError } from '@core/errors';
 
 /**
  * Handler for @import directives
@@ -37,7 +36,6 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'import';
   private debugEnabled: boolean = false;
   private stateTrackingService?: IStateTrackingService;
-  private interpreterServiceClient?: IInterpreterServiceClient;
 
   constructor(
     @inject('IValidationService') private validationService: IValidationService,
@@ -46,40 +44,13 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     @inject('IFileSystemService') private fileSystemService: IFileSystemService,
     @inject('IParserService') private parserService: IParserService,
     @inject('IPathService') private pathService: IPathService,
-    @inject('InterpreterServiceClientFactory') private interpreterServiceClientFactory: InterpreterServiceClientFactory,
     @inject('ICircularityService') private circularityService: ICircularityService,
+    @inject('IInterpreterServiceClient') private interpreterServiceClient?: IInterpreterServiceClient,
     @inject('IURLContentResolver') private urlContentResolver?: IURLContentResolver,
     @inject('StateTrackingService') trackingService?: IStateTrackingService
   ) {
     this.stateTrackingService = trackingService;
     this.debugEnabled = !!trackingService && (process.env.MELD_DEBUG === 'true');
-    try {
-      this.interpreterServiceClient = this.interpreterServiceClientFactory.createClient();
-    } catch (error) {
-       logger.warn('Failed to get interpreter service client from factory during construction', { error });
-    }
-  }
-
-  private ensureInterpreterServiceClient(): IInterpreterServiceClient {
-    if (!this.interpreterServiceClient && this.interpreterServiceClientFactory) {
-      try {
-        this.interpreterServiceClient = this.interpreterServiceClientFactory.createClient();
-      } catch (error) {
-        logger.warn('Failed to get interpreter service client from factory', {
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    }
-    
-    if (!this.interpreterServiceClient) {
-      throw new DirectiveError(
-        'Interpreter service client is not available. Ensure InterpreterServiceClientFactory is registered and resolvable, or provide a mock in tests.',
-        this.kind,
-        DirectiveErrorCode.EXECUTION_FAILED
-      );
-    }
-    
-    return this.interpreterServiceClient;
   }
 
   async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
@@ -227,7 +198,14 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       }
 
       // 6. Interpret Content
-      const interpreterServiceClient = this.ensureInterpreterServiceClient();
+      const interpreterServiceClient = this.interpreterServiceClient;
+      if (!interpreterServiceClient) {
+        throw new DirectiveError(
+          'Interpreter service client is not available (injection failed).',
+          this.kind,
+          DirectiveErrorCode.INVALID_CONTEXT
+        );
+      }
       let sourceStateChanges: StateChanges | undefined;
 
       try {
@@ -247,7 +225,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // ---> Log Before Interpret <-----
         process.stdout.write(`DEBUG [ImportHandler.handle PRE-INTERPRET] Interpreting AST for: ${resolvedIdentifier}\n`);
         
-        // <<< Use client again >>>
+        // Use client (now guaranteed to be defined)
         const interpretedChildState: StateServiceLike = await interpreterServiceClient.interpret(astNodes, 
           undefined, 
           childState 
@@ -386,6 +364,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
                specificCode = DirectiveErrorCode.RESOLUTION_FAILED;
             } else if (error instanceof MeldFileNotFoundError || error.name === 'MeldFileNotFoundError') { // Assuming MeldFileNotFoundError exists
                specificCode = DirectiveErrorCode.FILE_NOT_FOUND;
+            } else if (error instanceof MeldError && error.code === 'CIRCULAR_IMPORT') {
+               specificCode = DirectiveErrorCode.CIRCULAR_REFERENCE;
             } // Add more checks here if needed (e.g., for PathValidationError)
             
             errorToThrow = new DirectiveError(
