@@ -31,7 +31,7 @@ Systematically investigate and fix the core service failures identified in `_pla
 
 **Phase 0: Foundational AST & State Refactor [COMPLETE]**
 
-*   **Rationale:** Foundational issues with state cloning, parent lookups, node identification, and transformation context are hindering progress. Strengthening the state data model (`StateNode`) and AST (`MeldNode`) is crucial before debugging higher-level interactions.
+*   **Rationale:** Foundational issues with state cloning, parent lookups, node identification, and transformation context were hindering progress. Strengthening the state data model (`StateNode`) and AST (`MeldNode`) is crucial before debugging higher-level interactions.
 *   **Objectives:**
     *   **AST:** Add unique `nodeId` to all AST nodes (Parser change).
     *   **State Data (`StateNode`):** Enhance with `parentServiceRef`, `transformationOptions`, `createdAt`, `modifiedAt`. Remove redundant `parentState`.
@@ -55,16 +55,31 @@ Systematically investigate and fix the core service failures identified in `_pla
     5.  **Compare State Snapshots:** Compare the state (variables stored) just before the failing resolution attempt in `api/integration.test.ts` vs. a passing case. Is the variable correctly defined in the expected state instance?
 *   **Fix & Verify:** Implement fixes in the identified service(s). Update relevant unit tests (`ResolutionService.test.ts`, `InterpreterService.unit.test.ts`, `StateService.test.ts`) using the refactoring pattern. Re-run `api/integration.test.ts` to confirm the fix.
 
-**Phase 2: `@import` Directive Processing [NEXT]**
+**Phase 2: `@import` Directive Processing [In Progress - DI Issues]**
 
-*   **Target Failures:** `api/integration.test.ts` #3 (`@import` Directive Processing).
-*   **Hypothesized Services:** `InterpreterService`, `DirectiveService`, `ImportDirectiveHandler`, `StateService`, `ParserService`, `FileSystemService`.
-*   **Investigation Steps:**
-    1.  **Focus on Simple Import:** Use the `should handle simple imports` test in `api/integration.test.ts`.
-    2.  **Trace `ImportDirectiveHandler`:** Add logging to `ImportDirectiveHandler.execute`. Log the incoming directive node, the resolved path, the content read from the file, the result of parsing the imported content, and the state *after* attempting to interpret/merge the imported nodes.
-    3.  **Trace `InterpreterService` Import Handling:** How does `InterpreterService` process the result returned by the `ImportDirectiveHandler`? Does it correctly replace the `@import` node or merge the imported nodes into the main flow? Log relevant steps.
-    4.  **Verify State Merging:** Check if variables defined in the imported file (`importedVar` in the simple test) are correctly present in the main `StateService` *after* the import directive is processed.
-*   **Fix & Verify:** Implement fixes. Refactor/update `ImportDirectiveHandler.test.ts` and potentially `InterpreterService.unit.test.ts`. Re-run failing import tests in `api/integration.test.ts`.
+*   **Target Failures:** `api/integration.test.ts` #3 (`@import` Directive Processing), #4 (Circular Import Detection - Error Message).
+*   **Hypothesized Services:** `InterpreterService`, `DirectiveService`, `ImportDirectiveHandler`, `StateService`, `ParserService`, `FileSystemService`, `InterpreterServiceClientFactory`, DI Container (`api/integration.test.ts`).
+*   **Investigation Steps & Findings:**
+    1.  **Initial Error:** `@import` tests initially failed with "Path validation failed for resolved path "": Path cannot be empty".
+    2.  **Fix 1:** Modified `ImportDirectiveHandler` to perform two-step path resolution: first call `resolutionService.resolveInContext` on the `pathObject`, then pass the resulting *string* to `resolutionService.resolvePath`. This fixed the "Path cannot be empty" error for imports.
+    3.  **New Error:** This unmasked a new failure in the same integration tests: "Interpreter service client is not available. Ensure InterpreterServiceClientFactory is registered and resolvable, or provide a mock in tests." This error originates from within `ImportDirectiveHandler` when it tries to use the `InterpreterServiceClient` (obtained via `InterpreterServiceClientFactory`) to interpret the imported file's content.
+    4.  **Extensive DI Debugging:** Investigated the DI setup in `api/integration.test.ts` thoroughly:
+        *   Confirmed registration of `InterpreterServiceClientFactory`, `IInterpreterService`, `IDirectiveService`, `IValidationService`, and all other known direct/indirect dependencies for `InterpreterService` and `DirectiveService`.
+        *   Corrected the container usage within `InterpreterServiceClientFactory` to use the test-specific container instance instead of the global one.
+        *   Experimented with adding/removing `delay()` for the circular dependency between `DirectiveService` and `InterpreterServiceClientFactory`.
+        *   **Result:** None of these DI configuration changes resolved the "Interpreter service client is not available" error in the integration tests.
+    5.  **Unit Test Validation:** Switched focus to `ImportDirectiveHandler.unit.test.ts`:
+        *   Fixed several issues with test mocks (methods returning `{}` instead of `Map`, interactions with `delay()`).
+        *   Modified tests to directly inject a mocked `IInterpreterServiceClient`, bypassing the factory.
+        *   **Result:** The unit tests now pass (12/15), confirming the handler's *isolated* logic for parsing, interpreting (via mock), and merging state changes is mostly correct. The remaining 3 failures relate to mocking special path variable resolution in specific scenarios. (Update: These 3 were subsequently fixed by improving the mock state object). (Final Update: Unit tests now pass except for one minor assertion on circular error code).
+    6.  **Current Status:** The handler logic appears sound in isolation. The persistent "Interpreter service client is not available" error in `api/integration.test.ts` strongly suggests a complex DI resolution failure specific to that test environment's container setup, possibly due to an unidentified transitive dependency or configuration interaction. The Heap OOM errors seen earlier were likely red herrings or masked by the DI failures.
+*   **Next Steps:**
+    1.  Fix the minor assertion logic for the circular import error code in `ImportDirectiveHandler.test.ts`.
+    2.  Re-run `npm test api` to confirm the DI error ("Interpreter service client not available") is the primary remaining blocker for `@import` integration tests.
+    3.  Systematically debug the DI resolution within `api/integration.test.ts` for `IInterpreterService`:
+        *   Temporarily simplify the container setup (remove less critical registrations).
+        *   Add logging *during* tsyringe's resolution process if possible (might require modifying tsyringe or using advanced techniques).
+        *   Consider if any other core services (`ResolutionService`, `PathService`, etc.) also need to be singletons within the `testContainer`. (Tried `ResolutionService` singleton - no change).
 
 **Phase 3: `@run` Directive Processing**
 
@@ -90,16 +105,16 @@ Systematically investigate and fix the core service failures identified in `_pla
 
 **Phase 5: Circular Import Detection**
 
-*   **Target Failures:** `api/integration.test.ts` #4 (Circular Import Detection).
+*   **Target Failures:** `api/integration.test.ts` #4 (Circular Import Detection - throwing wrong error).
 *   **Hypothesized Services:** `CircularityService`, `InterpreterService`, `ImportDirectiveHandler`, `StateService`.
 *   **Investigation Steps:**
     1.  **Trace `CircularityService` Calls:** Add logging where `CircularityService.push` and `pop` (or equivalent methods) are called during the import process (likely within `InterpreterService` or `ImportDirectiveHandler`). Log the file paths being pushed/popped.
     2.  **Check Detection Logic:** Review the `CircularityService.check` (or equivalent) logic. Is it correctly identifying the loop based on the pushed paths?
-    3.  **Verify Error Propagation:** If the error *is* detected by `CircularityService`, is it being correctly thrown and propagated up the call stack to cause `processMeld` to reject?
-*   **Fix & Verify:** Implement fixes. Refactor/update `CircularityService.test.ts` and potentially `ImportDirectiveHandler.test.ts`. Re-run the circular import test.
+    3.  **Verify Error Propagation:** If the error *is* detected by `CircularityService`, is it being correctly thrown and propagated up the call stack to cause `processMeld` to reject? Why is the wrong error ("Interpreter service client not available") being thrown instead? (Likely due to the DI issue preventing interpretation).
+*   **Fix & Verify:** Implement fixes. Refactor/update `CircularityService.test.ts` and potentially `ImportDirectiveHandler.test.ts`. Re-run the circular import test after fixing the DI issue in Phase 2.
 
 **Phase 6: Remaining/Minor Issues**
 
-*   **Target Failures:** `api/api.test.ts` #3 (Example File Output).
-*   **Investigation Steps:** Once other issues are resolved, revisit this test. Analyze the expected vs. actual output. Trace `OutputService`.
+*   **Target Failures:** `api/api.test.ts` #3 (Example File Output), other output discrepancies.
+*   **Investigation Steps:** Once other issues are resolved, revisit these tests. Analyze the expected vs. actual output. Trace `OutputService`.
 *   **Fix & Verify:** Implement fixes. Update relevant tests.

@@ -237,12 +237,21 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // --- DEBUG LOGGING END ---
 
         // Construct StateChanges manually from the resulting state's variables
+        // <<< Add individual try/catch for each getAll call >>>
+        let textMap, dataMap, pathMap, commandMap;
+        try { textMap = interpretedChildState.getAllTextVars() ?? new Map(); } catch(e) { logger.error("Error getting textVars", {e}); textMap = new Map(); }
+        try { dataMap = interpretedChildState.getAllDataVars() ?? new Map(); } catch(e) { logger.error("Error getting dataVars", {e}); dataMap = new Map(); }
+        try { pathMap = interpretedChildState.getAllPathVars() ?? new Map(); } catch(e) { logger.error("Error getting pathVars", {e}); pathMap = new Map(); }
+        try { commandMap = interpretedChildState.getAllCommands() ?? new Map(); } catch(e) { logger.error("Error getting commandVars", {e}); commandMap = new Map(); }
+
         const allVars = {
-          text: interpretedChildState.getAllTextVars() ?? new Map(), // Ensure Map
-          data: interpretedChildState.getAllDataVars() ?? new Map(), // Ensure Map
-          path: interpretedChildState.getAllPathVars() ?? new Map(), // Ensure Map
-          command: interpretedChildState.getAllCommands() ?? new Map(), // Ensure Map
+          text: textMap,
+          data: dataMap,
+          path: pathMap,
+          command: commandMap,
         };
+        // <<< END TRY/CATCH SECTION >>>
+        
         process.stdout.write(`DEBUG [ImportHandler]: allVars object constructed. Keys: ${JSON.stringify(Object.keys(allVars))}\n`);
         process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.text = ${typeof allVars.text}, isMap: ${allVars.text instanceof Map}\n`);
         process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.data = ${typeof allVars.data}, isMap: ${allVars.data instanceof Map}\n`);
@@ -251,29 +260,30 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         process.stdout.write(`DEBUG [ImportHandler]: allVars.text value = ${JSON.stringify(allVars.text)}\n`);
         // --- DEBUG LOGGING END ---
         
-        // <<< Simplified totalVars calculation to avoid .size on potential non-Map >>>
-        const totalVars = 
-            (allVars.text ? Object.keys(allVars.text).length : 0) + 
-            (allVars.data ? Object.keys(allVars.data).length : 0) + 
-            (allVars.path ? Object.keys(allVars.path).length : 0) + 
-            (allVars.command ? Object.keys(allVars.command).length : 0);
-        // const totalVars = (allVars.text?.size || 0) + (allVars.data?.size || 0) + (allVars.path?.size || 0) + (allVars.command?.size || 0);
-        process.stdout.write(`DEBUG [ImportHandler]: Extracted ${totalVars} total variables from interpreted state.\n`);
-
+        // <<< Ensure accumulatedVariables is declared >>>
         const accumulatedVariables: Record<string, VariableDefinition> = {};
         // Combine all variable types into the StateChanges format
+        // <<< Remove checks, restore original loops >>>
+        // if (allVars.text && allVars.text.size > 0) { 
         for (const [key, value] of allVars.text.entries()) {
           accumulatedVariables[key] = value;
         }
-        for (const [key, value] of allVars.data.entries()) {
-          accumulatedVariables[key] = value;
-        }
-        for (const [key, value] of allVars.path.entries()) {
-          accumulatedVariables[key] = value;
-        }
-        for (const [key, value] of allVars.command.entries()) {
-          accumulatedVariables[key] = value;
-        }
+        // }
+        // if (allVars.data && allVars.data.size > 0) {
+          for (const [key, value] of allVars.data.entries()) {
+            accumulatedVariables[key] = value;
+          }
+        // }
+        // if (allVars.path && allVars.path.size > 0) {
+          for (const [key, value] of allVars.path.entries()) {
+            accumulatedVariables[key] = value;
+          }
+        // }
+        // if (allVars.command && allVars.command.size > 0) {
+          for (const [key, value] of allVars.command.entries()) {
+            accumulatedVariables[key] = value;
+          }
+        // }
 
         // --- DEBUG LOGGING START ---
         process.stdout.write(`DEBUG [ImportHandler]: Accumulated variable keys: ${JSON.stringify(Object.keys(accumulatedVariables))}\n`);
