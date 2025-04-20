@@ -47,9 +47,23 @@ import type { IInterpreterService } from '@services/pipeline/InterpreterService/
  * - vi.spyOn on resolved mocks for test-specific behavior
  */
 
-// Mock logger
-const mockLoggerObject = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-vi.mock('@core/utils/logger', () => ({ importLogger: mockLoggerObject }));
+vi.mock('@core/utils/logger', () => {
+  // DEFINE the mock object INSIDE the factory function
+  const mockLoggerObject = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
+  };
+  return { 
+    // Ensure all exported loggers are mocked if needed by the SUT
+    importLogger: mockLoggerObject, 
+    directiveLogger: mockLoggerObject, // Add other loggers if imported directly
+    logger: mockLoggerObject, // Add default logger if imported directly
+    default: mockLoggerObject // ADD default export
+    // ... add other exported loggers as needed
+  };
+});
 
 // Define a simple mock OutputFormattingContext
 // ...
@@ -200,7 +214,13 @@ describe('ImportDirectiveHandler', () => {
 
     testContainer = container.createChildContainer();
 
-    testContainer.registerInstance('ILogger', mockLoggerObject);
+    // Replace reference to hoisted mock with an inline mock for ILogger registration
+    testContainer.registerInstance('ILogger', { 
+      debug: vi.fn(), 
+      info: vi.fn(), 
+      warn: vi.fn(), 
+      error: vi.fn() 
+    });
     testContainer.registerInstance<IStateService>('IStateService', stateService);
     testContainer.registerInstance<IResolutionService>('IResolutionService', resolutionService);
     testContainer.registerInstance<IFileSystemService>('IFileSystemService', fileSystemService);

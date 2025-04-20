@@ -36,6 +36,15 @@ import { StateTrackingServiceClientFactory } from '@services/state/StateTracking
 // Import service needed by StateTrackingServiceClientFactory
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService';
 
+// --- Import REAL Directive Handlers ---
+import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
+import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
+import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
+import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
+import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
+
 // Define a minimal logger interface for testing
 interface ITestLogger {
   debug: Mock;
@@ -96,6 +105,15 @@ describe('DirectiveService Integration Tests', () => {
     testContainer.register<ITestLogger>('ILogger', { useValue: mockLogger });
     
     testContainer.registerInstance('DependencyContainer', testContainer);
+
+    // --- Register REAL Handlers BEFORE Resolving DirectiveService ---
+    testContainer.register('IDirectiveHandler', { useClass: TextDirectiveHandler }, { lifecycle: Lifecycle.Singleton });
+    testContainer.register('IDirectiveHandler', { useClass: DataDirectiveHandler }, { lifecycle: Lifecycle.Singleton });
+    testContainer.register('IDirectiveHandler', { useClass: PathDirectiveHandler }, { lifecycle: Lifecycle.Singleton });
+    testContainer.register('IDirectiveHandler', { useClass: DefineDirectiveHandler }, { lifecycle: Lifecycle.Singleton });
+    testContainer.register('IDirectiveHandler', { useClass: RunDirectiveHandler }, { lifecycle: Lifecycle.Singleton });
+    testContainer.register('IDirectiveHandler', { useClass: EmbedDirectiveHandler }, { lifecycle: Lifecycle.Singleton });
+    testContainer.register('IDirectiveHandler', { useClass: ImportDirectiveHandler }, { lifecycle: Lifecycle.Singleton });
 
     // Resolve services from the test container AFTER registration
     directiveService = testContainer.resolve(DirectiveService);
