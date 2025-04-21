@@ -633,6 +633,9 @@ export class OutputService implements IOutputService {
         pretty: opts.pretty
       });
 
+      // <<< Log the final string before returning >>>
+      process.stdout.write(`>>> OutputService.convert returning: ${JSON.stringify(result)}\n`);
+
       return result;
     } catch (error) {
       logger.error('Failed to convert output', {
@@ -967,10 +970,23 @@ export class OutputService implements IOutputService {
     for (const node of nodes) { 
       const currentContext = this.getCurrentFormattingContext(); // Context might still be needed by handleNewlines
 
+      // <<< Log node being processed >>>
+      process.stdout.write(`>>> convertToMarkdown Loop: Processing node type: ${node.type}, ID: ${node.nodeId}\n`);
+
       if (node.type === 'Text') {
-        output += this.handleNewlines((node as TextNode).content, currentContext);
+        const textContent = (node as TextNode).content;
+        const handledContent = this.handleNewlines(textContent, currentContext);
+        // <<< Log content being appended >>>
+        process.stdout.write(`    Appending Text content: "${handledContent}"\n`);
+        output += handledContent;
       } else if (node.type === 'CodeFence') {
-        output += this.codeFenceToMarkdown(node as CodeFenceNode);
+        const fenceContent = this.codeFenceToMarkdown(node as CodeFenceNode);
+        // <<< Log content being appended >>>
+        process.stdout.write(`    Appending CodeFence content: "${fenceContent.substring(0,50)}..."\n`);
+        output += fenceContent;
+      } else {
+        // <<< Log ignored node >>>
+        process.stdout.write(`    Ignoring node type: ${node.type}\n`);
       }
       // Implicitly ignore Comment, Directive, and other node types
 

@@ -92,6 +92,9 @@ export async function processMeld(content: string, options?: Partial<ProcessOpti
     executionContainer.dispose(); 
   }
 
+  // <<< Log the actual value being returned >>>
+  process.stdout.write(`>>> processMeld returning: ${JSON.stringify(finalOutput)}\n`);
+
   return finalOutput;
 }
 

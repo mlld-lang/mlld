@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
-import type { MeldNode } from '@core/syntax/types.js';
+import type { MeldNode } from '@core/syntax/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
@@ -27,6 +27,16 @@ import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionS
 import { createResolutionServiceMock, createStateServiceMock } from '@tests/utils/mocks/serviceMocks';
 import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
 import { VariableType } from '@core/types/variables.js';
+import { createLLMXML } from 'llmxml';
+import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference.js';
+import { outputLogger as logger } from '@core/utils/logger.js';
+import { 
+  MeldNode, 
+  TextNode, 
+  CodeFenceNode, 
+  DirectiveNode, 
+  Field 
+} from '@core/syntax/types/index.js';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -428,34 +438,27 @@ describe('OutputService', () => {
     });
 
     it('should respect output-literal mode at directive boundaries', async () => {
-      // Mock a directive followed by a text node
-      const nodes: MeldNode[] = [
-        createDirectiveNode('text', [{ name: 'greeting', value: 'Hello' }], createLocation(1, 1)),
-        createTextNode('{{greeting}} World!', createLocation(2, 1))
+      // Simulate the node list *after* interpretation: 
+      // Original: [ Text{\n}, Directive{@text greeting}, Text{{greeting}} World!} ]
+      // Expected Transformed: [ Text{\n}, Text{Hello World!} ] (Interpreter handles resolution and @text removal)
+      const transformedNodes: MeldNode[] = [
+        createTextNode('\n', createLocation(1, 1)), // Keep leading newline if present
+        // NOTE: The original @text directive node is NOT included here, 
+        // as the InterpreterService is responsible for processing it.
+        // This TextNode represents the resolved content originally from '{{greeting}} World!'
+        createTextNode('Hello World!', createLocation(2, 1))
       ];
 
-      // Setup state mock - always in transformation mode
+      // Setup minimal state mock - only need isTransformationEnabled for this path
       vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
-      vi.mocked(state.shouldTransform).mockReturnValue(true);
-      vi.mocked(state.getVariable).mockImplementation((name, type?) => {
-        if (name === 'greeting' && type === VariableType.TEXT) return { type: VariableType.TEXT, name: 'greeting', value: 'Hello' } as any;
-        return undefined;
-      });
+      // No need to mock getTransformedNodes, as convert receives the list directly now.
+      // No need to mock getVariable, as OutputService shouldn't resolve variables.
       
-      // Mock the transformed nodes to simulate what would happen in transformation mode
-      const transformedNodes: MeldNode[] = [
-        createTextNode('Hello World!', createLocation(1, 1))
-      ];
-      vi.mocked(state.getTransformedNodes).mockReturnValue(transformedNodes);
+      // Process the SIMULATED transformed nodes
+      const result = await service.convert(transformedNodes, state, 'markdown');
       
-      // Process the nodes
-      const result = await service.convert(nodes, state, 'markdown');
-      
-      // In transformation mode, the directive should be replaced with its value
-      expect(result).toContain('Hello World!');
-      
-      // No additional newlines should be added at boundaries in output-literal mode
-      expect(result).not.toContain('\n\n\n');
+      // Assert the output is the concatenation of the TextNode content
+      expect(result).toBe('\nHello World!');
     });
   });
 

@@ -334,7 +334,7 @@ describe('SDK Integration Tests', () => {
         format: 'markdown'
       });
       
-      expect(result).toContain('Hello, World!');
+      expect(result).toBe('\nHello, World!\n');
     });
   });
 
@@ -450,7 +450,7 @@ More text`;
         format: 'markdown'
       });
       
-      expect(result).toContain('Hello, World!');
+      expect(result).toBe('\nHello, World!\n');
     });
   });
 

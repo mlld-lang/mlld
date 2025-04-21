@@ -49,6 +49,7 @@ import {
   type TextVariable,
   type DataVariable 
 } from '@core/types';
+import type { IValidationService } from '@services/validation/IValidationService.js';
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),
@@ -62,6 +63,9 @@ describe('InterpreterService Integration', () => {
   let state: IStateService;
   let parser: IParserService;
   let mockDirectiveClient: IDirectiveServiceClient;
+  let mockValidationService: IValidationService;
+  let mockStateService: IStateService;
+  let mockPathService: IPathService;
 
   beforeEach(async () => {
     context = TestContextDI.createIsolated();
@@ -134,6 +138,125 @@ describe('InterpreterService Integration', () => {
     testContainer.registerInstance('IStateTrackingService', trackingService);
     
     await context.fixtures.load('interpreterTestProject');
+
+    // --- Create Mocks ---
+    mockValidationService = { validate: vi.fn() } as unknown as IValidationService;
+    
+    // <<< Create a more realistic StateService mock >>>
+    const stateStorage: Record<string, any> = {}; // Simple key-value store for variables
+    mockStateService = {
+      _mockStorage: stateStorage,
+      clone: vi.fn().mockImplementation(() => { 
+        // Create a NEW mock instance with COPIED storage for clone
+        const clonedStorage = { ...stateStorage }; 
+        const clonedMock: IStateService = {
+          ...mockStateService, // Copy existing mock methods
+          _mockStorage: clonedStorage, 
+          getStateId: vi.fn().mockReturnValue(crypto.randomUUID()), // Give clone new ID
+          clone: vi.fn().mockImplementation(() => { throw new Error('Cannot clone a clone in this simple mock'); }), // Prevent deep clone issues
+          // Re-mock methods that modify storage to use the cloned storage
+          setVariable: vi.fn().mockImplementation(async (variable) => {
+            clonedStorage[variable.name] = variable;
+            return variable;
+          }),
+          setTextVar: vi.fn().mockImplementation(async (name, value, metadata) => {
+            const variable = createTextVariable(name, value, metadata);
+            clonedStorage[name] = variable;
+            return variable;
+          }),
+          setDataVar: vi.fn().mockImplementation(async (name, value, metadata) => {
+            const variable = createDataVariable(name, value, metadata);
+            clonedStorage[name] = variable;
+            return variable;
+          }),
+          setPathVar: vi.fn().mockImplementation(async (name, value, metadata) => {
+             const variable = createPathVariable(name, value, metadata);
+             clonedStorage[name] = variable;
+             return variable;
+          }),
+           setCommand: vi.fn().mockImplementation(async (name, value, metadata) => { 
+               // Assuming commands are stored similarly for this mock
+               const variable = { type: VariableType.COMMAND, name, value, metadata }; 
+               clonedStorage[name] = variable;
+               return variable as any; // Adjust return type as needed
+           }),
+          // Re-mock getVariable to read from the specific clone's storage
+          getVariable: vi.fn().mockImplementation((name: string) => {
+            return clonedStorage[name];
+          }),
+          applyStateChanges: vi.fn().mockImplementation(async (changes: StateChanges) => {
+            // Simplified apply for mock: directly modifies clonedStorage
+             if (changes.variables) {
+               for (const [varName, variable] of Object.entries(changes.variables)) {
+                  if (variable) { // Assume set
+                     clonedStorage[varName] = variable;
+                  } else { // Assume remove if value is null/undefined? Needs clearer contract.
+                     delete clonedStorage[varName];
+                  }
+               }
+             }
+            return clonedMock; // Return self after modification
+          })
+        };
+        return clonedMock;
+      }),
+      // Initial mock methods operating on the main stateStorage
+      setVariable: vi.fn().mockImplementation(async (variable) => {
+        stateStorage[variable.name] = variable;
+        return variable;
+      }),
+      setTextVar: vi.fn().mockImplementation(async (name, value, metadata) => {
+        const variable = createTextVariable(name, value, metadata);
+        stateStorage[name] = variable;
+        return variable;
+      }),
+      setDataVar: vi.fn().mockImplementation(async (name, value, metadata) => {
+        const variable = createDataVariable(name, value, metadata);
+        stateStorage[name] = variable;
+        return variable;
+      }),
+      setPathVar: vi.fn().mockImplementation(async (name, value, metadata) => {
+        const variable = createPathVariable(name, value, metadata);
+        stateStorage[name] = variable;
+        return variable;
+      }),
+      setCommand: vi.fn().mockImplementation(async (name, value, metadata) => {
+        const variable = { type: VariableType.COMMAND, name, value, metadata };
+        stateStorage[name] = variable;
+        return variable as any;
+      }),
+      getVariable: vi.fn().mockImplementation((name: string) => {
+        return stateStorage[name];
+      }),
+      applyStateChanges: vi.fn().mockImplementation(async (changes: StateChanges) => { 
+          // Simplified apply for mock: directly modifies stateStorage
+          if (changes.variables) {
+             for (const [varName, variable] of Object.entries(changes.variables)) {
+                if (variable) { // Assume set
+                   stateStorage[varName] = variable;
+                } else { // Assume remove if value is null/undefined? Needs clearer contract.
+                   delete stateStorage[varName];
+                }
+             }
+           }
+          return mockStateService; // Return self
+      }),
+      getCurrentFilePath: vi.fn().mockReturnValue('mock-test.meld'),
+      isTransformationEnabled: vi.fn().mockReturnValue(true),
+      getStateId: vi.fn().mockReturnValue('mock-state-id'),
+      // Add stubs for other IStateService methods if needed by tests
+      getNodes: vi.fn().mockReturnValue([]),
+      getOriginalNodes: vi.fn().mockReturnValue([]),
+      getTransformedNodes: vi.fn().mockReturnValue([]),
+      addNode: vi.fn(),
+      transformNode: vi.fn(),
+      createChildState: vi.fn(), // Add mock for createChildState if called
+      mergeChildState: vi.fn() // Add mock for mergeChildState if called
+    } as unknown as IStateService;
+    // <<< End realistic StateService mock >>>
+
+    mockPathService = { resolvePath: vi.fn(), validatePath: vi.fn(), normalizePath: vi.fn() } as unknown as IPathService;
+    // Configure mockPathService resolvePath to return the input path for simplicity
   });
 
   afterEach(async () => {
@@ -160,8 +283,10 @@ describe('InterpreterService Integration', () => {
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
           const variable = createTextVariable(varName, expectedValue);
-          const stateChanges = {
-            set: [variable]
+          const stateChanges: StateChanges = {
+            variables: {
+              [varName]: variable
+            }
           };
           // Return a DirectiveResult with stateChanges
           return { stateChanges, replacement: undefined };
@@ -185,8 +310,10 @@ describe('InterpreterService Integration', () => {
 
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
           const variable = createDataVariable(varName, expectedData);
-          const stateChanges = {
-            set: [variable]
+          const stateChanges: StateChanges = {
+            variables: {
+              [varName]: variable
+            }
           };
           // Return a DirectiveResult with stateChanges
           return { stateChanges, replacement: undefined };
@@ -227,9 +354,11 @@ describe('InterpreterService Integration', () => {
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
          const variable = createPathVariable(varName, expectedPathValue);
-         const stateChanges = {
-            set: [variable]
-          };
+         const stateChanges: StateChanges = {
+           variables: {
+             [varName]: variable
+           }
+         };
          // Return a DirectiveResult with stateChanges
          return { stateChanges, replacement: undefined };
       });
@@ -257,8 +386,10 @@ describe('InterpreterService Integration', () => {
           const varName = node.directive.identifier;
           const value = `val_${varName}`;
           const variable = createTextVariable(varName, value);
-          const stateChanges = {
-            set: [variable]
+          const stateChanges: StateChanges = {
+            variables: {
+              [varName]: variable
+            }
           };
           // Return a DirectiveResult with stateChanges
           return { stateChanges, replacement: undefined };
@@ -301,8 +432,10 @@ describe('InterpreterService Integration', () => {
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
          const variable = createTextVariable(varName, expectedValue);
-         const stateChanges = {
-           set: [variable]
+         const stateChanges: StateChanges = {
+           variables: {
+             [varName]: variable
+           }
          };
          // Return a DirectiveResult with stateChanges
          return { stateChanges, replacement: undefined };
@@ -326,8 +459,10 @@ describe('InterpreterService Integration', () => {
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
          const variable = createTextVariable(varName, expectedValue);
-         const stateChanges = {
-           set: [variable]
+         const stateChanges: StateChanges = {
+           variables: {
+             [varName]: variable
+           }
          };
          // Return a DirectiveResult with stateChanges
          return { stateChanges, replacement: undefined };
@@ -358,8 +493,10 @@ describe('InterpreterService Integration', () => {
 
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
          const variable = createTextVariable(varName, attemptedValue);
-         const stateChanges = {
-           set: [variable]
+         const stateChanges: StateChanges = {
+           variables: {
+             [varName]: variable
+           }
          };
          // Return a DirectiveResult with stateChanges
          return { stateChanges, replacement: undefined };
@@ -424,8 +561,10 @@ describe('InterpreterService Integration', () => {
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
          const variable = createTextVariable(varName, expectedValue);
-         const stateChanges = {
-           set: [variable]
+         const stateChanges: StateChanges = {
+           variables: {
+             [varName]: variable
+           }
          };
          // Return a DirectiveResult with stateChanges
          return { stateChanges, replacement: undefined };
@@ -456,16 +595,20 @@ describe('InterpreterService Integration', () => {
       vi.spyOn(mockDirectiveClient, 'handleDirective')
          .mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
             const variable = createTextVariable(validVarName, validValue);
-            const stateChanges = {
-              set: [variable]
+            const stateChanges: StateChanges = {
+              variables: {
+                [validVarName]: variable
+              }
             };
             // Return a DirectiveResult with stateChanges
             return { stateChanges, replacement: undefined };
          })
          .mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
             const variable = createTextVariable(invalidVarName, errorValue);
-            const stateChanges = {
-              set: [variable]
+            const stateChanges: StateChanges = {
+              variables: {
+                [invalidVarName]: variable
+              }
             };
             // Simulate successful handling before resolution error
             // Return a DirectiveResult with stateChanges
@@ -497,8 +640,10 @@ describe('InterpreterService Integration', () => {
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
          const variable = createTextVariable(varName, expectedValue);
-         const stateChanges = {
-           set: [variable]
+         const stateChanges: StateChanges = {
+           variables: {
+             [varName]: variable
+           }
          };
          // Return a DirectiveResult with stateChanges
          return { stateChanges, replacement: undefined };
@@ -530,8 +675,10 @@ describe('InterpreterService Integration', () => {
       vi.spyOn(mockDirectiveClient, 'handleDirective')
          .mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
             const variable = createTextVariable(beforeVarName, 'before_val');
-            const stateChanges = {
-              set: [variable]
+            const stateChanges: StateChanges = {
+              variables: {
+                [beforeVarName]: variable
+              }
             };
             // Return a DirectiveResult with stateChanges
             return { stateChanges, replacement: undefined };
@@ -553,8 +700,10 @@ describe('InterpreterService Integration', () => {
          // This mock should not be called due to the error
          .mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
             const variable = createTextVariable(afterVarName, 'after_val');
-            const stateChanges = {
-              set: [variable]
+            const stateChanges: StateChanges = {
+              variables: {
+                [afterVarName]: variable
+              }
             };
             return { stateChanges, replacement: undefined };
          });
@@ -635,8 +784,10 @@ describe('InterpreterService Integration', () => {
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
          const variable = createTextVariable(varName, expectedValue);
-         const stateChanges = {
-           set: [variable]
+         const stateChanges: StateChanges = {
+           variables: {
+             [varName]: variable
+           }
          };
          // Return a DirectiveResult with stateChanges
          return { stateChanges, replacement: undefined };
@@ -660,8 +811,10 @@ describe('InterpreterService Integration', () => {
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
          const variable = createDataVariable(varName, expectedData);
-         const stateChanges = {
-           set: [variable]
+         const stateChanges: StateChanges = {
+           variables: {
+             [varName]: variable
+           }
          };
          // Return a DirectiveResult with stateChanges
          return { stateChanges, replacement: undefined };
@@ -695,8 +848,10 @@ describe('InterpreterService Integration', () => {
 
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
          const variable = createPathVariable(varName, expectedPathValue);
-         const stateChanges = {
-           set: [variable]
+         const stateChanges: StateChanges = {
+           variables: {
+             [varName]: variable
+           }
          };
          // Return a DirectiveResult with stateChanges
          return { stateChanges, replacement: undefined };
@@ -720,10 +875,11 @@ describe('InterpreterService Integration', () => {
 
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
          const variable = createDataVariable(varName, complexData);
-         const stateChanges = {
-           set: [variable]
+         const stateChanges: StateChanges = {
+           variables: {
+             [varName]: variable
+           }
          };
-         // Return a DirectiveResult with stateChanges
          return { stateChanges, replacement: undefined };
       });
       
@@ -753,8 +909,10 @@ describe('InterpreterService Integration', () => {
             const varName = node.directive.identifier;
             const value = `val_${varName}`;
             const variable = createTextVariable(varName, value);
-            const stateChanges = {
-              set: [variable]
+            const stateChanges: StateChanges = {
+              variables: {
+                [varName]: variable
+              }
             };
             // Return a DirectiveResult with stateChanges
             return { stateChanges, replacement: undefined };
