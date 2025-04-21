@@ -16,7 +16,6 @@ import { ErrorDisplayService } from '@services/display/ErrorDisplayService/Error
 import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver.js';
-import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { SourceMapService } from '@core/utils/SourceMapService.js';
@@ -86,9 +85,6 @@ container.register(StateFactory, { useClass: StateFactory });
 
 container.register(StateEventService, { useClass: StateEventService });
 container.register('IStateEventService', { useToken: StateEventService }); // Use Class as token
-
-container.register(StateTrackingService, { useClass: StateTrackingService });
-container.register('IStateTrackingService', { useToken: StateTrackingService }); // Use Class as token
 
 container.register(StateService, { useClass: StateService });
 container.register('IStateService', { useToken: StateService }); // Use Class as token

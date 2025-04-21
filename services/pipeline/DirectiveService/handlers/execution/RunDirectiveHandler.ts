@@ -186,14 +186,10 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       }
       // --- End Execution Block ---
 
-      // Cleanup temp file
-      if (tempFilePath) {
-        try {
-          await this.fileSystemService.deleteFile(tempFilePath);
-        } catch (cleanupError) {
-          logger.warn('Failed to delete temporary script file', { path: tempFilePath, error: cleanupError });
-        }
-      }
+      // <<< REMOVE Logging for stdout/stderr >>>
+      // process.stdout.write(`>>> RunDirectiveHandler: Raw stdout: [${stdout}]\n`);
+      // process.stdout.write(`>>> RunDirectiveHandler: Raw stderr: [${stderr}]\n`);
+      // <<< END Logging >>>
 
       // Store results using correct variable names extracted from the directive data
       const directiveSourceLocation: SourceLocation | undefined = node.location ? {
@@ -223,8 +219,17 @@ export class RunDirectiveHandler implements IDirectiveHandler {
             type: 'Text',
             // Combine stdout and stderr, separated by newline, filtering empty strings
             content: [stdout, stderr].filter(s => s).join('\n'), 
-            location: node.location
+            location: node.location,
+            nodeId: crypto.randomUUID() // Ensure nodeId is added
         };
+        // <<< REMOVE Logging for replacement node >>>
+        // try {
+        //    process.stdout.write(`>>> RunDirectiveHandler: Created replacementNode: ${JSON.stringify(replacementNode)}\n`);
+        // } catch (e) {
+        //    process.stdout.write(`>>> RunDirectiveHandler: Error stringifying replacementNode: ${e}\n`);
+        //    process.stdout.write(`>>> RunDirectiveHandler: Replacement node content: ${replacementNode.content}\n`);
+        // }
+        // <<< END Logging >>>
       }
 
       // Return NEW DirectiveResult shape

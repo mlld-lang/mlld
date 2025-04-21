@@ -454,9 +454,19 @@ export class InterpreterService implements IInterpreterService {
               const nodesBefore = currentState.getTransformedNodes(); 
               const index = nodesBefore.findIndex(n => n.nodeId === node.nodeId);
   
+              // <<< ADD LOGGING HERE >>>
+              logger.debug(`[Interpreter Loop] Processing node ${node.nodeId} (Type: ${node.type}, Kind: ${(node as DirectiveNode).directive?.kind}). Replacement found? ${!!nodeResult.replacement}. Index in transformed list: ${index}`);
+              if (nodeResult.replacement) {
+                logger.debug(`[Interpreter Loop] Replacement content: ${JSON.stringify(nodeResult.replacement)}`);
+              }
+              // <<< END LOGGING >>>
+
               if (index !== -1) {
                 const replacementNodes = nodeResult.replacement;
+                // <<< ADD LOGGING HERE >>>
+                logger.debug(`[Interpreter Loop] Calling transformNode. Index: ${index}, Replacement Node Count: ${replacementNodes.length}, First Replacement Node Type: ${replacementNodes[0]?.type}, First Replacement Node Content: ${(replacementNodes[0] as TextNode)?.content?.substring(0, 50)}...`);
                 currentState.transformNode(index, replacementNodes.length > 0 ? replacementNodes : undefined);
+                // <<< END LOGGING >>>
                 logger.debug(`Applied ${replacementNodes.length} replacement nodes for original node ${node.nodeId} at index ${index}`);
               } else {
                  process.stderr.write(`WARN: [InterpreterService Loop] Original node (ID: ${node.nodeId}) not found for replacement.\n`);
@@ -513,6 +523,9 @@ export class InterpreterService implements IInterpreterService {
         finalStateNodes: currentState.getNodes()?.length ?? 0,
         mergedToParent: opts.mergeState && opts.initialState
       });
+
+      // <<< Use process.stdout.write to log ID before return >>>
+      process.stdout.write(`>>> [Interpreter EXIT] Returning state ID: ${currentState?.getStateId()}\n`);
 
       return currentState;
     } catch (error) {

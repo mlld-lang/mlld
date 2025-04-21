@@ -19,6 +19,7 @@ import type { IResolutionService } from '@services/resolution/ResolutionService/
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 // +++ Import logger and ILogger +++
 import logger, { ILogger } from '@core/utils/logger.js';
+import type { MeldNode, TextNode } from '@core/syntax/types/index.js'; // <<< Add TextNode import
 
 // DI Container is configured by importing @core/di-config.js elsewhere
 
@@ -69,7 +70,21 @@ export async function processMeld(content: string, options?: Partial<ProcessOpti
       initialState: stateService, 
   });
 
+  // <<< Log ID of received resultState >>>
+  process.stdout.write(`>>> [processMeld ENTRY] Received state ID: ${resultState?.getStateId()}\n`);
+
+  // <<< Restore original getTransformedNodes call >>>
   const nodesToProcess = resultState.getTransformedNodes(); 
+  // <<< Keep simple logging >>>
+  process.stdout.write(`\n>>> [processMeld DEBUG] Nodes PRE-OutputService (FROM resultState) (Count: ${nodesToProcess?.length ?? 0}) <<\n`);
+  if (nodesToProcess && nodesToProcess.length > 0) {
+    process.stdout.write(`    First 3 nodes: ${JSON.stringify(nodesToProcess.slice(0, 3).map(n => ({ type: n.type, nodeId: n.nodeId, content: (n as any).content?.substring(0, 50) })), null, 2)}\n`);
+  } else {
+    process.stdout.write(`    Node list is empty or null.\n`);
+  }
+  process.stdout.write(`>>> [processMeld DEBUG] End Nodes PRE-OutputService <<\n\n`);
+
+  // <<< Pass resultState directly to convert >>>
   const finalOutput = await outputService.convert(nodesToProcess, resultState, options?.format || 'xml'); 
 
   // <<< Dispose container ONLY if it was created internally >>>

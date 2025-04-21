@@ -3,7 +3,7 @@ import { stateLogger as logger } from '@core/utils/logger.js';
 import { randomUUID } from 'crypto';
 import { Service } from '@core/ServiceProvider.js';
 import { injectable } from 'tsyringe';
-import { cloneDeep } from 'lodash';
+import cloneDeep from 'lodash/cloneDeep.js';
 import type { IStateService } from './IStateService.js';
 import type { TransformationOptions } from '@core/types/state.js';
 

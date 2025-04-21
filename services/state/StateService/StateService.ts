@@ -31,9 +31,10 @@ import {
   createCommandVariable
 } from '@core/types';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/guards.js';
-import { cloneDeep } from 'lodash';
+import cloneDeep from 'lodash/cloneDeep.js';
 import * as crypto from 'crypto';
 import { VariableType } from '@core/types';
+import type { StateChanges } from '@core/directives/DirectiveHandler.js';
 
 // Helper function to get the container
 function getContainer() {
@@ -256,7 +257,29 @@ export class StateService implements IStateService {
 
     try {
       const newStateNode = this.stateFactory.updateState(this.currentState, updates); 
+      const oldStateId = this.currentState?.stateId;
+      const newStateId = newStateNode?.stateId;
+      const oldTransformedNodes = this.currentState?.transformedNodes;
+      const newTransformedNodes = newStateNode?.transformedNodes;
+      logger.debug(`[StateService updateState] BEFORE assignment`, {
+          source,
+          oldStateId,
+          oldTransformedNodesLength: oldTransformedNodes?.length,
+          oldTransformedFirstNodeId: oldTransformedNodes?.[0]?.nodeId,
+          updatesKeys: Object.keys(updates),
+          hasUpdateTransformedNodes: updates.hasOwnProperty('transformedNodes'),
+          updateTransformedNodesLength: (updates as any).transformedNodes?.length
+      });
       this.currentState = newStateNode; 
+      logger.debug(`[StateService updateState] AFTER assignment`, {
+          source,
+          newStateId,
+          currentStateIdNow: this.currentState?.stateId,
+          currentStateTransformedNodesLength: this.currentState?.transformedNodes?.length,
+          currentStateTransformedFirstNodeId: this.currentState?.transformedNodes?.[0]?.nodeId,
+          areNodesSameObject: oldTransformedNodes === newTransformedNodes, // Should be false
+          areStateNodesSameObject: oldStateSnapshot === this.currentState // Should be false
+      });
     } catch (error) {
       logger.error(`Error updating state from source '${source}'`, { error, updates });
       throw error; 
@@ -419,16 +442,18 @@ export class StateService implements IStateService {
 
   getTransformedNodes(): MeldNode[] {
     const transformEnabled = this.isTransformationEnabled();
-    const transformedNodesExist = !!this.currentState.transformedNodes;
+    const transformedNodesArray = this.currentState.transformedNodes;
+    const transformedNodesExist = !!transformedNodesArray;
     
-    // process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. isTransformationEnabled: ${transformEnabled}. transformedNodesExist: ${transformedNodesExist}\n`);
-
     if (transformEnabled && transformedNodesExist) {
-       // process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. RETURNING transformedNodes (Length: ${this.currentState.transformedNodes?.length ?? 0})\n`);
-      return [...this.currentState.transformedNodes!]; // Use ! because we checked existence
+      const arrayToReturn = transformedNodesArray!.slice();
+      process.stdout.write(`>>> [getTransformedNodes RETURN] RETURNING SLICE: ${JSON.stringify(arrayToReturn.slice(0, 3).map(n=>({type: n.type, nodeId: n.nodeId})))}\n\n`);
+      return arrayToReturn;
+    } else {
+      const arrayToReturn = this.currentState.nodes.slice();
+      process.stdout.write(`>>> [getTransformedNodes RETURN] RETURNING ORIGINAL SLICE: ${JSON.stringify(arrayToReturn.slice(0, 3).map(n=>({type: n.type, nodeId: n.nodeId})))}\n\n`);
+      return arrayToReturn;
     }
-    // process.stdout.write(`DEBUG: [StateService.getTransformedNodes] StateID: ${this.getStateId()}. RETURNING original nodes (Length: ${this.currentState.nodes?.length ?? 0})\n`);
-    return [...this.currentState.nodes]; 
   }
 
   setTransformedNodes(nodes: MeldNode[]): void {
@@ -1041,34 +1066,38 @@ export class StateService implements IStateService {
     // Create a new state instance based on the current one to apply changes to
     const newStateService = this.clone();
 
-    // Apply removals first
-    if (changes.remove && changes.remove.length > 0) {
-      for (const removal of changes.remove) {
-        logger.debug(`Applying removal change for variable: ${removal.name} (Type: ${removal.type ?? 'any'})`, { stateId: newStateService.getStateId() });
-        // Use the existing removeVariable logic on the new state instance
-        // Note: removeVariable is already async
-        await newStateService.removeVariable(removal.name, removal.type);
+    // <<< Refactor to use changes.variables >>>
+    let setOperations = 0;
+    if (changes.variables) {
+      for (const [name, variable] of Object.entries(changes.variables)) {
+        if (variable === undefined || variable === null) {
+          // Handle potential removals if needed in the future (e.g., if value is explicitly null/undefined)
+          // logger.debug(`Skipping removal for variable via StateChanges (not implemented): ${name}`, { stateId: newStateService.getStateId() });
+          // For now, we only handle setting variables.
+          logger.debug(`Applying set change for variable: ${name} (Type: ${(variable as any)?.type})`, { stateId: newStateService.getStateId() });
+          // Assume variable is a valid MeldVariable structure if not null/undefined
+          // Type assertion might be needed if 'any' causes issues, but Record<string, any> forces it.
+          await newStateService.setVariable(variable as MeldVariable);
+          setOperations++;
+        } else {
+          // Handle setting the variable
+          logger.debug(`Applying set change for variable: ${name} (Type: ${(variable as any)?.type})`, { stateId: newStateService.getStateId() });
+          // Assume variable is a valid MeldVariable structure
+          await newStateService.setVariable(variable as MeldVariable);
+          setOperations++;
+        }
       }
     }
-
-    // Apply settings/updates next
-    if (changes.set && changes.set.length > 0) {
-      for (const variable of changes.set) {
-        logger.debug(`Applying set change for variable: ${variable.name} (Type: ${variable.type})`, { stateId: newStateService.getStateId() });
-        // Use the existing setVariable logic on the new state instance
-        // Note: setVariable is already async
-        await newStateService.setVariable(variable);
-      }
-    }
+    // <<< End Refactor >>>
 
     // No need to call updateState here, as clone() creates a new node
     // and setVariable/removeVariable on the cloned instance already update its internal node
     // We might want to emit a specific 'stateChangesApplied' event here if needed.
-    
+
     logger.debug('Finished applying state changes.', { 
       stateId: newStateService.getStateId(), 
-      removals: changes.remove?.length ?? 0, 
-      sets: changes.set?.length ?? 0 
+      // removals: changes.remove?.length ?? 0, // Removed this part
+      sets: setOperations 
     });
 
     // Return the new state instance with changes applied

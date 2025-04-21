@@ -1,3 +1,4 @@
+import { createLLMXML } from 'llmxml';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IOutputService, OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -592,15 +593,15 @@ export class OutputService implements IOutputService {
   ): Promise<string> {
     const opts = { ...DEFAULT_OPTIONS, ...options };
     
-    logger.debug('Converting output', {
+    // <<< ADD LOGGING >>>
+    logger.debug('[OutputService convert ENTRY]', {
       format,
-      nodeCount: nodes.length,
-      options: opts,
-      pretty: opts.pretty
+      passedNodeCount: nodes?.length ?? 0,
+      passedFirstNodeType: nodes?.[0]?.type,
+      passedFirstNodeId: nodes?.[0]?.nodeId,
+      stateId: state?.getStateId()
     });
-
-    // We always use transformed nodes now (transformation is always enabled)
-    const nodesToProcess = state.getTransformedNodes();
+    // <<< END LOGGING >>>
 
     const formatter = this.formatters.get(format);
     if (!formatter) {
@@ -610,7 +611,7 @@ export class OutputService implements IOutputService {
 
     try {
       // Get the raw output from the formatter
-      let result = await formatter(nodesToProcess, state, opts);
+      let result = await formatter(nodes, state, opts);
       
       // Apply Prettier formatting if requested
       if (opts.pretty) {
@@ -628,7 +629,7 @@ export class OutputService implements IOutputService {
       logger.debug('Successfully converted output', {
         format,
         resultLength: result.length,
-        transformedNodesCount: nodesToProcess.length,
+        transformedNodesCount: nodes.length,
         pretty: opts.pretty
       });
 
@@ -948,38 +949,35 @@ export class OutputService implements IOutputService {
     let output = '';
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
-    // Set the initial formatting context
+    logger.debug('[OutputService convertToMarkdown] Entry', {
+      nodeCount: nodes?.length ?? 0,
+      firstNodeType: nodes?.[0]?.type,
+      stateId: state?.getStateId(),
+      isTransformationEnabled: state?.isTransformationEnabled(),
+      transformedNodeCountInState: state?.getTransformedNodes()?.length
+    });
+    if (nodes && nodes.length > 0) {
+      logger.debug('[OutputService convertToMarkdown] First 3 nodes:', {
+        nodes: nodes.slice(0, 3).map(n => ({ type: n.type, nodeId: n.nodeId, content: (n as any).content?.substring(0, 50) }))
+      });
+    }
+
     const initialContext = this.createFormattingContext('document', true);
 
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
-      const currentContext = this.getCurrentFormattingContext();
-      
-      // Handle specific node types
+    for (const node of nodes) { 
+      const currentContext = this.getCurrentFormattingContext(); // Context might still be needed by handleNewlines
+
       if (node.type === 'Text') {
-        const textNode = node as TextNode;
-        output += this.handleNewlines(textNode.content, currentContext);
+        output += this.handleNewlines((node as TextNode).content, currentContext);
       } else if (node.type === 'CodeFence') {
         output += this.codeFenceToMarkdown(node as CodeFenceNode);
-      } else if (node.type === 'Comment') {
-        // Comments are typically ignored in Markdown output
-        continue;
-      } else if (node.type === 'Directive') {
-        const directive = node as DirectiveNode;
-        const kind = directive.directive.kind;
-        if (['text', 'data', 'path', 'import', 'define'].includes(kind)) {
-           output += ''; 
-        } else {
-           output += `[UNKNOWN NODE TYPE: Directive - Kind: ${kind}]`;
-        }
-      } else {
-        output += `[UNKNOWN NODE TYPE: ${node.type}]`;
       }
-      
-      // Update line start/end status based on the processed node's content
+      // Implicitly ignore Comment, Directive, and other node types
+
+      // Update context (if still needed by handleNewlines)
       const endsWithNewline = output.endsWith('\n');
       this.getCurrentFormattingContext().atLineStart = endsWithNewline;
-      this.getCurrentFormattingContext().atLineEnd = false; // Reset for next node
+      this.getCurrentFormattingContext().atLineEnd = false; 
       this.getCurrentFormattingContext().lastOutputEndedWithNewline = endsWithNewline;
     }
     
@@ -1006,12 +1004,6 @@ export class OutputService implements IOutputService {
       // Log the markdown for debugging
       logger.debug('Converting markdown to XML', { markdown });
 
-      // Use enhanced llmxml 1.5.0 features
-      const { createLLMXML } = await import('llmxml');
-      
-      // Extract XML format options from the options parameter
-      const xmlOptions = options?.formatOptions?.xml || {};
-      
       // Create LLMXML instance with more granular configuration
       const llmxml = createLLMXML({
         warningLevel: 'none'

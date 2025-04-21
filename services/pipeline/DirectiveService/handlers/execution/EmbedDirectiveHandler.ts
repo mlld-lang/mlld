@@ -17,7 +17,6 @@ import { embedLogger } from '@core/utils/logger.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js'; 
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
-import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
@@ -27,7 +26,6 @@ import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { EmbedDirectiveData } from '@core/syntax/types/directives.js';
-import { vi } from 'vitest';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 import type { SourceLocation } from '@core/types/common.js';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
@@ -159,6 +157,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       type: 'Text',
       content,
       location: originalNode.location,
+      nodeId: crypto.randomUUID(),
       // Add enhanced formatting metadata to help with context preservation
       formattingMetadata
     };
@@ -387,8 +386,6 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       const headingLevel = options.headingLevel;
       if (headingLevel) {
         // TODO: Find appropriate service/utility for heading adjustment
-        // <<< Log the logger object >>>
-        process.stdout.write(`>>> EMBED HANDLER - Logger object: ${typeof this.logger}, Warn is mock: ${vi.isMockFunction(this.logger?.warn)}\n`);
         this.logger.warn(`Heading level adjustment specified (+${headingLevel}) but not currently supported by ResolutionService. Content unchanged.`, standardErrorDetails);
         // Validate the option format here if needed
         if (typeof headingLevel !== 'number' || !Number.isInteger(headingLevel) || headingLevel < 1) {
