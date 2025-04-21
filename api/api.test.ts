@@ -327,9 +327,9 @@ describe('SDK Integration Tests', () => {
       try {
           result = await processMeld(content, {
             format: 'markdown',
-            transformation: true,
+        transformation: true,
             container: testContainer
-          });
+      });
       } catch (e) {
           error = e instanceof Error ? e : new Error(String(e));
       }
@@ -424,14 +424,15 @@ More text`;
       const content = `
 @text greeting = "Hello"
 @run [echo {{greeting}}]`;
-      await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
       
       const result = await processMeld(content, {
         fs: context.fs as unknown as NodeFileSystem,
         transformation: true,
-        container: testContainer
+        container: testContainer,
+        format: 'xml'
       });
       
+      expect(result).toContain('<Meld>');
       expect(result).toContain('Hello');
       expect(result).not.toContain('@text');
       expect(result).not.toContain('@run');
@@ -444,9 +445,9 @@ More text`;
       try {
           result = await processMeld(content, {
             format: 'markdown',
-            transformation: true,
+        transformation: true,
             container: testContainer
-          });
+      });
       } catch (e) {
           error = e instanceof Error ? e : new Error(String(e));
       }
