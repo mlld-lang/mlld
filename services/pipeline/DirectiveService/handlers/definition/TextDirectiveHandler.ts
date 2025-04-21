@@ -264,7 +264,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       };
       
       // Create the variable definition structure directly for the state change
-      const variableChange = {
+      const variableChange: VariableDefinition = {
+          name: identifier,
           type: VariableType.TEXT,
           value: resolvedValue,
           metadata: metadata

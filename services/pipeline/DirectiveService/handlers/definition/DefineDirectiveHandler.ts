@@ -194,13 +194,16 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       logger.debug('Constructed command definition', { name: commandDefinition.name, type: commandDefinition.type });
 
       // Store the ICommandDefinition using setCommandVar on the provided state
-      const commandVariable = createCommandVariable(commandDefinition.name, commandDefinition, baseMetadata);
-      await state.setVariable(commandVariable);
+      // <<< Remove direct state modification >>>
+      // const commandVariable = createCommandVariable(commandDefinition.name, commandDefinition, baseMetadata);
+      // await state.setVariable(commandVariable);
       
       logger.debug(`Stored command '${commandDefinition.name}'`, { definition: commandDefinition });
 
       // Create VariableDefinition for StateChanges
+      // <<< FIX: Add name property >>>
       const variableDefinition: VariableDefinition = {
+          name: commandDefinition.name, // Add the name property
           type: VariableType.COMMAND,
           value: commandDefinition,
           metadata: baseMetadata

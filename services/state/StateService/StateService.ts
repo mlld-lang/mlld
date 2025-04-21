@@ -35,6 +35,7 @@ import cloneDeep from 'lodash/cloneDeep.js';
 import * as crypto from 'crypto';
 import { VariableType } from '@core/types';
 import type { StateChanges } from '@core/directives/DirectiveHandler.js';
+import assert from 'node:assert';
 
 // Helper function to get the container
 function getContainer() {
@@ -320,7 +321,7 @@ export class StateService implements IStateService {
     return foundVariable; 
   }
 
-  async setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<TextVariable> {
+  async setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<IStateService> {
     this.checkMutable();
     const variable = createTextVariable(name, value, {
       origin: VariableOrigin.DIRECT_DEFINITION,
@@ -334,11 +335,7 @@ export class StateService implements IStateService {
         text
       }
     }, `setTextVar:${name}`);
-    
-    const checkVar = this.getTextVar(name);
-    // process.stdout.write(`DEBUG: [StateService.setTextVar POST-UPDATE] Var '${name}' read back: ${checkVar ? JSON.stringify(checkVar.value) : 'NOT FOUND'}. State ID: ${this.getStateId()}\n`);
-
-    return variable;
+    return this;
   }
 
   getAllTextVars(): Map<string, TextVariable> {
@@ -354,7 +351,7 @@ export class StateService implements IStateService {
     return this.currentState.variables.data.get(name);
   }
 
-  async setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): Promise<DataVariable> {
+  async setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): Promise<IStateService> {
     this.checkMutable();
     const variable = createDataVariable(name, value, {
       origin: VariableOrigin.DIRECT_DEFINITION,
@@ -368,7 +365,7 @@ export class StateService implements IStateService {
         data
       }
     }, `setDataVar:${name}`);
-    return variable;
+    return this;
   }
 
   getAllDataVars(): Map<string, DataVariable> {
@@ -384,7 +381,7 @@ export class StateService implements IStateService {
     return this.currentState.variables.path.get(name);
   }
 
-  async setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): Promise<IPathVariable> {
+  async setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): Promise<IStateService> {
     this.checkMutable();
     const variable = createPathVariable(name, value, { 
       origin: VariableOrigin.DIRECT_DEFINITION,
@@ -398,7 +395,7 @@ export class StateService implements IStateService {
         path
       }
     }, `setPathVar:${name}`);
-    return variable;
+    return this;
   }
 
   getAllPathVars(): Map<string, IPathVariable> {
@@ -410,7 +407,7 @@ export class StateService implements IStateService {
     return this.currentState.commands.get(name);
   }
 
-  async setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<CommandVariable> {
+  async setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<IStateService> {
     this.checkMutable();
     const variable = createCommandVariable(name, value, {
         origin: VariableOrigin.DIRECT_DEFINITION,
@@ -419,7 +416,7 @@ export class StateService implements IStateService {
     const commands = new Map(this.currentState.commands);
     commands.set(name, variable);
     await this.updateState({ commands }, `setCommandVar:${name}`);
-    return variable;
+    return this;
   }
 
   getAllCommands(): Map<string, CommandVariable> {
@@ -444,28 +441,38 @@ export class StateService implements IStateService {
     const transformEnabled = this.isTransformationEnabled();
     const transformedNodesArray = this.currentState.transformedNodes;
     const transformedNodesExist = !!transformedNodesArray;
+    const originalNodes = this.currentState.nodes;
     
     if (transformEnabled && transformedNodesExist) {
-      const arrayToReturn = transformedNodesArray!.slice();
-      process.stdout.write(`>>> [getTransformedNodes RETURN] RETURNING SLICE: ${JSON.stringify(arrayToReturn.slice(0, 3).map(n=>({type: n.type, nodeId: n.nodeId})))}\n\n`);
+      try {
+          assert.notStrictEqual(transformedNodesArray, originalNodes, 
+              `StateID: ${this.getStateId()} - TransformedNodes array SHOULD NOT be the same instance as originalNodes when transform enabled and transformed exists.`);
+      } catch (e) {
+          process.stderr.write(`ASSERTION FAILED in getTransformedNodes: ${e instanceof Error ? e.message : String(e)}\n`);
+          // Optionally throw or log more details
+      }
+      const arrayToReturn = transformedNodesArray!.slice(); 
+      process.stdout.write(`>>> [getTransformedNodes RETURN] RETURNING SLICE (Transformed): ${JSON.stringify(arrayToReturn.slice(0, 3).map(n=>({type: n.type, nodeId: n.nodeId})))}\n\n`);
       return arrayToReturn;
     } else {
-      const arrayToReturn = this.currentState.nodes.slice();
-      process.stdout.write(`>>> [getTransformedNodes RETURN] RETURNING ORIGINAL SLICE: ${JSON.stringify(arrayToReturn.slice(0, 3).map(n=>({type: n.type, nodeId: n.nodeId})))}\n\n`);
+       // Assert that if transform is disabled OR transformed doesn't exist, we return the original nodes reference (or a slice)
+      const arrayToReturn = originalNodes.slice(); 
+      process.stdout.write(`>>> [getTransformedNodes RETURN] RETURNING SLICE (Original): ${JSON.stringify(arrayToReturn.slice(0, 3).map(n=>({type: n.type, nodeId: n.nodeId})))}\n\n`);
       return arrayToReturn;
     }
   }
 
-  setTransformedNodes(nodes: MeldNode[]): void {
+  async setTransformedNodes(nodes: MeldNode[]): Promise<IStateService> {
     this.checkMutable();
     if (this.isTransformationEnabled()) {
-      this.updateState({ transformedNodes: [...nodes] }, 'setTransformedNodes');
+      await this.updateState({ transformedNodes: [...nodes] }, 'setTransformedNodes');
     } else {
       logger.warn('Attempted to set transformed nodes while transformation is disabled.');
     }
+    return this;
   }
 
-  addNode(node: MeldNode): void {
+  async addNode(node: MeldNode): Promise<IStateService> {
     this.checkMutable();
     const nodeClone = cloneDeep(node);
     const nodes = [...this.currentState.nodes, nodeClone];
@@ -476,14 +483,15 @@ export class StateService implements IStateService {
       transformedNodesUpdate = { transformedNodes: [...currentTransformed, nodeClone] };
     }
 
-    this.updateState({ nodes, ...transformedNodesUpdate }, `addNode:${node.nodeId}`);
+    await this.updateState({ nodes, ...transformedNodesUpdate }, `addNode:${node.nodeId}`);
+    return this;
   }
 
-  transformNode(index: number, replacement: MeldNode | MeldNode[] | undefined): void {
+  async transformNode(index: number, replacement: MeldNode | MeldNode[] | undefined): Promise<IStateService> {
     this.checkMutable();
     if (!this.isTransformationEnabled()) {
       logger.debug('Transformation is disabled, skipping node transformation.');
-      return;
+      return this;
     }
 
     const baseTransformedNodes = this.currentState.transformedNodes 
@@ -492,7 +500,7 @@ export class StateService implements IStateService {
 
     if (index < 0 || index >= baseTransformedNodes.length) {
       logger.error('Invalid index provided for transformNode', { index, length: baseTransformedNodes.length });
-      return;
+      return this;
     }
 
     const replacementClone = cloneDeep(replacement);
@@ -504,7 +512,8 @@ export class StateService implements IStateService {
       baseTransformedNodes.splice(index, 1);
     }
 
-    this.updateState({ transformedNodes: baseTransformedNodes }, `transformNode:index-${index}`);
+    await this.updateState({ transformedNodes: baseTransformedNodes }, `transformNode:index-${index}`);
+    return this;
   }
 
   isTransformationEnabled(): boolean {
@@ -520,25 +529,27 @@ export class StateService implements IStateService {
     return true;
   }
 
-  setTransformationEnabled(enabled: boolean): void {
+  async setTransformationEnabled(enabled: boolean): Promise<IStateService> {
     this.checkMutable();
     const newOptions = { 
       ...this.currentState.transformationOptions, 
       enabled 
     };
-    this.updateState({ transformationOptions: newOptions }, 'setTransformationEnabled');
+    await this.updateState({ transformationOptions: newOptions }, 'setTransformationEnabled');
+    return this;
   }
 
-  setTransformationOptions(options: TransformationOptions): void {
+  async setTransformationOptions(options: TransformationOptions): Promise<IStateService> {
     this.checkMutable();
-    this.updateState({ transformationOptions: { ...options } }, 'setTransformationOptions');
+    await this.updateState({ transformationOptions: { ...options } }, 'setTransformationOptions');
+    return this;
   }
 
   getTransformationOptions(): TransformationOptions {
     return { ...this.currentState.transformationOptions };
   }
 
-  appendContent(content: string): void {
+  async appendContent(content: string): Promise<IStateService> {
     this.checkMutable();
     const textNode: TextNode = {
       type: 'Text',
@@ -546,22 +557,24 @@ export class StateService implements IStateService {
       location: { start: { line: -1, column: -1 }, end: { line: -1, column: -1 } },
       nodeId: crypto.randomUUID()
     };
-    this.addNode(textNode);
+    return await this.addNode(textNode);
   }
 
   // Imports
-  addImport(path: string): void {
+  async addImport(path: string): Promise<IStateService> {
     this.checkMutable();
     const imports = new Set(this.currentState.imports);
     imports.add(path);
-    this.updateState({ imports }, `addImport:${path}`);
+    await this.updateState({ imports }, `addImport:${path}`);
+    return this;
   }
 
-  removeImport(path: string): void {
+  async removeImport(path: string): Promise<IStateService> {
     this.checkMutable();
     const imports = new Set(this.currentState.imports);
     imports.delete(path);
-    this.updateState({ imports }, `removeImport:${path}`);
+    await this.updateState({ imports }, `removeImport:${path}`);
+    return this;
   }
 
   hasImport(path: string): boolean {
@@ -577,9 +590,10 @@ export class StateService implements IStateService {
     return this.currentState.filePath ?? null;
   }
 
-  setCurrentFilePath(path: string): void {
+  async setCurrentFilePath(path: string): Promise<IStateService> {
     this.checkMutable();
-    this.updateState({ filePath: path }, 'setCurrentFilePath');
+    await this.updateState({ filePath: path }, 'setCurrentFilePath');
+    return this;
   }
 
   // State management
@@ -602,17 +616,19 @@ export class StateService implements IStateService {
   createChildState(options?: Partial<{ /* VariableCopyOptions TBD */ }>): IStateService {
     this.checkMutable();
     
-    const childNode = this.stateFactory.createChildState(this, { 
+    const childNode = this.stateFactory.createChildState(this.currentState, { 
+       // Pass any relevant options derived from the input `options` if needed
     });
 
     const childService = new StateService(
       this.stateFactory,
       this.eventService,
       this.trackingServiceClientFactory,
-      this
+      this // Pass current service as parent reference for the *new* child service
     );
 
-    childService._setInternalStateNode(childNode);
+    // Set the node created by the factory onto the new service instance
+    childService._setInternalStateNode(childNode); 
 
     this.ensureFactoryInitialized();
     const childId = childService.getStateId();
@@ -650,18 +666,16 @@ export class StateService implements IStateService {
     return childService;
   }
 
-  async mergeChildState(childState: IStateService): Promise<void> {
+  async mergeChildState(childState: IStateService): Promise<IStateService> {
     this.checkMutable();
 
     if (!this.isStateService(childState)) {
       logger.error('Cannot merge state: Provided object is not a StateService instance.');
-      return;
+      return this;
     }
 
     const childNode = childState.getInternalStateNode();
-
     const mergedNode = this.stateFactory.mergeStates(this.currentState, childNode);
-
     const updates: Partial<Omit<StateNode, 'stateId' | 'createdAt' | 'parentServiceRef'>> = {
         variables: mergedNode.variables,
         commands: mergedNode.commands,
@@ -700,6 +714,8 @@ export class StateService implements IStateService {
       });
       }
     }
+
+    return this;
   }
 
   clone(): IStateService {
@@ -892,79 +908,134 @@ export class StateService implements IStateService {
    */
   getVariable(name: string, type?: VariableType): MeldVariable | undefined {
     let variable: MeldVariable | undefined = undefined;
+    const stateId = this.getStateId(); // Get ID once
 
-    // Look locally
     if (type) {
+      process.stdout.write(`DEBUG [getVariable LOOKUP] StateID: ${stateId}, Type: ${type}, Name: '${name}'\n`);
+      let targetMap: Map<string, MeldVariable> | undefined;
+      let mapName: string = 'unknown';
       switch (type) {
-        case VariableType.TEXT: variable = this.currentState.variables.text.get(name); break;
-        case VariableType.DATA: variable = this.currentState.variables.data.get(name); break;
-        case VariableType.PATH: variable = this.currentState.variables.path.get(name); break;
-        case VariableType.COMMAND: variable = this.currentState.commands.get(name); break;
+        case VariableType.TEXT: targetMap = this.currentState.variables.text as Map<string, MeldVariable>; mapName='Text'; break;
+        case VariableType.DATA: targetMap = this.currentState.variables.data as Map<string, MeldVariable>; mapName='Data'; break;
+        case VariableType.PATH: targetMap = this.currentState.variables.path as Map<string, MeldVariable>; mapName='Path'; break;
+        case VariableType.COMMAND: targetMap = this.currentState.commands as Map<string, MeldVariable>; mapName='Command'; break;
       }
+      if (targetMap) {
+          process.stdout.write(`DEBUG [getVariable SIZE] Type: ${mapName}, StateID: ${stateId}. Map size: ${targetMap.size}\n`);
+          // +++ Iterate and log keys +++
+          let keysFound = '';
+          try {
+            for (const key of targetMap.keys()) {
+              keysFound += key + ', ';
+            }
+          } catch (e) { keysFound = 'ERROR_ITERATING_KEYS'; }
+          process.stdout.write(`DEBUG [getVariable ITERATED_KEYS] Type: ${mapName}, StateID: ${stateId}. Keys: [${keysFound}]\n`);
+          // +++ End Iterate +++
+          const hasKey = targetMap.has(name);
+          process.stdout.write(`DEBUG [getVariable CHECK] Type: ${mapName}, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
+          const valueFromGet = targetMap.get(name);
+          process.stdout.write(`DEBUG [getVariable GET] Type: ${mapName}, StateID: ${stateId}. Value from .get('${name}'): ${valueFromGet !== undefined ? 'FOUND' : 'UNDEFINED'}\n`);
+          variable = valueFromGet;
+      } else {
+          process.stdout.write(`DEBUG [getVariable CHECK] Type: ${mapName}, StateID: ${stateId}. Target map is undefined!\n`);
+      }
+
     } else {
-      // Check in preferred order if no type specified
-      variable =
-        this.currentState.variables.text.get(name) ??
-        this.currentState.variables.data.get(name) ??
-        this.currentState.variables.path.get(name) ??
-        this.currentState.commands.get(name);
+      process.stdout.write(`DEBUG [getVariable LOOKUP] StateID: ${stateId}, Type: ANY, Name: '${name}'\n`);
+      let textMap = this.currentState.variables.text;
+      let hasKey = textMap.has(name);
+      process.stdout.write(`DEBUG [getVariable CHECK-ANY] Type: TEXT, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
+      const valueFromText = textMap.get(name);
+      variable = valueFromText;
+      
+      if (!variable) {
+          let dataMap = this.currentState.variables.data;
+          hasKey = dataMap.has(name);
+          process.stdout.write(`DEBUG [getVariable CHECK-ANY] Type: DATA, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
+          const valueFromData = dataMap.get(name);
+          variable = valueFromData;
+      }
+      if (!variable) {
+          let pathMap = this.currentState.variables.path;
+          hasKey = pathMap.has(name);
+          process.stdout.write(`DEBUG [getVariable CHECK-ANY] Type: PATH, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
+          const valueFromPath = pathMap.get(name);
+          variable = valueFromPath;
+      }
+      if (!variable) {
+          let commandMap = this.currentState.commands;
+          hasKey = commandMap.has(name);
+          process.stdout.write(`DEBUG [getVariable CHECK-ANY] Type: COMMAND, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
+          const valueFromCommand = commandMap.get(name);
+          variable = valueFromCommand;
+      }
     }
 
     // If not found locally, check parent
     if (!variable && this.currentState.parentServiceRef) {
-      // Add logging
-      // process.stdout.write(`DEBUG: [StateService.getVariable] \\"${name}\\" not found locally (State ID: ${this.getStateId()}), checking parent (Parent ID: ${this.currentState.parentServiceRef.getStateId()})...\\n`);
-      // Recursive call to parent
+      process.stdout.write(`DEBUG [getVariable PARENT] StateID: ${stateId}, Var '${name}' not local, checking parent: ${this.currentState.parentServiceRef.getStateId()}\n`);
       return this.currentState.parentServiceRef.getVariable(name, type);
     }
     
-    // If found locally, ensure the type matches if a specific type was requested
-    // (This check might be redundant if the initial lookup used the type correctly, but keeps logic clear)
+    // Type mismatch check
     if (variable && type && variable.type !== type) {
-        // logger.debug(`Variable \'${name}\' found locally but type mismatch (Found: ${variable.type}, Expected: ${type}). State ID: ${this.getStateId()}`);
-        return undefined; // Type mismatch
+        process.stdout.write(`DEBUG [getVariable TYPE-MISMATCH] StateID: ${stateId}, Var '${name}', Found: ${variable.type}, Expected: ${type}\n`);
+        return undefined; 
     }
 
-    // Return the found variable (or undefined if not found anywhere)
+    process.stdout.write(`DEBUG [getVariable FINAL] StateID: ${stateId}, Var '${name}', Found: ${!!variable} (Type: ${variable?.type})\n`);
     return variable;
   }
 
   /**
    * Sets a variable using a pre-constructed MeldVariable object.
    */
-  async setVariable(variable: MeldVariable): Promise<MeldVariable> {
+  async setVariable(variable: MeldVariable): Promise<IStateService> {
     this.checkMutable();
     const variableClone = cloneDeep(variable);
     const { name, type } = variableClone;
     let newVariables = { ...this.currentState.variables };
     let newCommands = this.currentState.commands;
 
+    // +++ Log variable being set +++
+    process.stdout.write(`DEBUG [setVariable ENTRY] Setting '${name}' (Type: ${type}). StateID: ${this.getStateId()}\n`);
+
     if (isTextVariable(variableClone)) {
         const textMap = new Map(newVariables.text);
         textMap.set(name, variableClone);
         newVariables = { ...newVariables, text: textMap };
+        // +++ Log map content BEFORE updateState +++
+        process.stdout.write(`DEBUG [setVariable PRE-UPDATE] textMap for '${name}' has key? ${textMap.has(name)}\n`);
     } else if (isDataVariable(variableClone)) {
         const dataMap = new Map(newVariables.data);
         dataMap.set(name, variableClone);
         newVariables = { ...newVariables, data: dataMap };
+        process.stdout.write(`DEBUG [setVariable PRE-UPDATE] dataMap for '${name}' has key? ${dataMap.has(name)}\n`);
     } else if (isPathVariable(variableClone)) {
         const pathMap = new Map(newVariables.path);
         pathMap.set(name, variableClone);
         newVariables = { ...newVariables, path: pathMap };
+        process.stdout.write(`DEBUG [setVariable PRE-UPDATE] pathMap for '${name}' has key? ${pathMap.has(name)}\n`);
     } else if (isCommandVariable(variableClone)) {
         newCommands = new Map(newCommands);
         newCommands.set(name, variableClone);
+        process.stdout.write(`DEBUG [setVariable PRE-UPDATE] commands map for '${name}' has key? ${newCommands.has(name)}\n`);
     } else {
-        // Handle potential future variable types or throw error
         logger.error('Attempted to set unknown variable type', { variable });
         throw new Error(`Unsupported variable type: ${ (variable as any)?.type }`);
     }
 
-    // Use generic source name for the event
     await this.updateState({ variables: newVariables, commands: newCommands }, `setVariable:${name}`);
+
+    // +++ Log map content AFTER updateState (accessing the updated this.currentState) +++
+    let found = false;
+    if (type === VariableType.TEXT) found = this.currentState.variables.text.has(name);
+    else if (type === VariableType.DATA) found = this.currentState.variables.data.has(name);
+    else if (type === VariableType.PATH) found = this.currentState.variables.path.has(name);
+    else if (type === VariableType.COMMAND) found = this.currentState.commands.has(name);
+    process.stdout.write(`DEBUG [setVariable POST-UPDATE] StateID: ${this.getStateId()}. Var '${name}' found in correct map? ${found}\n`);
     
-    // Return the original (or cloned) variable object as per interface
-    return variableClone;
+    return this;
   }
 
   /**
@@ -980,7 +1051,7 @@ export class StateService implements IStateService {
    * Removes a variable, optionally specifying the type.
    * Only removes from the local state, does not affect parents.
    */
-  async removeVariable(name: string, type?: VariableType): Promise<boolean> {
+  async removeVariable(name: string, type?: VariableType): Promise<IStateService> {
     this.checkMutable();
     let removed = false;
     let newVariables = { ...this.currentState.variables };
@@ -1046,7 +1117,7 @@ export class StateService implements IStateService {
     if (removed) {
         await this.updateState({ variables: newVariables, commands: newCommands }, sourceAction);
     }
-    return removed;
+    return this;
   }
 
   // Add getParentState method to satisfy interface

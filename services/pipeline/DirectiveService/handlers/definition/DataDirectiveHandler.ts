@@ -313,6 +313,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       
       // <<< Create VariableDefinition for StateChanges >>>
       const variableDefinition: VariableDefinition = {
+          name: identifier,
           type: VariableType.DATA,
           value: finalValue,
           metadata: metadata

@@ -17,16 +17,6 @@ const DEFAULT_TRANSFORMATION_OPTIONS: TransformationOptions = {
 };
 
 /**
- * Options for creating a new state node
- */
-export interface StateNodeOptions {
-  readonly parentServiceRef?: IStateService;
-  readonly transformationOptions?: TransformationOptions;
-  readonly filePath?: string;
-  readonly source?: string;
-}
-
-/**
  * Factory for creating and managing immutable state objects
  */
 @injectable()
@@ -38,8 +28,7 @@ export class StateFactory implements IStateFactory {
 
   createState(options?: StateNodeOptions): StateNode {
     const now = Date.now();
-    const parentOptions = options?.parentServiceRef?.getInternalStateNode()?.transformationOptions;
-    const explicitOptions = options?.transformationOptions;
+    const parentTransformationOptions = options?.parentState?.transformationOptions;
 
     const state: StateNode = {
       stateId: randomUUID(),
@@ -53,10 +42,11 @@ export class StateFactory implements IStateFactory {
       nodes: [],
       transformedNodes: undefined,
       filePath: options?.filePath,
-      parentServiceRef: options?.parentServiceRef,
-      transformationOptions: explicitOptions ?? parentOptions ?? DEFAULT_TRANSFORMATION_OPTIONS,
+      parentServiceRef: undefined,
+      transformationOptions: parentTransformationOptions ?? DEFAULT_TRANSFORMATION_OPTIONS,
       createdAt: now,
-      modifiedAt: now
+      modifiedAt: now,
+      source: options?.source as StateNode['source']
     };
 
     this.logOperation({
@@ -64,21 +54,17 @@ export class StateFactory implements IStateFactory {
       timestamp: now,
       source: options?.source ?? 'createState',
       details: {
-        operation: 'createState',
-        stateId: state.stateId
+        operation: 'createState'
       }
     });
 
     return state;
   }
 
-  createChildState(parentService: IStateService, options?: StateNodeOptions): StateNode {
-    const parentTransformationOptions = parentService.getTransformationOptions();
-
+  createChildState(parent: StateNode, options?: StateNodeOptions): StateNode {
     const child = this.createState({
       ...options,
-      parentServiceRef: parentService,
-      transformationOptions: options?.transformationOptions ?? parentTransformationOptions,
+      parentState: parent,
       source: options?.source ?? 'createChildState'
     });
 
@@ -87,9 +73,7 @@ export class StateFactory implements IStateFactory {
       timestamp: Date.now(),
       source: options?.source ?? 'createChildState',
       details: {
-        operation: 'createChildState',
-        parentStateId: parentService.getStateId(),
-        stateId: child.stateId
+        operation: 'createChildState'
       }
     });
 
@@ -142,10 +126,7 @@ export class StateFactory implements IStateFactory {
       timestamp: now,
       source: 'mergeStates',
       details: {
-        operation: 'mergeStates',
-        parentStateId: parent.stateId,
-        childStateId: child.stateId,
-        stateId: merged.stateId
+        operation: 'mergeStates'
       }
     });
 
@@ -155,43 +136,67 @@ export class StateFactory implements IStateFactory {
   updateState(state: StateNode, updates: Partial<Omit<StateNode, 'stateId' | 'createdAt' | 'parentServiceRef'>>): StateNode {
     const now = Date.now();
     
-    // Always create new maps, cloning from updates if provided, otherwise from original state
-    const newTextMap = new Map(
-      Array.from(updates.variables?.text ?? state.variables.text,
-                 ([key, value]) => [key, cloneDeep(value)])
-    );
-    const newDataMap = new Map(
-      Array.from(updates.variables?.data ?? state.variables.data,
-                 ([key, value]) => [key, cloneDeep(value)])
-    );
-    const newPathMap = new Map(
-      Array.from(updates.variables?.path ?? state.variables.path,
-                 ([key, value]) => [key, cloneDeep(value)])
-    );
-    const newCommandsMap = new Map(
-      Array.from(updates.commands ?? state.commands,
-                 ([key, value]) => [key, cloneDeep(value)])
-    );
+    const source = (updates as any)?.source || 'unknown_update';
+    const approxBeforeTextSize = JSON.stringify(state.variables.text).length;
+    const approxBeforeDataSize = JSON.stringify(state.variables.data).length;
+    const approxBeforePathSize = JSON.stringify(state.variables.path).length;
+    const approxBeforeCommandSize = JSON.stringify(state.commands).length;
+    process.stdout.write(`DEBUG [StateFactory.updateState ENTRY] Source: ${source}, StateID: ${state.stateId}, ApproxSizes: Text=${approxBeforeTextSize}, Data=${approxBeforeDataSize}, Path=${approxBeforePathSize}, Cmd=${approxBeforeCommandSize}\n`);
+
+    const existingParentRef = state.parentServiceRef;
+
+    // --- Corrected Map Merging Logic --- 
+    // 1. Start with copies of the original maps
+    const newTextMap = new Map(state.variables.text);
+    const newDataMap = new Map(state.variables.data);
+    const newPathMap = new Map(state.variables.path);
+    const newCommandsMap = new Map(state.commands);
+
+    // 2. Apply updates from the 'updates' object to the new maps
+    if (updates.variables) {
+        if (updates.variables.text) {
+            for (const [key, value] of updates.variables.text.entries()) {
+                newTextMap.set(key, value);
+            }
+        }
+        if (updates.variables.data) {
+            for (const [key, value] of updates.variables.data.entries()) {
+                newDataMap.set(key, value);
+            }
+        }
+        if (updates.variables.path) {
+            for (const [key, value] of updates.variables.path.entries()) {
+                newPathMap.set(key, value);
+            }
+        }
+    }
+    if (updates.commands) {
+        for (const [key, value] of updates.commands.entries()) {
+            newCommandsMap.set(key, value);
+        }
+    }
+    // --- End Corrected Logic ---
 
     const updated: StateNode = {
       stateId: state.stateId,
       variables: {
-        text: newTextMap,
+        text: newTextMap, // Use the merged maps
         data: newDataMap,
         path: newPathMap
       },
-      commands: newCommandsMap,
-      imports: updates.imports ? new Set(updates.imports) : new Set(state.imports), // Ensure new Set
-      nodes: updates.nodes ? [...updates.nodes] : [...state.nodes], // Ensure new array
+      commands: newCommandsMap, // Use the merged map
+      // Carry over other properties, applying updates if they exist
+      imports: updates.imports ? new Set(updates.imports) : new Set(state.imports), 
+      nodes: updates.nodes ? [...updates.nodes] : [...state.nodes], 
       transformedNodes: updates.transformedNodes !== undefined 
                           ? [...updates.transformedNodes] 
-                          : state.transformedNodes ? [...state.transformedNodes] : undefined, // Ensure new array if exists
+                          : state.transformedNodes ? [...state.transformedNodes] : undefined, 
       filePath: updates.filePath ?? state.filePath,
-      parentServiceRef: state.parentServiceRef,
+      parentServiceRef: existingParentRef, // Preserve original parent ref
       transformationOptions: updates.transformationOptions ?? state.transformationOptions,
       createdAt: state.createdAt,
       modifiedAt: now,
-      source: state.source
+      source: (updates.source as StateNode['source']) ?? state.source
     };
 
     this.logOperation({
@@ -200,8 +205,8 @@ export class StateFactory implements IStateFactory {
       source: 'updateState',
       details: {
         operation: 'updateState',
-        stateId: updated.stateId,
-        updatedKeys: Object.keys(updates)
+        key: 'updatedKeys', 
+        value: Object.keys(updates)
       }
     });
 
@@ -210,6 +215,16 @@ export class StateFactory implements IStateFactory {
 
   createClonedState(originalState: StateNode, options?: StateNodeOptions): StateNode {
     const now = Date.now();
+
+    const source = options?.source || 'createClonedState';
+    const approxBeforeTextSize = JSON.stringify(originalState.variables.text).length;
+    const approxBeforeDataSize = JSON.stringify(originalState.variables.data).length;
+    const approxBeforePathSize = JSON.stringify(originalState.variables.path).length;
+    const approxBeforeCommandSize = JSON.stringify(originalState.commands).length;
+    process.stdout.write(`DEBUG [StateFactory.createClonedState ENTRY] Source: ${source}, OriginalStateID: ${originalState.stateId}, ApproxSizes: Text=${approxBeforeTextSize}, Data=${approxBeforeDataSize}, Path=${approxBeforePathSize}, Cmd=${approxBeforeCommandSize}\n`);
+
+    const parentRef = originalState.parentServiceRef;
+
     const clonedVariables = {
         text: cloneDeep(originalState.variables.text),
         data: cloneDeep(originalState.variables.data),
@@ -225,21 +240,19 @@ export class StateFactory implements IStateFactory {
       nodes: [...originalState.nodes],
       transformedNodes: originalState.transformedNodes ? [...originalState.transformedNodes] : undefined,
       filePath: options?.filePath ?? originalState.filePath,
-      parentServiceRef: options?.parentServiceRef ?? originalState.parentServiceRef,
-      transformationOptions: options?.transformationOptions ?? originalState.transformationOptions,
+      parentServiceRef: parentRef,
+      transformationOptions: originalState.transformationOptions,
       createdAt: now,
       modifiedAt: now,
-      source: 'clone'
+      source: source as StateNode['source']
     };
 
     this.logOperation({
       type: 'create',
       timestamp: now,
-      source: options?.source ?? 'createClonedState',
+      source: source,
       details: {
-        operation: 'createClonedState',
-        originalStateId: originalState.stateId,
-        stateId: clonedState.stateId
+        operation: 'createClonedState'
       }
     });
 

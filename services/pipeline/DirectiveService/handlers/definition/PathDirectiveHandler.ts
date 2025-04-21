@@ -151,6 +151,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
          stateChanges: { 
             variables: { 
                 [identifier]: {
+                    name: identifier,
                     type: VariableType.PATH,
                     value: pathStateForStorage,
                     metadata: metadata
