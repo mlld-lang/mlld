@@ -17,6 +17,7 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { mock } from 'vitest-mock-extended';
+import { container, type DependencyContainer } from 'tsyringe';
 import { StateService } from '@services/state/StateService/StateService.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import type { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService.js';
@@ -44,25 +45,39 @@ import type { IStateTrackingServiceClient } from '@services/state/StateTrackingS
 import type { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 
 describe('StateService', () => {
+  let testContainer: DependencyContainer;
   let state: StateService;
   let mockEventService: IStateEventService;
   let stateFactory: StateFactory;
   let trackingClient: IStateTrackingServiceClient;
+  let mockTrackingClientFactory: Pick<StateTrackingServiceClientFactory, 'createClient'>;
 
   beforeEach(() => {
+    testContainer = container.createChildContainer();
+
     mockEventService = mock<IStateEventService>();
     mockEventService.emit = vi.fn();
     
     trackingClient = mock<IStateTrackingServiceClient>();
-    stateFactory = new StateFactory();
-    const trackingClientFactory: Pick<StateTrackingServiceClientFactory, 'createClient'> = { 
+    mockTrackingClientFactory = { 
       createClient: vi.fn().mockReturnValue(trackingClient)
     };
-    state = new StateService(stateFactory, mockEventService, trackingClientFactory as StateTrackingServiceClientFactory);
+
+    stateFactory = new StateFactory();
+
+    testContainer.registerInstance('IStateEventService', mockEventService);
+    testContainer.registerInstance('StateTrackingServiceClientFactory', mockTrackingClientFactory as StateTrackingServiceClientFactory);
+    testContainer.registerInstance('StateFactory', stateFactory);
+    testContainer.registerInstance('DependencyContainer', testContainer);
+
+    testContainer.register('IStateService', { useClass: StateService });
+
+    state = testContainer.resolve<StateService>('IStateService');
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    testContainer?.dispose();
   });
 
   describe('Basic functionality', () => {
@@ -500,8 +515,13 @@ describe('StateService', () => {
     it('should track merge relationships via client', async () => {
       const childState = state.createChildState();
       await childState.setVariable(createTextVariable('childVar', 'childValue'));
+      
+      const resolvedTrackingClient = (state as any).trackingClient;
+
       vi.clearAllMocks();
+      
       await state.mergeChildState(childState);
+
       expect(trackingClient.registerRelationship).toHaveBeenCalledTimes(1);
       expect(trackingClient.registerRelationship).toHaveBeenCalledWith(
         expect.objectContaining({ 

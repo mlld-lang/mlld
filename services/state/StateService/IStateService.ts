@@ -18,6 +18,7 @@ import type {
   ICommandDefinition,
   MeldPath
 } from '@core/types/index.js';
+import type { StateChanges } from '@core/directives/DirectiveHandler.js';
 
 /**
  * Service responsible for managing state in Meld documents.
@@ -255,7 +256,7 @@ interface IStateService {
    * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable.
    */
-  setVariable(variable: MeldVariable): Promise<IStateService>;
+  setVariable(variable: MeldVariable): Promise<MeldVariable>;
 
   /**
    * Checks if a variable exists, optionally specifying the type.
@@ -274,7 +275,7 @@ interface IStateService {
    * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable.
    */
-  removeVariable(name: string, type?: VariableType): Promise<IStateService>;
+  removeVariable(name: string, type?: VariableType): Promise<boolean>;
 
   /**
    * Gets the output of a previously executed command (If state tracks this).

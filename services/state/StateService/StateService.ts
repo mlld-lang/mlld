@@ -1055,7 +1055,7 @@ export class StateService implements IStateService {
     else if (type === VariableType.COMMAND) found = this.currentState.commands.has(name);
     process.stdout.write(`DEBUG [setVariable POST-UPDATE] StateID: ${this.getStateId()}. Var '${name}' found in correct map? ${found}\n`);
     
-    return this;
+    return variableClone;
   }
 
   /**
@@ -1137,7 +1137,7 @@ export class StateService implements IStateService {
     if (removed) {
         await this.updateState({ variables: newVariables, commands: newCommands }, sourceAction);
     }
-    return this;
+    return removed;
   }
 
   // Add getParentState method to satisfy interface
