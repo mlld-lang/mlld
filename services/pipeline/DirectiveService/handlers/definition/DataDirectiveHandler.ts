@@ -49,6 +49,17 @@ import { isCommandVariable } from '@core/types/guards.js'; // <-- Corrected path
 // Re-add IStateService import as it's needed for context.state type checking
 import type { IStateService } from '@services/state/StateService/IStateService.js'; 
 
+// +++ Import ALL Concrete Handlers +++
+import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
+import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
+import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
+import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
+import { VarDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/VarDirectiveHandler.js'; // Assuming it exists
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
+import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
+// +++ End Handler Imports +++
+
 // Define local interfaces mirroring expected AST structure for type safety
 // Based on docs/dev/AST.md
 /* // <<< REMOVE LOCAL INTERFACES >>>

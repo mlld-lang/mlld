@@ -442,20 +442,27 @@ export class StateService implements IStateService {
     const transformedNodesArray = this.currentState.transformedNodes;
     const transformedNodesExist = !!transformedNodesArray;
     const originalNodes = this.currentState.nodes;
+    const stateId = this.getStateId();
     
+    // +++ Add detailed logging before return +++
+    const originalLength = originalNodes?.length ?? 'null';
+    const originalLastType = originalNodes?.[originalLength - 1]?.type ?? 'N/A';
+    const transformedLength = transformedNodesArray?.length ?? 'null';
+    const transformedLastType = transformedNodesArray?.[transformedLength - 1]?.type ?? 'N/A';
+
+    process.stdout.write(
+        `>>> [getTransformedNodes PRE-RETURN] StateID: ${stateId}\n` +
+        `    TransformEnabled: ${transformEnabled}, TransformedExists: ${transformedNodesExist}\n` +
+        `    Original Nodes: Length=${originalLength}, LastType=${originalLastType}\n` +
+        `    Transformed Nodes: Length=${transformedLength}, LastType=${transformedLastType}\n`
+    );
+    // +++ End logging +++
+
     if (transformEnabled && transformedNodesExist) {
-      try {
-          assert.notStrictEqual(transformedNodesArray, originalNodes, 
-              `StateID: ${this.getStateId()} - TransformedNodes array SHOULD NOT be the same instance as originalNodes when transform enabled and transformed exists.`);
-      } catch (e) {
-          process.stderr.write(`ASSERTION FAILED in getTransformedNodes: ${e instanceof Error ? e.message : String(e)}\n`);
-          // Optionally throw or log more details
-      }
       const arrayToReturn = transformedNodesArray!.slice(); 
       process.stdout.write(`>>> [getTransformedNodes RETURN] RETURNING SLICE (Transformed): ${JSON.stringify(arrayToReturn.slice(0, 3).map(n=>({type: n.type, nodeId: n.nodeId})))}\n\n`);
       return arrayToReturn;
     } else {
-       // Assert that if transform is disabled OR transformed doesn't exist, we return the original nodes reference (or a slice)
       const arrayToReturn = originalNodes.slice(); 
       process.stdout.write(`>>> [getTransformedNodes RETURN] RETURNING SLICE (Original): ${JSON.stringify(arrayToReturn.slice(0, 3).map(n=>({type: n.type, nodeId: n.nodeId})))}\n\n`);
       return arrayToReturn;

@@ -1,5 +1,5 @@
 import type { MeldNode } from '@core/syntax/types/index.js';
-import type { StateServiceLike, InterpreterOptionsBase } from '@core/shared-service-types.js';
+import type { InterpreterOptionsBase } from '@core/shared-service-types.js';
 import type { InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 
@@ -22,10 +22,10 @@ export interface IInterpreterServiceClient {
    * @returns A child state initialized for interpretation
    */
   createChildContext(
-    parentState: StateServiceLike,
+    parentState: IStateService,
     filePath?: string,
     options?: InterpreterOptionsBase
-  ): Promise<StateServiceLike>;
+  ): Promise<IStateService>;
 
   /**
    * Interpret a sequence of Meld nodes.
@@ -39,6 +39,6 @@ export interface IInterpreterServiceClient {
   interpret(
     nodes: MeldNode[],
     options?: InterpreterOptionsBase,
-    initialState?: StateServiceLike
-  ): Promise<StateServiceLike>;
+    initialState?: IStateService
+  ): Promise<IStateService>;
 }

@@ -5,7 +5,7 @@ import type { IInterpreterServiceClient } from '../interfaces/IInterpreterServic
 import { interpreterLogger as logger } from '@core/utils/logger.js';
 import type { MeldNode } from '@core/syntax/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { StateServiceLike, InterpreterOptionsBase, ClientFactory, InterpreterServiceLike } from '@core/shared-service-types.js';
+import type { InterpreterOptionsBase } from '@core/shared-service-types.js';
 
 /**
  * Factory for creating interpreter service clients
@@ -16,7 +16,7 @@ import type { StateServiceLike, InterpreterOptionsBase, ClientFactory, Interpret
   description: 'Factory for creating InterpreterService clients'
 })
 export class InterpreterServiceClientFactory {
-  private interpreterService?: InterpreterServiceLike;
+  private interpreterService?: IInterpreterService;
   private container: DependencyContainer;
 
   /**
@@ -38,7 +38,7 @@ export class InterpreterServiceClientFactory {
    * inject a mock or test implementation of the interpreter service
    * @param service The interpreter service implementation to use
    */
-  setInterpreterServiceForTests(service: InterpreterServiceLike): void {
+  setInterpreterServiceForTests(service: IInterpreterService): void {
     logger.debug('Setting interpreter service directly for tests');
     this.interpreterService = service;
   }
@@ -47,11 +47,14 @@ export class InterpreterServiceClientFactory {
    * Lazily initializes the interpreter service when needed using the factory's container.
    * This breaks the circular dependency by deferring the resolution.
    */
-  private getInterpreterService(): InterpreterServiceLike {
+  private getInterpreterService(): IInterpreterService {
     if (!this.interpreterService) {
       logger.debug('Lazily initializing IInterpreterService using factory container', { containerId: (this.container as any).id || 'global' });
       // Use the injected container instance
       this.interpreterService = this.container.resolve<IInterpreterService>('IInterpreterService');
+    }
+    if (!this.interpreterService) {
+      throw new Error('Failed to resolve IInterpreterService from container in factory');
     }
     return this.interpreterService;
   }
@@ -61,23 +64,22 @@ export class InterpreterServiceClientFactory {
    * @returns A client that provides interpreter service functionality
    */
   createClient(): IInterpreterServiceClient {
+    process.stdout.write('DEBUG [InterpreterServiceClientFactory] createClient() called.\n');
     logger.debug('Creating InterpreterServiceClient');
     // Ensure the service is fetched using the correct container before creating client methods
     const service = this.getInterpreterService(); 
     
     return {
-      interpret: async (nodes: MeldNode[], options?: InterpreterOptionsBase, initialState?: StateServiceLike): Promise<StateServiceLike> => {
+      interpret: async (nodes: MeldNode[], options?: InterpreterOptionsBase, initialState?: IStateService): Promise<IStateService> => {
         // Use the already fetched service instance
-        if (!service) throw new Error('Interpreter service not available in client (factory failed to resolve)');
         return await service.interpret(nodes, options, initialState);
       },
       createChildContext: async (
-        parentState: StateServiceLike,
+        parentState: IStateService,
         filePath?: string,
         options?: InterpreterOptionsBase
-      ): Promise<StateServiceLike> => {
+      ): Promise<IStateService> => {
         // Use the already fetched service instance
-        if (!service) throw new Error('Interpreter service not available in client (factory failed to resolve)');
         return await service.createChildContext(parentState, filePath, options);
       }
     };

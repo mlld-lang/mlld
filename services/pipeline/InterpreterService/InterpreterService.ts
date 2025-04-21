@@ -111,13 +111,19 @@ export class InterpreterService implements IInterpreterService {
    * Ensure clients are initialized before use.
    */
   private ensureClientsInitialized(): void {
+    // +++ Log entry +++
+    process.stdout.write(`DEBUG [ensureClientsInitialized] ENTER. Has directiveClientFactory? ${!!this.directiveClientFactory}. Has parserClientFactory? ${!!this.parserClientFactory}.\n`);
     if (!this.directiveClient) {
         this.initializeDirectiveClient();
     }
     if (!this.parserClient) {
         this.initializeParserClient();
     }
+    // +++ Log before check +++
+    process.stdout.write(`DEBUG [ensureClientsInitialized] After init calls. Has directiveClient? ${!!this.directiveClient}. Has parserClient? ${!!this.parserClient}.\n`);
     if (!this.directiveClient || !this.parserClient) {
+        // +++ Log failure +++
+        process.stderr.write(`ERROR [ensureClientsInitialized] FAIL: Directive or Parser client is missing!\n`);
         throw new MeldInterpreterError(
             'Failed to initialize necessary clients (Directive/Parser). Check factory dependencies.',
             'initialization',
@@ -125,6 +131,8 @@ export class InterpreterService implements IInterpreterService {
             { severity: ErrorSeverity.Fatal }
         );
     }
+    // +++ Log success +++
+    process.stdout.write(`DEBUG [ensureClientsInitialized] EXIT. Clients initialized successfully.\n`);
   }
 
   /**
@@ -140,6 +148,8 @@ export class InterpreterService implements IInterpreterService {
       this.directiveClient = this.directiveClientFactory.createClient();
       logger.debug('Successfully created DirectiveServiceClient using factory', { hasClient: !!this.directiveClient });
     } catch (error) {
+      // +++ Log error +++
+      process.stderr.write(`ERROR [initializeDirectiveClient] Failed to create client: ${error instanceof Error ? error.message : String(error)}\n`);
       logger.warn('Failed to create DirectiveServiceClient', { error });
       this.directiveClient = undefined;
     }
@@ -157,6 +167,8 @@ export class InterpreterService implements IInterpreterService {
       this.parserClient = this.parserClientFactory.createClient();
       logger.debug('Successfully created ParserServiceClient using factory', { hasClient: !!this.parserClient });
     } catch (error) {
+      // +++ Log error +++
+      process.stderr.write(`ERROR [initializeParserClient] Failed to create client: ${error instanceof Error ? error.message : String(error)}\n`);
       logger.warn('Failed to create ParserServiceClient', { error });
       this.parserClient = undefined;
     }

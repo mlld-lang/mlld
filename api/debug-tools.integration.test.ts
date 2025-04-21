@@ -47,6 +47,17 @@ import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterS
 // Import the default logger instance
 import logger from '@core/utils/logger.js'; 
 
+// <<< ADD Imports for Handlers >>>
+import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
+import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
+import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
+import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
+import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
+import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+// <<< END Handler Imports >>>
+
 // Define a minimal logger interface if not found/imported
 interface IDirectiveLogger {
   log: (...args: any[]) => void;
@@ -138,6 +149,25 @@ describe('Debug Tools Integration Test', () => {
     testContainer.register(ResolutionServiceClientFactory, { useClass: ResolutionServiceClientFactory });
     testContainer.register(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory });
     // --- End Factory Registration --- 
+
+    // +++ Register Concrete Handlers for IDirectiveHandler token +++
+    testContainer.registerSingleton(TextDirectiveHandler);
+    testContainer.registerSingleton(DataDirectiveHandler);
+    testContainer.registerSingleton(PathDirectiveHandler);
+    testContainer.registerSingleton(DefineDirectiveHandler);
+    testContainer.registerSingleton(RunDirectiveHandler);
+    testContainer.registerSingleton(EmbedDirectiveHandler);
+    testContainer.registerSingleton(ImportDirectiveHandler);
+
+    // Register them all under the token that DirectiveService uses (@injectAll)
+    testContainer.register('IDirectiveHandler', { useToken: TextDirectiveHandler });
+    testContainer.register('IDirectiveHandler', { useToken: DataDirectiveHandler });
+    testContainer.register('IDirectiveHandler', { useToken: PathDirectiveHandler });
+    testContainer.register('IDirectiveHandler', { useToken: DefineDirectiveHandler });
+    testContainer.register('IDirectiveHandler', { useToken: RunDirectiveHandler });
+    testContainer.register('IDirectiveHandler', { useToken: EmbedDirectiveHandler });
+    testContainer.register('IDirectiveHandler', { useToken: ImportDirectiveHandler });
+    // +++ End Handler Registration +++
 
     // Register MeldProcessor (Commented out)
     // testContainer.registerSingleton(MeldProcessor);

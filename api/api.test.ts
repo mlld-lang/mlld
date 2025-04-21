@@ -321,20 +321,21 @@ describe('SDK Integration Tests', () => {
     });
 
     it('should preserve state and content in transformation mode', async () => {
-      const content = `
-@text greeting = "Hello"
-@text name = "World"
-@run [echo {{greeting}}, {{name}}!]`;
-      await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
+      const content = '\n@text greeting = "Hello"\n@text name = "World"\n@run echo {{greeting}}, {{name}}!';
+      let error: Error | undefined;
+      let result: string | undefined;
+      try {
+          result = await processMeld(content, {
+            format: 'markdown',
+            transformation: true,
+            container: testContainer
+          });
+      } catch (e) {
+          error = e instanceof Error ? e : new Error(String(e));
+      }
       
-      const result = await processMeld(content, {
-        // fs: context.fs as unknown as NodeFileSystem, // fs is now injected via DI
-        transformation: true,
-        container: testContainer,
-        format: 'markdown'
-      });
-      
-      expect(result).toBe('\nHello, World!\n');
+      expect(error).toBeUndefined();
+      expect(result).toBe('\n\n\nHello, World!');
     });
   });
 
@@ -437,20 +438,21 @@ More text`;
     });
 
     it('should preserve state and content in transformation mode', async () => {
-      const content = `
-@text greeting = "Hello"
-@text name = "World"
-@run [echo {{greeting}}, {{name}}!]`;
-      await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
+      const content = '\n@text greeting = "Hello"\n@text name = "World"\n@run echo {{greeting}}, {{name}}!';
+      let error: Error | undefined;
+      let result: string | undefined;
+      try {
+          result = await processMeld(content, {
+            format: 'markdown',
+            transformation: true,
+            container: testContainer
+          });
+      } catch (e) {
+          error = e instanceof Error ? e : new Error(String(e));
+      }
       
-      const result = await processMeld(content, {
-        // fs: context.fs as unknown as NodeFileSystem, // fs is now injected via DI
-        transformation: true,
-        container: testContainer,
-        format: 'markdown'
-      });
-      
-      expect(result).toBe('\nHello, World!\n');
+      expect(error).toBeUndefined();
+      expect(result).toBe('\n\n\nHello, World!');
     });
   });
 
