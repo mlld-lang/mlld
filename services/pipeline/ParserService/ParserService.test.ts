@@ -354,6 +354,43 @@ describe('ParserService', () => {
       console.log('Expected Result:', JSON.stringify(mockResult, null, 2));
       expect(result).toBeTruthy();
     });
+
+    // <<< ADD Test for @run with interpolation >>>
+    it('should parse @run directive with interpolated values in brackets', async () => {
+      const service = testContext.container.resolve<ParserService>('IParserService');
+      const content = '@run [echo {{greeting}}]'; // Minimal case
+      let ast: MeldNode[] | undefined;
+      let error: Error | undefined;
+
+      try {
+        // Use parse to get the AST
+        ast = await service.parse(content, 'test.mld'); 
+      } catch (e) {
+        error = e instanceof Error ? e : new Error(String(e));
+      }
+
+      // Log results for debugging
+      console.log('Parser Test (@run interpolation): Error:', error);
+      console.log('Parser Test (@run interpolation): AST:', JSON.stringify(ast, null, 2));
+
+      // Assertions
+      expect(error).toBeUndefined(); // Expect NO parse error
+      expect(ast).toBeDefined();
+      expect(ast).toHaveLength(1);
+      expect(ast![0].type).toBe('Directive');
+      const directiveNode = ast![0] as DirectiveNode;
+      expect(directiveNode.directive.kind).toBe('run');
+      expect(directiveNode.directive.subtype).toBe('runCommand');
+      // Verify the command is an InterpolatableValue array
+      expect(Array.isArray(directiveNode.directive.command)).toBe(true);
+      const commandParts = directiveNode.directive.command as InterpolatableValue;
+      expect(commandParts).toHaveLength(2);
+      expect(commandParts[0].type).toBe('Text');
+      expect((commandParts[0] as TextNode).content).toBe('echo ');
+      expect(commandParts[1].type).toBe('VariableReference');
+      expect((commandParts[1] as VariableReferenceNode).identifier).toBe('greeting');
+    });
+    // <<< END Test >>>
   });
 
   describe('parseWithLocations', () => {

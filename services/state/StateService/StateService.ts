@@ -445,21 +445,26 @@ export class StateService implements IStateService {
     const stateId = this.getStateId();
     
     // +++ Add detailed logging before return +++
-    const originalLength = originalNodes?.length ?? 'null';
-    const originalLastType = originalNodes?.[originalLength - 1]?.type ?? 'N/A';
-    const transformedLength = transformedNodesArray?.length ?? 'null';
-    const transformedLastType = transformedNodesArray?.[transformedLength - 1]?.type ?? 'N/A';
+    const originalLength = originalNodes?.length;
+    const transformedLength = transformedNodesArray?.length;
+    
+    const originalLastType = (typeof originalLength === 'number' && originalLength > 0) 
+        ? originalNodes[originalLength - 1]?.type ?? 'N/A' 
+        : 'N/A';
+    const transformedLastType = (typeof transformedLength === 'number' && transformedLength > 0 && transformedNodesArray)
+        ? transformedNodesArray[transformedLength - 1]?.type ?? 'N/A'
+        : 'N/A';
 
     process.stdout.write(
         `>>> [getTransformedNodes PRE-RETURN] StateID: ${stateId}\n` +
         `    TransformEnabled: ${transformEnabled}, TransformedExists: ${transformedNodesExist}\n` +
-        `    Original Nodes: Length=${originalLength}, LastType=${originalLastType}\n` +
-        `    Transformed Nodes: Length=${transformedLength}, LastType=${transformedLastType}\n`
+        `    Original Nodes: Length=${originalLength ?? 'null'}, LastType=${originalLastType}\n` +
+        `    Transformed Nodes: Length=${transformedLength ?? 'null'}, LastType=${transformedLastType}\n`
     );
     // +++ End logging +++
-
+    
     if (transformEnabled && transformedNodesExist) {
-      const arrayToReturn = transformedNodesArray!.slice(); 
+      const arrayToReturn = transformedNodesArray!.slice();
       process.stdout.write(`>>> [getTransformedNodes RETURN] RETURNING SLICE (Transformed): ${JSON.stringify(arrayToReturn.slice(0, 3).map(n=>({type: n.type, nodeId: n.nodeId})))}\n\n`);
       return arrayToReturn;
     } else {
@@ -635,7 +640,7 @@ export class StateService implements IStateService {
     );
 
     // Set the node created by the factory onto the new service instance
-    childService._setInternalStateNode(childNode); 
+    childService._setInternalStateNode(childNode);
 
     this.ensureFactoryInitialized();
     const childId = childService.getStateId();
@@ -929,7 +934,6 @@ export class StateService implements IStateService {
       }
       if (targetMap) {
           process.stdout.write(`DEBUG [getVariable SIZE] Type: ${mapName}, StateID: ${stateId}. Map size: ${targetMap.size}\n`);
-          // +++ Iterate and log keys +++
           let keysFound = '';
           try {
             for (const key of targetMap.keys()) {
@@ -937,13 +941,22 @@ export class StateService implements IStateService {
             }
           } catch (e) { keysFound = 'ERROR_ITERATING_KEYS'; }
           process.stdout.write(`DEBUG [getVariable ITERATED_KEYS] Type: ${mapName}, StateID: ${stateId}. Keys: [${keysFound}]\n`);
-          // +++ End Iterate +++
+          
+          // +++ Log Instance Check +++
+          let isSameInstance = false;
+          if (mapName === 'Text') isSameInstance = Object.is(targetMap, this.currentState.variables.text);
+          else if (mapName === 'Data') isSameInstance = Object.is(targetMap, this.currentState.variables.data);
+          else if (mapName === 'Path') isSameInstance = Object.is(targetMap, this.currentState.variables.path);
+          else if (mapName === 'Command') isSameInstance = Object.is(targetMap, this.currentState.commands);
+          process.stdout.write(`DEBUG [getVariable INSTANCE_CHECK] Type: ${mapName}, StateID: ${stateId}. Is targetMap same instance as currentState map? ${isSameInstance}\n`);
+          // +++ End Instance Check +++
+
           const hasKey = targetMap.has(name);
           process.stdout.write(`DEBUG [getVariable CHECK] Type: ${mapName}, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
           const valueFromGet = targetMap.get(name);
           process.stdout.write(`DEBUG [getVariable GET] Type: ${mapName}, StateID: ${stateId}. Value from .get('${name}'): ${valueFromGet !== undefined ? 'FOUND' : 'UNDEFINED'}\n`);
           variable = valueFromGet;
-      } else {
+    } else {
           process.stdout.write(`DEBUG [getVariable CHECK] Type: ${mapName}, StateID: ${stateId}. Target map is undefined!\n`);
       }
 
@@ -1033,7 +1046,7 @@ export class StateService implements IStateService {
     }
 
     await this.updateState({ variables: newVariables, commands: newCommands }, `setVariable:${name}`);
-
+    
     // +++ Log map content AFTER updateState (accessing the updated this.currentState) +++
     let found = false;
     if (type === VariableType.TEXT) found = this.currentState.variables.text.has(name);

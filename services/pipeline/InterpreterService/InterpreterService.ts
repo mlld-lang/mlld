@@ -21,7 +21,6 @@ import type { ResolutionContext } from '@core/types/resolution.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import * as crypto from 'crypto';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
-import type { MeldVariable } from '@core/types';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -99,6 +98,21 @@ export class InterpreterService implements IInterpreterService {
       hasPathService: !!this.pathService
     });
     
+    // << REMOVED eager client initialization >>
+    // if (this.directiveClientFactory && this.stateService && this.pathService) {
+    //   this.initializeDirectiveClient();
+    //   if (this.parserClientFactory) { 
+    //     this.initializeParserClient();
+    //   } else {
+    //     logger.warn('ParserClientFactory not available during InterpreterService construction');
+    //   }
+    //   this.initialized = true;
+    //   logger.debug('InterpreterService initialized via DI');
+    // } else {
+    //   logger.warn('InterpreterService constructed with missing core dependencies (DirectiveClientFactory, StateService, PathService). Manual initialization might be needed (deprecated).');
+    // }
+    
+    // << ADDED simple initialization check based on core dependencies >>
     this.initialized = !!(this.resolutionService && this.pathService && this.directiveClientFactory && this.stateService && this.parserClientFactory);
     if (this.initialized) {
         logger.debug('InterpreterService core dependencies resolved.');
@@ -111,19 +125,14 @@ export class InterpreterService implements IInterpreterService {
    * Ensure clients are initialized before use.
    */
   private ensureClientsInitialized(): void {
-    // +++ Log entry +++
-    process.stdout.write(`DEBUG [ensureClientsInitialized] ENTER. Has directiveClientFactory? ${!!this.directiveClientFactory}. Has parserClientFactory? ${!!this.parserClientFactory}.\n`);
     if (!this.directiveClient) {
         this.initializeDirectiveClient();
     }
     if (!this.parserClient) {
         this.initializeParserClient();
     }
-    // +++ Log before check +++
-    process.stdout.write(`DEBUG [ensureClientsInitialized] After init calls. Has directiveClient? ${!!this.directiveClient}. Has parserClient? ${!!this.parserClient}.\n`);
+    // Ensure clients were successfully created after attempting initialization
     if (!this.directiveClient || !this.parserClient) {
-        // +++ Log failure +++
-        process.stderr.write(`ERROR [ensureClientsInitialized] FAIL: Directive or Parser client is missing!\n`);
         throw new MeldInterpreterError(
             'Failed to initialize necessary clients (Directive/Parser). Check factory dependencies.',
             'initialization',
@@ -131,8 +140,6 @@ export class InterpreterService implements IInterpreterService {
             { severity: ErrorSeverity.Fatal }
         );
     }
-    // +++ Log success +++
-    process.stdout.write(`DEBUG [ensureClientsInitialized] EXIT. Clients initialized successfully.\n`);
   }
 
   /**
@@ -148,8 +155,6 @@ export class InterpreterService implements IInterpreterService {
       this.directiveClient = this.directiveClientFactory.createClient();
       logger.debug('Successfully created DirectiveServiceClient using factory', { hasClient: !!this.directiveClient });
     } catch (error) {
-      // +++ Log error +++
-      process.stderr.write(`ERROR [initializeDirectiveClient] Failed to create client: ${error instanceof Error ? error.message : String(error)}\n`);
       logger.warn('Failed to create DirectiveServiceClient', { error });
       this.directiveClient = undefined;
     }
@@ -167,8 +172,6 @@ export class InterpreterService implements IInterpreterService {
       this.parserClient = this.parserClientFactory.createClient();
       logger.debug('Successfully created ParserServiceClient using factory', { hasClient: !!this.parserClient });
     } catch (error) {
-      // +++ Log error +++
-      process.stderr.write(`ERROR [initializeParserClient] Failed to create client: ${error instanceof Error ? error.message : String(error)}\n`);
       logger.warn('Failed to create ParserServiceClient', { error });
       this.parserClient = undefined;
     }
@@ -195,6 +198,7 @@ export class InterpreterService implements IInterpreterService {
    * Updated to accept DirectiveProcessingContext
    */
   private async callDirectiveHandleDirective(node: DirectiveNode, context: DirectiveProcessingContext): Promise<DirectiveResult> {
+    // << ADDED lazy initialization >>
     this.ensureClientsInitialized(); 
     
     if (this.directiveClient && this.directiveClient.handleDirective) {
@@ -204,6 +208,7 @@ export class InterpreterService implements IInterpreterService {
         process.stdout.write(`DEBUG: [callDirectiveHandleDirective] AFTER await client.handleDirective for ${node.directive.kind}. Result type: ${typeof result}\n`);
         return result as DirectiveResult;
       } catch (error) {
+        // Re-throw the original error to preserve its type and details
         throw error;
       }
     }
@@ -341,10 +346,19 @@ export class InterpreterService implements IInterpreterService {
           logger.debug('Using injected StateService as base for interpretation');
         }
 
+        // <<< FIX: Clone if based on initial state, otherwise create child >>>
         if (isBasedOnInitialState) {
-           currentState = baseState.clone(); 
+           if (typeof baseState.clone !== 'function') {
+             throw new MeldInterpreterError('Provided initial state does not support clone()', 'initialization', undefined, { severity: ErrorSeverity.Fatal });
+           }
+           currentState = baseState.clone(); // CLONE the provided initial state
+           logger.debug('Cloned initial state for interpretation', { stateId: currentState?.getStateId() });
         } else {
-           currentState = await baseState.createChildState(); 
+           if (typeof baseState.createChildState !== 'function') {
+             throw new MeldInterpreterError('Internal StateService does not support createChildState()', 'initialization', undefined, { severity: ErrorSeverity.Fatal });
+           }
+           currentState = await baseState.createChildState(); // CREATE CHILD from internal service
+           logger.debug('Created working child state from internal service for interpretation', { stateId: currentState?.getStateId() });
         }
 
         if (!currentState) {
@@ -357,11 +371,16 @@ export class InterpreterService implements IInterpreterService {
         }
         
       } catch (initializationError) {
+        // Catch errors during base state determination or child state creation
         logger.error('Fatal error during interpreter state initialization', { error: initializationError });
-        throw initializationError;
+        throw initializationError; // Re-throw original error
       }
 
+      // --- Proceed only if state initialization was successful ---
+      // <<< ADD CHECK FOR VALID currentState >>>
       if (!currentState || typeof currentState.isTransformationEnabled !== 'function') {
+        // If state initialization failed but didn't throw in a way caught above,
+        // or if initialState was invalid, throw a specific error here.
         logger.error('InterpreterService: currentState is invalid after initialization attempt.', { state: currentState });
         throw new MeldInterpreterError(
           'Invalid state after initialization attempt. Cannot proceed.',
@@ -371,6 +390,7 @@ export class InterpreterService implements IInterpreterService {
         );
       }
       
+      // Fix 6 & 7: Move these checks after successful initialization AND validation
       if (opts.filePath) {
         currentState.setCurrentFilePath(opts.filePath);
       }
@@ -388,36 +408,30 @@ export class InterpreterService implements IInterpreterService {
         mergeState: opts.mergeState
       });
 
-      initialSnapshot = currentState!.clone() as IStateService;
-      lastGoodState = currentState;
+      initialSnapshot = currentState!.clone() as IStateService; // Keep initial snapshot for potential error rollback
+      lastGoodState = currentState; // Initialize lastGoodState *before* the loop without cloning
 
       for (const node of nodes) {
-        // <<< Log state BEFORE node processing >>>
-        process.stdout.write(`DEBUG Loop START Node ${node.nodeId} (${node.type}): currentState ID = ${currentState?.getStateId()}\n`);
-
-        // Restore cloning logic for lastGoodState
+        // If we enter the loop, *now* clone the lastGoodState for the first time if it hasn't been cloned yet
+        // This ensures clone isn't called for empty node arrays.
         if (lastGoodState === currentState && nodes.length > 0) { 
              lastGoodState = currentState.clone() as IStateService; 
-             process.stdout.write(`DEBUG Loop Cloned lastGoodState: ID = ${lastGoodState?.getStateId()}\n`);
         }
         
         let nodeResult: DirectiveResult | undefined;
         try {
-          // <<< NOTE: stateBeforeNode not strictly needed with current rollback >>>
-          // const stateBeforeNode: IStateService | null = currentState;
+          const stateBeforeNode: IStateService | null = currentState;
 
-          // Call interpretNode (restored version that modifies state)
-          const [intermediateState, directiveResultFromNode] = await this.interpretNode(node, currentState, opts);
-          currentState = intermediateState; // Update current state
-          nodeResult = directiveResultFromNode; // Capture the result
-
-          process.stdout.write(`DEBUG Loop AFTER interpretNode ${node.nodeId}: currentState ID = ${currentState?.getStateId()}\n`);
-
-          // Validate DirectiveResult structure 
+          // Step 1: Modify interpretNode call to receive tuple
+          const [intermediateState, nodeResult] = await this.interpretNode(node, currentState, opts);
+          currentState = intermediateState;
+          
+          // <<< ADDED: Validate DirectiveResult structure >>>
           if (node.type === 'Directive' && nodeResult && (typeof nodeResult !== 'object' || (nodeResult.stateChanges === undefined && nodeResult.replacement === undefined))) {
+            logger.error('Invalid result type returned from directive handler client after interpretNode', { nodeResult, nodeId: node.nodeId, kind: (node as DirectiveNode).directive.kind });
             throw new MeldInterpreterError(
-              'Invalid directive result structure',
-              'invalid_directive_result',
+              `Invalid result type returned from directive handler client for directive '${(node as DirectiveNode).directive.kind}'`, 
+              'directive_client_error', 
               convertLocation(node.location),
               { severity: ErrorSeverity.Fatal }
             );
@@ -426,72 +440,67 @@ export class InterpreterService implements IInterpreterService {
           // Apply state changes if present and supported
           if (nodeResult?.stateChanges && currentState && typeof currentState.applyStateChanges === 'function') {
             logger.debug(`Applying state changes from directive result for node ${node.nodeId}`);
-            // <<< Log state BEFORE applyStateChanges >>>
-            process.stdout.write(`DEBUG Loop BEFORE applyStateChanges ${node.nodeId}: currentState ID = ${currentState?.getStateId()}\n`);
-            // <<< Ensure await and assignment >>>
-            const stateAfterChanges = await currentState.applyStateChanges(nodeResult.stateChanges); 
-            // <<< Log state AFTER applyStateChanges >>>
-            process.stdout.write(`DEBUG Loop AFTER applyStateChanges ${node.nodeId}: stateAfterChanges ID = ${stateAfterChanges?.getStateId()}\n`);
-            currentState = stateAfterChanges;
-            if (!currentState) { 
-                throw new MeldInterpreterError('State became null after applying changes.', 'internal_error', convertLocation(node.location), { severity: ErrorSeverity.Fatal });
+            currentState = await currentState.applyStateChanges(nodeResult.stateChanges);
+            // Add null check after potential reassignment
+            if (!currentState) {
+              throw new MeldInterpreterError('State became null after applying changes.', 'internal_error', convertLocation(node.location), { severity: ErrorSeverity.Fatal });
             }
           } else if (nodeResult?.stateChanges) {
             logger.warn(`State object doesn't support applyStateChanges or currentState is null, skipping changes for node ${node.nodeId}`);
           }
           
           // Handle replacements
-          if (nodeResult?.replacement !== undefined && currentState) { 
-            if (currentState.isTransformationEnabled?.()) { 
+          if (nodeResult?.replacement !== undefined && currentState) { // Add null check for currentState
+            if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) { 
               const nodesBefore = currentState.getTransformedNodes(); 
               const index = nodesBefore.findIndex(n => n.nodeId === node.nodeId);
+  
+              // <<< ADD LOGGING HERE >>>
+              logger.debug(`[Interpreter Loop] Processing node ${node.nodeId} (Type: ${node.type}, Kind: ${(node as DirectiveNode).directive?.kind}). Replacement found? ${!!nodeResult.replacement}. Index in transformed list: ${index}`);
+              if (nodeResult.replacement) {
+                logger.debug(`[Interpreter Loop] Replacement content: ${JSON.stringify(nodeResult.replacement)}`);
+              }
+              // <<< END LOGGING >>>
+
               if (index !== -1) {
                 const replacementNodes = nodeResult.replacement;
-                currentState.transformNode(index, replacementNodes.length > 0 ? replacementNodes : undefined); 
+                // <<< ADD LOGGING HERE >>>
+                logger.debug(`[Interpreter Loop] Calling transformNode. Index: ${index}, Replacement Node Count: ${replacementNodes.length}, First Replacement Node Type: ${replacementNodes[0]?.type}, First Replacement Node Content: ${(replacementNodes[0] as TextNode)?.content?.substring(0, 50)}...`);
+                currentState.transformNode(index, replacementNodes.length > 0 ? replacementNodes : undefined);
+                // <<< END LOGGING >>>
+                logger.debug(`Applied ${replacementNodes.length} replacement nodes for original node ${node.nodeId} at index ${index}`);
               } else {
                  process.stderr.write(`WARN: [InterpreterService Loop] Original node (ID: ${node.nodeId}) not found for replacement.\n`);
               }
             } 
           } 
           
-          // Check state validity before cloning lastGoodState
-          if (!currentState) { 
+          if (!currentState) { // Add null check before cloning
              throw new MeldInterpreterError('State became null unexpectedly before cloning last good state.', 'internal_error', convertLocation(node.location), { severity: ErrorSeverity.Fatal });
           }
-          // <<< Log state BEFORE cloning lastGoodState >>>
-          process.stdout.write(`DEBUG Loop BEFORE clone lastGoodState ${node.nodeId}: currentState ID = ${currentState?.getStateId()}\n`);
           // Clone at the end of successful processing within the loop
           lastGoodState = currentState.clone() as IStateService; 
-          process.stdout.write(`DEBUG Loop AFTER clone lastGoodState ${node.nodeId}: lastGoodState ID = ${lastGoodState?.getStateId()}\n`);
         } catch (error) {
-          // <<< Log state INSIDE catch block >>>
-          process.stdout.write(`DEBUG Loop ENTER CATCH ${node.nodeId}: currentState ID = ${currentState?.getStateId()}, lastGoodState ID = ${lastGoodState?.getStateId()}\n`);
           try {
             this.handleError(error instanceof Error ? error : new Error(String(error)), opts, node);
-            // Rollback to the last known good state
-            if (lastGoodState) {
-                // <<< Log state BEFORE rollback assignment >>>
-                process.stdout.write(`DEBUG Loop BEFORE rollback assign ${node.nodeId}: Assigning lastGoodState ID = ${lastGoodState?.getStateId()}\n`);
-                currentState = lastGoodState; 
-                // <<< Log state AFTER rollback assignment >>>
-                process.stdout.write(`DEBUG Loop AFTER rollback assign ${node.nodeId}: currentState ID = ${currentState?.getStateId()}\n`);
-            } else {
-                // ... (rollback failure handling) ...
-                 logger.error("Rollback failed: lastGoodState is undefined.");
-                 currentState = initialSnapshot?.clone() as IStateService ?? null;
-                 if (!currentState) {
-                    throw new MeldInterpreterError("Rollback failed completely: Cannot recover state.", "error_recovery", undefined, { severity: ErrorSeverity.Fatal, cause: error instanceof Error ? error : undefined });
-                 }
-            }
+            // Rollback to the last known good state *before* the failed node processing
+            currentState = lastGoodState; // No clone needed here, revert to the state before the try block for this node
           } catch (fatalError) {
-            // <<< NO CHANGE: Fatal error handling >>>
-            if (opts.initialState && opts.mergeState) { /* ... merge initialSnapshot ... */ }
+            if (opts.initialState && opts.mergeState) {
+              if (typeof opts.initialState.mergeChildState === 'function') {
+                 (opts.initialState as IStateService).mergeChildState(initialSnapshot as IStateService);
+              } else {
+                  logger.warn('Initial state does not support mergeChildState', { initialState: opts.initialState });
+              }
+            }
             throw fatalError;
           }
         }
-      } // End of loop
+      }
 
+      // <<< ADD CHECK FOR VALID currentState BEFORE MERGE >>>
       if (!currentState || typeof currentState.mergeChildState !== 'function') {
+        // This shouldn't happen if the loop completed, but adds safety
         logger.error('InterpreterService: currentState is invalid before final merge.', { state: currentState });
         throw new MeldInterpreterError(
           'Invalid final state before merging.',
@@ -516,11 +525,11 @@ export class InterpreterService implements IInterpreterService {
         mergedToParent: opts.mergeState && opts.initialState
       });
 
+      // <<< Use process.stdout.write to log ID before return >>>
       process.stdout.write(`>>> [Interpreter EXIT] Returning state ID: ${currentState?.getStateId()}\n`);
 
       return currentState;
     } catch (error) {
-       logger.error('Interpretation failed with error:', { error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined });
       throw error; 
     }
   }
@@ -561,39 +570,63 @@ export class InterpreterService implements IInterpreterService {
     switch (node.type) {
       case 'Text':
         const textNode = node as TextNode;
-        let nodeToAdd: TextNode = textNode; 
+        let nodeToAdd: TextNode = textNode; // Start with the original node
 
+        // Check if content potentially needs resolution
         if (textNode.content.includes('{{')) {
+            // << ADDED lazy initialization >>
             this.ensureClientsInitialized(); 
-            if (this.parserClient && this.resolutionService) {
-               try {
-                  const parsedNodesRaw = await this.parserClient.parseString(textNode.content, { filePath: currentState.getCurrentFilePath() ?? undefined });
-                  const parsedNodes: InterpolatableValue = parsedNodesRaw.filter(
-                    (node): node is TextNode | VariableReferenceNode => 
-                      node.type === 'Text' || node.type === 'VariableReference'
-                  );
 
-                  logger.debug(`[InterpreterNode] Parsed TextNode content into ${parsedNodes?.length ?? 0} nodes.`);
-                  const context = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
-                  const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, context);
-                  nodeToAdd = { ...textNode, content: resolvedContent };
-               } catch (resolutionError) {
-                  logger.warn('[InterpreterNode] Failed to parse/resolve TextNode content, using original node instead.', {
-                      error: resolutionError instanceof Error ? resolutionError.message : String(resolutionError),
-                      originalContent: textNode.content.substring(0, 100),
-                      filePath: currentState.getCurrentFilePath()
-                  });
-                  nodeToAdd = textNode;
-               }
-            } else {
-              nodeToAdd = textNode;
+            // Ensure parser client is available after lazy init
+            if (this.parserClient && this.resolutionService) {
+                logger.debug(`[InterpreterService] TextNode content might need resolution: ${textNode.content.substring(0, 50)}...`);
+                try {
+                    // 1. Parse the string content into an InterpolatableValue array
+                    // Assuming parseString exists and returns INode[] - Needs Filtering
+                    const parsedNodesRaw = await this.parserClient.parseString(
+                        textNode.content, 
+                        { 
+                            // Linter Fix 3: Ensure filePath is string | undefined
+                            filePath: currentState.getCurrentFilePath() ?? undefined, 
+                            // Linter Fix 2: Removed unsupported 'startRule' option
+                        }
+                    );
+                    // Linter Fix 1: Filter/Cast the result to InterpolatableValue
+                    const parsedNodes: InterpolatableValue = parsedNodesRaw.filter(
+                      (node): node is TextNode | VariableReferenceNode => 
+                        node.type === 'Text' || node.type === 'VariableReference'
+                    );
+
+                    logger.debug(`[InterpreterService] Parsed TextNode content into ${parsedNodes?.length ?? 0} nodes.`);
+
+                    // 2. Resolve the parsed nodes
+                    const context = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
+                    const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, context);
+                    logger.debug(`[InterpreterService] Resolved TextNode content to: ${resolvedContent.substring(0, 50)}...`);
+
+                    // 3. Create a new node with resolved content
+                    nodeToAdd = {
+                        ...textNode, // Copy original properties (location, nodeId, etc.)
+                        content: resolvedContent, // Use the resolved content
+                    };
+
+                } catch (resolutionError) {
+                    logger.warn('[InterpreterService] Failed to parse/resolve TextNode content, adding original node instead.', {
+                        error: resolutionError instanceof Error ? resolutionError.message : String(resolutionError),
+                        originalContent: textNode.content.substring(0, 100),
+                        filePath: currentState.getCurrentFilePath()
+                    });
+                    // Fallback to adding the original node if resolution fails
+                    nodeToAdd = textNode;
+                }
             }
         }
-        currentState = await currentState.addNode(nodeToAdd);
+        // Add either the original node or the newly resolved node
+        currentState.addNode(nodeToAdd);
         break;
 
       case 'CodeFence':
-        currentState = await currentState.addNode(node);
+        currentState.addNode(node);
         break;
 
       case 'VariableReference':
@@ -601,19 +634,21 @@ export class InterpreterService implements IInterpreterService {
          try {
              const varRefContext = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
              const resolvedStringValue = await this.resolutionService.resolveNodes([varNode], varRefContext);
-             const resolvedTextNode: TextNode = { 
+             const resolvedTextNode: TextNode = {
                  type: 'Text',
                  content: resolvedStringValue,
                  location: varNode.location,
                  nodeId: crypto.randomUUID()
              };
-             currentState = await currentState.addNode(resolvedTextNode);
+             currentState.addNode(resolvedTextNode);
          } catch (error) {
               logger.error('Failed to resolve VariableReferenceNode during interpretation', {
                  error: error instanceof Error ? error.message : String(error),
                  identifier: varNode.identifier
               });
-              currentState = await currentState.addNode(varNode); 
+              const errorState = currentState.clone();
+              errorState.addNode(varNode);
+              currentState = errorState;
          }
          break;
 
@@ -621,7 +656,7 @@ export class InterpreterService implements IInterpreterService {
         break;
 
       case 'Directive':
-        currentState = await currentState.addNode(node); 
+        currentState.addNode(node);
 
         if (node.type !== 'Directive' || !('directive' in node) || !node.directive) {
           throw new MeldInterpreterError(
@@ -655,6 +690,7 @@ export class InterpreterService implements IInterpreterService {
           directiveNode: directiveNode, 
         };
 
+        // Call the directive handler (now returns new DirectiveResult)
         directiveResult = await this.callDirectiveHandleDirective(directiveNode, handlerContext);
         
         break;
@@ -667,6 +703,7 @@ export class InterpreterService implements IInterpreterService {
         );
     }
 
+    // Step 1: Return the tuple
     return [currentState, directiveResult];
   }
 
