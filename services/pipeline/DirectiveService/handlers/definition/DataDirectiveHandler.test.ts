@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
 import { createDataDirective, createLocation, createDirectiveNode } from '@tests/utils/testFactories.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+// import { TestContextDI } from '@tests/utils/di/TestContextDI.js'; // Removed
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { DirectiveNode, InterpolatableValue } from '@core/syntax/types/nodes.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { dataDirectiveExamples } from '@core/syntax/index.js';
-import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
+// import { MockFactory } from '@tests/utils/mocks/MockFactory.js'; // Removed
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { DirectiveProcessingContext } from '@core/types/index.js';
 import { JsonValue, VariableType, VariableMetadata, VariableOrigin, createDataVariable, MeldVariable } from '@core/types';
@@ -17,7 +17,7 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
-import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js';
+// import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js'; // Removed
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
 import { PathPurpose } from '@core/types/paths.js';
 import * as path from 'path';
@@ -27,51 +27,106 @@ import type {
     FormattingContext,
     ParserFlags
  } from '@core/types/resolution.js';
+import { container, type DependencyContainer } from 'tsyringe'; // Added
+import { mockDeep, DeepMockProxy } from 'vitest-mock-extended'; // Added
 
 /**
  * DataDirectiveHandler Test Status
  * --------------------------------
  * 
- * MIGRATION STATUS: Phase 5 ✅ (Using TestContextDI helpers)
+ * MIGRATION STATUS: In Progress (Refactoring to Manual DI)
  * 
- * This test file has been migrated to use:
- * - TestContextDI.createTestHelpers().setupWithStandardMocks()
- * - vi.spyOn on resolved mocks for test-specific behavior
+ * This test file is being migrated to use:
+ * - Manual Child Container pattern
+ * - Standardized mock factories with vitest-mock-extended
  */
 
 describe('DataDirectiveHandler', () => {
-  let fixture: DirectiveTestFixture;
+  // Remove fixture usage
+  // let fixture: DirectiveTestFixture;
   let handler: DataDirectiveHandler;
+  let testContainer: DependencyContainer;
+  // Declare mocks for dependencies
+  let mockValidationService: DeepMockProxy<IValidationService>;
+  let mockStateService: DeepMockProxy<IStateService>;
+  let mockResolutionService: DeepMockProxy<IResolutionService>;
+  let mockFileSystemService: DeepMockProxy<IFileSystemService>;
+  let mockPathService: DeepMockProxy<IPathService>;
 
   beforeEach(async () => {
-    fixture = await DirectiveTestFixture.create();
-    handler = await fixture.context.resolve(DataDirectiveHandler);
-    fixture.handler = handler;
+    // fixture = await DirectiveTestFixture.create(); // Removed
+    testContainer = container.createChildContainer(); // Create child container
 
-    vi.spyOn(fixture.stateService, 'getCurrentFilePath').mockReturnValue('/test.meld');
-    vi.spyOn(fixture.stateService, 'isTransformationEnabled').mockReturnValue(false);
+    // --- Create Mocks ---
+    mockValidationService = mockDeep<IValidationService>({
+      validate: vi.fn(),
+    });
+    mockStateService = mockDeep<IStateService>({
+      getCurrentFilePath: vi.fn(),
+      isTransformationEnabled: vi.fn(),
+      setVariable: vi.fn(),
+      clone: vi.fn().mockReturnThis(), // Basic mock for clone
+      // Add other methods if needed by handler or context creation
+      getStateId: vi.fn().mockReturnValue('mock-data-state-id'), 
+      getVariable: vi.fn(),
+    });
+    mockResolutionService = mockDeep<IResolutionService>({
+      resolveNodes: vi.fn(),
+      resolveInContext: vi.fn(),
+      // Add other methods if needed by the handler
+    });
+    mockFileSystemService = mockDeep<IFileSystemService>({
+        executeCommand: vi.fn(),
+        // Add other methods if needed
+        readFile: vi.fn(),
+        exists: vi.fn(),
+    });
+    mockPathService = mockDeep<IPathService>();
+
+    // --- Register Mocks --- 
+    testContainer.registerInstance<IValidationService>('IValidationService', mockValidationService);
+    testContainer.registerInstance<IStateService>('IStateService', mockStateService);
+    testContainer.registerInstance<IResolutionService>('IResolutionService', mockResolutionService);
+    testContainer.registerInstance<IFileSystemService>('IFileSystemService', mockFileSystemService);
+    testContainer.registerInstance<IPathService>('IPathService', mockPathService);
+    // Mock logger if needed by handler
+    testContainer.registerInstance('ILogger', { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() });
+    testContainer.registerInstance('DependencyContainer', testContainer);
+
+    // --- Register Handler --- 
+    testContainer.register(DataDirectiveHandler, { useClass: DataDirectiveHandler });
+
+    // --- Resolve Handler --- 
+    handler = testContainer.resolve(DataDirectiveHandler);
+    // handler = await fixture.context.resolve(DataDirectiveHandler); // Removed
+    // fixture.handler = handler; // Removed
+
+    // --- Default Mock Behaviors --- 
+    vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue('/test.meld');
+    vi.spyOn(mockStateService, 'isTransformationEnabled').mockReturnValue(false);
     vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockImplementation(async (v) => v);
-
-    vi.spyOn(fixture.resolutionService, 'resolveNodes').mockImplementation(async (nodes, ctx) => 
+    vi.spyOn(mockResolutionService, 'resolveNodes').mockImplementation(async (nodes, ctx) => 
         nodes.map((n: any) => n.content || `{{${n.identifier}}}`).join('')
     );
-     vi.spyOn(fixture.resolutionService, 'resolveInContext').mockImplementation(async (val) => typeof val === 'string' ? val : JSON.stringify(val));
-
-    vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: '', stderr: '' });
-    vi.spyOn(fixture.validationService, 'validate').mockResolvedValue(undefined);
+     vi.spyOn(mockResolutionService, 'resolveInContext').mockImplementation(async (val) => typeof val === 'string' ? val : JSON.stringify(val));
+    vi.spyOn(mockFileSystemService, 'executeCommand').mockResolvedValue({ stdout: '', stderr: '' });
+    vi.spyOn(mockValidationService, 'validate').mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
-    await fixture?.cleanup();
+    // await fixture?.cleanup(); // Removed
+    testContainer?.dispose(); // Added
+    vi.clearAllMocks();
   });
 
   const createMockProcessingContext = (node: DirectiveNode): DirectiveProcessingContext => {
-    if (!fixture?.stateService) {
-        throw new Error("Test setup error: fixture.stateService is undefined in createMockProcessingContext");
+    // Use manually created mocks instead of fixture
+    if (!mockStateService) {
+        throw new Error("Test setup error: mockStateService is undefined in createMockProcessingContext");
     }
-    const currentFilePath = fixture.stateService.getCurrentFilePath() || undefined;
+    const currentFilePath = mockStateService.getCurrentFilePath() || undefined;
     const resolutionContext: ResolutionContext = { 
-        state: fixture.stateService, 
+        state: mockStateService, 
         strict: true,
         currentFilePath: currentFilePath,
         depth: 0, 
@@ -89,37 +144,16 @@ describe('DataDirectiveHandler', () => {
             baseDir: currentFilePath ? path.dirname(currentFilePath) : '.',
             allowTraversal: false
         },
-        withIncreasedDepth: () => ({ ...resolutionContext, depth: resolutionContext.depth + 1 } as ResolutionContext),
-        withStrictMode: (strict: boolean) => ({ ...resolutionContext, strict } as ResolutionContext),
-        withPathContext: (ctx: Partial<PathResolutionContext>) => ({
-            ...resolutionContext, 
-            pathContext: { 
-                ...(resolutionContext.pathContext ?? { purpose: PathPurpose.READ, baseDir: '.', allowTraversal: false }),
-                ...ctx 
-            }
-        } as ResolutionContext),
-        withFlags: (flags: Partial<ResolutionFlags>) => ({
-            ...resolutionContext, 
-            flags: { ...resolutionContext.flags, ...flags }
-        } as ResolutionContext),
-        withAllowedTypes: (types: VariableType[]) => ({ ...resolutionContext, allowedVariableTypes: types } as ResolutionContext),
-        withFormattingContext: (formatting: Partial<FormattingContext>) => ({
-            ...resolutionContext, 
-            formattingContext: { 
-                ...(resolutionContext.formattingContext ?? { isBlock: false, preserveLiteralFormatting: false, preserveWhitespace: false }),
-                ...formatting 
-            }
-        } as ResolutionContext),
-        withParserFlags: (flags: Partial<ParserFlags>) => ({
-            ...resolutionContext, 
-            parserFlags: { 
-                ...(resolutionContext.parserFlags ?? { parseInRawContent: false, parseInCodeBlocks: true, resolveVariablesDuringParsing: false, parseLiteralTypes: [] }),
-                ...flags 
-            }
-        } as ResolutionContext),
+        withIncreasedDepth: vi.fn().mockReturnThis(),
+        withStrictMode: vi.fn().mockReturnThis(),
+        withAllowedTypes: vi.fn().mockReturnThis(),
+        withFlags: vi.fn().mockReturnThis(),
+        withFormattingContext: vi.fn().mockReturnThis(),
+        withPathContext: vi.fn().mockReturnThis(),
+        withParserFlags: vi.fn().mockReturnThis(),
     };
     return {
-        state: fixture.stateService,
+        state: mockStateService,
         resolutionContext: resolutionContext,
         formattingContext: { isBlock: false },
         directiveNode: node,
@@ -166,8 +200,8 @@ describe('DataDirectiveHandler', () => {
     it('should handle invalid JSON from run/embed', async () => {
       const node = createDirectiveNode('data', { identifier: 'invalidData', source: 'run', run: { subtype: 'runCommand', command: [{ type: 'Text', content: 'echo { invalid JSON' }] } });
       const processingContext = createMockProcessingContext(node);
-      vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('echo { invalid JSON');
-      vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: '{ invalid JSON', stderr: '' });
+      vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue('echo { invalid JSON');
+      vi.spyOn(mockFileSystemService, 'executeCommand').mockResolvedValue({ stdout: '{ invalid JSON', stderr: '' });
       await expect(handler.handle(processingContext)).rejects.toThrow(/Failed to parse command output as JSON/);
     });
 

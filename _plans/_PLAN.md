@@ -72,15 +72,28 @@ Systematically investigate and fix the core service failures identified in `_pla
     *   **`TestContextDI` Cleanup Issue:** Deeper investigation into the test utilities revealed that `TestContextDI.cleanup` used `clearInstances()` instead of `dispose()`. This likely caused container state leakage between test files, contributing to the DI instability and potentially the OOM error due to excessive object creation/retention.
     *   **Revised OOM Hypothesis:** The OOM is likely caused by the combination of recursive interpretation (`@import`), numerous service instantiations driven by inconsistent/leaky test container setups, and potentially inefficient state cloning (`StateFactory.createClonedState` deep-cloning variable maps).
     *   **Refactoring Plan:** A dedicated plan (`_plans/REFAC-SERVICE-TEST-DI.md`) was created to address the systemic test isolation issues by refactoring all service tests (`tests/services/**/*.test.ts`) to use the recommended "Manual Child Container" pattern with proper setup and `dispose()` cleanup. Addressing this is crucial for overall test suite stability and likely necessary to fully resolve the OOM error.
-*   **Current Status:** The `@import` directive logic appears functional, but testing is blocked by the persistent Heap OOM error, which is now suspected to be linked to fundamental issues in the test DI lifecycle management (addressed by `_plans/REFAC-SERVICE-TEST-DI.md`). The `@run` and `@path` errors also persist and need separate investigation as per Phases 3 & 4.
+*   **Current Status:** The `@import` directive logic appears functional based on unit tests, but API integration testing is blocked by the persistent Heap OOM error. Investigation points towards test DI lifecycle/isolation issues being addressed by `_plans/REFAC-SERVICE-TEST-DI.md`.
 *   **Next Steps:**
-    1.  **(High Priority)** Execute the plan in `_plans/REFAC-SERVICE-TEST-DI.md` to refactor service tests for proper DI isolation (Phases 1 & 2 done, starting Phase 3).
+    1.  **(High Priority)** Continue executing the plan in `_plans/REFAC-SERVICE-TEST-DI.md` (Phases 1-4 COMPLETE, starting Phase 5 - Handlers).
     2.  **(Contingent on OOM resolution)** Re-run `api/integration.test.ts` after service test refactoring. If OOM persists, add detailed logging to `StateFactory.createClonedState` and `StateService.setVariable` to analyze object sizes during cloning/setting.
     3.  **(Deferred)** Address `@path` errors (Phase 4).
     4.  **(Deferred)** Address `@run` errors (Phase 3).
     5.  **(Deferred)** Remove the lazy-resolution workaround for `ICircularityService` in `ImportDirectiveHandler` if the root cause is confirmed to be fixed by the broader test refactoring.
+    6.  **(NEW)** Add list of handler test files needing DI refactor:
+        *   `services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.command.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.integration.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.transformation.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.transformation.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.transformation.test.ts`
 
-**Phase 3: `@run` Directive Processing [Not Started]**
+**Phase 3: `@run` Directive Processing [Deferred pending DI Refactor & OOM resolution]**
 
 *   **Target Failures:** `api/api.test.ts` #1 (`@run` Directive Execution), #2 (Variable Resolution within `@run`). Tests fail with "Run directive command cannot be empty".
 *   **Hypothesized Services:** `InterpreterService`, `DirectiveService`, `RunDirectiveHandler`, `ResolutionService`, `ParserService`.
@@ -90,7 +103,7 @@ Systematically investigate and fix the core service failures identified in `_pla
     3.  **Execution Logic:** Trace the actual command execution logic within the handler.
 *   **Fix & Verify:** Implement fixes. Refactor/update `RunDirectiveHandler.test.ts`. Re-run failing `@run` tests in `api/api.test.ts` (after OOM is fixed).
 
-**Phase 4: Special Path Variable Resolution (`@path`) [Blocked by OOM]**
+**Phase 4: Special Path Variable Resolution (`@path`) [Deferred pending DI Refactor & OOM resolution]**
 
 *   **Target Failures:** `api/integration.test.ts` tests for `$PROJECTPATH`, `$.`, `$HOMEPATH`, `$~` fail with "Path validation failed for resolved path \"\": Path cannot be empty".
 *   **Hypothesized Services:** `PathService`, `ResolutionService`, `PathDirectiveHandler`, `FileSystemServiceClientFactory` (and underlying client/FS).
@@ -104,7 +117,7 @@ Systematically investigate and fix the core service failures identified in `_pla
     3.  **(Blocked by OOM)** Verify the correct alias expansion occurs during final output rendering (if applicable, or ensure `PathService` handles them correctly later).
     4.  Refactor/update `PathDirectiveHandler.test.ts`, `PathService.test.ts`, `ResolutionService.test.ts`.
 
-**Phase 5: Circular Import Detection [Blocked by OOM]**
+**Phase 5: Circular Import Detection [Deferred pending DI Refactor & OOM resolution]**
 
 *   **Target Failures:** `api/integration.test.ts` #4 (Circular Import Detection - throwing wrong error).
 *   **Hypothesized Services:** `CircularityService`, `InterpreterService`, `ImportDirectiveHandler`, `StateService`.
