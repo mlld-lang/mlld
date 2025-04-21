@@ -2,28 +2,32 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 import { MeldImportError } from '@core/errors/MeldImportError.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { container, type DependencyContainer } from 'tsyringe';
+import { mockDeep, DeepMockProxy } from 'vitest-mock-extended';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 
 describe('CircularityService', () => {
-  const helpers = TestContextDI.createTestHelpers();
-  let context: TestContextDI;
-  let service: ICircularityService; // Use interface type
+  let testContainer: DependencyContainer;
+  let service: ICircularityService;
+  let mockResolutionService: DeepMockProxy<IResolutionService>;
 
   beforeEach(async () => {
-    // Use helper
-    context = helpers.setupWithStandardMocks();
-    // Await init
-    await context.resolve('IFileSystemService'); // Resolve something to wait
+    testContainer = container.createChildContainer();
+
+    mockResolutionService = mockDeep<IResolutionService>();
+
+    testContainer.registerInstance<IResolutionService>('IResolutionService', mockResolutionService);
+    testContainer.registerInstance('DependencyContainer', testContainer);
     
-    // Resolve service (expecting real implementation)
-    service = await context.resolve('ICircularityService');
+    testContainer.register<ICircularityService>('ICircularityService', { useClass: CircularityService });
     
-    // Verify we got the real service
+    service = testContainer.resolve<ICircularityService>('ICircularityService');
+    
     expect(service).toBeInstanceOf(CircularityService);
   });
 
   afterEach(async () => {
-    await context?.cleanup();
+    testContainer?.dispose();
   });
 
   describe('Basic import tracking', () => {
@@ -90,12 +94,10 @@ describe('CircularityService', () => {
       service.beginImport('fileA.meld');
       service.beginImport('fileB.meld');
       
-      // Expect an error when attempting to import fileA.meld again (circular import)
       expect(() => {
         service.beginImport('fileA.meld');
       }).toThrow(MeldImportError);
       
-      // The stack should remain unchanged
       expect(service.getImportStack()).toEqual([
         'fileA.meld',
         'fileB.meld'
@@ -132,7 +134,6 @@ describe('CircularityService', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(MeldImportError);
         const importError = error as MeldImportError;
-        // Check if details and importChain exist before accessing
         expect(importError.details).toBeDefined();
         expect(importError.details?.importChain).toEqual([
           'fileA.meld',
@@ -157,8 +158,6 @@ describe('CircularityService', () => {
   });
 
   describe('Path normalization', () => {
-    // These tests might be less relevant if PathService handles normalization
-    // but good to keep for verifying internal normalization if any exists.
     it('should normalize paths with backslashes', () => {
       service.beginImport('C:\\path\\to\\file.meld');
       expect(service.isInStack('C:/path/to/file.meld')).toBe(true);

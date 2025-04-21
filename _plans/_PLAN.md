@@ -43,24 +43,22 @@ Systematically investigate and fix the core service failures identified in `_pla
     *   AST Node IDs: `_plans/AST-ID.md`
     *   State System Enhancements: `_plans/STATE-UPDATES.md`
 
-**Phase 1: Variable Resolution Stability [COMPLETE]**
+**Phase 1: Variable Resolution Stability [Mostly COMPLETE]**
 
 *   **Target Failures:** `api/integration.test.ts` #1 (Variable/Data Resolution Regression).
 *   **Hypothesized Services:** `InterpreterService`, `ResolutionService`, `StateService`, `VariableReferenceResolver`, `OutputService`.
-*   **Investigation Steps:**
-    1.  **Analyze `api/integration.test.ts` Context:** Why does basic `{{var}}` resolution fail here but pass in `api/array-access.test.ts` with the same DI setup? Are there subtle differences in the test structure, content order, or options passed to `processMeld`?
-    2.  **Trace `InterpreterService`:** Add logging/debugging to trace the processing of the relevant `TextNode`s and `VariableReferenceNode`s. Confirm the correct state is being used when calling `ResolutionService`.
-    3.  **Trace `ResolutionService.resolveNodes` / `VariableReferenceResolver`:** Add logging/debugging to trace the resolution flow for the specific failing variable. Check the state lookups (`context.state.getVariable`).
-    4.  **Use Visualization:** In the failing test, call `stateVisualizationService.visualizeContextHierarchy` (or `visualizeVariablePropagation` if relevant) at key points (e.g., before/after the failing resolution) to understand the state structure and variable availability across contexts.
-    5.  **Compare State Snapshots:** Compare the state (variables stored) just before the failing resolution attempt in `api/integration.test.ts` vs. a passing case. Is the variable correctly defined in the expected state instance?
-*   **Fix & Verify:** Implement fixes in the identified service(s). Update relevant unit tests (`ResolutionService.test.ts`, `InterpreterService.unit.test.ts`, `StateService.test.ts`) using the refactoring pattern. Re-run `api/integration.test.ts` to confirm the fix.
+*   **Investigation Steps & Findings:**
+    1.  **Initial Regression Fixed:** The core regression where simple `{{var}}` failed in `api/integration.test.ts` (but not `api/array-access.test.ts`) was resolved by refactoring `StateService` to use `this.parentService` correctly for lookups and fixing `StateFactory` map handling (`_plans/STATE-UPDATES.md` work).
+    2.  **Output Formatting Adjusted:** Addressed related assertion failure in `api/api.test.ts` regarding expected XML (`<Meld>` tag) by adjusting the test assertion.
+    3.  **Remaining Issues:** Failures related to variable resolution within specific directives (`@run`, special `@path` vars) persist and are tracked in Phases 3 & 4.
+*   **Fix & Verify:** Fixes implemented in `StateService` and `StateFactory`. Unit tests (`StateService.test.ts`, `StateFactory.test.ts`) updated and passing. `api/api.test.ts` adjusted. Basic variable resolution appears stable, pending fixes in later phases.
 
 **Phase 2: `@import` Directive Processing [In Progress - OOM Blocker]**
 
 *   **Target Failures:** `api/integration.test.ts` #3 (`@import` Directive Processing), #4 (Circular Import Detection - Error Message). Original DI errors now masked by OOM.
 *   **Hypothesized Services:** `InterpreterService`, `DirectiveService`, `ImportDirectiveHandler`, `StateService`, `ParserService`, `FileSystemService`, `InterpreterServiceClientFactory`, `CircularityService`, DI Container (`api/integration.test.ts`).
 *   **Investigation Steps & Findings:**
-    1.  **Initial Error:** `@import` tests initially failed with "Path validation failed for resolved path "": Path cannot be empty".
+    1.  **Initial Error:** `@import` tests initially failed with "Path validation failed for resolved path \"\": Path cannot be empty".
     2.  **Fix 1:** Modified `ImportDirectiveHandler` to perform two-step path resolution: first call `resolutionService.resolveInContext` on the `pathObject`, then pass the resulting *string* to `resolutionService.resolvePath`. This fixed the "Path cannot be empty" error for imports.
     3.  **New Error (DI Related):** This unmasked a new failure: `TypeError: this.circularityService.beginImport is not a function` during import execution within integration tests (`api/integration.test.ts`). This occurred despite `ICircularityService` being correctly registered in the test container setup (`beforeEach`).
     4.  **DI Debugging:** Added logging inside `ImportDirectiveHandler` confirming that the instance injected via the constructor for `ICircularityService` was incorrect (it was an `InterpreterServiceClientFactory` instance). However, explicitly resolving `ICircularityService` from the injected container *within the handler's `handle` method* yielded the correct service instance.
@@ -74,15 +72,15 @@ Systematically investigate and fix the core service failures identified in `_pla
     *   **`TestContextDI` Cleanup Issue:** Deeper investigation into the test utilities revealed that `TestContextDI.cleanup` used `clearInstances()` instead of `dispose()`. This likely caused container state leakage between test files, contributing to the DI instability and potentially the OOM error due to excessive object creation/retention.
     *   **Revised OOM Hypothesis:** The OOM is likely caused by the combination of recursive interpretation (`@import`), numerous service instantiations driven by inconsistent/leaky test container setups, and potentially inefficient state cloning (`StateFactory.createClonedState` deep-cloning variable maps).
     *   **Refactoring Plan:** A dedicated plan (`_plans/REFAC-SERVICE-TEST-DI.md`) was created to address the systemic test isolation issues by refactoring all service tests (`tests/services/**/*.test.ts`) to use the recommended "Manual Child Container" pattern with proper setup and `dispose()` cleanup. Addressing this is crucial for overall test suite stability and likely necessary to fully resolve the OOM error.
-*   **Current Status:** The `@import` directive logic appears functional, but testing is blocked by the persistent Heap OOM error, which is now suspected to be linked to fundamental issues in the test DI lifecycle management. The `@run` and `@path` errors also persist and need separate investigation as per Phases 3 & 4.
+*   **Current Status:** The `@import` directive logic appears functional, but testing is blocked by the persistent Heap OOM error, which is now suspected to be linked to fundamental issues in the test DI lifecycle management (addressed by `_plans/REFAC-SERVICE-TEST-DI.md`). The `@run` and `@path` errors also persist and need separate investigation as per Phases 3 & 4.
 *   **Next Steps:**
-    1.  **(High Priority)** Execute the plan in `_plans/REFAC-SERVICE-TEST-DI.md` to refactor service tests for proper DI isolation.
+    1.  **(High Priority)** Execute the plan in `_plans/REFAC-SERVICE-TEST-DI.md` to refactor service tests for proper DI isolation (Phases 1 & 2 done, starting Phase 3).
     2.  **(Contingent on OOM resolution)** Re-run `api/integration.test.ts` after service test refactoring. If OOM persists, add detailed logging to `StateFactory.createClonedState` and `StateService.setVariable` to analyze object sizes during cloning/setting.
     3.  **(Deferred)** Address `@path` errors (Phase 4).
     4.  **(Deferred)** Address `@run` errors (Phase 3).
     5.  **(Deferred)** Remove the lazy-resolution workaround for `ICircularityService` in `ImportDirectiveHandler` if the root cause is confirmed to be fixed by the broader test refactoring.
 
-**Phase 3: `@run` Directive Processing**
+**Phase 3: `@run` Directive Processing [Not Started]**
 
 *   **Target Failures:** `api/api.test.ts` #1 (`@run` Directive Execution), #2 (Variable Resolution within `@run`). Tests fail with "Run directive command cannot be empty".
 *   **Hypothesized Services:** `InterpreterService`, `DirectiveService`, `RunDirectiveHandler`, `ResolutionService`, `ParserService`.
@@ -94,7 +92,7 @@ Systematically investigate and fix the core service failures identified in `_pla
 
 **Phase 4: Special Path Variable Resolution (`@path`) [Blocked by OOM]**
 
-*   **Target Failures:** `api/integration.test.ts` tests for `$PROJECTPATH`, `$.`, `$HOMEPATH`, `$~` fail with "Path validation failed for resolved path "": Path cannot be empty".
+*   **Target Failures:** `api/integration.test.ts` tests for `$PROJECTPATH`, `$.`, `$HOMEPATH`, `$~` fail with "Path validation failed for resolved path \"\": Path cannot be empty".
 *   **Hypothesized Services:** `PathService`, `ResolutionService`, `PathDirectiveHandler`, `FileSystemServiceClientFactory` (and underlying client/FS).
 *   **Investigation Steps & Findings:**
     1.  **Logging Added:** Added logging to `ResolutionService.resolvePath` and `PathDirectiveHandler`.
@@ -106,7 +104,7 @@ Systematically investigate and fix the core service failures identified in `_pla
     3.  **(Blocked by OOM)** Verify the correct alias expansion occurs during final output rendering (if applicable, or ensure `PathService` handles them correctly later).
     4.  Refactor/update `PathDirectiveHandler.test.ts`, `PathService.test.ts`, `ResolutionService.test.ts`.
 
-**Phase 5: Circular Import Detection**
+**Phase 5: Circular Import Detection [Blocked by OOM]**
 
 *   **Target Failures:** `api/integration.test.ts` #4 (Circular Import Detection - throwing wrong error).
 *   **Hypothesized Services:** `CircularityService`, `InterpreterService`, `ImportDirectiveHandler`, `StateService`.
@@ -114,9 +112,9 @@ Systematically investigate and fix the core service failures identified in `_pla
     1.  **Trace `CircularityService` Calls:** Add logging where `CircularityService.push` and `pop` (or equivalent methods) are called during the import process (likely within `InterpreterService` or `ImportDirectiveHandler`). Log the file paths being pushed/popped.
     2.  **Check Detection Logic:** Review the `CircularityService.check` (or equivalent) logic. Is it correctly identifying the loop based on the pushed paths?
     3.  **Verify Error Propagation:** If the error *is* detected by `CircularityService`, is it being correctly thrown and propagated up the call stack to cause `processMeld` to reject? Why is the wrong error ("Interpreter service client not available") being thrown instead? (Likely due to the DI issue preventing interpretation).
-*   **Fix & Verify:** Implement fixes. Refactor/update `CircularityService.test.ts` and potentially `ImportDirectiveHandler.test.ts`. Re-run the circular import test after fixing the DI issue in Phase 2.
+*   **Fix & Verify:** Implement fixes. Refactor/update `CircularityService.test.ts` and potentially `ImportDirectiveHandler.test.ts`. Re-run the circular import test after fixing the DI issue in Phase 2 (and OOM resolved).
 
-**Phase 6: Remaining/Minor Issues**
+**Phase 6: Remaining/Minor Issues [Not Started]**
 
 *   **Target Failures:** `api/api.test.ts` #3 (Example File Output), other output discrepancies.
 *   **Investigation Steps:** Once other issues are resolved, revisit these tests. Analyze the expected vs. actual output. Trace `OutputService`.

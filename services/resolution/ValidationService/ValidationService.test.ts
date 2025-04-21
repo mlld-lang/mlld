@@ -29,46 +29,44 @@ import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNode
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
 import { createMeldPath, unsafeCreateValidatedResourcePath } from '@core/types/paths.js';
+import { container, type DependencyContainer } from 'tsyringe';
 
 describe('ValidationService', () => {
   let service: IValidationService;
-  let context: TestContextDI;
+  let testContainer: DependencyContainer;
   let mockResolutionService: DeepMockProxy<IResolutionService>;
   let directiveNodeFactory: DirectiveNodeFactory;
+  let nodeFactory: NodeFactory;
   
   beforeEach(async () => {
-    context = TestContextDI.create();
+    testContainer = container.createChildContainer();
 
     mockResolutionService = mockDeep<IResolutionService>();
     mockResolutionService.resolvePath.mockResolvedValue(createMeldPath('/resolved/path'));
     mockResolutionService.resolveInContext.mockImplementation(async (val) => String(val));
     mockResolutionService.validateResolution.mockResolvedValue(createMeldPath('/resolved/path'));
-    context.registerMock<IResolutionService>('IResolutionService', mockResolutionService);
 
-    context.container.registerService('IValidationService', ValidationService);
+    nodeFactory = new NodeFactory();
+    directiveNodeFactory = new DirectiveNodeFactory(nodeFactory);
+
+    testContainer.registerInstance<IResolutionService>('IResolutionService', mockResolutionService);
+    testContainer.registerInstance(NodeFactory, nodeFactory);
+    testContainer.registerInstance(DirectiveNodeFactory, directiveNodeFactory);
+    testContainer.registerInstance('DependencyContainer', testContainer);
     
-    service = await context.resolve('IValidationService');
+    testContainer.register<IValidationService>('IValidationService', { useClass: ValidationService });
+    
+    service = testContainer.resolve<IValidationService>('IValidationService');
     
     expect(service).toBeInstanceOf(ValidationService);
 
-    try {
-      directiveNodeFactory = await context.resolve(DirectiveNodeFactory);
-    } catch (e) {
-      const nodeFactoryInstance = new NodeFactory(); 
-      const directiveFactoryInstance = new DirectiveNodeFactory(nodeFactoryInstance);
-      context.registerMock(NodeFactory, nodeFactoryInstance); 
-      context.registerMock(DirectiveNodeFactory, directiveFactoryInstance);
-      directiveNodeFactory = directiveFactoryInstance; 
-    }
-
-    vi.resetAllMocks();
     mockResolutionService.resolvePath.mockResolvedValue(createMeldPath('/resolved/path'));
     mockResolutionService.validateResolution.mockResolvedValue(createMeldPath('/resolved/path'));
     mockResolutionService.resolveInContext.mockImplementation(async (val) => String(val));
   });
   
   afterEach(async () => {
-    await context?.cleanup();
+    testContainer?.dispose();
   });
   
   describe('Service initialization', () => {
@@ -372,12 +370,10 @@ describe('ValidationService', () => {
   
   describe('Unknown directive handling', () => {
     it('should throw on unknown directive kind with Fatal severity', async () => {
-       // Manually create node with invalid kind to bypass factory type checks
        const node: DirectiveNode = {
          type: 'Directive',
          directive: {
-           kind: 'unknown' as any, // Cast to bypass enum check
-           // Other properties like identifier/value might be needed depending on validator
+           kind: 'unknown' as any,
            identifier: 'test', 
            value: 'test'
          },
