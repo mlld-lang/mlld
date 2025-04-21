@@ -10,9 +10,12 @@ import {
   contentExamples 
 } from '@core/syntax/index.js';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
 import { NodeFactory } from '@core/syntax/types/factories/NodeFactory.js';
+import { container, type DependencyContainer } from 'tsyringe';
+import { mock, mockDeep } from 'vitest-mock-extended';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 
 // Define a type that combines the meld-spec Location with our filePath
 type LocationWithFilePath = {
@@ -52,64 +55,44 @@ function hasFilePath(location: any): location is LocationWithFilePath {
   );
 }
 
-// Create a mock ResolutionService for testing
-const mockResolutionService = {
-  resolveInContext: async (value: string, context: any) => {
-    // For testing purposes, just return the value
-    return value;
-  }
-};
-
 describe('ParserService', () => {
   let service: ParserService;
-  let testContext: TestContextDI;
-  let mockNodeFactory: any;
-  let mockVariableNodeFactory: any;
+  let testContainer: DependencyContainer;
+  let mockNodeFactory: NodeFactory;
+  let mockVariableNodeFactory: VariableNodeFactory;
+  let mockResolutionClient: IResolutionServiceClient;
+  let mockResolutionClientFactory: ResolutionServiceClientFactory;
 
   beforeEach(async () => {
-    // Create test context with isolated container
-    testContext = TestContextDI.createIsolated();
-    await testContext.initialize();
+    testContainer = container.createChildContainer();
     
-    // Create mock NodeFactory
-    mockNodeFactory = {
-      createNode: vi.fn().mockImplementation((type, location) => ({
-        type,
-        ...(location && { location })
-      }))
-    };
+    // --- Mocks & Real Instances ---
+    mockNodeFactory = new NodeFactory(); 
+    mockVariableNodeFactory = new VariableNodeFactory(mockNodeFactory); 
+    mockResolutionClient = mock<IResolutionServiceClient>();
+    // mockResolutionClientFactory = mock<ResolutionServiceClientFactory>(); // OLD MOCK
+    // Configure factory mock to return the client mock directly
+    mockResolutionClientFactory = {
+        createClient: vi.fn().mockReturnValue(mockResolutionClient)
+    } as unknown as ResolutionServiceClientFactory;
+    // vi.spyOn(mockResolutionClientFactory, 'createClient').mockReturnValue(mockResolutionClient); // REMOVED SPY
     
-    // Create mock VariableNodeFactory
-    mockVariableNodeFactory = {
-      createVariableReferenceNode: vi.fn().mockImplementation((identifier, valueType, fields, format, location) => ({
-        type: 'VariableReference',
-        identifier,
-        valueType,
-        fields,
-        isVariableReference: true,
-        ...(format && { format }),
-        ...(location && { location })
-      })),
-      isVariableReferenceNode: vi.fn().mockImplementation((node) => {
-        return (
-          node?.type === 'VariableReference' &&
-          typeof node?.identifier === 'string' &&
-          typeof node?.valueType === 'string'
-        );
-      })
-    };
+    // --- Registration --- 
+    testContainer.registerInstance(NodeFactory, mockNodeFactory);
+    testContainer.registerInstance(VariableNodeFactory, mockVariableNodeFactory);
+    testContainer.registerInstance(ResolutionServiceClientFactory, mockResolutionClientFactory);
+    testContainer.registerInstance('DependencyContainer', testContainer);
     
-    // Register mock services in the container
-    testContext.registerMock('IResolutionService', mockResolutionService);
-    testContext.registerMock(NodeFactory, mockNodeFactory);
-    testContext.registerMock(VariableNodeFactory, mockVariableNodeFactory);
-    
-    // Resolve service from container
-    service = testContext.container.resolve(ParserService);
+    // Register the service under test
+    testContainer.register(ParserService, { useClass: ParserService });
+
+    // --- Resolve --- 
+    service = testContainer.resolve(ParserService);
   });
   
   afterEach(async () => {
-    await testContext?.cleanup();
+    testContainer?.dispose();
+    vi.clearAllMocks();
   });
 
   describe('parse', () => {
@@ -357,7 +340,7 @@ describe('ParserService', () => {
 
     // <<< ADD Test for @run with interpolation >>>
     it('should parse @run directive with interpolated values in brackets', async () => {
-      const service = testContext.container.resolve<ParserService>('IParserService');
+      const service = testContainer.resolve<ParserService>('IParserService');
       const content = '@run [echo {{greeting}}]'; // Minimal case
       let ast: MeldNode[] | undefined;
       let error: Error | undefined;

@@ -15,7 +15,7 @@ import { VariableType, type CommandVariable, type TextVariable, type JsonValue }
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { InterpreterTestFixture } from '@tests/utils/fixtures/InterpreterTestFixture.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { container, DependencyContainer } from 'tsyringe';
+import { container, type DependencyContainer } from 'tsyringe';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
@@ -28,7 +28,7 @@ import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { AbsolutePath, RelativePath, unsafeCreateAbsolutePath } from '@core/types/paths.js';
-import { ILogger } from '@core/utils/logger'; // Import ILogger
+import { ILogger } from '@core/utils/logger';
 
 // Define a minimal logger interface for testing
 interface ITestLogger {
@@ -51,12 +51,8 @@ const createMockHandler = (kind: string): IDirectiveHandler => ({
 });
 
 describe('InterpreterService Unit', () => {
-  // Remove TestContextDI
-  // let context: TestContextDI; 
-  let testContainer: DependencyContainer; // Add manual container
+  let testContainer: DependencyContainer;
   let service: InterpreterService;
-  // Keep mocks, but registration will be manual
-  // let mockDirectiveService: IDirectiveService; // Interpreter depends on the CLIENT factory, not the service directly
   let mockStateService: IStateService;
   let mockResolutionService: IResolutionService;
   let mockParserClient: IParserServiceClient;
@@ -64,15 +60,11 @@ describe('InterpreterService Unit', () => {
   let mockDirectiveClient: IDirectiveServiceClient;
   let mockDirectiveClientFactory: DirectiveServiceClientFactory;
   let mockPathService: IPathService;
-  // let mockDirectiveHandler: IDirectiveHandler; // Handlers are not direct dependencies
-  // let mockTransformationHandler: IDirectiveHandler;
-  // let mockTextHandler: IDirectiveHandler;
-  // let mockEmbedHandler: IDirectiveHandler;
   let mockLogger: ITestLogger;
-
 
   beforeEach(async () => {
     vi.resetAllMocks();
+    testContainer = container.createChildContainer();
 
     // --- Create Mocks ---
     mockLogger = { 
@@ -139,25 +131,19 @@ describe('InterpreterService Unit', () => {
     // vi.spyOn(mockParserClientFactory, 'createClient').mockReturnValue(mockParserClient);
 
     // --- Create Manual Container & Register Mocks ---
-    // context = TestContextDI.createIsolated(); // REMOVE
-    testContainer = container.createChildContainer();
-
-    // Register mocks with correct tokens
-    testContainer.registerInstance<ILogger>('ILogger', mockLogger); // Use ILogger token
+    testContainer.registerInstance<ILogger>('ILogger', mockLogger);
     testContainer.registerInstance<IResolutionService>('IResolutionService', mockResolutionService);
     testContainer.registerInstance<IPathService>('IPathService', mockPathService);
     testContainer.registerInstance<IStateService>('IStateService', mockStateService);
     testContainer.registerInstance<DirectiveServiceClientFactory>(DirectiveServiceClientFactory, mockDirectiveClientFactory);
     testContainer.registerInstance<ParserServiceClientFactory>(ParserServiceClientFactory, mockParserClientFactory);
     
-    // Register the container itself (needed by factories within the service if they use it)
     testContainer.registerInstance('DependencyContainer', testContainer); 
 
-    // Register the REAL service implementation
-    testContainer.register<IInterpreterService>(InterpreterService, { useClass: InterpreterService });
+    // --- Register the REAL service implementation ---
+    testContainer.register(InterpreterService, { useClass: InterpreterService });
 
     // --- Resolve Service from Manual Container ---
-    // service = context.resolveSync(InterpreterService); // REMOVE
     service = testContainer.resolve(InterpreterService);
 
     // --- Setup Default Mock Behaviors (on the mocks registered above) ---
@@ -178,8 +164,7 @@ describe('InterpreterService Unit', () => {
   });
 
   afterEach(async () => {
-    // await context?.cleanup(); // REMOVE
-    testContainer?.dispose(); // Dispose manual container
+    testContainer?.dispose();
     vi.clearAllMocks();
   });
 

@@ -30,50 +30,41 @@ import { VariableType } from '@core/types/variables.js';
 import { createLLMXML } from 'llmxml';
 import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference.js';
 import { outputLogger as logger } from '@core/utils/logger.js';
-import { 
-  MeldNode, 
-  TextNode, 
-  CodeFenceNode, 
-  DirectiveNode, 
-  Field 
-} from '@core/syntax/types/index.js';
+import { container, type DependencyContainer } from 'tsyringe';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
 
 describe('OutputService', () => {
-  let context: TestContextDI;
+  let testContainer: DependencyContainer;
   let service: OutputService;
   let state: DeepMockProxy<IStateService>;
   let resolutionService: DeepMockProxy<IResolutionService>;
   let mockVariableNodeFactory: DeepMockProxy<VariableNodeFactory>;
 
   beforeEach(async () => {
-    // Use TestContextDI for setup
-    context = TestContextDI.createIsolated();
+    testContainer = container.createChildContainer();
     
-    // Create standard mocks
     state = mockDeep<IStateService>();
     resolutionService = mockDeep<IResolutionService>();
     mockVariableNodeFactory = mockDeep<VariableNodeFactory>();
     
-    // Register mocks in the container
-    context.registerMock('IStateService', state);
-    context.registerMock('IResolutionService', resolutionService);
-    context.registerMock('VariableNodeFactory', mockVariableNodeFactory);
-    
-    // Mock default behaviors
+    testContainer.registerInstance<IStateService>('IStateService', state);
+    testContainer.registerInstance<IResolutionService>('IResolutionService', resolutionService);
+    testContainer.registerInstance(VariableNodeFactory, mockVariableNodeFactory);
+    testContainer.registerInstance('DependencyContainer', testContainer);
+
     vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
     vi.mocked(state.getTransformedNodes).mockReturnValue([]);
     vi.mocked(state.shouldTransform).mockReturnValue(true);
     
-    // Resolve the service instance from the container
-    await context.initialize(); 
-    service = await context.resolve(OutputService);
+    testContainer.register(OutputService, { useClass: OutputService });
+
+    service = testContainer.resolve(OutputService);
   });
 
   afterEach(async () => {
-    await context?.cleanup();
+    testContainer?.dispose();
     vi.restoreAllMocks();
   });
 
@@ -107,30 +98,24 @@ describe('OutputService', () => {
         createTextNode('Hello world\n', createLocation(1, 1))
       ];
 
-      // Mock state.getTransformedNodes to return our test nodes
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
       const output = await service.convert(nodes, state, 'markdown');
       expect(output).toBe('Hello world\n');
     });
 
-    // Added test to verify handling of pre-resolved content
     it('should output pre-resolved text nodes correctly', async () => {
-      // Simulate a node that ORIGINALLY was 'Hello {{user}}!' but was resolved by InterpreterService
       const preResolvedContent = 'Hello Alice!';
       const nodes: MeldNode[] = [
         createTextNode(preResolvedContent, createLocation(1, 1)) 
       ];
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
-      // No need to mock resolutionService for this node type
 
       const output = await service.convert(nodes, state, 'markdown');
-      // Expect the output service to use the content directly
       expect(output).toBe(preResolvedContent); 
     });
 
-    it.skip('should include state variables when requested', async () => { // <<< SKIP TEST
-      // Mock state variable getters
+    it.skip('should include state variables when requested', async () => {
       vi.mocked(state as any).getAllTextVars.mockReturnValue(new Map([['greeting', { name: 'greeting', type: VariableType.TEXT, value: 'hello' }]]));
       vi.mocked(state as any).getAllDataVars.mockReturnValue(new Map([['count', { name: 'count', type: VariableType.DATA, value: 42 }]]));
 
@@ -138,7 +123,6 @@ describe('OutputService', () => {
         createTextNode('Content', createLocation(1, 1))
       ];
 
-      // Mock transformed nodes
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
       const output = await service.convert(nodes, state, 'markdown', {
@@ -157,19 +141,16 @@ describe('OutputService', () => {
         createTextNode('\n  Hello  \n  World  \n', createLocation(1, 1))
       ];
 
-      // Mock transformed nodes
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
       const preserved = await service.convert(nodes, state, 'markdown', {
         preserveFormatting: true
       });
-      // The actual output doesn't preserve the trailing newline
       expect(preserved).toBe('\n  Hello  \n  World  \n');
 
       const cleaned = await service.convert(nodes, state, 'markdown', {
         preserveFormatting: false
       });
-      // With preserveFormatting: false, we still preserve the formatting in our simplified implementation
       expect(cleaned).toBe('\n  Hello  \n  World  \n');
     });
   });
@@ -180,7 +161,6 @@ describe('OutputService', () => {
         createTextNode('Hello world', createLocation(1, 1))
       ];
 
-      // Mock transformed nodes
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
       const output = await service.convert(nodes, state, 'xml');
@@ -193,7 +173,6 @@ describe('OutputService', () => {
         createCodeFenceNode(fenceContent, 'typescript', createLocation(1, 1))
       ];
 
-      // Mock transformed nodes
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
       const output = await service.convert(nodes, state, 'xml');
@@ -201,8 +180,7 @@ describe('OutputService', () => {
       expect(output).toContain('```typescript');
     });
 
-    it.skip('should preserve state variables when requested', async () => { // <<< SKIP TEST
-      // Mock state variable getters
+    it.skip('should preserve state variables when requested', async () => {
       vi.mocked(state as any).getAllTextVars.mockReturnValue(new Map([['greeting', { name: 'greeting', type: VariableType.TEXT, value: 'hello' }]]));
       vi.mocked(state as any).getAllDataVars.mockReturnValue(new Map([['count', { name: 'count', type: VariableType.DATA, value: 42 }]]));
 
@@ -210,7 +188,6 @@ describe('OutputService', () => {
         createTextNode('Content', createLocation(1, 1))
       ];
 
-      // Mock transformed nodes
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
       const output = await service.convert(nodes, state, 'xml', {
@@ -225,13 +202,8 @@ describe('OutputService', () => {
     });
   });
 
-  // TODO(transformation-removal): Remove or refactor transformation-dependent tests
-  // These tests were removed as part of the transformation mode removal.
-  // New tests should be added to verify the default behavior without transformation mode.
-  
   describe('Direct Container Resolution and Field Access', () => {
     it('should handle field access with direct field access fallback', async () => {
-      // State setup remains the same
       const mockState = mockDeep<IStateService>();
       vi.mocked(mockState.getVariable).mockImplementation((name, type?) => {
         if (name === 'user' && (!type || type === VariableType.DATA)) {
@@ -240,40 +212,33 @@ describe('OutputService', () => {
         return undefined;
       });
 
-      // Provide TextNode with PRE-RESOLVED content
       const textNode = createTextNode(
         'User: Claude, Role: AI Assistant, Capability: 10',
         createLocation(1, 1)
       );
       
-      // Mock transformed nodes setup
       vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
       vi.mocked(state.getTransformedNodes).mockReturnValue([textNode]);
       vi.mocked(mockState.isTransformationEnabled).mockReturnValue(true);
       vi.mocked(mockState.getTransformedNodes).mockReturnValue([textNode]);
       
-      // Call convert on the service resolved from the container
       const output = await service.convert([textNode], mockState, 'markdown'); 
       
-      // Clean the output for comparison
       const cleanOutput = output.trim().replace(/\s+/g, ' ');
       
-      // Assertions check against the pre-resolved content
       expect(cleanOutput).toContain('User: Claude');
       expect(cleanOutput).toContain('Role: AI Assistant');
       expect(cleanOutput).toContain('Capability: 10');
     });
     
     it('should gracefully handle errors in field access', async () => {
-      // Setup mocks within the DI context
       const mockStateForError = mockDeep<IStateService>();
       vi.mocked(mockStateForError.getVariable).mockImplementation((name, type?) => {
-        if (name === 'user' && (!type || type === VariableType.DATA)) return null; // Causes error
+        if (name === 'user' && (!type || type === VariableType.DATA)) return undefined;
         return undefined;
       });
       vi.mocked(mockStateForError.isTransformationEnabled).mockReturnValue(true);
       
-      // Mock resolutionService (in the container) to throw
       resolutionService.resolveText.mockRejectedValue(new Error('Resolution error'));
       
       const textNode = createTextNode(
@@ -282,60 +247,42 @@ describe('OutputService', () => {
       );
       vi.mocked(mockStateForError.getTransformedNodes).mockReturnValue([textNode]);
 
-      // Call convert using the service from the container, passing the specific error state
       const output = await service.convert([textNode], mockStateForError, 'markdown');
       
-      // Verify basic functionality still works
       expect(output).toContain('User:'); 
     });
   
     it('should not duplicate code fence markers in markdown output (regression #10.2.4)', async () => {
-      // This tests the fix for the codefence duplication bug in version 10.2.4
-      // Arrange: Set up a code fence node with content that already includes the fence markers
       const content = '```javascript\nconst name = "Claude";\nconst greet = () => `Hello, ${name}`;\n```';
       const nodes: MeldNode[] = [
         createCodeFenceNode(content, 'javascript', createLocation(1, 1))
       ];
 
-      // Mock transformed nodes
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
-      // Act: Convert to markdown
       const output = await service.convert(nodes, state, 'markdown');
 
-      // Assert: Check that the output doesn't have duplicated fence markers
-      // The output should contain the content exactly as-is, without adding extra ```
       expect(output).toContain(content);
-      // Make sure it contains the code inside
       expect(output).toContain('const name = "Claude";');
-      // Make sure it has exactly one opening and one closing fence marker
       const fenceMarkerCount = (output.match(/```/g) || []).length;
-      expect(fenceMarkerCount).toBe(2); // Opening and closing, not 4 (which would indicate duplication)
+      expect(fenceMarkerCount).toBe(2);
     });
 
     it('should not duplicate code fence markers in XML output (regression #10.2.4)', async () => {
-      // This tests the fix for the codefence duplication bug in version 10.2.4
-      // Arrange: Set up a code fence node with content that already includes the fence markers
       const content = '```typescript\ninterface User { name: string; age: number; }\n```';
       const nodes: MeldNode[] = [
         createCodeFenceNode(content, 'typescript', createLocation(1, 1))
       ];
 
-      // Mock transformed nodes
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
-      // Act: Convert to XML
       const output = await service.convert(nodes, state, 'xml');
 
-      // Assert: Check that the output doesn't have duplicated fence markers
-      // The output should contain the content exactly as-is, without adding extra ```
       expect(output).toContain('interface User');
-      // Make sure it contains the code inside
       expect(output).toContain('interface User');
     });
 
     it('should handle a document with mixed content and code fences (regression #10.2.4)', async () => {
-      // This tests that code fence markers are not duplicated in a mixed document
       const codeFenceContent = '```javascript\nconst greeting = () => "Hello";\n```';
       const nodes: MeldNode[] = [
         createTextNode('Text before code\n', createLocation(1, 1)),
@@ -343,29 +290,23 @@ describe('OutputService', () => {
         createTextNode('\nText after code', createLocation(4, 1))
       ];
 
-      // Mock transformed nodes
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
-      // Act: Convert to markdown
       const output = await service.convert(nodes, state, 'markdown');
 
-      // Assert: Check the output structure
       expect(output).toContain('Text before code');
       expect(output).toContain(codeFenceContent);
       expect(output).toContain('Text after code');
       
-      // Check for no duplication of fence markers
       const fenceMarkerCount = (output.match(/```/g) || []).length;
-      expect(fenceMarkerCount).toBe(2); // Only the ones in the original content
+      expect(fenceMarkerCount).toBe(2);
     });
   });
 
   describe('Directive boundary handling', () => {
     beforeEach(() => {
-      // Initialize with standard mocks
       service = new OutputService(state, resolutionService, undefined, mockVariableNodeFactory);
       
-      // Default state behavior - always return true for isTransformationEnabled
       vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
       vi.mocked(state.getVariable).mockImplementation((name, type?) => {
         return undefined;
@@ -373,174 +314,129 @@ describe('OutputService', () => {
     });
 
     it('should maintain proper spacing at directive-to-text boundary', async () => {
-      // Mock a directive followed by a block-level text node
       const nodes: MeldNode[] = [
         createDirectiveNode('text', [{ name: 'name', value: 'value' }], createLocation(1, 1)),
         createTextNode('This is a block-level text.\nIt has multiple lines.', createLocation(2, 1))
       ];
 
-      // Setup state mock - always in transformation mode
       vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
       
-      // Process the nodes
       const result = await service.convert(nodes, state, 'markdown');
       
-      // Verify proper spacing between directive and text
-      // The directive should not output content (it's a definition)
-      // The text should be properly formatted
       expect(result).toContain('This is a block-level text.');
       expect(result).toContain('It has multiple lines.');
       
-      // Check for improper double newlines or missing newlines
       expect(result).not.toContain('\n\n\n');
     });
 
     it('should maintain proper spacing at text-to-directive boundary', async () => {
-      // Mock a text node followed by a directive
       const nodes: MeldNode[] = [
         createTextNode('This is inline text.', createLocation(1, 1)),
         createDirectiveNode('text', [{ name: 'name', value: 'value' }], createLocation(2, 1))
       ];
 
-      // Setup state mock - always in transformation mode
       vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
       
-      // Process the nodes
       const result = await service.convert(nodes, state, 'markdown');
       
-      // Verify proper spacing - text followed by directive
       expect(result).toContain('This is inline text.');
       
-      // Check for proper spacing - no excessive newlines
       expect(result).not.toContain('\n\n\n');
     });
 
     it('should handle adjacent directives correctly', async () => {
-      // Mock multiple adjacent directives
       const nodes: MeldNode[] = [
         createDirectiveNode('text', [{ name: 'var1', value: 'value1' }], createLocation(1, 1)),
         createDirectiveNode('text', [{ name: 'var2', value: 'value2' }], createLocation(2, 1)),
         createDirectiveNode('text', [{ name: 'var3', value: 'value3' }], createLocation(3, 1))
       ];
 
-      // Setup state mock - always in transformation mode
       vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
       
-      // Process the nodes
       const result = await service.convert(nodes, state, 'markdown');
       
-      // Adjacent directives should have proper spacing
-      // In normal mode they don't emit content
       expect(result).not.toContain('\n\n\n');
     });
 
     it('should respect output-literal mode at directive boundaries', async () => {
-      // Simulate the node list *after* interpretation: 
-      // Original: [ Text{\n}, Directive{@text greeting}, Text{{greeting}} World!} ]
-      // Expected Transformed: [ Text{\n}, Text{Hello World!} ] (Interpreter handles resolution and @text removal)
       const transformedNodes: MeldNode[] = [
-        createTextNode('\n', createLocation(1, 1)), // Keep leading newline if present
-        // NOTE: The original @text directive node is NOT included here, 
-        // as the InterpreterService is responsible for processing it.
-        // This TextNode represents the resolved content originally from '{{greeting}} World!'
+        createTextNode('\n', createLocation(1, 1)),
         createTextNode('Hello World!', createLocation(2, 1))
       ];
 
-      // Setup minimal state mock - only need isTransformationEnabled for this path
       vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
-      // No need to mock getTransformedNodes, as convert receives the list directly now.
-      // No need to mock getVariable, as OutputService shouldn't resolve variables.
+      vi.mocked(state.getTransformedNodes).mockReturnValue(transformedNodes);
       
-      // Process the SIMULATED transformed nodes
       const result = await service.convert(transformedNodes, state, 'markdown');
       
-      // Assert the output is the concatenation of the TextNode content
       expect(result).toBe('\nHello World!');
     });
   });
 
   describe('Prettier Integration', () => {
     it('should call formatWithPrettier when pretty option is true', async () => {
-      // Create simple nodes
       const nodes = [
         createTextNode('# Simple content', createLocation(1, 1))
       ];
       
-      // Set up mocks
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
       vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
       
-      // Create a spy on the formatWithPrettier import
       const prettierUtils = await import('@core/utils/prettierUtils.js');
       const formatSpy = vi.spyOn(prettierUtils, 'formatWithPrettier');
       formatSpy.mockResolvedValue('# Formatted content');
       
-      // Call with pretty option
       await service.convert(nodes, state, 'markdown', {
         pretty: true
       });
       
-      // Verify the spy was called
       expect(formatSpy).toHaveBeenCalled();
       expect(formatSpy).toHaveBeenCalledWith(expect.any(String), 'markdown');
       
-      // Clean up the spy
       formatSpy.mockRestore();
     });
     
     it('should use the correct parser for XML format', async () => {
-      // Create simple XML nodes
       const nodes = [
         createTextNode('<tag>content</tag>', createLocation(1, 1))
       ];
       
-      // Set up mocks
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
       vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
       
-      // Create a spy on the formatWithPrettier import
       const prettierUtils = await import('@core/utils/prettierUtils.js');
       const formatSpy = vi.spyOn(prettierUtils, 'formatWithPrettier');
       formatSpy.mockResolvedValue('<tag>\n  content\n</tag>');
       
-      // Call with pretty option and XML format
       await service.convert(nodes, state, 'xml', {
         pretty: true
       });
       
-      // Verify the spy was called with HTML parser for XML content
       expect(formatSpy).toHaveBeenCalledWith(expect.any(String), 'html');
       
-      // Clean up the spy
       formatSpy.mockRestore();
     });
     
     it('should not call formatWithPrettier when pretty option is false', async () => {
-      // Create simple nodes
       const nodes = [
         createTextNode('# Simple content', createLocation(1, 1))
       ];
       
-      // Set up mocks
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
       vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
       
-      // Create a spy on the formatWithPrettier import
       const prettierUtils = await import('@core/utils/prettierUtils.js');
       const formatSpy = vi.spyOn(prettierUtils, 'formatWithPrettier');
       
-      // Call without pretty option
       await service.convert(nodes, state, 'markdown', {
         pretty: false
       });
       
-      // Verify the spy was not called
       expect(formatSpy).not.toHaveBeenCalled();
       
-      // Clean up the spy
       formatSpy.mockRestore();
     });
   });
