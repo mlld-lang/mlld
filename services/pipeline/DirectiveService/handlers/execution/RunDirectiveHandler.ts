@@ -72,6 +72,9 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       node: node, 
       context: { currentFilePath: currentFilePath ?? undefined } 
     };
+    
+    // <<< Declare tempFilePath *outside* the try block >>>
+    let tempFilePath: string | undefined;
 
     try {
       if (!node.directive || node.directive.kind !== 'run') {
@@ -89,7 +92,6 @@ export class RunDirectiveHandler implements IDirectiveHandler {
 
       let commandToExecute: string;
       let commandArgs: string[] = [];
-      let tempFilePath: string | undefined;
       const execOptions = { cwd: context.executionContext?.cwd || this.fileSystemService.getCwd() };
 
       // --- Resolution Block --- 
@@ -119,6 +121,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
             const scriptContent = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
             process.stdout.write(`DEBUG: [RunHandler runCode] AFTER resolveNodes. Result: '${scriptContent}'\n`);
               if (language) {
+              // <<< Assign to outer tempFilePath >>>
               tempFilePath = await this.createTempScriptFile(scriptContent, language);
               commandToExecute = `${language} ${this.escapePath(tempFilePath)}`;
               } else {
@@ -249,6 +252,15 @@ export class RunDirectiveHandler implements IDirectiveHandler {
          }
       }
       // Fallback for unexpected errors
+      // Ensure cleanup happens even if unexpected errors occur before the main try block completes
+      if (tempFilePath) { // Check again in case error happened before finally
+        try {
+          await this.fileSystemService.deleteFile(tempFilePath);
+          logger.debug('Deleted temporary script file during error handling', { path: tempFilePath });
+        } catch (cleanupError) {
+          logger.warn('Failed to delete temporary script file during error handling', { path: tempFilePath, error: cleanupError });
+        }
+      }
       const cause = error instanceof Error ? error : new Error(String(error));
       const details = { ...baseErrorDetails, cause };
       logger.error(`Unexpected error executing run directive: ${cause.message}`, { details });
@@ -258,6 +270,17 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         DirectiveErrorCode.EXECUTION_FAILED,
         details
       );
+    } finally {
+      // <<< ADD TEMP FILE CLEANUP HERE >>>
+      if (tempFilePath) {
+        try {
+          // Use await because deleteFile is likely async
+          await this.fileSystemService.deleteFile(tempFilePath);
+          logger.debug('Deleted temporary script file in finally block', { path: tempFilePath });
+        } catch (cleanupError) {
+          logger.warn('Failed to delete temporary script file in finally block', { path: tempFilePath, error: cleanupError });
+        }
+      }
     }
   }
   

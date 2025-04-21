@@ -255,10 +255,10 @@ describe('DirectiveService', () => {
       it('should route to text handler and update state', async () => {
         const directiveNode = createTextDirective('greeting', 'Hello Directive');
         const currentFilePath = 'test.meld';
+        const expectedResolvedValue = 'ResolvedContextValue_Global'; // From global mock setup
         
         // Use mocks configured in beforeEach
         vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue(currentFilePath);
-        vi.spyOn(mockStateService, 'clone').mockImplementation(() => mockStateService);
         vi.spyOn(mockValidationService, 'validate').mockImplementation(vi.fn());
 
         const processingContext: DirectiveProcessingContext = {
@@ -271,13 +271,13 @@ describe('DirectiveService', () => {
         const result = await service.handleDirective(directiveNode, processingContext);
 
         expect(mockValidationService.validate).toHaveBeenCalledWith(directiveNode);
-        // Assert that the setTextVar mock was called with the correct arguments, including metadata
-        expect(mockStateService.setTextVar).toHaveBeenCalledWith('greeting', 'ResolvedContextValue_Global', undefined); // Expect 3 args now
-        expect(result).toBeDefined(); // DirectiveResult should be returned
-        // We now expect the handler to return a DirectiveResult, not the state itself.
-        // Check the stateChanges within the result
+        expect(result).toBeDefined(); 
+        expect(result.stateChanges).toBeDefined();
+        expect(result.stateChanges?.variables).toBeDefined();
         expect(result.stateChanges?.variables?.greeting).toBeDefined();
-        expect(result.stateChanges?.variables?.greeting?.value).toBe('ResolvedContextValue_Global');
+        expect(result.stateChanges?.variables?.greeting?.type).toBe(VariableType.TEXT);
+        expect(result.stateChanges?.variables?.greeting?.value).toBe(expectedResolvedValue);
+        expect(result.replacement).toBeUndefined(); // Expect no replacement node from this mock
       });
 
       it('should use resolution service for interpolated text value', async () => {

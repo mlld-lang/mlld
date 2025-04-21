@@ -230,6 +230,7 @@ describe('DirectiveService Integration Tests', () => {
     expect(result.stateChanges?.variables?.dynamicConfig).toBeDefined();
     // If keys ARE NOT interpolated by the data handler/resolver, this should pass.
     // If keys ARE interpolated, the expected result would need to change.
-    expect(result.stateChanges?.variables?.dynamicConfig?.value).toEqual({ user: 'active' }); // EXPECTATION UPDATED ASSUMING KEY IS RESOLVED
+    // The key 'dynamicKey' should resolve to 'user' based on state.
+    expect(result.stateChanges?.variables?.dynamicConfig?.value).toEqual({ user: 'active' }); 
   });
 }); 

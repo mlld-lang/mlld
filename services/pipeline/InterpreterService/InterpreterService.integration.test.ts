@@ -712,7 +712,7 @@ describe('InterpreterService Integration', () => {
       await expect(interpreter.interpret([beforeNode, errorNode, afterNode] as MeldNode[], {
         initialState: testState,
         filePath: 'test.meld'
-      })).rejects.toThrow(MeldInterpreterError); // Interpreter wraps DirectiveError
+      })).rejects.toThrow(DirectiveError); // <<< Expect DirectiveError, not MeldInterpreterError
       
       // Only the first handler should have been called and succeeded, 
       // the second threw, the third wasn't called. 

@@ -264,13 +264,14 @@ export class InterpreterService implements IInterpreterService {
    * In strict mode, all errors throw
    * In permissive mode, recoverable errors become warnings
    */
-  private handleError(error: Error, options: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> & Pick<InterpreterOptions, 'errorHandler'>): void {
+  private handleError(error: Error, options: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> & Pick<InterpreterOptions, 'errorHandler'>, node?: MeldNode): void {
+    const errorLocation = node ? convertLocation(node.location) : undefined;
     const meldError = error instanceof MeldError 
       ? error 
       : new MeldInterpreterError(
           `Interpretation failed: ${error.message}`,
           'interpretation',
-          undefined,
+          errorLocation,
           { severity: ErrorSeverity.Recoverable, cause: error }
         );
     
@@ -481,7 +482,7 @@ export class InterpreterService implements IInterpreterService {
           lastGoodState = currentState.clone() as IStateService; 
         } catch (error) {
           try {
-            this.handleError(error instanceof Error ? error : new Error(String(error)), opts);
+            this.handleError(error instanceof Error ? error : new Error(String(error)), opts, node);
             // Rollback to the last known good state *before* the failed node processing
             currentState = lastGoodState; // No clone needed here, revert to the state before the try block for this node
           } catch (fatalError) {
