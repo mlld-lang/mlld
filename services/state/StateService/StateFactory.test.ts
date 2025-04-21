@@ -5,6 +5,7 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { TransformationOptions } from '@core/types/state.js';
 import { createTextVariable } from '@core/types';
+import { mock } from 'vitest-mock-extended';
 
 // Define the default options locally for the test file
 const DEFAULT_TRANSFORMATION_OPTIONS_TEST: TransformationOptions = {
@@ -91,18 +92,28 @@ describe('StateFactory', () => {
     });
 
     it('should create state with options', () => {
-      const mockParentNode = factory.createState(); // Create a node to be wrapped
-      const mockParentService = createMockParentService(mockParentNode);
+      const mockParentService = mock<IStateService>();
+      const mockParentNode = mock<StateNode>({ // Define properties directly
+          transformationOptions: { enabled: true, preserveOriginal: true, transformNested: true }
+      }); 
+      // vi.spyOn(mockParentService, 'getInternalStateNode').mockReturnValue(mockParentNode); // REMOVED
+      // vi.spyOn(mockParentNode, 'transformationOptions', 'get').mockReturnValue({ enabled: true, preserveOriginal: true, transformNested: true }); // REMOVED - Set directly
+      // vi.spyOn(mockParentService, 'getTransformationOptions').mockReturnValue({ enabled: true, preserveOriginal: true, transformNested: true }); // REMOVED
+      
+      // Simulate getting the node from the service mock
+      const parentNodeForFactory = mockParentNode; // Use the mocked node directly
 
       const state = factory.createState({
-        parentServiceRef: mockParentService,
+        parentState: parentNodeForFactory, // Pass the node
         filePath: '/test/file.md',
         source: 'test'
       });
 
-      expect(state.parentServiceRef).toBe(mockParentService);
+      // expect(state.parentServiceRef).toBe(mockParentService); // REMOVED
       expect(state.filePath).toBe('/test/file.md');
-      expect(state.transformationOptions).toEqual(mockParentService.getTransformationOptions());
+      // expect(state.transformationOptions).toEqual({ enabled: true, preserveOriginal: true, transformNested: true }); // CHANGE THIS
+      expect(state.transformationOptions).toEqual(parentNodeForFactory.transformationOptions); // Compare to the source object
+      expect(state.source).toBe('test');
     });
 
     // This test is no longer valid as createState does not handle inheritance directly.
@@ -144,12 +155,22 @@ describe('StateFactory', () => {
 
   describe('createChildState', () => {
     it('should create child state with parent reference', () => {
-      const parentNode = factory.createState();
-      const mockParentService = createMockParentService(parentNode);
-      const child = factory.createChildState(mockParentService); // Pass mock IStateService instance
+      const mockParentService = mock<IStateService>();
+      const mockParentNode = mock<StateNode>({ // Define properties directly
+        transformationOptions: { enabled: true, preserveOriginal: true, transformNested: true }
+      }); 
+      // vi.spyOn(mockParentService, 'getInternalStateNode').mockReturnValue(mockParentNode); // REMOVED
+      // vi.spyOn(mockParentNode, 'transformationOptions', 'get').mockReturnValue({ enabled: true, preserveOriginal: true, transformNested: true }); // REMOVED
+      
+      // Simulate getting the node from the service mock
+      const parentNodeForFactory = mockParentNode; // Use the mocked node directly
 
-      expect(child.parentServiceRef).toBe(mockParentService);
-      expect(mockParentService.getTransformationOptions).toHaveBeenCalled();
+      const child = factory.createChildState(parentNodeForFactory); // Pass the node
+
+      // Check if the transformation options were copied from the parent *node*
+      // expect(child.transformationOptions).toEqual({ enabled: true, preserveOriginal: true, transformNested: true }); // CHANGE THIS
+      expect(child.transformationOptions).toEqual(parentNodeForFactory.transformationOptions); // Compare to the source object
+      // expect(mockParentService.getTransformationOptions).toHaveBeenCalled(); // REMOVED
     });
 
     // This test might need adjustment. createChildState only sets up the parent link.
@@ -173,9 +194,38 @@ describe('StateFactory', () => {
       expect(childNode.variables.text.size).toBe(0); 
       expect(childNode.variables.data.size).toBe(0);
       expect(childNode.variables.path.size).toBe(0);
-      expect(childNode.parentServiceRef).toBe(mockParentService);
+      // expect(child.parentServiceRef).toBe(mockParentService); // REMOVED
       
       // Assertions checking direct variable presence in the child node are removed.
+      // expect(child.variables.text.get('text')).toBe('parent');
+      // expect(child.variables.data.get('data')).toEqual({ value: 'parent' });
+      // expect(child.variables.path.get('path')).toBe('/parent');
+    });
+
+    it('should inherit variables from parent state node', () => {
+      // Create parent state node with some values
+      const parentBase = factory.createState();
+      const parentNode = factory.updateState(parentBase, {
+        variables: {
+          text: new Map([['text', createTextVariable('text', 'parent', {})]]),
+          data: new Map([['data', { value: { value: 'parent' } } as any]]),
+          path: new Map([['path', { value: '/parent' } as any]])
+        }
+      });
+      // No need for mock service here, just pass the parent node
+      // const mockParentService = createMockParentService(parentNode);
+
+      // Create child state linked to the mock parent service
+      // const childNode = factory.createChildState(mockParentService); // Pass mock IStateService instance
+      const childNode = factory.createChildState(parentNode); // Pass parent node
+
+      // Verify child node itself is empty
+      expect(childNode.variables.text.size).toBe(0); 
+      expect(childNode.variables.data.size).toBe(0);
+      expect(childNode.variables.path.size).toBe(0);
+      
+      // Assertions checking direct variable presence in the child node are removed.
+      // These were testing StateService logic, not factory logic.
       // expect(child.variables.text.get('text')).toBe('parent');
       // expect(child.variables.data.get('data')).toEqual({ value: 'parent' });
       // expect(child.variables.path.get('path')).toBe('/parent');

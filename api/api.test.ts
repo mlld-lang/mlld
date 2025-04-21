@@ -321,7 +321,7 @@ describe('SDK Integration Tests', () => {
     });
 
     it('should preserve state and content in transformation mode', async () => {
-      const content = '\n@text greeting = "Hello"\n@text name = "World"\n@run echo {{greeting}}, {{name}}!';
+      const content = '\n@text greeting = "Hello"\n@text name = "World"\n@run [echo {{greeting}}, {{name}}!]';
       let error: Error | undefined;
       let result: string | undefined;
       try {
@@ -439,7 +439,7 @@ More text`;
     });
 
     it('should preserve state and content in transformation mode', async () => {
-      const content = '\n@text greeting = "Hello"\n@text name = "World"\n@run echo {{greeting}}, {{name}}!';
+      const content = '\n@text greeting = "Hello"\n@text name = "World"\n@run [echo {{greeting}}, {{name}}!]';
       let error: Error | undefined;
       let result: string | undefined;
       try {

@@ -42,7 +42,6 @@ export class StateFactory implements IStateFactory {
       nodes: [],
       transformedNodes: undefined,
       filePath: options?.filePath,
-      parentServiceRef: undefined,
       transformationOptions: parentTransformationOptions ?? DEFAULT_TRANSFORMATION_OPTIONS,
       createdAt: now,
       modifiedAt: now,
@@ -114,7 +113,6 @@ export class StateFactory implements IStateFactory {
           : parent.transformedNodes ? [...parent.transformedNodes] : undefined,
       filePath: child.filePath ?? parent.filePath,
       stateId: parent.stateId,
-      parentServiceRef: parent.parentServiceRef,
       transformationOptions: parent.transformationOptions,
       createdAt: parent.createdAt,
       modifiedAt: now,
@@ -146,45 +144,30 @@ export class StateFactory implements IStateFactory {
     const existingParentRef = state.parentServiceRef;
 
     // --- Corrected Map Merging Logic --- 
-    // 1. Start with copies of the original maps
-    const newTextMap = new Map(state.variables.text);
-    const newDataMap = new Map(state.variables.data);
-    const newPathMap = new Map(state.variables.path);
-    const newCommandsMap = new Map(state.commands);
-
-    // 2. Apply updates from the 'updates' object to the new maps
-    if (updates.variables) {
-        if (updates.variables.text) {
-            for (const [key, value] of updates.variables.text.entries()) {
-                newTextMap.set(key, value);
-            }
-        }
-        if (updates.variables.data) {
-            for (const [key, value] of updates.variables.data.entries()) {
-                newDataMap.set(key, value);
-            }
-        }
-        if (updates.variables.path) {
-            for (const [key, value] of updates.variables.path.entries()) {
-                newPathMap.set(key, value);
-            }
-        }
-    }
-    if (updates.commands) {
-        for (const [key, value] of updates.commands.entries()) {
-            newCommandsMap.set(key, value);
-        }
-    }
-    // --- End Corrected Logic ---
+    // NOTE: [StateFactory Map Handling - 2024-08-XX]
+    // This logic was corrected to directly use the maps provided in the 'updates' object
+    // (updates.variables.text, updates.commands, etc.) when they exist. The previous logic
+    // copied the original state maps and only applied .set() operations from the update maps.
+    // This meant deletions performed *before* calling updateState (like in StateService.removeVariable)
+    // were not persisted, as the deleted key was never iterated over in the .set() loop.
+    // This fix ensures that if an entirely new map (with deletions) is passed in `updates`,
+    // that new map is used for the resulting state node.
+    // This change might be related to fixes for previous API integration test failures.
+    
+    // Determine the final maps to use
+    const finalTextMap = updates.variables?.text ?? new Map(state.variables.text);
+    const finalDataMap = updates.variables?.data ?? new Map(state.variables.data);
+    const finalPathMap = updates.variables?.path ?? new Map(state.variables.path);
+    const finalCommandsMap = updates.commands ?? new Map(state.commands);
 
     const updated: StateNode = {
       stateId: state.stateId,
       variables: {
-        text: newTextMap, // Use the merged maps
-        data: newDataMap,
-        path: newPathMap
+        text: finalTextMap, // Use the final maps
+        data: finalDataMap,
+        path: finalPathMap
       },
-      commands: newCommandsMap, // Use the merged map
+      commands: finalCommandsMap, // Use the final map
       // Carry over other properties, applying updates if they exist
       imports: updates.imports ? new Set(updates.imports) : new Set(state.imports), 
       nodes: updates.nodes ? [...updates.nodes] : [...state.nodes], 
@@ -192,7 +175,6 @@ export class StateFactory implements IStateFactory {
                           ? [...updates.transformedNodes] 
                           : state.transformedNodes ? [...state.transformedNodes] : undefined, 
       filePath: updates.filePath ?? state.filePath,
-      parentServiceRef: existingParentRef, // Preserve original parent ref
       transformationOptions: updates.transformationOptions ?? state.transformationOptions,
       createdAt: state.createdAt,
       modifiedAt: now,
@@ -223,8 +205,6 @@ export class StateFactory implements IStateFactory {
     const approxBeforeCommandSize = JSON.stringify(originalState.commands).length;
     process.stdout.write(`DEBUG [StateFactory.createClonedState ENTRY] Source: ${source}, OriginalStateID: ${originalState.stateId}, ApproxSizes: Text=${approxBeforeTextSize}, Data=${approxBeforeDataSize}, Path=${approxBeforePathSize}, Cmd=${approxBeforeCommandSize}\n`);
 
-    const parentRef = originalState.parentServiceRef;
-
     const clonedVariables = {
         text: cloneDeep(originalState.variables.text),
         data: cloneDeep(originalState.variables.data),
@@ -240,7 +220,6 @@ export class StateFactory implements IStateFactory {
       nodes: [...originalState.nodes],
       transformedNodes: originalState.transformedNodes ? [...originalState.transformedNodes] : undefined,
       filePath: options?.filePath ?? originalState.filePath,
-      parentServiceRef: parentRef,
       transformationOptions: originalState.transformationOptions,
       createdAt: now,
       modifiedAt: now,

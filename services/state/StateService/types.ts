@@ -33,7 +33,6 @@ export interface StateNode {
   readonly nodes: MeldNode[];
   readonly transformedNodes?: MeldNode[];
   readonly imports: Set<string>;
-  readonly parentServiceRef?: IStateService;
   readonly transformationOptions: TransformationOptions;
   readonly createdAt: number;
   readonly modifiedAt: number;

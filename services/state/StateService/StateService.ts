@@ -58,6 +58,7 @@ export class StateService implements IStateService {
   private _isImmutable: boolean = false;
   private eventService?: IStateEventService;
   private trackingService?: IStateTrackingService;
+  private parentService?: IStateService;
   
   // Factory pattern properties
   private trackingServiceClientFactory?: StateTrackingServiceClientFactory;
@@ -81,6 +82,7 @@ export class StateService implements IStateService {
     if (stateFactory) {
       this.stateFactory = stateFactory;
       this.eventService = eventService;
+      this.parentService = parentState;
       
       // Initialize tracking client factory
       this.trackingServiceClientFactory = trackingServiceClientFactory;
@@ -89,7 +91,8 @@ export class StateService implements IStateService {
         this.initializeTrackingClient();
       }
       
-      this.initializeState(parentState);
+      // Initialize state with parent if provided
+      this.initializeState(this.parentService);
     } else {
       // Fallback for non-DI initialization
       logger.warn('StateService initialized without factory in DI-only mode');
@@ -105,6 +108,7 @@ export class StateService implements IStateService {
         (eventService && this.isStateService(eventService) ? 
           eventService : undefined);
       
+      this.parentService = actualParentState;
       this.initializeState(actualParentState);
     }
   }
@@ -173,7 +177,6 @@ export class StateService implements IStateService {
     const parentNode = parentService?.getInternalStateNode(); 
     this.currentState = this.stateFactory.createState({
       source: 'new',
-      parentState: parentNode
     });
     
     // Register state with tracking service if available
@@ -321,7 +324,7 @@ export class StateService implements IStateService {
     return foundVariable; 
   }
 
-  async setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<IStateService> {
+  async setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<void> {
     this.checkMutable();
     const variable = createTextVariable(name, value, {
       origin: VariableOrigin.DIRECT_DEFINITION,
@@ -335,7 +338,6 @@ export class StateService implements IStateService {
         text
       }
     }, `setTextVar:${name}`);
-    return this;
   }
 
   getAllTextVars(): Map<string, TextVariable> {
@@ -351,7 +353,7 @@ export class StateService implements IStateService {
     return this.currentState.variables.data.get(name);
   }
 
-  async setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): Promise<IStateService> {
+  async setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): Promise<void> {
     this.checkMutable();
     const variable = createDataVariable(name, value, {
       origin: VariableOrigin.DIRECT_DEFINITION,
@@ -365,7 +367,6 @@ export class StateService implements IStateService {
         data
       }
     }, `setDataVar:${name}`);
-    return this;
   }
 
   getAllDataVars(): Map<string, DataVariable> {
@@ -381,7 +382,7 @@ export class StateService implements IStateService {
     return this.currentState.variables.path.get(name);
   }
 
-  async setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): Promise<IStateService> {
+  async setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): Promise<void> {
     this.checkMutable();
     const variable = createPathVariable(name, value, { 
       origin: VariableOrigin.DIRECT_DEFINITION,
@@ -395,7 +396,6 @@ export class StateService implements IStateService {
         path
       }
     }, `setPathVar:${name}`);
-    return this;
   }
 
   getAllPathVars(): Map<string, IPathVariable> {
@@ -407,7 +407,7 @@ export class StateService implements IStateService {
     return this.currentState.commands.get(name);
   }
 
-  async setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<IStateService> {
+  async setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<void> {
     this.checkMutable();
     const variable = createCommandVariable(name, value, {
         origin: VariableOrigin.DIRECT_DEFINITION,
@@ -416,7 +416,6 @@ export class StateService implements IStateService {
     const commands = new Map(this.currentState.commands);
     commands.set(name, variable);
     await this.updateState({ commands }, `setCommandVar:${name}`);
-    return this;
   }
 
   getAllCommands(): Map<string, CommandVariable> {
@@ -474,17 +473,16 @@ export class StateService implements IStateService {
     }
   }
 
-  async setTransformedNodes(nodes: MeldNode[]): Promise<IStateService> {
+  async setTransformedNodes(nodes: MeldNode[]): Promise<void> {
     this.checkMutable();
     if (this.isTransformationEnabled()) {
       await this.updateState({ transformedNodes: [...nodes] }, 'setTransformedNodes');
     } else {
       logger.warn('Attempted to set transformed nodes while transformation is disabled.');
     }
-    return this;
   }
 
-  async addNode(node: MeldNode): Promise<IStateService> {
+  async addNode(node: MeldNode): Promise<void> {
     this.checkMutable();
     const nodeClone = cloneDeep(node);
     const nodes = [...this.currentState.nodes, nodeClone];
@@ -496,14 +494,13 @@ export class StateService implements IStateService {
     }
 
     await this.updateState({ nodes, ...transformedNodesUpdate }, `addNode:${node.nodeId}`);
-    return this;
   }
 
-  async transformNode(index: number, replacement: MeldNode | MeldNode[] | undefined): Promise<IStateService> {
+  async transformNode(index: number, replacement: MeldNode | MeldNode[] | undefined): Promise<void> {
     this.checkMutable();
     if (!this.isTransformationEnabled()) {
       logger.debug('Transformation is disabled, skipping node transformation.');
-      return this;
+      return;
     }
 
     const baseTransformedNodes = this.currentState.transformedNodes 
@@ -512,7 +509,7 @@ export class StateService implements IStateService {
 
     if (index < 0 || index >= baseTransformedNodes.length) {
       logger.error('Invalid index provided for transformNode', { index, length: baseTransformedNodes.length });
-      return this;
+      return;
     }
 
     const replacementClone = cloneDeep(replacement);
@@ -525,7 +522,6 @@ export class StateService implements IStateService {
     }
 
     await this.updateState({ transformedNodes: baseTransformedNodes }, `transformNode:index-${index}`);
-    return this;
   }
 
   isTransformationEnabled(): boolean {
@@ -541,27 +537,25 @@ export class StateService implements IStateService {
     return true;
   }
 
-  async setTransformationEnabled(enabled: boolean): Promise<IStateService> {
+  async setTransformationEnabled(enabled: boolean): Promise<void> {
     this.checkMutable();
     const newOptions = { 
       ...this.currentState.transformationOptions, 
       enabled 
     };
     await this.updateState({ transformationOptions: newOptions }, 'setTransformationEnabled');
-    return this;
   }
 
-  async setTransformationOptions(options: TransformationOptions): Promise<IStateService> {
+  async setTransformationOptions(options: TransformationOptions): Promise<void> {
     this.checkMutable();
     await this.updateState({ transformationOptions: { ...options } }, 'setTransformationOptions');
-    return this;
   }
 
   getTransformationOptions(): TransformationOptions {
     return { ...this.currentState.transformationOptions };
   }
 
-  async appendContent(content: string): Promise<IStateService> {
+  async appendContent(content: string): Promise<void> {
     this.checkMutable();
     const textNode: TextNode = {
       type: 'Text',
@@ -569,24 +563,22 @@ export class StateService implements IStateService {
       location: { start: { line: -1, column: -1 }, end: { line: -1, column: -1 } },
       nodeId: crypto.randomUUID()
     };
-    return await this.addNode(textNode);
+    await this.addNode(textNode);
   }
 
   // Imports
-  async addImport(path: string): Promise<IStateService> {
+  async addImport(path: string): Promise<void> {
     this.checkMutable();
     const imports = new Set(this.currentState.imports);
     imports.add(path);
     await this.updateState({ imports }, `addImport:${path}`);
-    return this;
   }
 
-  async removeImport(path: string): Promise<IStateService> {
+  async removeImport(path: string): Promise<void> {
     this.checkMutable();
     const imports = new Set(this.currentState.imports);
     imports.delete(path);
     await this.updateState({ imports }, `removeImport:${path}`);
-    return this;
   }
 
   hasImport(path: string): boolean {
@@ -602,10 +594,9 @@ export class StateService implements IStateService {
     return this.currentState.filePath ?? null;
   }
 
-  async setCurrentFilePath(path: string): Promise<IStateService> {
+  async setCurrentFilePath(path: string): Promise<void> {
     this.checkMutable();
     await this.updateState({ filePath: path }, 'setCurrentFilePath');
-    return this;
   }
 
   // State management
@@ -636,7 +627,7 @@ export class StateService implements IStateService {
       this.stateFactory,
       this.eventService,
       this.trackingServiceClientFactory,
-      this // Pass current service as parent reference for the *new* child service
+      this
     );
 
     // Set the node created by the factory onto the new service instance
@@ -678,12 +669,12 @@ export class StateService implements IStateService {
     return childService;
   }
 
-  async mergeChildState(childState: IStateService): Promise<IStateService> {
+  async mergeChildState(childState: IStateService): Promise<void> {
     this.checkMutable();
 
     if (!this.isStateService(childState)) {
       logger.error('Cannot merge state: Provided object is not a StateService instance.');
-      return this;
+      return;
     }
 
     const childNode = childState.getInternalStateNode();
@@ -726,8 +717,6 @@ export class StateService implements IStateService {
       });
       }
     }
-
-    return this;
   }
 
   clone(): IStateService {
@@ -737,7 +726,7 @@ export class StateService implements IStateService {
       this.stateFactory,
       this.eventService,
       this.trackingServiceClientFactory,
-      clonedNode.parentServiceRef
+      this.parentService
     );
 
     clonedService._setInternalStateNode(clonedNode);
@@ -752,7 +741,7 @@ export class StateService implements IStateService {
         try {
           this.trackingClient.registerState({
             id: cloneId,
-            parentId: clonedNode.parentServiceRef?.getStateId(),
+            parentId: this.parentService?.getStateId(),
             source: clonedNode.source || 'clone',
             filePath: clonedService.getCurrentFilePath() || undefined,
             transformationEnabled: clonedService.isTransformationEnabled(),
@@ -773,7 +762,7 @@ export class StateService implements IStateService {
           if (this.trackingService.registerState) {
              this.trackingService.registerState({
                 id: cloneId,
-                parentId: clonedNode.parentServiceRef?.getStateId(),
+                parentId: this.parentService?.getStateId(),
                 source: clonedNode.source || 'clone',
                 filePath: clonedService.getCurrentFilePath() || undefined,
                 transformationEnabled: clonedService.isTransformationEnabled(),
@@ -992,9 +981,9 @@ export class StateService implements IStateService {
     }
 
     // If not found locally, check parent
-    if (!variable && this.currentState.parentServiceRef) {
-      process.stdout.write(`DEBUG [getVariable PARENT] StateID: ${stateId}, Var '${name}' not local, checking parent: ${this.currentState.parentServiceRef.getStateId()}\n`);
-      return this.currentState.parentServiceRef.getVariable(name, type);
+    if (!variable && this.parentService) {
+      process.stdout.write(`DEBUG [getVariable PARENT] StateID: ${stateId}, Var '${name}' not local, checking parent: ${this.parentService.getStateId()}\n`);
+      return this.parentService.getVariable(name, type);
     }
     
     // Type mismatch check
@@ -1010,7 +999,7 @@ export class StateService implements IStateService {
   /**
    * Sets a variable using a pre-constructed MeldVariable object.
    */
-  async setVariable(variable: MeldVariable): Promise<IStateService> {
+  async setVariable(variable: MeldVariable): Promise<MeldVariable> {
     this.checkMutable();
     const variableClone = cloneDeep(variable);
     const { name, type } = variableClone;
@@ -1071,7 +1060,7 @@ export class StateService implements IStateService {
    * Removes a variable, optionally specifying the type.
    * Only removes from the local state, does not affect parents.
    */
-  async removeVariable(name: string, type?: VariableType): Promise<IStateService> {
+  async removeVariable(name: string, type?: VariableType): Promise<boolean> {
     this.checkMutable();
     let removed = false;
     let newVariables = { ...this.currentState.variables };
@@ -1142,7 +1131,7 @@ export class StateService implements IStateService {
 
   // Add getParentState method to satisfy interface
   getParentState(): IStateService | undefined {
-    return this.currentState.parentServiceRef;
+    return this.parentService;
   }
 
   /**

@@ -70,7 +70,7 @@ interface IStateService {
    * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable
    */
-  addNode(node: MeldNode): Promise<IStateService>;
+  addNode(node: MeldNode): Promise<void>;
   
   /**
    * Appends raw content to the document.
@@ -79,7 +79,7 @@ interface IStateService {
    * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable
    */
-  appendContent(content: string): Promise<IStateService>;
+  appendContent(content: string): Promise<void>;
 
   /**
    * Gets transformed nodes for output generation.
@@ -95,7 +95,7 @@ interface IStateService {
    * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable
    */
-  setTransformedNodes(nodes: MeldNode[]): Promise<IStateService>;
+  setTransformedNodes(nodes: MeldNode[]): Promise<void>;
   
   /**
    * Replaces the node at the specified index in the transformed nodes array.
@@ -105,7 +105,7 @@ interface IStateService {
    * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable or index is out of bounds
    */
-  transformNode(index: number, replacement: MeldNode | MeldNode[] | undefined): Promise<IStateService>;
+  transformNode(index: number, replacement: MeldNode | MeldNode[] | undefined): Promise<void>;
   
   /**
    * Checks if transformation is enabled.
@@ -120,7 +120,7 @@ interface IStateService {
    * @param enabled - Whether to enable transformation
    * @returns A promise resolving to the updated state service instance.
    */
-  setTransformationEnabled(enabled: boolean): Promise<IStateService>;
+  setTransformationEnabled(enabled: boolean): Promise<void>;
   
   /**
    * Gets the current transformation options.
@@ -135,7 +135,7 @@ interface IStateService {
    * @param options - The transformation options to set
    * @returns A promise resolving to the updated state service instance.
    */
-  setTransformationOptions(options: TransformationOptions): Promise<IStateService>;
+  setTransformationOptions(options: TransformationOptions): Promise<void>;
   
   /**
    * Registers an imported file path.
@@ -144,7 +144,7 @@ interface IStateService {
    * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable
    */
-  addImport(path: string): Promise<IStateService>;
+  addImport(path: string): Promise<void>;
   
   /**
    * Removes an imported file path.
@@ -153,7 +153,7 @@ interface IStateService {
    * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable
    */
-  removeImport(path: string): Promise<IStateService>;
+  removeImport(path: string): Promise<void>;
   
   /**
    * Checks if a file has been imported.
@@ -183,7 +183,7 @@ interface IStateService {
    * @param path - The current file path
    * @returns A promise resolving to the updated state service instance.
    */
-  setCurrentFilePath(path: string): Promise<IStateService>;
+  setCurrentFilePath(path: string): Promise<void>;
 
   /**
    * Checks if the state has local changes that haven't been merged.
@@ -224,7 +224,7 @@ interface IStateService {
    * @returns A promise resolving to the updated state service instance (this instance after merge).
    * @throws {MeldStateError} If the state is immutable or the child state is invalid
    */
-  mergeChildState(childState: IStateService): Promise<IStateService>;
+  mergeChildState(childState: IStateService): Promise<void>;
   
   /**
    * Creates a deep clone of this state.
@@ -317,10 +317,10 @@ interface IStateService {
   getCommandVar(name: string): CommandVariable | undefined;
 
   // Type-specific setters from StateServiceLike
-  setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<IStateService>;
-  setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): Promise<IStateService>;
-  setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): Promise<IStateService>;
-  setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<IStateService>;
+  setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<void>;
+  setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): Promise<void>;
+  setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): Promise<void>;
+  setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<void>;
 
   // Get all variables by type from StateServiceLike
   getAllTextVars(): Map<string, TextVariable>;
