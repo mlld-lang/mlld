@@ -4,19 +4,26 @@
 *   **Goal:** Fix remaining assertion failures in `api/api.test.ts` related to `@run` output in transformation mode.
 *   **Investigation Summary:**
     *   ✅ **DI Fixed & Verified:** Added missing DI registrations to `api/api.test.ts`, fixing initial resolution errors.
-    *   ⚠️ **Problem Persists:** The two assertion failures in `api.test.ts` related to missing `@run` output (`expect('').toContain('Hello')` etc.) still fail.
-    *   **Debugging Transformation Output:**
+    *   ⚠️ **API Problem Persists:** The two assertion failures in `api/api.test.ts` related to missing `@run` output (`expect('').toContain('Hello')` etc.) still fail.
+    *   **Debugging Transformation Output (API Test):**
         *   `RunDirectiveHandler` correctly produces a replacement `TextNode`.
         *   `InterpreterService` correctly calls `state.transformNode`.
         *   `StateService.transformNode` & `updateState` correctly update the internal `transformedNodes` array.
         *   `StateService.clone` & `StateFactory.createClonedState` correctly copy the `transformedNodes` array reference.
         *   Logs *inside* `StateService.getTransformedNodes` (even on the final cloned state) show it *intends* to return the correct transformed list (`[Text, Directive, Text]`).
         *   **Contradiction:** Logs *immediately after* the `getTransformedNodes` call in `api/index.ts` show the caller receives the *original* node list (`[Text, Directive, Directive]`). Array cloning methods (`slice`, spread operator) were tested and made no difference.
-*   **Root Cause Hypothesis:** The application logic (state updates, cloning, parameter passing) appears sound based on extensive logging. The discrepancy between the value `getTransformedNodes` intends to return and the value received by the caller points to a deeper issue potentially outside the direct application code:
+    *   **Separate DirectiveService Issue Identified:**
+        *   An integration test for `DirectiveService` (`DirectiveService.integration.test.ts`) is failing.
+        *   The failure (`AssertionError: expected { active: 'active' } to deeply equal { user: 'active' }`) indicates a bug in how `@data` directive values with interpolated *keys* are resolved (e.g., `{ "{{keyVar}}": "{{valueVar}}" }`).
+        *   The key (`keyVar`, expected 'user') seems to resolve incorrectly to the value of `valueVar` ('active').
+        *   This likely points to a bug in `DataDirectiveHandler` or `ResolutionService`.
+        *   **Relevance:** While distinct from the API test's `getTransformedNodes` issue, this interpolation bug *could* indirectly cause API test failures if those APIs rely on templates using `@data` with interpolated keys.
+*   **Root Cause Hypothesis (API Test):** The application logic (state updates, cloning, parameter passing) appears sound based on extensive logging. The discrepancy between the value `getTransformedNodes` intends to return and the value received by the caller points to a deeper issue potentially outside the direct application code:
     1.  **Environment/Tooling:** Node.js, TypeScript (`tsup`), or test runner (`vitest`) interaction causing unexpected behavior with array references or clones.
     2.  **Obscure Bug:** Memory corruption, reference issue, or async timing problem not revealed by logging.
     3.  **Logging Artefact:** (Less likely) `process.stdout.write` timing issue.
-*   **Immediate Next Step:** Use the Node.js debugger to step through the `getTransformedNodes` return statement and the subsequent assignment in `api/index.ts` to directly inspect the array reference and value in memory.
+*   **Immediate Next Step (API Test):** Use the Node.js debugger to step through the `getTransformedNodes` return statement and the subsequent assignment in `api/index.ts` to directly inspect the array reference and value in memory.
+*   **Next Step (DirectiveService Issue):** Investigate the `DataDirectiveHandler` and `ResolutionService` to fix the key interpolation bug.
 
 ---
 
@@ -32,12 +39,13 @@ Resolve the persistent "JavaScript heap out of memory" (OOM) errors previously o
     - Fixed initial DI (`DependencyContainer`, `MainLogger`) and circular DI (`delay()`) issues.
     - Refactored `DirectiveService` and handlers for proper DI (Steps 1-4 below).
     - **Step 1-4 (Core DI Refactor): COMPLETE.**
-    - **Step 5 (Validation): COMPLETE.** `DirectiveService.test.ts` and `api/smoke.test.ts` passing.
+    - **Step 5 (Validation): COMPLETE.** `DirectiveService.test.ts` (except for new issue) and `api/smoke.test.ts` passing.
     - **Step 6 (Integration Refactor - Diagnosis):**
         *   Applied minimal DI to `api/api.test.ts`.
         *   Encountered misleading "Run directive command cannot be empty" errors (FIXED).
         *   Identified incorrect DI setup in `api/api.test.ts` as the cause for `getAllVariables is not a function` errors during resolution (FIXED by adding full DI registrations).
-        *   **Current Status:** DI errors are fixed, but the original two assertion failures persist in `api/api.test.ts`'s "Full Pipeline Integration" tests. Extensive logging narrowed the problem down to the value returned by `StateService.getTransformedNodes` being incorrect at the call site (`api/index.ts`), despite internal logs showing the correct data *before* the `return` statement.
+        *   **Current Status (API Tests):** DI errors are fixed, but the original two assertion failures persist in `api/api.test.ts`'s "Full Pipeline Integration" tests. Extensive logging narrowed the problem down to the value returned by `StateService.getTransformedNodes` being incorrect at the call site (`api/index.ts`), despite internal logs showing the correct data *before* the `return` statement.
+        *   **Current Status (DirectiveService Tests):** A new failure related to `@data` key interpolation has emerged (see "Recent Context").
 
 ## 3. Root Cause Hypothesis (Revised Further)
 
@@ -45,7 +53,8 @@ Resolve the persistent "JavaScript heap out of memory" (OOM) errors previously o
 - State/Map key/Validation/Error wrapping issues fixed.
 - DI configuration in `api/api.test.ts` corrected.
 - State update/cloning logic appears correct based on detailed logging.
-- **Current Problem:** An unknown mechanism (potentially environment-related, an obscure JS reference bug, or a test runner/async interaction issue) is causing `StateService.getTransformedNodes` to effectively return the *original* node list instead of the *transformed* list at the `api/index.ts` call site, despite internal logs showing the correct transformed list is available right before the return.
+- **Current Problem (API Tests):** An unknown mechanism (potentially environment-related, an obscure JS reference bug, or a test runner/async interaction issue) is causing `StateService.getTransformedNodes` to effectively return the *original* node list instead of the *transformed* list at the `api/index.ts` call site, despite internal logs showing the correct transformed list is available right before the return.
+- **Current Problem (DirectiveService):** Bug in `DataDirectiveHandler` or `ResolutionService` causing incorrect interpolation of object keys within `@data` directive values.
 
 ## 4. Revised Strategy
 
@@ -53,7 +62,7 @@ Use the Node.js debugger to bypass logging limitations and directly inspect the 
 
 ## 5. Next Steps (Revised - Start Here)
 
-1.  **(PRIORITY)** **Debug `getTransformedNodes` Return Value:**
+1.  **(PRIORITY - API Tests)** **Debug `getTransformedNodes` Return Value:**
     *   Configure and run the failing `api/api.test.ts` test (`should handle the complete parse...`) using the Node.js debugger (e.g., via VS Code debugger launch configuration or `node --inspect-brk`).
     *   Set breakpoints:
         *   Inside `StateService.getTransformedNodes`, right before the `if (transformEnabled && transformedNodesExist)` check.
@@ -63,9 +72,15 @@ Use the Node.js debugger to bypass logging limitations and directly inspect the 
         *   When paused *before* the `if`, inspect `this.currentState.nodes` and `this.currentState.transformedNodes` in the debugger's variable inspector. Verify `transformedNodes` contains the expected `TextNode` at index 2.
         *   When paused *on* the `return` statement, verify again that `transformedNodesArray` holds the correct array reference containing the `TextNode`.
         *   When paused *after* the call in `api/index.ts`, inspect the `nodesToProcess` variable. Does it contain the transformed list (with the `TextNode`) or the original list (with the `Directive`)?
-2.  **(Diagnosis based on Debugger):** Analyze the values observed in the debugger to pinpoint where the array content or reference changes unexpectedly.
-3.  **(Fix)** Implement the necessary fix based on the debugger findings.
-4.  **Re-validate `api/api.test.ts`:** Run `npm test api/api.test.ts`. Verify the two assertion failures are fixed.
-5.  **Continue Integration Test Refactor:** Address remaining test failures and refactor other tests as previously planned.
-6.  **Final Validation:** Run `npm test api cli`.
-7.  **Cleanup:** Remove all debug logs (`process.stdout.write` and `logger.debug`). 
+2.  **(Diagnosis based on Debugger - API Tests):** Analyze the values observed in the debugger to pinpoint where the array content or reference changes unexpectedly.
+3.  **(Fix - API Tests)** Implement the necessary fix based on the debugger findings.
+4.  **(INVESTIGATE - DirectiveService)** **Debug `@data` Key Interpolation:**
+    *   Focus on `DataDirectiveHandler` and its interaction with `ResolutionService.resolveNode`.
+    *   Step through the resolution of the `InterpolatableValue` for the `@data` directive in the failing `DirectiveService.integration.test.ts`.
+    *   Identify why `{{dynamicKey}}` is resolving to 'active' instead of 'user'.
+5.  **(Fix - DirectiveService)** Implement the fix for the key interpolation bug.
+6.  **Re-validate `api/api.test.ts`:** Run `npm test api/api.test.ts`. Verify the two assertion failures are fixed.
+7.  **Re-validate `DirectiveService.integration.test.ts`:** Run `npm test services/pipeline/DirectiveService/DirectiveService.integration.test.ts`. Verify the `@data` key interpolation test passes.
+8.  **Continue Integration Test Refactor:** Address remaining test failures and refactor other tests as previously planned.
+9.  **Final Validation:** Run `npm test api cli`.
+10. **Cleanup:** Remove all debug logs (`process.stdout.write` and `logger.debug`). 
