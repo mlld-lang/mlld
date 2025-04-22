@@ -63,8 +63,8 @@ import type { IParserServiceClient } from '@services/pipeline/ParserService/inte
 describe('InterpreterService Integration', () => {
   let context: TestContextDI;
   let testContainer: DependencyContainer;
+  let interpreterService: IInterpreterService;
   // Declare service variables outside beforeEach
-  let interpreter: IInterpreterService;
   let state: IStateService;
   let parser: IParserService;
   // Declare mock variables outside beforeEach
@@ -81,7 +81,6 @@ describe('InterpreterService Integration', () => {
     vi.resetAllMocks();
     
     context = TestContextDI.createIsolated();
-    await context.initialize();
     
     testContainer = container.createChildContainer();
 
@@ -162,7 +161,7 @@ describe('InterpreterService Integration', () => {
     // --- End Registrations ---
     
     // Resolve services AFTER registration
-    interpreter = testContainer.resolve<IInterpreterService>('IInterpreterService'); 
+    interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService'); 
     state = testContainer.resolve<IStateService>('IStateService'); 
     parser = testContainer.resolve<IParserService>('IParserService');
     
@@ -175,8 +174,7 @@ describe('InterpreterService Integration', () => {
   });
 
   afterEach(async () => {
-    // Use dispose instead of clearInstances
-    testContainer?.dispose(); 
+    testContainer?.clearInstances(); 
     await context?.cleanup();
   });
 

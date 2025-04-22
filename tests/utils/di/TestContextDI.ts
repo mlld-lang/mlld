@@ -1,9 +1,13 @@
 import { container, DependencyContainer, InjectionToken } from 'tsyringe';
-import { TestContext } from '@tests/utils/TestContext.js';
 import { TestContainerHelper } from '@tests/utils/di/TestContainerHelper.js';
 import { Service } from '@core/ServiceProvider.js';
 import { vi } from 'vitest';
 import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
+import { ProjectBuilder } from '@tests/utils/ProjectBuilder.js';
+import { TestSnapshot } from '@tests/utils/TestSnapshot.js';
+import * as testFactories from '@tests/utils/testFactories.js';
+import * as path from 'path';
+import * as fsExtra from 'fs-extra';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
@@ -47,6 +51,7 @@ import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
 import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
 import type { IStateServiceClient } from '@services/state/StateService/interfaces/IStateServiceClient.js';
 import type { RawPath } from '@core/types/paths.js';
+import type { ILogger } from '@core/utils/logger.js';
 
 /**
  * Options for creating a TestContextDI instance
@@ -82,7 +87,7 @@ export interface TestContextDIOptions {
  * TestContextDI extends TestContext to provide DI capabilities for tests
  * It uses TSyringe dependency injection for all tests
  */
-export class TestContextDI extends TestContext {
+export class TestContextDI {
   /**
    * Container helper for managing DI in tests
    */
@@ -119,22 +124,26 @@ export class TestContextDI extends TestContext {
   private isCleanedUp: boolean = false;
 
   /**
-   * Internal flag for initialization status
-   */
-  private _isInitialized: boolean = false;
-  
-  /**
    * Leak detection enabled
    */
   private leakDetectionEnabled: boolean = false;
+
+  /**
+   * Added properties from TestContext
+   */
+  public builder!: ProjectBuilder;
+  public fixtures!: { load(fixtureName: string): Promise<void> };
+  public snapshot!: TestSnapshot;
+  public factory!: typeof testFactories;
+  private fixturesDir: string = 'tests/fixtures'; // Default value
 
   /**
    * Create a new TestContextDI instance
    * @param options Options for test context initialization
    */
   constructor(options: TestContextDIOptions = {}) {
-    // Call parent constructor, will initialize services manually
-    super(options.fixturesDir);
+    // Store fixturesDir
+    this.fixturesDir = options.fixturesDir ?? 'tests/fixtures';
 
     // Set leak detection flag
     this.leakDetectionEnabled = options.leakDetection === true;
@@ -221,10 +230,6 @@ export class TestContextDI extends TestContext {
       throw new Error(`Cannot resolve service '${String(token)}' - context has been cleaned up`);
     }
 
-    if (this.initPromise && !this._isInitialized) {
-      console.warn('Warning: Synchronous resolve called before initialization is complete. This may cause race conditions.');
-    }
-
     // Resolve from container
     return this.container.resolve<T>(token);
   }
@@ -276,7 +281,6 @@ export class TestContextDI extends TestContext {
     const containerDiagnostics = this.container.getDiagnostics();
     
     return {
-      initialized: this._isInitialized,
       cleanedUp: this.isCleanedUp,
       mockCount: this.registeredMocks.size,
       childContextCount: this.childContexts.length,
@@ -298,9 +302,6 @@ export class TestContextDI extends TestContext {
     // Clear registered mocks
     this.registeredMocks.clear();
     
-    // Reset initialization state
-    this._isInitialized = false;
-    
     // Reinitialize
     await this.initializeAsync();
   }
@@ -315,7 +316,6 @@ export class TestContextDI extends TestContext {
     
     // Mark as cleaned up to prevent further use
     this.isCleanedUp = true;
-    this._isInitialized = false;
     
     // Check for memory leaks
     if (this.leakDetectionEnabled) {
@@ -332,9 +332,13 @@ export class TestContextDI extends TestContext {
     this.childContexts = [];
     
     // Clean up container instances and registrations
-    // this.container.clearInstances(); // <<< Replace with dispose >>>
-    this.container.dispose(); // <<< Use dispose for full cleanup >>>
+    this.container.dispose();
     
+    // Added: Cleanup filesystem
+    if (this.fs) { // Add check in case initialization failed
+        this.fs.cleanup();
+    }
+
     // Clear registered mocks
     this.registeredMocks.clear();
     
@@ -343,13 +347,39 @@ export class TestContextDI extends TestContext {
   }
 
   /**
-   * Initializes the test context with dependency injection
+   * Initializes the test context with dependency injection and merged TestContext setup
    */
   private async initializeAsync(): Promise<void> {
+    // Initialize fs and normalizePathForTests (existing)
     this.fs = new MemfsTestFileSystem();
     this.normalizePathForTests = (path) => path;
+
+    // Added: Initialize fs (from TestContext constructor)
+    this.fs.initialize(); 
+
+    // Added: Initialize merged properties (from TestContext constructor)
+    this.builder = new ProjectBuilder(this.fs);
+    this.snapshot = new TestSnapshot(this.fs);
+    this.factory = testFactories;
+    this.fixtures = {
+      load: async (fixtureName: string): Promise<void> => {
+        const fixturePath = path.join(process.cwd(), this.fixturesDir, `${fixtureName}.json`);
+        const fixtureContent = await fsExtra.readFile(fixturePath, 'utf-8'); 
+        const fixture = JSON.parse(fixtureContent);
+        // Assuming loadFixture exists on MemfsTestFileSystem based on TestContext usage
+        // If not, this might need adjustment based on MemfsTestFileSystem implementation
+        await (this.fs as any).loadFixture(fixture); 
+      }
+    };
+
+    // Added: Directory creation (from TestContext.initialize)
+    await this.fs.mkdir('/project', { recursive: true }); 
+    await this.fs.mkdir('/project/src', { recursive: true });
+    await this.fs.mkdir('/project/nested', { recursive: true });
+    await this.fs.mkdir('/project/shared', { recursive: true });
+
+    // Existing DI service registration
     await this.registerServices();
-    this._isInitialized = true;
   }
 
   /**
@@ -506,7 +536,6 @@ export class TestContextDI extends TestContext {
           } as unknown as IPathServiceClient; // Cast via unknown
            ClientFactoryHelpers.registerClientFactory(context, 'PathServiceClientFactory', pathClient);
         }
-        context._isInitialized = true;
         context.initPromise = Promise.resolve();
         return context;
       },

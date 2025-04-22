@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import { beforeEach, afterEach, afterAll, vi } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { container } from 'tsyringe';
 import { EventEmitter } from 'events';
 
@@ -13,31 +12,14 @@ process.env.NODE_ENV = 'test';
 // Set test timeout to a reasonable value (10 seconds by default)
 vi.setConfig({ testTimeout: 10000 });
 
-// Create global test context
-globalThis.testContext = TestContextDI.createIsolated();
-
-// Initialize the global test context
-beforeEach(async () => {
-  // Initialize global test context if not already initialized
-  if (globalThis.testContext && !globalThis.testContext.isInitialized) {
-    await globalThis.testContext.initialize();
-  }
-  
+// Simplified beforeEach: Just reset mocks
+beforeEach(() => {
   vi.resetAllMocks();
-  
-  // Clear container instances to prevent test cross-contamination
-  container.clearInstances();
 });
 
 // Clean up after each test
 afterEach(async () => {
-  // Clean up any test context resources
-  if (globalThis.testContext) {
-    // Clean up context
-    await globalThis.testContext.cleanup();
-  }
-  
-  // Clear container instances again to ensure proper cleanup
+  // Keep container clearing for now, though ideally tests clean themselves up
   container.clearInstances();
   
   // Restore all mocks
@@ -62,9 +44,3 @@ afterAll(() => {
     global.gc();
   }
 });
-
-// Make test utilities available globally
-declare global {
-  // eslint-disable-next-line no-var
-  var testContext: TestContextDI;
-}

@@ -2,7 +2,7 @@
 
 ## Goal
 
-To eliminate the outdated `TestContext` base class by merging its essential non-DI testing utilities (like the mock filesystem and fixture management) directly into `TestContextDI`. This simplifies the testing utility hierarchy and makes `TestContextDI` a self-contained helper for test setup, supporting both its DI features and the necessary filesystem/fixture setup required by the manual child container pattern.
+To eliminate the outdated `TestContext` base class by merging its essential non-DI testing utilities (like the mock filesystem and fixture management) directly into `TestContextDI`, and to remove the problematic global test context setup. This simplifies the testing utility hierarchy, makes `TestContextDI` a self-contained helper, and enforces better test isolation practices.
 
 ## Motivation
 
@@ -10,6 +10,7 @@ To eliminate the outdated `TestContext` base class by merging its essential non-
 -   The inheritance relationship between `TestContextDI` and `TestContext` adds unnecessary complexity.
 -   `TestContextDI`, even when used alongside the preferred manual child container pattern, is primarily valued for providing the initialized mock filesystem (`context.fs`) and fixture loading capabilities.
 -   Merging these core utilities into `TestContextDI` consolidates related setup logic and removes the dependency on the outdated base class.
+-   The global `TestContextDI` instance created in `tests/setup.ts` violates test isolation principles, leading to potential cross-test contamination and conflicts with the preferred manual child container pattern.
 
 ## Refactoring Steps
 
@@ -67,21 +68,37 @@ To eliminate the outdated `TestContext` base class by merging its essential non-
     *   **Update Cleanup (`cleanup`)**:
         *   Add a call to clean up the filesystem resources: `this.fs.cleanup();` (ensure it's called before or after container disposal as appropriate).
 
-2.  **Delete `tests/utils/TestContext.ts`:**
-    *   Once `TestContextDI` no longer inherits from it and incorporates the necessary logic, delete the `tests/utils/TestContext.ts` file.
+2.  **Refactor `tests/setup.ts` to Remove Global Context:**
+    *   **Problem:** The current `tests/setup.ts` creates a single, global `TestContextDI` instance (`globalThis.testContext`). This is poor practice for test isolation and conflicts with the recommended manual child container approach.
+    *   **Action:** Modify `tests/setup.ts` to remove the global instance and its lifecycle management:
+        *   Delete the line: `globalThis.testContext = TestContextDI.createIsolated();`
+        *   Delete the `beforeEach` logic block that checks `globalThis.testContext.isInitialized` and called the (now removed) `initialize` method.
+        *   Delete the `afterEach` logic that calls `globalThis.testContext.cleanup()`.
+        *   Delete the `declare global { ... }` block for `testContext`.
+        *   Keep other useful setup logic (e.g., `reflect-metadata`, `vi.resetAllMocks()`, `vi.restoreAllMocks()`).
+    *   **Expected Fallout:** This change is *expected* to cause more tests to fail. Specifically, any test file that implicitly relied on `globalThis.testContext` will now break. This is desirable as it highlights tests that require proper, isolated setup (either via manual child containers or by creating their own `TestContextDI` instance if needed just for `fs`).
 
-3.  **Address Fallout (Deferred):**
-    *   Acknowledge that tests or helper files still directly importing and using `new TestContext()` will break.
-    *   Plan to address these breakages in a separate follow-up effort. Solutions may include:
-        *   Deleting obsolete test files.
-        *   Updating files to use `TestContextDI.create()` or `TestContextDI.createIsolated()`.
-        *   Refactoring tests to use the manual child container pattern, potentially still using `TestContextDI` just for `fs` access if needed.
+3.  **Modify `tests/utils/di/TestContextDI.ts` (Follow-up):**
+    *   **Action:** Remove the `isInitialized` property and related checks, as initialization is now handled automatically via the constructor and `initializeAsync`.
+    *   **Action:** Remove the `initialize` method if it still exists remnants from the previous step.
+
+4.  **Delete `tests/utils/TestContext.ts`:**
+    *   Once `TestContextDI` no longer inherits from it and incorporates the necessary logic, and `tests/setup.ts` no longer references it globally, delete the `tests/utils/TestContext.ts` file.
+
+5.  **Address Fallout (Incremental):**
+    *   Iteratively fix the test failures introduced by steps 1, 2 and 3.
+    *   For each failing test file:
+        *   If it relied on `globalThis.testContext`, implement proper setup using the manual child container pattern (`container.createChildContainer()`, explicit registration) as documented in `docs/dev/TESTS.md`.
+        *   If the test only needs the mock filesystem or fixtures, it *can* instantiate a local `TestContextDI` (`const context = TestContextDI.createIsolated();`) and use `context.fs` or `context.fixtures`, ensuring `await context.cleanup()` is called in `afterEach`.
+        *   Update any direct calls to methods that were specific to the old `TestContext` (like potentially `context.restore()` for mocks if that was part of `TestContext` rather than `TestContextDI`).
+        *   Delete obsolete test files if they are no longer relevant.
 
 ## Verification
 
--   Run tests that rely on `TestContextDI` (especially those using `context.fs`, `context.fixtures`, `context.builder`, or `context.snapshot`). Ensure they still pass after the refactoring.
--   Confirm that the core functionalities copied from `TestContext` (filesystem operations, fixture loading) work correctly within `TestContextDI`.
+-   Run tests (`npm test`) frequently during the "Address Fallout" step.
+-   The end goal is a clean test run (`npm test`) after all fallout has been addressed.
+-   Confirm that core functionalities (filesystem, fixtures, DI mocking, manual containers) work as expected in the refactored tests.
 
 ## Deferred Work
 
--   The primary deferred task is fixing all test files that directly imported and instantiated `TestContext`. This will be handled separately after the merge is complete. 
+-   No major deferred work planned with this updated approach; fallout is addressed incrementally. 
