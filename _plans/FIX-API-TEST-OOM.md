@@ -1,61 +1,53 @@
-# Debug Log: Resolving API Test Failures (Variable Resolution)
+# Debug Log: Resolving API Test Failures (OOM & DI Scopes)
 
 ## Initial Problem
 
 After major refactors related to AST, State management, Types, and Directive Handlers, the API integration tests (`npm test api`) started failing with:
 
-1.  JavaScript heap out of memory errors (OOM).
+1.  JavaScript heap out of memory errors (OOM), particularly in tests involving `@import` directives.
 2.  Worker exited unexpectedly errors.
-3.  Numerous specific test failures related to variable resolution and output formatting.
+3.  Specific test failures related to circular import detection (throwing DI errors instead of expected circularity errors).
+4.  Other functional failures (variable resolution, output formatting).
 
 ## Investigation & Fixes Summary
 
 We systematically investigated the failures using extensive logging (`process.stdout.write`) and targeted code changes.
 
-1.  **DI Issues:** Initial investigation focused on Dependency Injection setup in the API tests. We ensured core services like `IStateService` were registered correctly (often as singletons within the test scope) and resolved potential circular dependencies (e.g., using `delay()`). This fixed some initial test setup errors but not the core functional failures or OOM.
+1.  **Variable Resolution Issues Fixed:** Several underlying bugs preventing basic variable definition and resolution were fixed first (detailed in previous versions of this log, involving `StateFactory` map merging and missing `name` properties in handler results).
 
-2.  **State Cloning Frequency:** We hypothesized that the frequent deep cloning of state (`lodash.cloneDeep` on variable maps within `StateFactory.updateState`) triggered by `StateService` methods like `addNode` and `setVariable` during the `InterpreterService` loop was causing the OOM.
-    *   **Logging Added:** Added logs to `StateFactory.updateState` and `StateFactory.createClonedState` to track the approximate size of variable maps being cloned.
-    *   **Finding:** Logs showed that variable map sizes remained small (`~2` entries) in the failing API tests. This indicated that *while frequent*, the cloning wasn't operating on excessively large *data*, making it less likely as the sole cause of the OOM, although it could contribute to memory pressure.
+2.  **Initial DI Scope Investigation:** We explored making various services singletons within the test container (`api/integration.test.ts`) and explicitly passing the container or specific service instances (`ICircularityService`) during recursive `interpret` calls made by `ImportDirectiveHandler`. Extensive logging was added.
 
-3.  **State Modification Return Types:** We identified and fixed inconsistencies between the `IStateService` interface and the `StateService` implementation regarding the return types of state modification methods (`addNode`, `setTextVar`, etc.). The implementation was updated to return `Promise<IStateService>` (returning `this`) to align with immutable patterns, and the interface was updated accordingly. This resolved linter errors but didn't fix the core variable resolution failures.
+3.  **Findings from DI Logging:**
+    *   Logs confirmed that crucial stateful services (`CircularityService`) were being re-instantiated during recursive imports, causing their state (like the import stack) to reset.
+    *   The `InterpreterServiceClientFactory` and `ImportDirectiveHandler` constructors were receiving containers with `unknown` IDs, indicating they were not being resolved within the scope of the intended child `testContainer` created in the `beforeEach` block.
+    *   Neither registering services/factories as singletons nor explicitly passing the container/service instance solved the core scope problem.
 
-4.  **Variable Resolution Failure (`getAllVariables` TypeError):**
-    *   Test failures clearly indicated variables were not being resolved correctly (e.g., `{{greeting}}` resolved to `''`).
-    *   Logs revealed a `TypeError: currentState.getAllVariables is not a function` error occurring within `VariableReferenceResolver.getVariable`.
-    *   **Fix:** Removed the erroneous `getAllVariables` call from the logging code within `VariableReferenceResolver.getVariable`.
-    *   **Result:** This fixed the `TypeError` but *not* the underlying resolution failures; `getVariable` still reported variables as not found.
+4.  **Root Cause Identified (`StateService.createChildState`):**
+    *   Investigation revealed that `StateService.createChildState` was manually creating child state instances using `new StateService(...)`.
+    *   This **bypassed the DI container** for the child state and all dependencies resolved *by* that child state instance (including nested `InterpreterService`, `DirectiveService`, `ImportDirectiveHandler`, `CircularityService` calls during import interpretation).
+    *   This manual instantiation broke the singleton scope inheritance chain, leading to new service instances being created with incorrect (or global) scope, thus losing the `CircularityService` stack and causing infinite recursion and the OOM error.
 
-5.  **Variable Loss During State Update:**
-    *   Detailed logging added to `StateService.setVariable` and `StateService.getVariable` revealed a contradiction:
-        *   `setVariable` confirmed a variable (e.g., `greeting`) existed in the map of the *new state node* immediately after the update.
-        *   However, a subsequent `getVariable` call on the *exact same state instance* (verified by state ID logging) failed to find the key, reporting the map as having incorrect keys (e.g., `[null]` or only later keys like `[name]`).
-    *   **Root Cause:** The logic in `StateFactory.updateState` for creating the new state node was flawed. It was not correctly merging the incoming `updates` maps with the maps copied from the original `state` node. Instead of applying updates *to* the copies, it was sometimes replacing entire maps, causing data loss for variable types not included in that specific `updates` object.
-    *   **Fix:** Corrected the map merging logic in `StateFactory.updateState`. The fix involved:
-        1.  Creating new `Map` instances explicitly from the *original* state's maps (`new Map(state.variables.text)`, etc.).
-        2.  Iterating through the maps provided in the `updates` argument.
-        3.  Using `.set(key, cloneDeep(value))` to apply the updates onto the *newly created copies*.
-        4.  Assigning these correctly merged maps to the new `StateNode`.
-    *   **Result:** This resolved the variable loss, and subsequent test runs showed `getVariable` finding the correct variables.
+5.  **Fix Implemented:**
+    *   Injected `DependencyContainer` into `StateService` constructor.
+    *   Modified `StateService.createChildState` to:
+        *   Create a `childContainer` using `this.container.createChildContainer()`.
+        *   Register the parent `StateService` instance (`this`) within the `childContainer` using a specific token (`'ParentStateServiceForChild'`).
+        *   Resolve the new `StateService` instance using `childContainer.resolve(StateService)`.
+    *   Modified the `StateService` constructor to optionally inject `'ParentStateServiceForChild'` and assign it to `this.parentService`.
 
-6.  **`cloneDeep` Value Removal:** Temporarily removed `cloneDeep` on the *value* during the `.set()` operation in `StateFactory.updateState` to rule out `cloneDeep` itself corrupting the Map. This did *not* fix the issue, confirming `cloneDeep` on the value wasn't the cause of the variable loss.
+6.  **Result:** This ensures that child states are created *through the DI container*, preserving the correct scope and allowing singleton services (like `ICircularityService`) registered in the parent test container to be correctly resolved and reused during recursive interpretation.
 
-7.  **Missing `name` Property in Handlers:**
-    *   **Root Cause Re-evaluation:** Even after fixing the factory merging logic, `getVariable` logs showed the map keys were `[undefined]` instead of the expected variable names (like `['greeting']`).
-    *   **Investigation:** Traced the `MeldVariable` object creation back to the definition handlers (`TextDirectiveHandler`, `DataDirectiveHandler`, etc.).
-    *   **Bug:** Discovered these handlers were creating the `VariableDefinition` object (value for the `stateChanges.variables` map) *without* including the mandatory `name` property.
-    *   **Fix:** Added the `name: identifier` property to the `VariableDefinition` objects created in `TextDirectiveHandler`, `DataDirectiveHandler`, `PathDirectiveHandler`, and `DefineDirectiveHandler`.
-    *   **Result:** This **finally fixed the variable resolution failures**. Tests related to basic variable setting and lookup now pass.
+## Current Status (After DI Scope Fixes)
 
-## Current Status (After Variable Resolution Fixes)
-
-*   **Variable Resolution:** Corrected. Tests dependent solely on setting and getting variables now pass.
-*   **Output Formatting Failures:** 3 assertion errors remain in `api/api.test.ts` related to the final generated output string (incorrect newlines, empty output when content expected). This points to issues in `OutputService` or how the final node list is handled/passed by `InterpreterService` / `api/index.ts`.
-*   **DI Failure:** The `api/debug-tools.integration.test.ts` still fails due to DI errors (`Failed to initialize necessary clients`).
-*   **Heap / Worker Errors:** The tests still eventually crash with heap exhaustion / unexpected worker exit, although it takes longer now. This might be related to the remaining failing tests or other underlying performance/memory issues.
+*   **OOM Error:** Resolved. The recursive import tests no longer exhaust memory.
+*   **Circular Import Detection:** The test `should detect circular imports` now fails with the expected `MeldImportError` related to circularity, rather than the previous DI error. (This is a positive sign, showing the correct error is now reachable).
+*   **Other Import Tests:** Tests `should handle simple imports` and `should handle nested imports` now fail with a different DI error: `Attempted to resolve unregistered dependency token: "ParentStateServiceForChild"`. This indicates the constructor adaptation for the child state injection needs further refinement.
+*   **Variable Resolution:** Appears stable based on previously passing tests.
+*   **Output Formatting Failures:** Likely still present in `api/api.test.ts` (not run in the last step).
+*   **DI Failure:** `api/debug-tools.integration.test.ts` failure likely still present.
 
 ## Next Steps
 
-1.  Address the output formatting failures in `api/api.test.ts`.
-2.  Fix the DI setup in `api/debug-tools.integration.test.ts`.
-3.  Re-evaluate the heap/worker errors after resolving the functional test failures. 
+1.  **Fix `ParentStateServiceForChild` DI Error:** Investigate why the token `'ParentStateServiceForChild'`, despite being registered in the child container within `createChildState`, is not found when resolving `StateService` via `childContainer.resolve(StateService)`. Check constructor signature and injection points again.
+2.  **Verify Circular Import Test:** Once the DI error is fixed, confirm the `should detect circular imports` test passes by correctly identifying the `MeldImportError`.
+3.  **Address Remaining Failures:** Re-run `npm test api` and address the remaining functional failures (e.g., output formatting in `api.test.ts`, DI issues in `debug-tools.integration.test.ts`, etc.). 

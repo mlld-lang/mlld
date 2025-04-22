@@ -5,29 +5,42 @@ import type { IResolutionService } from '@services/resolution/ResolutionService/
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { container, DependencyContainer } from 'tsyringe';
+import { mock } from 'vitest-mock-extended';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 describe('StringConcatenationHandler', () => {
-  const helpers = TestContextDI.createTestHelpers();
-  let contextDI: TestContextDI;
+  let testContainer: DependencyContainer;
   let handler: StringConcatenationHandler;
   let mockResolutionService: IResolutionService;
   let mockParserService: IParserService;
+  let mockStateService: IStateService;
   let context: ResolutionContext;
 
   beforeEach(async () => {
-    contextDI = helpers.setupWithStandardMocks();
-    
-    mockResolutionService = await contextDI.resolve<IResolutionService>('IResolutionService');
-    mockParserService = await contextDI.resolve<IParserService>('IParserService');
-    
+    testContainer = container.createChildContainer();
+
+    mockResolutionService = mock<IResolutionService>({
+      resolveInContext: vi.fn()
+    });
+    mockParserService = mock<IParserService>({
+      parse: vi.fn()
+    });
+    mockStateService = mock<IStateService>({
+      getCurrentFilePath: vi.fn().mockReturnValue('test.meld') 
+    });
+
+    testContainer.registerInstance<IResolutionService>('IResolutionService', mockResolutionService);
+    testContainer.registerInstance<IParserService>('IParserService', mockParserService);
+    testContainer.registerInstance<IStateService>('IStateService', mockStateService);
+    testContainer.registerInstance<DependencyContainer>('DependencyContainer', testContainer);
+
     handler = new StringConcatenationHandler(mockResolutionService, mockParserService);
 
-    const mockStateService = await contextDI.resolve<IStateService>('IStateService');
     context = {
       currentFilePath: 'test.meld',
       strict: true,
-      allowedVariableTypes: new Set(['text', 'data', 'path', 'command']), 
+      allowedVariableTypes: new Set(['text', 'data', 'path', 'command']),
       state: mockStateService
     };
 
@@ -35,7 +48,7 @@ describe('StringConcatenationHandler', () => {
   });
   
   afterEach(async () => {
-    await contextDI?.cleanup();
+    testContainer?.dispose();
   });
 
   describe('hasConcatenation', () => {
