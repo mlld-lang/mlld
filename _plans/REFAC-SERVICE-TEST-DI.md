@@ -31,8 +31,6 @@ The core strategy is to apply the "Manual Child Container" pattern consistently 
 
 ## List of remaining tests (delete each test as it is is completed)
 
-services/resolution/ResolutionService/resolvers/VariableReferenceResolver.edge.test.ts
-services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts
 services/resolution/ResolutionService/ResolutionService.test.ts
 services/resolution/ValidationService/ValidationService.test.ts
 
