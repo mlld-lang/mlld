@@ -27,26 +27,23 @@ import type {
     FormattingContext,
     ParserFlags
  } from '@core/types/resolution.js';
-import { container, type DependencyContainer } from 'tsyringe'; // Added
-import { mockDeep, DeepMockProxy } from 'vitest-mock-extended'; // Added
+import { container, type DependencyContainer } from 'tsyringe';
+import { mockDeep, DeepMockProxy } from 'vitest-mock-extended';
 
 /**
  * DataDirectiveHandler Test Status
  * --------------------------------
  * 
- * MIGRATION STATUS: In Progress (Refactoring to Manual DI)
+ * MIGRATION STATUS: Complete (Using Manual DI)
  * 
- * This test file is being migrated to use:
+ * This test file has been migrated to use:
  * - Manual Child Container pattern
  * - Standardized mock factories with vitest-mock-extended
  */
 
 describe('DataDirectiveHandler', () => {
-  // Remove fixture usage
-  // let fixture: DirectiveTestFixture;
   let handler: DataDirectiveHandler;
   let testContainer: DependencyContainer;
-  // Declare mocks for dependencies
   let mockValidationService: DeepMockProxy<IValidationService>;
   let mockStateService: DeepMockProxy<IStateService>;
   let mockResolutionService: DeepMockProxy<IResolutionService>;
@@ -54,8 +51,7 @@ describe('DataDirectiveHandler', () => {
   let mockPathService: DeepMockProxy<IPathService>;
 
   beforeEach(async () => {
-    // fixture = await DirectiveTestFixture.create(); // Removed
-    testContainer = container.createChildContainer(); // Create child container
+    testContainer = container.createChildContainer();
 
     // --- Create Mocks ---
     mockValidationService = mockDeep<IValidationService>({
@@ -65,8 +61,7 @@ describe('DataDirectiveHandler', () => {
       getCurrentFilePath: vi.fn(),
       isTransformationEnabled: vi.fn(),
       setVariable: vi.fn(),
-      clone: vi.fn().mockReturnThis(), // Basic mock for clone
-      // Add other methods if needed by handler or context creation
+      clone: vi.fn().mockReturnThis(),
       getStateId: vi.fn().mockReturnValue('mock-data-state-id'), 
       getVariable: vi.fn(),
     });
@@ -77,10 +72,9 @@ describe('DataDirectiveHandler', () => {
     });
     mockFileSystemService = mockDeep<IFileSystemService>({
         executeCommand: vi.fn(),
-        // Add other methods if needed
         readFile: vi.fn(),
         exists: vi.fn(),
-    });
+    }); 
     mockPathService = mockDeep<IPathService>();
 
     // --- Register Mocks --- 
@@ -89,7 +83,6 @@ describe('DataDirectiveHandler', () => {
     testContainer.registerInstance<IResolutionService>('IResolutionService', mockResolutionService);
     testContainer.registerInstance<IFileSystemService>('IFileSystemService', mockFileSystemService);
     testContainer.registerInstance<IPathService>('IPathService', mockPathService);
-    // Mock logger if needed by handler
     testContainer.registerInstance('ILogger', { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() });
     testContainer.registerInstance('DependencyContainer', testContainer);
 
@@ -98,8 +91,6 @@ describe('DataDirectiveHandler', () => {
 
     // --- Resolve Handler --- 
     handler = testContainer.resolve(DataDirectiveHandler);
-    // handler = await fixture.context.resolve(DataDirectiveHandler); // Removed
-    // fixture.handler = handler; // Removed
 
     // --- Default Mock Behaviors --- 
     vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue('/test.meld');
@@ -114,13 +105,11 @@ describe('DataDirectiveHandler', () => {
   });
 
   afterEach(async () => {
-    // await fixture?.cleanup(); // Removed
-    testContainer?.dispose(); // Added
+    testContainer?.dispose();
     vi.clearAllMocks();
   });
 
   const createMockProcessingContext = (node: DirectiveNode): DirectiveProcessingContext => {
-    // Use manually created mocks instead of fixture
     if (!mockStateService) {
         throw new Error("Test setup error: mockStateService is undefined in createMockProcessingContext");
     }

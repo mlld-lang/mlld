@@ -15,7 +15,7 @@ import { MeldResolutionError, MeldError } from '@core/errors';
 //   createStateServiceMock,
 //   createResolutionServiceMock,
 // } from '@tests/utils/mocks/serviceMocks.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+// import { TestContextDI } from '@tests/utils/di/TestContextDI.js'; // Removed
 import type { ICommandDefinition } from '@core/types/define.js';
 import type { CommandVariable } from '@core/types/variables.js';
 import type { DirectiveNode, IDirectiveData as DefineDirectiveData, DirectiveData, VariableReferenceNode, TextNode } from '@core/syntax/types';
@@ -30,7 +30,7 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 // import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 // import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { VariableMetadata, VariableOrigin, VariableType, createCommandVariable, MeldVariable } from '@core/types/variables.js';
-import { MockFactory } from '@tests/utils/mocks/MockFactory.js'; // Keep for state override if needed
+// import { MockFactory } from '@tests/utils/mocks/MockFactory.js'; // Removed
 import type { CommandVariable as CoreCommandVariable } from '@core/types/variables.js';
 import type { 
     IBasicCommandDefinition,
@@ -46,6 +46,7 @@ import { isCommandVariable } from '@core/types/guards.js';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler'; // Added correct imports
 import crypto from 'crypto'; // Added crypto import
 import { VariableDefinition } from '@core/types/variables.js'; // Import the type
+import { container, type DependencyContainer } from 'tsyringe'; // Added
 
 // Helper to extract state (keep as is)
 function getStateFromResult(result: any): IStateService | undefined {
@@ -159,48 +160,69 @@ const createMockProcessingContext = (node: DirectiveNode, state: IStateService, 
 };
 
 describe('DefineDirectiveHandler', () => {
-  const helpers = TestContextDI.createTestHelpers();
+  // const helpers = TestContextDI.createTestHelpers(); // Removed
   let handler: DefineDirectiveHandler;
-  // Use standard interface types
-  let stateService: IStateService;
-  let resolutionService: IResolutionService;
-  let context: TestContextDI;
+  let stateService: DeepMockProxy<IStateService>; // Changed to mock type
+  let resolutionService: DeepMockProxy<IResolutionService>; // Changed to mock type
+  // let context: TestContextDI; // Removed
   let validationService: DeepMockProxy<IValidationService>;
+  let testContainer: DependencyContainer; // Added
 
   beforeEach(async () => {
-    // Use helper
-    context = helpers.setupWithStandardMocks();
-    await context.resolve('IFileSystemService'); // Implicitly waits for init
+    // context = helpers.setupWithStandardMocks(); // Removed
+    // await context.resolve('IFileSystemService'); // Removed
+    testContainer = container.createChildContainer(); // Added
 
-    // Resolve services from context
-    stateService = await context.resolve('IStateService');
-    resolutionService = await context.resolve('IResolutionService');
-    // Resolve the handler itself from the DI container
-    handler = await context.resolve(DefineDirectiveHandler); 
+    // --- Create Mocks ---
+    stateService = mockDeep<IStateService>({
+      getCurrentFilePath: vi.fn(), 
+      setVariable: vi.fn(),
+      getVariable: vi.fn(),
+    });
+    resolutionService = mockDeep<IResolutionService>({
+      resolveNodes: vi.fn(),
+    });
+    validationService = mockDeep<IValidationService>({
+      validate: vi.fn(),
+    });
 
-    // Default mock behavior for resolved mocks
+    // --- Register Mocks --- 
+    testContainer.registerInstance<IStateService>('IStateService', stateService);
+    testContainer.registerInstance<IResolutionService>('IResolutionService', resolutionService);
+    testContainer.registerInstance<IValidationService>('IValidationService', validationService);
+    testContainer.registerInstance('ILogger', { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() });
+    testContainer.registerInstance('DependencyContainer', testContainer);
+
+    // --- Register Handler --- 
+    testContainer.register(DefineDirectiveHandler, { useClass: DefineDirectiveHandler });
+
+    // --- Resolve Handler --- 
+    handler = testContainer.resolve(DefineDirectiveHandler);
+    // handler = await context.resolve(DefineDirectiveHandler); // Removed
+
+    // --- Default Mock Behavior --- 
     vi.spyOn(stateService, 'getCurrentFilePath').mockReturnValue('/test.meld');
-    // Use aliased CommandVariable type for mock return value
     const mockCommandVar: CommandVariable = { 
-        type: VariableType.COMMAND, // Use enum
+        type: VariableType.COMMAND,
         name: '', 
         value: { 
             type: 'basic', 
             name: '', 
             commandTemplate: '', 
             parameters: [], 
-            isMultiline: false // Add missing property
+            isMultiline: false 
         } 
     }; 
-    vi.spyOn(stateService, 'setVariable');
+    vi.spyOn(stateService, 'setVariable'); // Keep spying if needed for assertions
     vi.spyOn(resolutionService, 'resolveNodes').mockImplementation(async (nodes, ctx) => {
-      // Simple mock: join text content or variable placeholders
       return nodes.map((n: any) => n.content || `{{${n.identifier}}}`).join('');
     });
+    vi.spyOn(validationService, 'validate').mockResolvedValue(undefined); // Mock validate
   });
 
   afterEach(async () => {
-    await context?.cleanup();
+    // await context?.cleanup(); // Removed
+    testContainer?.dispose(); // Added
     vi.clearAllMocks();
   });
 
