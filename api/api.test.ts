@@ -82,8 +82,8 @@ describe('SDK Integration Tests', () => {
   let testFilePath: string;
 
   beforeEach(async () => {
-    context = TestContextDI.createIsolated();
-    await context.initialize();
+    context = await TestContextDI.createIsolated();
+    // await context.initialize(); // REMOVED: Initialization is now automatic
     testFilePath = 'test.meld';
 
     testContainer = container.createChildContainer();
@@ -200,7 +200,7 @@ describe('SDK Integration Tests', () => {
 
   afterEach(async () => {
     testContainer?.clearInstances();
-    await context?.cleanup();
+    await context?.cleanup(); // REVERTED: dispose -> cleanup
     vi.resetModules();
     vi.clearAllMocks();
   });
@@ -308,14 +308,15 @@ describe('SDK Integration Tests', () => {
     });
 
     it('should process content with custom state', async () => {
-      const customState = new StateService();
+      // Resolve StateService from the container instead of manual instantiation
+      const customState = testContainer.resolve<IStateService>('IStateService'); 
       const content = '@text greeting = "Hello"';
       await context.fs.writeFile(unsafeCreateValidatedResourcePath(testFilePath), content);
-      testContainer.register('IStateService', { useValue: customState });
+      // REMOVED: Redundant registration: testContainer.register('IStateService', { useValue: customState });
       
       const result = await processMeld(content, {
         fs: context.fs as unknown as NodeFileSystem,
-        container: testContainer
+        container: testContainer // Pass the testContainer which now has customState resolved
       });
       expect(result).toBe('');
     });

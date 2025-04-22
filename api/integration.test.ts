@@ -57,9 +57,11 @@ import { ValidationService } from '@services/resolution/ValidationService/Valida
 import logger from '@core/utils/logger.js'; 
 // <<< ADDED: Import DirectiveService >>>
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
+// <<< CORRECTED: Import StateTrackingService from debug utils >>>
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 // =========================
 
-// Define runDirectiveExamples from the module
+// Define run examples directly
 const runDirectiveExamples = runDirectiveExamplesModule;
 
 // Type guard function
@@ -74,8 +76,7 @@ describe('API Integration Tests', () => {
 
   beforeEach(async () => {
     // 1. Setup TestContextDI for FS/Fixtures
-    context = TestContextDI.createIsolated();
-    await context.initialize();
+    context = await TestContextDI.createIsolated();
     projectRoot = '/project';
 
     // 2. Create Manual Child Container
@@ -101,7 +102,6 @@ describe('API Integration Tests', () => {
 
     // Register Real Services (Singleton State)
     testContainer.registerSingleton(StateService, StateService);
-    testContainer.registerSingleton('IStateService', { useToken: StateService });
     testContainer.registerSingleton('IResolutionService', ResolutionService);
     testContainer.registerSingleton('IParserService', ParserService);
     testContainer.registerSingleton('IInterpreterService', InterpreterService);
@@ -111,6 +111,13 @@ describe('API Integration Tests', () => {
     testContainer.registerSingleton('IPathOperationsService', PathOperationsService);
     // <<< Register CircularityService >>>
     testContainer.registerSingleton('ICircularityService', CircularityService);
+    // Register StateTrackingService for StateService dependency
+    testContainer.registerSingleton(StateTrackingService, StateTrackingService); // Register concrete class
+    // REMOVED: testContainer.registerSingleton('IStateTrackingService', { useExisting: StateTrackingService });
+
+    // Register Logger
+    testContainer.registerInstance<ILogger>('ILogger', logger);
+
     // <<< ADDED: Register DirectiveService >>>
     testContainer.registerSingleton('IDirectiveService', DirectiveService);
     // <<< ADDED: Register ValidationService >>>
@@ -121,8 +128,8 @@ describe('API Integration Tests', () => {
   });
 
   afterEach(async () => {
-    testContainer?.dispose(); // <-- CHANGED: Use dispose instead of clearInstances
-    await context?.cleanup();
+    testContainer?.dispose(); // <-- CHECK THIS: dispose might be redundant if cleanup handles it
+    await context?.cleanup(); // REVERTED: cleanupAsync -> cleanup
     vi.resetModules();
     vi.clearAllMocks();
   });
@@ -646,7 +653,7 @@ Docs are at $docs
       testContainer.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
       
       // --- Essential Services ---
-      testContainer.registerSingleton('IStateService', StateService);
+      testContainer.registerSingleton(StateService, StateService);
       testContainer.register('IPathService', { useClass: PathService });
       testContainer.register('IFileSystemService', { useClass: FileSystemService });
       testContainer.register('IParserService', { useClass: ParserService });
