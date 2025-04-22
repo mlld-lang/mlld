@@ -51,6 +51,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     @inject('IURLContentResolver') private urlContentResolver?: IURLContentResolver,
     @inject('StateTrackingService') stateTrackingService?: IStateTrackingService
   ) {
+    const factoryContainerId = (this.interpreterServiceClientFactory as any)?.container?.id || 'factory-container-not-found';
+    process.stdout.write(`DEBUG [ImportDirectiveHandler CONSTRUCTOR] Factory Container ID: ${factoryContainerId}\n`);
     this.interpreterServiceClient = this.interpreterServiceClientFactory.createClient();
     this.debugEnabled = false;
     if (stateTrackingService) {

@@ -7,7 +7,7 @@ import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/Mel
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 import { Service } from '@core/ServiceProvider.js';
-import { inject, injectable, delay, container } from 'tsyringe';
+import { inject, injectable, delay, container as globalContainer, DependencyContainer } from 'tsyringe';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -297,8 +297,13 @@ export class InterpreterService implements IInterpreterService {
   async interpret(
     nodes: MeldNode[],
     options?: InterpreterOptions,
-    initialState?: IStateService
+    initialState?: IStateService,
+    container?: DependencyContainer
   ): Promise<IStateService> {
+    // Log entry with container info if available
+    const receivedContainerId = (container as any)?.id || (container === globalContainer ? 'global' : (container ? 'unknown-child' : 'not-provided'));
+    process.stdout.write(`DEBUG [InterpreterService.interpret ENTRY] Container ID received: ${receivedContainerId}\n`);
+    
     this.ensureInitialized();
 
     if (!nodes) {

@@ -102,16 +102,16 @@ describe('API Integration Tests', () => {
     // Register Real Services (Singleton State)
     testContainer.registerSingleton('IStateService', StateService);
     testContainer.registerSingleton('IResolutionService', ResolutionService);
-    testContainer.register('IParserService', { useClass: ParserService });
-    testContainer.register('IInterpreterService', { useClass: InterpreterService });
+    testContainer.registerSingleton('IParserService', ParserService);
+    testContainer.registerSingleton('IInterpreterService', InterpreterService);
     testContainer.register('IOutputService', { useClass: OutputService });
-    testContainer.register('IFileSystemService', { useClass: FileSystemService });
-    testContainer.register('IPathService', { useClass: PathService });
-    testContainer.register('IPathOperationsService', { useClass: PathOperationsService });
+    testContainer.registerSingleton('IFileSystemService', FileSystemService);
+    testContainer.registerSingleton('IPathService', PathService);
+    testContainer.registerSingleton('IPathOperationsService', PathOperationsService);
     // <<< Register CircularityService >>>
-    testContainer.register('ICircularityService', { useClass: CircularityService });
+    testContainer.registerSingleton('ICircularityService', CircularityService);
     // <<< ADDED: Register DirectiveService >>>
-    testContainer.register('IDirectiveService', { useClass: DirectiveService });
+    testContainer.registerSingleton('IDirectiveService', DirectiveService);
     // <<< ADDED: Register ValidationService >>>
     testContainer.register('IValidationService', { useClass: ValidationService });
 
@@ -120,7 +120,7 @@ describe('API Integration Tests', () => {
   });
 
   afterEach(async () => {
-    testContainer?.clearInstances(); // Clear manual container first
+    testContainer?.dispose(); // <-- CHANGED: Use dispose instead of clearInstances
     await context?.cleanup();
     vi.resetModules();
     vi.clearAllMocks();

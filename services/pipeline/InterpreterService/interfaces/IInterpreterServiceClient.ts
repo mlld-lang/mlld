@@ -34,11 +34,13 @@ export interface IInterpreterServiceClient {
    * @param nodes - The nodes to interpret
    * @param options - Optional configuration options
    * @param initialState - Optional initial state for interpretation
+   * @param container - Optional container for dependency injection
    * @returns The final state after interpretation
    */
   interpret(
     nodes: MeldNode[],
     options?: InterpreterOptionsBase,
-    initialState?: IStateService
+    initialState?: IStateService,
+    container?: import('tsyringe').DependencyContainer
   ): Promise<IStateService>;
 }

@@ -27,6 +27,8 @@ export class InterpreterServiceClientFactory {
     @inject('DependencyContainer') container: DependencyContainer
   ) {
     this.container = container || globalContainer; // Fallback just in case
+    const containerId = (this.container as any).id || (this.container === globalContainer ? 'global' : 'unknown');
+    process.stdout.write(`DEBUG [InterpreterServiceClientFactory CONSTRUCTOR] Received container with ID: ${containerId}\n`);
     if (this.container === globalContainer) {
       logger.warn('InterpreterServiceClientFactory resolved using global container, might cause issues in tests.');
     }
@@ -70,9 +72,10 @@ export class InterpreterServiceClientFactory {
     const service = this.getInterpreterService(); 
     
     return {
-      interpret: async (nodes: MeldNode[], options?: InterpreterOptionsBase, initialState?: IStateService): Promise<IStateService> => {
+      interpret: async (nodes: MeldNode[], options?: InterpreterOptionsBase, initialState?: IStateService, container?: DependencyContainer): Promise<IStateService> => {
         // Use the already fetched service instance
-        return await service.interpret(nodes, options, initialState);
+        // Pass the container if provided, otherwise let the service use its own resolution context
+        return await service.interpret(nodes, options, initialState, container);
       },
       createChildContext: async (
         parentState: IStateService,
