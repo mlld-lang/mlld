@@ -67,6 +67,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
     // ---> Log Entry <-----
     process.stdout.write(`DEBUG [ImportHandler.handle ENTER] Node Kind: ${context.directiveNode?.directive?.kind}\n`);
+    process.stdout.write(`DEBUG [ImportHandler.handle] CircularityService stack: ${JSON.stringify((this.circularityService as any)?._importStack || [])}\n`);
 
     const { directiveNode: baseNode, state: currentStateService, resolutionContext: inputResolutionContext } = context;
     const node = baseNode as DirectiveNode;
@@ -212,21 +213,45 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // 6. Interpret Content
       let sourceStateChanges: StateChanges | undefined;
       try {
+        // Before creating child state, get a reference to the CircularityService for tracking
+        process.stdout.write(`DEBUG [ImportHandler]: Before creating child state, CircularityService stack size: ${(this.circularityService as any)?._importStack?.length || 'unknown'}\n`);
+        
         const childState = await currentStateService.createChildState();
         if (sourceContextPath) {
           childState.setCurrentFilePath(sourceContextPath.validatedPath);
         }
+        
+        // Direct sanity check on child state parent relationship
+        process.stdout.write(`DEBUG [ImportHandler]: Created child state with ID: ${childState.getStateId()}, Has parent? ${!!childState.getParentState()}, Parent matches? ${childState.getParentState() === currentStateService}\n`);
 
         process.stdout.write(`DEBUG [ImportHandler]: BEFORE interpret call for ${resolvedIdentifier}\n`);
-        const interpretedState = await this.interpreterServiceClient!.interpret(
-          astNodes, 
-          { 
-            filePath: resolvedIdentifier, 
-            mergeState: false, 
-          }, 
-          childState,
-          this.circularityService
-        );
+        
+        // CRITICAL FIX: Begin tracking this import in the circularity service BEFORE interpretation
+        // This ensures the import stack is updated correctly before recursive imports
+        this.circularityService.beginImport(resolvedIdentifier);
+        process.stdout.write(`DEBUG [ImportHandler]: AFTER beginImport, stack: ${JSON.stringify((this.circularityService as any)?._importStack || [])}\n`);
+        
+        let interpretedState;
+        try {
+          interpretedState = await this.interpreterServiceClient!.interpret(
+            astNodes, 
+            { 
+              filePath: resolvedIdentifier, 
+              mergeState: false, 
+            }, 
+            childState,
+            this.circularityService  // Pass the circularity service to maintain import stack
+          );
+          
+          // Only end the import if interpretation completes successfully
+          this.circularityService.endImport(resolvedIdentifier);
+          process.stdout.write(`DEBUG [ImportHandler]: AFTER endImport, stack: ${JSON.stringify((this.circularityService as any)?._importStack || [])}\n`);
+        } catch (error) {
+          // Clean up the import stack even if interpretation fails
+          this.circularityService.endImport(resolvedIdentifier);
+          process.stdout.write(`DEBUG [ImportHandler]: AFTER error endImport, stack: ${JSON.stringify((this.circularityService as any)?._importStack || [])}\n`);
+          throw error;
+        }
         process.stdout.write(`DEBUG [ImportHandler]: AFTER interpret call for ${resolvedIdentifier} (resolved)\n`);
 
         sourceStateChanges = { variables: interpretedState.getLocalChanges() };

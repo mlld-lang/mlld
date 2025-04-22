@@ -619,34 +619,80 @@ export class StateService implements IStateService {
   process.stdout.write(`DEBUG [StateService.createChildState ENTRY] ParentStateID: ${this.getStateId()}, Container ID: ${(this.container as any)?.id || 'unknown'}, IsRegistered('ParentStateServiceForChild'): ${this.container.isRegistered('ParentStateServiceForChild')}
 `);
   
-  // --- Use Container to Resolve Child --- 
-  const childContainer = this.container.createChildContainer();
-  
-  // Register the current instance (parent) using a specific token
-  childContainer.registerInstance<IStateService>('ParentStateServiceForChild', this);
-  process.stdout.write(`DEBUG [StateService.createChildState] After registering ParentStateServiceForChild. ChildContainer ID: ${(childContainer as any)?.id || 'unknown'}, IsRegistered: ${childContainer.isRegistered('ParentStateServiceForChild')}
-`);
-
-  // Resolve StateService using the child container. 
-  // It will inject dependencies from the child/parent hierarchy.
-  // The constructor needs to be adapted to inject 'ParentStateServiceForChild' optionally.
+  // --- Method 1: Manual Child Service Creation ---
+  // This approach ensures more direct control over instance creation and parent/child relationships
   try {
-    const childService = childContainer.resolve(StateService);
-    process.stdout.write(`DEBUG [StateService.createChildState] Created child state with ID: ${childService.getStateId()}, Has parent? ${!!childService.getParentState()}, Parent matches? ${childService.getParentState() === this}
+    // First, create a new state factory instance using the same parent state factory
+    const childStateFactory = this.stateFactory;
+    
+    // Then, create a new state service instance directly
+    const childService = new StateService(
+      childStateFactory,            // Use the same state factory
+      this.container,               // Use the parent container
+      this.eventService,            // Share the event service
+      undefined,                    // No need for tracking factory
+      this,                         // Explicitly pass this instance as parent
+      undefined                     // No direct parent needed
+    );
+    
+    // Initialize the new child service (sets up state from parent)
+    childService.initializeState(this);
+    
+    process.stdout.write(`DEBUG [StateService.createChildState] Created MANUAL child state with ID: ${childService.getStateId()}, Has parent? ${!!childService.getParentState()}, Parent matches? ${childService.getParentState() === this}
 `);
     
-    // Verify that we have proper parent state linkage
-    if (!childService.getParentState()) {
-      process.stdout.write(`WARNING [StateService.createChildState] Child state created but parent reference is missing! This may cause recursive import issues.
-`);
-    }
-    
-    logger.debug(`[StateService ${this.getStateId()}] Child state created via container: ${childService.getStateId()}`);
     return childService;
   } catch (error) {
-    process.stdout.write(`ERROR [StateService.createChildState] Failed to resolve child StateService: ${error instanceof Error ? error.message : String(error)}
+    process.stdout.write(`ERROR [StateService.createChildState] Failed to manually create child StateService: ${error instanceof Error ? error.message : String(error)}
 `);
-    throw error;
+    
+    // Fall back to container-based approach if manual creation fails
+    process.stdout.write(`DEBUG [StateService.createChildState] Falling back to container-based child creation
+`);
+    
+    // --- Method 2: Container-based Child Service Creation (Fallback) ---
+    try {
+      // Create a child container
+      const childContainer = this.container.createChildContainer();
+      
+      // Register the current instance (parent) using a specific token
+      childContainer.registerInstance<IStateService>('ParentStateServiceForChild', this);
+      process.stdout.write(`DEBUG [StateService.createChildState] After registering ParentStateServiceForChild. ChildContainer ID: ${(childContainer as any)?.id || 'unknown'}, IsRegistered: ${childContainer.isRegistered('ParentStateServiceForChild')}
+`);
+
+      // Register shared singletons that need to persist across state instances
+      // Critical for maintaining service state during recursive imports
+      if (this.container.isRegistered('ICircularityService')) {
+        const circularityService = this.container.resolve('ICircularityService');
+        process.stdout.write(`DEBUG [StateService.createChildState] Registering CircularityService in child container. Stack size: ${(circularityService as any)?._importStack?.length || 'unknown'}
+`);
+        childContainer.registerInstance('ICircularityService', circularityService);
+      }
+
+      // Resolve StateService using the child container
+      const childService = childContainer.resolve(StateService);
+      process.stdout.write(`DEBUG [StateService.createChildState] Created CONTAINER child state with ID: ${childService.getStateId()}, Has parent? ${!!childService.getParentState()}, Parent matches? ${childService.getParentState() === this}
+`);
+      
+      // Verify that we have proper parent state linkage
+      if (!childService.getParentState()) {
+        process.stdout.write(`WARNING [StateService.createChildState] Child state created but parent reference is missing! This may cause recursive import issues.
+`);
+        
+        // CRITICAL FIX: Explicitly set the parent service if it's not set by DI
+        // This ensures the parent reference is maintained across state instances
+        (childService as any).parentService = this;
+        process.stdout.write(`DEBUG [StateService.createChildState] FIXED: Manually set parent reference. Rechecking: Has parent? ${!!childService.getParentState()}, Parent matches? ${childService.getParentState() === this}
+`);
+      }
+      
+      logger.debug(`[StateService ${this.getStateId()}] Child state created via container: ${childService.getStateId()}`);
+      return childService;
+    } catch (fallbackError) {
+      process.stdout.write(`ERROR [StateService.createChildState] Both creation methods failed: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}
+`);
+      throw fallbackError;
+    }
   }
 }  
 
