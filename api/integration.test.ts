@@ -97,7 +97,7 @@ describe('API Integration Tests', () => {
     testContainer.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
     testContainer.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
     testContainer.register(FileSystemServiceClientFactory, { useClass: FileSystemServiceClientFactory });
-    testContainer.register(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory });
+    testContainer.registerSingleton(InterpreterServiceClientFactory, InterpreterServiceClientFactory);
 
     // Register Real Services (Singleton State)
     testContainer.registerSingleton('IStateService', StateService);

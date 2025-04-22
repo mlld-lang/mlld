@@ -5,7 +5,7 @@ import type { StateNode } from '@services/state/StateService/types.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import type { IStateEventService, StateEvent, StateTransformEvent } from '@services/state/StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
-import { inject, container, injectable } from 'tsyringe';
+import { inject, container, injectable, DependencyContainer } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
@@ -53,12 +53,13 @@ function getContainer() {
 })
 export class StateService implements IStateService {
   // Initialize with default or it will be set in initialization methods
-  private stateFactory: StateFactory = new StateFactory();
+  private stateFactory: StateFactory;
   private currentState!: StateNode;
   private _isImmutable: boolean = false;
   private eventService?: IStateEventService;
   private trackingService?: IStateTrackingService;
   private parentService?: IStateService;
+  private container: DependencyContainer;
   
   // Factory pattern properties
   private trackingServiceClientFactory?: StateTrackingServiceClientFactory;
@@ -68,49 +69,47 @@ export class StateService implements IStateService {
   /**
    * Creates a new StateService instance using dependency injection
    * 
-   * @param stateFactory - Factory for creating state nodes and managing state operations
-   * @param eventService - Service for handling state events and notifications
-   * @param trackingServiceClientFactory - Factory for creating tracking service clients
-   * @param parentState - Optional parent state service to inherit from (used for nested imports)
+   * @param stateFactory - Factory for creating state nodes (required)
+   * @param container - Dependency container for resolving dependencies (required)
+   * @param eventService - Service for handling state events and notifications (optional)
+   * @param trackingServiceClientFactory - Factory for creating tracking service clients (optional)
+   * @param injectedParentState - Optional parent state service to inherit from (used for nested imports)
+   * @param directParentState - Keep direct parentState for potential root-level creation (though DI is preferred)
    */
   constructor(
-    @inject(StateFactory) stateFactory?: StateFactory,
-    @inject('IStateEventService') eventService?: IStateEventService,
+    // Required dependencies first
+    @inject(StateFactory) stateFactory: StateFactory,
+    @inject('DependencyContainer') container: DependencyContainer,
+    // Optional dependencies 
+    @inject('IStateEventService') eventService?: IStateEventService, 
     @inject('StateTrackingServiceClientFactory') trackingServiceClientFactory?: StateTrackingServiceClientFactory,
-    parentState?: IStateService
+    // Optional parent state (either passed directly for root or injected for child)
+    @inject('ParentStateServiceForChild') injectedParentState?: IStateService,
+    // Keep direct parentState for potential root-level creation (though DI is preferred)
+    directParentState?: IStateService 
   ) {
-    if (stateFactory) {
-      this.stateFactory = stateFactory;
-      this.eventService = eventService;
-      this.parentService = parentState;
-      
-      // Initialize tracking client factory
-      this.trackingServiceClientFactory = trackingServiceClientFactory;
-      if (this.trackingServiceClientFactory) {
+    // Assign required dependencies
+    this.stateFactory = stateFactory;
+    this.container = container;
+    
+    // Assign optional dependencies
+    this.eventService = eventService;
+    this.trackingServiceClientFactory = trackingServiceClientFactory;
+    
+    // Determine parent: Prioritize injected parent (from child container resolution)
+    this.parentService = injectedParentState || directParentState;
+    
+    // Initialize tracking client factory if provided
+    if (this.trackingServiceClientFactory) {
         this.factoryInitialized = true;
         this.initializeTrackingClient();
-      }
-      
-      // Initialize state with parent if provided
-      this.initializeState(this.parentService);
     } else {
-      // Fallback for non-DI initialization
-      logger.warn('StateService initialized without factory in DI-only mode');
-      this.stateFactory = new StateFactory();
-      
-      // Use proper type guards to determine service type
-      if (eventService && this.isStateEventService(eventService)) {
-        this.eventService = eventService;
-      }
-      
-      // Initialize state with parent if provided
-      const actualParentState = parentState || 
-        (eventService && this.isStateService(eventService) ? 
-          eventService : undefined);
-      
-      this.parentService = actualParentState;
-      this.initializeState(actualParentState);
+        this.factoryInitialized = false;
     }
+    
+    // Initialize state with parent if provided
+    // Ensure stateFactory is assigned before calling initializeState
+    this.initializeState(this.parentService);
   }
 
   /**
@@ -617,55 +616,28 @@ export class StateService implements IStateService {
   }
 
   createChildState(options?: Partial<{ /* VariableCopyOptions TBD */ }>): IStateService {
-    this.checkMutable();
+    logger.debug(`[StateService ${this.getStateId()}] Creating child state`);
     
-    const childNode = this.stateFactory.createChildState(this.currentState, { 
-       // Pass any relevant options derived from the input `options` if needed
-    });
-
-    const childService = new StateService(
-      this.stateFactory,
-      this.eventService,
-      this.trackingServiceClientFactory,
-      this
-    );
-
-    // Set the node created by the factory onto the new service instance
-    childService._setInternalStateNode(childNode);
-
-    this.ensureFactoryInitialized();
-    const childId = childService.getStateId();
-    if (childId) {
-    if (this.trackingClient) {
-      try {
-        this.trackingClient.registerRelationship({
-          sourceId: this.currentState.stateId,
-                    targetId: childId,
-          type: 'parent-child',
-          timestamp: Date.now(),
-          source: 'parent'
-        });
-        if (this.trackingClient.registerEvent) {
-          this.trackingClient.registerEvent({
-            stateId: this.currentState.stateId,
-            type: 'created-child',
-            timestamp: Date.now(),
-                        details: { childId: childId },
-            source: 'parent'
-          });
-        }
-      } catch (error) {
-        logger.warn('Failed to register child state creation with tracking client', { error });
-      }
-    } else if (this.trackingService) {
-      try {
-                this.trackingService.addRelationship(this.currentState.stateId, childId, 'parent-child');
-      } catch (error) {
-        logger.warn('Failed to register parent-child relationship with tracking service', { error });
-            }
-      }
-    }
+    // --- Use Container to Resolve Child --- 
+    const childContainer = this.container.createChildContainer();
     
+    // Register the current instance (parent) using a specific token
+    childContainer.registerInstance<IStateService>('ParentStateServiceForChild', this);
+
+    // Resolve StateService using the child container. 
+    // It will inject dependencies from the child/parent hierarchy.
+    // The constructor needs to be adapted to inject 'ParentStateServiceForChild' optionally.
+    const childService = childContainer.resolve(StateService);
+    
+    // TODO: Adapt StateService constructor to optionally inject 'ParentStateServiceForChild' 
+    // and assign it to this.parentService if present. 
+    // For now, this resolution assumes the constructor handles the parent correctly OR 
+    // we manually set it after resolution if needed (less ideal).
+
+    // Copy variables (Assuming this logic exists/works)
+    // copyVariables(this, childService, options);
+    
+    logger.debug(`[StateService ${this.getStateId()}] Child state created via container: ${childService.getStateId()}`);
     return childService;
   }
 
@@ -724,6 +696,7 @@ export class StateService implements IStateService {
 
     const clonedService = new StateService(
       this.stateFactory,
+      this.container,
       this.eventService,
       this.trackingServiceClientFactory,
       this.parentService

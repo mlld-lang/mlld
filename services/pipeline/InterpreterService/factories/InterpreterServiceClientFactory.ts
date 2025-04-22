@@ -6,6 +6,7 @@ import { interpreterLogger as logger } from '@core/utils/logger.js';
 import type { MeldNode } from '@core/syntax/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { InterpreterOptionsBase } from '@core/shared-service-types.js';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 
 /**
  * Factory for creating interpreter service clients
@@ -72,10 +73,9 @@ export class InterpreterServiceClientFactory {
     const service = this.getInterpreterService(); 
     
     return {
-      interpret: async (nodes: MeldNode[], options?: InterpreterOptionsBase, initialState?: IStateService, container?: DependencyContainer): Promise<IStateService> => {
+      interpret: async (nodes: MeldNode[], options?: InterpreterOptionsBase, initialState?: IStateService, circularityService?: ICircularityService): Promise<IStateService> => {
         // Use the already fetched service instance
-        // Pass the container if provided, otherwise let the service use its own resolution context
-        return await service.interpret(nodes, options, initialState, container);
+        return await service.interpret(nodes, options, initialState, circularityService);
       },
       createChildContext: async (
         parentState: IStateService,

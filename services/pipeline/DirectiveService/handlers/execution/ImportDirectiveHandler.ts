@@ -221,7 +221,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             filePath: resolvedIdentifier, 
             mergeState: false, 
           }, 
-          childState
+          childState,
+          this.circularityService
         );
         process.stdout.write(`DEBUG [ImportHandler]: AFTER interpret call for ${resolvedIdentifier} (resolved)\n`);
 

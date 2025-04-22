@@ -21,6 +21,7 @@ import type { ResolutionContext } from '@core/types/resolution.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import * as crypto from 'crypto';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
+import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -298,11 +299,10 @@ export class InterpreterService implements IInterpreterService {
     nodes: MeldNode[],
     options?: InterpreterOptions,
     initialState?: IStateService,
-    container?: DependencyContainer
+    circularityService?: ICircularityService
   ): Promise<IStateService> {
-    // Log entry with container info if available
-    const receivedContainerId = (container as any)?.id || (container === globalContainer ? 'global' : (container ? 'unknown-child' : 'not-provided'));
-    process.stdout.write(`DEBUG [InterpreterService.interpret ENTRY] Container ID received: ${receivedContainerId}\n`);
+    // Log entry 
+    process.stdout.write(`DEBUG [InterpreterService.interpret ENTRY] Has circularityService param? ${!!circularityService}\n`);
     
     this.ensureInitialized();
 

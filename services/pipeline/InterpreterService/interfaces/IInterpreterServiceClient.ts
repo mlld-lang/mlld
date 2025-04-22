@@ -34,13 +34,13 @@ export interface IInterpreterServiceClient {
    * @param nodes - The nodes to interpret
    * @param options - Optional configuration options
    * @param initialState - Optional initial state for interpretation
-   * @param container - Optional container for dependency injection
+   * @param circularityService - Optional circularity service for resolution
    * @returns The final state after interpretation
    */
   interpret(
     nodes: MeldNode[],
     options?: InterpreterOptionsBase,
     initialState?: IStateService,
-    container?: import('tsyringe').DependencyContainer
+    circularityService?: import('@services/resolution/CircularityService/ICircularityService.js').ICircularityService
   ): Promise<IStateService>;
 }
