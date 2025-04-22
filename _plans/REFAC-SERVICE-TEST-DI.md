@@ -31,8 +31,6 @@ The core strategy is to apply the "Manual Child Container" pattern consistently 
 
 ## List of remaining tests (delete each test as it is is completed)
 
-services/state/StateService/StateFactory.test.ts
-
 services/fs/PathService/PathService.test.ts
 services/pipeline/OutputService/OutputService.test.ts
 
