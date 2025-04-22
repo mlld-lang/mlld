@@ -25,7 +25,6 @@ import type { OutputFormattingContext, DirectiveProcessingContext } from '@core/
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { AbsolutePath, RelativePath, unsafeCreateAbsolutePath } from '@core/types/paths.js';
 import { ILogger } from '@core/utils/logger';
