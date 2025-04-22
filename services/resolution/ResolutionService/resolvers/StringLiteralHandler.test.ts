@@ -15,10 +15,15 @@ describe('StringLiteralHandler', () => {
   beforeEach(async () => {
     testContainer = container.createChildContainer();
     
-    parserService = mockDeep<IParserService>();
-    testContainer.registerInstance<IParserService>('IParserService', parserService);
+    parserService = {
+      parseString: vi.fn(),
+      parseFile: vi.fn(),
+      parse: vi.fn(),
+      parseWithLocations: vi.fn()
+    };
+    testContainer.registerInstance<IParserService>('IParserService', parserService as IParserService);
     
-    handler = new StringLiteralHandler(parserService);
+    handler = new StringLiteralHandler(parserService as IParserService);
     
     vi.resetAllMocks();
   });

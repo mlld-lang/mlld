@@ -81,8 +81,8 @@ import type { Mocked, Mock } from 'vitest'; // Import Mock
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
 
-// Mock the logger
-const createManualLoggerMock = () => ({ // Define helper function
+// Define helper function BEFORE vi.mock
+const createManualLoggerMock = () => ({ 
   debug: vi.fn(),
   info: vi.fn(),
   warn: vi.fn(),
@@ -91,6 +91,7 @@ const createManualLoggerMock = () => ({ // Define helper function
   level: 'debug' // Add level property based on ILogger interface
 });
 
+// Mock the logger
 vi.mock('@core/utils/logger', () => ({ // Update mock to include all needed loggers
   logger: createManualLoggerMock(),
   resolutionLogger: createManualLoggerMock(),
