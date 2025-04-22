@@ -33,7 +33,7 @@ import { container, type DependencyContainer } from 'tsyringe';
 // Import tokens and helpers for manual DI setup
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
-import { URL } from 'node:url'; 
+import { URL } from 'node:url';
 // Import interfaces/classes to mock
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
@@ -47,9 +47,13 @@ import {
   createDataVariable, 
   createPathVariable, 
   type TextVariable,
-  type DataVariable 
+  type DataVariable,
 } from '@core/types';
-import type { IValidationService } from '@services/validation/IValidationService.js';
+// Import StateChanges from the correct location
+import type { StateChanges } from '@core/directives/DirectiveHandler';
+import crypto from 'crypto';
+// Import IParserServiceClient for mocking
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),
@@ -59,15 +63,23 @@ import type { IValidationService } from '@services/validation/IValidationService
 describe('InterpreterService Integration', () => {
   let context: TestContextDI;
   let testContainer: DependencyContainer;
+  // Declare service variables outside beforeEach
   let interpreter: IInterpreterService;
   let state: IStateService;
   let parser: IParserService;
+  // Declare mock variables outside beforeEach
   let mockDirectiveClient: IDirectiveServiceClient;
-  let mockValidationService: IValidationService;
-  let mockStateService: IStateService;
+  let mockDirectiveClientFactory: DirectiveServiceClientFactory;
+  let mockResolutionService: IResolutionService;
+  let mockParserClientFactory: ParserServiceClientFactory;
+  let mockParserServiceClient: IParserServiceClient; // Declare mock parser client
   let mockPathService: IPathService;
+  let mockURLContentResolver: IURLContentResolver;
 
   beforeEach(async () => {
+    // Reset mocks first
+    vi.resetAllMocks();
+    
     context = TestContextDI.createIsolated();
     await context.initialize();
     
@@ -82,35 +94,40 @@ describe('InterpreterService Integration', () => {
     } as IDirectiveServiceClient;
     
     vi.spyOn(mockDirectiveClient, 'supportsDirective').mockReturnValue(true);
-    vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementation(
-      async (node: MeldNode, context: IDirectiveHandlerContext) => {
-        // Original state for testing purposes
-        // Return a valid, empty DirectiveResult for the default mock
-        return { stateChanges: undefined, replacement: [] };
-      },
-    );
+    // Define handleDirective mock implementation separately for clarity
+    const mockHandleDirectiveImpl = async (node: DirectiveNode, context: DirectiveProcessingContext): Promise<DirectiveResult> => {
+      // Default mock returns empty result
+      return { stateChanges: undefined, replacement: [] };
+    };
+    vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementation(mockHandleDirectiveImpl);
     
     // --- Mock DirectiveServiceClientFactory --- 
-    // const mockDirectiveClientFactory = mock<DirectiveServiceClientFactory>(); // Don't use vitest-mock-extended here
     // Manually create the factory mock
-    const mockDirectiveClientFactory = {
+    mockDirectiveClientFactory = {
       createClient: vi.fn(),
-      directiveService: undefined // Add missing required property 
+      // directiveService: undefined // Property 'directiveService' does not exist on type 'DirectiveServiceClientFactory'.ts(2339)
     } as unknown as DirectiveServiceClientFactory; // Cast via unknown to satisfy type checker
     
     // Configure the factory mock to return our manual client mock using vi.spyOn
     vi.spyOn(mockDirectiveClientFactory, 'createClient').mockReturnValue(mockDirectiveClient);
-    
-    // >>> REGISTER Dependencies in the MANUAL container <<<
-    // Register MOCKS for InterpreterService dependencies
-    testContainer.registerInstance(DirectiveServiceClientFactory, mockDirectiveClientFactory); // Mock Factory
-    testContainer.registerInstance('IResolutionService', mock<IResolutionService>()); // Mock Service
-    testContainer.registerInstance('ParserServiceClientFactory', mock<ParserServiceClientFactory>()); // Mock Factory
-    testContainer.registerInstance('IPathService', mock<IPathService>()); // Mock Service
-    // Register infrastructure mocks needed by other services
-    testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs); // Use mock FS from TestContextDI
-    // Register mock IURLContentResolver (copied from TestContextDI)
-    const mockURLContentResolver = {
+
+    // --- Mock ParserServiceClient & Factory ---
+    // Create a basic manual mock for the client
+    mockParserServiceClient = { 
+      parse: vi.fn(), 
+      parseWithLocation: vi.fn() 
+    } as unknown as IParserServiceClient;
+    // Create the factory mock manually
+    mockParserClientFactory = {
+      createClient: vi.fn()
+    } as unknown as ParserServiceClientFactory;
+    // Configure the factory mock to return the client mock
+    vi.spyOn(mockParserClientFactory, 'createClient').mockReturnValue(mockParserServiceClient);
+
+    // --- Create other mocks ---
+    mockResolutionService = mock<IResolutionService>();
+    mockPathService = mock<IPathService>();
+    mockURLContentResolver = {
       isURL: vi.fn().mockImplementation((path: string) => {
         if (!path) return false;
         try { const url = new URL(path); return !!url.protocol && !!url.host; } catch { return false; }
@@ -122,145 +139,44 @@ describe('InterpreterService Integration', () => {
         return { content: `Mock content for ${url}`, metadata: { statusCode: 200, contentType: 'text/plain' }, fromCache: false, url };
       })
     };
+    
+    // >>> REGISTER Dependencies in the MANUAL container <<<
+    // Register MOCKS for InterpreterService dependencies
+    testContainer.registerInstance(DirectiveServiceClientFactory, mockDirectiveClientFactory);
+    testContainer.registerInstance('IResolutionService', mockResolutionService); 
+    testContainer.registerInstance(ParserServiceClientFactory, mockParserClientFactory);
+    testContainer.registerInstance('IPathService', mockPathService); 
+    // Register infrastructure mocks
+    testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
     testContainer.registerInstance<IURLContentResolver>('IURLContentResolver', mockURLContentResolver);
+    // Register ParentStateServiceForChild using a factory returning null
+    testContainer.register<IStateService | null>('ParentStateServiceForChild', { 
+        useFactory: () => null 
+    });
     
     // Register REAL Service Implementations 
     testContainer.register('IInterpreterService', { useClass: InterpreterService });
-    testContainer.register('IStateService', { useClass: StateService }); // Keep StateService real for now
-    testContainer.register('IParserService', { useClass: ParserService }); // Keep ParserService real
+    testContainer.register('IStateService', { useClass: StateService }); 
+    testContainer.register('IParserService', { useClass: ParserService }); 
+    testContainer.registerInstance('DependencyContainer', testContainer);
     // --- End Registrations ---
     
+    // Resolve services AFTER registration
     interpreter = testContainer.resolve<IInterpreterService>('IInterpreterService'); 
     state = testContainer.resolve<IStateService>('IStateService'); 
     parser = testContainer.resolve<IParserService>('IParserService');
     
+    // Register TrackingService
     const trackingService = new StateTrackingService();
     testContainer.registerInstance('IStateTrackingService', trackingService);
     
+    // Load fixtures 
     await context.fixtures.load('interpreterTestProject');
-
-    // --- Create Mocks ---
-    mockValidationService = { validate: vi.fn() } as unknown as IValidationService;
-    
-    // <<< Create a more realistic StateService mock >>>
-    const stateStorage: Record<string, any> = {}; // Simple key-value store for variables
-    mockStateService = {
-      _mockStorage: stateStorage,
-      clone: vi.fn().mockImplementation(() => { 
-        // Create a NEW mock instance with COPIED storage for clone
-        const clonedStorage = { ...stateStorage }; 
-        const clonedMock: IStateService = {
-          ...mockStateService, // Copy existing mock methods
-          _mockStorage: clonedStorage, 
-          getStateId: vi.fn().mockReturnValue(crypto.randomUUID()), // Give clone new ID
-          clone: vi.fn().mockImplementation(() => { throw new Error('Cannot clone a clone in this simple mock'); }), // Prevent deep clone issues
-          // Re-mock methods that modify storage to use the cloned storage
-          setVariable: vi.fn().mockImplementation(async (variable) => {
-            clonedStorage[variable.name] = variable;
-            return variable;
-          }),
-          setTextVar: vi.fn().mockImplementation(async (name, value, metadata) => {
-            const variable = createTextVariable(name, value, metadata);
-            clonedStorage[name] = variable;
-            return variable;
-          }),
-          setDataVar: vi.fn().mockImplementation(async (name, value, metadata) => {
-            const variable = createDataVariable(name, value, metadata);
-            clonedStorage[name] = variable;
-            return variable;
-          }),
-          setPathVar: vi.fn().mockImplementation(async (name, value, metadata) => {
-             const variable = createPathVariable(name, value, metadata);
-             clonedStorage[name] = variable;
-             return variable;
-          }),
-           setCommand: vi.fn().mockImplementation(async (name, value, metadata) => { 
-               // Assuming commands are stored similarly for this mock
-               const variable = { type: VariableType.COMMAND, name, value, metadata }; 
-               clonedStorage[name] = variable;
-               return variable as any; // Adjust return type as needed
-           }),
-          // Re-mock getVariable to read from the specific clone's storage
-          getVariable: vi.fn().mockImplementation((name: string) => {
-            return clonedStorage[name];
-          }),
-          applyStateChanges: vi.fn().mockImplementation(async (changes: StateChanges) => {
-            // Simplified apply for mock: directly modifies clonedStorage
-             if (changes.variables) {
-               for (const [varName, variable] of Object.entries(changes.variables)) {
-                  if (variable) { // Assume set
-                     clonedStorage[varName] = variable;
-                  } else { // Assume remove if value is null/undefined? Needs clearer contract.
-                     delete clonedStorage[varName];
-                  }
-               }
-             }
-            return clonedMock; // Return self after modification
-          })
-        };
-        return clonedMock;
-      }),
-      // Initial mock methods operating on the main stateStorage
-      setVariable: vi.fn().mockImplementation(async (variable) => {
-        stateStorage[variable.name] = variable;
-        return variable;
-      }),
-      setTextVar: vi.fn().mockImplementation(async (name, value, metadata) => {
-        const variable = createTextVariable(name, value, metadata);
-        stateStorage[name] = variable;
-        return variable;
-      }),
-      setDataVar: vi.fn().mockImplementation(async (name, value, metadata) => {
-        const variable = createDataVariable(name, value, metadata);
-        stateStorage[name] = variable;
-        return variable;
-      }),
-      setPathVar: vi.fn().mockImplementation(async (name, value, metadata) => {
-        const variable = createPathVariable(name, value, metadata);
-        stateStorage[name] = variable;
-        return variable;
-      }),
-      setCommand: vi.fn().mockImplementation(async (name, value, metadata) => {
-        const variable = { type: VariableType.COMMAND, name, value, metadata };
-        stateStorage[name] = variable;
-        return variable as any;
-      }),
-      getVariable: vi.fn().mockImplementation((name: string) => {
-        return stateStorage[name];
-      }),
-      applyStateChanges: vi.fn().mockImplementation(async (changes: StateChanges) => { 
-          // Simplified apply for mock: directly modifies stateStorage
-          if (changes.variables) {
-             for (const [varName, variable] of Object.entries(changes.variables)) {
-                if (variable) { // Assume set
-                   stateStorage[varName] = variable;
-                } else { // Assume remove if value is null/undefined? Needs clearer contract.
-                   delete stateStorage[varName];
-                }
-             }
-           }
-          return mockStateService; // Return self
-      }),
-      getCurrentFilePath: vi.fn().mockReturnValue('mock-test.meld'),
-      isTransformationEnabled: vi.fn().mockReturnValue(true),
-      getStateId: vi.fn().mockReturnValue('mock-state-id'),
-      // Add stubs for other IStateService methods if needed by tests
-      getNodes: vi.fn().mockReturnValue([]),
-      getOriginalNodes: vi.fn().mockReturnValue([]),
-      getTransformedNodes: vi.fn().mockReturnValue([]),
-      addNode: vi.fn(),
-      transformNode: vi.fn(),
-      createChildState: vi.fn(), // Add mock for createChildState if called
-      mergeChildState: vi.fn() // Add mock for mergeChildState if called
-    } as unknown as IStateService;
-    // <<< End realistic StateService mock >>>
-
-    mockPathService = { resolvePath: vi.fn(), validatePath: vi.fn(), normalizePath: vi.fn() } as unknown as IPathService;
-    // Configure mockPathService resolvePath to return the input path for simplicity
   });
 
   afterEach(async () => {
-    testContainer?.clearInstances(); 
+    // Use dispose instead of clearInstances
+    testContainer?.dispose(); 
     await context?.cleanup();
   });
 
@@ -332,6 +248,7 @@ describe('InterpreterService Integration', () => {
       const varName = 'testPath';
       const node: DirectiveNode = {
         type: 'Directive',
+        nodeId: crypto.randomUUID(),
         location: context.factory.createLocation(1, 1),
         directive: {
           kind: 'path',
@@ -834,6 +751,7 @@ describe('InterpreterService Integration', () => {
       const varName = 'test';
       const node: DirectiveNode = {
         type: 'Directive',
+        nodeId: crypto.randomUUID(),
         location: context.factory.createLocation(1, 1),
         directive: { kind: 'path', identifier: varName, path: { raw: 'filename.meld', structured: { base: '.', segments: ['filename.meld'], cwd: true }, isPathVariable: false } }
       };

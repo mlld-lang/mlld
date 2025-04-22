@@ -4,7 +4,7 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { DirectiveNode } from '@core/syntax/types/index.js';
 import { IDirectiveService, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -25,49 +25,57 @@ import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterS
 import type { OutputFormattingContext } from '@core/types/index.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { InterpolatableValue, VariableReferenceNode, StructuredPath } from '@core/syntax/types/nodes.js';
-import type { JsonValue } from '@core/types/index.js';
+import type { JsonValue, VariableMetadata } from '@core/types/index.js';
 import { createRawPath, unsafeCreateAbsolutePath, RawPath, AbsolutePath, RelativePath } from '@core/types/paths.js';
 import crypto from 'crypto';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { ILogger } from '@core/utils/logger.js';
 
 // Define a simple mock OutputFormattingContext
 const mockFormattingContext: OutputFormattingContext = {
-  isBlock: false,
-  preserveLiteralFormatting: false,
-  preserveWhitespace: false,
+  isOutputLiteral: true,
+  contextType: 'block',
+  nodeType: 'directive',
+  atLineStart: true,
+  atLineEnd: false,
 };
 
 // Main test suite for DirectiveService
 describe('DirectiveService', () => {
+  let context: TestContextDI;
   let testContainer: DependencyContainer;
   let service: IDirectiveService;
   let mockTextHandler: IDirectiveHandler;
   let mockDataHandler: IDirectiveHandler;
   let mockImportHandler: IDirectiveHandler;
 
-  // Mocks for constructor dependencies
   let mockValidationService: IValidationService;
   let mockStateService: IStateService;
   let mockPathService: IPathService;
-  let mockFileSystemService: IFileSystemService;
   let mockParserService: IParserService;
   let mockInterpreterClient: IInterpreterServiceClient;
   let mockInterpreterClientFactory: InterpreterServiceClientFactory;
   let mockCircularityService: ICircularityService;
   let mockResolutionService: IResolutionService;
+  let mockFileSystemService: IFileSystemService;
+  let mockLogger: ILogger;
 
   beforeEach(async () => {
-    // Reset mocks before each test to ensure isolation
     vi.resetAllMocks();
+
+    context = TestContextDI.createIsolated();
+    await context.initialize();
+
+    testContainer = container.createChildContainer();
 
     // --- Create Mocks ---
     mockValidationService = { validate: vi.fn() } as unknown as IValidationService;
-    mockStateService = { 
-      // Configure clone to return the mock itself
-      clone: vi.fn().mockImplementation(() => mockStateService), 
+    mockStateService = {
+      clone: vi.fn().mockImplementation(() => mockStateService),
       setTextVar: vi.fn(),
-      setDataVar: vi.fn(), 
-      setPathVar: vi.fn(), 
-      setCommand: vi.fn(), 
+      setDataVar: vi.fn(),
+      setPathVar: vi.fn(),
+      setCommand: vi.fn(),
       getTextVar: vi.fn(),
       getDataVar: vi.fn(),
       getPathVar: vi.fn(),
@@ -75,66 +83,109 @@ describe('DirectiveService', () => {
       getCurrentFilePath: vi.fn().mockReturnValue('mock-test.meld'),
       isTransformationEnabled: vi.fn().mockReturnValue(true),
       getStateId: vi.fn().mockReturnValue('mock-state-id'),
-      _mockStorage: {}, // Add a property to store test values
-      // Add other methods as needed, maybe from MockFactory?
+      createChildState: vi.fn().mockImplementation(() => mockStateService),
+      _mockStorage: {},
+      resolveVariable: vi.fn(),
+      getVariable: vi.fn(),
+      getAllVariables: vi.fn().mockReturnValue({ text: {}, data: {}, path: {}, commands: {} }),
+      getNodes: vi.fn().mockReturnValue([]),
+      addNode: vi.fn(),
+      addNodes: vi.fn(),
+      setNodes: vi.fn(),
+      getTransformedNodes: vi.fn().mockReturnValue(null),
+      setTransformedNodes: vi.fn(),
+      setEventService: vi.fn(),
+      setTrackingService: vi.fn(),
+      getEventService: vi.fn().mockReturnValue({ emit: vi.fn(), on: vi.fn(), off: vi.fn() }),
+      getTrackingService: vi.fn().mockReturnValue({ trackStateOperation: vi.fn(), trackVariableAccess: vi.fn(), trackVariableMutation: vi.fn() }),
+      enableTransformation: vi.fn(),
+      disableTransformation: vi.fn(),
+      isImmutable: vi.fn().mockReturnValue(false),
+      setImmutable: vi.fn(),
+      getScope: vi.fn().mockReturnValue({}),
+      setScope: vi.fn(),
+      getParentState: vi.fn().mockReturnValue(null),
     } as unknown as IStateService;
-    mockPathService = { resolvePath: vi.fn(), validatePath: vi.fn(), normalizePath: vi.fn() } as unknown as IPathService;
-    // Configure mockPathService resolvePath to return the input path for simplicity
+    mockPathService = { resolvePath: vi.fn(), validatePath: vi.fn(), normalizePath: vi.fn(), dirname: vi.fn().mockReturnValue(process.cwd()) } as unknown as IPathService;
     vi.spyOn(mockPathService, 'resolvePath').mockImplementation(
-      (filePath): AbsolutePath | RelativePath => { 
-        // Simple mock: treat raw string input as absolute path for testing
-        const pathString = typeof filePath === 'string' ? filePath : filePath.raw;
+      (filePath: RawPath | StructuredPath, baseDir?: RawPath): AbsolutePath | RelativePath => {
+        let pathString: string;
+        if (typeof filePath === 'string') {
+          pathString = filePath;
+        } else if (filePath && typeof filePath === 'object' && 'structured' in filePath && filePath.structured) {
+          pathString = filePath.structured.segments.map((f: string) => f).join('/');
+        } else {
+          pathString = '';
+        }
         return unsafeCreateAbsolutePath(pathString);
       }
     );
     mockFileSystemService = { readFile: vi.fn(), exists: vi.fn() } as unknown as IFileSystemService;
-    mockParserService = { parse: vi.fn(), parseFile: vi.fn() } as unknown as IParserService;
+    mockParserService = { parse: vi.fn(), parseWithLocation: vi.fn(), parseFile: vi.fn() } as unknown as IParserService;
     mockInterpreterClient = { interpret: vi.fn(), createChildContext: vi.fn() } as unknown as IInterpreterServiceClient;
     mockInterpreterClientFactory = {
       createClient: vi.fn().mockReturnValue(mockInterpreterClient)
     } as unknown as InterpreterServiceClientFactory;
-    mockCircularityService = { beginImport: vi.fn(), endImport: vi.fn(), isInStack: vi.fn().mockReturnValue(false), checkVariableReference: vi.fn() } as unknown as ICircularityService;
-    mockResolutionService = { 
-      resolveInContext: vi.fn(), 
+    mockCircularityService = { beginImport: vi.fn(), endImport: vi.fn(), isInStack: vi.fn().mockReturnValue(false), checkVariableReference: vi.fn(), getImportStack: vi.fn().mockReturnValue([]), reset: vi.fn() } as unknown as ICircularityService;
+    mockResolutionService = {
+      resolveInContext: vi.fn(),
       resolveVariableReference: vi.fn(),
       resolveNodes: vi.fn(),
       resolvePath: vi.fn(),
       extractSection: vi.fn()
     } as unknown as IResolutionService;
 
-    // Configure mockResolutionService methods needed by real handlers
-    vi.spyOn(mockResolutionService, 'resolveNodes').mockImplementation(async (nodes, ctx) => 'ResolvedNodesValue'); // Simple placeholder
+    // --- Configure mocks ... ---
+    vi.spyOn(mockPathService, 'resolvePath').mockImplementation(
+      (filePath: RawPath | StructuredPath, baseDir?: RawPath): AbsolutePath | RelativePath => {
+        let pathString: string;
+        if (typeof filePath === 'string') {
+          pathString = filePath;
+        } else if (filePath && typeof filePath === 'object' && 'structured' in filePath && filePath.structured) {
+          pathString = filePath.structured.segments.map((f: string) => f).join('/');
+        } else {
+          pathString = '';
+        }
+        return unsafeCreateAbsolutePath(pathString);
+      }
+    );
     vi.spyOn(mockResolutionService, 'resolveInContext').mockImplementation(async (value, ctx) => {
-      return 'ResolvedContextValue_Global';
+      if (typeof value === 'string') {
+        return value;
+      } else if (isInterpolatableValueArray(value)) {
+        return value.map(n => n.type === 'Text' ? n.content : '').join('');
+      }
+      return 'ResolvedContextValue_Unknown';
     });
-
-    // Configure setDataVar mock
-    vi.spyOn(mockStateService, 'setDataVar').mockImplementation(async (name, value) => {
+    vi.spyOn(mockResolutionService, 'resolveNodes').mockImplementation(async (nodes, ctx) => 'ResolvedNodesValue');
+    vi.spyOn(mockStateService, 'setDataVar').mockImplementation(async (name: string, value: JsonValue, metadata?: Partial<VariableMetadata>) => {
        (mockStateService as any)._mockStorage[name] = value;
-       // Return structure satisfying Promise<DataVariable>
-       return { type: VariableType.DATA, name, value: value as JsonValue, metadata: {} } as DataVariable;
+       return;
     });
 
-    // --- Create Container & Register Mocks ---
-    testContainer = container.createChildContainer();
+    // >>> Register Core/Infrastructure Mocks FIRST <<<
+    testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
+    testContainer.registerInstance('IFileSystemService', mockFileSystemService);
+    // Register Logger Mock EARLY
+    testContainer.registerInstance('ILogger', { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn(), trace: vi.fn(), level: 'debug' });
+
+    // >>> Register Service Mocks <<<
     testContainer.registerInstance('IValidationService', mockValidationService);
     testContainer.registerInstance('IStateService', mockStateService);
     testContainer.registerInstance('IPathService', mockPathService);
-    testContainer.registerInstance('IFileSystemService', mockFileSystemService);
     testContainer.registerInstance('IParserService', mockParserService);
-    testContainer.registerInstance('InterpreterServiceClientFactory', mockInterpreterClientFactory); // Use string token
+    testContainer.registerInstance(InterpreterServiceClientFactory, mockInterpreterClientFactory);
     testContainer.registerInstance('ICircularityService', mockCircularityService);
     testContainer.registerInstance('IResolutionService', mockResolutionService);
-    testContainer.registerInstance('ILogger', { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() }); // Basic logger mock
-    testContainer.registerInstance('IInterpreterService', { interpret: vi.fn(), createChildContext: vi.fn() }); // Basic mock
+    testContainer.registerInstance('IInterpreterService', { interpret: vi.fn(), createChildContext: vi.fn() });
 
     testContainer.registerInstance('DependencyContainer', testContainer);
 
-    // --- Define Mock Handlers FIRST ---
+    // --- Define Mock Handlers ---
     mockTextHandler = {
         kind: 'text',
         handle: vi.fn(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult> => {
-            let resolvedValue = 'DefaultResolvedText'; // Default value
+            let resolvedValue = 'DefaultResolvedText';
             if (ctx.directiveNode.directive) {
               const directiveValue = ctx.directiveNode.directive.value;
               if (isInterpolatableValueArray(directiveValue)) {
@@ -144,7 +195,6 @@ describe('DirectiveService', () => {
               } else {
                 resolvedValue = String(directiveValue);
               }
-              // Return DirectiveResult with state changes
               return {
                 stateChanges: {
                   variables: {
@@ -159,7 +209,7 @@ describe('DirectiveService', () => {
     mockDataHandler = {
         kind: 'data',
         handle: vi.fn(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult> => {
-           let resolvedValue: unknown = 'DefaultResolvedData'; // Default value
+           let resolvedValue: unknown = 'DefaultResolvedData';
            if (ctx.directiveNode.directive) {
                const directiveValue = ctx.directiveNode.directive.value;
                if (isInterpolatableValueArray(directiveValue)) {
@@ -167,7 +217,6 @@ describe('DirectiveService', () => {
                } else {
                   resolvedValue = directiveValue;
                }
-               // Return DirectiveResult with state changes
                return {
                  stateChanges: {
                    variables: {
@@ -181,23 +230,23 @@ describe('DirectiveService', () => {
     };
     mockImportHandler = {
         kind: 'import',
-        handle: async (ctx: DirectiveProcessingContext): Promise<DirectiveResult> => {
-            // Return the new DirectiveResult shape
-            return { stateChanges: undefined, replacement: [] }; // Import usually has empty replacement
-        }
+        handle: vi.fn(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult> => {
+            return { stateChanges: undefined, replacement: [] };
+        })
     };
 
-    // --- Register Mock Handlers BEFORE Resolving Service ---
+    // --- Register Mock Handlers ---
     testContainer.registerInstance('IDirectiveHandler', mockTextHandler);
     testContainer.registerInstance('IDirectiveHandler', mockDataHandler);
     testContainer.registerInstance('IDirectiveHandler', mockImportHandler);
 
-    // --- Resolve Service Under Test AFTER Registering Handlers ---
+    // --- Resolve Service Under Test LAST ---
     service = testContainer.resolve(DirectiveService);
   });
 
   afterEach(async () => {
     testContainer?.dispose();
+    await context?.cleanup();
   });
 
   describe('Service initialization and Handler Registration', () => {
@@ -211,23 +260,23 @@ describe('DirectiveService', () => {
     it('should throw if handler is missing when processing', async () => {
       const freshContext = TestContextDI.createTestHelpers().setupWithStandardMocks({}, { isolatedContainer: true });
 
-      // Create an empty DirectiveService instance (needs mocks injected if constructor requires them)
-      // OR, simpler: Register a basic object that conforms to the interface but has no handlers
+      const minimalMockState = {
+        getCurrentFilePath: vi.fn().mockReturnValue('test.meld'),
+        clone: vi.fn().mockImplementation(() => minimalMockState),
+        getStateId: vi.fn().mockReturnValue('fresh-mock-state'),
+        isTransformationEnabled: vi.fn().mockReturnValue(true),
+      } as unknown as IStateService;
+      freshContext.registerMock('IStateService', minimalMockState);
+
       const mockEmptyDirectiveService = {
-        // Implement necessary methods from IDirectiveService if resolve() needs them
-        // For this test, we mainly need handleDirective to exist but fail internally
-        // Let's assume the real service resolution is the issue source, so replace it.
-        getSupportedDirectives: () => [], // Mock this method used in logging
+        getSupportedDirectives: () => [],
         handleDirective: vi.fn().mockImplementation(async (node, ctx) => {
-           // Simulate the check failing internally - throw the expected error
            throw new DirectiveError('Simulated: No handler registered', node.directive!.kind, DirectiveErrorCode.HANDLER_NOT_FOUND);
         })
       } as unknown as IDirectiveService;
 
-      // Register this mock instance to overwrite the default registration
       freshContext.registerMock('IDirectiveService', mockEmptyDirectiveService);
 
-      // Now resolve - it should get our mockEmptyDirectiveService
       const freshService = await freshContext.resolve<IDirectiveService>('IDirectiveService');
 
       const node = createTextDirective('test', 'value');
@@ -255,9 +304,8 @@ describe('DirectiveService', () => {
       it('should route to text handler and update state', async () => {
         const directiveNode = createTextDirective('greeting', 'Hello Directive');
         const currentFilePath = 'test.meld';
-        const expectedResolvedValue = 'ResolvedContextValue_Global'; // From global mock setup
+        const expectedResolvedValue = 'Hello Directive';
         
-        // Use mocks configured in beforeEach
         vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue(currentFilePath);
         vi.spyOn(mockValidationService, 'validate').mockImplementation(vi.fn());
 
@@ -277,18 +325,16 @@ describe('DirectiveService', () => {
         expect(result.stateChanges?.variables?.greeting).toBeDefined();
         expect(result.stateChanges?.variables?.greeting?.type).toBe(VariableType.TEXT);
         expect(result.stateChanges?.variables?.greeting?.value).toBe(expectedResolvedValue);
-        expect(result.replacement).toBeUndefined(); // Expect no replacement node from this mock
+        expect(result.replacement).toBeUndefined();
       });
 
       it('should use resolution service for interpolated text value', async () => {
           const directiveNode = createTextDirective('greeting', 'Hello, {{name}}');
           const currentFilePath = 'interpolate.meld';
-          const expectedResolvedValue = 'ResolvedContextValue_Global'; // Value from global mock
+          const expectedResolvedValue = 'Hello, {{name}}';
 
           vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue(currentFilePath);
           vi.spyOn(mockValidationService, 'validate').mockImplementation(vi.fn());
-          // Ensure resolveInContext mock is set (it should be by global setup)
-          // vi.spyOn(mockResolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedValue);
 
           const processingContext: DirectiveProcessingContext = {
               state: mockStateService,
@@ -299,9 +345,7 @@ describe('DirectiveService', () => {
           const result = await service.handleDirective(directiveNode, processingContext);
 
           expect(mockValidationService.validate).toHaveBeenCalledWith(directiveNode);
-          // Assert that the mock handler was called
           expect(mockTextHandler.handle).toHaveBeenCalled();
-          // Assert the returned DirectiveResult contains the correct state change
           expect(result?.stateChanges?.variables?.greeting).toBeDefined();
           expect(result?.stateChanges?.variables?.greeting?.value).toBe(expectedResolvedValue);
       });
@@ -314,7 +358,6 @@ describe('DirectiveService', () => {
         if (directiveNode?.directive) { directiveNode.directive.source = 'literal'; }
         
         vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue('test-data.meld');
-        // No longer need to mock setDataVar, we check the result
 
         const processingContext: DirectiveProcessingContext = { 
             state: mockStateService, 
@@ -325,11 +368,9 @@ describe('DirectiveService', () => {
 
         const result = await service.handleDirective(directiveNode, processingContext);
 
-        // Verify the correct handler was called
         expect(mockDataHandler.handle).toHaveBeenCalledWith(expect.objectContaining({ 
           directiveNode: directiveNode 
         }));
-        // Assert the returned DirectiveResult contains the correct state change
         expect(result?.stateChanges?.variables?.config).toBeDefined();
         expect(result?.stateChanges?.variables?.config?.value).toEqual(dataValue);
       });
@@ -337,14 +378,12 @@ describe('DirectiveService', () => {
       it('should process data directive with variable interpolation', async () => { 
         const interpolatableValue: InterpolatableValue = [
           { type: 'Text', content: 'Value: ', nodeId: crypto.randomUUID() }, 
-          { type: 'VariableReference', identifier: 'sourceVar', valueType: 'text' } as VariableReferenceNode
+          { type: 'VariableReference', identifier: 'sourceVar', valueType: 'text', nodeId: crypto.randomUUID() } as VariableReferenceNode
         ];
         const directiveNode = createDataDirective('config', interpolatableValue );
-        const expectedResolvedValue = 'Value: ResolvedSource';
+        const expectedResolvedValue = 'ResolvedNodesValue';
 
-        // Mock necessary services (ResolutionService needed here)
         vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue(expectedResolvedValue);
-        // No longer need to mock setDataVar
 
         const processingContext: DirectiveProcessingContext = { 
             state: mockStateService, 
@@ -355,8 +394,7 @@ describe('DirectiveService', () => {
 
         const result = await service.handleDirective(directiveNode, processingContext);
 
-        // Assert the returned DirectiveResult contains the *resolved* value
-        expect(mockDataHandler.handle).toHaveBeenCalled(); // Verify handler called
+        expect(mockDataHandler.handle).toHaveBeenCalled();
         expect(result?.stateChanges?.variables?.config).toBeDefined();
         expect(result?.stateChanges?.variables?.config?.value).toBe(expectedResolvedValue);
       });
@@ -366,12 +404,14 @@ describe('DirectiveService', () => {
       it('should route to import handler', async () => {
         const directiveNode = createImportDirective('other.meld');
         const currentFilePath = 'main.meld';
+        const resolvedImportPath = unsafeCreateAbsolutePath('other.meld');
 
         vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue(currentFilePath);
         vi.spyOn(mockStateService, 'clone').mockImplementation(() => mockStateService);
         vi.spyOn(mockValidationService, 'validate').mockImplementation(vi.fn());
         vi.spyOn(mockCircularityService, 'isInStack').mockReturnValue(false);
         vi.spyOn(mockCircularityService, 'beginImport');
+        vi.spyOn(mockPathService, 'resolvePath').mockReturnValue(resolvedImportPath);
 
         const processingContext: DirectiveProcessingContext = {
             state: mockStateService,
@@ -379,20 +419,25 @@ describe('DirectiveService', () => {
             resolutionContext: ResolutionContextFactory.create(mockStateService, currentFilePath),
             formattingContext: mockFormattingContext,
         };
-        await service.handleDirective(directiveNode, processingContext);
+        const result = await service.handleDirective(directiveNode, processingContext);
 
         expect(mockValidationService.validate).toHaveBeenCalledWith(directiveNode);
+        expect(mockImportHandler.handle).toHaveBeenCalled();
+        expect(result).toEqual({ stateChanges: undefined, replacement: [] });
       });
 
-      // TODO(mock-issue): Skipping due to complex DI/mock interaction issues.
       it('should handle circular imports detection (mocked)', async () => {
         const node = createImportDirective('circular.meld');
         const currentFilePath = 'main.meld';
+        const resolvedCircularPath = unsafeCreateAbsolutePath('circular.meld');
 
         vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue(currentFilePath);
         vi.spyOn(mockStateService, 'clone').mockImplementation(() => mockStateService);
         vi.spyOn(mockValidationService, 'validate').mockImplementation(vi.fn());
-        vi.spyOn(mockCircularityService, 'isInStack').mockReturnValue(true);
+        vi.spyOn(mockCircularityService, 'isInStack').mockImplementation((filePath: string) => {
+          return filePath === resolvedCircularPath;
+        });
+        vi.spyOn(mockPathService, 'resolvePath').mockReturnValue(resolvedCircularPath);
 
         const processingContext: DirectiveProcessingContext = {
             state: mockStateService,
@@ -405,7 +450,7 @@ describe('DirectiveService', () => {
           .rejects.toThrowError(MeldError);
 
         expect(mockValidationService.validate).toHaveBeenCalledWith(node);
-        expect(mockCircularityService.isInStack).toHaveBeenCalledWith('circular.meld');
+        expect(mockCircularityService.isInStack).toHaveBeenCalledWith(resolvedCircularPath);
       });
     });
   });
