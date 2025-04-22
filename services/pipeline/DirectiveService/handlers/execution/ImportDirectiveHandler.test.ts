@@ -225,10 +225,15 @@ describe('ImportDirectiveHandler', () => {
       registerRelationship: vi.fn(),
       getStateLineage: vi.fn().mockReturnValue([]),
       getStateDescendants: vi.fn().mockReturnValue([]),
-      getAllStates: vi.fn().mockReturnValue([]),
-      getStateMetadata: vi.fn().mockReturnValue(undefined)
+      getAllStates: vi.fn(),
+      getStateMetadata: vi.fn(),
+      trackContextBoundary: vi.fn(),
+      trackVariableCrossing: vi.fn(),
+      getContextBoundaries: vi.fn(),
+      getVariableCrossings: vi.fn(),
+      getContextHierarchy: vi.fn(),
     };
-    testContainer.registerInstance<IStateTrackingService>('IStateTrackingService', mockStateTrackingService);
+    testContainer.registerInstance<IStateTrackingService>('StateTrackingService', mockStateTrackingService);
 
     testContainer.register(ImportDirectiveHandler, { useClass: ImportDirectiveHandler });
 
@@ -276,7 +281,7 @@ describe('ImportDirectiveHandler', () => {
         const resolvedPathString = typeof pathInput === 'string' ? pathInput : pathInput?.raw ?? '';
         const testCasePath = 
             resolvedPathString.includes('nonexistent') ? resolvedNonExistentPath :
-            resolvedPathString.includes('$./') || resolvedPathString.includes('$PROJECTPATH') ? resolvedProjectPath :
+            resolvedPathString.includes('$.') || resolvedPathString.includes('$PROJECTPATH') ? resolvedProjectPath :
             resolvedPathString.includes('$~/') || resolvedPathString.includes('$HOMEPATH') ? resolvedHomePath :
             resolvedPathString; 
         return Promise.resolve(createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath(testCasePath), true));
@@ -322,7 +327,7 @@ describe('ImportDirectiveHandler', () => {
       );
       
       mockInterpreterServiceClient.interpret.mockResolvedValue(createMockInterpretedState());
-      
+
       await handler.handle(mockProcessingContext);
       expect(mockResolutionService.resolveInContext).toHaveBeenCalledWith(node.directive.path, expect.anything());      
       expect(mockResolutionService.resolvePath).toHaveBeenCalledWith('$PROJECTPATH/samples/nested.meld', expect.anything());
