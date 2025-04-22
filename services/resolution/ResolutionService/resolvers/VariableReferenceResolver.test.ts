@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach, type Mock } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 
 // --- Corrected Core Type Imports ---
@@ -37,16 +37,24 @@ import { createVariableReferenceNode } from '@tests/utils/testFactories.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 // Removed duplicate import of IFilesystemPathState
 import { createStateServiceMock } from '@tests/utils/mocks/serviceMocks.js';
+import { container, type DependencyContainer } from 'tsyringe'; // Import container and DependencyContainer
+
+// Define explicit mock types matching used methods
+type MockResolutionService = Pick<IResolutionService, 'resolveNodes' | 'resolveInContext' | 'resolveFieldAccess' | 'validateResolution' | 'convertToFormattedString'>;
+type MockPathService = Pick<IPathService, 'resolvePath' | 'validatePath'>; // Add others if needed
 
 describe('VariableReferenceResolver', () => {
-  let contextDI: TestContextDI;
+  // Remove contextDI if not used for fs/fixtures
+  // let contextDI: TestContextDI; 
+  let testContainer: DependencyContainer; // Use manual container
   let resolver: VariableReferenceResolver;
   let stateService: ReturnType<typeof createStateServiceMock>;
-  let parserService: DeepMockProxy<IParserService>;
-  let resolutionService: DeepMockProxy<IResolutionService>;
-  let pathService: Partial<IPathService>;
+  let parserService: Partial<IParserService>; // Use Partial for manual mocks
+  let resolutionService: MockResolutionService; // Use explicit mock type
+  let pathService: MockPathService; // Use explicit mock type
   let context: ResolutionContext;
-  let fileSystemService: DeepMockProxy<IFileSystemService>;
+  // Remove fileSystemService if not directly needed by this resolver/tests
+  // let fileSystemService: DeepMockProxy<IFileSystemService>; 
 
   // --- Define ALL mock variables/defs used in tests --- 
   const mockGreetingVar: TextVariable = { name: 'greeting', type: VariableType.TEXT, value: 'Hello World' };
@@ -63,16 +71,28 @@ describe('VariableReferenceResolver', () => {
   const mockVar2: TextVariable = { name: 'var2', type: VariableType.TEXT, value: '{{var1}}' };
 
   beforeEach(async () => {
-    contextDI = TestContextDI.createIsolated();
+    // contextDI = TestContextDI.createIsolated(); // Remove if not used
+    testContainer = container.createChildContainer(); // Create child container
 
-    // Initialize mocks
+    // Initialize mocks (Manual objects)
     stateService = createStateServiceMock(); 
-    fileSystemService = mockDeep<IFileSystemService>();
-    parserService = mockDeep<IParserService>(); 
-    resolutionService = mockDeep<IResolutionService>();
+    // fileSystemService = mockDeep<IFileSystemService>(); // Remove if not needed
+    parserService = {
+      parse: vi.fn(),
+      parseWithLocations: vi.fn(),
+      parseFile: vi.fn(),
+      // Add other methods if needed by the resolver
+    };
+    resolutionService = {
+      resolveNodes: vi.fn(),
+      resolveInContext: vi.fn(),
+      resolveFieldAccess: vi.fn(), 
+      validateResolution: vi.fn(), 
+      convertToFormattedString: vi.fn(),
+    };
     pathService = { 
-        resolvePath: vi.fn() as any, 
-        validatePath: vi.fn() as any,
+        resolvePath: vi.fn() as any, // Use as any to bypass type error
+        validatePath: vi.fn() as any, // Use as any to bypass type error
     };
 
     // --- Restore Full Mock implementation for getVariable --- 
@@ -97,38 +117,47 @@ describe('VariableReferenceResolver', () => {
         return undefined;
     });
     
-    // Restore other necessary mocks
+    // Restore other necessary mocks FOR STATE SERVICE
     stateService.getCurrentFilePath.mockReturnValue('/mock/dir/test.meld');
     // ... potentially restore getTextVar, getDataVar etc. if needed by specific tests ...
     
-    // --- Mock other services ---
-    fileSystemService.executeCommand.mockResolvedValue({ stdout: '', stderr: '' });
-    fileSystemService.dirname.mockImplementation(p => p ? p.substring(0, p.lastIndexOf('/') || 0) : '');
-    fileSystemService.getCwd.mockReturnValue('/mock/cwd');
+    // --- Mock other services (IF NEEDED DIRECTLY, otherwise remove) ---
+    // fileSystemService.executeCommand.mockResolvedValue({ stdout: '', stderr: '' }); // Remove if fileSystemService removed
+    // fileSystemService.dirname.mockImplementation(p => p ? p.substring(0, p.lastIndexOf('/') || 0) : ''); // Remove if fileSystemService removed
+    // fileSystemService.getCwd.mockReturnValue('/mock/cwd'); // Remove if fileSystemService removed
     
-    // --- Register ALL mocks (still needed if other services use DI) --- 
-    contextDI.registerMock<IStateService>('IStateService', stateService);
-    contextDI.registerMock<IFileSystemService>('IFileSystemService', fileSystemService);
-    contextDI.registerMock<IParserService>('IParserService', parserService);
-    contextDI.registerMock<IResolutionService>('IResolutionService', resolutionService);
-    contextDI.registerMock<IPathService>('IPathService', pathService as IPathService); 
+    // --- Register ALL mocks in the MANUAL container --- 
+    testContainer.registerInstance<IStateService>('IStateService', stateService);
+    // contextDI.registerMock<IFileSystemService>('IFileSystemService', fileSystemService); // Remove if fileSystemService removed
+    testContainer.registerInstance<IParserService>('IParserService', parserService as IParserService); // Register manual mock
+    testContainer.registerInstance<IResolutionService>('IResolutionService', resolutionService as IResolutionService); // Register manual mock
+    testContainer.registerInstance<IPathService>('IPathService', pathService as IPathService); // Register manual mock
     
-    // --- Explicitly Resolve Mocks (Optional, keep for now) ---
-    await contextDI.resolve<IStateService>('IStateService');
-    await contextDI.resolve<IFileSystemService>('IFileSystemService');
-    await contextDI.resolve<IParserService>('IParserService');
-    await contextDI.resolve<IResolutionService>('IResolutionService');
-    await contextDI.resolve<IPathService>('IPathService');
+    // --- Register REAL Service Implementation ---
+    // The resolver itself is registered automatically via @Service decorator,
+    // but we need to ensure its dependencies are correctly mocked above.
+    // If VariableReferenceResolver wasn't marked with @Service, we'd register it here:
+    // testContainer.register(VariableReferenceResolver, { useClass: VariableReferenceResolver });
+    // Or if injecting an interface:
+    // testContainer.register('IVariableReferenceResolver', { useClass: VariableReferenceResolver });
+    
+    // --- Remove Explicit DI Context Resolves ---
+    // await contextDI.resolve<IStateService>('IStateService'); 
+    // await contextDI.resolve<IFileSystemService>('IFileSystemService');
+    // await contextDI.resolve<IParserService>('IParserService');
+    // await contextDI.resolve<IResolutionService>('IResolutionService');
+    // await contextDI.resolve<IPathService>('IPathService');
 
-    // --- Instantiate resolver DIRECTLY --- 
-    resolver = new VariableReferenceResolver(stateService, pathService as IPathService, resolutionService, parserService);
+    // --- RESOLVE the resolver from the MANUAL container --- 
+    resolver = testContainer.resolve(VariableReferenceResolver);
 
     context = ResolutionContextFactory.create(stateService, 'test.meld')
                .withStrictMode(true); 
   });
   
   afterEach(async () => {
-    await contextDI?.cleanup();
+    // await contextDI?.cleanup(); // Remove if contextDI is removed
+    testContainer?.dispose(); // Dispose the manual container
   });
 
   describe('resolve', () => {
@@ -304,7 +333,8 @@ describe('VariableReferenceResolver', () => {
       });
 
       // Mock the resolutionService.resolveNodes method
-      resolutionService.resolveNodes.mockResolvedValue('Outer Hello World Inner');
+      // Cast to Mock to access mock methods
+      (resolutionService.resolveNodes as Mock).mockResolvedValue('Outer Hello World Inner'); 
     });
 
     it('should call resolutionService.resolveNodes for interpolatable variable values', async () => {
@@ -327,11 +357,18 @@ describe('VariableReferenceResolver', () => {
     });
 
     it('should throw MeldResolutionError if resolutionService is missing during recursion', async () => {
-      // Create a resolver instance specifically without the resolutionService
-      const resolverWithoutService = new VariableReferenceResolver(stateService, pathService as IPathService, undefined, parserService);
-      
+      // Manually instantiate the resolver, passing mocks for required dependencies
+      // and explicitly passing undefined for the optional resolutionService.
+      const resolverWithoutService = new VariableReferenceResolver(
+        stateService,      // Mock stateService from beforeEach
+        pathService as any, // Mock pathService from beforeEach
+        undefined,         // Explicitly undefined for resolutionService
+        parserService as any // Mock parserService from beforeEach
+      );
+
       const node = createVariableReferenceNode('recursiveTextVar', VariableType.TEXT);
-      
+
+      // The resolve call should now definitely hit the check for the missing service
       await expectToThrowWithConfig(async () => {
         await resolverWithoutService.resolve(node, context);
       }, {
@@ -339,6 +376,7 @@ describe('VariableReferenceResolver', () => {
         code: 'E_SERVICE_UNAVAILABLE',
         messageContains: 'Cannot recursively resolve variable: ResolutionService instance is missing'
       });
+      // No container to dispose for this specific test
     });
 
   });
