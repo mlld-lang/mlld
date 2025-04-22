@@ -61,6 +61,11 @@ import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+// Add imports for FileSystemService, PathOperationsService, and PathServiceClientFactory
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
+import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),
@@ -82,6 +87,8 @@ describe('InterpreterService Integration', () => {
   let mockParserServiceClient: IParserServiceClient; // Declare mock parser client
   let mockPathService: IPathService;
   let mockURLContentResolver: IURLContentResolver;
+  // Add mock for PathServiceClientFactory
+  let mockPathServiceClientFactory: PathServiceClientFactory;
 
   beforeEach(async () => {
     // Reset mocks first
@@ -146,6 +153,13 @@ describe('InterpreterService Integration', () => {
     // --- Create other mocks ---
     // mockResolutionService = mock<IResolutionService>(); // Commented out - using real service
     mockPathService = mock<IPathService>(); // Mock PathService as ResolutionService depends on it
+    // --- Mock PathServiceClientFactory ---
+    const mockPathServiceClient = mock<IPathServiceClient>();
+    mockPathServiceClientFactory = {
+      createClient: vi.fn().mockReturnValue(mockPathServiceClient)
+    } as unknown as PathServiceClientFactory;
+    vi.spyOn(mockPathServiceClientFactory, 'createClient').mockReturnValue(mockPathServiceClient);
+
     mockURLContentResolver = {
       isURL: vi.fn().mockImplementation((path: string) => {
         if (!path) return false;
@@ -177,6 +191,14 @@ describe('InterpreterService Integration', () => {
     // --- Register Mocks/Services needed by ResolutionService FIRST ---
     testContainer.registerInstance<IPathService>('IPathService', mockPathService); // Register the mock path service
     testContainer.registerInstance(ParserServiceClientFactory, mockParserClientFactory); // Ensure ParserServiceClientFactory mock is registered
+    // Register REAL PathOperationsService
+    testContainer.register(PathOperationsService, { useClass: PathOperationsService });
+    testContainer.register('IPathOperationsService', { useToken: PathOperationsService });
+    // Register MOCK PathServiceClientFactory
+    testContainer.registerInstance(PathServiceClientFactory, mockPathServiceClientFactory);
+    // Register REAL FileSystemService (depends on PathOperationsService, PathServiceClientFactory, IFileSystem)
+    testContainer.register(FileSystemService, { useClass: FileSystemService });
+    testContainer.register('IFileSystemService', { useToken: FileSystemService });
 
     // Register REAL Service Implementations 
     testContainer.register('IInterpreterService', { useClass: InterpreterService });
@@ -208,7 +230,7 @@ describe('InterpreterService Integration', () => {
     it('interprets text nodes', async () => {
       const content = 'Hello world';
       const nodes = await parser.parse(content);
-      const result = await interpreter.interpret(nodes as MeldNode[]);
+      const result = await interpreterService.interpret(nodes as MeldNode[]);
       const resultNodes = result.getNodes();
       expect(resultNodes).toHaveLength(1);
       expect(resultNodes[0].type).toBe('Text');
@@ -232,7 +254,7 @@ describe('InterpreterService Integration', () => {
           return { stateChanges, replacement: undefined };
       });
 
-      const resultState = await interpreter.interpret([node] as MeldNode[]);
+      const resultState = await interpreterService.interpret([node] as MeldNode[]);
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalled();
       // Assert against the returned state
@@ -259,7 +281,7 @@ describe('InterpreterService Integration', () => {
           return { stateChanges, replacement: undefined };
       });
       
-      const resultState = await interpreter.interpret([node] as MeldNode[]);
+      const resultState = await interpreterService.interpret([node] as MeldNode[]);
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalled();
       // Assert against the returned state
       const variable = resultState.getVariable(varName);
@@ -304,7 +326,7 @@ describe('InterpreterService Integration', () => {
          return { stateChanges, replacement: undefined };
       });
       
-      const resultState = await interpreter.interpret([node] as MeldNode[], { filePath: 'test.meld' }); 
+      const resultState = await interpreterService.interpret([node] as MeldNode[], { filePath: 'test.meld' }); 
       
       // Assert against the returned state
       const variable = resultState.getVariable(varName);
@@ -336,7 +358,7 @@ describe('InterpreterService Integration', () => {
           return { stateChanges, replacement: undefined };
       });
       
-      const resultState = await interpreter.interpret(nodes as MeldNode[], {
+      const resultState = await interpreterService.interpret(nodes as MeldNode[], {
         initialState: parentState,
         filePath: 'test.meld',
         mergeState: true
@@ -359,8 +381,8 @@ describe('InterpreterService Integration', () => {
   describe('State management', () => {
     it('creates isolated states for different interpretations', async () => {
       const node = context.factory.createTextDirective('test', 'value');
-      const result1 = await interpreter.interpret([node] as MeldNode[]);
-      const result2 = await interpreter.interpret([node] as MeldNode[]);
+      const result1 = await interpreterService.interpret([node] as MeldNode[]);
+      const result2 = await interpreterService.interpret([node] as MeldNode[]);
       expect(result1).not.toBe(result2);
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(2); // handleDirective called for each interpretation
     });
@@ -382,7 +404,7 @@ describe('InterpreterService Integration', () => {
          return { stateChanges, replacement: undefined };
       });
       
-      await interpreter.interpret([node] as MeldNode[], { initialState: parentState, mergeState: true });
+      await interpreterService.interpret([node] as MeldNode[], { initialState: parentState, mergeState: true });
       
       // Assert against the *parentState* because mergeState was true
       const variable = parentState.getVariable(varName);
@@ -409,7 +431,7 @@ describe('InterpreterService Integration', () => {
          return { stateChanges, replacement: undefined };
       });
       
-      const childResultState = await interpreter.interpret([node] as MeldNode[], { initialState: parentState, mergeState: false });
+      const childResultState = await interpreterService.interpret([node] as MeldNode[], { initialState: parentState, mergeState: false });
       
       // Check parent state - should be undefined
       expect(parentState.getVariable(varName)).toBeUndefined();
@@ -444,7 +466,7 @@ describe('InterpreterService Integration', () => {
       });
 
       // Interpretation should succeed even if resolution would fail later
-      const finalState = await interpreter.interpret([node] as MeldNode[], { 
+      const finalState = await interpreterService.interpret([node] as MeldNode[], { 
         initialState: parentState,
         filePath: 'test.meld',
         mergeState: true 
@@ -470,8 +492,8 @@ describe('InterpreterService Integration', () => {
       await context.writeFile('project/src/circular2.meld', '@import [$./circular1.meld]');
       const node = context.factory.createImportDirective('$./project/src/circular1.meld', context.factory.createLocation(1, 1));
       
-      const originalInterpret = interpreter.interpret;
-      (interpreter as any).interpret = vi.fn().mockRejectedValue(
+      const originalInterpret = interpreterService.interpret;
+      (interpreterService as any).interpret = vi.fn().mockRejectedValue(
         new MeldInterpreterError(
           'Circular import detected: a.meld -> b.meld -> a.meld',
           'import',
@@ -485,13 +507,13 @@ describe('InterpreterService Integration', () => {
         )
       );
       try {
-        await interpreter.interpret([node] as MeldNode[], { filePath: 'test.meld' });
+        await interpreterService.interpret([node] as MeldNode[], { filePath: 'test.meld' });
         throw new Error('Should have thrown error');
       } catch (error: unknown) {
         expect(error).toBeInstanceOf(MeldInterpreterError);
         expect((error as MeldInterpreterError).message).toContain('Circular import');
       } finally {
-        (interpreter as any).interpret = originalInterpret;
+        (interpreterService as any).interpret = originalInterpret;
       }
     });
 
@@ -511,7 +533,7 @@ describe('InterpreterService Integration', () => {
          return { stateChanges, replacement: undefined };
       });
       
-      const finalState = await interpreter.interpret([node] as MeldNode[], { filePath: 'test.meld' });
+      const finalState = await interpreterService.interpret([node] as MeldNode[], { filePath: 'test.meld' });
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
       // Check the variable exists in the *returned* state
@@ -557,7 +579,7 @@ describe('InterpreterService Integration', () => {
          });
 
       // Interpretation should complete
-      const finalState = await interpreter.interpret([validNode, invalidNode] as MeldNode[], {
+      const finalState = await interpreterService.interpret([validNode, invalidNode] as MeldNode[], {
         initialState: testState,
         filePath: 'test.meld'
       });
@@ -591,7 +613,7 @@ describe('InterpreterService Integration', () => {
       });
        
       // Interpretation itself succeeds
-      const finalState = await interpreter.interpret([node] as MeldNode[], { filePath: 'test.meld' });
+      const finalState = await interpreterService.interpret([node] as MeldNode[], { filePath: 'test.meld' });
       // Check variable using getVariable on the *returned* state
       const errorVar = finalState.getVariable(varName);
       expect(errorVar).toBeDefined();
@@ -650,7 +672,7 @@ describe('InterpreterService Integration', () => {
          });
 
       // Expect interpret to reject due to the DirectiveError
-      await expect(interpreter.interpret([beforeNode, errorNode, afterNode] as MeldNode[], {
+      await expect(interpreterService.interpret([beforeNode, errorNode, afterNode] as MeldNode[], {
         initialState: testState,
         filePath: 'test.meld'
       })).rejects.toThrow(DirectiveError); // <<< Expect DirectiveError, not MeldInterpreterError
@@ -673,8 +695,8 @@ describe('InterpreterService Integration', () => {
       await context.writeFile('project/src/circular2.meld', '@import [$./circular1.meld]');
       const node = context.factory.createImportDirective('$./project/src/circular1.meld', context.factory.createLocation(1, 1));
       
-      const originalInterpret = interpreter.interpret;
-      (interpreter as any).interpret = vi.fn().mockRejectedValue(
+      const originalInterpret = interpreterService.interpret;
+      (interpreterService as any).interpret = vi.fn().mockRejectedValue(
         new MeldInterpreterError(
           'Circular import detected: a.meld -> b.meld -> a.meld',
           'import',
@@ -688,14 +710,14 @@ describe('InterpreterService Integration', () => {
         )
       );
       try {
-        await interpreter.interpret([node] as MeldNode[], { filePath: 'test.meld' });
+        await interpreterService.interpret([node] as MeldNode[], { filePath: 'test.meld' });
         throw new Error('Should have thrown error');
       } catch (error: unknown) {
         expect(error).toBeInstanceOf(MeldInterpreterError);
         expect((error as MeldInterpreterError).message).toContain('Circular import');
         // Add check for cleanup if applicable (e.g., circularity service state)
       } finally {
-        (interpreter as any).interpret = originalInterpret;
+        (interpreterService as any).interpret = originalInterpret;
       }
     });
   });
@@ -707,7 +729,7 @@ describe('InterpreterService Integration', () => {
       const node = context.factory.createTextDirective('dummy', 'value', context.factory.createLocation(1,1));
       // Re-apply the mock explicitly for this test to ensure it returns the correct structure
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue({ stateChanges: undefined, replacement: [] }); // Use empty array for replacement
-      const resultState = await interpreter.interpret([node] as MeldNode[], { filePath: 'some/dir/test.meld' });
+      const resultState = await interpreterService.interpret([node] as MeldNode[], { filePath: 'some/dir/test.meld' });
       // Check that the directive was processed
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalled();
       // We can't easily assert the internal filePath propagation without more complex mocking or exposing state
@@ -734,7 +756,7 @@ describe('InterpreterService Integration', () => {
          return { stateChanges, replacement: undefined };
       });
       
-      const resultState = await interpreter.interpret([node] as MeldNode[]);
+      const resultState = await interpreterService.interpret([node] as MeldNode[]);
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
       // Assert against the returned state
@@ -761,7 +783,7 @@ describe('InterpreterService Integration', () => {
          return { stateChanges, replacement: undefined };
       });
       
-      const resultState = await interpreter.interpret([node] as MeldNode[]);
+      const resultState = await interpreterService.interpret([node] as MeldNode[]);
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
       // Assert against the returned state
@@ -799,7 +821,7 @@ describe('InterpreterService Integration', () => {
          return { stateChanges, replacement: undefined };
       });
       
-      const resultState = await interpreter.interpret([node] as MeldNode[], { filePath: 'test.meld' });
+      const resultState = await interpreterService.interpret([node] as MeldNode[], { filePath: 'test.meld' });
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
       // Assert against the returned state
@@ -825,7 +847,7 @@ describe('InterpreterService Integration', () => {
          return { stateChanges, replacement: undefined };
       });
       
-      const resultState = await interpreter.interpret([node] as MeldNode[]);
+      const resultState = await interpreterService.interpret([node] as MeldNode[]);
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
       // Assert against the returned state
@@ -860,7 +882,7 @@ describe('InterpreterService Integration', () => {
             return { stateChanges, replacement: undefined };
          });
 
-      const resultState = await interpreter.interpret([node1, node2, node3] as MeldNode[]);
+      const resultState = await interpreterService.interpret([node1, node2, node3] as MeldNode[]);
       const stateNodes = resultState.getNodes(); // Check nodes on returned state
       
       expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(3);
