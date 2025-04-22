@@ -367,12 +367,12 @@ describe('ResolutionService', () => {
 
     it('should resolve text variables', async () => {
       // The beforeEach setup handles mocking:
-      // - stateService.getTextVar('greeting') returns TextVariable({ value: 'Hello World' })
-      // - mockParserClient.parseString('{{greeting}}') returns VariableReferenceNode({ identifier: 'greeting' })
+      // - stateService.getTextVar('textVar') returns TextVariable({ value: 'World' })
+      // - mockParserClient.parseString('{{textVar}}') returns VariableReferenceNode({ identifier: 'textVar' })
 
-      const result = await service.resolveText('{{greeting}}', defaultContext);
+      const result = await service.resolveText('{{textVar}}', defaultContext);
       
-      expect(result).toBe('Hello World');
+      expect(result).toBe('World');
     });
 
     it('should resolve data variables', async () => {
@@ -445,15 +445,15 @@ describe('ResolutionService', () => {
     });
 
     it('should concatenate multiple nodes', async () => {
-      // The beforeEach setup handles mocking:
-      // - mockParserClient.parseString('Hello {{name}}') returns [TextNode, VariableReferenceNode]
-      
-      // Mock stateService specifically for 'name' if not covered in beforeEach
-      vi.mocked(stateService.getTextVar).mockImplementation((name: string): TextVariable | undefined => {
-        if (name === 'name') return createMockTextVariable('name', 'Alice');
-        return undefined; // Simplified for this test
-      });
-      const result = await service.resolveText('Hello {{name}}', defaultContext);
+      // Define mock nodes for this specific test's input
+      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }; // Define mock location
+      const mockNodes: MeldNode[] = [
+        { type: 'Text', content: 'Hello ', location: mockLocation } as TextNode,
+        { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode
+      ];
+      parserService.parse.mockResolvedValue(mockNodes); // Mock parser for this test
+
+      const result = await service.resolveText('Hello ${name}', defaultContext);
       expect(result).toBe('Hello Alice');
     });
   });
@@ -782,18 +782,28 @@ describe('ResolutionService', () => {
 
    describe('resolveText', () => {
      it('should resolve text variables', async () => {
-       // beforeEach mocks stateService.getTextVar('greeting') and parserClient
-      const result = await service.resolveText('{{greeting}}', defaultContext);
+       // beforeEach mocks stateService.getTextVar('textVar') -> 'World'
+      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }; // Define mock location
+      const mockNodes: MeldNode[] = [
+        { type: 'Text', content: 'Hello ', location: mockLocation } as TextNode,
+        { type: 'VariableReference', identifier: 'textVar', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode // Corrected identifier to textVar
+      ];
+      parserService.parse.mockResolvedValue(mockNodes); // Mock parser for this test
+
+       const result = await service.resolveText('Hello ${textVar}', defaultContext); // Corrected template string
       expect(result).toBe('Hello World');
     });
 
     it('should concatenate multiple nodes', async () => {
-      // beforeEach mocks parserClient for 'Hello {{name}}'
-       vi.mocked(stateService.getTextVar).mockImplementation((name: string): TextVariable | undefined => {
-        if (name === 'name') return createMockTextVariable('name', 'Alice');
-        return undefined; // Simplified for this test
-      });
-      const result = await service.resolveText('Hello {{name}}', defaultContext);
+       // beforeEach mocks stateService.getTextVar('name') -> 'Alice'
+       const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }; // Define mock location
+       const mockNodes: MeldNode[] = [
+         { type: 'Text', content: 'Hello ', location: mockLocation } as TextNode,
+         { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode // Corrected identifier to name
+       ];
+       parserService.parse.mockResolvedValue(mockNodes); // Mock parser for this test
+
+       const result = await service.resolveText('Hello ${name}', defaultContext); // Restored correct result line
       expect(result).toBe('Hello Alice');
     });
 
@@ -1008,57 +1018,4 @@ describe('ResolutionService', () => {
 
   });
 
-  describe('resolveText', () => {
-    it('should resolve text variables in a string', async () => {
-      // Define mock nodes for this specific test's input
-      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }; // Define mock location
-      const mockNodes: MeldNode[] = [
-        { type: 'Text', content: 'Hello ', location: mockLocation } as TextNode,
-        { type: 'VariableReference', identifier: 'textVar', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode
-      ];
-      parserService.parse.mockResolvedValue(mockNodes); // Mock parser for this test
-
-      const result = await service.resolveText('Hello ${textVar}', defaultContext);
-      expect(result).toBe('Hello World');
-    });
-
-    it('should resolve data variables with field access', async () => {
-      // Define mock nodes for this specific test's input
-      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }; // Define mock location
-      const mockNodes: MeldNode[] = [
-        { type: 'Text', content: 'Hello ', location: mockLocation } as TextNode,
-        { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode
-      ];
-      parserService.parse.mockResolvedValue(mockNodes); // Mock parser for this test
-
-      const result = await service.resolveText('Hello ${name}', defaultContext);
-      expect(result).toBe('Hello Alice');
-    });
-
-    it('should resolve text variables', async () => {
-      // Define mock nodes for this specific test's input
-      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }; // Define mock location
-      const mockNodes: MeldNode[] = [
-        { type: 'Text', content: 'Hello ', location: mockLocation } as TextNode,
-        { type: 'VariableReference', identifier: 'textVar', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode
-      ];
-      parserService.parse.mockResolvedValue(mockNodes); // Mock parser for this test
-
-      const result = await service.resolveText('Hello ${textVar}', defaultContext);
-      expect(result).toBe('Hello World');
-    });
-
-    it('should concatenate multiple nodes', async () => {
-      // Define mock nodes for this specific test's input
-      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }; // Define mock location
-      const mockNodes: MeldNode[] = [
-        { type: 'Text', content: 'Hello ', location: mockLocation } as TextNode,
-        { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode
-      ];
-      parserService.parse.mockResolvedValue(mockNodes); // Mock parser for this test
-
-      const result = await service.resolveText('Hello ${name}', defaultContext);
-      expect(result).toBe('Hello Alice');
-    });
-  });
 }); // End describe('ResolutionService')
