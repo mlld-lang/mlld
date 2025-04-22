@@ -17,57 +17,128 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { mock } from 'vitest-mock-extended';
+import { container, type DependencyContainer } from 'tsyringe'; // Import DI container
+
+// Import Services and Interfaces
 import { StateService } from '@services/state/StateService/StateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
+import type { IStateFactory } from '@services/state/StateService/types.js';
 import type { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService.js';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+
+// Other necessary types
 import type { MeldNode, TextNode } from '@core/syntax/types/index.js';
 import {
   VariableType, 
   PathContentType, 
-  ICommandDefinition, 
-  IFilesystemPathState, 
-  IUrlPathState, 
+  type ICommandDefinition, 
+  type IFilesystemPathState, 
+  type IUrlPathState, 
   createTextVariable, 
   createDataVariable, 
   createPathVariable, 
   createCommandVariable, 
-  RelativePath, 
+  type RelativePath, 
   VariableOrigin,
-  TextVariable,
-  DataVariable,
-  IPathVariable,
-  CommandVariable,
-  MeldVariable
+  type TextVariable,
+  type DataVariable,
+  type IPathVariable,
+  type CommandVariable,
+  type MeldVariable,
+  type ICommandParameterMetadata,
+  type IBasicCommandDefinition
 } from '@core/types/index.js';
 import { unsafeCreateValidatedResourcePath } from '@core/types/paths.js';
-import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
-import type { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+
 
 describe('StateService', () => {
-  let state: StateService;
+  let testContainer: DependencyContainer;
+  let stateService: IStateService; // Service under test
   let mockEventService: IStateEventService;
-  let stateFactory: StateFactory;
-  let trackingClient: IStateTrackingServiceClient;
+  let mockTrackingClient: IStateTrackingServiceClient;
+  let mockTrackingClientFactory: StateTrackingServiceClientFactory;
 
   beforeEach(() => {
-    mockEventService = mock<IStateEventService>();
-    mockEventService.emit = vi.fn();
-    
-    trackingClient = mock<IStateTrackingServiceClient>();
-    stateFactory = new StateFactory();
-    const trackingClientFactory: Pick<StateTrackingServiceClientFactory, 'createClient'> = { 
-      createClient: vi.fn().mockReturnValue(trackingClient)
-    };
-    state = new StateService(stateFactory, mockEventService, trackingClientFactory as StateTrackingServiceClientFactory);
+    testContainer = container.createChildContainer();
+
+    // --- Create Mocks ---
+    // Mock Event Service (Manual Object)
+    mockEventService = {
+        emit: vi.fn(),
+        // Add other methods from IStateEventService if they are ever called directly in tests
+        on: vi.fn(),
+        off: vi.fn(),
+        once: vi.fn(),
+    } as unknown as IStateEventService; // Cast necessary for type checking
+
+    // Mock Tracking Client (Manual Object)
+    mockTrackingClient = {
+        registerState: vi.fn(),
+        registerRelationship: vi.fn(),
+        // Add other methods if needed by tests
+        getStateHistory: vi.fn(),
+        getStateRelationships: vi.fn(),
+        generateReport: vi.fn(),
+        getRelationshipGraph: vi.fn(),
+    } as unknown as IStateTrackingServiceClient; // Cast necessary
+
+    // Mock Tracking Client Factory (Manual Object returning the manual client)
+    mockTrackingClientFactory = {
+        createClient: vi.fn().mockReturnValue(mockTrackingClient)
+    } as unknown as StateTrackingServiceClientFactory; // Cast as factory type
+
+    // --- Register Dependencies ---
+    // Register Mocks
+    testContainer.registerInstance<IStateEventService>('IStateEventService', mockEventService);
+    testContainer.registerInstance<StateTrackingServiceClientFactory>('StateTrackingServiceClientFactory', mockTrackingClientFactory);
+
+    // Register ParentStateServiceForChild using a factory returning null
+    testContainer.register<IStateService | null>('ParentStateServiceForChild', { 
+        useFactory: () => null 
+    });
+
+    // Register Real Implementations
+    testContainer.register<IStateFactory>('IStateFactory', { useClass: StateFactory });
+    testContainer.register<IStateService>('IStateService', { useClass: StateService });
+
+    // --> ADDED: Register the container itself <--
+    testContainer.registerInstance<DependencyContainer>('DependencyContainer', testContainer); 
+
+    // --- Resolve Service Under Test ---
+    stateService = testContainer.resolve<IStateService>('IStateService');
+
+    // Verify factory was called during StateService construction
+    expect(mockTrackingClientFactory.createClient).toHaveBeenCalledTimes(1);
+    // Verify the tracking client registered the initial state creation
+    expect(mockTrackingClient.registerState).toHaveBeenCalledTimes(1);
+    expect(mockTrackingClient.registerState).toHaveBeenCalledWith(
+        expect.objectContaining({
+            id: stateService.getStateId(),
+            parentId: undefined,
+            source: 'new',
+            transformationEnabled: false
+        })
+    );
+    // Clear the initial registerState call before tests run
+    (mockTrackingClient.registerState as any).mockClear();
   });
 
   afterEach(() => {
+    testContainer?.dispose();
     vi.restoreAllMocks();
   });
 
+  // --- Tests ---
+  // Replace `state.` with `stateService.`
+  // Replace direct use of `mockEventService`, `trackingClient` with the mocked instances
+  // `mockEventService` and `mockTrackingClient` respectively.
+
   describe('Basic functionality', () => {
     it('should set and get text variables', async () => {
-      const variable = await state.setVariable(createTextVariable('greeting', 'Hello')) as TextVariable;
+      // Use stateService resolved from container
+      const variable = await stateService.setVariable(createTextVariable('greeting', 'Hello')) as TextVariable;
       expect(variable).toBeInstanceOf(Object);
       expect(variable.type).toBe(VariableType.TEXT);
       expect(variable.name).toBe('greeting');
@@ -75,23 +146,23 @@ describe('StateService', () => {
       expect(variable.metadata).toBeDefined();
       expect(variable.metadata?.origin).toBe(VariableOrigin.DIRECT_DEFINITION);
 
-      const retrieved = state.getVariable('greeting', VariableType.TEXT);
+      const retrieved = stateService.getVariable('greeting', VariableType.TEXT);
       expect(retrieved).toBeDefined();
       expect(retrieved).toEqual(variable);
     });
 
     it('should return undefined for non-existent text variables', () => {
-      expect(state.getVariable('nonexistent', VariableType.TEXT)).toBeUndefined();
+      expect(stateService.getVariable('nonexistent', VariableType.TEXT)).toBeUndefined();
     });
 
     it('should get all text variables - check individually', async () => {
-      const greetingVar = await state.setVariable(createTextVariable('greeting', 'Hello'));
-      const farewellVar = await state.setVariable(createTextVariable('farewell', 'Goodbye'));
+      const greetingVar = await stateService.setVariable(createTextVariable('greeting', 'Hello'));
+      const farewellVar = await stateService.setVariable(createTextVariable('farewell', 'Goodbye'));
 
       // Check individually using getVariable
-      const retrievedGreeting = state.getVariable('greeting', VariableType.TEXT);
-      const retrievedFarewell = state.getVariable('farewell', VariableType.TEXT);
-      const retrievedNonExistent = state.getVariable('nonexistent', VariableType.TEXT);
+      const retrievedGreeting = stateService.getVariable('greeting', VariableType.TEXT);
+      const retrievedFarewell = stateService.getVariable('farewell', VariableType.TEXT);
+      const retrievedNonExistent = stateService.getVariable('nonexistent', VariableType.TEXT);
 
       expect(retrievedGreeting).toEqual(greetingVar);
       expect(retrievedFarewell).toEqual(farewellVar);
@@ -105,7 +176,7 @@ describe('StateService', () => {
 
     it('should set and get data variables', async () => {
       const dataValue = { foo: 'bar', nested: { num: 1 } };
-      const variable = await state.setVariable(createDataVariable('config', dataValue)) as DataVariable;
+      const variable = await stateService.setVariable(createDataVariable('config', dataValue)) as DataVariable;
       expect(variable).toBeInstanceOf(Object);
       expect(variable.type).toBe(VariableType.DATA);
       expect(variable.name).toBe('config');
@@ -113,7 +184,7 @@ describe('StateService', () => {
       expect(variable.metadata).toBeDefined();
       expect(variable.metadata?.origin).toBe(VariableOrigin.DIRECT_DEFINITION);
 
-      const retrieved = state.getVariable('config', VariableType.DATA);
+      const retrieved = stateService.getVariable('config', VariableType.DATA);
       expect(retrieved).toBeDefined();
       expect(retrieved).toEqual(variable);
       expect(retrieved?.value).toEqual(dataValue);
@@ -129,7 +200,7 @@ describe('StateService', () => {
         validatedPath: unsafeCreateValidatedResourcePath('./some/path.txt') as RelativePath,
         exists: undefined
       };
-      const variable = await state.setVariable(createPathVariable('local', fsPathValue)) as IPathVariable;
+      const variable = await stateService.setVariable(createPathVariable('local', fsPathValue)) as IPathVariable;
       
       expect(variable).toBeInstanceOf(Object);
       expect(variable.type).toBe(VariableType.PATH);
@@ -140,7 +211,7 @@ describe('StateService', () => {
       expect(variable.value.contentType).toBe(PathContentType.FILESYSTEM);
       expect((variable.value as IFilesystemPathState).validatedPath).toEqual(fsPathValue.validatedPath);
       
-      const retrieved = state.getVariable('local', VariableType.PATH);
+      const retrieved = stateService.getVariable('local', VariableType.PATH) as IPathVariable;
       expect(retrieved).toBeDefined();
       expect(retrieved).toEqual(variable);
       expect(retrieved?.value.contentType).toBe(PathContentType.FILESYSTEM);
@@ -154,7 +225,7 @@ describe('StateService', () => {
         fetchStatus: 'not_fetched',
         validatedPath: unsafeCreateValidatedResourcePath('https://example.com')
       };
-      const variable = await state.setVariable(createPathVariable('remote', urlValue)) as IPathVariable;
+      const variable = await stateService.setVariable(createPathVariable('remote', urlValue)) as IPathVariable;
       
       expect(variable).toBeInstanceOf(Object);
       expect(variable.type).toBe(VariableType.PATH);
@@ -165,19 +236,22 @@ describe('StateService', () => {
       expect(variable.value.contentType).toBe(PathContentType.URL);
       expect((variable.value as IUrlPathState).fetchStatus).toBe('not_fetched');
       
-      const retrieved = state.getVariable('remote', VariableType.PATH);
+      const retrieved = stateService.getVariable('remote', VariableType.PATH) as IPathVariable;
       expect(retrieved).toBeDefined();
       expect(retrieved).toEqual(variable);
       expect(retrieved?.value.contentType).toBe(PathContentType.URL);
     });
 
     it('should set and get command variables', async () => {
-      const commandDef: ICommandDefinition = { 
+      const params: ICommandParameterMetadata[] = [{ name: 'msg', position: 0 }];
+      const commandDef: IBasicCommandDefinition = { 
         type: 'basic',
-        command: 'echo "{{msg}}"', 
-        parameters: ['msg'] 
+        name: 'echoCmd',
+        commandTemplate: 'echo "{{msg}}"',
+        parameters: params,
+        isMultiline: false
       };
-      const variable = await state.setVariable(createCommandVariable('echoCmd', commandDef)) as CommandVariable;
+      const variable = await stateService.setVariable(createCommandVariable('echoCmd', commandDef)) as CommandVariable;
       
       expect(variable).toBeInstanceOf(Object);
       expect(variable.type).toBe(VariableType.COMMAND);
@@ -185,69 +259,69 @@ describe('StateService', () => {
       expect(variable.metadata).toBeDefined();
       expect(variable.metadata?.origin).toBe(VariableOrigin.DIRECT_DEFINITION);
       expect(variable.value).toEqual(commandDef);
-      expect(variable.value.type).toBe('basic');
-      expect(variable.value.command).toBe('echo "{{msg}}"');
+      expect((variable.value as IBasicCommandDefinition).type).toBe('basic');
+      expect((variable.value as IBasicCommandDefinition).commandTemplate).toBe('echo "{{msg}}"');
 
-      const retrieved = state.getVariable('echoCmd', VariableType.COMMAND);
+      const retrieved = stateService.getVariable('echoCmd', VariableType.COMMAND) as CommandVariable;
       expect(retrieved).toBeDefined();
       expect(retrieved).toEqual(variable);
-      expect(retrieved?.value.parameters).toEqual(['msg']);
+      expect((retrieved?.value as IBasicCommandDefinition).parameters).toEqual(params);
     });
 
     it('should add and get nodes', () => {
       const node: TextNode = {
+        nodeId: 'test-text-node',
         type: 'Text',
         content: 'test',
         location: { start: { line: 1, column: 1 }, end: { line: 1, column: 4 } }
       };
-      state.addNode(node);
-      expect(state.getNodes()).toEqual([node]);
+      stateService.addNode(node);
+      expect(stateService.getNodes()).toEqual([node]);
     });
 
     it('should add and check imports', () => {
-      state.addImport('test.md');
-      expect(state.hasImport('test.md')).toBe(true);
+      stateService.addImport('test.md');
+      expect(stateService.hasImport('test.md')).toBe(true);
     });
 
     // Un-skip this test
     it('should emit events for state operations', async () => {
-      const emitSpy = vi.spyOn(mockEventService, 'emit');
-      
-      state.setCurrentFilePath('test.meld');
-      
-      // Clear mocks *after* potentially triggering calls, before the call under test
-      emitSpy.mockClear(); 
-      // vi.clearAllMocks(); // Alternative if needed
-      
-      // Await the async setVariable call
-      await state.setVariable(createTextVariable('test', 'value')); 
-      
-      // Check if the emit spy was called with the expected event object
-      expect(emitSpy).toHaveBeenCalledTimes(1); // Check if called at all first
-      expect(emitSpy).toHaveBeenCalledWith(expect.objectContaining({
+      // Spy is no longer needed here as mockEventService.emit is already a vi.fn()
+      // const emitSpy = vi.spyOn(mockEventService, 'emit'); // REMOVE
+
+      stateService.setCurrentFilePath('test.meld');
+
+      // Clear the mock function directly
+      (mockEventService.emit as any).mockClear();
+
+      await stateService.setVariable(createTextVariable('test', 'value')); 
+
+      // Check the mock function directly
+      expect(mockEventService.emit).toHaveBeenCalledTimes(1);
+      expect(mockEventService.emit).toHaveBeenCalledWith(expect.objectContaining({
         type: 'transform',
-        stateId: state.getStateId(), // Check against the actual state ID
+        stateId: stateService.getStateId(), // Check against the actual state ID
         source: 'setVariable:test', 
         location: { file: 'test.meld' }
       }));
       
-      // Restore the spy
-      emitSpy.mockRestore();
+      // No need to restore here, afterEach handles it
     });
 
     it('should create child state with inherited properties (typed)', async () => {
-      const parentTextVar = await state.setVariable(createTextVariable('parentText', 'value')) as TextVariable;
-      const parentDataVar = await state.setVariable(createDataVariable('parentData', { key: 'data' })) as DataVariable;
-      const parentPathVar = await state.setVariable(createPathVariable('parentPath', { 
+      const parentTextVar = await stateService.setVariable(createTextVariable('parentText', 'value')) as TextVariable;
+      const parentDataVar = await stateService.setVariable(createDataVariable('parentData', { key: 'data' })) as DataVariable;
+      const parentPathVar = await stateService.setVariable(createPathVariable('parentPath', { 
         contentType: PathContentType.FILESYSTEM, 
         originalValue: './parent', 
         isValidSyntax: true, 
         isSecure: true, 
         isAbsolute: false 
       } as IFilesystemPathState)) as IPathVariable;
-      const parentCmdVar = await state.setVariable(createCommandVariable('parentCmd', { type: 'basic', command: 'echo parent' } as ICommandDefinition)) as CommandVariable;
+      const parentCmdDef: IBasicCommandDefinition = { type: 'basic', name: 'parentCmd', commandTemplate: 'echo parent', parameters: [], isMultiline: false };
+      const parentCmdVar = await stateService.setVariable(createCommandVariable('parentCmd', parentCmdDef)) as CommandVariable;
       
-      const child = state.createChildState();
+      const child = stateService.createChildState();
       
       expect(child.getVariable('parentText', VariableType.TEXT)).toEqual(parentTextVar);
       expect(child.getVariable('parentData', VariableType.DATA)).toEqual(parentDataVar);
@@ -255,25 +329,26 @@ describe('StateService', () => {
       expect(child.getVariable('parentCmd', VariableType.COMMAND)).toEqual(parentCmdVar);
       
       await child.setVariable(createTextVariable('childText', 'childValue'));
-      expect(state.getVariable('childText', VariableType.TEXT)).toBeUndefined();
+      expect(stateService.getVariable('childText', VariableType.TEXT)).toBeUndefined();
       await child.setVariable(createTextVariable('parentText', 'newValueInChild'));
-      expect(state.getVariable('parentText', VariableType.TEXT)?.value).toBe('value');
+      expect(stateService.getVariable('parentText', VariableType.TEXT)?.value).toBe('value');
     });
 
     it('should clone state properly (deep copy)', async () => {
-      const originalText = await state.setVariable(createTextVariable('originalText', 'value')) as TextVariable;
-      const originalData = await state.setVariable(createDataVariable('originalData', { nested: { val: 1 } })) as DataVariable;
+      const originalText = await stateService.setVariable(createTextVariable('originalText', 'value')) as TextVariable;
+      const originalData = await stateService.setVariable(createDataVariable('originalData', { nested: { val: 1 } })) as DataVariable;
       const originalPathValue: IFilesystemPathState = { contentType: PathContentType.FILESYSTEM, originalValue: './orig', isValidSyntax: true, isSecure: true, isAbsolute: false, exists: false };
-      const originalPath = await state.setVariable(createPathVariable('originalPath', originalPathValue)) as IPathVariable;
-      const originalCmdValue: ICommandDefinition = { type: 'basic', command: 'echo orig', parameters: ['a'] };
-      const originalCmd = await state.setVariable(createCommandVariable('originalCmd', originalCmdValue)) as CommandVariable;
-      state.setTransformationEnabled(true);
-      state.setTransformationOptions({ enabled: true, preserveOriginal: false, transformNested: false});
+      const originalPath = await stateService.setVariable(createPathVariable('originalPath', originalPathValue)) as IPathVariable;
+      const originalParams: ICommandParameterMetadata[] = [{ name: 'a', position: 0 }];
+      const originalCmdValue: IBasicCommandDefinition = { type: 'basic', name: 'originalCmd', commandTemplate: 'echo orig', parameters: originalParams, isMultiline: false };
+      const originalCmd = await stateService.setVariable(createCommandVariable('originalCmd', originalCmdValue)) as CommandVariable;
+      stateService.setTransformationEnabled(true);
+      stateService.setTransformationOptions({ enabled: true, preserveOriginal: false, transformNested: false});
       
-      const clone = state.clone();
+      const clone = stateService.clone();
       
       expect(clone).toBeInstanceOf(StateService);
-      expect(clone.getStateId()).not.toBe(state.getStateId());
+      expect(clone.getStateId()).not.toBe(stateService.getStateId());
       expect(clone.isTransformationEnabled()).toBe(true);
       expect(clone.getTransformationOptions()).toEqual({ enabled: true, preserveOriginal: false, transformNested: false});
       
@@ -283,18 +358,18 @@ describe('StateService', () => {
       expect(clone.getVariable('originalCmd', VariableType.COMMAND)).toEqual(originalCmd);
       
       await clone.setVariable(createTextVariable('originalText', 'clonedValue'));
-      expect(state.getVariable('originalText', VariableType.TEXT)?.value).toBe('value');
+      expect(stateService.getVariable('originalText', VariableType.TEXT)?.value).toBe('value');
       
       const clonedDataVar = clone.getVariable('originalData', VariableType.DATA) as DataVariable;
       expect(clonedDataVar).toBeDefined();
       (clonedDataVar?.value as any).nested.val = 2;
-      expect((state.getVariable('originalData', VariableType.DATA)?.value as any).nested.val).toBe(1);
+      expect((stateService.getVariable('originalData', VariableType.DATA)?.value as any).nested.val).toBe(1);
       
       const clonedPathVar = clone.getVariable('originalPath', VariableType.PATH) as IPathVariable;
       expect(clonedPathVar).toBeDefined();
       (clonedPathVar?.value as IFilesystemPathState).originalValue = './cloned';
       (clonedPathVar?.value as IFilesystemPathState).exists = true;
-      const originalPathCheck = state.getVariable('originalPath', VariableType.PATH) as IPathVariable;
+      const originalPathCheck = stateService.getVariable('originalPath', VariableType.PATH) as IPathVariable;
       expect((originalPathCheck?.value as IFilesystemPathState).originalValue).toBe('./orig');
       expect((originalPathCheck?.value as IFilesystemPathState).exists).toBe(false);
       expect((clonedPathVar?.value as IFilesystemPathState).originalValue).toBe('./cloned');
@@ -302,16 +377,18 @@ describe('StateService', () => {
       
       const clonedCmdVar = clone.getVariable('originalCmd', VariableType.COMMAND) as CommandVariable;
       expect(clonedCmdVar).toBeDefined();
-      (clonedCmdVar?.value as ICommandDefinition).command = 'echo cloned';
-      (clonedCmdVar?.value as ICommandDefinition).parameters?.push('b');
-      const originalCmdCheck = state.getVariable('originalCmd', VariableType.COMMAND) as CommandVariable;
-      expect((originalCmdCheck?.value as ICommandDefinition).command).toBe('echo orig');
-      expect((originalCmdCheck?.value as ICommandDefinition).parameters).toEqual(['a']);
-      expect((clonedCmdVar?.value as ICommandDefinition).command).toBe('echo cloned');
-      expect((clonedCmdVar?.value as ICommandDefinition).parameters).toEqual(['a', 'b']);
+      const clonedCmdValue = clonedCmdVar?.value as IBasicCommandDefinition; 
+      clonedCmdValue.commandTemplate = 'echo cloned';
+      clonedCmdValue.parameters?.push({ name: 'b', position: 1 });
+      const originalCmdCheck = stateService.getVariable('originalCmd', VariableType.COMMAND) as CommandVariable;
+      const originalCmdCheckValue = originalCmdCheck?.value as IBasicCommandDefinition;
+      expect(originalCmdCheckValue.commandTemplate).toBe('echo orig');
+      expect(originalCmdCheckValue.parameters).toEqual(originalParams);
+      expect(clonedCmdValue.commandTemplate).toBe('echo cloned');
+      expect(clonedCmdValue.parameters?.map(p => p.name)).toEqual(['a', 'b']);
 
       await clone.setVariable(createTextVariable('newInClone', 'onlyInClone'));
-      expect(state.getVariable('newInClone', VariableType.TEXT)).toBeUndefined();
+      expect(stateService.getVariable('newInClone', VariableType.TEXT)).toBeUndefined();
       expect(clone.getVariable('newInClone', VariableType.TEXT)?.value).toBe('onlyInClone');
     });
   });
@@ -323,8 +400,8 @@ describe('StateService', () => {
     let cmdVar: CommandVariable;
 
     beforeEach(async () => {
-      textVar = await state.setVariable(createTextVariable('myText', 'text val')) as TextVariable;
-      dataVar = await state.setVariable(createDataVariable('myData', { key: 'data val' })) as DataVariable;
+      textVar = await stateService.setVariable(createTextVariable('myText', 'text val')) as TextVariable;
+      dataVar = await stateService.setVariable(createDataVariable('myData', { key: 'data val' })) as DataVariable;
       const pathValue: IFilesystemPathState = { 
         contentType: PathContentType.FILESYSTEM, 
         originalValue: './path', 
@@ -332,121 +409,122 @@ describe('StateService', () => {
         isSecure: true,
         isAbsolute: false
       };
-      pathVar = await state.setVariable(createPathVariable('myPath', pathValue)) as IPathVariable;
-      const cmdValue: ICommandDefinition = { type: 'basic', command: 'echo cmd' };
-      cmdVar = await state.setVariable(createCommandVariable('myCmd', cmdValue)) as CommandVariable;
+      pathVar = await stateService.setVariable(createPathVariable('myPath', pathValue)) as IPathVariable;
+      const cmdValue: IBasicCommandDefinition = { type: 'basic', name: 'myCmd', commandTemplate: 'echo cmd', parameters: [], isMultiline: false };
+      cmdVar = await stateService.setVariable(createCommandVariable('myCmd', cmdValue)) as CommandVariable;
     });
 
     it('getVariable should retrieve variable by name, checking types in order (default)', () => {
-      expect(state.getVariable('myText')).toEqual(textVar);
-      expect(state.getVariable('myData')).toEqual(dataVar);
-      expect(state.getVariable('myPath')).toEqual(pathVar);
-      expect(state.getVariable('myCmd')).toEqual(cmdVar);
-      expect(state.getVariable('nonExistent')).toBeUndefined();
+      expect(stateService.getVariable('myText')).toEqual(textVar);
+      expect(stateService.getVariable('myData')).toEqual(dataVar);
+      expect(stateService.getVariable('myPath')).toEqual(pathVar);
+      expect(stateService.getVariable('myCmd')).toEqual(cmdVar);
+      expect(stateService.getVariable('nonExistent')).toBeUndefined();
     });
 
     it('getVariable should retrieve variable by name and specific type', () => {
-      expect(state.getVariable('myText', VariableType.TEXT)).toEqual(textVar);
-      expect(state.getVariable('myText', VariableType.DATA)).toBeUndefined();
-      expect(state.getVariable('myData', VariableType.DATA)).toEqual(dataVar);
-      expect(state.getVariable('myData', VariableType.PATH)).toBeUndefined();
-      expect(state.getVariable('myPath', VariableType.PATH)).toEqual(pathVar);
-      expect(state.getVariable('myCmd', VariableType.COMMAND)).toEqual(cmdVar);
+      expect(stateService.getVariable('myText', VariableType.TEXT)).toEqual(textVar);
+      expect(stateService.getVariable('myText', VariableType.DATA)).toBeUndefined();
+      expect(stateService.getVariable('myData', VariableType.DATA)).toEqual(dataVar);
+      expect(stateService.getVariable('myData', VariableType.PATH)).toBeUndefined();
+      expect(stateService.getVariable('myPath', VariableType.PATH)).toEqual(pathVar);
+      expect(stateService.getVariable('myCmd', VariableType.COMMAND)).toEqual(cmdVar);
     });
 
     it('setVariable should store variables correctly based on type', async () => {
-      expect(state.getVariable('myText', VariableType.TEXT)).toEqual(textVar);
-      expect(state.getVariable('myData', VariableType.DATA)).toEqual(dataVar);
-      expect(state.getVariable('myPath', VariableType.PATH)).toEqual(pathVar);
-      expect(state.getVariable('myCmd', VariableType.COMMAND)).toEqual(cmdVar);
+      expect(stateService.getVariable('myText', VariableType.TEXT)).toEqual(textVar);
+      expect(stateService.getVariable('myData', VariableType.DATA)).toEqual(dataVar);
+      expect(stateService.getVariable('myPath', VariableType.PATH)).toEqual(pathVar);
+      expect(stateService.getVariable('myCmd', VariableType.COMMAND)).toEqual(cmdVar);
 
       const newVar = createTextVariable('another', 'val');
-      const setResult = await state.setVariable(newVar);
+      const setResult = await stateService.setVariable(newVar);
       expect(setResult).toEqual(newVar);
-      expect(state.getVariable('another', VariableType.TEXT)).toEqual(newVar);
+      expect(stateService.getVariable('another', VariableType.TEXT)).toEqual(newVar);
     });
 
     it('hasVariable should check existence by name', () => {
-      expect(state.hasVariable('myText')).toBe(true);
-      expect(state.hasVariable('myData')).toBe(true);
-      expect(state.hasVariable('myPath')).toBe(true);
-      expect(state.hasVariable('myCmd')).toBe(true);
-      expect(state.hasVariable('nonExistent')).toBe(false);
+      expect(stateService.hasVariable('myText')).toBe(true);
+      expect(stateService.hasVariable('myData')).toBe(true);
+      expect(stateService.hasVariable('myPath')).toBe(true);
+      expect(stateService.hasVariable('myCmd')).toBe(true);
+      expect(stateService.hasVariable('nonExistent')).toBe(false);
     });
 
     it('hasVariable should check existence by name and specific type', () => {
-      expect(state.hasVariable('myText', VariableType.TEXT)).toBe(true);
-      expect(state.hasVariable('myText', VariableType.DATA)).toBe(false);
-      expect(state.hasVariable('myData', VariableType.DATA)).toBe(true);
-      expect(state.hasVariable('myPath', VariableType.PATH)).toBe(true);
-      expect(state.hasVariable('myCmd', VariableType.COMMAND)).toBe(true);
+      expect(stateService.hasVariable('myText', VariableType.TEXT)).toBe(true);
+      expect(stateService.hasVariable('myText', VariableType.DATA)).toBe(false);
+      expect(stateService.hasVariable('myData', VariableType.DATA)).toBe(true);
+      expect(stateService.hasVariable('myPath', VariableType.PATH)).toBe(true);
+      expect(stateService.hasVariable('myCmd', VariableType.COMMAND)).toBe(true);
     });
 
     it('removeVariable should remove variable by name (any type found first)', async () => {
-      expect(await state.removeVariable('myText')).toBe(true);
-      expect(state.hasVariable('myText')).toBe(false);
-      expect(await state.removeVariable('myData')).toBe(true);
-      expect(state.hasVariable('myData')).toBe(false);
-      expect(await state.removeVariable('myPath')).toBe(true);
-      expect(state.hasVariable('myPath')).toBe(false);
-      expect(await state.removeVariable('myCmd')).toBe(true);
-      expect(state.hasVariable('myCmd')).toBe(false);
-      expect(await state.removeVariable('nonExistent')).toBe(false);
+      expect(await stateService.removeVariable('myText')).toBe(true);
+      expect(stateService.hasVariable('myText')).toBe(false);
+      expect(await stateService.removeVariable('myData')).toBe(true);
+      expect(stateService.hasVariable('myData')).toBe(false);
+      expect(await stateService.removeVariable('myPath')).toBe(true);
+      expect(stateService.hasVariable('myPath')).toBe(false);
+      expect(await stateService.removeVariable('myCmd')).toBe(true);
+      expect(stateService.hasVariable('myCmd')).toBe(false);
+      expect(await stateService.removeVariable('nonExistent')).toBe(false);
     });
 
     it('removeVariable should remove variable by name and specific type', async () => {
-      expect(await state.removeVariable('myText', VariableType.DATA)).toBe(false);
-      expect(state.hasVariable('myText', VariableType.TEXT)).toBe(true);
-      expect(await state.removeVariable('myText', VariableType.TEXT)).toBe(true);
-      expect(state.hasVariable('myText', VariableType.TEXT)).toBe(false);
-      expect(await state.removeVariable('myData', VariableType.DATA)).toBe(true);
-      expect(state.hasVariable('myData', VariableType.DATA)).toBe(false);
+      expect(await stateService.removeVariable('myText', VariableType.DATA)).toBe(false);
+      expect(stateService.hasVariable('myText', VariableType.TEXT)).toBe(true);
+      expect(await stateService.removeVariable('myText', VariableType.TEXT)).toBe(true);
+      expect(stateService.hasVariable('myText', VariableType.TEXT)).toBe(false);
+      expect(await stateService.removeVariable('myData', VariableType.DATA)).toBe(true);
+      expect(stateService.hasVariable('myData', VariableType.DATA)).toBe(false);
     });
   });
   
   describe('Node management', () => {
     it('should handle empty nodes array', () => {
-      expect(state.getNodes()).toEqual([]);
+      expect(stateService.getNodes()).toEqual([]);
     });
   });
   
   describe('Immutability', () => {
     it('should be mutable by default', () => {
-      expect(state.isImmutable).toBe(false);
+      expect(stateService.isImmutable).toBe(false);
     });
 
     it('should become immutable when setImmutable is called', () => {
-      state.setImmutable();
-      expect(state.isImmutable).toBe(true);
+      stateService.setImmutable();
+      expect(stateService.isImmutable).toBe(true);
     });
 
     it('should throw error on modification attempts when immutable', async () => {
-      state.setImmutable();
-      await expect(state.setVariable(createTextVariable('test', 'value'))).rejects.toThrow('Cannot modify immutable state');
+      stateService.setImmutable();
+      await expect(stateService.setVariable(createTextVariable('test', 'value'))).rejects.toThrow('Cannot modify immutable state');
     });
   });
   
   describe('Cloning and Merging', () => {
     it('should clone the current state', () => {
-      const cloned = state.clone();
+      const cloned = stateService.clone();
       expect(cloned).toBeInstanceOf(StateService);
-      expect(cloned.getStateId()).not.toBe(state.getStateId());
+      expect(cloned.getStateId()).not.toBe(stateService.getStateId());
       expect(cloned.getParentState()).toBeUndefined();
     });
 
     it('should create a child state inheriting variables', async () => {
-      const parentTextVar = await state.setVariable(createTextVariable('parentText', 'value'));
-      const parentDataVar = await state.setVariable(createDataVariable('parentData', { key: 'data' }));
-      const parentPathVar = await state.setVariable(createPathVariable('parentPath', { 
+      const parentTextVar = await stateService.setVariable(createTextVariable('parentText', 'value'));
+      const parentDataVar = await stateService.setVariable(createDataVariable('parentData', { key: 'data' }));
+      const parentPathVar = await stateService.setVariable(createPathVariable('parentPath', { 
         contentType: PathContentType.FILESYSTEM, 
         originalValue: './parent', 
         isValidSyntax: true, 
         isSecure: true, 
         isAbsolute: false 
-      } as IFilesystemPathState));
-      const parentCmdVar = await state.setVariable(createCommandVariable('parentCmd', { type: 'basic', command: 'echo parent' } as ICommandDefinition));
+      } as IFilesystemPathState)) as IPathVariable;
+      const parentCmdDef: IBasicCommandDefinition = { type: 'basic', name: 'parentCmd', commandTemplate: 'echo parent', parameters: [], isMultiline: false };
+      const parentCmdVar = await stateService.setVariable(createCommandVariable('parentCmd', parentCmdDef));
       
-      const child = state.createChildState();
+      const child = stateService.createChildState();
       
       expect(child.getVariable('parentText', VariableType.TEXT)).toEqual(parentTextVar);
       expect(child.getVariable('parentData', VariableType.DATA)).toEqual(parentDataVar);
@@ -454,43 +532,48 @@ describe('StateService', () => {
       expect(child.getVariable('parentCmd', VariableType.COMMAND)).toEqual(parentCmdVar);
       
       await child.setVariable(createTextVariable('childText', 'childValue'));
-      expect(state.getVariable('childText', VariableType.TEXT)).toBeUndefined();
+      expect(stateService.getVariable('childText', VariableType.TEXT)).toBeUndefined();
       await child.setVariable(createTextVariable('parentText', 'newValueInChild'));
-      expect(state.getVariable('parentText', VariableType.TEXT)?.value).toBe('value');
+      expect(stateService.getVariable('parentText', VariableType.TEXT)?.value).toBe('value');
     });
 
     it('should merge variables from child state', async () => {
-      const childState = state.createChildState();
+      const childState = stateService.createChildState();
       await childState.setVariable(createTextVariable('childVar', 'childValue'));
-      vi.clearAllMocks();
-      await state.mergeChildState(childState);
-      expect(trackingClient.registerRelationship).toHaveBeenCalledTimes(1);
-      expect(trackingClient.registerRelationship).toHaveBeenCalledWith(
-        expect.objectContaining({ 
-            sourceId: state.getStateId(), 
+
+      // Clear the mock function directly before the call
+      (mockTrackingClient.registerRelationship as any).mockClear();
+
+      await stateService.mergeChildState(childState);
+
+      // Check the mock function directly
+      expect(mockTrackingClient.registerRelationship).toHaveBeenCalledTimes(1);
+      expect(mockTrackingClient.registerRelationship).toHaveBeenCalledWith(
+        expect.objectContaining({
+            sourceId: stateService.getStateId(), 
             targetId: childState.getStateId(), 
             type: 'merge-source' 
         })
       );
-      expect(state.getVariable('childVar', VariableType.TEXT)?.value).toBe('childValue');
+      expect(stateService.getVariable('childVar', VariableType.TEXT)?.value).toBe('childValue');
     });
 
     it('should overwrite existing parent variables and add new child variables on merge', async () => {
       // Test Setup: Parent has 'parentVar', Child adds 'childVar' and overwrites 'parentVar'
-      await state.setVariable(createTextVariable('parentVar', 'parentOriginal'));
-      const childState = state.createChildState();
+      await stateService.setVariable(createTextVariable('parentVar', 'parentOriginal'));
+      const childState = stateService.createChildState();
       await childState.setVariable(createTextVariable('childVar', 'childValue'));
       await childState.setVariable(createTextVariable('parentVar', 'childOverwritesParent'));
       
       // Action: Merge child into parent
-      await state.mergeChildState(childState);
+      await stateService.mergeChildState(childState);
       
       // Assertions: Check parent state after merge
-      const childVarAfterMerge = state.getVariable('childVar', VariableType.TEXT);
+      const childVarAfterMerge = stateService.getVariable('childVar', VariableType.TEXT);
       expect(childVarAfterMerge).toBeDefined();
       expect(childVarAfterMerge?.value).toBe('childValue'); // Child-only variable should now exist
 
-      const parentVarAfterMerge = state.getVariable('parentVar', VariableType.TEXT);
+      const parentVarAfterMerge = stateService.getVariable('parentVar', VariableType.TEXT);
       expect(parentVarAfterMerge).toBeDefined();
       expect(parentVarAfterMerge?.value).toBe('childOverwritesParent'); // Parent variable should be overwritten
     });
@@ -498,18 +581,63 @@ describe('StateService', () => {
 
   describe('State Tracking', () => {
     it('should track merge relationships via client', async () => {
-      const childState = state.createChildState();
+      const childState = stateService.createChildState();
       await childState.setVariable(createTextVariable('childVar', 'childValue'));
-      vi.clearAllMocks();
-      await state.mergeChildState(childState);
-      expect(trackingClient.registerRelationship).toHaveBeenCalledTimes(1);
-      expect(trackingClient.registerRelationship).toHaveBeenCalledWith(
+
+      // Clear the mock function directly before the call
+      (mockTrackingClient.registerRelationship as any).mockClear();
+
+      await stateService.mergeChildState(childState);
+      expect(mockTrackingClient.registerRelationship).toHaveBeenCalledTimes(1);
+      expect(mockTrackingClient.registerRelationship).toHaveBeenCalledWith(
         expect.objectContaining({ 
-            sourceId: state.getStateId(), 
+            sourceId: stateService.getStateId(), 
             targetId: childState.getStateId(), 
             type: 'merge-source' 
         })
       );
+    });
+
+    // Add tests for create and clone tracking if necessary
+    it('should track creation via client', () => {
+      // The check for the initial create call is moved to beforeEach
+      // This test now verifies that *no additional* create calls happened
+      expect(mockTrackingClient.registerState).toHaveBeenCalledTimes(0); // Should be 0 after mockClear in beforeEach
+    });
+
+    it('should track clone relationships via client', async () => {
+        await stateService.setVariable(createTextVariable('originalText', 'value'));
+
+        // Clear the mock function directly before the call
+        (mockTrackingClient.registerRelationship as any).mockClear();
+
+        const clone = stateService.clone();
+
+        // Check the mock function directly
+        expect(mockTrackingClient.registerRelationship).toHaveBeenCalledTimes(1);
+        expect(mockTrackingClient.registerRelationship).toHaveBeenCalledWith(
+            expect.objectContaining({
+                sourceId: stateService.getStateId(),
+                targetId: clone.getStateId(),
+                type: 'clone-original'
+            })
+        );
+    });
+
+    it('should track child state creation relationships via client', async () => {
+        const child = stateService.createChildState();
+        
+        // Verification happens in the beforeEach of the next test block, 
+        // but we need to assert the relationship registration here
+        // Check the mock function directly
+        expect(mockTrackingClient.registerRelationship).toHaveBeenCalledTimes(1);
+        expect(mockTrackingClient.registerRelationship).toHaveBeenCalledWith(
+            expect.objectContaining({
+                sourceId: stateService.getStateId(),
+                targetId: child.getStateId(),
+                type: 'parent-child'
+            })
+        );
     });
   });
 }); 

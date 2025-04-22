@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import type { StateNode, IStateFactory } from '@services/state/StateService/types.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { TransformationOptions } from '@core/types/state.js';
 import { createTextVariable } from '@core/types';
@@ -55,24 +54,11 @@ const createMockParentService = (stateNode?: StateNode): IStateService => ({
 });
 
 describe('StateFactory', () => {
-  const helpers = TestContextDI.createTestHelpers(); // Define helpers
   let factory: IStateFactory;
-  let context: TestContextDI;
 
-  beforeEach(async () => {
-    // Use setupMinimal helper, which provides basic DI without extensive mocks
-    context = helpers.setupMinimal(); 
-    // Initialization is handled within setupMinimal if needed
-    
-    // Get service instance using DI (expecting the real factory)
-    factory = await context.resolve<IStateFactory>('IStateFactory');
-    
-    // Add a check to ensure we got the real factory
-    expect(factory).toBeInstanceOf(StateFactory);
-  });
-
-  afterEach(async () => {
-    await context?.cleanup();
+  beforeEach(() => {
+    // Create the factory directly
+    factory = new StateFactory();
   });
 
   describe('createState', () => {
