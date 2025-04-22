@@ -54,6 +54,11 @@ import type { StateChanges } from '@core/directives/DirectiveHandler';
 import crypto from 'crypto';
 // Import IParserServiceClient for mocking
 import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
+import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
+import { StateFactory } from '@services/state/StateService/StateFactory.js';
+import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),
@@ -84,7 +89,13 @@ describe('InterpreterService Integration', () => {
     
     testContainer = container.createChildContainer();
 
-    // --- Mock DirectiveServiceClient --- 
+    // Register Infrastructure Mocks
+    testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
+    const mockLogger = MockFactory.createLogger('InterpreterIntegration');
+    testContainer.registerInstance('MainLogger', mockLogger);
+    testContainer.registerInstance('ILogger', mockLogger);
+
+    // Create and Register Mocks
     mockDirectiveClient = {
       supportsDirective: vi.fn(), 
       handleDirective: vi.fn(),
@@ -139,20 +150,15 @@ describe('InterpreterService Integration', () => {
       })
     };
     
-    // >>> REGISTER Dependencies in the MANUAL container <<<
-    // Register MOCKS for InterpreterService dependencies
-    testContainer.registerInstance(DirectiveServiceClientFactory, mockDirectiveClientFactory);
-    testContainer.registerInstance('IResolutionService', mockResolutionService); 
-    testContainer.registerInstance(ParserServiceClientFactory, mockParserClientFactory);
-    testContainer.registerInstance('IPathService', mockPathService); 
-    // Register infrastructure mocks
-    testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
-    testContainer.registerInstance<IURLContentResolver>('IURLContentResolver', mockURLContentResolver);
-    // Register ParentStateServiceForChild using a factory returning null
-    testContainer.register<IStateService | null>('ParentStateServiceForChild', { 
-        useFactory: () => null 
-    });
-    
+    // Register *Real* Dependencies needed by StateService (which InterpreterService uses)
+    testContainer.register(StateEventService, { useClass: StateEventService });
+    testContainer.register('IStateEventService', { useToken: StateEventService });
+    testContainer.register(StateFactory, { useClass: StateFactory });
+    // Register StateTrackingServiceClientFactory - Real or Mock?
+    // Let's use a simple mock for now, unless real tracking is needed.
+    const mockTrackingClient = { trackStateOperation: vi.fn() } as IStateTrackingServiceClient;
+    ClientFactoryHelpers.registerClientFactory(testContainer, 'StateTrackingServiceClientFactory', mockTrackingClient);
+
     // Register REAL Service Implementations 
     testContainer.register('IInterpreterService', { useClass: InterpreterService });
     testContainer.register('IStateService', { useClass: StateService }); 

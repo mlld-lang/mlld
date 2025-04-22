@@ -5,17 +5,19 @@ import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IRes
 import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { mockDeep, type MockedObjectDeep } from 'vitest-mock-extended';
 
 describe('StringLiteralHandler', () => {
   const helpers = TestContextDI.createTestHelpers();
   let contextDI: TestContextDI;
   let handler: StringLiteralHandler;
-  let parserService: IParserService;
+  let parserService: MockedObjectDeep<IParserService>;
 
   beforeEach(async () => {
     contextDI = helpers.setupMinimal();
     
-    parserService = await contextDI.resolve<IParserService>('IParserService');
+    parserService = mockDeep<IParserService>();
+    contextDI.container.registerInstance<IParserService>('IParserService', parserService);
     
     handler = new StringLiteralHandler(parserService);
     

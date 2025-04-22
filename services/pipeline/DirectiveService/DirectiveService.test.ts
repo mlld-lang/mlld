@@ -30,7 +30,7 @@ import { createRawPath, unsafeCreateAbsolutePath, RawPath, AbsolutePath, Relativ
 import crypto from 'crypto';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { ILogger } from '@core/utils/logger.js';
-import { MockFactory } from '@tests/utils/MockFactory.js';
+import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
 
 // Define a simple mock OutputFormattingContext
 const mockFormattingContext: OutputFormattingContext = {

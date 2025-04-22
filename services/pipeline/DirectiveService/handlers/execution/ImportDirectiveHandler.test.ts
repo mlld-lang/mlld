@@ -36,6 +36,9 @@ import path from 'path';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
+import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { MockFactory } from '@tests/utils/MockFactory.js';
 
 /**
  * ImportDirectiveHandler Test Status
@@ -169,6 +172,7 @@ describe('ImportDirectiveHandler', () => {
   let mockInterpreterServiceClientFactory: DeepMockProxy<InterpreterServiceClientFactory>;
   let testContainer: DependencyContainer;
   let mockProcessingContext: DirectiveProcessingContext;
+  let mockStateTrackingService: MockedObjectDeep<IStateTrackingService>;
 
   beforeEach(async () => {
     mockStateService = mockDeep<IStateService>();
@@ -215,6 +219,9 @@ describe('ImportDirectiveHandler', () => {
 
     testContainer.registerInstance('DependencyContainer', testContainer);
     
+    mockStateTrackingService = MockFactory.createStateTrackingService();
+    testContainer.registerInstance<IStateTrackingService>('IStateTrackingService', mockStateTrackingService);
+
     testContainer.register(ImportDirectiveHandler, { useClass: ImportDirectiveHandler });
 
     handler = testContainer.resolve(ImportDirectiveHandler);

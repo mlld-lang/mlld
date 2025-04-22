@@ -83,11 +83,12 @@ const runDirectiveExamples = runDirectiveExamplesModule;
 
 // Mock the logger
 vi.mock('@core/utils/logger', () => ({
-  resolutionLogger: {
+  logger: {
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
-    error: vi.fn()
+    error: vi.fn(),
+    trace: vi.fn()
   }
 }));
 
