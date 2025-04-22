@@ -31,7 +31,6 @@ The core strategy is to apply the "Manual Child Container" pattern consistently 
 
 ## List of remaining tests (delete each test as it is is completed)
 
-services/resolution/ResolutionService/ResolutionService.test.ts
 services/resolution/ValidationService/ValidationService.test.ts
 
 services/cli/CLIService/CLIService.test.ts

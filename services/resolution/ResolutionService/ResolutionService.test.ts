@@ -74,7 +74,7 @@ import { ResolutionContextFactory } from '@services/resolution/ResolutionService
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils';
 // Import success and failure
 import { success, failure } from '@core/types'; // Keep extensionless
-import { container } from 'tsyringe'; // Import container for direct registration
+import { container, type DependencyContainer } from 'tsyringe'; // Import container and DependencyContainer for direct registration
 import { mockDeep, MockProxy } from 'vitest-mock-extended'; // Import mockDeep
 import type { Mocked, Mock } from 'vitest'; // Import Mock
 
@@ -143,6 +143,7 @@ describe('ResolutionService', () => {
   let pathServiceMock: Mocked<IPathService>;
   let defaultContext: ResolutionContext;
   let testContext: TestContextDI;
+  let testContainer: DependencyContainer;
   let mockParserClient: Mocked<IParserServiceClient>;
   let mockParserClientFactory: Mocked<ParserServiceClientFactory>;
   let mockVariableResolverClient: Mocked<IVariableReferenceResolverClient>;
@@ -291,34 +292,51 @@ describe('ResolutionService', () => {
        return [mockTextNodeFactory.createTextNode(text, mockLocation)];
     });
 
-    // --- 3. Create TestContextDI --- 
-    testContext = TestContextDI.createIsolated();
-    const container = testContext.container.getContainer();
+    // --- 3. Create Manual Child Container ---
+    testContainer = container.createChildContainer();
+    // Initialize TestContextDI *only if needed for FS/fixtures* - currently seems unused here
+    // testContext = TestContextDI.createIsolated();
+    // await testContext.initialize();
 
-    // --- 4. Register ALL Mocks --- 
-    container.registerInstance<IStateService>('IStateService', stateService);
-    container.registerInstance<IFileSystemService>('IFileSystemService', fileSystemService);
-    container.registerInstance<IParserService>('IParserService', parserService);
-    container.registerInstance<IPathService>('IPathService', pathServiceMock);
-    container.registerInstance<ParserServiceClientFactory>('ParserServiceClientFactory', mockParserClientFactory);
-    container.registerInstance<VariableReferenceResolverClientFactory>('VariableReferenceResolverClientFactory', mockVariableResolverClientFactory);
-    container.registerInstance<DirectiveServiceClientFactory>('DirectiveServiceClientFactory', mockDirectiveClientFactory);
-    container.registerInstance<FileSystemServiceClientFactory>('FileSystemServiceClientFactory', mockFileSystemClientFactory);
-    container.registerInstance<TextNodeFactory>('TextNodeFactory', mockTextNodeFactory);
-    container.registerInstance<VariableNodeFactory>('VariableNodeFactory', mockVariableNodeFactory);
+    // --- 4. Register ALL Mocks in testContainer ---
+    // Register Infrastructure mocks (if needed)
+    // Example: If using context.fs:
+    // testContainer.registerInstance<IFileSystem>('IFileSystem', testContext.fs);
 
-    // --- 5. Initialize Context --- 
-    await testContext.initialize();
+    // Register Service Mocks
+    testContainer.registerInstance<IStateService>('IStateService', stateService);
+    testContainer.registerInstance<IFileSystemService>('IFileSystemService', fileSystemService);
+    testContainer.registerInstance<IParserService>('IParserService', parserService); // Keep if directly injected, though less likely
+    testContainer.registerInstance<IPathService>('IPathService', pathServiceMock);
+
+    // Register Factory Mocks (use string token if defined, otherwise class)
+    testContainer.registerInstance(ParserServiceClientFactory, mockParserClientFactory); // Assuming factory is injected by class
+    testContainer.registerInstance(VariableReferenceResolverClientFactory, mockVariableResolverClientFactory);
+    testContainer.registerInstance(DirectiveServiceClientFactory, mockDirectiveClientFactory);
+    testContainer.registerInstance(FileSystemServiceClientFactory, mockFileSystemClientFactory);
+
+    // Register AST Factory Mocks
+    testContainer.registerInstance(TextNodeFactory, mockTextNodeFactory);
+    testContainer.registerInstance(VariableNodeFactory, mockVariableNodeFactory);
+
+    // --- 5. Register Real Service Implementation ---
+    testContainer.register('IResolutionService', { useClass: ResolutionService });
     
-    // --- 6. Resolve Service Under Test --- 
-    service = container.resolve(ResolutionService);
+    // --- 6. Register the Container itself (needed by factories) ---
+    testContainer.registerInstance('DependencyContainer', testContainer);
 
-    // --- 7. Create Default Context --- 
+    // --- 7. Resolve Service Under Test ---
+    service = testContainer.resolve<IResolutionService>('IResolutionService');
+
+    // --- 8. Create Default Context (uses resolved service's factory or mocks) ---
     defaultContext = ResolutionContextFactory.create(stateService, 'test.meld');
   });
   
   afterEach(async () => {
-    await testContext.cleanup();
+    // Dispose the manual container first
+    testContainer?.dispose();
+    // Cleanup TestContextDI *only if used*
+    // await testContext?.cleanup();
   });
 
   describe('resolveInContext', () => {
