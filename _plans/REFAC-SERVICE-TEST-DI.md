@@ -31,7 +31,6 @@ The core strategy is to apply the "Manual Child Container" pattern consistently 
 
 ## List of remaining tests (delete each test as it is is completed)
 
-services/sourcemap/SourceMapService.test.ts
 services/state/StateEventService/StateEventService.test.ts
 services/state/utilities/StateVariableCopier.test.ts
 

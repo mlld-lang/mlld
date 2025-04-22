@@ -1,10 +1,10 @@
-import { describe, expect, test, beforeEach, afterEach } from 'vitest';
+import { describe, expect, test, beforeEach, afterEach, vi } from 'vitest';
 import { SourceMapService, sourceMapService, SourceLocation, ISourceMapService } from '@core/utils/SourceMapService.js';
 import { extractErrorLocation, extractLocationFromErrorObject, addMapping, resetSourceMaps } from '@core/utils/sourceMapUtils.js';
 import { MeldError } from '@core/errors/MeldError.js';
 import { enhanceMeldErrorWithSourceInfo } from '@core/utils/sourceMapUtils.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { container } from 'tsyringe';
+import { container, type DependencyContainer } from 'tsyringe';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 describe('SourceMapService', () => {
@@ -128,18 +128,19 @@ describe('SourceMapService', () => {
 
   // Test for DI mode
   describe('DI mode', () => {
-    const helpers = TestContextDI.createTestHelpers(); // Define helpers
-    let testContext: TestContextDI;
+    let testContainer: DependencyContainer; // Use a manual child container
     let sourceMapService: ISourceMapService;
 
     beforeEach(async () => {
-      // Create a new test context using the minimal setup helper
-      testContext = helpers.setupMinimal();
-      // Initialize if needed (setupMinimal might handle this)
-      // await testContext.initialize(); 
+      // Create a fresh child container for each test
+      testContainer = container.createChildContainer();
 
-      // Resolve the SourceMapService using the context resolver
-      sourceMapService = await testContext.resolve<ISourceMapService>('ISourceMapService');
+      // Register the REAL service implementation
+      // Use the Interface token for registration if resolving via Interface
+      testContainer.register<ISourceMapService>('ISourceMapService', { useClass: SourceMapService });
+
+      // Resolve the SourceMapService from the manual container
+      sourceMapService = testContainer.resolve<ISourceMapService>('ISourceMapService');
       
       // Reset the service for clean test state
       sourceMapService.reset();
@@ -147,7 +148,8 @@ describe('SourceMapService', () => {
 
     // Add afterEach for cleanup
     afterEach(async () => {
-      await testContext?.cleanup();
+      // Dispose the manual container
+      testContainer?.dispose();
     });
 
     test('should register source files via DI', () => {
