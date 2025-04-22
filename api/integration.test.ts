@@ -91,8 +91,15 @@ describe('API Integration Tests', () => {
     // Remove incorrect registration
     // testContainer.registerInstance<ILogger>('DirectiveLogger', mockLogger);
     // Register the actual main logger using correct tokens
-    testContainer.registerInstance('MainLogger', logger); 
-    testContainer.register('ILogger', { useToken: 'MainLogger' });
+    const testLogger: ILogger = {
+      error: (message, context) => logger.error(message, context),
+      warn: (message, context) => logger.warn(message, context),
+      info: (message, context) => logger.info(message, context),
+      debug: (message, context) => logger.debug(message, context),
+      trace: (message, context) => logger.debug(`[TRACE] ${message}`, context), // Map trace to debug
+      level: logger.level ?? 'info', // Use logger's level or default
+    };
+    testContainer.registerInstance<ILogger>('ILogger', testLogger);
 
     // Register Real Factories
     testContainer.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
@@ -115,10 +122,7 @@ describe('API Integration Tests', () => {
     testContainer.registerSingleton(StateTrackingService, StateTrackingService); // Register concrete class
     // REMOVED: testContainer.registerSingleton('IStateTrackingService', { useExisting: StateTrackingService });
 
-    // Register Logger
-    testContainer.registerInstance<ILogger>('ILogger', logger);
-
-    // <<< ADDED: Register DirectiveService >>>
+    // Register other services
     testContainer.registerSingleton('IDirectiveService', DirectiveService);
     // <<< ADDED: Register ValidationService >>>
     testContainer.register('IValidationService', { useClass: ValidationService });

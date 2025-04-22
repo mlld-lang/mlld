@@ -10,6 +10,7 @@ import type { ParserFlags } from '@core/types/resolution';
 import { StringLiteralType } from '@core/types/common';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import { logger } from '@core/utils/logger.js';
+import { Service } from '@core/ServiceProvider.js';
 
 // Define the type for the context object without the methods
 type ResolutionContextBase = Omit<ResolutionContext, 
@@ -19,6 +20,7 @@ type ResolutionContextBase = Omit<ResolutionContext,
 /**
  * Factory for creating resolution contexts appropriate for different directives
  */
+@Service()
 export class ResolutionContextFactory {
 
   // --- Private Static Helper Methods for building new contexts --- 
