@@ -46,9 +46,9 @@ describe('DirectiveService', () => {
   let context: TestContextDI;
   let testContainer: DependencyContainer;
   let directiveService: IDirectiveService;
-  let mockStateService: MockedObjectDeep<IStateService>;
-  let mockValidationService: MockedObjectDeep<IValidationService>;
-  let mockResolutionService: MockedObjectDeep<IResolutionService>;
+  let mockStateService: any;
+  let mockValidationService: any;
+  let mockResolutionService: any;
   let mockTextHandler: IDirectiveHandler;
   let mockDataHandler: IDirectiveHandler;
   let mockImportHandler: IDirectiveHandler;
@@ -83,6 +83,7 @@ describe('DirectiveService', () => {
     
     // Create and Register Mocks
     mockStateService = MockFactory.createStateService();
+    (mockStateService as any)._mockStorage = {}; // Initialize mock storage
     mockValidationService = MockFactory.createValidationService();
     mockResolutionService = MockFactory.createResolutionService();
     mockPathService = { resolvePath: vi.fn(), validatePath: vi.fn(), normalizePath: vi.fn(), dirname: vi.fn().mockReturnValue(process.cwd()) } as unknown as IPathService;
@@ -130,10 +131,13 @@ describe('DirectiveService', () => {
       return 'ResolvedContextValue_Unknown';
     });
     vi.spyOn(mockResolutionService, 'resolveNodes').mockImplementation(async (nodes, ctx) => 'ResolvedNodesValue');
-    vi.spyOn(mockStateService, 'setDataVar').mockImplementation(async (name: string, value: JsonValue, metadata?: Partial<VariableMetadata>) => {
+    
+    // Removed vi.spyOn for setDataVar
+    // Assign the mock function directly
+    mockStateService.setDataVar = async (name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): Promise<void> => {
        (mockStateService as any)._mockStorage[name] = value;
        return;
-    });
+    };
 
     // >>> Register Core/Infrastructure Mocks FIRST <<<
     testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
