@@ -293,14 +293,14 @@ describe('ResolutionService', () => {
     // Add other PathService methods if needed by ResolutionService
     
     // Configure ParserServiceClient mock (Implementation needs the AST factories)
-    mockParserClient.parseString.mockImplementation(async (text: string): Promise<Array<TextNode | VariableReferenceNode>> => {
+    mockParserClient.parseString.mockImplementation(async (text: string): Promise<MeldNode[]> => {
        const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: text.length + 1 } };
        // Use the mocked AST factories HERE
        if (text === '$nonexistent') {
-         return [mockVariableNodeFactory.createVariableReferenceNode('nonexistent', VariableType.PATH, [], undefined, mockLocation)];
+         return [{ type: 'VariableReference', identifier: 'nonexistent', valueType: VariableType.PATH, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' } as VariableReferenceNode];
        }
        if (text === '{{nonexistent}}') {
-          return [mockVariableNodeFactory.createVariableReferenceNode('nonexistent', VariableType.TEXT, [], undefined, mockLocation)];
+          return [{ type: 'VariableReference', identifier: 'nonexistent', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' } as VariableReferenceNode];
        }
        // Mock other specific cases needed by tests using mockVariableNodeFactory and mockTextNodeFactory
        // Fallback
@@ -366,13 +366,16 @@ describe('ResolutionService', () => {
     });
 
     it('should resolve text variables', async () => {
-      // The beforeEach setup handles mocking:
-      // - stateService.getTextVar('textVar') returns TextVariable({ value: 'World' })
-      // - mockParserClient.parseString('{{textVar}}') returns VariableReferenceNode({ identifier: 'textVar' })
+      // Add specific parser mock for this test's input
+      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } };
+      const mockNodes: MeldNode[] = [
+        { type: 'VariableReference', identifier: 'textVar', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' } as VariableReferenceNode
+      ];
+      parserService.parse.mockResolvedValue(mockNodes); // Mock parser for '{{textVar}}'
 
-      const result = await service.resolveText('{{textVar}}', defaultContext);
+      const result = await service.resolveText('{{textVar}}', defaultContext); // Using textVar now
       
-      expect(result).toBe('World');
+      expect(result).toBe('World'); // Expecting 'World'
     });
 
     it('should resolve data variables', async () => {
@@ -384,7 +387,8 @@ describe('ResolutionService', () => {
           valueType: VariableType.DATA, 
           fields: [], 
           isVariableReference: true, 
-          location: mockLocation
+          location: mockLocation,
+          nodeId: 'mock-node-id'
       };
 
       // Call with the node object
@@ -449,7 +453,7 @@ describe('ResolutionService', () => {
       const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }; // Define mock location
       const mockNodes: MeldNode[] = [
         { type: 'Text', content: 'Hello ', location: mockLocation } as TextNode,
-        { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode
+        { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' } as VariableReferenceNode
       ];
       parserService.parse.mockResolvedValue(mockNodes); // Mock parser for this test
 
@@ -608,7 +612,8 @@ describe('ResolutionService', () => {
           valueType: VariableType.DATA, 
           fields: [{ type: 'field', value: 'name' }], 
           isVariableReference: true, 
-          location: mockLocation
+          location: mockLocation,
+          nodeId: 'mock-node-id'
       };
 
       // Test resolveData for the raw value using the node
@@ -639,7 +644,8 @@ describe('ResolutionService', () => {
               { type: 'field', value: 'value' }  // Use correct fields from beforeEach mock
           ], 
           isVariableReference: true, 
-          location: mockLocation
+          location: mockLocation,
+          nodeId: 'mock-node-id'
       };
 
       const resultData = await service.resolveData(node, defaultContext);
@@ -655,7 +661,8 @@ describe('ResolutionService', () => {
             valueType: VariableType.DATA,
             fields: [{ type: 'field', value: 'nonexistent' }],
             isVariableReference: true,
-            location: mockLocation
+            location: mockLocation,
+            nodeId: 'mock-node-id'
         };
 
         await expectToThrowWithConfig(async () => {
@@ -682,7 +689,8 @@ describe('ResolutionService', () => {
             valueType: VariableType.DATA, // Or TEXT, depending on how primitives are stored
             fields: [{ type: 'field', value: 'length' }],
             isVariableReference: true,
-            location: mockLocation
+            location: mockLocation,
+            nodeId: 'mock-node-id'
         };
 
         await expectToThrowWithConfig(async () => {
@@ -712,7 +720,8 @@ describe('ResolutionService', () => {
           { type: 'field', value: 'value' }
         ],
         isVariableReference: true,
-        location: { start: {line: 1, column: 1}, end: {line: 1, column: 20} } // Mock location
+        location: { start: {line: 1, column: 1}, end: {line: 1, column: 20} },
+        nodeId: 'mock-node-id'
       };
       const result = await service.resolveData(node, defaultContext);
       expect(result).toBe('deep');
@@ -728,7 +737,8 @@ describe('ResolutionService', () => {
         valueType: VariableType.DATA,
         fields: [ { type: 'field', value: 'profile' } ], // Accessing 'profile' which doesn't exist
         isVariableReference: true,
-        location: { start: {line: 1, column: 1}, end: {line: 1, column: 20} }
+        location: { start: {line: 1, column: 1}, end: {line: 1, column: 20} },
+        nodeId: 'mock-node-id'
       };
 
       let caughtError: any = null;
@@ -786,7 +796,7 @@ describe('ResolutionService', () => {
       const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }; // Define mock location
       const mockNodes: MeldNode[] = [
         { type: 'Text', content: 'Hello ', location: mockLocation } as TextNode,
-        { type: 'VariableReference', identifier: 'textVar', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode // Corrected identifier to textVar
+        { type: 'VariableReference', identifier: 'textVar', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' } as VariableReferenceNode // Corrected identifier to textVar
       ];
       parserService.parse.mockResolvedValue(mockNodes); // Mock parser for this test
 
@@ -799,7 +809,7 @@ describe('ResolutionService', () => {
        const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }; // Define mock location
        const mockNodes: MeldNode[] = [
          { type: 'Text', content: 'Hello ', location: mockLocation } as TextNode,
-         { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode // Corrected identifier to name
+         { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' } as VariableReferenceNode // Corrected identifier to name
        ];
        parserService.parse.mockResolvedValue(mockNodes); // Mock parser for this test
 
@@ -810,18 +820,29 @@ describe('ResolutionService', () => {
      it('should handle non-existent variable in strict mode', async () => {
       const strictContext = defaultContext.withStrictMode(true);
        // Fix: Use VariableNodeFactory
-       vi.mocked(mockParserClient.parseString).mockImplementation(async (text: string): Promise<Array<TextNode | VariableReferenceNode>> => {
-         const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: text.length + 1 } };
-         if (text === '{{nonexistent}}') {
-           if (!mockVariableNodeFactory) throw new Error('Mock VariableNodeFactory not initialized');
-           const node = mockVariableNodeFactory.createVariableReferenceNode('nonexistent', VariableType.TEXT, [], undefined, mockLocation);
-           return [node];
+       const inputString = '${nonexistent}'; // Input string
+
+       // Mock parser SPECIFICALLY for the input string in this test
+       vi.mocked(parserService.parse).mockImplementation(async (value: string): Promise<MeldNode[]> => {
+         if (value === inputString) {
+             const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } };
+             const mockNodes: MeldNode[] = [
+                 { type: 'VariableReference', identifier: 'nonexistent', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' } as VariableReferenceNode
+             ];
+             return mockNodes;
          }
-          if (!mockTextNodeFactory) throw new Error('Mock TextNodeFactory not initialized');
-         return [mockTextNodeFactory.createTextNode(text, mockLocation)];
+         // Fallback for unexpected parse calls within this test (optional)
+         return []; 
+       });
+
+      // Mock stateService to return undefined for the variable
+      vi.mocked(stateService.getTextVar).mockImplementation((name: string): TextVariable | undefined => {
+        if (name === 'nonexistent') return undefined;
+        return undefined;
       });
+
       await expectToThrowWithConfig(async () => {
-        await service.resolveText('{{nonexistent}}', strictContext);
+        await service.resolveText('${nonexistent}', strictContext);
       }, {
         type: 'VariableResolutionError',
         code: 'E_VAR_NOT_FOUND',
@@ -831,17 +852,28 @@ describe('ResolutionService', () => {
 
      it('should return empty string for non-existent variable in non-strict mode', async () => {
         // Fix: Use VariableNodeFactory
-       vi.mocked(mockParserClient.parseString).mockImplementation(async (text: string): Promise<Array<TextNode | VariableReferenceNode>> => {
-         const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: text.length + 1 } };
-         if (text === '{{nonexistent}}') {
-           if (!mockVariableNodeFactory) throw new Error('Mock VariableNodeFactory not initialized');
-           const node = mockVariableNodeFactory.createVariableReferenceNode('nonexistent', VariableType.TEXT, [], undefined, mockLocation);
-           return [node];
+       const inputString = '${nonexistent}'; // Input string
+
+       // Mock parser SPECIFICALLY for the input string in this test
+       vi.mocked(parserService.parse).mockImplementation(async (value: string): Promise<MeldNode[]> => {
+         if (value === inputString) {
+             const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } };
+             const mockNodes: MeldNode[] = [
+                 { type: 'VariableReference', identifier: 'nonexistent', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' } as VariableReferenceNode
+             ];
+             return mockNodes;
          }
-          if (!mockTextNodeFactory) throw new Error('Mock TextNodeFactory not initialized');
-         return [mockTextNodeFactory.createTextNode(text, mockLocation)];
+          // Fallback for unexpected parse calls within this test (optional)
+         return []; 
+       });
+
+      // Mock stateService to return undefined for the variable
+      vi.mocked(stateService.getTextVar).mockImplementation((name: string): TextVariable | undefined => {
+        if (name === 'nonexistent') return undefined;
+        return undefined;
       });
-      const result = await service.resolveText('{{nonexistent}}', defaultContext);
+
+      const result = await service.resolveText('${nonexistent}', defaultContext);
       expect(result).toBe('');
     });
 
@@ -909,11 +941,11 @@ describe('ResolutionService', () => {
 
     beforeEach(() => {
       // Create mock nodes of different types
-      mockCommentNode = { type: 'Comment', content: 'a comment', location: mockLocation };
-      mockDirectiveNode = { type: 'Directive', directive: { kind: 'text', identifier: 'ignore' }, location: mockLocation };
-      textNode1 = { type: 'Text', content: 'Hello ', location: mockLocation };
-      textNode2 = { type: 'Text', content: '!', location: mockLocation };
-      varNode1 = { type: 'VariableReference', identifier: 'subject', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation };
+      mockCommentNode = { type: 'Comment', content: 'a comment', location: mockLocation, nodeId: 'mock-comment-node' }; // Add nodeId
+      mockDirectiveNode = { type: 'Directive', directive: { kind: 'text', identifier: 'ignore' }, location: mockLocation, nodeId: 'mock-directive-node' }; // Add nodeId
+      textNode1 = { type: 'Text', content: 'Hello ', location: mockLocation, nodeId: 'mock-text-node-1' }; // Add nodeId
+      textNode2 = { type: 'Text', content: '!', location: mockLocation, nodeId: 'mock-text-node-2' }; // Add nodeId
+      varNode1 = { type: 'VariableReference', identifier: 'subject', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' };
       
       // Ensure stateService mock is ready for 'subject'
       vi.mocked(stateService.getTextVar).mockImplementation((name: string): TextVariable | undefined => {
@@ -929,20 +961,20 @@ describe('ResolutionService', () => {
     });
 
     it('should resolve a mix of TextNodes and resolvable VariableReferenceNodes', async () => {
-      const textNode1 = { type: 'Text', content: 'Hello ', location: mockLocation };
-      const varNode1 = { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation };
-      const textNode2 = { type: 'Text', content: '!', location: mockLocation };
+      const textNode1 = { type: 'Text', content: 'Hello ', location: mockLocation, nodeId: 'mock-text-node-1' };
+      const varNode1 = { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' };
+      const textNode2 = { type: 'Text', content: '!', location: mockLocation, nodeId: 'mock-text-node-2' };
       const nodes: MeldNode[] = [textNode1 as TextNode, varNode1 as VariableReferenceNode, textNode2 as TextNode];
       const result = await service.resolveContent(nodes, defaultContext);
       expect(result).toBe('Hello Alice!');
     });
 
     it('should filter out non-Text and non-VariableReference nodes', async () => {
-      const textNode1 = { type: 'Text', content: 'Hello ', location: mockLocation };
-      const mockCommentNode = { type: 'Comment', content: 'ignore me', location: mockLocation };
-      const varNode1 = { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation };
-      const mockDirectiveNode = { type: 'Directive', directive: { kind: 'text' }, location: mockLocation };
-      const textNode2 = { type: 'Text', content: '!', location: mockLocation };
+      const textNode1 = { type: 'Text', content: 'Hello ', location: mockLocation, nodeId: 'mock-text-node-1' };
+      const mockCommentNode = { type: 'Comment', content: 'ignore me', location: mockLocation, nodeId: 'mock-comment-node' };
+      const varNode1 = { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' };
+      const mockDirectiveNode = { type: 'Directive', directive: { kind: 'text' }, location: mockLocation, nodeId: 'mock-directive-node' };
+      const textNode2 = { type: 'Text', content: '!', location: mockLocation, nodeId: 'mock-text-node-2' };
       const nodes: MeldNode[] = [
         textNode1 as TextNode, 
         mockCommentNode as CommentNode, 
@@ -975,7 +1007,8 @@ describe('ResolutionService', () => {
           valueType: VariableType.TEXT, 
           fields: [], 
           isVariableReference: true, 
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
+          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } },
+          nodeId: 'mock-node-id'
       };
       const nodes: MeldNode[] = [textNode1, failingVarNode];
       
@@ -1002,7 +1035,8 @@ describe('ResolutionService', () => {
           valueType: VariableType.TEXT, 
           fields: [], 
           isVariableReference: true, 
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
+          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } },
+          nodeId: 'mock-node-id'
       };
       const nodes: MeldNode[] = [textNode1, failingVarNode, textNode2];
       
