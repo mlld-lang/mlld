@@ -400,15 +400,16 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         this.logger.warn(`Under-header wrapping specified ("${underHeader}") but not currently supported by ResolutionService. Content unchanged.`, standardErrorDetails);
       }
 
-      // Create the replacement node
+      // Create the replacement node - This should ALWAYS happen for @embed
       const replacementNode = this.createReplacementNode(content, node, context);
       this.logger.debug(`Created replacement node`, { type: replacementNode.type });
+      const replacementNodes = replacementNode ? [replacementNode] : undefined; // Ensure array or undefined if creation failed
 
       // Return NEW DirectiveResult shape
       // Embed doesn't change state variables, so stateChanges is undefined
       return {
         stateChanges: undefined, 
-        replacement: replacementNode ? [replacementNode] : undefined // Ensure array or undefined
+        replacement: replacementNodes // Use the potentially undefined array
       };
     } catch (error) {
       if (error instanceof DirectiveError) {
