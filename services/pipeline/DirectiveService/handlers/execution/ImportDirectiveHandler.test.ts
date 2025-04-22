@@ -172,7 +172,7 @@ describe('ImportDirectiveHandler', () => {
   let mockInterpreterServiceClientFactory: DeepMockProxy<InterpreterServiceClientFactory>;
   let testContainer: DependencyContainer;
   let mockProcessingContext: DirectiveProcessingContext;
-  let mockStateTrackingService: MockedObjectDeep<IStateTrackingService>;
+  let mockStateTrackingService: IStateTrackingService;
 
   beforeEach(async () => {
     mockStateService = mockDeep<IStateService>();
@@ -219,7 +219,15 @@ describe('ImportDirectiveHandler', () => {
 
     testContainer.registerInstance('DependencyContainer', testContainer);
     
-    mockStateTrackingService = MockFactory.createStateTrackingService();
+    mockStateTrackingService = {
+      registerState: vi.fn(),
+      addRelationship: vi.fn(),
+      registerRelationship: vi.fn(),
+      getStateLineage: vi.fn().mockReturnValue([]),
+      getStateDescendants: vi.fn().mockReturnValue([]),
+      getAllStates: vi.fn().mockReturnValue([]),
+      getStateMetadata: vi.fn().mockReturnValue(undefined)
+    };
     testContainer.registerInstance<IStateTrackingService>('IStateTrackingService', mockStateTrackingService);
 
     testContainer.register(ImportDirectiveHandler, { useClass: ImportDirectiveHandler });

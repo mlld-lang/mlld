@@ -229,36 +229,61 @@ describe('DirectiveService', () => {
     });
 
     it('should throw if handler is missing when processing', async () => {
-      const freshContext = TestContextDI.createTestHelpers().setupWithStandardMocks({}, { isolatedContainer: true });
+      // Remove TestContextDI helpers
+      // const freshContext = TestContextDI.createTestHelpers().setupWithStandardMocks({}, { isolatedContainer: true });
+      
+      // Use a manual child container
+      let localTestContainer = container.createChildContainer();
 
       const minimalMockState = {
         getCurrentFilePath: vi.fn().mockReturnValue('test.meld'),
         clone: vi.fn().mockImplementation(() => minimalMockState),
         getStateId: vi.fn().mockReturnValue('fresh-mock-state'),
         isTransformationEnabled: vi.fn().mockReturnValue(true),
+        // Add any other methods required by ResolutionContextFactory or the test logic
+        getParentState: vi.fn().mockReturnValue(undefined), // Needed for ResolutionContextFactory?
+        getAllTextVars: vi.fn().mockReturnValue(new Map()), // Needed for ResolutionContextFactory?
+        getAllDataVars: vi.fn().mockReturnValue(new Map()), // Needed for ResolutionContextFactory?
+        getAllPathVars: vi.fn().mockReturnValue(new Map()), // Needed for ResolutionContextFactory?
+        getAllCommands: vi.fn().mockReturnValue(new Map()), // Needed for ResolutionContextFactory?
+        getVariable: vi.fn().mockReturnValue(undefined), // Add common methods
       } as unknown as IStateService;
-      freshContext.registerMock('IStateService', minimalMockState);
+      localTestContainer.registerInstance<IStateService>('IStateService', minimalMockState);
 
       const mockEmptyDirectiveService = {
         getSupportedDirectives: () => [],
         handleDirective: vi.fn().mockImplementation(async (node, ctx) => {
            throw new DirectiveError('Simulated: No handler registered', node.directive!.kind, DirectiveErrorCode.HANDLER_NOT_FOUND);
-        })
+        }),
+        // Add other IDirectiveService methods if needed by the test
+        initialize: vi.fn(),
+        updateInterpreterService: vi.fn(),
+        registerHandler: vi.fn(),
+        hasHandler: vi.fn().mockReturnValue(false),
+        validateDirective: vi.fn(),
+        createChildContext: vi.fn(),
+        processDirective: vi.fn(),
+        processDirectives: vi.fn(),
+        supportsDirective: vi.fn().mockReturnValue(false),
       } as unknown as IDirectiveService;
+      localTestContainer.registerInstance<IDirectiveService>('IDirectiveService', mockEmptyDirectiveService);
 
-      freshContext.registerMock('IDirectiveService', mockEmptyDirectiveService);
-
-      const freshService = await freshContext.resolve<IDirectiveService>('IDirectiveService');
+      // Resolve services from the local container
+      const freshService = localTestContainer.resolve<IDirectiveService>('IDirectiveService');
+      const resolvedMockState = localTestContainer.resolve<IStateService>('IStateService'); // Resolve the registered mock
 
       const node = createTextDirective('test', 'value');
       const currentFilePath = 'test.meld';
-      const freshMockState = await freshContext.resolve<IStateService>('IStateService');
-      vi.spyOn(freshMockState, 'getCurrentFilePath').mockReturnValue(currentFilePath);
+      // Use the resolved mock state
+      vi.spyOn(resolvedMockState, 'getCurrentFilePath').mockReturnValue(currentFilePath);
+
+      // Create ResolutionContext using the resolved mock state
+      const resolutionContext = ResolutionContextFactory.create(resolvedMockState, currentFilePath);
 
       const processingContext: DirectiveProcessingContext = {
-          state: freshMockState,
+          state: resolvedMockState,
           directiveNode: node,
-          resolutionContext: ResolutionContextFactory.create(freshMockState, currentFilePath),
+          resolutionContext: resolutionContext,
           formattingContext: mockFormattingContext,
       };
 
@@ -267,6 +292,9 @@ describe('DirectiveService', () => {
 
       await expect(freshService.handleDirective(node, processingContext))
         .rejects.toHaveProperty('code', DirectiveErrorCode.HANDLER_NOT_FOUND);
+        
+      // Dispose the local container
+      localTestContainer.dispose(); 
     });
   });
 

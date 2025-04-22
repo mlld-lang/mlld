@@ -165,7 +165,13 @@ describe('InterpreterService Integration', () => {
     // Register StateTrackingServiceClientFactory - Real or Mock?
     // Let's use a simple mock for now, unless real tracking is needed.
     const mockTrackingClient = { trackStateOperation: vi.fn() } as IStateTrackingServiceClient;
-    ClientFactoryHelpers.registerClientFactory(testContainer, 'StateTrackingServiceClientFactory', mockTrackingClient);
+    // ClientFactoryHelpers.registerClientFactory(testContainer, 'StateTrackingServiceClientFactory', mockTrackingClient); // <-- Problematic line
+    // 1. Create the mock factory manually
+    const mockTrackingClientFactory = {
+      createClient: vi.fn().mockReturnValue(mockTrackingClient)
+    };
+    // 2. Register the mock factory instance directly in testContainer
+    testContainer.registerInstance('StateTrackingServiceClientFactory', mockTrackingClientFactory);
 
     // Register REAL Service Implementations 
     testContainer.register('IInterpreterService', { useClass: InterpreterService });
