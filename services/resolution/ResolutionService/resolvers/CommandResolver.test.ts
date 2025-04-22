@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CommandResolver } from '@services/resolution/ResolutionService/resolvers/CommandResolver';
-import type { IStateService } from '@services/state/StateService/IStateService';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { 
   VariableType, 
   CommandVariable, 
@@ -11,10 +11,10 @@ import {
 } from '@core/types';
 import { ResolutionContext } from '@core/types/resolution';
 import { MeldResolutionError } from '@core/errors/index';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
-import { TestContextDI } from '@tests/utils/di';
-import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { mockDeep } from 'vitest-mock-extended';
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils';
+import { container, type DependencyContainer, injectable } from 'tsyringe'; // Added injectable for mock
 
 // Mock logger if CommandResolver uses it
 vi.mock('@core/utils/logger', () => ({
@@ -27,14 +27,14 @@ vi.mock('@core/utils/logger', () => ({
 }));
 
 describe('CommandResolver', () => {
-  const helpers = TestContextDI.createTestHelpers(); // Define helpers
-  let contextDI: TestContextDI;
+  let testContainer: DependencyContainer;
   let resolver: CommandResolver;
-  let stateService: IStateService; // Use interface type
-  let fileSystemService: IFileSystemService; // Use interface type
-  let parserService: IParserService; // Use interface type
+  let mockStateService: IStateService;
+  let mockFileSystemService: IFileSystemService;
+  let mockParserService: IParserService;
   let context: ResolutionContext;
 
+  // --- Mock Command Definitions --- 
   const mockSimpleCmdDef: IBasicCommandDefinition = {
     name: 'simple',
     type: 'basic', 
@@ -61,21 +61,52 @@ describe('CommandResolver', () => {
   };
 
   beforeEach(async () => {
-    // Use standard setup with mocks
-    contextDI = helpers.setupWithStandardMocks();
+    testContainer = container.createChildContainer();
 
-    // Resolve mocked services from the container
-    stateService = await contextDI.resolve<IStateService>('IStateService');
-    fileSystemService = await contextDI.resolve<IFileSystemService>('IFileSystemService');
-    parserService = await contextDI.resolve<IParserService>('IParserService');
+    // --- Create Manual Mocks --- 
+    mockStateService = {
+      getVariable: vi.fn(),
+      getCurrentFilePath: vi.fn(),
+      // Add other methods if needed, mocked to avoid type errors
+      setState: vi.fn(),
+      getState: vi.fn(),
+      getVariableValue: vi.fn(),
+      hasVariable: vi.fn(),
+      listVariables: vi.fn(),
+      stateId: 'mock-state-id',
+      variables: { text: new Map(), data: new Map(), path: new Map(), command: new Map() }
+    } as unknown as IStateService;
 
-    // Configure mocks using vi.spyOn for test-specific behavior
-    vi.spyOn(stateService, 'getVariable').mockImplementation((name: string, typeHint?: VariableType): CommandVariable | undefined => {
-      // Verify the type hint if provided (CommandResolver likely provides it)
+    mockFileSystemService = {
+      executeCommand: vi.fn(),
+      dirname: vi.fn(),
+      getCwd: vi.fn(),
+      // Add other methods if needed
+      readFile: vi.fn(),
+      writeFile: vi.fn(),
+      exists: vi.fn(),
+      isDirectory: vi.fn(),
+      isFile: vi.fn(),
+      resolvePath: vi.fn(),
+      normalizePath: vi.fn(),
+      joinPaths: vi.fn(),
+      listDir: vi.fn(),
+      watchFiles: vi.fn(() => ({ close: vi.fn() }))
+    } as unknown as IFileSystemService;
+
+    // ParserService mock (can be minimal as it's optional and not used in tests)
+    mockParserService = {
+      parse: vi.fn(),
+      parseWithLocations: vi.fn(),
+      parseFile: vi.fn(),
+      createVariableNode: vi.fn()
+    } as unknown as IParserService;
+
+    // --- Configure Mock Implementations --- 
+    vi.spyOn(mockStateService, 'getVariable').mockImplementation((name: string, typeHint?: VariableType): CommandVariable | undefined => {
       if (typeHint && typeHint !== VariableType.COMMAND) {
-        return undefined; // Only return command variables
+        return undefined;
       }
-      
       let definition: IBasicCommandDefinition | undefined;
       if (name === 'simple') definition = mockSimpleCmdDef;
       if (name === 'echo') definition = mockEchoCmdDef;
@@ -86,74 +117,73 @@ describe('CommandResolver', () => {
       }
       return undefined;
     });
-    
-    vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValue({ stdout: '', stderr: '' });
-    vi.spyOn(fileSystemService, 'dirname').mockImplementation(p => p ? p.substring(0, p.lastIndexOf('/') || 0) : '');
-    vi.spyOn(fileSystemService, 'getCwd').mockReturnValue('/mock/cwd');
-    
-    vi.spyOn(stateService, 'getCurrentFilePath').mockReturnValue('/mock/dir/test.meld');
-    
-    // Instantiate CommandResolver directly with resolved mocks
-    resolver = new CommandResolver(stateService, fileSystemService, parserService); 
+    vi.spyOn(mockFileSystemService, 'executeCommand').mockResolvedValue({ stdout: '', stderr: '' });
+    vi.spyOn(mockFileSystemService, 'dirname').mockImplementation(p => p ? p.substring(0, p.lastIndexOf('/') || 0) : '');
+    vi.spyOn(mockFileSystemService, 'getCwd').mockReturnValue('/mock/cwd');
+    vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue('/mock/dir/test.meld');
 
-    // Create ResolutionContext
-    context = ResolutionContextFactory.create(stateService, 'test.meld')
-               .withAllowedTypes([VariableType.COMMAND]); 
+    // --- Register Mocks and Real Service --- 
+    testContainer.registerInstance<IStateService>('IStateService', mockStateService);
+    testContainer.registerInstance<IFileSystemService>('IFileSystemService', mockFileSystemService);
+    testContainer.registerInstance<IParserService>('IParserService', mockParserService);
+    testContainer.register(CommandResolver, { useClass: CommandResolver });
+    
+    // --- Resolve Service Under Test --- 
+    resolver = testContainer.resolve(CommandResolver);
+    
+    // --- Create ResolutionContext --- 
+    context = ResolutionContextFactory.create(mockStateService, 'test.meld')
+               .withAllowedTypes([VariableType.COMMAND]);
   });
 
   afterEach(async () => {
-    await contextDI?.cleanup(); 
+    testContainer?.dispose();
   });
 
   describe('executeBasicCommand', () => {
     it('should execute a simple command with no args', async () => {
       const result = await resolver.executeBasicCommand(mockSimpleCmdDef, [], context);
       
-      // Check that the correct command string was executed
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo test', expect.objectContaining({ cwd: '/mock/dir' }));
-      // Check that the result is the stdout from the mock
-      expect(result).toBe(''); // Default mock stdout is empty
+      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith('echo test', expect.objectContaining({ cwd: '/mock/dir' }));
+      expect(result).toBe('');
     });
     
     it('should execute a command and substitute required args', async () => {
-      // Mock executeCommand to return substituted string for verification
-      fileSystemService.executeCommand.mockImplementation(async (cmd) => ({ stdout: cmd, stderr: '' }));
+      vi.spyOn(mockFileSystemService, 'executeCommand').mockImplementation(async (cmd) => ({ stdout: cmd, stderr: '' }));
       
       const result = await resolver.executeBasicCommand(mockEchoCmdDef, ['Hello'], context);
       
-      // Arg1 required, Arg2 defaults to 'default'
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo Hello default', expect.any(Object));
+      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith('echo Hello default', expect.any(Object));
       expect(result).toBe('echo Hello default');
     });
     
     it('should execute a command and substitute all args', async () => {
-      fileSystemService.executeCommand.mockImplementation(async (cmd) => ({ stdout: cmd, stderr: '' }));
+      vi.spyOn(mockFileSystemService, 'executeCommand').mockImplementation(async (cmd) => ({ stdout: cmd, stderr: '' }));
       
       const result = await resolver.executeBasicCommand(mockEchoCmdDef, ['Hello', 'World'], context);
       
-      // Arg1=Hello, Arg2=World
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo Hello World', expect.any(Object));
+      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith('echo Hello World', expect.any(Object));
       expect(result).toBe('echo Hello World');
     });
     
     it('should calculate cwd from currentFilePath if available', async () => {
-      stateService.getCurrentFilePath.mockReturnValue('/my/specific/file.txt');
-      fileSystemService.dirname.mockReturnValue('/my/specific');
+      vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue('/my/specific/file.txt');
+      vi.spyOn(mockFileSystemService, 'dirname').mockReturnValue('/my/specific');
       
       await resolver.executeBasicCommand(mockSimpleCmdDef, [], context);
       
-      expect(fileSystemService.dirname).toHaveBeenCalledWith('/my/specific/file.txt');
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ cwd: '/my/specific' }));
+      expect(mockFileSystemService.dirname).toHaveBeenCalledWith('/my/specific/file.txt');
+      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ cwd: '/my/specific' }));
     });
     
     it('should calculate cwd from fileSystemService.getCwd if currentFilePath is null', async () => {
-      stateService.getCurrentFilePath.mockReturnValue(null);
-      fileSystemService.getCwd.mockReturnValue('/system/cwd');
+      vi.spyOn(mockStateService, 'getCurrentFilePath').mockReturnValue(null);
+      vi.spyOn(mockFileSystemService, 'getCwd').mockReturnValue('/system/cwd');
       
       await resolver.executeBasicCommand(mockSimpleCmdDef, [], context);
       
-      expect(fileSystemService.getCwd).toHaveBeenCalled();
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ cwd: '/system/cwd' }));
+      expect(mockFileSystemService.getCwd).toHaveBeenCalled();
+      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ cwd: '/system/cwd' }));
     });
 
     // --- Argument Validation Error Tests --- 
@@ -161,7 +191,6 @@ describe('CommandResolver', () => {
     it('should throw MeldResolutionError for too few arguments (strict mode)', async () => {
       const strictContext = context.withStrictMode(true);
       await expectToThrowWithConfig(async () => {
-        // mockEchoCmdDef requires 1 arg, providing 0
         await resolver.executeBasicCommand(mockEchoCmdDef, [], strictContext);
       }, {
         type: 'MeldResolutionError',
@@ -172,17 +201,14 @@ describe('CommandResolver', () => {
     
     it('should return empty string for too few arguments (non-strict mode)', async () => {
       const nonStrictContext = context.withStrictMode(false);
-      // mockEchoCmdDef requires 1 arg, providing 0
       const result = await resolver.executeBasicCommand(mockEchoCmdDef, [], nonStrictContext);
       expect(result).toBe('');
-      // Should not attempt execution
-      expect(fileSystemService.executeCommand).not.toHaveBeenCalled();
+      expect(mockFileSystemService.executeCommand).not.toHaveBeenCalled();
     });
     
     it('should throw MeldResolutionError for too many arguments (strict mode)', async () => {
       const strictContext = context.withStrictMode(true);
       await expectToThrowWithConfig(async () => {
-        // mockEchoCmdDef allows max 2 args, providing 3
         await resolver.executeBasicCommand(mockEchoCmdDef, ['a', 'b', 'c'], strictContext);
       }, {
         type: 'MeldResolutionError',
@@ -193,18 +219,16 @@ describe('CommandResolver', () => {
     
     it('should return empty string for too many arguments (non-strict mode)', async () => {
       const nonStrictContext = context.withStrictMode(false);
-      // mockEchoCmdDef allows max 2 args, providing 3
       const result = await resolver.executeBasicCommand(mockEchoCmdDef, ['a', 'b', 'c'], nonStrictContext);
       expect(result).toBe('');
-      // Should not attempt execution
-      expect(fileSystemService.executeCommand).not.toHaveBeenCalled();
+      expect(mockFileSystemService.executeCommand).not.toHaveBeenCalled();
     });
     
     // --- Execution Error Tests ---
     
     it('should throw MeldResolutionError on command execution failure (strict mode)', async () => {
       const error = new Error('Command failed!');
-      fileSystemService.executeCommand.mockRejectedValue(error);
+      vi.spyOn(mockFileSystemService, 'executeCommand').mockRejectedValue(error);
       const strictContext = context.withStrictMode(true);
       
       await expectToThrowWithConfig(async () => {
@@ -217,16 +241,21 @@ describe('CommandResolver', () => {
     });
     
     it('should return empty string on command execution failure (non-strict mode)', async () => {
-      fileSystemService.executeCommand.mockRejectedValue(new Error('Command failed!'));
+      vi.spyOn(mockFileSystemService, 'executeCommand').mockRejectedValue(new Error('Command failed!'));
       const nonStrictContext = context.withStrictMode(false);
       
       const result = await resolver.executeBasicCommand(mockSimpleCmdDef, [], nonStrictContext);
       expect(result).toBe('');
     });
     
-    it('should throw MeldResolutionError if FileSystemService is missing', async () => {
-        // Create resolver without FileSystemService
-        const resolverWithoutFS = new CommandResolver(stateService, undefined, parserService); 
+    it('should throw MeldResolutionError if FileSystemService is missing when called', async () => {
+        // Manually instantiate resolver with undefined for optional dependencies
+        // This directly tests the internal check without complex DI resolution for optional deps
+        const resolverWithoutFS = new CommandResolver(
+            mockStateService, 
+            undefined, // Explicitly pass undefined for fileSystemService
+            mockParserService // Pass the mock parser service (or undefined if that's the test case)
+        );
         const strictContext = context.withStrictMode(true);
         
         await expectToThrowWithConfig(async () => {
@@ -236,6 +265,8 @@ describe('CommandResolver', () => {
             code: 'E_SERVICE_UNAVAILABLE',
             messageContains: 'FileSystemService is not available'
         });
+        
+        // No need to dispose a separate container here
     });
   });
 }); 

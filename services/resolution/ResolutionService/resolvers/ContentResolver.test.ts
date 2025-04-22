@@ -4,28 +4,30 @@ import type { MeldNode, TextNode, CodeFenceNode, CommentNode, DirectiveNode } fr
 import { ResolutionContext } from '@core/types.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
+import { mockDeep } from 'vitest-mock-extended';
+import { container, type DependencyContainer } from 'tsyringe';
 
 describe('ContentResolver', () => {
-  const helpers = TestContextDI.createTestHelpers();
-  let contextDI: TestContextDI;
+  let testContainer: DependencyContainer;
   let resolver: ContentResolver;
   let stateService: IStateService;
   let context: ResolutionContext;
 
   beforeEach(async () => {
-    contextDI = helpers.setupMinimal();
+    testContainer = container.createChildContainer();
     
-    stateService = await contextDI.resolve<IStateService>('IStateService');
+    stateService = mockDeep<IStateService>(); 
     
-    resolver = new ContentResolver(stateService);
+    testContainer.registerInstance<IStateService>('IStateService', stateService);
+    testContainer.register(ContentResolver, { useClass: ContentResolver });
+    
+    resolver = testContainer.resolve(ContentResolver);
     
     context = ResolutionContextFactory.create(stateService, 'test.meld');
   });
 
   afterEach(async () => {
-    await contextDI?.cleanup();
+    testContainer?.dispose();
   });
 
   it('should preserve text content exactly as is', async () => {

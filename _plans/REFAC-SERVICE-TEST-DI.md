@@ -31,23 +31,21 @@ The core strategy is to apply the "Manual Child Container" pattern consistently 
 
 ## List of remaining tests (delete each test as it is is completed)
 
-services/cli/CLIService/CLIService.test.ts
-services/fs/PathService/PathService.test.ts
-services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.test.ts
-services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.transformation.test.ts
 services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.test.ts
-services/pipeline/DirectiveService/DirectiveService.integration.test.ts
+
+services/fs/PathService/PathService.test.ts
+services/pipeline/OutputService/OutputService.test.ts
 services/pipeline/DirectiveService/DirectiveService.test.ts
+
 services/pipeline/InterpreterService/InterpreterService.integration.test.ts
 services/pipeline/InterpreterService/InterpreterService.unit.test.ts
-services/pipeline/OutputService/OutputService.test.ts
-services/resolution/ResolutionService/resolvers/CommandResolver.test.ts
-services/resolution/ResolutionService/resolvers/ContentResolver.test.ts
 services/resolution/ResolutionService/resolvers/StringLiteralHandler.test.ts
 services/resolution/ResolutionService/resolvers/VariableReferenceResolver.edge.test.ts
 services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts
 services/resolution/ResolutionService/ResolutionService.test.ts
 services/resolution/ValidationService/ValidationService.test.ts
+
+services/cli/CLIService/CLIService.test.ts
 services/sourcemap/SourceMapService.test.ts
 services/state/StateEventService/StateEventService.test.ts
 services/state/StateService/StateFactory.test.ts

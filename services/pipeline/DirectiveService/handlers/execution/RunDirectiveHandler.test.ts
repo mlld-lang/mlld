@@ -21,9 +21,7 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import { runDirectiveExamples } from '@core/syntax';
 import { parse, ParseResult } from '@core/ast';
 import { ErrorSeverity, MeldError } from '@core/errors/MeldError.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import {
-  createValidationServiceMock,
   createStateServiceMock,
   createResolutionServiceMock,
   createFileSystemServiceMock,
@@ -45,7 +43,6 @@ import type { DirectiveProcessingContext, FormattingContext } from '@core/types/
 import type { ResolutionContext } from '@core/types/resolution.js';
 import { JsonValue, Result, success } from '@core/types';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
-import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
 import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils.js';
 import { VariableMetadata } from '@core/types/variables.js';
 import { MeldResolutionError, FieldAccessError, PathValidationError } from '@core/errors';
@@ -57,6 +54,9 @@ import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
 import type { VariableDefinition } from '@core/types/variables.js';
+import { container, DependencyContainer } from 'tsyringe';
+import { mockDeep, DeepMockProxy } from 'vitest-mock-extended';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 
 /**
  * RunDirectiveHandler Test Status
@@ -79,39 +79,45 @@ import type { VariableDefinition } from '@core/types/variables.js';
  */
 
 describe('RunDirectiveHandler', () => {
-  const helpers = TestContextDI.createTestHelpers();
   let handler: RunDirectiveHandler;
-  let stateService: IStateService;
-  let resolutionService: IResolutionService;
-  let fileSystemService: IFileSystemService;
-  let context: TestContextDI;
+  let mockStateService: DeepMockProxy<IStateService>;
+  let mockResolutionService: DeepMockProxy<IResolutionService>;
+  let mockFileSystemService: DeepMockProxy<IFileSystemService>;
+  let testContainer: DependencyContainer;
 
   beforeEach(async () => {
-    context = helpers.setupWithStandardMocks();
-    await context.resolve('IPathService');
+    testContainer = container.createChildContainer();
     
-    stateService = await context.resolve('IStateService');
-    resolutionService = await context.resolve('IResolutionService');
-    fileSystemService = await context.resolve('IFileSystemService');
-    handler = await context.resolve(RunDirectiveHandler); 
+    mockStateService = mockDeep<IStateService>();
+    mockResolutionService = mockDeep<IResolutionService>();
+    mockFileSystemService = mockDeep<IFileSystemService>();
+    
+    testContainer.registerInstance<IStateService>('IStateService', mockStateService);
+    testContainer.registerInstance<IResolutionService>('IResolutionService', mockResolutionService);
+    testContainer.registerInstance<IFileSystemService>('IFileSystemService', mockFileSystemService);
+    testContainer.registerInstance('DependencyContainer', testContainer);
+    
+    testContainer.register(RunDirectiveHandler, { useClass: RunDirectiveHandler });
+    
+    handler = testContainer.resolve(RunDirectiveHandler); 
 
-    vi.spyOn(stateService, 'getCurrentFilePath').mockReturnValue('/workspace/test.meld');
-    vi.spyOn(stateService, 'setVariable').mockResolvedValue({} as TextVariable);
-    vi.spyOn(stateService, 'getVariable').mockImplementation((name: string, type?: VariableType): MeldVariable | undefined => {
+    mockStateService.getCurrentFilePath.mockReturnValue('/workspace/test.meld');
+    mockStateService.setVariable.mockResolvedValue({} as TextVariable);
+    mockStateService.getVariable.mockImplementation((name: string, type?: VariableType): MeldVariable | undefined => {
         if (name === 'greet' && (!type || type === VariableType.COMMAND)) {
             return { type: VariableType.COMMAND, name: 'greet', value: { type:'basic', commandTemplate: 'echo "Hello there!"' } } as CommandVariable;
         }
         return undefined;
     });
-    vi.spyOn(stateService, 'isTransformationEnabled').mockReturnValue(false);
+    mockStateService.isTransformationEnabled.mockReturnValue(false);
     
-    vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValue({ stdout: 'default stdout', stderr: '' });
-    vi.spyOn(fileSystemService, 'writeFile').mockResolvedValue(undefined);
-    vi.spyOn(fileSystemService, 'deleteFile').mockResolvedValue(undefined);
-    vi.spyOn(fileSystemService, 'getCwd').mockReturnValue('/workspace');
+    mockFileSystemService.executeCommand.mockResolvedValue({ stdout: 'default stdout', stderr: '' });
+    mockFileSystemService.writeFile.mockResolvedValue(undefined);
+    mockFileSystemService.deleteFile.mockResolvedValue(undefined);
+    mockFileSystemService.getCwd.mockReturnValue('/workspace');
 
-    vi.spyOn(resolutionService, 'resolveNodes').mockImplementation(async (nodes, ctx) => nodes.map((n: any) => n.content || `{{${n.identifier}}}`).join(''));
-    vi.spyOn(resolutionService, 'resolveInContext').mockImplementation(async (value, ctx) => {
+    mockResolutionService.resolveNodes.mockImplementation(async (nodes, ctx) => nodes.map((n: any) => n.content || `{{${n.identifier}}}`).join(''));
+    mockResolutionService.resolveInContext.mockImplementation(async (value, ctx) => {
         if (typeof value === 'object' && value?.type === 'VariableReference') {
             if (value.identifier === 'missingVar') throw new MeldResolutionError('Variable not found by mock', { code: 'VAR_NOT_FOUND' });
             return `resolved-var:${value.identifier}`;
@@ -121,21 +127,19 @@ describe('RunDirectiveHandler', () => {
   });
 
   afterEach(async () => {
-    await context?.cleanup();
+    testContainer?.dispose();
     vi.clearAllMocks();
   });
 
   const createMockProcessingContext = (node: DirectiveNode, overrides: Partial<DirectiveProcessingContext> = {}): DirectiveProcessingContext => {
-      const mockResolutionContext = { 
-          strict: true, 
-          state: stateService 
-      } as ResolutionContext; 
+      const mockResolutionContext = ResolutionContextFactory.create(
+          mockStateService, 
+          mockStateService.getCurrentFilePath() ?? undefined
+      );
       const mockFormattingContext: FormattingContext = { isBlock: false, preserveLiteralFormatting: false, preserveWhitespace: false };
-      if (!stateService) {
-        throw new Error('Test setup error: stateService is not defined when creating context');
-      }
+      
       return {
-          state: stateService, 
+          state: mockStateService,
           resolutionContext: mockResolutionContext,
           formattingContext: mockFormattingContext,
           directiveNode: node,
@@ -150,12 +154,12 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective(commandNodes, createLocation(), 'runCommand');
       const processingContext = createMockProcessingContext(node);
       
-      vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'command output', stderr: '' });
-      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo test');
+      mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'command output', stderr: '' });
+      mockResolutionService.resolveNodes.mockResolvedValueOnce('echo test');
       
       const result = await handler.handle(processingContext) as DirectiveResult;
       
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo test', {
+      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith('echo test', {
         cwd: '/workspace'
       });
       expect(result.stateChanges).toBeDefined();
@@ -193,12 +197,12 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective(commandNodes, location, 'runCommand');
       const processingContext = createMockProcessingContext(node);
       
-      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo Hello World');
-      vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'Hello World', stderr: '' });
+      mockResolutionService.resolveNodes.mockResolvedValueOnce('echo Hello World');
+      mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'Hello World', stderr: '' });
       
       const result = await handler.handle(processingContext) as DirectiveResult;
       
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo Hello World', {
+      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith('echo Hello World', {
         cwd: '/workspace'
       });
       expect(result.stateChanges).toBeDefined();
@@ -213,8 +217,8 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective(commandNodes, createLocation(), 'runCommand', undefined, undefined, 'custom_output');
       const processingContext = createMockProcessingContext(node);
       
-      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo test');
-      vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'command output', stderr: '' });
+      mockResolutionService.resolveNodes.mockResolvedValueOnce('echo test');
+      mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'command output', stderr: '' });
       
       const result = await handler.handle(processingContext) as DirectiveResult;
       
@@ -231,12 +235,12 @@ describe('RunDirectiveHandler', () => {
        const node = createRunDirective(commandRefObject, createLocation(), 'runDefined');
        const processingContext = createMockProcessingContext(node);
        
-       vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'Hello there!', stderr: '' });
+       mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'Hello there!', stderr: '' });
        
        const result = await handler.handle(processingContext) as DirectiveResult;
        
-       expect(stateService.getVariable).toHaveBeenCalledWith('greet', VariableType.COMMAND);
-       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
+       expect(mockStateService.getVariable).toHaveBeenCalledWith('greet', VariableType.COMMAND);
+       expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith(
          'echo "Hello there!"', 
          expect.objectContaining({ cwd: '/workspace' })
        );
@@ -255,13 +259,13 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective(scriptContent, location, 'runCode');
       const processingContext = createMockProcessingContext(node);
       
-      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo "Inline script ran"');
-      vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'Inline script ran', stderr: '' });
+      mockResolutionService.resolveNodes.mockResolvedValueOnce('echo "Inline script ran"');
+      mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'Inline script ran', stderr: '' });
       
       const result = await handler.handle(processingContext) as DirectiveResult;
       
-      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(scriptContent, processingContext.resolutionContext);
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo "Inline script ran"', { cwd: '/workspace' });
+      expect(mockResolutionService.resolveNodes).toHaveBeenCalledWith(scriptContent, processingContext.resolutionContext);
+      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith('echo "Inline script ran"', { cwd: '/workspace' });
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('stdout');
       const stdoutDef = result.stateChanges?.variables?.stdout;
@@ -274,15 +278,15 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective(scriptContent, location, 'runCode', 'python'); 
       const processingContext = createMockProcessingContext(node);
       
-      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('print("Python script ran")');
-      vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'Python script ran', stderr: '' });
-      vi.spyOn(fileSystemService, 'writeFile').mockResolvedValueOnce(undefined);
+      mockResolutionService.resolveNodes.mockResolvedValueOnce('print("Python script ran")');
+      mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'Python script ran', stderr: '' });
+      mockFileSystemService.writeFile.mockResolvedValueOnce(undefined);
       
       const result = await handler.handle(processingContext) as DirectiveResult;
       
-      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(scriptContent, processingContext.resolutionContext);
-      expect(fileSystemService.writeFile).toHaveBeenCalledWith(expect.stringContaining('.py'), 'print("Python script ran")');
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
+      expect(mockResolutionService.resolveNodes).toHaveBeenCalledWith(scriptContent, processingContext.resolutionContext);
+      expect(mockFileSystemService.writeFile).toHaveBeenCalledWith(expect.stringContaining('.py'), 'print("Python script ran")');
+      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith(
         expect.stringMatching(/^python .*?meld-script-.*?\.py$/),
         { cwd: '/workspace' }
       );
@@ -290,7 +294,7 @@ describe('RunDirectiveHandler', () => {
       expect(result.stateChanges?.variables).toHaveProperty('stdout');
       const stdoutDef = result.stateChanges?.variables?.stdout;
       expect(stdoutDef?.value).toBe('Python script ran');
-      expect(fileSystemService.deleteFile).toHaveBeenCalledWith(expect.stringContaining('.py'));
+      expect(mockFileSystemService.deleteFile).toHaveBeenCalledWith(expect.stringContaining('.py'));
     });
 
     it('should resolve and pass parameters to a language script', async () => {
@@ -307,21 +311,21 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective(scriptContent, location, 'runCodeParams', 'python', params);
       const processingContext = createMockProcessingContext(node);
 
-      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('import sys\nprint(f"Input: {sys.argv[1]}")');
-      vi.spyOn(resolutionService, 'resolveInContext').mockImplementationOnce(async (value, ctx) => { 
+      mockResolutionService.resolveNodes.mockResolvedValueOnce('import sys\nprint(f"Input: {sys.argv[1]}")');
+      mockResolutionService.resolveInContext.mockImplementationOnce(async (value, ctx) => { 
           if(typeof value === 'object' && value?.type === 'VariableReference' && value?.identifier === 'inputVar') return 'TestParameter'; 
           return 'fallback';
       }); 
 
-      vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'Input: TestParameter', stderr: '' });
-      vi.spyOn(fileSystemService, 'writeFile').mockResolvedValueOnce(undefined);
-      vi.spyOn(fileSystemService, 'deleteFile').mockResolvedValue(undefined);
+      mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'Input: TestParameter', stderr: '' });
+      mockFileSystemService.writeFile.mockResolvedValueOnce(undefined);
+      mockFileSystemService.deleteFile.mockResolvedValue(undefined);
       
       const result = await handler.handle(processingContext) as DirectiveResult;
       
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(paramNode, processingContext.resolutionContext); 
-      expect(fileSystemService.writeFile).toHaveBeenCalledWith(expect.stringContaining('.py'), 'import sys\nprint(f"Input: {sys.argv[1]}")');
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
+      expect(mockResolutionService.resolveInContext).toHaveBeenCalledWith(paramNode, processingContext.resolutionContext); 
+      expect(mockFileSystemService.writeFile).toHaveBeenCalledWith(expect.stringContaining('.py'), 'import sys\nprint(f"Input: {sys.argv[1]}")');
+      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith(
         expect.stringMatching(/^python .*?meld-script-.*?\.py "TestParameter"$/),
         { cwd: '/workspace' }
       );
@@ -329,7 +333,7 @@ describe('RunDirectiveHandler', () => {
       expect(result.stateChanges?.variables).toHaveProperty('stdout');
       const stdoutDef = result.stateChanges?.variables?.stdout;
       expect(stdoutDef?.value).toBe('Input: TestParameter');
-      expect(fileSystemService.deleteFile).toHaveBeenCalled();
+      expect(mockFileSystemService.deleteFile).toHaveBeenCalled();
     });
      
     it('should handle parameter resolution failure in strict mode', async () => {
@@ -354,9 +358,9 @@ describe('RunDirectiveHandler', () => {
             } as ResolutionContext
         };
 
-        vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('print("hello")');
+        mockResolutionService.resolveNodes.mockResolvedValueOnce('print("hello")');
         const resolutionError = new MeldResolutionError('Variable not found by mock', { code: 'VAR_NOT_FOUND' });
-        vi.spyOn(resolutionService, 'resolveInContext').mockImplementationOnce(async (value, ctx) => {
+        mockResolutionService.resolveInContext.mockImplementationOnce(async (value, ctx) => {
             if (typeof value === 'object' && value?.type === 'VariableReference' && value?.identifier === 'missingVar') throw resolutionError;
             return 'fallback';
         });
@@ -369,8 +373,8 @@ describe('RunDirectiveHandler', () => {
                 cause: resolutionError
             } as ErrorTestOptions
         );
-        expect(resolutionService.resolveInContext).toHaveBeenCalledWith(paramNode, processingContext.resolutionContext);
-        expect(fileSystemService.executeCommand).not.toHaveBeenCalled();
+        expect(mockResolutionService.resolveInContext).toHaveBeenCalledWith(paramNode, processingContext.resolutionContext);
+        expect(mockFileSystemService.executeCommand).not.toHaveBeenCalled();
     });
   });
 
@@ -387,7 +391,7 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective(commandNodes, createLocation(), 'runCommand');
       const processingContext = createMockProcessingContext(node);
       const resolutionError = new Error('Resolution failed');
-      vi.spyOn(resolutionService, 'resolveNodes').mockRejectedValue(resolutionError);
+      mockResolutionService.resolveNodes.mockRejectedValue(resolutionError);
       
       await expectToThrowWithConfig(
           async () => await handler.handle(processingContext),
@@ -405,8 +409,8 @@ describe('RunDirectiveHandler', () => {
       const processingContext = createMockProcessingContext(node);
       const executionError = new Error('Execution failed');
       
-      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValue('invalid-command');
-      vi.spyOn(fileSystemService, 'executeCommand').mockRejectedValue(executionError);
+      mockResolutionService.resolveNodes.mockResolvedValue('invalid-command');
+      mockFileSystemService.executeCommand.mockRejectedValue(executionError);
       
       await expectToThrowWithConfig(
           async () => await handler.handle(processingContext),
@@ -416,7 +420,7 @@ describe('RunDirectiveHandler', () => {
               cause: executionError
           } as ErrorTestOptions 
       );
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith('invalid-command', {
+      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith('invalid-command', {
         cwd: '/workspace'
       });
     });
@@ -426,7 +430,7 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective(commandRefObject, createLocation(), 'runDefined');
       const processingContext = createMockProcessingContext(node);
 
-      vi.spyOn(stateService, 'getVariable').mockImplementation((name: string, type?: VariableType) => {
+      mockStateService.getVariable.mockImplementation((name: string, type?: VariableType) => {
         if (name === 'undefinedCommand' && type === VariableType.COMMAND) return undefined;
         return undefined;
       }); 
@@ -438,7 +442,7 @@ describe('RunDirectiveHandler', () => {
               messageContains: 'Command definition \'undefinedCommand\' not found',
           } as ErrorTestOptions 
       );
-      expect(stateService.getVariable).toHaveBeenCalledWith('undefinedCommand', VariableType.COMMAND);
+      expect(mockStateService.getVariable).toHaveBeenCalledWith('undefinedCommand', VariableType.COMMAND);
     });
   });
 
@@ -448,8 +452,8 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective(commandNodes, createLocation(), 'runCommand');
       const processingContext = createMockProcessingContext(node);
       
-      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo "Out" && >&2 echo "Err"');
-      vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'Out', stderr: 'Err' });
+      mockResolutionService.resolveNodes.mockResolvedValueOnce('echo "Out" && >&2 echo "Err"');
+      mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'Out', stderr: 'Err' });
       
       const result = await handler.handle(processingContext) as DirectiveResult;
       
@@ -465,9 +469,9 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective(commandNodes, createLocation(), 'runCommand');
       const processingContext = createMockProcessingContext(node);
       
-      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('echo Success');
-      vi.spyOn(fileSystemService, 'executeCommand').mockResolvedValueOnce({ stdout: 'transformed output', stderr: '' });
-      vi.spyOn(stateService, 'isTransformationEnabled').mockReturnValue(true);
+      mockResolutionService.resolveNodes.mockResolvedValueOnce('echo Success');
+      mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'transformed output', stderr: '' });
+      mockStateService.isTransformationEnabled.mockReturnValue(true);
       
       const result = await handler.handle(processingContext) as DirectiveResult;
       

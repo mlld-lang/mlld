@@ -1,3 +1,4 @@
+import { injectable, inject } from 'tsyringe';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@core/types/resolution.js';
 import { VariableType } from '@core/types/variables.js';
@@ -13,12 +14,12 @@ import { logger } from '@core/utils/logger.js';
 /**
  * Handles resolution and execution of command variables.
  */
+@injectable()
 export class CommandResolver {
   constructor(
-    private stateService: IStateService,
-    // Make fileSystemService optional to align with potential DI/fallback issues
-    private fileSystemService?: IFileSystemService, 
-    private parserService?: IParserService
+    @inject('IStateService') private stateService: IStateService,
+    @inject('IFileSystemService') private fileSystemService?: IFileSystemService,
+    @inject('IParserService') private parserService?: IParserService
   ) {}
 
   /**

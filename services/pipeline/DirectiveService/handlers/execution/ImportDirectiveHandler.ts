@@ -27,6 +27,8 @@ import { MeldPath, PathContentType, ValidatedResourcePath } from '@core/types/pa
 import type { StateServiceLike } from '@core/shared-service-types.js';
 import { MeldResolutionError, MeldFileNotFoundError, MeldError } from '@core/errors';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
+import crypto from 'crypto';
+import { TextNodeFactory } from '@core/syntax/types/factories/TextNodeFactory.js';
 
 /**
  * Handler for @import directives
@@ -49,7 +51,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     @inject('ICircularityService') private circularityService: ICircularityService,
     @inject(InterpreterServiceClientFactory) private interpreterServiceClientFactory: InterpreterServiceClientFactory,
     @inject('IURLContentResolver') private urlContentResolver?: IURLContentResolver,
-    @inject('StateTrackingService') stateTrackingService?: IStateTrackingService
+    @inject('StateTrackingService') stateTrackingService?: IStateTrackingService,
+    @inject(TextNodeFactory) private textNodeFactory?: TextNodeFactory
   ) {
     const factoryContainerId = (this.interpreterServiceClientFactory as any)?.container?.id || 'factory-container-not-found';
     process.stdout.write(`DEBUG [ImportDirectiveHandler CONSTRUCTOR] Factory Container ID: ${factoryContainerId}\n`);
@@ -284,13 +287,23 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       }
 
       // Return success with accumulated state changes (if any)
-      // const finalStateChanges = Object.keys(accumulatedStateChanges).length > 0 ? { variables: accumulatedStateChanges } : undefined; // No longer needed
-      // process.stdout.write(`DEBUG [ImportHandler.handle RETURN] finalStateChanges defined: ${!!finalStateChanges}, keys: ${finalStateChanges ? JSON.stringify(Object.keys(finalStateChanges.variables)) : 'N/A'}\n`);
       process.stdout.write(`DEBUG [ImportHandler.handle RETURN] Accumulated keys: ${JSON.stringify(Object.keys(accumulatedStateChanges))}\n`);
       
+      // Create replacement based on transformation mode
+      let replacementNodes: MeldNode[] | undefined;
+      if (currentStateService.isTransformationEnabled()) {
+        if (!this.textNodeFactory) {
+          // Fallback or throw error if factory not injected
+          logger.error('TextNodeFactory not available in ImportDirectiveHandler');
+          replacementNodes = []; // Or potentially throw?
+        } else {
+          replacementNodes = [this.textNodeFactory.createTextNode('', node.location)];
+        }
+      } // If not transformation, replacement is implicitly undefined
+
       const result: DirectiveResult = {
-        stateChanges: { variables: accumulatedStateChanges }, // Use the result from helper functions
-        replacement: [] 
+        stateChanges: { variables: accumulatedStateChanges }, 
+        replacement: replacementNodes // Use dynamically created replacement
       };
       process.stdout.write(`DEBUG [ImportHandler]: ABOUT TO RETURN result: ${JSON.stringify(result)}\n`);
       return result;

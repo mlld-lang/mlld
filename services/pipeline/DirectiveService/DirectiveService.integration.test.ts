@@ -1,6 +1,5 @@
-import { container, Lifecycle } from 'tsyringe';
+import { container, Lifecycle, type DependencyContainer } from 'tsyringe';
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -23,6 +22,7 @@ import { PathService } from '@services/fs/PathService/PathService';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
 import { ParserService } from '@services/pipeline/ParserService/ParserService';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService';
+import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService';
 import { StateFactory } from '@services/state/StateService/StateFactory';
 import { StateEventService } from '@services/state/StateEventService/StateEventService';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
@@ -55,14 +55,13 @@ interface ITestLogger {
 }
 
 describe('DirectiveService Integration Tests', () => {
-  let context: TestContextDI;
+  let testContainer: DependencyContainer;
   let directiveService: DirectiveService;
   let stateService: IStateService;
 
   beforeEach(async () => {
-    // Use isolated container as per TESTS.md recommendations
-    context = TestContextDI.createIsolated();
-    const testContainer = context.container.getContainer(); // Get the underlying tsyringe container
+    // Use manual child container
+    testContainer = container.createChildContainer(); 
 
     // --- Register REAL Services Needed for DirectiveService Integration ---
     // Register dependencies manually, respecting order where needed
@@ -84,6 +83,12 @@ describe('DirectiveService Integration Tests', () => {
     // StateTrackingService and its factory (dependency for StateService)
     testContainer.register<StateTrackingService>(StateTrackingService, { useClass: StateTrackingService }, { lifecycle: Lifecycle.Singleton });
     testContainer.register<StateTrackingServiceClientFactory>(StateTrackingServiceClientFactory, { useClass: StateTrackingServiceClientFactory }, { lifecycle: Lifecycle.Singleton });
+    
+    // !!! Register a provider returning null for the parent state dependency !!!
+    testContainer.register<IStateService | null>('ParentStateServiceForChild', { 
+        useFactory: () => null 
+    });
+    
     testContainer.register<StateService>('IStateService', { useClass: StateService }, { lifecycle: Lifecycle.Singleton });
 
     // Pipeline Services
@@ -92,6 +97,10 @@ describe('DirectiveService Integration Tests', () => {
     testContainer.register<ValidationService>('IValidationService', { useClass: ValidationService }, { lifecycle: Lifecycle.Singleton });
     testContainer.register<CircularityService>('ICircularityService', { useClass: CircularityService }, { lifecycle: Lifecycle.Singleton });
     testContainer.register<InterpreterServiceClientFactory>(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory }, { lifecycle: Lifecycle.Singleton });
+    
+    // !!! Register real InterpreterService needed by handlers !!!
+    testContainer.register<InterpreterService>('IInterpreterService', { useClass: InterpreterService }, { lifecycle: Lifecycle.Singleton });
+    
     testContainer.register<DirectiveService>(DirectiveService, { useClass: DirectiveService }, { lifecycle: Lifecycle.Singleton });
     
     // Register a mock logger using the minimal interface
@@ -104,6 +113,7 @@ describe('DirectiveService Integration Tests', () => {
     };
     testContainer.register<ITestLogger>('ILogger', { useValue: mockLogger });
     
+    // !!! Register the container itself for factories !!!
     testContainer.registerInstance('DependencyContainer', testContainer);
 
     // --- Register REAL Handlers BEFORE Resolving DirectiveService ---
@@ -119,8 +129,6 @@ describe('DirectiveService Integration Tests', () => {
     directiveService = testContainer.resolve(DirectiveService);
     stateService = testContainer.resolve<IStateService>('IStateService');
     
-    // NOTE: Manual cycle breaking removed. Dependencies should be handled by `delay()` now.
-
     // Initialize state with variables needed for interpolation
     await stateService.setTextVar('name', 'World');
     await stateService.setTextVar('user', 'Alice');
@@ -130,7 +138,7 @@ describe('DirectiveService Integration Tests', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    testContainer?.dispose();
   });
 
   it('should correctly process @text directive with interpolation', async () => {

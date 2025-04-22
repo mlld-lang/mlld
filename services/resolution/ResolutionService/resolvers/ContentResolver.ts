@@ -1,3 +1,4 @@
+import { injectable, inject } from 'tsyringe';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { MeldNode, TextNode, CodeFenceNode, CommentNode } from '@core/syntax/types.js';
@@ -6,8 +7,9 @@ import type { MeldNode, TextNode, CodeFenceNode, CommentNode } from '@core/synta
  * Handles resolution of raw content (text, code blocks, comments)
  * Preserves original document formatting while skipping comments and directives
  */
+@injectable()
 export class ContentResolver {
-  constructor(private stateService: IStateService) {}
+  constructor(@inject('IStateService') private stateService: IStateService) {}
 
   /**
    * Resolve content nodes, preserving original formatting but skipping comments and directives
