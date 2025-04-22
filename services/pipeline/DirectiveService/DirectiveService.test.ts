@@ -70,9 +70,16 @@ describe('DirectiveService', () => {
 
     // Register Infrastructure Mocks
     testContainer.registerInstance<IFileSystem>('IFileSystem', context.fs);
-    const mockLogger = MockFactory.createLogger('DirectiveService');
-    testContainer.registerInstance('MainLogger', mockLogger);
-    testContainer.registerInstance('ILogger', mockLogger);
+    const mockLogger = {
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
+        trace: vi.fn(),
+        level: 'debug'
+    };
+    testContainer.registerInstance<ILogger>('MainLogger', mockLogger as ILogger);
+    testContainer.registerInstance<ILogger>('ILogger', mockLogger as ILogger);
     
     // Create and Register Mocks
     mockStateService = MockFactory.createStateService();
