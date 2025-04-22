@@ -80,7 +80,7 @@ export class CLIService implements ICLIService {
     @inject('IFileSystemService') fileSystemService: IFileSystemService,
     @inject('IPathService') pathService: IPathService,
     @inject('IStateService') stateService: IStateService,
-    promptService?: IPromptService
+    @inject('IPromptService') promptService?: IPromptService
   ) {
     // Store injected services
     this.parserService = parserService;

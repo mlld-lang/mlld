@@ -21,7 +21,6 @@ import {
 } from '@tests/utils/ErrorTestUtils.js';
 import { textDirectiveExamples } from '@core/syntax/index.js';
 // import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers'; // Commented out due to path issues
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { DirectiveKind } from '@core/syntax/types/interfaces/IDirectiveNode.js';
 import { NodeFactory } from '@core/syntax/types/factories/NodeFactory.js';
