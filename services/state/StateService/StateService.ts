@@ -616,30 +616,39 @@ export class StateService implements IStateService {
   }
 
   createChildState(options?: Partial<{ /* VariableCopyOptions TBD */ }>): IStateService {
-    logger.debug(`[StateService ${this.getStateId()}] Creating child state`);
-    
-    // --- Use Container to Resolve Child --- 
-    const childContainer = this.container.createChildContainer();
-    
-    // Register the current instance (parent) using a specific token
-    childContainer.registerInstance<IStateService>('ParentStateServiceForChild', this);
+  process.stdout.write(`DEBUG [StateService.createChildState ENTRY] ParentStateID: ${this.getStateId()}, Container ID: ${(this.container as any)?.id || 'unknown'}, IsRegistered('ParentStateServiceForChild'): ${this.container.isRegistered('ParentStateServiceForChild')}
+`);
+  
+  // --- Use Container to Resolve Child --- 
+  const childContainer = this.container.createChildContainer();
+  
+  // Register the current instance (parent) using a specific token
+  childContainer.registerInstance<IStateService>('ParentStateServiceForChild', this);
+  process.stdout.write(`DEBUG [StateService.createChildState] After registering ParentStateServiceForChild. ChildContainer ID: ${(childContainer as any)?.id || 'unknown'}, IsRegistered: ${childContainer.isRegistered('ParentStateServiceForChild')}
+`);
 
-    // Resolve StateService using the child container. 
-    // It will inject dependencies from the child/parent hierarchy.
-    // The constructor needs to be adapted to inject 'ParentStateServiceForChild' optionally.
+  // Resolve StateService using the child container. 
+  // It will inject dependencies from the child/parent hierarchy.
+  // The constructor needs to be adapted to inject 'ParentStateServiceForChild' optionally.
+  try {
     const childService = childContainer.resolve(StateService);
+    process.stdout.write(`DEBUG [StateService.createChildState] Created child state with ID: ${childService.getStateId()}, Has parent? ${!!childService.getParentState()}, Parent matches? ${childService.getParentState() === this}
+`);
     
-    // TODO: Adapt StateService constructor to optionally inject 'ParentStateServiceForChild' 
-    // and assign it to this.parentService if present. 
-    // For now, this resolution assumes the constructor handles the parent correctly OR 
-    // we manually set it after resolution if needed (less ideal).
-
-    // Copy variables (Assuming this logic exists/works)
-    // copyVariables(this, childService, options);
+    // Verify that we have proper parent state linkage
+    if (!childService.getParentState()) {
+      process.stdout.write(`WARNING [StateService.createChildState] Child state created but parent reference is missing! This may cause recursive import issues.
+`);
+    }
     
     logger.debug(`[StateService ${this.getStateId()}] Child state created via container: ${childService.getStateId()}`);
     return childService;
+  } catch (error) {
+    process.stdout.write(`ERROR [StateService.createChildState] Failed to resolve child StateService: ${error instanceof Error ? error.message : String(error)}
+`);
+    throw error;
   }
+}  
 
   async mergeChildState(childState: IStateService): Promise<void> {
     this.checkMutable();
