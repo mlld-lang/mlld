@@ -3,28 +3,17 @@ import { StateVisualizationService } from '@tests/utils/debug/StateVisualization
 import { IStateHistoryService, StateOperation, StateTransformation } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
 import type { IStateTrackingService, StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { VisualizationConfig, VisualizationFormat } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
+import { mockDeep } from 'vitest-mock-extended';
 
 describe('StateVisualizationService', () => {
-  let mockHistoryService: IStateHistoryService & { [K in keyof IStateHistoryService]: Mock };
-  let mockTrackingService: IStateTrackingService & { [K in keyof IStateTrackingService]: Mock };
+  let mockHistoryService: ReturnType<typeof mockDeep<IStateHistoryService>>;
+  let mockTrackingService: ReturnType<typeof mockDeep<IStateTrackingService>>;
   let visualizationService: StateVisualizationService;
 
   beforeEach(() => {
-    mockHistoryService = {
-      recordOperation: vi.fn(),
-      getOperationHistory: vi.fn(),
-      getTransformationChain: vi.fn(),
-      queryHistory: vi.fn(),
-      getRelatedOperations: vi.fn(),
-      clearHistoryBefore: vi.fn(),
-    };
-
-    mockTrackingService = {
-      registerState: vi.fn(),
-      addRelationship: vi.fn(),
-      getStateLineage: vi.fn(),
-      getStateDescendants: vi.fn(),
-    };
+    mockHistoryService = mockDeep<IStateHistoryService>();
+    mockTrackingService = mockDeep<IStateTrackingService>();
+    mockTrackingService.getAllStates.mockReturnValue([]);
 
     visualizationService = new StateVisualizationService(
       mockHistoryService,

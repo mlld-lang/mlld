@@ -27,7 +27,7 @@ import { logger } from '@core/utils/logger.js';
 // Import necessary factories and clients
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
-import { mock } from 'vitest-mock-extended';
+import { mock, mockDeep } from 'vitest-mock-extended';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import { container, type DependencyContainer } from 'tsyringe';
 // Import tokens and helpers for manual DI setup
@@ -66,6 +66,7 @@ import { FileSystemService } from '@services/fs/FileSystemService/FileSystemServ
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
 import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
+import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),
@@ -81,20 +82,20 @@ describe('InterpreterService Integration', () => {
   let parser: IParserService;
   // Declare mock variables outside beforeEach
   let mockDirectiveClient: IDirectiveServiceClient;
-  let mockDirectiveClientFactory: DirectiveServiceClientFactory;
+  let mockDirectiveClientFactoryObject: { createClient: () => IDirectiveServiceClient };
   let mockResolutionService: IResolutionService;
-  let mockParserClientFactory: ParserServiceClientFactory;
+  let mockParserClientFactoryObject: { createClient: () => IParserServiceClient };
   let mockParserServiceClient: IParserServiceClient; // Declare mock parser client
   let mockPathService: IPathService;
   let mockURLContentResolver: IURLContentResolver;
   // Add mock for PathServiceClientFactory
-  let mockPathServiceClientFactory: PathServiceClientFactory;
+  let mockPathServiceClientFactory: { createClient: () => IPathServiceClient };
 
   beforeEach(async () => {
     // Reset mocks first
     vi.resetAllMocks();
     
-    context = TestContextDI.createIsolated();
+    context = await TestContextDI.createIsolated();
     
     testContainer = container.createChildContainer();
 
@@ -128,14 +129,12 @@ describe('InterpreterService Integration', () => {
     vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementation(mockHandleDirectiveImpl);
     
     // --- Mock DirectiveServiceClientFactory --- 
-    // Manually create the factory mock
-    mockDirectiveClientFactory = {
-      createClient: vi.fn(),
-      // directiveService: undefined // Property 'directiveService' does not exist on type 'DirectiveServiceClientFactory'.ts(2339)
-    } as unknown as DirectiveServiceClientFactory; // Cast via unknown to satisfy type checker
-    
-    // Configure the factory mock to return our manual client mock using vi.spyOn
-    vi.spyOn(mockDirectiveClientFactory, 'createClient').mockReturnValue(mockDirectiveClient);
+    // Create the mock factory object
+    mockDirectiveClientFactoryObject = {
+      createClient: vi.fn().mockReturnValue(mockDirectiveClient),
+    };
+    // Register the mock factory object using the class token and useValue
+    testContainer.register(DirectiveServiceClientFactory, { useValue: mockDirectiveClientFactoryObject as any });
 
     // --- Mock ParserServiceClient & Factory ---
     // Create a basic manual mock for the client
@@ -143,12 +142,12 @@ describe('InterpreterService Integration', () => {
       parse: vi.fn(), 
       parseWithLocation: vi.fn() 
     } as unknown as IParserServiceClient;
-    // Create the factory mock manually
-    mockParserClientFactory = {
-      createClient: vi.fn()
-    } as unknown as ParserServiceClientFactory;
-    // Configure the factory mock to return the client mock
-    vi.spyOn(mockParserClientFactory, 'createClient').mockReturnValue(mockParserServiceClient);
+    // Create the mock factory object
+    mockParserClientFactoryObject = {
+      createClient: vi.fn().mockReturnValue(mockParserServiceClient),
+    };
+    // Register the mock factory object using the class token and useValue
+    testContainer.register(ParserServiceClientFactory, { useValue: mockParserClientFactoryObject as any });
 
     // --- Create other mocks ---
     // mockResolutionService = mock<IResolutionService>(); // Commented out - using real service
@@ -179,18 +178,18 @@ describe('InterpreterService Integration', () => {
     testContainer.register(StateFactory, { useClass: StateFactory });
     // Register StateTrackingServiceClientFactory - Real or Mock?
     // Let's use a simple mock for now, unless real tracking is needed.
-    const mockTrackingClient = { trackStateOperation: vi.fn() } as IStateTrackingServiceClient;
-    // ClientFactoryHelpers.registerClientFactory(testContainer, 'StateTrackingServiceClientFactory', mockTrackingClient); // <-- Problematic line
-    // 1. Create the mock factory manually
-    const mockTrackingClientFactory = {
-      createClient: vi.spyOn(mockTrackingClient, 'trackStateOperation').mockReturnValue(mockTrackingClient)
-    };
-    // 2. Register the mock factory instance directly in testContainer
-    testContainer.registerInstance('StateTrackingServiceClientFactory', mockTrackingClientFactory);
+    const mockTrackingClient = {
+      trackStateOperation: vi.fn(),
+      registerState: vi.fn(),
+      addRelationship: vi.fn(),
+      registerRelationship: vi.fn(),
+    } as IStateTrackingServiceClient; // No longer needs 'as unknown' if complete
+    const mockStateTrackingClientFactory = { createClient: vi.fn().mockReturnValue(mockTrackingClient) };
+    // Register the mock factory object using the class token and useValue
+    testContainer.register('StateTrackingServiceClientFactory', { useValue: mockStateTrackingClientFactory }); // Changed from registerInstance
 
     // --- Register Mocks/Services needed by ResolutionService FIRST ---
     testContainer.registerInstance<IPathService>('IPathService', mockPathService); // Register the mock path service
-    testContainer.registerInstance(ParserServiceClientFactory, mockParserClientFactory); // Ensure ParserServiceClientFactory mock is registered
     // Register REAL PathOperationsService
     testContainer.register(PathOperationsService, { useClass: PathOperationsService });
     testContainer.register('IPathOperationsService', { useToken: PathOperationsService });
@@ -488,8 +487,8 @@ describe('InterpreterService Integration', () => {
 
   describe('Error handling', () => {
     it('handles circular imports', async () => {
-      await context.writeFile('project/src/circular1.meld', '@import [$./circular2.meld]');
-      await context.writeFile('project/src/circular2.meld', '@import [$./circular1.meld]');
+      await context.fs.writeFile('project/src/circular1.meld', '@import [$./circular2.meld]');
+      await context.fs.writeFile('project/src/circular2.meld', '@import [$./circular1.meld]');
       const node = context.factory.createImportDirective('$./project/src/circular1.meld', context.factory.createLocation(1, 1));
       
       const originalInterpret = interpreterService.interpret;
@@ -614,6 +613,8 @@ describe('InterpreterService Integration', () => {
        
       // Interpretation itself succeeds
       const finalState = await interpreterService.interpret([node] as MeldNode[], { filePath: 'test.meld' });
+      
+      expect(mockDirectiveClient.handleDirective).toHaveBeenCalledTimes(1);
       // Check variable using getVariable on the *returned* state
       const errorVar = finalState.getVariable(varName);
       expect(errorVar).toBeDefined();
@@ -691,8 +692,8 @@ describe('InterpreterService Integration', () => {
     });
 
     it('handles cleanup on circular imports', async () => {
-      await context.writeFile('project/src/circular1.meld', '@import [$./circular2.meld]');
-      await context.writeFile('project/src/circular2.meld', '@import [$./circular1.meld]');
+      await context.fs.writeFile('project/src/circular1.meld', '@import [$./circular2.meld]');
+      await context.fs.writeFile('project/src/circular2.meld', '@import [$./circular1.meld]');
       const node = context.factory.createImportDirective('$./project/src/circular1.meld', context.factory.createLocation(1, 1));
       
       const originalInterpret = interpreterService.interpret;

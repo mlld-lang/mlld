@@ -170,16 +170,24 @@ export class TestContextDI {
    * Create a TestContextDI instance
    * @param options Options for test context initialization
    */
-  static create(options: TestContextDIOptions = {}): TestContextDI {
-    return new TestContextDI(options);
+  static async create(options: TestContextDIOptions = {}): Promise<TestContextDI> {
+    const context = new TestContextDI(options);
+    if (context.initPromise) { // Ensure initPromise exists
+      await context.initPromise; // Await initialization
+    }
+    return context;
   }
 
   /**
    * Create a TestContextDI instance with an isolated container
    * @param options Options for test context initialization
    */
-  static createIsolated(options: Omit<TestContextDIOptions, 'isolatedContainer'> = {}): TestContextDI {
-    return new TestContextDI({ ...options, isolatedContainer: true });
+  static async createIsolated(options: Omit<TestContextDIOptions, 'isolatedContainer'> = {}): Promise<TestContextDI> {
+    const context = new TestContextDI({ ...options, isolatedContainer: true });
+    if (context.initPromise) { // Ensure initPromise exists
+      await context.initPromise; // Await initialization
+    }
+    return context;
   }
 
   /**

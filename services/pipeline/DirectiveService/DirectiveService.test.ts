@@ -13,7 +13,7 @@ import { ErrorSeverity, MeldError } from '@core/errors/MeldError.js';
 import { createTextDirective, createDataDirective, createImportDirective } from '@tests/utils/testFactories.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import type { DirectiveProcessingContext, ExecutionContext } from '@core/types/index.js';
-import type { DirectiveResult } from '@core/directives/DirectiveHandler';
+import type { DirectiveResult } from '@core/directives/DirectiveHandler.js';
 import type { ResolutionContext } from '@core/types/resolution.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
@@ -64,7 +64,7 @@ describe('DirectiveService', () => {
   beforeEach(async () => {
     vi.resetAllMocks();
 
-    context = TestContextDI.createIsolated();
+    context = await TestContextDI.createIsolated();
 
     testContainer = container.createChildContainer();
 
@@ -413,7 +413,6 @@ describe('DirectiveService', () => {
         vi.spyOn(mockStateService, 'clone').mockImplementation(() => mockStateService);
         vi.spyOn(mockValidationService, 'validate').mockImplementation(vi.fn());
         vi.spyOn(mockCircularityService, 'isInStack').mockReturnValue(false);
-        vi.spyOn(mockCircularityService, 'beginImport');
         vi.spyOn(mockPathService, 'resolvePath').mockReturnValue(resolvedImportPath);
 
         const processingContext: DirectiveProcessingContext = {
