@@ -14,7 +14,6 @@ import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/Directive
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { embedLogger } from '@core/utils/logger.js';
-import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js'; 
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import { inject, injectable } from 'tsyringe';

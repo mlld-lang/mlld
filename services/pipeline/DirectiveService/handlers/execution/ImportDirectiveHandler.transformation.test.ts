@@ -372,12 +372,7 @@ describe('ImportDirectiveHandler Transformation', () => {
       mockProcessingContext = createMockProcessingContext(node);
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext) as DirectiveResult;
 
-      expect(result.replacement).toEqual<TextNode[] | undefined>([{
-        type: 'Text',
-        content: '', 
-        location: importLocation,
-        nodeId: expect.any(String) // Check for nodeId
-      }]);
+      expect(result.replacement).toEqual([]);
       // Check stateChanges instead of direct calls
       expect(result.stateChanges?.variables).toHaveProperty('var1');
       expect(result.stateChanges?.variables?.var1?.value).toBe('value1');
@@ -417,12 +412,7 @@ describe('ImportDirectiveHandler Transformation', () => {
       expect(result.stateChanges?.variables).toHaveProperty('alias2');
       expect(result.stateChanges?.variables?.alias2?.value).toBe('v2');
       expect(result.stateChanges?.variables).not.toHaveProperty('var2');
-      expect(result.replacement).toEqual([{
-        type: 'Text',
-        content: '',
-        location: importLocation,
-        nodeId: expect.any(String)
-      }]);
+      expect(result.replacement).toEqual([]);
     });
 
     it('should preserve error handling and cleanup in transformation mode', async () => {

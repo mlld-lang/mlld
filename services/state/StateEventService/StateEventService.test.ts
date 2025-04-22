@@ -1,30 +1,31 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
 import type { StateEvent, StateEventHandler, IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+// Remove TestContextDI import if no longer needed for anything else
+// import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { container, type DependencyContainer } from 'tsyringe'; // Import container and type
 
 describe('StateEventService', () => {
-  // Remove describe.each for DI modes, as we standardise on DI
-  const helpers = TestContextDI.createTestHelpers();
-  let context: TestContextDI;
+  let testContainer: DependencyContainer; // Use a manual child container
   let service: IStateEventService;
 
   beforeEach(async () => {
-    // Use the helper - assuming StateEventService is registered globally or 
-    // setupWithStandardMocks doesn't mock it, allowing resolution of the real one.
-    context = helpers.setupWithStandardMocks(); 
-    // Await initialization implicitly
-    await context.resolve('IFileSystemService');
+    // Create a fresh child container for each test
+    testContainer = container.createChildContainer();
+
+    // Register the REAL service implementation
+    testContainer.register<IStateEventService>('IStateEventService', { useClass: StateEventService });
+
+    // Resolve the service from the manual container
+    service = testContainer.resolve<IStateEventService>('IStateEventService');
     
-    // Resolve the service (expecting the real implementation)
-    service = await context.resolve('IStateEventService');
-    
-    // Verify we got a real service instance
-    expect(service).toBeInstanceOf(StateEventService);
+    // Optional: Verify we got a real service instance if needed
+    // expect(service).toBeInstanceOf(StateEventService);
   });
 
   afterEach(async () => {
-    await context?.cleanup();
+    // Dispose the manual container
+    testContainer?.dispose();
   });
 
   it('should register and emit events', async () => {

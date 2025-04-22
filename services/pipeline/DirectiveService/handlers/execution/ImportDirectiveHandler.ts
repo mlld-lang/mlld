@@ -289,21 +289,18 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // Return success with accumulated state changes (if any)
       process.stdout.write(`DEBUG [ImportHandler.handle RETURN] Accumulated keys: ${JSON.stringify(Object.keys(accumulatedStateChanges))}\n`);
       
-      // Create replacement based on transformation mode
-      let replacementNodes: MeldNode[] | undefined;
-      if (currentStateService.isTransformationEnabled()) {
-        if (!this.textNodeFactory) {
-          // Fallback or throw error if factory not injected
-          logger.error('TextNodeFactory not available in ImportDirectiveHandler');
-          replacementNodes = []; // Or potentially throw?
-        } else {
-          replacementNodes = [this.textNodeFactory.createTextNode('', node.location)];
-        }
-      } // If not transformation, replacement is implicitly undefined
+      // Create replacement based on transformation mode OR default to empty array
+      let replacementNodes: MeldNode[] = []; // Default to empty array
+      // if (currentStateService.isTransformationEnabled()) {
+      //   // Import directives themselves don't produce output, so the replacement
+      //   // in transformation mode should be an empty array, not an empty text node.
+      //   replacementNodes = []; 
+      // }
+      // No need for the else/implicit undefined case now.
 
       const result: DirectiveResult = {
         stateChanges: { variables: accumulatedStateChanges }, 
-        replacement: replacementNodes // Use dynamically created replacement
+        replacement: replacementNodes // Always return [] for imports
       };
       process.stdout.write(`DEBUG [ImportHandler]: ABOUT TO RETURN result: ${JSON.stringify(result)}\n`);
       return result;

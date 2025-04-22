@@ -3,4 +3,8 @@
  * @module services/state/utilities
  */
 
-export * from './StateVariableCopier.js'; 
+export * from './StateComparisonService.js';
+export * from './VariableExtractionService.js';
+export * from './StateSerializationService.js';
+export * from './StateDeserializationService.js';
+export * from './StateDiffService.js'; 

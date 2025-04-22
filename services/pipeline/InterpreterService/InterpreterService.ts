@@ -5,7 +5,6 @@ import type { IInterpreterService, InterpreterOptions } from '@services/pipeline
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
-import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 import { Service } from '@core/ServiceProvider.js';
 import { inject, injectable, delay, container as globalContainer, DependencyContainer } from 'tsyringe';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
@@ -63,7 +62,6 @@ export class InterpreterService implements IInterpreterService {
   private directiveClientFactory?: DirectiveServiceClientFactory;
   private stateService?: IStateService;
   private initialized = false;
-  private stateVariableCopier = new StateVariableCopier();
   private resolutionService!: IResolutionService;
   private parserClientFactory?: ParserServiceClientFactory;
   private parserClient?: IParserServiceClient;
