@@ -5,7 +5,7 @@ import type { StateNode } from '@services/state/StateService/types.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import type { IStateEventService, StateEvent, StateTransformEvent } from '@services/state/StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
-import { inject, container, injectable, DependencyContainer } from 'tsyringe';
+import { inject, container, injectable, DependencyContainer, optional } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
@@ -81,7 +81,7 @@ export class StateService implements IStateService {
     @inject(StateFactory) stateFactory: StateFactory,
     @inject('DependencyContainer') container: DependencyContainer,
     // Optional dependencies 
-    @inject('IStateEventService') eventService?: IStateEventService, 
+    @inject('IStateEventService') eventService?: IStateEventService,
     @inject('StateTrackingServiceClientFactory') trackingServiceClientFactory?: StateTrackingServiceClientFactory,
     // Optional parent state (either passed directly for root or injected for child)
     @inject('ParentStateServiceForChild') injectedParentState?: IStateService,

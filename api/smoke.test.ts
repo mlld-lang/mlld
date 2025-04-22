@@ -5,6 +5,8 @@ import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 // import type { ILogger } from '@core/utils/logger.js'; // No longer needed here
 // import logger from '@core/utils/logger.js'; // No longer needed here
+import { StateService } from '@services/state/StateService.js';
+import type { IStateService } from '@services/state/IStateService.js';
 
 describe('API Smoke Tests', () => {
   // let testContainer: DependencyContainer; // No longer needed here
@@ -20,6 +22,11 @@ describe('API Smoke Tests', () => {
     // // Register Logger (often required early by many services)
     // testContainer.registerInstance('MainLogger', logger); // Removed
     // testContainer.register('ILogger', { useToken: 'MainLogger' }); // Removed
+    testContainer.registerSingleton(StateService, StateService);
+    testContainer.registerSingleton('IStateService', { useToken: StateService });
+    testContainer.registerInstance<IStateService | null>('ParentStateServiceForChild', null); // Fix DI error
+
+    // Register other services or factories
   });
 
   afterEach(async () => {

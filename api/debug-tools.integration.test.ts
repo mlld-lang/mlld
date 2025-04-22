@@ -184,6 +184,10 @@ describe('Debug Tools Integration Test', () => {
     resolutionServiceForEnabling.enableResolutionTracking(trackerConfig);
     variableResolutionTracker = resolutionServiceForEnabling.getResolutionTracker()!;
     variableResolutionTracker.configure(trackerConfig);
+
+    testContainer.registerSingleton(StateService, StateService);
+    testContainer.registerSingleton('IStateService', { useToken: StateService });
+    testContainer.registerInstance<IStateService | null>('ParentStateServiceForChild', null); // Fix DI error
   });
 
   afterEach(async () => {

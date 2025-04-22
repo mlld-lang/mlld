@@ -58,7 +58,8 @@ describe('Array Access Tests', () => {
     // Core Services needed by processMeld or Interpreter chain
     testContainer.register(StateEventService, StateEventService);
     testContainer.register(StateFactory, StateFactory);
-    testContainer.register(StateService, StateService);
+    testContainer.registerSingleton(StateService, StateService);
+    testContainer.registerSingleton('IStateService', { useToken: StateService });
     testContainer.register(PathOperationsService, PathOperationsService);
     testContainer.register(FileSystemService, FileSystemService);
     testContainer.register(PathService, PathService);
@@ -79,6 +80,7 @@ describe('Array Access Tests', () => {
     testContainer.register(InterpreterServiceClientFactory, InterpreterServiceClientFactory); 
     testContainer.register(DirectiveServiceClientFactory, DirectiveServiceClientFactory);
 
+    testContainer.registerInstance<IStateService | null>('ParentStateServiceForChild', null); // Fix DI error
   });
 
   afterEach(async () => {

@@ -100,7 +100,9 @@ describe('API Integration Tests', () => {
     testContainer.registerSingleton(InterpreterServiceClientFactory, InterpreterServiceClientFactory);
 
     // Register Real Services (Singleton State)
-    testContainer.registerSingleton('IStateService', StateService);
+    testContainer.registerSingleton(StateService, StateService);
+    testContainer.registerSingleton('IStateService', { useToken: StateService });
+    testContainer.registerInstance<IStateService | null>('ParentStateServiceForChild', null);
     testContainer.registerSingleton('IResolutionService', ResolutionService);
     testContainer.registerSingleton('IParserService', ParserService);
     testContainer.registerSingleton('IInterpreterService', InterpreterService);

@@ -142,6 +142,7 @@ describe('SDK Integration Tests', () => {
 
     testContainer.register(StateService, { useClass: StateService });
     testContainer.register<IStateService>('IStateService', { useToken: StateService });
+    testContainer.registerInstance<IStateService | null>('ParentStateServiceForChild', null);
 
     testContainer.register(ResolutionService, { useClass: ResolutionService });
     testContainer.register<IResolutionService>('IResolutionService', { useToken: ResolutionService });
