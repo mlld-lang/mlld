@@ -19,6 +19,7 @@ import type { IStateService as ClonedState } from '@services/state/StateService/
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { Result } from '@core/types/common.js';
 import type { MeldPath } from '@core/types/paths.js';
+import type { ILogger } from '@services/logger/ILogger.js';
 
 /**
  * Creates a mock ValidationService with default behavior
@@ -242,4 +243,21 @@ export function createPathValidationErrorMock(message: string, path: string) {
   });
   
   return error;
+}
+
+/**
+ * Creates a mock LoggerService with default behavior
+ * @returns A mocked ILogger
+ */
+export function createLoggerServiceMock() {
+  const service = mock<ILogger>();
+  // Provide no-op implementations for logging methods
+  service.debug.mockImplementation(() => {});
+  service.info.mockImplementation(() => {});
+  service.warn.mockImplementation(() => {});
+  service.error.mockImplementation(() => {});
+  service.log.mockImplementation(() => {});
+  service.setLogLevel.mockImplementation(() => {});
+  // Add other methods if ILogger interface has them
+  return service;
 } 

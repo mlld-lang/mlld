@@ -1,93 +1,125 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import type { DirectiveNode, DirectiveContext, TextNode } from '@core/syntax/types.js';
+import type { DirectiveNode, DirectiveContext, TextNode, InterpolatableValue } from '@core/syntax/types.js';
 import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { createRunDirective, createLocation } from '@tests/utils/testFactories.js';
+import { createRunDirective, createLocation, createTextNode, createVariableReferenceNode } from '@tests/utils/testFactories.js';
 import { mock, mockDeep } from 'vitest-mock-extended';
 import type { DirectiveProcessingContext, FormattingContext, ResolutionContext } from '@core/types/index.js';
-import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js';
-import { TextVariable, VariableType } from '@core/types/variables.js';
+import { TextVariable, VariableType, MeldVariable } from '@core/types/variables.js';
 import { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { container, DependencyContainer } from 'tsyringe';
+import { 
+    createStateServiceMock,
+    createResolutionServiceMock,
+    createFileSystemServiceMock,
+    createDirectiveErrorMock,
+    createLoggerServiceMock,
+} from '@tests/utils/mocks/serviceMocks.ts';
+import type { ILogger } from '@core/utils/logger.js';
+import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils.js';
 
 describe('RunDirectiveHandler Transformation', () => {
-  let fixture: DirectiveTestFixture;
+  let testContainer: DependencyContainer;
   let handler: RunDirectiveHandler;
-  let mockProcessingContext: Partial<DirectiveProcessingContext>;
+  let stateServiceMock: ReturnType<typeof createStateServiceMock>;
+  let resolutionServiceMock: ReturnType<typeof createResolutionServiceMock>;
+  let fileSystemServiceMock: ReturnType<typeof createFileSystemServiceMock>;
+  let loggerMock: ReturnType<typeof createLoggerServiceMock>;
 
-  beforeEach(async () => {
-    fixture = await DirectiveTestFixture.create();
+  beforeEach(() => {
+    testContainer = container.createChildContainer();
 
-    vi.spyOn(fixture.stateService, 'isTransformationEnabled').mockReturnValue(true);
-    vi.spyOn(fixture.stateService, 'getCurrentFilePath').mockReturnValue('/project/run_transform.meld');
-    vi.spyOn(fixture.stateService, 'setTextVar').mockImplementation(async (name: string, value: string): Promise<TextVariable> => {
-        return { type: VariableType.TEXT, name, value } as TextVariable;
+    stateServiceMock = createStateServiceMock();
+    resolutionServiceMock = createResolutionServiceMock();
+    fileSystemServiceMock = createFileSystemServiceMock();
+    loggerMock = createLoggerServiceMock();
+
+    stateServiceMock.isTransformationEnabled.mockReturnValue(true);
+    stateServiceMock.getCurrentFilePath.mockReturnValue('/project/run_transform.meld');
+    stateServiceMock.setVariable.mockImplementation(async (def: VariableDefinition): Promise<TextVariable> => {
+        return { type: VariableType.TEXT, name: def.name, value: def.value as string, origin: def.origin, metadata: def.metadata } as TextVariable;
     });
-    vi.spyOn(fixture.fileSystemService, 'getCwd').mockReturnValue('/workspace');
+    fileSystemServiceMock.getCwd.mockReturnValue('/workspace');
 
-    handler = await fixture.context.resolve(RunDirectiveHandler);
-    fixture.handler = handler;
+    testContainer.registerInstance<IStateService>('IStateService', stateServiceMock);
+    testContainer.registerInstance<IResolutionService>('IResolutionService', resolutionServiceMock);
+    testContainer.registerInstance<IFileSystemService>('IFileSystemService', fileSystemServiceMock);
+    testContainer.registerInstance<ILogger>('MainLogger', loggerMock);
+    testContainer.registerInstance<DependencyContainer>('DependencyContainer', testContainer);
+    testContainer.register(RunDirectiveHandler, { useClass: RunDirectiveHandler });
+
+    handler = testContainer.resolve(RunDirectiveHandler);
   });
 
-  afterEach(async () => {
-    await fixture?.cleanup();
+  afterEach(() => {
+    testContainer?.dispose();
+    vi.clearAllMocks();
   });
 
-  const createMockProcessingContext = (node: DirectiveNode): Partial<DirectiveProcessingContext> => {
-      const mockResolutionContext = mockDeep<ResolutionContext>();
-      if (!fixture || !fixture.stateService) {
-        throw new Error('Test setup error: fixture or stateService is not defined');
-      }
-      expect(fixture.stateService.getCurrentFilePath).toBeDefined(); 
-      expect(fixture.stateService.isTransformationEnabled).toBeDefined();
+  const createMockProcessingContext = (node: DirectiveNode, stateService: IStateService, overrides: Partial<DirectiveProcessingContext> = {}): DirectiveProcessingContext => {
+      const mockResolutionContext = { 
+          strict: true, 
+          state: stateService 
+      } as ResolutionContext; 
+      const mockFormattingContext: FormattingContext = { isBlock: false, preserveLiteralFormatting: false, preserveWhitespace: false };
       
-      mockResolutionContext.currentFilePath = fixture.stateService.getCurrentFilePath();
-      mockResolutionContext.state = fixture.stateService;
-      mockResolutionContext.strict = true; 
-      mockResolutionContext.depth = 0;
-      mockResolutionContext.flags = {}; 
-      mockResolutionContext.pathContext = { purpose: 'read' };
-
+      if (!stateService) {
+        throw new Error('Test setup error: stateService is not defined when creating context');
+      }
+      
       return {
-          state: fixture.stateService,
+          state: stateService,
           resolutionContext: mockResolutionContext,
+          formattingContext: mockFormattingContext,
           directiveNode: node,
           executionContext: { cwd: '/workspace' },
+          ...overrides
       };
   };
 
   describe('transformation behavior', () => {
     it('should return replacement node with command output when transformation enabled', async () => {
-      const node = createRunDirective('echo test', createLocation(1, 1));
-      mockProcessingContext = createMockProcessingContext(node);
-      vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('echo "output"');
-      vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: 'output', stderr: '' });
+      const commandNodes: InterpolatableValue = [ createTextNode('echo test') ];
+      const node = createRunDirective(commandNodes, createLocation(1, 1), 'runCommand');
+      const mockProcessingContext = createMockProcessingContext(node, stateServiceMock);
+      
+      resolutionServiceMock.resolveNodes.mockResolvedValueOnce('echo "output"');
+      fileSystemServiceMock.executeCommand.mockResolvedValueOnce({ stdout: 'output', stderr: '' });
       
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
 
       expect(result.replacement?.[0]).toMatchObject({ type: 'Text', content: 'output' });
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables?.stdout?.value).toBe('output');
+      expect(result.stateChanges?.variables?.stderr?.value).toBe('');
     });
 
     it('should handle variable interpolation in command during transformation', async () => {
-      const node = createRunDirective('echo {{message}}', createLocation(1, 1));
-      mockProcessingContext = createMockProcessingContext(node);
-      vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('echo Hello World');
-      vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: 'Hello World', stderr: '' });
+      const commandNodes: InterpolatableValue = [ createTextNode('echo '), createVariableReferenceNode('message', VariableType.TEXT) ];
+      const node = createRunDirective(commandNodes, createLocation(1, 1), 'runCommand');
+      const mockProcessingContext = createMockProcessingContext(node, stateServiceMock);
+      
+      resolutionServiceMock.resolveNodes.mockResolvedValueOnce('echo Hello World');
+      fileSystemServiceMock.executeCommand.mockResolvedValueOnce({ stdout: 'Hello World', stderr: '' });
 
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
 
       expect(result.replacement?.[0]).toMatchObject({ type: 'Text', content: 'Hello World' });
+      expect(result.stateChanges?.variables?.stdout?.value).toBe('Hello World');
     });
 
     it('should handle stderr output in transformation', async () => {
-      const node = createRunDirective('echo error >&2', createLocation(1, 1));
-      mockProcessingContext = createMockProcessingContext(node);
-      vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('echo Err >&2');
-      vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: '', stderr: 'Error output' });
+      const commandNodes: InterpolatableValue = [ createTextNode('echo error >&2') ];
+      const node = createRunDirective(commandNodes, createLocation(1, 1), 'runCommand');
+      const mockProcessingContext = createMockProcessingContext(node, stateServiceMock);
+      
+      resolutionServiceMock.resolveNodes.mockResolvedValueOnce('echo Err >&2');
+      fileSystemServiceMock.executeCommand.mockResolvedValueOnce({ stdout: '', stderr: 'Error output' });
 
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext) as DirectiveResult;
       expect(result.replacement?.[0]).toMatchObject({ type: 'Text', content: 'Error output' });
@@ -100,10 +132,12 @@ describe('RunDirectiveHandler Transformation', () => {
     });
 
     it('should handle both stdout and stderr in transformation', async () => {
-      const node = createRunDirective('echo test && echo error >&2', createLocation(1, 1));
-      mockProcessingContext = createMockProcessingContext(node);
-      vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('echo Out && echo Err >&2');
-      vi.spyOn(fixture.fileSystemService, 'executeCommand').mockResolvedValue({ stdout: 'Out', stderr: 'Err' });
+      const commandNodes: InterpolatableValue = [ createTextNode('echo test && echo error >&2') ];
+      const node = createRunDirective(commandNodes, createLocation(1, 1), 'runCommand');
+      const mockProcessingContext = createMockProcessingContext(node, stateServiceMock);
+      
+      resolutionServiceMock.resolveNodes.mockResolvedValueOnce('echo Out && echo Err >&2');
+      fileSystemServiceMock.executeCommand.mockResolvedValueOnce({ stdout: 'Out', stderr: 'Err' });
 
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext) as DirectiveResult;
       expect(result.replacement?.[0]).toMatchObject({ type: 'Text', content: 'Out\nErr' });
@@ -114,16 +148,21 @@ describe('RunDirectiveHandler Transformation', () => {
     });
 
     it('should preserve error handling during transformation', async () => {
-      const node = createRunDirective('invalid-command', createLocation(1, 1));
-      mockProcessingContext = createMockProcessingContext(node);
+      const commandNodes: InterpolatableValue = [ createTextNode('invalid-command') ];
+      const node = createRunDirective(commandNodes, createLocation(1, 1), 'runCommand');
+      const mockProcessingContext = createMockProcessingContext(node, stateServiceMock);
       const executionError = new Error('Command failed');
-      vi.spyOn(fixture.resolutionService, 'resolveNodes').mockResolvedValue('bad-command');
-      vi.spyOn(fixture.fileSystemService, 'executeCommand').mockRejectedValue(executionError);
+      
+      resolutionServiceMock.resolveNodes.mockResolvedValueOnce('bad-command');
+      fileSystemServiceMock.executeCommand.mockRejectedValue(executionError);
 
-      await expect(handler.handle(mockProcessingContext as DirectiveProcessingContext)).rejects.toThrow(DirectiveError);
-      await expect(handler.handle(mockProcessingContext as DirectiveProcessingContext)).rejects.toHaveProperty(
-          'message', 
-          expect.stringContaining('Failed to execute command: Command failed')
+      await expectToThrowWithConfig(
+          async () => await handler.handle(mockProcessingContext as DirectiveProcessingContext),
+          {
+              code: DirectiveErrorCode.EXECUTION_FAILED,
+              messageContains: 'Failed to execute command: Command failed',
+              cause: executionError
+          } as ErrorTestOptions
       );
     });
   });
