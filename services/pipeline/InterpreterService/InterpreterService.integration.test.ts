@@ -37,6 +37,7 @@ import { URL } from 'node:url';
 // Import interfaces/classes to mock
 import type { ILogger } from '@core/utils/logger.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { 
@@ -143,8 +144,8 @@ describe('InterpreterService Integration', () => {
     vi.spyOn(mockParserClientFactory, 'createClient').mockReturnValue(mockParserServiceClient);
 
     // --- Create other mocks ---
-    mockResolutionService = mock<IResolutionService>();
-    mockPathService = mock<IPathService>();
+    // mockResolutionService = mock<IResolutionService>(); // Commented out - using real service
+    mockPathService = mock<IPathService>(); // Mock PathService as ResolutionService depends on it
     mockURLContentResolver = {
       isURL: vi.fn().mockImplementation((path: string) => {
         if (!path) return false;
@@ -168,15 +169,20 @@ describe('InterpreterService Integration', () => {
     // ClientFactoryHelpers.registerClientFactory(testContainer, 'StateTrackingServiceClientFactory', mockTrackingClient); // <-- Problematic line
     // 1. Create the mock factory manually
     const mockTrackingClientFactory = {
-      createClient: vi.fn().mockReturnValue(mockTrackingClient)
+      createClient: vi.spyOn(mockTrackingClient, 'trackStateOperation').mockReturnValue(mockTrackingClient)
     };
     // 2. Register the mock factory instance directly in testContainer
     testContainer.registerInstance('StateTrackingServiceClientFactory', mockTrackingClientFactory);
+
+    // --- Register Mocks/Services needed by ResolutionService FIRST ---
+    testContainer.registerInstance<IPathService>('IPathService', mockPathService); // Register the mock path service
+    testContainer.registerInstance(ParserServiceClientFactory, mockParserClientFactory); // Ensure ParserServiceClientFactory mock is registered
 
     // Register REAL Service Implementations 
     testContainer.register('IInterpreterService', { useClass: InterpreterService });
     testContainer.register('IStateService', { useClass: StateService }); 
     testContainer.register('IParserService', { useClass: ParserService }); 
+    testContainer.register('IResolutionService', { useClass: ResolutionService }); // <<< Added registration for REAL ResolutionService
     testContainer.registerInstance('DependencyContainer', testContainer);
     // --- End Registrations ---
     
