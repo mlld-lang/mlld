@@ -82,14 +82,20 @@ import type { Mocked, Mock } from 'vitest'; // Import Mock
 const runDirectiveExamples = runDirectiveExamplesModule;
 
 // Mock the logger
-vi.mock('@core/utils/logger', () => ({
-  logger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    trace: vi.fn()
-  }
+const createManualLoggerMock = () => ({ // Define helper function
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  trace: vi.fn(),
+  level: 'debug' // Add level property based on ILogger interface
+});
+
+vi.mock('@core/utils/logger', () => ({ // Update mock to include all needed loggers
+  logger: createManualLoggerMock(),
+  resolutionLogger: createManualLoggerMock(),
+  importLogger: createManualLoggerMock(),
+  // Add validationLogger if needed for specific tests later
 }));
 
 // Helper function to create mock TextVariable using factory

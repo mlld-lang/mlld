@@ -4,20 +4,19 @@ import { ResolutionError } from '@services/resolution/ResolutionService/errors/R
 import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { mockDeep, type MockedObjectDeep } from 'vitest-mock-extended';
+import { container, type DependencyContainer } from 'tsyringe';
 
 describe('StringLiteralHandler', () => {
-  const helpers = TestContextDI.createTestHelpers();
-  let contextDI: TestContextDI;
+  let testContainer: DependencyContainer;
   let handler: StringLiteralHandler;
   let parserService: MockedObjectDeep<IParserService>;
 
   beforeEach(async () => {
-    contextDI = helpers.setupMinimal();
+    testContainer = container.createChildContainer();
     
     parserService = mockDeep<IParserService>();
-    contextDI.container.registerInstance<IParserService>('IParserService', parserService);
+    testContainer.registerInstance<IParserService>('IParserService', parserService);
     
     handler = new StringLiteralHandler(parserService);
     
@@ -25,7 +24,7 @@ describe('StringLiteralHandler', () => {
   });
   
   afterEach(async () => {
-    await contextDI?.cleanup();
+    testContainer?.dispose();
   });
 
   describe('isStringLiteral', () => {

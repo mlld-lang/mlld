@@ -38,7 +38,7 @@ import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterS
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
-import { MockFactory } from '@tests/utils/MockFactory.js';
+import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
 
 /**
  * ImportDirectiveHandler Test Status
