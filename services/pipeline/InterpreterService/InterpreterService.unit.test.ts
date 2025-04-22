@@ -20,7 +20,7 @@ import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveServi
 import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
-import { mock, mockDeep } from 'vitest-mock-extended';
+import { mock, mockDeep, type DeepMockProxy } from 'vitest-mock-extended';
 import type { OutputFormattingContext, DirectiveProcessingContext } from '@core/types/index.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
@@ -29,6 +29,11 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { AbsolutePath, RelativePath, unsafeCreateAbsolutePath } from '@core/types/paths.js';
 import { ILogger } from '@core/utils/logger';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
+import type { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
+import type { ResolutionContext, ResolutionFlags } from '@core/types/resolution.js';
 
 // Define a minimal logger interface for testing
 interface ITestLogger {
@@ -61,6 +66,9 @@ describe('InterpreterService Unit', () => {
   let mockDirectiveClientFactory: DirectiveServiceClientFactory;
   let mockPathService: IPathService;
   let mockLogger: ITestLogger;
+  let mockFileSystemService: IFileSystemService;
+  let mockCircularityService: ICircularityService;
+  let mockResolutionContextFactory: ResolutionContextFactory;
 
   beforeEach(async () => {
     vi.resetAllMocks();
@@ -74,8 +82,15 @@ describe('InterpreterService Unit', () => {
         error: vi.fn(),
         trace: vi.fn(),
         level: 'info' 
-    };
-    mockResolutionService = mock<IResolutionService>();
+    } as unknown as ITestLogger; // Cast needed for non-standard logger mock
+    
+    // Use object literal with vi.fn() for ResolutionService mock
+    mockResolutionService = {
+      resolveInContext: vi.fn(),
+      resolveNodes: vi.fn(),
+      // Add other IResolutionService methods if needed by tests later
+    } as unknown as IResolutionService;
+    
     // Linter Fix: Use object literal for path service mock
     mockPathService = { 
       dirname: vi.fn(),
@@ -117,7 +132,11 @@ describe('InterpreterService Unit', () => {
       handleDirective: vi.fn(),
       supportsDirective: vi.fn().mockReturnValue(true) // Include other methods if needed
     } as unknown as IDirectiveServiceClient;
-    mockParserClient = mock<IParserServiceClient>();
+    // Use object literal with vi.fn() for ParserClient mock
+    mockParserClient = {
+        parseString: vi.fn(),
+        // Add other IParserServiceClient methods if needed
+    } as unknown as IParserServiceClient;
 
     // Mock Factories to return Mock Clients - Use object literals with vi.fn()
     mockDirectiveClientFactory = { 
@@ -130,6 +149,63 @@ describe('InterpreterService Unit', () => {
     } as unknown as ParserServiceClientFactory;
     // vi.spyOn(mockParserClientFactory, 'createClient').mockReturnValue(mockParserClient);
 
+    // Add Mocks for other potential dependencies
+    mockFileSystemService = {
+      readFile: vi.fn(),
+      writeFile: vi.fn(),
+      // Add other IFileSystemService methods if needed
+    } as unknown as IFileSystemService;
+
+    mockCircularityService = {
+      startProcessing: vi.fn(),
+      finishProcessing: vi.fn(),
+      isCircular: vi.fn().mockReturnValue(false),
+      // Add other ICircularityService methods if needed
+    } as unknown as ICircularityService;
+
+    // Mock ResolutionContextFactory (Manual Object + Spy)
+    mockResolutionContextFactory = { 
+      createContext: vi.fn().mockImplementation((options?: Partial<ResolutionContext>): ResolutionContext => {
+        // Create a base mock context satisfying the interface
+        const baseContext: ResolutionContext = {
+          state: options?.state ?? mockStateService, // Use provided or default mock state
+          strict: options?.strict ?? false,
+          depth: options?.depth ?? 0,
+          flags: {
+            isVariableEmbed: false,
+            isTransformation: false,
+            allowRawContentResolution: false,
+            isDirectiveHandler: false,
+            isImportContext: false,
+            processNestedVariables: true,
+            preserveUnresolved: false,
+            ...(options?.flags ?? {}), // Merge flags from options
+          },
+          currentFilePath: options?.currentFilePath ?? undefined,
+          formattingContext: options?.formattingContext ?? undefined,
+          pathContext: options?.pathContext ?? undefined,
+          parserFlags: options?.parserFlags ?? undefined,
+          allowedVariableTypes: options?.allowedVariableTypes ?? undefined,
+
+          // Implement context modification methods (can return 'this' for simple mocks)
+          withIncreasedDepth: vi.fn().mockReturnThis(),
+          withStrictMode: vi.fn().mockReturnThis(),
+          withAllowedTypes: vi.fn().mockReturnThis(),
+          withFlags: vi.fn().mockReturnThis(),
+          withFormattingContext: vi.fn().mockReturnThis(),
+          withPathContext: vi.fn().mockReturnThis(),
+          withParserFlags: vi.fn().mockReturnThis(),
+        };
+        // Note: For more complex tests, the 'with*' methods might need
+        // to return new objects with the specific changes.
+        return baseContext;
+      }),
+      // Add other methods of ResolutionContextFactory if they exist and are needed
+    } as ResolutionContextFactory; // Cast the whole mock object to the class type
+
+    // Spy AFTER object creation - CAST TO ANY to bypass type error
+    vi.spyOn(mockResolutionContextFactory as any, 'createContext');
+
     // --- Create Manual Container & Register Mocks ---
     testContainer.registerInstance<ILogger>('ILogger', mockLogger);
     testContainer.registerInstance<IResolutionService>('IResolutionService', mockResolutionService);
@@ -137,6 +213,11 @@ describe('InterpreterService Unit', () => {
     testContainer.registerInstance<IStateService>('IStateService', mockStateService);
     testContainer.registerInstance<DirectiveServiceClientFactory>(DirectiveServiceClientFactory, mockDirectiveClientFactory);
     testContainer.registerInstance<ParserServiceClientFactory>(ParserServiceClientFactory, mockParserClientFactory);
+    
+    testContainer.registerInstance<IFileSystemService>('IFileSystemService', mockFileSystemService);
+    testContainer.registerInstance<ICircularityService>('ICircularityService', mockCircularityService);
+    // Register the manual mock instance using Class token
+    testContainer.registerInstance(ResolutionContextFactory, mockResolutionContextFactory);
     
     testContainer.registerInstance('DependencyContainer', testContainer); 
 
@@ -159,8 +240,7 @@ describe('InterpreterService Unit', () => {
     // Setup default behavior for the CLIENT's handleDirective
     vi.spyOn(mockDirectiveClient, 'handleDirective').mockResolvedValue({ stateChanges: undefined, replacement: [] });
     
-    // Remove spy setup for mockDirectiveService as it's not a direct dependency
-    // vi.spyOn(mockDirectiveService, 'handleDirective'); 
+    // Spy on mockResolutionContextFactory.createContext is done above
   });
 
   afterEach(async () => {
@@ -375,6 +455,8 @@ describe('InterpreterService Unit', () => {
 
     // This test structure seems problematic as interpretNode doesn't directly call DirectiveService
     // It uses the DirectiveServiceClient. Re-evaluate the goal.
+    // REMOVING this skipped test as it seems invalid based on the comment and architecture.
+    /*
     it.skip('routes DirectiveNode to DirectiveService.handleDirective', async () => {
         // <<< Use 'text' kind >>>
         const directiveNode = createDirectiveNode('text', { identifier: 'test' }); 
@@ -394,6 +476,7 @@ describe('InterpreterService Unit', () => {
             expect.objectContaining({ state: mockStateService })
         );
     });
+    */
 
     // This test focuses on interpretNode, which itself doesn't apply state changes.
     // State changes are applied within the main interpret loop *after* interpretNode returns.
