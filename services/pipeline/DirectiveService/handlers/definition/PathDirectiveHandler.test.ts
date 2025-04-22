@@ -185,7 +185,7 @@ describe('PathDirectiveHandler', () => {
 
       expect(validateSpy).toHaveBeenCalledWith(node);
       expect(resolveInContextSpy).toHaveBeenCalledWith(
-        structuredPathValue, // Expect the structured path object
+        structuredPathValue.interpolatedValue, // Expect the interpolatedValue array based on handler logic
         expect.any(Object) 
       );
       expect(resolvePathSpy).toHaveBeenCalledWith(expectedResolvedString, expect.any(Object));

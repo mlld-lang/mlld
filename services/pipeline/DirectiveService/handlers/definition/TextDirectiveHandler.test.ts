@@ -1,14 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import type { DirectiveNode } from '@core/syntax/types/index.js';
-import type { InterpolatableValue, StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
+import type { DirectiveNode, InterpolatableValue, VariableReferenceNode, TextNode, StructuredPath } from '@core/syntax/types/nodes.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { parse } from '@core/ast';
-import { createLocation } from '@tests/utils/testFactories.js';
+import { createLocation, createTextDirective, createNodeFromExample as coreCreateNodeFromExample, createDirectiveNode as coreCreateDirectiveNode, createTextNode as coreCreateTextNode, createVariableReferenceNode as coreCreateVariableReferenceNode } from '@tests/utils/testFactories.js';
 import { textDirectiveExamples } from '@core/syntax/index.js';
 import { ErrorSeverity, FieldAccessError, MeldResolutionError } from '@core/errors/index.js';
-import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import type { VariableDefinition } from '@core/types/variables.js';
@@ -21,127 +19,161 @@ import {
   MeldError,
   MeldErrorCodes,
 } from '@core/errors/index.js';
+import { container, type DependencyContainer } from 'tsyringe';
+import { mockDeep, DeepMockProxy } from 'vitest-mock-extended';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { ResolutionContext } from '@core/types/resolution.js';
+import type { FormattingContext } from '@core/types/index.js';
+import path from 'path';
 
 /**
  * TextDirectiveHandler Test Status
  * --------------------------------
  * 
- * MIGRATION STATUS: Complete (Refactored to use DirectiveTestFixture)
+ * MIGRATION STATUS: In Progress (Refactoring to Manual DI)
  * 
- * This test file has been fully migrated to use:
- * - Centralized syntax examples
- * - DirectiveTestFixture for container management and standard mocks
- * - vi.spyOn for test-specific mock behavior
+ * This test file is being migrated to use:
+ * - Manual Child Container pattern
+ * - Standardized mock factories with vitest-mock-extended
  */
-
-/**
- * Helper function to create real AST nodes using @core/ast
- */
-const createNodeFromExample = async (code: string): Promise<DirectiveNode> => {
-  try {
-    // Ensure @core/ast is available
-    const { parse } = await import('@core/ast');
-    
-    const result = await parse(code, {
-      trackLocations: true,
-      validateNodes: true
-    });
-    
-    if (!result.ast || result.ast.length === 0 || result.ast[0].type !== 'Directive') {
-        throw new Error(`Failed to parse directive from code: ${code}`);
-    }
-    
-    return result.ast[0] as DirectiveNode;
-  } catch (error) {
-    console.error('Error parsing with @core/ast:', error);
-    throw error;
-  }
-};
 
 describe('TextDirectiveHandler', () => {
-  let fixture: DirectiveTestFixture;
   let handler: TextDirectiveHandler;
-  let stateService: IStateService; // Direct reference from fixture
-  let resolutionService: IResolutionService; // Direct reference from fixture
+  let testContainer: DependencyContainer;
+  let mockValidationService: DeepMockProxy<IValidationService>;
+  let mockStateService: DeepMockProxy<IStateService>;
+  let mockResolutionService: DeepMockProxy<IResolutionService>;
+  let mockFileSystemService: DeepMockProxy<IFileSystemService>;
+  let mockPathService: DeepMockProxy<IPathService>;
+  let stateService: DeepMockProxy<IStateService>;
+  let resolutionService: DeepMockProxy<IResolutionService>;
+  let validationService: DeepMockProxy<IValidationService>;
+  let fileSystemService: DeepMockProxy<IFileSystemService>;
+  let pathService: DeepMockProxy<IPathService>;
 
   beforeEach(async () => {
-    // Create the fixture first, which sets up the DI container with mocks
-    fixture = await DirectiveTestFixture.create({
-      // No handler instance passed here; we resolve it from the container
-      // Add specific overrides for this test suite if needed
+    testContainer = container.createChildContainer();
+
+    mockValidationService = mockDeep<IValidationService>({ validate: vi.fn() });
+    mockStateService = mockDeep<IStateService>({ 
+        getCurrentFilePath: vi.fn().mockReturnValue('/test.meld'), 
+        setVariable: vi.fn(),
+        getStateId: vi.fn().mockReturnValue('mock-text-state') 
     });
+    mockResolutionService = mockDeep<IResolutionService>({ 
+        resolveNodes: vi.fn(), 
+        resolveInContext: vi.fn() 
+    });
+    mockFileSystemService = mockDeep<IFileSystemService>();
+    mockPathService = mockDeep<IPathService>();
 
-    // Ensure the actual handler class is registered in the test container
-    // so tsyringe can inject the mocked dependencies into it.
-    // Use registerService for actual classes, not registerMock.
-    // Access the container helper via fixture.context.container
-    if (!fixture.context.container.isRegistered(TextDirectiveHandler)) {
-      fixture.context.container.registerService(TextDirectiveHandler, TextDirectiveHandler);
-    }
+    testContainer.registerInstance<IValidationService>('IValidationService', mockValidationService);
+    testContainer.registerInstance<IStateService>('IStateService', mockStateService);
+    testContainer.registerInstance<IResolutionService>('IResolutionService', mockResolutionService);
+    testContainer.registerInstance<IFileSystemService>('IFileSystemService', mockFileSystemService);
+    testContainer.registerInstance<IPathService>('IPathService', mockPathService);
+    testContainer.registerInstance('ILogger', { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() });
+    testContainer.registerInstance('DependencyContainer', testContainer);
 
-    // Resolve the handler instance *from the fixture's container*
-    // This ensures it receives the mocked dependencies correctly.
-    handler = fixture.context.resolveSync(TextDirectiveHandler);
-    
-    // Manually assign the resolved handler to the fixture instance
-    // so that fixture.executeHandler() can use it internally.
-    fixture.handler = handler;
-    
-    // Now get references to the *mocked* services from the fixture
-    // These are the instances that should have been injected into 'handler'
-    stateService = fixture.stateService;
-    resolutionService = fixture.resolutionService;
+    testContainer.register(TextDirectiveHandler, { useClass: TextDirectiveHandler });
 
-    // Set up spy/mock behavior on the *mocked* resolutionService instance
-    vi.spyOn(resolutionService, 'resolveNodes').mockImplementation(async (nodes: InterpolatableValue, context: any): Promise<string> => {
+    handler = testContainer.resolve(TextDirectiveHandler);
+    validationService = mockValidationService;
+    stateService = mockStateService;
+    resolutionService = mockResolutionService;
+    fileSystemService = mockFileSystemService;
+    pathService = mockPathService;
+
+    vi.spyOn(resolutionService, 'resolveNodes').mockImplementation(async (nodes, ctx) => {
         let result = '';
         for (const node of nodes) {
             if (node.type === 'Text') result += node.content;
             else if (node.type === 'VariableReference') {
-                // Simple variable mocking for common test cases
                 if (node.identifier === 'name') result += 'World';
                 else if (node.identifier === 'user' && node.fields?.[0]?.value === 'name') result += 'Alice';
                 else if (node.identifier === 'greeting') result += 'Hello';
                 else if (node.identifier === 'subject') result += 'World';
-                else if (node.identifier === 'configPath') result += '$PROJECTPATH/docs'; // Use a distinct name
+                else if (node.identifier === 'configPath') result += '$PROJECTPATH/docs';
                 else if (node.identifier === 'missing' || node.identifier === 'undefined_var') {
-                    // Simulate resolution error with required options
                     throw new MeldResolutionError(
                       `Variable not found: ${node.identifier}`,
                       { 
-                        code: 'E_VAR_NOT_FOUND', // Example code
-                        details: { variableName: node.identifier }, // Provide details
-                        severity: ErrorSeverity.Recoverable // Use correct enum member
+                        code: 'E_VAR_NOT_FOUND',
+                        details: { variableName: node.identifier },
+                        severity: ErrorSeverity.Recoverable
                       }
                     );
                 }
-                else result += `{{${node.identifier}}}`; // Fallback for unknown vars
+                else result += `{{${node.identifier}}}`;
             }
         }
         return result;
     });
-    
     vi.spyOn(stateService, 'getCurrentFilePath').mockReturnValue('test.meld');
+    vi.spyOn(validationService, 'validate').mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
-    await fixture?.cleanup();
+    testContainer?.dispose();
+    vi.clearAllMocks();
   });
+
+  const createMockProcessingContext = (node: DirectiveNode): DirectiveProcessingContext => {
+    const currentFilePath = stateService.getCurrentFilePath() || undefined;
+    const resolutionContext: ResolutionContext = { 
+        state: stateService, 
+        strict: false, depth: 0, allowedVariableTypes: [], flags: {},
+        formattingContext: {}, pathContext: {}, parserFlags: {},
+        currentFilePath: currentFilePath,
+        withIncreasedDepth: vi.fn().mockReturnThis(),
+        withStrictMode: vi.fn().mockReturnThis(),
+        withPathContext: vi.fn().mockReturnThis(),
+        withFlags: vi.fn().mockReturnThis(),
+        withAllowedTypes: vi.fn().mockReturnThis(),
+        withFormattingContext: vi.fn().mockReturnThis(),
+        withParserFlags: vi.fn().mockReturnThis()
+    };
+    return {
+        state: stateService, 
+        resolutionContext: resolutionContext,
+        formattingContext: { isBlock: false } as FormattingContext,
+        directiveNode: node,
+        executionContext: { cwd: '/test/dir' },
+    };
+  };
+
+  const createNodeFromExample = async (code: string): Promise<DirectiveNode> => {
+    try {
+      const { parse } = await import('@core/ast');
+      const result = await parse(code, {
+        trackLocations: true,
+        validateNodes: true,
+        structuredPaths: true
+      });
+      const nodes = result.ast || [];
+      if (!nodes || nodes.length === 0 || nodes[0].type !== 'Directive') {
+        throw new Error(`Failed to parse directive from code: ${code}`);
+      }
+      return nodes[0] as DirectiveNode;
+    } catch (error) {
+      console.error('Error parsing with @core/ast:', error);
+      throw error;
+    }
+  };
 
   describe('execute', () => {
     it('should handle a simple text assignment with string literal', async () => {
       const example = textDirectiveExamples.atomic.simpleString;
       const node = await createNodeFromExample(example.code);
+      const processingContext = createMockProcessingContext(node);
       
-      // --- Test Specific Mock Setup ---
-      // Mock resolution service to return the direct literal value
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('Hello');
-      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable');
 
-      // --- Execution ---
-      const result = await fixture.executeHandler(node) as DirectiveResult;
+      const result = await handler.handle(processingContext) as DirectiveResult;
 
-      // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('greeting');
@@ -155,15 +187,11 @@ describe('TextDirectiveHandler', () => {
       const node = await createNodeFromExample(example.code);
       const expectedValue = 'Line 1\nLine 2\t"Quoted"';
       
-      // --- Test Specific Mock Setup ---
-      // Mock resolveNodes to return the unescaped value
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce(expectedValue); 
-      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable');
       
-      // --- Execution ---
-      const result = await fixture.executeHandler(node) as DirectiveResult;
+      const result = await handler.handle(createMockProcessingContext(node)) as DirectiveResult;
       
-      // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('escaped');
@@ -177,14 +205,11 @@ describe('TextDirectiveHandler', () => {
       const node = await createNodeFromExample(example.code);
       const expectedValue = 'Template content';
       
-      // --- Test Specific Mock Setup ---
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce(expectedValue);
-      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable');
 
-      // --- Execution ---
-      const result = await fixture.executeHandler(node) as DirectiveResult;
+      const result = await handler.handle(createMockProcessingContext(node)) as DirectiveResult;
       
-      // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('message');
@@ -195,18 +220,14 @@ describe('TextDirectiveHandler', () => {
 
     it('should handle object property interpolation in text value', async () => {
       const example = textDirectiveExamples.combinations.objectInterpolation;
-      const node = await createNodeFromExample(example.code.split('\n')[1]); // Get only the @text line
+      const node = await createNodeFromExample(example.code.split('\n')[1]);
       const expectedValue = 'Hello, Alice!';
 
-      // --- Test Specific Mock Setup ---
-      // Override the default mock to return the specific expected value for this test
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce(expectedValue); 
-      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable');
       
-      // --- Execution ---
-      const result = await fixture.executeHandler(node) as DirectiveResult;
+      const result = await handler.handle(createMockProcessingContext(node)) as DirectiveResult;
       
-      // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('greeting');
@@ -217,18 +238,14 @@ describe('TextDirectiveHandler', () => {
 
     it('should handle path referencing in text values', async () => {
       const example = textDirectiveExamples.combinations.pathReferencing;
-      const node = await createNodeFromExample(example.code.split('\n')[5]); // Get only the @text configText line
+      const node = await createNodeFromExample(example.code.split('\n')[5]);
       const expectedValue = 'Docs are at $PROJECTPATH/docs';
 
-      // --- Test Specific Mock Setup ---
-      // Mock resolveNodes for this specific interpolation
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce(expectedValue);
-      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable');
 
-      // --- Execution ---
-      const result = await fixture.executeHandler(node) as DirectiveResult;
+      const result = await handler.handle(createMockProcessingContext(node)) as DirectiveResult;
       
-      // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('configText');
@@ -241,37 +258,30 @@ describe('TextDirectiveHandler', () => {
       const example = textDirectiveExamples.invalid.undefinedVariable;
       const node = await createNodeFromExample(example.code);
 
-      // --- Test Specific Mock Setup ---
-      // Default mock for resolveNodes in beforeEach already throws MeldResolutionError for 'undefined_var'
-      vi.spyOn(stateService, 'setVariable'); // Ensure setVariable is spied on
-      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
+      vi.spyOn(stateService, 'setVariable');
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable');
 
-      // --- Execution & Assertion ---
-      await expect(fixture.executeHandler(node))
+      await expect(handler.handle(createMockProcessingContext(node)))
         .rejects
-        .toThrow(DirectiveError); // Expect handler to wrap MeldResolutionError
+        .toThrow(DirectiveError);
       
-      await expect(fixture.executeHandler(node))
+      await expect(handler.handle(createMockProcessingContext(node)))
         .rejects
-        .toHaveProperty('cause.message', 'Variable not found: undefined_var'); // Check original cause
+        .toHaveProperty('cause.message', 'Variable not found: undefined_var');
         
-      expect(setVariableSpy).not.toHaveBeenCalled(); // State should not be updated
+      expect(setVariableSpy).not.toHaveBeenCalled();
     });
 
     it('should handle basic variable interpolation', async () => {
       const example = textDirectiveExamples.combinations.basicInterpolation;
-      const node = await createNodeFromExample(example.code.split('\n')[2]); // Get only the @text message line
+      const node = await createNodeFromExample(example.code.split('\n')[2]);
       const expectedValue = 'Hello, World!';
       
-      // --- Test Specific Mock Setup ---
-      // Mock resolveNodes (uses default mock logic from beforeEach)
       vi.spyOn(stateService, 'setVariable');
-      const setVariableSpy = vi.spyOn(stateService, 'setVariable'); // Spy on the new method
+      const setVariableSpy = vi.spyOn(stateService, 'setVariable');
 
-      // --- Execution ---
-      const result = await fixture.executeHandler(node) as DirectiveResult;
+      const result = await handler.handle(createMockProcessingContext(node)) as DirectiveResult;
       
-      // --- Assertions ---
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('message');

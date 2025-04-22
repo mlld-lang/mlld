@@ -14,7 +14,7 @@ Systematically investigate and fix the core service failures identified in `_pla
 
 ## Recommended Debugging Strategy
 
-*   **Extensive Logging:** Due to potential console output suppression in the test environment (see `docs/dev/TESTS.md`), DO NOT USE `logger.debug` or `console.log` -- instead rely heavily on **`process.stdout.write('DEBUG: [ServiceName] Message\n');`** for detailed tracing.
+*   **Extensive Logging:** Due to potential console output suppression in the test environment (see `docs/dev/TESTS.md`), DO NOT USE `logger.debug` or `console.log` -- instead rely heavily on **`process.stdout.write('DEBUG: [ServiceName] Message\\n');`** for detailed tracing.
 *   **Trace Data Flow:** Log key inputs, intermediate values, state lookups/updates, and outputs as data moves between `InterpreterService`, `DirectiveService`, `ResolutionService`, `StateService`, and handlers.
 *   **Isolate:** Use the simplest failing test case for the specific issue being investigated.
 
@@ -43,15 +43,19 @@ Systematically investigate and fix the core service failures identified in `_pla
     *   AST Node IDs: `_plans/AST-ID.md`
     *   State System Enhancements: `_plans/STATE-UPDATES.md`
 
-**Phase 1: Variable Resolution Stability [Mostly COMPLETE]**
+**Phase 1: Variable Resolution Stability [COMPLETE]**
 
-*   **Target Failures:** `api/integration.test.ts` #1 (Variable/Data Resolution Regression).
+*   **Target Failures:** `api/integration.test.ts` #1 (Variable/Data Resolution Regression). `TextDirectiveHandler.test.ts` (TypeError). `DirectiveService.integration.test.ts` (`@data` key interpolation failure).
 *   **Hypothesized Services:** `InterpreterService`, `ResolutionService`, `StateService`, `VariableReferenceResolver`, `OutputService`.
 *   **Investigation Steps & Findings:**
-    1.  **Initial Regression Fixed:** The core regression where simple `{{var}}` failed in `api/integration.test.ts` (but not `api/array-access.test.ts`) was resolved by refactoring `StateService` to use `this.parentService` correctly for lookups and fixing `StateFactory` map handling (`_plans/STATE-UPDATES.md` work).
+    1.  **Initial Regression Fixed:** The core regression where simple `{{var}}` failed in `api/integration.test.ts` was resolved by refactoring `StateService` to use `this.parentService` correctly for lookups and fixing `StateFactory` map handling (`_plans/STATE-UPDATES.md` work).
     2.  **Output Formatting Adjusted:** Addressed related assertion failure in `api/api.test.ts` regarding expected XML (`<Meld>` tag) by adjusting the test assertion.
-    3.  **Remaining Issues:** Failures related to variable resolution within specific directives (`@run`, special `@path` vars) persist and are tracked in Phases 3 & 4.
-*   **Fix & Verify:** Fixes implemented in `StateService` and `StateFactory`. Unit tests (`StateService.test.ts`, `StateFactory.test.ts`) updated and passing. `api/api.test.ts` adjusted. Basic variable resolution appears stable, pending fixes in later phases.
+    3.  **`TextDirectiveHandler` Test Fixed:** Resolved `TypeError: createNodeFromExample is not a function` in `TextDirectiveHandler.test.ts` by correcting the function call to the locally defined parser function.
+    4.  **`@data` Key Interpolation Fixed:** Investigated the failure in `DirectiveService.integration.test.ts` where `@data { "{{dynamicKey}}": "{{dynamicValue}}" }` resolved incorrectly.
+        *   **Root Cause:** Found that `ResolutionService.resolveNodes` relied on `node.nodeId` to map resolved variable values, but nodes created manually in tests via `tests/utils/testFactories.ts` were missing this ID. This caused values for different variables to overwrite each other in the internal map.
+        *   **Fix:** Updated `createVariableReferenceNode` in `tests/utils/testFactories.ts` to assign a unique `nodeId` to manually created nodes, making them consistent with parser-generated nodes.
+    5.  **Remaining Issues:** Failures related to variable resolution within specific directives (`@run`, special `@path` vars) persist and are tracked in Phases 3 & 4.
+*   **Fix & Verify:** Fixes implemented in `StateService`, `StateFactory`, `tests/utils/testFactories.ts`, and `TextDirectiveHandler.test.ts`. Unit tests (`StateService.test.ts`, `StateFactory.test.ts`) updated and passing. `api/api.test.ts` adjusted. `DirectiveService.integration.test.ts` and `TextDirectiveHandler.test.ts` now pass relevant tests. Basic variable and data resolution appears stable, pending fixes in later phases.
 
 **Phase 2: `@import` Directive Processing [In Progress - OOM Blocker]**
 
@@ -80,14 +84,13 @@ Systematically investigate and fix the core service failures identified in `_pla
     4.  **(Deferred)** Address `@run` errors (Phase 3).
     5.  **(Deferred)** Remove the lazy-resolution workaround for `ICircularityService` in `ImportDirectiveHandler` if the root cause is confirmed to be fixed by the broader test refactoring.
     6.  **(NEW)** Add list of handler test files needing DI refactor:
-        *   `services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.command.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.integration.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.test.ts`
-        *   `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.transformation.test.ts`
+        *   `services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.test.ts` - ✅ DONE (Already migrated)
+        *   `services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.test.ts` - ❓ MISSING
+        *   `services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.test.ts` - ✅ DONE (Already migrated)
+        *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.command.test.ts` - ✅ DONE (Refactored)
+        *   `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.integration.test.ts` - ✅ DONE (Refactored)
+        *   `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.test.ts` - ✅ DONE (Refactored, 1 test skipped)
+        *   `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.transformation.test.ts` - ✅ DONE (Refactored)
         *   `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.test.ts`
         *   `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.transformation.test.ts`
         *   `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.test.ts`

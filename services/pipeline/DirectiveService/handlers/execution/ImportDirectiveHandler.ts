@@ -206,138 +206,43 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // 6. Interpret Content
       let sourceStateChanges: StateChanges | undefined;
-
       try {
-        // Create a new child state for the imported content
-        if (!sourceContextPath) {
-           throw new Error('sourceContextPath is missing for interpretation');
-        }
-        
-        // Create child state without options initially
         const childState = await currentStateService.createChildState();
-        // Set the file path on the new child state
-        childState.setCurrentFilePath(sourceContextPath.validatedPath);
+        if (sourceContextPath) {
+          childState.setCurrentFilePath(sourceContextPath.validatedPath);
+        }
 
-        // Log the state creation for debugging
-        process.stdout.write(`DEBUG: [ImportDirectiveHandler.handle] Created child state ID: ${childState.getStateId()}, Path: ${childState.getCurrentFilePath() ?? 'N/A'}\n`);
-
-        // ---> Log Before Interpret <-----
-        process.stdout.write(`DEBUG [ImportHandler.handle PRE-INTERPRET] Interpreting AST for: ${resolvedIdentifier}. Node count: ${astNodes.length}\n`);
-        process.stdout.write(`DEBUG [ImportHandler.handle PRE-INTERPRET] Calling interpreterServiceClient.interpret...\n`);
-        
-        // Use client (now guaranteed to be defined)
-        const interpretedChildState: StateServiceLike = await this.interpreterServiceClient.interpret(astNodes, 
-          undefined, 
-          childState 
+        process.stdout.write(`DEBUG [ImportHandler]: BEFORE interpret call for ${resolvedIdentifier}\n`);
+        const interpretedState = await this.interpreterServiceClient!.interpret(
+          astNodes, 
+          { 
+            filePath: resolvedIdentifier, 
+            mergeState: false, 
+          }, 
+          childState
         );
-        
-        // ---> Log After Interpret <-----
-        process.stdout.write(`DEBUG [ImportHandler.handle POST-INTERPRET] Call completed. Type of result: ${typeof interpretedChildState}, Is null/undefined: ${interpretedChildState == null}\n`);
-        if (interpretedChildState) {
-          process.stdout.write(`DEBUG [ImportHandler.handle POST-INTERPRET] Result keys: ${Object.keys(interpretedChildState).join(', ')}\n`);
-          process.stdout.write(`DEBUG [ImportHandler.handle POST-INTERPRET] typeof getAllTextVars: ${typeof interpretedChildState.getAllTextVars}\n`);
-        }
+        process.stdout.write(`DEBUG [ImportHandler]: AFTER interpret call for ${resolvedIdentifier} (resolved)\n`);
 
-        // <<< ADD CHECK for interpretedChildState >>>
-        if (!interpretedChildState || typeof interpretedChildState.getAllTextVars !== 'function') {
-          logger.error('Interpreter service client returned invalid state object', { interpretedChildState });
-          // Log before throwing
-          process.stdout.write(`ERROR [ImportHandler.handle] Invalid state received from interpret! Type: ${typeof interpretedChildState}, Has getAllTextVars: ${!!interpretedChildState?.getAllTextVars}\n`);
-          throw new DirectiveError(
-            'Internal error: Failed to get valid state from interpreted import content.',
-            this.kind,
-            DirectiveErrorCode.EXECUTION_FAILED
-          );
-        }
-        // <<< END CHECK >>>
+        sourceStateChanges = { variables: interpretedState.getLocalChanges() };
 
-        // Construct StateChanges manually from the resulting state's variables
-        // <<< Add individual try/catch for each getAll call >>>
-        let textMap, dataMap, pathMap, commandMap;
-        try { textMap = interpretedChildState.getAllTextVars() ?? new Map(); } catch(e) { logger.error("Error getting textVars", {e}); textMap = new Map(); }
-        try { dataMap = interpretedChildState.getAllDataVars() ?? new Map(); } catch(e) { logger.error("Error getting dataVars", {e}); dataMap = new Map(); }
-        try { pathMap = interpretedChildState.getAllPathVars() ?? new Map(); } catch(e) { logger.error("Error getting pathVars", {e}); pathMap = new Map(); }
-        try { commandMap = interpretedChildState.getAllCommands() ?? new Map(); } catch(e) { logger.error("Error getting commandVars", {e}); commandMap = new Map(); }
-
-        const allVars = {
-          text: textMap,
-          data: dataMap,
-          path: pathMap,
-          command: commandMap,
-        };
-        // <<< END TRY/CATCH SECTION >>>
-        
-        // process.stdout.write(`DEBUG [ImportHandler]: allVars object constructed. Keys: ${JSON.stringify(Object.keys(allVars))}\n`);
-        // process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.text = ${typeof allVars.text}, isMap: ${allVars.text instanceof Map}\n`);
-        // process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.data = ${typeof allVars.data}, isMap: ${allVars.data instanceof Map}\n`);
-        // process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.path = ${typeof allVars.path}, isMap: ${allVars.path instanceof Map}\n`);
-        // process.stdout.write(`DEBUG [ImportHandler]: typeof allVars.command = ${typeof allVars.command}, isMap: ${allVars.command instanceof Map}\n`);
-        // process.stdout.write(`DEBUG [ImportHandler]: allVars.text value = ${JSON.stringify(allVars.text)}\n`);
-        // --- DEBUG LOGGING END ---
-        
-        // Log variable sizes/types before accumulation
-        // process.stdout.write(`DEBUG [ImportHandler Var Check]: Text Vars (${allVars.text?.size ?? 0}):\n`);
-        // allVars.text?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, length=${JSON.stringify(v.value).length}\n`));
-        // process.stdout.write(`DEBUG [ImportHandler Var Check]: Data Vars (${allVars.data?.size ?? 0}):\n`);
-        // allVars.data?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, length=${JSON.stringify(v.value).length}\n`));
-        // process.stdout.write(`DEBUG [ImportHandler Var Check]: Path Vars (${allVars.path?.size ?? 0}):\n`);
-        // allVars.path?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, value=${JSON.stringify(v.value)}\n`));
-        // process.stdout.write(`DEBUG [ImportHandler Var Check]: Command Vars (${allVars.command?.size ?? 0}):\n`);
-        // allVars.command?.forEach((v, k) => process.stdout.write(`  - ${k}: type=${typeof v.value}, value=${JSON.stringify(v.value)}\n`));
-
-        // <<< Ensure accumulatedVariables is declared >>>
-        const accumulatedVariables: Record<string, VariableDefinition> = {};
-        // Combine all variable types into the StateChanges format
-        // <<< Remove checks, restore original loops >>>
-        // if (allVars.text && allVars.text.size > 0) { 
-        for (const [key, value] of allVars.text.entries()) {
-          accumulatedVariables[key] = value;
-        }
-        // }
-        // if (allVars.data && allVars.data.size > 0) {
-          for (const [key, value] of allVars.data.entries()) {
-            accumulatedVariables[key] = value;
-          }
-        // }
-        // if (allVars.path && allVars.path.size > 0) {
-          for (const [key, value] of allVars.path.entries()) {
-            accumulatedVariables[key] = value;
-          }
-        // }
-        // if (allVars.command && allVars.command.size > 0) {
-          for (const [key, value] of allVars.command.entries()) {
-            accumulatedVariables[key] = value;
-          }
-        // }
-
-        // --- DEBUG LOGGING START ---
-        // process.stdout.write(`DEBUG [ImportHandler]: Accumulated variable keys: ${JSON.stringify(Object.keys(accumulatedVariables))}\n`);
-        // --- DEBUG LOGGING END ---
-
-        if (Object.keys(accumulatedVariables).length > 0) {
-           sourceStateChanges = { variables: accumulatedVariables };
-        } else {
-            sourceStateChanges = undefined;
-            logger.warn(`[ImportDirectiveHandler] Interpretation of ${resolvedIdentifier} completed, but no variables were found in the resulting state. Import will be empty.`);
-        }
-        // ---> Log sourceStateChanges before passing to helpers
-        // const approxSize = JSON.stringify(sourceStateChanges).length;
-        // process.stdout.write(`DEBUG [ImportHandler]: Constructed sourceStateChanges (approx size: ${approxSize} chars): ${JSON.stringify(sourceStateChanges).substring(0, 200)}...\n`);
-
-      } catch (interpretError) {
-        const cause = interpretError instanceof Error ? interpretError : new Error(String(interpretError));
-        throw new DirectiveError(
+      } catch (interpretErrorCaught) { 
+        process.stdout.write(`DEBUG [ImportHandler]: CAUGHT error during interpret for ${resolvedIdentifier}: ${interpretErrorCaught}\n`);
+        const cause = interpretErrorCaught instanceof Error ? interpretErrorCaught : new Error(String(interpretErrorCaught));
+        // Construct and throw the DirectiveError directly
+        const directiveError = new DirectiveError(
           `Failed to interpret imported content from ${resolvedIdentifier}. ${cause.message}`,
           this.kind,
           DirectiveErrorCode.EXECUTION_FAILED,
           { cause }
         );
+        process.stdout.write(`DEBUG [ImportHandler]: Re-throwing DIRECTLY: ${directiveError.message}\n`);
+        throw directiveError; // Throw directly
       }
 
-      // 7. Process Imports (Using extracted sourceStateChanges)
+      // 7. Process Imports (This section should NOT be reached if interpret throws)
       const importDirectiveLocation: SyntaxSourceLocation | undefined = location ? {
           filePath: currentFilePath ?? 'unknown',
-          line: location.start.line, // Assuming location has start.line/column
+          line: location.start.line,
           column: location.start.column
       } : undefined;
 
@@ -384,9 +289,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         stateChanges: { variables: accumulatedStateChanges }, // Use the result from helper functions
         replacement: [] 
       };
+      process.stdout.write(`DEBUG [ImportHandler]: ABOUT TO RETURN result: ${JSON.stringify(result)}\n`);
       return result;
 
     } catch (error) {
+      process.stdout.write(`DEBUG [ImportHandler]: OUTER CATCH block reached. Error: ${error}\n`);
       let errorMessage = 'Unknown error during import execution';
       let errorToThrow: DirectiveError;
 

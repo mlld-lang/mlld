@@ -24,6 +24,9 @@ import type { TextVariable, DataVariable, IPathVariable, CommandVariable, Variab
 import type { JsonValue } from '@core/types';
 import type { ICommandDefinition } from '@core/types/define.js';
 
+// Counter for generating unique node IDs in tests
+let testNodeIdCounter = 0;
+
 const DEFAULT_POSITION: Position = { line: 1, column: 1 };
 const DEFAULT_LOCATION: Location = {
   start: DEFAULT_POSITION,
@@ -456,6 +459,7 @@ export function createVariableReferenceNode(
 ): VariableReferenceNode {
   return {
     type: 'VariableReference',
+    nodeId: `test-vref-${testNodeIdCounter++}`,
     identifier,
     valueType,
     isVariableReference: true,
