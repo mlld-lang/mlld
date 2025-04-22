@@ -32,8 +32,6 @@ The core strategy is to apply the "Manual Child Container" pattern consistently 
 ## List of remaining tests (delete each test as it is is completed)
 
 services/fs/PathService/PathService.test.ts
-services/pipeline/OutputService/OutputService.test.ts
-
 services/pipeline/InterpreterService/InterpreterService.unit.test.ts
 services/resolution/ResolutionService/resolvers/StringLiteralHandler.test.ts
 services/resolution/ResolutionService/resolvers/VariableReferenceResolver.edge.test.ts

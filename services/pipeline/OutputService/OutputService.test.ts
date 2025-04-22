@@ -5,7 +5,7 @@ import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import type { MeldNode } from '@core/syntax/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
+import type { OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
 import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
 import {
   createTextNode,
@@ -24,6 +24,9 @@ import runDirectiveExamplesModule from '@core/syntax/run.js';
 import { createNodeFromExample } from '@core/syntax/helpers/index.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
+import type { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
 import { createResolutionServiceMock, createStateServiceMock } from '@tests/utils/mocks/serviceMocks';
 import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
 import { VariableType } from '@core/types/variables.js';
@@ -31,6 +34,15 @@ import { createLLMXML } from 'llmxml';
 import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference.js';
 import { outputLogger as logger } from '@core/utils/logger.js';
 import { container, type DependencyContainer } from 'tsyringe';
+import type { ILogger } from '@core/utils/logger.js';
+import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
+
+// Define FormatConverter locally for the test
+type FormatConverter = (
+  nodes: MeldNode[],
+  state: IStateService,
+  options?: OutputOptions
+) => Promise<string>;
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -38,29 +50,76 @@ const runDirectiveExamples = runDirectiveExamplesModule;
 describe('OutputService', () => {
   let testContainer: DependencyContainer;
   let service: OutputService;
-  let state: DeepMockProxy<IStateService>;
-  let resolutionService: DeepMockProxy<IResolutionService>;
-  let mockVariableNodeFactory: DeepMockProxy<VariableNodeFactory>;
+  let mockState: IStateService;
+  let mockResolutionService: IResolutionService;
+  let mockVariableNodeFactory: VariableNodeFactory;
+  let mockResolutionServiceClientFactory: ResolutionServiceClientFactory;
+  let mockVariableReferenceResolverClientFactory: VariableReferenceResolverClientFactory;
+  let mockResolutionServiceClient: IResolutionServiceClient;
+  let mockVariableReferenceResolverClient: IVariableReferenceResolverClient;
 
   beforeEach(async () => {
     testContainer = container.createChildContainer();
     
-    state = mockDeep<IStateService>();
-    resolutionService = mockDeep<IResolutionService>();
-    mockVariableNodeFactory = mockDeep<VariableNodeFactory>();
-    
-    testContainer.registerInstance<IStateService>('IStateService', state);
-    testContainer.registerInstance<IResolutionService>('IResolutionService', resolutionService);
-    testContainer.registerInstance(VariableNodeFactory, mockVariableNodeFactory);
-    testContainer.registerInstance('DependencyContainer', testContainer);
+    // Create Manual Mocks
+    mockState = {
+      isTransformationEnabled: vi.fn(),
+      getTransformedNodes: vi.fn(),
+      shouldTransform: vi.fn(),
+      getVariable: vi.fn(),
+      // Add other methods/properties used by OutputService if needed
+      getStateId: vi.fn().mockReturnValue('test-state-id'),
+      getCurrentFilePath: vi.fn().mockReturnValue('/test/file.mld'),
+    } as unknown as IStateService;
 
-    vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
-    vi.mocked(state.getTransformedNodes).mockReturnValue([]);
-    vi.mocked(state.shouldTransform).mockReturnValue(true);
-    
-    testContainer.register(OutputService, { useClass: OutputService });
+    mockResolutionService = {
+      resolveInContext: vi.fn(),
+      // Add other methods used by OutputService if needed
+    } as unknown as IResolutionService;
 
-    service = testContainer.resolve(OutputService);
+    mockVariableNodeFactory = {
+      createVariableReference: vi.fn(),
+      // Add other methods if needed
+    } as unknown as VariableNodeFactory;
+
+    // Mock Clients first
+    mockResolutionServiceClient = {
+      resolve: vi.fn(),
+      // Add other methods if needed
+    } as unknown as IResolutionServiceClient;
+
+    mockVariableReferenceResolverClient = {
+      accessFields: vi.fn(),
+      convertToString: vi.fn(),
+      // Add other methods if needed
+    } as unknown as IVariableReferenceResolverClient;
+
+    // Mock Factories
+    mockResolutionServiceClientFactory = {
+      createClient: vi.fn().mockReturnValue(mockResolutionServiceClient)
+    } as unknown as ResolutionServiceClientFactory;
+    mockVariableReferenceResolverClientFactory = {
+      createClient: vi.fn().mockReturnValue(mockVariableReferenceResolverClient)
+    } as unknown as VariableReferenceResolverClientFactory;
+
+    // Register Manual Mocks
+    testContainer.registerInstance<IStateService>('IStateService', mockState);
+    testContainer.registerInstance<IResolutionService>('IResolutionService', mockResolutionService);
+    testContainer.registerInstance(VariableNodeFactory, mockVariableNodeFactory); // Register class token
+    testContainer.registerInstance(ResolutionServiceClientFactory, mockResolutionServiceClientFactory); // Register class token (optional constructor arg)
+    testContainer.registerInstance('VariableReferenceResolverClientFactory', mockVariableReferenceResolverClientFactory); // Register string token (internal resolve)
+    testContainer.registerInstance('DependencyContainer', testContainer); // Register container itself
+
+    // Setup default mock behaviors (using vi.spyOn on the manual mocks)
+    vi.spyOn(mockState, 'isTransformationEnabled').mockReturnValue(true);
+    vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue([]);
+    vi.spyOn(mockState, 'shouldTransform').mockReturnValue(true);
+    
+    // Register the REAL service implementation against the INTERFACE token
+    testContainer.register<IOutputService>('IOutputService', { useClass: OutputService });
+
+    // Resolve the service using the INTERFACE token
+    service = testContainer.resolve<IOutputService>('IOutputService');
   });
 
   afterEach(async () => {
@@ -75,14 +134,14 @@ describe('OutputService', () => {
     });
 
     it('should allow registering custom formats', async () => {
-      const customConverter = async () => 'custom';
+      const customConverter: FormatConverter = async () => 'custom';
       service.registerFormat('custom', customConverter);
       expect(service.supportsFormat('custom')).toBe(true);
     });
 
     it('should throw on invalid format registration', () => {
-      expect(() => service.registerFormat('', async () => '')).toThrow();
-      expect(() => service.registerFormat('test', null as any)).toThrow();
+      expect(() => service.registerFormat('', async () => '')).toThrowError();
+      expect(() => service.registerFormat('test', null as any)).toThrowError();
     });
 
     it('should list supported formats', () => {
@@ -98,34 +157,34 @@ describe('OutputService', () => {
         createTextNode('Hello world\n', createLocation(1, 1))
       ];
 
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
 
-      const output = await service.convert(nodes, state, 'markdown');
+      const output = await service.convert(nodes, mockState, 'markdown');
       expect(output).toBe('Hello world\n');
     });
 
     it('should output pre-resolved text nodes correctly', async () => {
       const preResolvedContent = 'Hello Alice!';
       const nodes: MeldNode[] = [
-        createTextNode(preResolvedContent, createLocation(1, 1)) 
+        createTextNode(preResolvedContent, createLocation(1, 1))
       ];
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
 
-      const output = await service.convert(nodes, state, 'markdown');
+      const output = await service.convert(nodes, mockState, 'markdown');
       expect(output).toBe(preResolvedContent); 
     });
 
     it.skip('should include state variables when requested', async () => {
-      vi.mocked(state as any).getAllTextVars.mockReturnValue(new Map([['greeting', { name: 'greeting', type: VariableType.TEXT, value: 'hello' }]]));
-      vi.mocked(state as any).getAllDataVars.mockReturnValue(new Map([['count', { name: 'count', type: VariableType.DATA, value: 42 }]]));
+      vi.spyOn(mockState as any, 'getAllTextVars').mockReturnValue(new Map([['greeting', { name: 'greeting', type: VariableType.TEXT, value: 'hello' }]]));
+      vi.spyOn(mockState as any, 'getAllDataVars').mockReturnValue(new Map([['count', { name: 'count', type: VariableType.DATA, value: 42 }]]));
 
       const nodes: MeldNode[] = [
         createTextNode('Content', createLocation(1, 1))
       ];
 
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
 
-      const output = await service.convert(nodes, state, 'markdown', {
+      const output = await service.convert(nodes, mockState, 'markdown', {
         includeState: true
       });
 
@@ -141,14 +200,14 @@ describe('OutputService', () => {
         createTextNode('\n  Hello  \n  World  \n', createLocation(1, 1))
       ];
 
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
 
-      const preserved = await service.convert(nodes, state, 'markdown', {
+      const preserved = await service.convert(nodes, mockState, 'markdown', {
         preserveFormatting: true
       });
       expect(preserved).toBe('\n  Hello  \n  World  \n');
 
-      const cleaned = await service.convert(nodes, state, 'markdown', {
+      const cleaned = await service.convert(nodes, mockState, 'markdown', {
         preserveFormatting: false
       });
       expect(cleaned).toBe('\n  Hello  \n  World  \n');
@@ -161,9 +220,9 @@ describe('OutputService', () => {
         createTextNode('Hello world', createLocation(1, 1))
       ];
 
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
 
-      const output = await service.convert(nodes, state, 'xml');
+      const output = await service.convert(nodes, mockState, 'xml');
       expect(output).toContain('Hello world');
     });
 
@@ -173,24 +232,24 @@ describe('OutputService', () => {
         createCodeFenceNode(fenceContent, 'typescript', createLocation(1, 1))
       ];
 
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
 
-      const output = await service.convert(nodes, state, 'xml');
+      const output = await service.convert(nodes, mockState, 'xml');
       expect(output).toContain('const x = 1;');
       expect(output).toContain('```typescript');
     });
 
     it.skip('should preserve state variables when requested', async () => {
-      vi.mocked(state as any).getAllTextVars.mockReturnValue(new Map([['greeting', { name: 'greeting', type: VariableType.TEXT, value: 'hello' }]]));
-      vi.mocked(state as any).getAllDataVars.mockReturnValue(new Map([['count', { name: 'count', type: VariableType.DATA, value: 42 }]]));
+      vi.spyOn(mockState as any, 'getAllTextVars').mockReturnValue(new Map([['greeting', { name: 'greeting', type: VariableType.TEXT, value: 'hello' }]]));
+      vi.spyOn(mockState as any, 'getAllDataVars').mockReturnValue(new Map([['count', { name: 'count', type: VariableType.DATA, value: 42 }]]));
 
       const nodes: MeldNode[] = [
         createTextNode('Content', createLocation(1, 1))
       ];
 
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
 
-      const output = await service.convert(nodes, state, 'xml', {
+      const output = await service.convert(nodes, mockState, 'xml', {
         includeState: true
       });
 
@@ -204,9 +263,8 @@ describe('OutputService', () => {
 
   describe('Direct Container Resolution and Field Access', () => {
     it('should handle field access with direct field access fallback', async () => {
-      const mockState = mockDeep<IStateService>();
-      vi.mocked(mockState.getVariable).mockImplementation((name, type?) => {
-        if (name === 'user' && (!type || type === VariableType.DATA)) {
+      vi.spyOn(mockState, 'getVariable').mockImplementation((name, type?) => {
+        if (name === 'user' && (!type || type === VariableType.DATA || type === undefined)) {
           return { type: VariableType.DATA, name: 'user', value: { name: 'Claude', details: { role: 'AI Assistant' }, metrics: [10] } } as any;
         }
         return undefined;
@@ -217,10 +275,8 @@ describe('OutputService', () => {
         createLocation(1, 1)
       );
       
-      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
-      vi.mocked(state.getTransformedNodes).mockReturnValue([textNode]);
-      vi.mocked(mockState.isTransformationEnabled).mockReturnValue(true);
-      vi.mocked(mockState.getTransformedNodes).mockReturnValue([textNode]);
+      vi.spyOn(mockState, 'isTransformationEnabled').mockReturnValue(true);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue([textNode]);
       
       const output = await service.convert([textNode], mockState, 'markdown'); 
       
@@ -232,20 +288,21 @@ describe('OutputService', () => {
     });
     
     it('should gracefully handle errors in field access', async () => {
-      const mockStateForError = mockDeep<IStateService>();
-      vi.mocked(mockStateForError.getVariable).mockImplementation((name, type?) => {
+      const mockStateForError = mockState;
+      vi.spyOn(mockStateForError, 'getVariable').mockImplementation((name, type?) => {
         if (name === 'user' && (!type || type === VariableType.DATA)) return undefined;
         return undefined;
       });
-      vi.mocked(mockStateForError.isTransformationEnabled).mockReturnValue(true);
+      vi.spyOn(mockStateForError, 'isTransformationEnabled').mockReturnValue(true);
       
-      resolutionService.resolveText.mockRejectedValue(new Error('Resolution error'));
+      vi.spyOn(mockResolutionService, 'resolveInContext')
+          .mockRejectedValue(new Error('Resolution error'));
       
       const textNode = createTextNode(
         'User: {{user.name}}, Role: {{user.details.role}}',
         createLocation(1, 1)
       );
-      vi.mocked(mockStateForError.getTransformedNodes).mockReturnValue([textNode]);
+      vi.spyOn(mockStateForError, 'getTransformedNodes').mockReturnValue([textNode]);
 
       const output = await service.convert([textNode], mockStateForError, 'markdown');
       
@@ -258,9 +315,9 @@ describe('OutputService', () => {
         createCodeFenceNode(content, 'javascript', createLocation(1, 1))
       ];
 
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
 
-      const output = await service.convert(nodes, state, 'markdown');
+      const output = await service.convert(nodes, mockState, 'markdown');
 
       expect(output).toContain(content);
       expect(output).toContain('const name = "Claude";');
@@ -274,9 +331,9 @@ describe('OutputService', () => {
         createCodeFenceNode(content, 'typescript', createLocation(1, 1))
       ];
 
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
 
-      const output = await service.convert(nodes, state, 'xml');
+      const output = await service.convert(nodes, mockState, 'xml');
 
       expect(output).toContain('interface User');
       expect(output).toContain('interface User');
@@ -290,9 +347,9 @@ describe('OutputService', () => {
         createTextNode('\nText after code', createLocation(4, 1))
       ];
 
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
 
-      const output = await service.convert(nodes, state, 'markdown');
+      const output = await service.convert(nodes, mockState, 'markdown');
 
       expect(output).toContain('Text before code');
       expect(output).toContain(codeFenceContent);
@@ -305,10 +362,10 @@ describe('OutputService', () => {
 
   describe('Directive boundary handling', () => {
     beforeEach(() => {
-      service = new OutputService(state, resolutionService, undefined, mockVariableNodeFactory);
+      service = new OutputService(mockState, mockResolutionService, undefined, mockVariableNodeFactory);
       
-      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
-      vi.mocked(state.getVariable).mockImplementation((name, type?) => {
+      vi.spyOn(mockState, 'isTransformationEnabled').mockReturnValue(true);
+      vi.spyOn(mockState, 'getVariable').mockImplementation((name, type?) => {
         return undefined;
       });
     });
@@ -319,10 +376,10 @@ describe('OutputService', () => {
         createTextNode('This is a block-level text.\nIt has multiple lines.', createLocation(2, 1))
       ];
 
-      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'isTransformationEnabled').mockReturnValue(true);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
       
-      const result = await service.convert(nodes, state, 'markdown');
+      const result = await service.convert(nodes, mockState, 'markdown');
       
       expect(result).toContain('This is a block-level text.');
       expect(result).toContain('It has multiple lines.');
@@ -336,10 +393,10 @@ describe('OutputService', () => {
         createDirectiveNode('text', [{ name: 'name', value: 'value' }], createLocation(2, 1))
       ];
 
-      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'isTransformationEnabled').mockReturnValue(true);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
       
-      const result = await service.convert(nodes, state, 'markdown');
+      const result = await service.convert(nodes, mockState, 'markdown');
       
       expect(result).toContain('This is inline text.');
       
@@ -353,10 +410,10 @@ describe('OutputService', () => {
         createDirectiveNode('text', [{ name: 'var3', value: 'value3' }], createLocation(3, 1))
       ];
 
-      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.spyOn(mockState, 'isTransformationEnabled').mockReturnValue(true);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
       
-      const result = await service.convert(nodes, state, 'markdown');
+      const result = await service.convert(nodes, mockState, 'markdown');
       
       expect(result).not.toContain('\n\n\n');
     });
@@ -367,10 +424,10 @@ describe('OutputService', () => {
         createTextNode('Hello World!', createLocation(2, 1))
       ];
 
-      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
-      vi.mocked(state.getTransformedNodes).mockReturnValue(transformedNodes);
+      vi.spyOn(mockState, 'isTransformationEnabled').mockReturnValue(true);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(transformedNodes);
       
-      const result = await service.convert(transformedNodes, state, 'markdown');
+      const result = await service.convert(transformedNodes, mockState, 'markdown');
       
       expect(result).toBe('\nHello World!');
     });
@@ -382,14 +439,14 @@ describe('OutputService', () => {
         createTextNode('# Simple content', createLocation(1, 1))
       ];
       
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
-      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
+      vi.spyOn(mockState, 'isTransformationEnabled').mockReturnValue(true);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
       
       const prettierUtils = await import('@core/utils/prettierUtils.js');
       const formatSpy = vi.spyOn(prettierUtils, 'formatWithPrettier');
       formatSpy.mockResolvedValue('# Formatted content');
       
-      await service.convert(nodes, state, 'markdown', {
+      await service.convert(nodes, mockState, 'markdown', {
         pretty: true
       });
       
@@ -404,14 +461,14 @@ describe('OutputService', () => {
         createTextNode('<tag>content</tag>', createLocation(1, 1))
       ];
       
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
-      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
+      vi.spyOn(mockState, 'isTransformationEnabled').mockReturnValue(true);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
       
       const prettierUtils = await import('@core/utils/prettierUtils.js');
       const formatSpy = vi.spyOn(prettierUtils, 'formatWithPrettier');
       formatSpy.mockResolvedValue('<tag>\n  content\n</tag>');
       
-      await service.convert(nodes, state, 'xml', {
+      await service.convert(nodes, mockState, 'xml', {
         pretty: true
       });
       
@@ -425,13 +482,13 @@ describe('OutputService', () => {
         createTextNode('# Simple content', createLocation(1, 1))
       ];
       
-      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
-      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
+      vi.spyOn(mockState, 'isTransformationEnabled').mockReturnValue(true);
+      vi.spyOn(mockState, 'getTransformedNodes').mockReturnValue(nodes);
       
       const prettierUtils = await import('@core/utils/prettierUtils.js');
       const formatSpy = vi.spyOn(prettierUtils, 'formatWithPrettier');
       
-      await service.convert(nodes, state, 'markdown', {
+      await service.convert(nodes, mockState, 'markdown', {
         pretty: false
       });
       
