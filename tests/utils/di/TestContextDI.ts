@@ -410,6 +410,9 @@ export class TestContextDI {
     this.registerURLContentResolver();
     this.registerDebugServices();
 
+    // Register the container instance itself for StateService
+    this.container.registerMock('DependencyContainer', this.container.getContainer());
+
     // Register REAL StateService last
     this.container.registerService(StateFactory, StateFactory);
     this.container.registerService('IStateService', StateService);

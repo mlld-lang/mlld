@@ -1,44 +1,32 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { processMeld, ProcessOptions } from '@api/index.js';
-import { container, DependencyContainer } from 'tsyringe'; // Need this
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import { logger } from '@core/utils/logger'; // Need this
-import type { ILogger } from '@core/utils/logger'; // Need this
+import { logger } from '@core/utils/logger';
+import type { ILogger } from '@core/utils/logger';
 import { StateService } from '@services/state/StateService/StateService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 describe('API Smoke Tests', () => {
-  let testContainer: DependencyContainer; // Restore this
-  let memFs: MemfsTestFileSystem;
+  let context: TestContextDI;
 
   beforeEach(async () => {
-    memFs = new MemfsTestFileSystem();
-    testContainer = container.createChildContainer(); // Restore this
-
-    // Register essential instances
-    testContainer.registerInstance<IFileSystem>('IFileSystem', memFs); // Restore this
-    testContainer.registerInstance('DependencyContainer', testContainer); // Restore this
-    testContainer.registerInstance<ILogger>('MainLogger', logger); // Restore logger registration
-    testContainer.register('ILogger', { useToken: 'MainLogger' }); // Restore logger registration
-
-    // Register StateService correctly
-    testContainer.registerSingleton(StateService, StateService);
-    testContainer.registerSingleton('IStateService', { useToken: StateService });
-
-    // NOTE: We might need more registrations here if processMeld requires them even for smoke tests.
+    context = await TestContextDI.createTestHelpers().setupWithStandardMocks();
   });
 
   afterEach(async () => {
-    testContainer?.dispose(); // Restore this for proper cleanup
+    if (context) {
+      await context.cleanup();
+    }
   });
 
   it('should process simple text content correctly', async () => {
     const content = `Just some plain text.`;
     const options: Partial<ProcessOptions> = {
       format: 'markdown',
-      fs: memFs as any, // Pass MemFS directly if needed by processMeld internally (or mock globally)
-      container: testContainer // Restore passing the container
+      fs: context.fs as any,
+      container: context.container.getContainer()
     };
 
     let result: string | undefined;
@@ -63,8 +51,8 @@ Hello {{message}}!`;
     
     const options: Partial<ProcessOptions> = {
       format: 'markdown',
-      fs: memFs as any, // Pass MemFS directly if needed
-      container: testContainer // Restore passing the container
+      fs: context.fs as any,
+      container: context.container.getContainer()
     };
     
     let result: string | undefined;
@@ -83,4 +71,4 @@ Hello {{message}}!`;
   });
 
   // Add more basic tests here later (e.g., simple @import, simple @run)
-}); 
+});
