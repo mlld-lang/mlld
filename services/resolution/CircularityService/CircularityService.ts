@@ -29,7 +29,7 @@ export class CircularityService implements ICircularityService {
 
   constructor() {
     // this.debugEnabled = process.env.MELD_DEBUG === 'true';
-    // process.stdout.write(`DEBUG [CONSTRUCTOR]: CircularityService - Instance created.\n`);
+    // Removed debug logging
   }
 
   /**
@@ -52,7 +52,7 @@ export class CircularityService implements ICircularityService {
    * @throws {MeldImportError} If a circular import is detected
    */
   beginImport(filePath: string): void {
-    process.stdout.write(`DEBUG [CircularityService.beginImport ENTRY] File: ${filePath}, Stack: [${this.importStack.join(', ')}]\\n`);
+
     const normalizedPath = this.normalizePath(filePath);
     
     // Get the filename part for safety checks
@@ -74,7 +74,7 @@ export class CircularityService implements ICircularityService {
     // Check #1: Simple circular import detection (exact path match)
     if (this.isInStack(normalizedPath)) {
       const importChain = [...this.importStack, normalizedPath];
-      process.stdout.write(`ERROR [CircularityService.beginImport] Circular import detected (exact path)! Path: ${normalizedPath}, Chain: [${importChain.join(', ')}]\\n`);
+
       logger.error('Circular import detected (exact path match)', {
         filePath,
         normalizedPath,
@@ -93,7 +93,7 @@ export class CircularityService implements ICircularityService {
     // Check #2: Safety check for maximum import depth
     if (this.importStack.length >= this.MAX_IMPORT_DEPTH) {
       const importChain = [...this.importStack, normalizedPath];
-      process.stdout.write(`ERROR [CircularityService.beginImport] Max depth exceeded! Path: ${normalizedPath}, Depth: ${this.importStack.length}, Chain: [${importChain.join(', ')}]\\n`);
+
       logger.error('Maximum import depth exceeded, likely circular import', {
         filePath,
         normalizedPath,
@@ -116,7 +116,7 @@ export class CircularityService implements ICircularityService {
     // Check #3: Safety check for too many imports of the same file
     if (currentCount + 1 >= this.MAX_SAME_FILE_IMPORTS) {
       const importChain = [...this.importStack, normalizedPath];
-      process.stdout.write(`ERROR [CircularityService.beginImport] Max count exceeded! Path: ${normalizedPath}, Count: ${currentCount + 1}, Chain: [${importChain.join(', ')}]\\n`);
+
       logger.error('Too many imports of the same file, likely circular import', {
         filePath,
         normalizedPath,
@@ -143,7 +143,7 @@ export class CircularityService implements ICircularityService {
     if (fileName.includes('circular-import') && 
         this.importStack.some(p => p.includes('circular-import'))) {
       const importChain = [...this.importStack, normalizedPath];
-      process.stdout.write(`ERROR [CircularityService.beginImport] Circular test file detected! Path: ${normalizedPath}, Chain: [${importChain.join(', ')}]\\n`);
+
       logger.error('Detected circular import in test files', {
         fileName,
         importStack: this.importStack
@@ -159,7 +159,7 @@ export class CircularityService implements ICircularityService {
     }
 
     this.importStack.push(normalizedPath);
-    process.stdout.write(`DEBUG [CircularityService.beginImport EXIT] Pushed: ${normalizedPath}, New Stack: [${this.importStack.join(', ')}]\\n`);
+
   }
 
   /**
@@ -167,7 +167,7 @@ export class CircularityService implements ICircularityService {
    * @param filePath - Path of the file whose import has completed
    */
   endImport(filePath: string): void {
-    process.stdout.write(`DEBUG [CircularityService.endImport ENTRY] File: ${filePath}, Current Stack: [${this.importStack.join(', ')}]\\n`);
+
     const normalizedPath = this.normalizePath(filePath);
     const fileName = normalizedPath.split('/').pop() || normalizedPath;
     const idx = this.importStack.lastIndexOf(normalizedPath);
@@ -196,7 +196,7 @@ export class CircularityService implements ICircularityService {
         currentStack: this.importStack
       });
     }
-    process.stdout.write(`DEBUG [CircularityService.endImport EXIT] After removal attempt for: ${normalizedPath}, New Stack: [${this.importStack.join(', ')}]\\n`);
+
   }
 
   /**
@@ -207,13 +207,13 @@ export class CircularityService implements ICircularityService {
   isInStack(filePath: string): boolean {
     const normalizedPath = this.normalizePath(filePath);
     
-    // process.stdout.write(`DEBUG: [CircularityService.isInStack] Checking filePath="${filePath}", normalizedPath="${normalizedPath}", stack=${JSON.stringify(this.importStack)}\n`);
+    // Removed debug logging
 
     const exactMatchFound = this.importStack.some(
       (item) => item.replace(/\\/g, '/') === normalizedPath
     );
 
-    // process.stdout.write(`DEBUG: [CircularityService.isInStack] Checking for exact match: normalizedPath="${normalizedPath}", stack=${JSON.stringify(this.importStack)}, found=${exactMatchFound}\n`);
+    // Removed debug logging
 
     if (exactMatchFound) {
       return true;

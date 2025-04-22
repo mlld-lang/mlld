@@ -22,8 +22,8 @@ function convertLocation(location: any): DirectiveLocation {
 export function validateTextDirective(node: DirectiveNode): void {
   const directive = node.directive;
   
-  // <<< Use process.stdout.write for reliable logging >>>
-  // process.stdout.write(`\n[validateTextDirective] Input Directive: ${JSON.stringify(directive, null, 2)}\n`);
+
+
   
   // Validate identifier
   if (!directive.identifier || typeof directive.identifier !== 'string') {

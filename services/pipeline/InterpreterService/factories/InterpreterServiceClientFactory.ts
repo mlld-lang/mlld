@@ -29,7 +29,7 @@ export class InterpreterServiceClientFactory {
   ) {
     this.container = container || globalContainer; // Fallback just in case
     const containerId = (this.container as any).id || (this.container === globalContainer ? 'global' : 'unknown');
-    process.stdout.write(`DEBUG [InterpreterServiceClientFactory CONSTRUCTOR] Received container with ID: ${containerId}\n`);
+
     if (this.container === globalContainer) {
       logger.warn('InterpreterServiceClientFactory resolved using global container, might cause issues in tests.');
     }
@@ -67,7 +67,7 @@ export class InterpreterServiceClientFactory {
    * @returns A client that provides interpreter service functionality
    */
   createClient(): IInterpreterServiceClient {
-    process.stdout.write('DEBUG [InterpreterServiceClientFactory] createClient() called.\n');
+
     logger.debug('Creating InterpreterServiceClient');
     // Ensure the service is fetched using the correct container before creating client methods
     const service = this.getInterpreterService(); 

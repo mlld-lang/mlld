@@ -460,8 +460,8 @@ export class PathService implements IPathService {
     context: PathValidationContext
   ): Promise<MeldPath> { 
     // +++ Log Entry +++
-    // process.stdout.write(`DEBUG: [PathService.validatePath ENTRY] FilePath Type: ${typeof filePath}, Path: ${JSON.stringify(filePath)}\\n`); // Removed
-    // process.stdout.write(`DEBUG: [PathService.validatePath ENTRY] Context: ${JSON.stringify(context)}\\n`); // Removed
+
+
 
     let pathObj: MeldPath;
     let rawPathString: string;
@@ -512,7 +512,7 @@ export class PathService implements IPathService {
       const baseDir = context.workingDirectory;
       const resolved = this.resolvePath(createRawPath(rawPathString), createRawPath(baseDir)); 
       // +++ Log Resolved Path (from string input) +++
-      // process.stdout.write(`DEBUG: [PathService.validatePath] Resolved string input to: ${JSON.stringify(resolved)}\\n`); // Removed
+
       pathObj = { 
           contentType: PathContentType.FILESYSTEM, 
           originalValue: rawPathString, 
@@ -573,12 +573,12 @@ export class PathService implements IPathService {
     fsPathObj.isDirectory = undefined; 
 
     // +++ Log Absolute Path Before Checks +++
-    // process.stdout.write(`DEBUG: [PathService.validatePath] Absolute path for checks: ${absolutePathToCheck}\\n`); // Removed
+
 
     // Security checks
     fsPathObj.isSecure = this.checkSecurityBoundaries(absolutePathToCheck, context, location);
     // +++ Log Security Check Result +++
-    // process.stdout.write(`DEBUG: [PathService.validatePath] Security check result: ${fsPathObj.isSecure}\\n`); // Removed
+
     if (!fsPathObj.isSecure) {
       throw new PathValidationError(PathErrorMessages.OUTSIDE_BASE_DIR, { 
         code: PathErrorCode.OUTSIDE_BASE_DIR,
@@ -592,7 +592,7 @@ export class PathService implements IPathService {
       fsPathObj.exists = exists;
       fsPathObj.isDirectory = isDirectory; 
       // +++ Log Existence Check Result +++
-      // process.stdout.write(`DEBUG: [PathService.validatePath] Existence check: exists=${exists}, isDirectory=${isDirectory}\\n`); // Removed
+
 
       if (context.rules.mustExist && !exists) {
         const isDirExpected = context.rules.mustBeDirectory; 
@@ -634,7 +634,7 @@ export class PathService implements IPathService {
     }
 
     // +++ Log Final Path Object +++
-    // process.stdout.write(`DEBUG: [PathService.validatePath EXIT] Returning: ${JSON.stringify(fsPathObj)}\\n`); // Removed
+
     return fsPathObj;
   }
   

@@ -442,13 +442,13 @@ export class ResolutionService implements IResolutionService {
    */
   public async resolveNodes(nodes: InterpolatableValue, context: ResolutionContext): Promise<string> {
     // Refactored logic to avoid await inside the main loop
-    // +++ USE process.stdout.write +++
+    // Removed debug logging
     const fnName = 'ResolutionService.resolveNodes';
-    process.stdout.write(`DEBUG: [${fnName} ENTRY] NodeCount: ${nodes?.length ?? 0}, StateID: ${context.state?.getStateId() ?? 'N/A'}, Strict: ${context.strict}\n`);
+
     // logger.debug(`[${fnName} ENTRY]`, { nodeCount: nodes?.length, contextFlags: context.flags });
     if (!nodes || nodes.length === 0) {
       // logger.debug(`[${fnName} EXIT] Empty node array input.`);
-      process.stdout.write(`DEBUG: [${fnName} EXIT] Empty node array input.\n`);
+
       return '';
     }
     // +++ End Added Logging +++
@@ -458,68 +458,68 @@ export class ResolutionService implements IResolutionService {
     const resolvedValues = new Map<string, string>(); 
 
     // First pass: Collect promises for variable resolutions
-    process.stdout.write(`DEBUG: [${fnName} Pass 1] Collecting variable resolution promises...\n`);
+
     for (const node of nodes) {
         if (node.type === 'VariableReference') {
-            process.stdout.write(`DEBUG: [${fnName} Pass 1] Found VariableReference: ${node.identifier}\n`);
+
             const promise = this.variableReferenceResolver.resolve(node, context)
                 .catch(error => {
-                    process.stderr.write(`WARN: [${fnName} Pass 1] Variable resolution failed for ${node.identifier}. Strict=${context.strict}. Error: ${error?.message ?? error}\n`);
+    
                     if (context.strict) throw error;
                     return ''; // Return empty string for failed optional vars
                 });
             promises.push(promise.then(val => {
-                process.stdout.write(`DEBUG: [${fnName} Pass 1] Resolved ${node.identifier} to: '${val}'\n`);
+
                 // Use nodeId as the key
                 resolvedValues.set(node.nodeId, val); 
                 return val; // Still return value for Promise.all
             }));
         } else if (node.type === 'Text') {
-            process.stdout.write(`DEBUG: [${fnName} Pass 1] Found TextNode: '${node.content?.substring(0, 30)}...'\n`);
+
         } else {
-             process.stderr.write(`WARN: [${fnName} Pass 1] Encountered unexpected node type\n`);
+
         }
     }
 
     // Wait for all variable resolutions to complete
-    process.stdout.write(`DEBUG: [${fnName} Pass 1] Awaiting ${promises.length} promises...\n`);
+
     try {
       await Promise.all(promises);
-      process.stdout.write(`DEBUG: [${fnName} Pass 1] All promises resolved.\n`);
+
     } catch (error) { 
-       process.stderr.write(`ERROR: Error during Promise.all in resolveNodes (strict mode failure likely). Error: ${error?.message ?? error}\n`);
+
        throw error; 
     }
 
     // Second pass: Build the final string synchronously using an array and join
-    process.stdout.write(`DEBUG: [${fnName} Pass 2] Building final string...\n`);
+
     const segments: string[] = []; // Initialize an array for string parts
     const mapKeys = Array.from(resolvedValues.keys()).join(', '); // Log node IDs directly
-    process.stdout.write(`DEBUG: [${fnName} Pass 2] Map keys (nodeIds): [${mapKeys}]\n`);
+
     for (const node of nodes) {
-        process.stdout.write(`DEBUG: [${fnName} Pass 2] Processing node with ID: ${node.nodeId}\n`);
+
         if (node.type === 'Text') {
             const contentToPush = node.content;
-            process.stdout.write(`DEBUG: [${fnName} Pass 2 Text] Pushing segment: '${contentToPush}'\n`);
+
             segments.push(contentToPush);
-            process.stdout.write(`DEBUG: [${fnName} Pass 2 Text] Segments array NOW: [${segments.map(s => `'${s}'`).join(', ')}]\n`);
+
         } else if (node.type === 'VariableReference') {
             // Use nodeId as the key for lookup
             const mapHasKey = resolvedValues.has(node.nodeId);
             const valueFromMap = resolvedValues.get(node.nodeId);
-            process.stdout.write(`DEBUG: [${fnName} Pass 2 Var(${node.identifier})] Map has node key (${node.nodeId})? ${mapHasKey}. Value from map: '${valueFromMap}'\n`);
+
             const resolvedVarValue = valueFromMap || ''; // Use value retrieved from map
-            process.stdout.write(`DEBUG: [${fnName} Pass 2 Var(${node.identifier})] Pushing segment: '${resolvedVarValue}'\n`);
+
             segments.push(resolvedVarValue);
-            process.stdout.write(`DEBUG: [${fnName} Pass 2 Var(${node.identifier})] Segments array NOW: [${segments.map(s => `'${s}'`).join(', ')}]\n`);
+
         }
     }
     // +++ MODIFY Logging +++
-    process.stdout.write(`DEBUG: [${fnName} Pass 2] Pre-Join Segments array: [${segments.map(s => `'${s}'`).join(', ')}]\n`);
+
     // logger.debug(`[${fnName} Pass 2] Pre-Join Segments array:`, segments);
     const result = segments.join(''); // Join all segments at the end
     // +++ MODIFY Logging +++
-    process.stdout.write(`DEBUG: [${fnName} EXIT] Returning: '${result}'\n`);
+
     // logger.debug(`[${fnName} EXIT] Returning: '${result}'`);
     return result;
   }
@@ -557,7 +557,7 @@ export class ResolutionService implements IResolutionService {
         });
 
     const finalResult = await promise;
-    process.stdout.write(`DEBUG: [ResolutionService.resolveText EXIT] Returning: '${finalResult}'\\n`);
+
     return finalResult; 
   }
 
@@ -738,19 +738,19 @@ export class ResolutionService implements IResolutionService {
   async resolvePath(resolvedPathString: string, context: ResolutionContext): Promise<MeldPath> {
     // +++ Log Entry +++
     // Log the argument EXACTLY as received
-    process.stdout.write(`DEBUG: [ResolutionService.resolvePath ENTRY] Received pathString: '${resolvedPathString}' (Type: ${typeof resolvedPathString})\n`); 
+
     // logger.debug(`Validating resolved path string: '${resolvedPathString}'`, { context: context.flags }); // Keep original logger debug if desired
     const validationContext = this.createValidationContext(context);
     // +++ Log Context +++
-    process.stdout.write(`DEBUG: [ResolutionService.resolvePath] ValidationContext: ${JSON.stringify(validationContext)}\n`);
+
 
     try {
       // +++ Log just before calling pathService.validatePath +++
-      process.stdout.write(`DEBUG: [ResolutionService.resolvePath] >>> Calling pathService.validatePath with pathString: '${resolvedPathString}'\n`);
+
       // Directly validate the provided resolved string
       const validatedPath = await this.pathService.validatePath(resolvedPathString, validationContext);
       // +++ Log Result +++
-      process.stdout.write(`DEBUG: [ResolutionService.resolvePath] validatePath Result: ${JSON.stringify(validatedPath)}\n`);
+
       logger.debug(`resolvePath (validation only): Successfully validated '${resolvedPathString}'`);
       
       // Return the validated MeldPath object
@@ -919,7 +919,7 @@ export class ResolutionService implements IResolutionService {
           logger.debug('Resolving interpolatedValue from StructuredPath');
           try { 
             result = await this.resolveNodes(pathObject.interpolatedValue, context);
-            process.stdout.write(`DEBUG: [resolveInContext after await resolveNodes] result: '${result}'\\n`);
+
           } catch (innerError) {
             logger.error('Error inside resolveInContext -> resolveNodes await', { innerError });
             result = ''; // Default to empty on inner error
@@ -927,13 +927,13 @@ export class ResolutionService implements IResolutionService {
         } else {
           logger.debug('No interpolatedValue on StructuredPath, returning raw string directly');
           result = String(pathObject.raw); 
-          process.stdout.write(`DEBUG: [resolveInContext using raw string] result: '${result}'\\n`);
+
         }
       } else if (typeof value === 'string') {
         logger.debug('resolveInContext: Value is plain string, calling resolveText');
         try { 
           result = await this.resolveText(value, context);
-          process.stdout.write(`DEBUG: [resolveInContext after await resolveText (string)] result: '${result}'\\n`);
+
         } catch (innerError) {
             logger.error('Error inside resolveInContext -> resolveText await', { innerError });
             result = ''; // Default to empty on inner error
@@ -948,7 +948,7 @@ export class ResolutionService implements IResolutionService {
     }
 
     // Log just before returning
-    process.stdout.write(`DEBUG: [ResolutionService.resolveInContext EXIT] Returning resolved string: '${result}'\\n`);
+
     return result; 
   }
 
