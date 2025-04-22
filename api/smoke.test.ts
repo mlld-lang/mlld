@@ -1,45 +1,44 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { processMeld, ProcessOptions } from '@api/index.js';
-// import { container, DependencyContainer } from 'tsyringe'; // No longer needed here
+import { container, DependencyContainer } from 'tsyringe'; // Need this
 import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-// import type { ILogger } from '@core/utils/logger.js'; // No longer needed here
-// import logger from '@core/utils/logger.js'; // No longer needed here
-import { StateService } from '@services/state/StateService.js';
-import type { IStateService } from '@services/state/IStateService.js';
+import { logger } from '@core/utils/logger'; // Need this
+import type { ILogger } from '@core/utils/logger'; // Need this
+import { StateService } from '@services/state/StateService/StateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 describe('API Smoke Tests', () => {
-  // let testContainer: DependencyContainer; // No longer needed here
+  let testContainer: DependencyContainer; // Restore this
   let memFs: MemfsTestFileSystem;
 
   beforeEach(async () => {
-    // Only need MemFS for setup now
-    memFs = new MemfsTestFileSystem(); 
-    // testContainer = container.createChildContainer(); // Removed
-    // // Register ONLY essential instances needed for basic operation
-    // testContainer.registerInstance<IFileSystem>('IFileSystem', memFs); // Removed
-    // testContainer.registerInstance('DependencyContainer', testContainer); // Removed
-    // // Register Logger (often required early by many services)
-    // testContainer.registerInstance('MainLogger', logger); // Removed
-    // testContainer.register('ILogger', { useToken: 'MainLogger' }); // Removed
+    memFs = new MemfsTestFileSystem();
+    testContainer = container.createChildContainer(); // Restore this
+
+    // Register essential instances
+    testContainer.registerInstance<IFileSystem>('IFileSystem', memFs); // Restore this
+    testContainer.registerInstance('DependencyContainer', testContainer); // Restore this
+    testContainer.registerInstance<ILogger>('MainLogger', logger); // Restore logger registration
+    testContainer.register('ILogger', { useToken: 'MainLogger' }); // Restore logger registration
+
+    // Register StateService correctly
     testContainer.registerSingleton(StateService, StateService);
     testContainer.registerSingleton('IStateService', { useToken: StateService });
-    testContainer.registerInstance<IStateService | null>('ParentStateServiceForChild', null); // Fix DI error
 
-    // Register other services or factories
+    // NOTE: We might need more registrations here if processMeld requires them even for smoke tests.
   });
 
   afterEach(async () => {
-    // testContainer?.dispose(); // Removed
-    // No cleanup needed here anymore for the container
+    testContainer?.dispose(); // Restore this for proper cleanup
   });
 
   it('should process simple text content correctly', async () => {
     const content = `Just some plain text.`;
     const options: Partial<ProcessOptions> = {
       format: 'markdown',
-      fs: memFs as any // Pass MemFS directly if needed by processMeld internally (or mock globally)
-      // container: testContainer // REMOVED
+      fs: memFs as any, // Pass MemFS directly if needed by processMeld internally (or mock globally)
+      container: testContainer // Restore passing the container
     };
 
     let result: string | undefined;
@@ -64,8 +63,8 @@ Hello {{message}}!`;
     
     const options: Partial<ProcessOptions> = {
       format: 'markdown',
-      fs: memFs as any // Pass MemFS directly if needed
-      // container: testContainer // REMOVED
+      fs: memFs as any, // Pass MemFS directly if needed
+      container: testContainer // Restore passing the container
     };
     
     let result: string | undefined;

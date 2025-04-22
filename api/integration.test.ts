@@ -102,7 +102,6 @@ describe('API Integration Tests', () => {
     // Register Real Services (Singleton State)
     testContainer.registerSingleton(StateService, StateService);
     testContainer.registerSingleton('IStateService', { useToken: StateService });
-    testContainer.registerInstance<IStateService | null>('ParentStateServiceForChild', null);
     testContainer.registerSingleton('IResolutionService', ResolutionService);
     testContainer.registerSingleton('IParserService', ParserService);
     testContainer.registerSingleton('IInterpreterService', InterpreterService);
@@ -278,6 +277,8 @@ First feature: {{config.app.features.0}}
         throw error;
       }
     });
+
+    it.todo('should handle nested array access (e.g., arr.1.1)'); // Placeholder for nested-array.test.ts scenario
 
     it('should handle template literals in text directives', async () => {
       // Use centralized examples directly
