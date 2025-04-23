@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach, type Mock } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
 
 // --- Corrected Core Type Imports ---
 import type { JsonValue, Result } from '@core/types';
@@ -54,6 +55,7 @@ describe('VariableReferenceResolver', () => {
   let resolutionService: MockResolutionService; // Use explicit mock type
   let pathService: MockPathService; // Use explicit mock type
   let resolutionServiceClientFactory: DeepMockProxy<ResolutionServiceClientFactory>;
+  let mockResolutionClient: DeepMockProxy<IResolutionServiceClient>;
   let context: ResolutionContext;
   // Remove fileSystemService if not directly needed by this resolver/tests
   // let fileSystemService: DeepMockProxy<IFileSystemService>; 
@@ -97,6 +99,12 @@ describe('VariableReferenceResolver', () => {
         validatePath: vi.fn() as any, // Use as any to bypass type error
     };
     resolutionServiceClientFactory = mockDeep<ResolutionServiceClientFactory>();
+    mockResolutionClient = mockDeep<IResolutionServiceClient>();
+    resolutionServiceClientFactory.createClient.mockReturnValue(mockResolutionClient);
+
+    // Create a context using the factory
+    // context = ResolutionContextFactory.create(stateService, 'test.meld')
+    //           .withStrictMode(true); 
 
     // --- Restore Full Mock implementation for getVariable --- 
     stateService.getVariable.mockImplementation((name: string): MeldVariable | undefined => {
@@ -161,6 +169,9 @@ describe('VariableReferenceResolver', () => {
 
     context = ResolutionContextFactory.create(stateService, 'test.meld')
                .withStrictMode(true); 
+
+    // Mock the client's resolveNodes method for the successful recursion test
+    mockResolutionClient.resolveNodes.mockResolvedValue('Outer Hello World Inner');
   });
   
   afterEach(async () => {
@@ -342,10 +353,10 @@ describe('VariableReferenceResolver', () => {
 
       // Mock the resolutionService.resolveNodes method
       // Cast to Mock to access mock methods
-      (resolutionService.resolveNodes as Mock).mockResolvedValue('Outer Hello World Inner'); 
+      // (resolutionService.resolveNodes as Mock).mockResolvedValue('Outer Hello World Inner'); 
     });
 
-    it('should call resolutionService.resolveNodes for interpolatable variable values', async () => {
+    it('should call resolutionServiceClient.resolveNodes for interpolatable variable values', async () => {
       const node = createVariableReferenceNode('recursiveTextVar', VariableType.TEXT);
       
       const result = await resolver.resolve(node, context);
@@ -356,21 +367,24 @@ describe('VariableReferenceResolver', () => {
       // Verify getVariable was called for the outer variable
       expect(stateService.getVariable).toHaveBeenCalledWith('recursiveTextVar', VariableType.TEXT);
       
-      // Verify resolutionService.resolveNodes was called with the correct array and context
-      expect(resolutionService.resolveNodes).toHaveBeenCalledTimes(1);
-      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(
+      // Verify resolutionServiceClient.resolveNodes was called with the correct array and context
+      expect(mockResolutionClient.resolveNodes).toHaveBeenCalledTimes(1);
+      expect(mockResolutionClient.resolveNodes).toHaveBeenCalledWith(
         interpolatableValue, 
         expect.objectContaining({ depth: context.depth + 1 }) // Check context depth increased
       );
     });
 
-    it('should throw MeldResolutionError if resolutionService is missing during recursion', async () => {
-      // Manually instantiate the resolver, passing mocks for required dependencies
-      // and explicitly passing undefined for the optional resolutionService.
-      const resolverWithoutService = new VariableReferenceResolver(
-        stateService,      // Mock stateService from beforeEach
-        pathService as any, // Mock pathService from beforeEach
-        resolutionServiceClientFactory as any,
+    it('should throw MeldResolutionError if resolutionServiceClient is missing during recursion', async () => {
+      // --- Temporarily configure factory to return undefined client for THIS test ---
+      resolutionServiceClientFactory.createClient.mockReturnValue(undefined as any);
+
+      // Instantiate the resolver normally, passing the re-configured factory.
+      // This will cause `this.resolutionClient` to be undefined inside the instance.
+      const resolverWithoutClient = new VariableReferenceResolver(
+        stateService,       // Mock stateService from beforeEach
+        pathService as any,  // Mock pathService from beforeEach
+        resolutionServiceClientFactory as any, // Pass the factory (now returns undefined client)
         parserService as any // Mock parserService from beforeEach
       );
 
@@ -378,13 +392,15 @@ describe('VariableReferenceResolver', () => {
 
       // The resolve call should now definitely hit the check for the missing service
       await expectToThrowWithConfig(async () => {
-        await resolverWithoutService.resolve(node, context);
+        await resolverWithoutClient.resolve(node, context);
       }, {
         type: 'MeldResolutionError',
         code: 'E_SERVICE_UNAVAILABLE',
-        messageContains: 'Cannot recursively resolve variable: ResolutionService instance is missing'
+        messageContains: 'Cannot recursively resolve variable: ResolutionServiceClient is missing'
       });
-      // No container to dispose for this specific test
+
+      // --- Restore factory mock for subsequent tests (if any) ---
+      resolutionServiceClientFactory.createClient.mockReturnValue(mockResolutionClient);
     });
 
   });
