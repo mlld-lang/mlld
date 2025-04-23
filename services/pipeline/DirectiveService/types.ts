@@ -14,7 +14,10 @@ export interface VariableValueDefinition {
 }
 
 // Re-export core types for local usage if needed, though direct import is preferred
-export type DirectiveResult = CoreDirectiveResult;
+export interface DirectiveResult extends CoreDirectiveResult {
+  transformedContent?: string; // Optional string content to replace the directive node
+}
+
 export type StateChanges = CoreStateChanges;
 
 // TODO: Review if VariableValueDefinition is still needed or if core VariableDefinition suffices.

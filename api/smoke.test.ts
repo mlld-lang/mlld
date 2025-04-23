@@ -7,12 +7,16 @@ import { logger } from '@core/utils/logger';
 import type { ILogger } from '@core/utils/logger';
 import { StateService } from '@services/state/StateService/StateService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 
 describe('API Smoke Tests', () => {
   let context: TestContextDI;
 
   beforeEach(async () => {
-    context = await TestContextDI.createTestHelpers().setupWithStandardMocks();
+    // Provide the REAL ResolutionService to prevent the mock from being used
+    context = await TestContextDI.createTestHelpers().setupWithStandardMocks({
+      'IResolutionService': ResolutionService 
+    });
   });
 
   afterEach(async () => {

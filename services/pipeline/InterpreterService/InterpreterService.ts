@@ -432,7 +432,10 @@ export class InterpreterService implements IInterpreterService {
           currentState = intermediateState;
           
           // <<< ADDED: Validate DirectiveResult structure >>>
-          if (node.type === 'Directive' && nodeResult && (typeof nodeResult !== 'object' || (nodeResult.stateChanges === undefined && nodeResult.replacement === undefined))) {
+          if (node.type === 'Directive' && nodeResult && 
+              (typeof nodeResult !== 'object' || 
+               (nodeResult.stateChanges === undefined && nodeResult.replacement === undefined && nodeResult.transformedContent === undefined)))
+          {
             logger.error('Invalid result type returned from directive handler client after interpretNode', { nodeResult, nodeId: node.nodeId, kind: (node as DirectiveNode).directive.kind });
             throw new MeldInterpreterError(
               `Invalid result type returned from directive handler client for directive '${(node as DirectiveNode).directive.kind}'`, 
