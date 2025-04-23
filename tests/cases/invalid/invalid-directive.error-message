@@ -1,1 +1,1 @@
-Unknown directive: nonexistent 
+Parse error: Parse error: Expected "data", "define", "embed", "import", "path", "run", "text", or "var" but "n" found. at line 5, column 2

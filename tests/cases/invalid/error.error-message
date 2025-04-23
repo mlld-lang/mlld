@@ -1,1 +1,1 @@
-undefined variable: nonexistent
+Parse error: Parse error: Expected [a-zA-Z_] or whitespace but "=" found. at line 3, column 7

@@ -3,12 +3,13 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { main } from '@api/index.js';
+import { processMeld } from '@api/index.js';
 import { findFiles, getTestCaseName, setupTestContext, VALID_CASES_DIR, EXPECTED_EXTENSION } from '@tests/e2e/example-runner-setup.js';
 import { promises as realFs } from 'fs';
 import type { Services } from '@core/types.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystemService.js';
 
-describe.skip('Valid Meld Test Cases', async () => {
+describe('Valid Meld Test Cases', async () => {
   const validTestCases = await findFiles(VALID_CASES_DIR, '.mld');
   const context = await setupTestContext(validTestCases);
   
@@ -24,7 +25,7 @@ describe.skip('Valid Meld Test Cases', async () => {
   for (const testPath of validTestCases) {
     const testName = getTestCaseName(testPath);
     
-    it.skip(`processes ${testName} correctly`, async () => {
+    it(`processes ${testName} correctly`, async () => {
       // Create a complete mock CommandExecutionService
       const mockCommandExecutionService = {
         executeShellCommand: vi.fn().mockImplementation(async (command) => {
@@ -38,20 +39,15 @@ describe.skip('Valid Meld Test Cases', async () => {
       // Re-register the mock to ensure it's available
       context.registerMock('ICommandExecutionService', mockCommandExecutionService);
       
-      // Process through API with properly structured services
-      const services = {
-        ...context.services,
-        // Need to provide commandExecution property directly for main function
-        commandExecution: mockCommandExecutionService 
-      };
+      // Read file content using context.fs
+      const fileContent = await (context.fs as IFileSystem).readFile(testPath);
       
-      const result = await main(testPath, {
-        fs: context.services.filesystem as any,
-        services: services as unknown as Partial<Services>,
-        transformation: true,
-        format: 'markdown'
+      // Process through processMeld API with DI container
+      const result = await processMeld(fileContent, { 
+        container: context.container.getContainer(),
+        sourcePath: testPath // Provide source path for context if needed
       });
-      
+
       // Verify basic expectations
       expect(result).toBeDefined();
       expect(typeof result).toBe('string');
