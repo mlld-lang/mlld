@@ -4,16 +4,16 @@ import type {
     StructuredPath, 
     Field, 
     VariableReferenceNode 
-} from '@core/syntax/types/nodes.js';
-import type { MeldVariable, VariableType } from '@core/types/variables.js';
-import type { ResolutionContext, FormattingContext } from '@core/types/resolution.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { MeldPath, PathValidationContext } from '@core/types/paths.js';
+} from '@core/syntax/types/nodes';
+import type { MeldVariable, VariableType } from '@core/types/variables';
+import type { ResolutionContext, FormattingContext } from '@core/types/resolution';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { MeldPath, PathValidationContext } from '@core/types/paths';
 import type { Result } from '@core/types';
 import type { MeldResolutionError, PathValidationError, FieldAccessError } from '@core/errors';
-import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
-import { Field as AstField } from '@core/syntax/types/shared-types.js';
-import type { JsonValue } from '@core/types/common.js';
+import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker';
+import { Field as AstField } from '@core/syntax/types/shared-types';
+import type { JsonValue } from '@core/types/common';
 import type { Location } from '@core/types';
 
 export type { ResolutionContext, FormattingContext };
@@ -190,4 +190,4 @@ export interface IResolutionService {
 export type { FieldAccessError };
 export type { VariableResolutionTracker, ResolutionTrackingConfig };
 
-import type { StateServiceLike } from '@core/shared-service-types.js'; 
+import type { StateServiceLike } from '@core/shared-service-types'; 

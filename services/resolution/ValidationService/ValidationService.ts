@@ -1,20 +1,20 @@
-import type { DirectiveNode } from '@core/syntax/types/index.js';
-import { validationLogger as logger } from '@core/utils/logger.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
-import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
-import { Service } from '@core/ServiceProvider.js';
+import type { DirectiveNode } from '@core/syntax/types';
+import { validationLogger as logger } from '@core/utils/logger';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
+import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { ErrorSeverity } from '@core/errors/MeldError';
+import { Service } from '@core/ServiceProvider';
 import { injectable } from 'tsyringe';
 
 // Import default validators
-import { validateTextDirective } from '@services/resolution/ValidationService/validators/TextDirectiveValidator.js';
-import { validateDataDirective } from '@services/resolution/ValidationService/validators/DataDirectiveValidator.js';
-import { validateImportDirective } from '@services/resolution/ValidationService/validators/ImportDirectiveValidator.js';
-import { validateEmbedDirective } from '@services/resolution/ValidationService/validators/EmbedDirectiveValidator.js';
-import { validatePathDirective } from '@services/resolution/ValidationService/validators/PathDirectiveValidator.js';
-import { validateDefineDirective } from '@services/resolution/ValidationService/validators/DefineDirectiveValidator.js';
-import { validateRunDirective } from '@services/resolution/ValidationService/validators/RunDirectiveValidator.js';
+import { validateTextDirective } from '@services/resolution/ValidationService/validators/TextDirectiveValidator';
+import { validateDataDirective } from '@services/resolution/ValidationService/validators/DataDirectiveValidator';
+import { validateImportDirective } from '@services/resolution/ValidationService/validators/ImportDirectiveValidator';
+import { validateEmbedDirective } from '@services/resolution/ValidationService/validators/EmbedDirectiveValidator';
+import { validatePathDirective } from '@services/resolution/ValidationService/validators/PathDirectiveValidator';
+import { validateDefineDirective } from '@services/resolution/ValidationService/validators/DefineDirectiveValidator';
+import { validateRunDirective } from '@services/resolution/ValidationService/validators/RunDirectiveValidator';
 
 /**
  * Map of directive error codes to severity levels
