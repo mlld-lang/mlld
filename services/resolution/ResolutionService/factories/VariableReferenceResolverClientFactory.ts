@@ -14,6 +14,7 @@ import { IParserServiceClient } from '@services/pipeline/ParserService/interface
 import { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types/nodes';
 import { ResolutionContextFactory } from '../ResolutionContextFactory';
 import { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference';
+import { createVariableReferenceNode } from '@core/syntax/types/variables';
 
 /**
  * Factory for creating variable reference resolver clients
@@ -59,8 +60,20 @@ export class VariableReferenceResolverClientFactory {
       /**
        * Resolves all variable references in the given text
        */
-      resolve: (text: string, context: ResolutionContext): Promise<string> => {
-        return this.variableReferenceResolver.resolve(text, context);
+      resolve: async (text: string, context: ResolutionContext): Promise<string> => {
+        // Create a variable reference node for the text
+        const varRefNode = createVariableReferenceNode(
+          text,
+          'text', // Default to text type for string resolution
+          [], // No fields
+          undefined, // No format
+          {
+            start: { line: 0, column: 0 },
+            end: { line: 0, column: 0 }
+          }
+        );
+
+        return await this.variableReferenceResolver.resolve(varRefNode, context);
       },
       
       /**
@@ -72,16 +85,17 @@ export class VariableReferenceResolverClientFactory {
         context: ResolutionContext,
         options?: FieldAccessOptions
       ): Promise<any> => {
-        // Create a variable reference node to resolve the base variable
-        const varRefNode: VariableReferenceNode = {
-          type: 'VariableReference',
-          identifier: varName,
-          fields: [],
-          location: {
+        // Create a variable reference node using the helper function
+        const varRefNode = createVariableReferenceNode(
+          varName,
+          'data', // Default to data type since we're accessing fields
+          [], // No fields in the node since we'll process them separately
+          undefined, // No format
+          {
             start: { line: 0, column: 0 },
             end: { line: 0, column: 0 }
           }
-        };
+        );
 
         // Get the base variable value first
         const baseValue = await this.variableReferenceResolver.resolve(varRefNode, context);

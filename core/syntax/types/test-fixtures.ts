@@ -214,12 +214,13 @@ export const embedTests: ParserTestCase[] = [
 
 export const embedInvalidTests: ParserTestCase[] = [
   {
-    name: 'empty-path',
-    description: 'Embed directive with empty path',
+    name: 'invalid-path',
+    description: 'Embed directive with invalid path',
     input: '@embed []',
     expected: {
       type: 'Error',
-      error: 'Path cannot be empty'
+      nodeId: 'test-error-3',
+      error: 'Invalid path'
     }
   }
 ];
@@ -228,24 +229,26 @@ export const embedInvalidTests: ParserTestCase[] = [
 export const importTests: ParserTestCase[] = [
   {
     name: 'simple-import',
-    description: 'Import directive with path',
-    input: '@import [utilities.meld]',
+    description: 'Import directive with simple path',
+    input: '@import [name] from [path/to/file.md]',
     expected: {
       type: 'Directive',
+      nodeId: 'test-node-8',
       directive: {
         kind: 'import',
-        subtype: 'importAll',
-        imports: [{ name: '*', alias: null }],
+        subtype: 'importPath',
+        imports: [
+          { name: 'name', alias: null }
+        ],
         path: {
-          raw: 'utilities.meld',
+          raw: 'path/to/file.md',
           interpolatedValue: [
-            { type: 'Text', content: 'utilities.meld' }
+            { type: 'Text', content: 'path/to/file.md' }
           ],
-          normalized: './utilities.meld',
+          normalized: 'path/to/file.md',
           structured: {
             base: '.',
-            cwd: true,
-            segments: ['utilities.meld'],
+            segments: ['path', 'to', 'file.md'],
             variables: {}
           }
         }
@@ -253,58 +256,58 @@ export const importTests: ParserTestCase[] = [
     }
   },
   {
-    name: 'import-path-variable',
-    description: 'Import with path variable',
-    input: '@import [$pathvar]',
+    name: 'import-with-variable',
+    description: 'Import directive with variable in path',
+    input: '@import [name] from [${path}]',
     expected: {
       type: 'Directive',
+      nodeId: 'test-node-9',
       directive: {
         kind: 'import',
-        subtype: 'importAll',
-        imports: [{ name: '*', alias: null }],
+        subtype: 'importPath',
+        imports: [
+          { name: 'name', alias: null }
+        ],
         path: {
-          raw: '$pathvar',
+          raw: '${path}',
           interpolatedValue: [
-            { type: 'VariableReference', valueType: 'path', identifier: 'pathvar', isSpecial: false, isVariableReference: true }
+            { type: 'Text', valueType: 'path', identifier: 'path', isSpecial: false, isVariableReference: true }
           ],
-          normalized: './$pathvar',
+          normalized: '${path}',
           isPathVariable: true,
           structured: {
             base: '.',
-            cwd: false,
-            segments: ['$pathvar'],
-            variables: {
-              path: ['pathvar']
-            }
+            segments: ['${path}'],
+            variables: { path: true }
           }
         }
       }
     }
   },
   {
-    name: 'import-homepath',
-    description: 'Import with HOMEPATH variable',
-    input: '@import [$HOMEPATH/config.meld]',
+    name: 'import-with-special-var',
+    description: 'Import directive with special variable in path',
+    input: '@import [name] from [${__cwd}/file.md]',
     expected: {
       type: 'Directive',
+      nodeId: 'test-node-10',
       directive: {
         kind: 'import',
-        subtype: 'importAll',
-        imports: [{ name: '*', alias: null }],
+        subtype: 'importPath',
+        imports: [
+          { name: 'name', alias: null }
+        ],
         path: {
-          raw: '$HOMEPATH/config.meld',
+          raw: '${__cwd}/file.md',
           interpolatedValue: [
-            { type: 'VariableReference', valueType: 'path', identifier: 'HOMEPATH', isSpecial: true, isVariableReference: true },
-            { type: 'Text', content: '/config.meld' }
+            { type: 'Text', valueType: 'path', identifier: '__cwd', isSpecial: true, isVariableReference: true },
+            { type: 'Text', content: '/file.md' }
           ],
-          normalized: '$HOMEPATH/config.meld',
+          normalized: '${__cwd}/file.md',
           structured: {
-            base: '$HOMEPATH',
-            cwd: false,
-            segments: ['config.meld'],
-            variables: {
-              special: ['HOMEPATH']
-            }
+            base: '.',
+            segments: ['${__cwd}', 'file.md'],
+            variables: { __cwd: true }
           }
         }
       }
@@ -314,12 +317,13 @@ export const importTests: ParserTestCase[] = [
 
 export const importInvalidTests: ParserTestCase[] = [
   {
-    name: 'missing-path',
-    description: 'Import directive without path',
-    input: '@import []',
+    name: 'invalid-import',
+    description: 'Import directive with invalid syntax',
+    input: '@import [name] from',
     expected: {
       type: 'Error',
-      error: 'Path cannot be empty'
+      nodeId: 'test-error-4',
+      error: 'Invalid import syntax'
     }
   }
 ];
@@ -327,15 +331,19 @@ export const importInvalidTests: ParserTestCase[] = [
 // Run directive test cases
 export const runTests: ParserTestCase[] = [
   {
-    name: 'simple-command',
+    name: 'simple-run',
     description: 'Run directive with simple command',
-    input: '@run [echo hello world]',
+    input: '@run [ls -la]',
     expected: {
       type: 'Directive',
+      nodeId: 'test-node-11',
       directive: {
         kind: 'run',
         command: [
-          { type: 'Text', content: 'echo hello world' }
+          {
+            type: 'Text',
+            content: 'ls -la',
+          }
         ],
         subtype: 'runCommand'
       }
@@ -345,12 +353,13 @@ export const runTests: ParserTestCase[] = [
 
 export const runInvalidTests: ParserTestCase[] = [
   {
-    name: 'empty-command',
-    description: 'Run directive with empty command',
+    name: 'invalid-run',
+    description: 'Run directive with invalid syntax',
     input: '@run []',
     expected: {
       type: 'Error',
-      error: 'Command cannot be empty'
+      nodeId: 'test-error-5',
+      error: 'Invalid command'
     }
   }
 ];
@@ -358,11 +367,12 @@ export const runInvalidTests: ParserTestCase[] = [
 // Text directive test cases
 export const textTests: ParserTestCase[] = [
   {
-    name: 'text-variable',
-    description: 'Text directive with variable value',
+    name: 'simple-text',
+    description: 'Text directive with simple value',
     input: '@text greeting = "Hello, world!"',
     expected: {
       type: 'Directive',
+      nodeId: 'test-node-12',
       directive: {
         kind: 'text',
         identifier: 'greeting',
@@ -370,7 +380,7 @@ export const textTests: ParserTestCase[] = [
         value: [
           {
             type: 'Text',
-            content: 'Hello, world!',
+            content: 'Hello, world!'
           }
         ]
       }
@@ -380,12 +390,13 @@ export const textTests: ParserTestCase[] = [
 
 export const textInvalidTests: ParserTestCase[] = [
   {
-    name: 'missing-value',
-    description: 'Text directive without value',
+    name: 'invalid-text',
+    description: 'Text directive with invalid syntax',
     input: '@text greeting =',
     expected: {
       type: 'Error',
-      error: 'Value is required'
+      nodeId: 'test-error-6',
+      error: 'Invalid text value'
     }
   }
 ];
