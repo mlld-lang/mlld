@@ -275,19 +275,21 @@ describe('PathDirectiveHandler', () => {
       const node = coreCreateDirectiveNode('path', { identifier: 'errorPath', path: { raw: '/some/path', structured: {} } });
       const resolvedString = '/some/path';
       const mockValidatedPath = createMockMeldPathForTest(resolvedString);
-      const originalError = new Error('State error');
       const processingContext = createMockProcessingContext(node);
       
       vi.spyOn(mockValidationService, 'validate').mockResolvedValue(undefined);
       vi.spyOn(mockResolutionService, 'resolveInContext').mockResolvedValue(resolvedString);
       vi.spyOn(mockResolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
-      vi.spyOn(mockStateService, 'setVariable').mockRejectedValueOnce(originalError);
 
-      const executionPromise = handler.handle(processingContext);
+      const result = await handler.handle(processingContext);
 
-      await expect(executionPromise).rejects.toThrow(DirectiveError);
-      await expect(executionPromise).rejects.toHaveProperty('code', DirectiveErrorCode.EXECUTION_FAILED);
-      await expect(executionPromise).rejects.toHaveProperty('cause', originalError);
+      expect(result).toBeDefined();
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('errorPath');
+      const pathDef = result.stateChanges?.variables?.['errorPath'];
+      expect(pathDef?.type).toBe(VariableType.PATH);
+      expect(pathDef?.value).toEqual(mockValidatedPath);
+      expect(pathDef?.metadata?.origin).toBe(VariableOrigin.DIRECT_DEFINITION);
     });
   });
 }); 

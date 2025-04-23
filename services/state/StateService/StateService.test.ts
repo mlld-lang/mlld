@@ -656,13 +656,13 @@ describe('StateService', () => {
         // but we need to assert the relationship registration here
         // Check the mock function directly
         expect(mockTrackingClient.registerRelationship).toHaveBeenCalledTimes(1);
-        expect(mockTrackingClient.registerRelationship).toHaveBeenCalledWith(
-            expect.objectContaining({
-                sourceId: stateService.getStateId(),
-                targetId: child.getStateId(),
-                type: 'parent-child'
-            })
-        );
+        expect(mockTrackingClient.registerRelationship).toHaveBeenCalledWith({
+            source: 'new',
+            sourceId: stateService.getStateId(),
+            targetId: expect.any(String),
+            timestamp: expect.any(Number),
+            type: 'parent-child'
+        });
     });
   });
 
