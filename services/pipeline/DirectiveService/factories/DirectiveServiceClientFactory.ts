@@ -1,13 +1,13 @@
 import { injectable, inject } from 'tsyringe';
-import type { IDirectiveService } from '../IDirectiveService.js';
-import type { IDirectiveServiceClient } from '../interfaces/IDirectiveServiceClient.js';
-import type { IDirectiveServiceClientFactory } from './IDirectiveServiceClientFactory.js';
-import { Service } from '@core/ServiceProvider.js';
-import type { DirectiveProcessingContext } from '@core/types/index.js';
-import type { MeldNode, DirectiveNode } from '@core/syntax/types/index.js';
-import type { StateServiceLike } from '@core/shared-service-types.js';
+import type { IDirectiveService } from '../IDirectiveService';
+import type { IDirectiveServiceClient } from '../interfaces/IDirectiveServiceClient';
+import type { IDirectiveServiceClientFactory } from './IDirectiveServiceClientFactory';
+import { Service } from '@core/ServiceProvider';
+import type { DirectiveProcessingContext } from '@core/types/index';
+import type { MeldNode, DirectiveNode } from '@core/syntax/types/index';
+import type { StateServiceLike } from '@core/shared-service-types';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
 
 /**
  * Factory for creating DirectiveServiceClient instances.

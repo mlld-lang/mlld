@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
-import type { StateEvent, StateEventHandler, IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
+import { StateEventService } from '@services/state/StateEventService/StateEventService';
+import type { StateEvent, StateEventHandler, IStateEventService } from '@services/state/StateEventService/IStateEventService';
 // Remove TestContextDI import if no longer needed for anything else
-// import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+// import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import { container, type DependencyContainer } from 'tsyringe'; // Import container and type
 
 describe('StateEventService', () => {

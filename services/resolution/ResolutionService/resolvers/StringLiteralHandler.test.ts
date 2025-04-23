@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { StringLiteralHandler } from '@services/resolution/ResolutionService/resolvers/StringLiteralHandler.js';
-import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { StringLiteralHandler } from '@services/resolution/ResolutionService/resolvers/StringLiteralHandler';
+import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError';
+import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService';
+import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
 import { mockDeep, type MockedObjectDeep } from 'vitest-mock-extended';
 import { container, type DependencyContainer } from 'tsyringe';
 

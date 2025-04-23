@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi, Mock, afterEach } from 'vitest';
-import { TestVisualizationManager, TestOutputVerbosity } from '@tests/utils/debug/StateVisualizationService/TestVisualizationManager.js';
-import { StateVisualizationFileOutput } from '@tests/utils/debug/StateVisualizationService/FileOutputService.js';
-import { CompactStateVisualization } from '@tests/utils/debug/StateVisualizationService/CompactStateVisualization.js';
-import { IStateVisualizationService } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
-import { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
-import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { TestVisualizationManager, TestOutputVerbosity } from '@tests/utils/debug/StateVisualizationService/TestVisualizationManager';
+import { StateVisualizationFileOutput } from '@tests/utils/debug/StateVisualizationService/FileOutputService';
+import { CompactStateVisualization } from '@tests/utils/debug/StateVisualizationService/CompactStateVisualization';
+import { IStateVisualizationService } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService';
+import { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService';
+import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
 import fs from 'fs';
 import path from 'path';
-import { serviceLogger } from '@core/utils/logger.js';
+import { serviceLogger } from '@core/utils/logger';
 
 // Mock dependencies
 vi.mock('fs');

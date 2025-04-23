@@ -1,23 +1,23 @@
-import { DirectiveNode, DirectiveData } from '@core/syntax/types/index.js';
-import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { directiveLogger as logger } from '@core/utils/logger.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { DirectiveNode, DirectiveData } from '@core/syntax/types/index';
+import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { directiveLogger as logger } from '@core/utils/logger';
+import { ErrorSeverity } from '@core/errors/MeldError';
 import { inject, injectable, container } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
+import { Service } from '@core/ServiceProvider';
 import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, VariableMetadata, VariableType, createPathVariable } from '@core/types';
 import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
-import { VariableOrigin } from '@core/types/variables.js';
-import type { SourceLocation } from '@core/types/common.js';
-import type { DirectiveProcessingContext } from '@core/types/index.js';
-import type { ResolutionContext } from '@core/types/resolution.js';
-import type { PathDirectiveData } from '@core/syntax/types/directives.js';
+import { VariableOrigin } from '@core/types/variables';
+import type { SourceLocation } from '@core/types/common';
+import type { DirectiveProcessingContext } from '@core/types/index';
+import type { ResolutionContext } from '@core/types/resolution';
+import type { PathDirectiveData } from '@core/syntax/types/directives';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
-import type { StructuredPath } from '@core/syntax/types/nodes.js';
+import type { StructuredPath } from '@core/syntax/types/nodes';
 
 /**
  * Handler for @path directives

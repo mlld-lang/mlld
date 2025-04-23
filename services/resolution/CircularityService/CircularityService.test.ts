@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
-import { MeldImportError } from '@core/errors/MeldImportError.js';
-import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService';
+import { MeldImportError } from '@core/errors/MeldImportError';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
 import { container, type DependencyContainer } from 'tsyringe';
 import { mockDeep, DeepMockProxy } from 'vitest-mock-extended';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 
 describe('CircularityService', () => {
   let testContainer: DependencyContainer;

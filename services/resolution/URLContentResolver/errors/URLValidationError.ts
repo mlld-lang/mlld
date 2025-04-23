@@ -1,4 +1,4 @@
-import { URLError } from './URLError.js';
+import { URLError } from './URLError';
 
 /**
  * Error thrown when a URL is invalid

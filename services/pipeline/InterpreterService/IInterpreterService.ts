@@ -1,9 +1,9 @@
-import type { MeldNode, SourceLocation } from '@core/syntax/types/index.js';
-import type { DirectiveServiceLike } from '@core/shared-service-types.js';
-import type { MeldError } from '@core/errors/MeldError.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { InterpreterOptionsBase } from '@core/shared-service-types.js';
+import type { MeldNode, SourceLocation } from '@core/syntax/types/index';
+import type { DirectiveServiceLike } from '@core/shared-service-types';
+import type { MeldError } from '@core/errors/MeldError';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
+import type { InterpreterOptionsBase } from '@core/shared-service-types';
 
 /**
  * Error handler function type for handling Meld errors during interpretation.

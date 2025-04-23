@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CommandResolver } from '@services/resolution/ResolutionService/resolvers/CommandResolver';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
 import { 
   VariableType, 
   CommandVariable, 
@@ -11,7 +11,7 @@ import {
 } from '@core/types';
 import { ResolutionContext } from '@core/types/resolution';
 import { MeldResolutionError } from '@core/errors/index';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
 import { mockDeep } from 'vitest-mock-extended';
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils';
 import { container, type DependencyContainer, injectable } from 'tsyringe'; // Added injectable for mock

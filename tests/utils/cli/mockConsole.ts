@@ -76,8 +76,8 @@ export function mockConsole(): MockConsoleResult {
  * Example usage:
  * 
  * ```typescript
- * import { mockConsole } from '@tests/utils/cli/mockConsole.js';
- * import { mockProcessExit } from '@tests/utils/cli/mockProcessExit.js';
+ * import { mockConsole } from '@tests/utils/cli/mockConsole';
+ * import { mockProcessExit } from '@tests/utils/cli/mockProcessExit';
  * 
  * it('should display error message for missing file', async () => {
  *   const { mocks, restore } = mockConsole();

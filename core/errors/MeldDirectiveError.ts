@@ -1,4 +1,4 @@
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
 
 export interface DirectiveLocation {
   line: number;

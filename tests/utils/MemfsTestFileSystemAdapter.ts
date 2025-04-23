@@ -1,5 +1,5 @@
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
+import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem';
 
 import { vi } from 'vitest';
 

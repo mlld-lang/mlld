@@ -1,17 +1,17 @@
 import { vi } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
-import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
-import type { MeldNode, TextNode } from '@core/syntax/types/index.js';
-import { createTextNode, createLocation } from '@tests/utils/testFactories.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { MockFactory } from '@tests/utils/mocks/MockFactory';
+import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
+import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
+import type { MeldNode, TextNode } from '@core/syntax/types/index';
+import { createTextNode, createLocation } from '@tests/utils/testFactories';
 
 /**
  * Options for configuring the InterpreterTestFixture

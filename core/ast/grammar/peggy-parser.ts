@@ -1,5 +1,5 @@
 // Generated TypeScript parser
-import type { MeldNode } from '@core/syntax/types.js';
+import type { MeldNode } from '@core/syntax/types';
 
 // Define return type for the parser
 type ParseFunction = (input: string, options?: any) => MeldNode[];

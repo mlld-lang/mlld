@@ -1,32 +1,32 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
-import { createDataDirective, createLocation, createDirectiveNode } from '@tests/utils/testFactories.js';
-// import { TestContextDI } from '@tests/utils/di/TestContextDI.js'; // Removed
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { DirectiveNode, InterpolatableValue } from '@core/syntax/types/nodes.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { dataDirectiveExamples } from '@core/syntax/index.js';
-// import { MockFactory } from '@tests/utils/mocks/MockFactory.js'; // Removed
-import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
-import type { DirectiveProcessingContext } from '@core/types/index.js';
+import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler';
+import { createDataDirective, createLocation, createDirectiveNode } from '@tests/utils/testFactories';
+// import { TestContextDI } from '@tests/utils/di/TestContextDI'; // Removed
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import type { DirectiveNode, InterpolatableValue } from '@core/syntax/types/nodes';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { dataDirectiveExamples } from '@core/syntax/index';
+// import { MockFactory } from '@tests/utils/mocks/MockFactory'; // Removed
+import { isInterpolatableValueArray } from '@core/syntax/types/guards';
+import type { DirectiveProcessingContext } from '@core/types/index';
 import { JsonValue, VariableType, VariableMetadata, VariableOrigin, createDataVariable, MeldVariable } from '@core/types';
-import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError';
+import { ErrorSeverity } from '@core/errors/MeldError';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
-// import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture.js'; // Removed
-import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
-import { PathPurpose } from '@core/types/paths.js';
+// import { DirectiveTestFixture } from '@tests/utils/fixtures/DirectiveTestFixture'; // Removed
+import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils';
+import { PathPurpose } from '@core/types/paths';
 import * as path from 'path';
 import type { 
     ResolutionFlags, 
     PathResolutionContext, 
     FormattingContext,
     ParserFlags
- } from '@core/types/resolution.js';
+ } from '@core/types/resolution';
 import { container, type DependencyContainer } from 'tsyringe';
 import { mockDeep, DeepMockProxy } from 'vitest-mock-extended';
 

@@ -5,26 +5,26 @@ import type {
     TextNode, 
     StructuredPath 
 } from '@core/syntax/types/nodes'; 
-import type { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { directiveLogger as logger } from '@core/utils/logger.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import type { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
+import { directiveLogger as logger } from '@core/utils/logger';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { ErrorSeverity, FieldAccessError, PathValidationError, MeldResolutionError } from '@core/errors';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { inject, injectable } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import type { VariableMetadata, VariableDefinition } from '@core/types/variables.js';
-import { VariableType, VariableOrigin, createTextVariable } from '@core/types/variables.js';
-import type { SourceLocation } from '@core/types/common.js';
+import { Service } from '@core/ServiceProvider';
+import type { VariableMetadata, VariableDefinition } from '@core/types/variables';
+import { VariableType, VariableOrigin, createTextVariable } from '@core/types/variables';
+import type { SourceLocation } from '@core/types/common';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards'; 
-import { ICommandDefinition, isBasicCommand } from '@core/types/define.js'; 
-import type { DirectiveProcessingContext } from '@core/types/index.js';
+import { ICommandDefinition, isBasicCommand } from '@core/types/define'; 
+import type { DirectiveProcessingContext } from '@core/types/index';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler'; 
 import { DirectiveKind } from '@core/syntax/types/directives'; 
-import { isCommandVariable } from '@core/types/guards.js';
+import { isCommandVariable } from '@core/types/guards';
 
 interface EmbedRHSStructure {
     subtype: 'embedPath' | 'embedVariable' | 'embedTemplate';

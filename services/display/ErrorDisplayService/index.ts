@@ -2,5 +2,5 @@
  * Error Display Service index
  */
 
-export * from './ErrorDisplayService.js';
-export type { IErrorDisplayService } from './IErrorDisplayService.js';
+export * from './ErrorDisplayService';
+export type { IErrorDisplayService } from './IErrorDisplayService';

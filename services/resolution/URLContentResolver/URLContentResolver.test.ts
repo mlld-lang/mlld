@@ -1,5 +1,5 @@
-import { URLContentResolver } from './URLContentResolver.js';
-import { URLSecurityError, URLValidationError } from './errors/index.js';
+import { URLContentResolver } from './URLContentResolver';
+import { URLSecurityError, URLValidationError } from './errors/index';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 describe('URLContentResolver', () => {

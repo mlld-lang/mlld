@@ -11,9 +11,9 @@
  *   --transform      Enable transformation mode
  */
 
-import { main } from '@api/index.js';
-import type { ProcessOptions } from '@core/types/index.js';
-import type { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
+import { main } from '@api/index';
+import type { ProcessOptions } from '@core/types/index';
+import type { OutputFormat } from '@services/pipeline/OutputService/IOutputService';
 import path from 'path';
 
 async function run() {

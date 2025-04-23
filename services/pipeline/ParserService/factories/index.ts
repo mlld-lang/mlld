@@ -1,1 +1,1 @@
-export * from './ParserServiceClientFactory.js'; 
+export * from './ParserServiceClientFactory'; 

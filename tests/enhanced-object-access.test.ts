@@ -3,7 +3,7 @@
  * introduced in Phase 2 of the P0 fixing plan.
  */
 import { describe, expect, it } from 'vitest';
-import { runMeld, runMeldWithTransformation } from '@api/run-meld.js';
+import { runMeld, runMeldWithTransformation } from '@api/run-meld';
 
 describe('Enhanced Object Access and Formatting', () => {
   describe('Field Access', () => {

@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { container, injectable } from 'tsyringe';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
-import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
-import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
-import type { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
-import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
+import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
+import type { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
 import { mockDeep } from 'vitest-mock-extended';
-import { Service } from '@core/ServiceProvider.js';
+import { Service } from '@core/ServiceProvider';
 import type { VariableReferenceNode } from '@core/ast/ast/astTypes';
 import { VariableType } from '@core/types';
 

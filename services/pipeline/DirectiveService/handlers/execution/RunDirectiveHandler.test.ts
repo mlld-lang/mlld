@@ -12,51 +12,51 @@ vi.mock('../../../../core/utils/logger', () => ({
 */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
-import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import type { DirectiveNode, InterpolatableValue, TextNode, VariableReferenceNode } from '@core/syntax/types/nodes.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler';
+import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import type { DirectiveNode, InterpolatableValue, TextNode, VariableReferenceNode } from '@core/syntax/types/nodes';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { runDirectiveExamples } from '@core/syntax';
 import { parse, ParseResult } from '@core/ast';
-import { ErrorSeverity, MeldError } from '@core/errors/MeldError.js';
+import { ErrorSeverity, MeldError } from '@core/errors/MeldError';
 import {
   createStateServiceMock,
   createResolutionServiceMock,
   createFileSystemServiceMock,
   createDirectiveErrorMock,
-} from '@tests/utils/mocks/serviceMocks.js';
-import type { Location, SourceLocation } from '@core/types/index.js';
+} from '@tests/utils/mocks/serviceMocks';
+import type { Location, SourceLocation } from '@core/types/index';
 import type { MockedFunction } from 'vitest';
 import { 
   createRunDirective,
   createTextNode, 
   createVariableReferenceNode, 
   createLocation 
-} from '@tests/utils/testFactories.js';
-import { VariableType, CommandVariable, VariableOrigin, TextVariable, createTextVariable } from '@core/types/variables.js';
+} from '@tests/utils/testFactories';
+import { VariableType, CommandVariable, VariableOrigin, TextVariable, createTextVariable } from '@core/types/variables';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
-import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
-import type { ResolutionContext } from '@core/types/resolution.js';
+import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index';
+import type { ResolutionContext } from '@core/types/resolution';
 import { JsonValue, Result, success } from '@core/types';
-import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
-import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils.js';
-import { VariableMetadata } from '@core/types/variables.js';
+import { isInterpolatableValueArray } from '@core/syntax/types/guards';
+import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils';
+import { VariableMetadata } from '@core/types/variables';
 import { MeldResolutionError, FieldAccessError, PathValidationError } from '@core/errors';
 import { MeldPath } from '@core/types';
-import type { ValidatedResourcePath } from '@core/types/paths.js';
+import type { ValidatedResourcePath } from '@core/types/paths';
 import type { Stats } from 'fs-extra';
-import { Field as AstField } from '@core/syntax/types/shared-types.js';
-import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import { Field as AstField } from '@core/syntax/types/shared-types';
+import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
-import type { VariableDefinition } from '@core/types/variables.js';
+import type { VariableDefinition } from '@core/types/variables';
 import { container, DependencyContainer } from 'tsyringe';
 import { mockDeep, DeepMockProxy } from 'vitest-mock-extended';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
 
 /**
  * RunDirectiveHandler Test Status

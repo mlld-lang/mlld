@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import type { DirectiveNode, DirectiveContext, TextNode, InterpolatableValue } from '@core/syntax/types.js';
-import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { createRunDirective, createLocation, createTextNode, createVariableReferenceNode } from '@tests/utils/testFactories.js';
+import type { DirectiveNode, DirectiveContext, TextNode, InterpolatableValue } from '@core/syntax/types';
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import { createRunDirective, createLocation, createTextNode, createVariableReferenceNode } from '@tests/utils/testFactories';
 import { mock, mockDeep } from 'vitest-mock-extended';
-import type { DirectiveProcessingContext, FormattingContext, ResolutionContext } from '@core/types/index.js';
-import { TextVariable, VariableType, MeldVariable } from '@core/types/variables.js';
-import { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
-import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import type { DirectiveProcessingContext, FormattingContext, ResolutionContext } from '@core/types/index';
+import { TextVariable, VariableType, MeldVariable } from '@core/types/variables';
+import { DirectiveResult } from '@services/pipeline/DirectiveService/types';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { container, DependencyContainer } from 'tsyringe';
 import { 
     createStateServiceMock,
@@ -20,8 +20,8 @@ import {
     createDirectiveErrorMock,
     createLoggerServiceMock,
 } from '@tests/utils/mocks/serviceMocks.ts';
-import type { ILogger } from '@core/utils/logger.js';
-import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils.js';
+import type { ILogger } from '@core/utils/logger';
+import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils';
 
 describe('RunDirectiveHandler Transformation', () => {
   let testContainer: DependencyContainer;

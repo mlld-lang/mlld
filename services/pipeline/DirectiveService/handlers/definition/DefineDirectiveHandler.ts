@@ -1,28 +1,28 @@
-import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { DirectiveNode, IDirectiveData, DirectiveData } from '@core/syntax/types/index.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { directiveLogger as logger } from '@core/utils/logger.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { DirectiveNode, IDirectiveData, DirectiveData } from '@core/syntax/types/index';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { directiveLogger as logger } from '@core/utils/logger';
+import { ErrorSeverity } from '@core/errors/MeldError';
 import { inject, injectable } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
+import { Service } from '@core/ServiceProvider';
 import type { 
     ICommandDefinition, 
     IBasicCommandDefinition, 
     ILanguageCommandDefinition, 
     ICommandParameterMetadata
-} from '@core/types/define.js';
-import { isBasicCommand } from '@core/types/define.js';
-import type { SourceLocation } from '@core/types/common.js';
-import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
+} from '@core/types/define';
+import { isBasicCommand } from '@core/types/define';
+import type { SourceLocation } from '@core/types/common';
+import type { InterpolatableValue } from '@core/syntax/types/nodes';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
+import { isInterpolatableValueArray } from '@core/syntax/types/guards';
 import { MeldResolutionError, FieldAccessError } from '@core/errors';
-import { VariableMetadata, VariableOrigin, VariableType, createCommandVariable } from '@core/types/variables.js';
-import type { ResolutionContext } from '@core/types/resolution.js';
-import type { DirectiveProcessingContext } from '@core/types/index.js';
+import { VariableMetadata, VariableOrigin, VariableType, createCommandVariable } from '@core/types/variables';
+import type { ResolutionContext } from '@core/types/resolution';
+import type { DirectiveProcessingContext } from '@core/types/index';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
 
 @injectable()

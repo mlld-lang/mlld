@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { container, InjectionToken, inject } from 'tsyringe';
-import { Service, createService, resolveService, registerServiceInstance, registerServiceFactory, registerServiceClass, getServiceMetadata } from '@core/ServiceProvider.js';
+import { Service, createService, resolveService, registerServiceInstance, registerServiceFactory, registerServiceClass, getServiceMetadata } from '@core/ServiceProvider';
 
 // Test classes
 @Service()

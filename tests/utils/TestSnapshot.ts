@@ -1,4 +1,4 @@
-import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
+import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem';
 
 /**
  * Result of comparing two filesystem snapshots

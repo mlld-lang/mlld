@@ -3,10 +3,10 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { processMeld } from '@api/index.js';
-import { findFiles, getTestCaseName, setupTestContext, INVALID_CASES_DIR, ERROR_EXTENSION } from '@tests/e2e/example-runner-setup.js';
+import { processMeld } from '@api/index';
+import { findFiles, getTestCaseName, setupTestContext, INVALID_CASES_DIR, ERROR_EXTENSION } from '@tests/e2e/example-runner-setup';
 import { promises as realFs } from 'fs';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
 import { vi } from 'vitest';
 
 describe('Invalid Meld Test Cases', async () => {

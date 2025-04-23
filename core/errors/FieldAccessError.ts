@@ -1,6 +1,6 @@
-import { MeldError, ErrorSeverity } from './MeldError.js';
+import { MeldError, ErrorSeverity } from './MeldError';
 import { ResolutionErrorCode } from './index';
-import type { Field as AstField } from '@core/syntax/types/shared-types.js';
+import type { Field as AstField } from '@core/syntax/types/shared-types';
 
 /**
  * Details specific to field access errors.

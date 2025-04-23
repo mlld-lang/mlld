@@ -1,5 +1,5 @@
-import { MeldAstError, ParseErrorCode, ParseResult } from '@core/ast/types.js';
-import parser from './parser.js';
+import { MeldAstError, ParseErrorCode, ParseResult } from '@core/ast/types';
+import parser from './parser';
 const { parse: peggyParse, SyntaxError } = parser;
 
 // Export an async parse function that returns a ParseResult

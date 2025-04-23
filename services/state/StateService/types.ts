@@ -1,12 +1,12 @@
-import type { MeldNode } from '@core/syntax/types/index.js';
+import type { MeldNode } from '@core/syntax/types/index';
 import type {
   TextVariable,
   DataVariable,
   IPathVariable,
   CommandVariable,
   TransformationOptions
-} from '@core/types/index.js';
-import type { IStateService } from './IStateService.js';
+} from '@core/types/index';
+import type { IStateService } from './IStateService';
 
 /**
  * Command definition with optional configuration

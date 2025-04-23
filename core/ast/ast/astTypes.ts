@@ -22,10 +22,10 @@ import type {
   ValidationResult,
   Example
 } from '@core/syntax/types';
-import type { TextNode as TextNodeImport, CodeFenceNode as CodeFenceNodeImport, CommentNode as CommentNodeImport, ErrorNode as ErrorNodeImport, VariableReferenceNode as VariableReferenceNodeImport } from '@core/syntax/types/nodes.js';
-import type { SourceLocation as SourceLocationImport } from '@core/syntax/types/shared-types.js';
+import type { TextNode as TextNodeImport, CodeFenceNode as CodeFenceNodeImport, CommentNode as CommentNodeImport, ErrorNode as ErrorNodeImport, VariableReferenceNode as VariableReferenceNodeImport } from '@core/syntax/types/nodes';
+import type { SourceLocation as SourceLocationImport } from '@core/syntax/types/shared-types';
 // Correct import path for DirectiveData
-import type { DirectiveData as DirectiveDataImport } from '@core/syntax/types/index.js';
+import type { DirectiveData as DirectiveDataImport } from '@core/syntax/types/index';
 
 // Re-export all imported types
 export type {

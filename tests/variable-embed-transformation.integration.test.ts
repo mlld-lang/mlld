@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { MeldNode, TextNode } from '@core/syntax/types/shared-types.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import type { MeldNode, TextNode } from '@core/syntax/types/shared-types';
 import { 
   embedDirectiveExamples, 
   textDirectiveExamples,
   dataDirectiveExamples, 
   combineExamples
-} from '@core/syntax/index.js';
-import { main } from '@api/index.js';
-import type { Services } from '@core/types/services.js';
+} from '@core/syntax/index';
+import { main } from '@api/index';
+import type { Services } from '@core/types/services';
 
 describe('Variable-Based Embed Transformation Integration Tests', () => {
   let context: TestContextDI;

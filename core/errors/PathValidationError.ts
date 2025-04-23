@@ -1,5 +1,5 @@
-import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError.js';
-import type { PathValidationContext } from '@core/types/paths.js';
+import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError';
+import type { PathValidationContext } from '@core/types/paths';
 
 export enum PathErrorCode {
   INVALID_PATH = 'INVALID_PATH',

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mockDeep, mockReset } from 'vitest-mock-extended';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
 import type * as fs from 'fs/promises';
 import type * as path from 'path';
 

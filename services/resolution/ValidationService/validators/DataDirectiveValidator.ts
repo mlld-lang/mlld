@@ -1,7 +1,7 @@
-import { DirectiveNode } from '@core/syntax/types.js';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
-import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { DirectiveNode } from '@core/syntax/types';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
+import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { ErrorSeverity } from '@core/errors/MeldError';
 
 // Define interface matching the meld-ast structure for data directives
 interface DataDirectiveData {

@@ -5,11 +5,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { main } from './index.js';
-import { TestContext } from '@tests/utils/index.js';
-import type { ProcessOptions } from '@core/types/index.js';
-import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
+import { main } from './index';
+import { TestContext } from '@tests/utils/index';
+import type { ProcessOptions } from '@core/types/index';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import path from 'path';
 
 describe('API Integration Tests', () => {

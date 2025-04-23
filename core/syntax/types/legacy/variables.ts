@@ -6,8 +6,8 @@ import {
   SPECIAL_PATH_VARS,
   ENV_VAR_PREFIX,
   VAR_PATTERNS
-} from '@core/syntax/types/interfaces/index.js';
-import { VariableNodeFactory } from '@core/syntax/types/factories/index.js';
+} from '@core/syntax/types/interfaces/index';
+import { VariableNodeFactory } from '@core/syntax/types/factories/index';
 
 /**
  * Legacy function to create variable reference nodes

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi, Mock } from 'vitest';
 import { mockDeep, mockReset, DeepMockProxy } from 'vitest-mock-extended';
-import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import type { DirectiveNode } from '@core/syntax/types/index.js';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import type { DirectiveNode } from '@core/syntax/types/index';
 import {
   createTextDirective,
   createDataDirective,
@@ -10,24 +10,24 @@ import {
   createEmbedDirective,
   createPathDirective,
   createLocation
-} from '@tests/utils/testFactories.js';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
-import { ErrorSeverity, MeldError } from '@core/errors/MeldError.js';
+} from '@tests/utils/testFactories';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
+import { ErrorSeverity, MeldError } from '@core/errors/MeldError';
 import { 
   expectDirectiveValidationError, 
   expectToThrowWithConfig,
   expectValidationError,
   expectValidationToThrowWithDetails
-} from '@tests/utils/ErrorTestUtils.js';
-import { textDirectiveExamples } from '@core/syntax/index.js';
+} from '@tests/utils/ErrorTestUtils';
+import { textDirectiveExamples } from '@core/syntax/index';
 // import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers'; // Commented out due to path issues
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import { DirectiveKind } from '@core/syntax/types/interfaces/IDirectiveNode.js';
-import { NodeFactory } from '@core/syntax/types/factories/NodeFactory.js';
-import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNodeFactory.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
-import { createMeldPath, unsafeCreateValidatedResourcePath } from '@core/types/paths.js';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import { DirectiveKind } from '@core/syntax/types/interfaces/IDirectiveNode';
+import { NodeFactory } from '@core/syntax/types/factories/NodeFactory';
+import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNodeFactory';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { MockFactory } from '@tests/utils/mocks/MockFactory';
+import { createMeldPath, unsafeCreateValidatedResourcePath } from '@core/types/paths';
 import { container, type DependencyContainer } from 'tsyringe';
 
 describe('ValidationService', () => {

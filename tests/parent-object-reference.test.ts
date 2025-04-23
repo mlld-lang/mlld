@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
-import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
-import { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
-import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory';
+import { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient';
+import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
 import { container } from 'tsyringe';
-import { VariableNodeFactory } from '@core/syntax/types/factories/index.js';
+import { VariableNodeFactory } from '@core/syntax/types/factories/index';
 // Keep legacy import during transition
-import { createVariableReferenceNode } from '@tests/utils/testFactories.js';
+import { createVariableReferenceNode } from '@tests/utils/testFactories';
 
 /**
  * Parent Object Reference Test

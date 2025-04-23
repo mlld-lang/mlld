@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { main } from '@api/index.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { Services } from '@core/types/index.js';
+import { main } from '@api/index';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import type { Services } from '@core/types/index';
 
 describe('Embed Directive Variable Path Prefix Fix', () => {
   let context: TestContextDI;

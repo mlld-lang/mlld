@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { main } from '@api/index.js';
-import type { Services } from '@core/types/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { main } from '@api/index';
+import type { Services } from '@core/types/index';
 
 describe('Nested Arrays Specific Test', () => {
   let context: TestContextDI;

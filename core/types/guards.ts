@@ -5,8 +5,8 @@ import type {
   IPathVariable, 
   CommandVariable, 
   IFilesystemPathState 
-} from './variables.js';
-import { VariableType } from './index.js'; // Assuming VariableType is exported from index
+} from './variables';
+import { VariableType } from './index'; // Assuming VariableType is exported from index
 
 export const isTextVariable = (variable: MeldVariable | undefined): variable is TextVariable =>
   variable?.type === VariableType.TEXT;

@@ -11,7 +11,7 @@ export * from './ITestOutputFilterService';
 export * from './TestOutputFilterService';
 
 // Global instance for shared access across tests
-import { TestOutputFilterService } from '@tests/utils/debug/TestOutputFilterService/TestOutputFilterService.js';
+import { TestOutputFilterService } from '@tests/utils/debug/TestOutputFilterService/TestOutputFilterService';
 
 // Create a default instance
 const defaultInstance = new TestOutputFilterService();

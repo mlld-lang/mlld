@@ -1,5 +1,5 @@
 import * as path from 'path';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import type { ResolutionContext, FormattingContext } from '@core/types/resolution';
 import {
@@ -32,18 +32,18 @@ import {
   isBasicCommand,
   ResolutionErrorCode
 } from '@core/types';
-import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/syntax/types/index.js';
+import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/syntax/types/index';
 import { ResolutionContextFactory } from './ResolutionContextFactory';
 import { CommandResolver } from './resolvers/CommandResolver';
 import { ContentResolver } from './resolvers/ContentResolver';
 import { logger } from '@core/utils/logger';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { inject, singleton, container, delay, injectable } from 'tsyringe';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index';
 import { Service } from '@core/ServiceProvider';
-import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
-import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
 import { IVariableReferenceResolverClient } from './interfaces/IVariableReferenceResolverClient';
 import { VariableReferenceResolverClientFactory } from './factories/VariableReferenceResolverClientFactory';
 import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient';
@@ -55,13 +55,13 @@ import { VariableResolutionErrorFactory } from './resolvers/error-factory';
 import { isTextVariable, isPathVariable, isCommandVariable, isDataVariable, isFilesystemPath } from '@core/types/guards';
 // Import and alias the AST Field type
 import { Field as AstField } from '@core/syntax/types/shared-types';
-import { InterpolatableValue } from '@core/syntax/types/nodes.js';
+import { InterpolatableValue } from '@core/syntax/types/nodes';
 import type {
   AbsolutePath,
   RelativePath,
   RawPath,
   PathValidationContext
-} from '@core/types/paths.js';
+} from '@core/types/paths';
 import {
   createAbsolutePath,
   isAbsolutePath,
@@ -69,14 +69,14 @@ import {
   isUrlPath,
   createRawPath,
   isValidatedResourcePath
-} from '@core/types/paths.js';
-import { PathValidationErrorDetails } from '@core/errors/PathValidationError.js';
+} from '@core/types/paths';
+import { PathValidationErrorDetails } from '@core/errors/PathValidationError';
 import {
   // Import StructuredPath explicitly from syntax types
   StructuredPath 
-} from '@core/syntax/types/nodes.js'; 
+} from '@core/syntax/types/nodes'; 
 // Import VariableReferenceResolver for constructor injection
-import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver';
 
 /**
  * Internal type for heading nodes in the ResolutionService

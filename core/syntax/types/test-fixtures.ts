@@ -1,4 +1,4 @@
-import type { ParserTestCase } from '@core/syntax/types/parser.js';
+import type { ParserTestCase } from '@core/syntax/types/parser';
 
 // Data directive test cases
 export const dataTests: ParserTestCase[] = [

@@ -50,7 +50,7 @@ export function mockProcessExit(): MockProcessExitResult {
  * Example usage:
  * 
  * ```typescript
- * import { mockProcessExit } from '@tests/utils/cli/mockProcessExit.js';
+ * import { mockProcessExit } from '@tests/utils/cli/mockProcessExit';
  * 
  * it('should exit with code 1 on fatal error', async () => {
  *   const { mockExit, restore } = mockProcessExit();

@@ -1,4 +1,4 @@
-import { MeldError, type MeldErrorOptions, ErrorSeverity, type BaseErrorDetails, type ErrorSourceLocation } from '@core/errors/MeldError.js';
+import { MeldError, type MeldErrorOptions, ErrorSeverity, type BaseErrorDetails, type ErrorSourceLocation } from '@core/errors/MeldError';
 
 // Define options specific to FileSystemError, without extending MeldErrorOptions
 export interface MeldFileSystemErrorOptions { 

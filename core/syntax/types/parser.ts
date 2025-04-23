@@ -1,5 +1,5 @@
-import { MeldNode, DirectiveNode, TextNode, CodeFenceNode, VariableNode, ErrorNode, CommentNode } from '@core/syntax/types/nodes.js';
-import { VariableReferenceNode } from '@core/syntax/types/variables.js';
+import { MeldNode, DirectiveNode, TextNode, CodeFenceNode, VariableNode, ErrorNode, CommentNode } from '@core/syntax/types/nodes';
+import { VariableReferenceNode } from '@core/syntax/types/variables';
 
 /**
  * Interface that all Meld parser implementations must implement

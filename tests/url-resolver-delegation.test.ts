@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { container } from 'tsyringe';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
-import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver.js';
-import { PathService } from '@services/fs/PathService/PathService.js';
-import { DirectiveNode } from '@core/syntax/types/index.js';
-import { createImportDirective } from '@tests/utils/testFactories.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler';
+import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver';
+import { PathService } from '@services/fs/PathService/PathService';
+import { DirectiveNode } from '@core/syntax/types/index';
+import { createImportDirective } from '@tests/utils/testFactories';
 
 // Mock fetch API
 global.fetch = vi.fn();

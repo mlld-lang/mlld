@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { container } from 'tsyringe';
-import { TestContainerHelper } from '@tests/utils/di/TestContainerHelper.js';
+import { TestContainerHelper } from '@tests/utils/di/TestContainerHelper';
 import {
   MockValidationService,
   MockStateService,
@@ -14,7 +14,7 @@ import {
   MockParserService,
   MockInterpreterService,
   MockPathService,
-} from '@tests/utils/di/MockServices.js';
+} from '@tests/utils/di/MockServices';
 
 // Set up test environment
 describe('MockServices', () => {

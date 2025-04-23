@@ -1,16 +1,16 @@
-import { DirectiveNode, SourceLocation } from '@core/syntax/types/index.js';
+import { DirectiveNode, SourceLocation } from '@core/syntax/types/index';
 import type { 
   ParserServiceLike,
   CircularityServiceLike,
-} from '@core/shared-service-types.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { ResolutionContext } from '@core/types/resolution.js';
-import type { DirectiveProcessingContext } from '@core/types/index.js';
+} from '@core/shared-service-types';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { ResolutionContext } from '@core/types/resolution';
+import type { DirectiveProcessingContext } from '@core/types/index';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler.ts';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 
 /**
  * Interface for directive handlers

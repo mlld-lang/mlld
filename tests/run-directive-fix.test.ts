@@ -11,15 +11,15 @@ vi.mock('@core/utils/logger', () => ({
 }));
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
-import { DirectiveNode } from '@core/syntax/types.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler';
+import { DirectiveNode } from '@core/syntax/types';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import {
   createValidationServiceMock,
   createStateServiceMock,
   createResolutionServiceMock,
   createFileSystemServiceMock
-} from '@tests/utils/mocks/serviceMocks.js';
+} from '@tests/utils/mocks/serviceMocks';
 
 // Helper to create a run directive node
 const createRunDirectiveNode = (command: string, outputVar?: string): DirectiveNode => {

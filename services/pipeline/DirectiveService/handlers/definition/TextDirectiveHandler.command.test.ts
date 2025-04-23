@@ -1,28 +1,28 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { DirectiveNode, InterpolatableValue, VariableReferenceNode, TextNode } from '@core/syntax/types/nodes.js';
-import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
-import { VariableType, TextVariable, createTextVariable, VariableDefinition } from '@core/types/variables.js';
-import { VariableMetadata, VariableOrigin } from '@core/types/variables.js';
+import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { DirectiveNode, InterpolatableValue, VariableReferenceNode, TextNode } from '@core/syntax/types/nodes';
+import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index';
+import { VariableType, TextVariable, createTextVariable, VariableDefinition } from '@core/types/variables';
+import { VariableMetadata, VariableOrigin } from '@core/types/variables';
 import { MeldResolutionError, FieldAccessError, PathValidationError } from '@core/errors';
 import { MeldPath } from '@core/types';
-import type { ValidatedResourcePath } from '@core/types/paths.js';
+import type { ValidatedResourcePath } from '@core/types/paths';
 import type { Stats } from 'fs-extra';
-import { Field as AstField } from '@core/syntax/types/shared-types.js';
-import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import { Field as AstField } from '@core/syntax/types/shared-types';
+import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import { container, type DependencyContainer } from 'tsyringe';
 import { mockDeep, DeepMockProxy } from 'vitest-mock-extended';
-import { createDirectiveNode as coreCreateDirectiveNode, createLocation } from '@tests/utils/testFactories.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import { createDirectiveNode as coreCreateDirectiveNode, createLocation } from '@tests/utils/testFactories';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import path from 'path';
-import { PathPurpose } from '@core/types/paths.js';
+import { PathPurpose } from '@core/types/paths';
 
 /**
  * TextDirectiveHandler Command Test Status

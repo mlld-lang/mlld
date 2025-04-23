@@ -5,7 +5,7 @@ import {
   IVariableReference, 
   NodeFactory, 
   VariableNodeFactory 
-} from '@core/syntax/types/index.js';
+} from '@core/syntax/types/index';
 
 describe('Circular Dependency Resolution', () => {
   it('should resolve factories from container', () => {

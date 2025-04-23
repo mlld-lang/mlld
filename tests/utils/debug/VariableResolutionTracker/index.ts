@@ -4,7 +4,7 @@
  */
 
 // Export the class
-export { VariableResolutionTracker } from './VariableResolutionTracker.js';
+export { VariableResolutionTracker } from './VariableResolutionTracker';
 
 // Export the types with 'export type'
-export type { ResolutionAttempt, ResolutionTrackingConfig } from './VariableResolutionTracker.js';
+export type { ResolutionAttempt, ResolutionTrackingConfig } from './VariableResolutionTracker';

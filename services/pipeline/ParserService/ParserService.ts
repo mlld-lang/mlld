@@ -1,12 +1,12 @@
 import { injectable, singleton, container, inject, delay } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import { parserLogger as logger } from '@core/utils/logger.js';
-import { MeldParseError } from '@core/errors/MeldParseError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
-import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
-import type { MeldNode } from '@core/syntax/types/index.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { Service } from '@core/ServiceProvider';
+import { parserLogger as logger } from '@core/utils/logger';
+import { MeldParseError } from '@core/errors/MeldParseError';
+import { ErrorSeverity } from '@core/errors/MeldError';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
+import type { MeldNode } from '@core/syntax/types/index';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
 import type { 
   CodeFenceNode, 
   TextNode,
@@ -14,14 +14,14 @@ import type {
   DirectiveKind,
   SourceLocation,
   Position
-} from '@core/syntax/types/index.js';
-import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference.js';
-import { parse } from '@core/ast/index.js';  // Import the parse function directly
-import type { Location } from '@core/types/index.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
+} from '@core/syntax/types/index';
+import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference';
+import { parse } from '@core/ast/index';  // Import the parse function directly
+import type { Location } from '@core/types/index';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory';
 
 // Define our own ParseError type since it's not exported from meld-ast
 interface ParseError {

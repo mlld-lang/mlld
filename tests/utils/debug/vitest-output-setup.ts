@@ -7,8 +7,8 @@
  */
 
 import { beforeEach, afterEach } from 'vitest';
-import { TestOutputOptions } from '@tests/utils/debug/TestOutputFilterService.js';
-import { getOutputFilterInstance } from '@tests/utils/debug/TestOutputFilterService.js';
+import { TestOutputOptions } from '@tests/utils/debug/TestOutputFilterService';
+import { getOutputFilterInstance } from '@tests/utils/debug/TestOutputFilterService';
 
 // Get the shared instance of the output filter
 const outputFilter = getOutputFilterInstance();

@@ -1,5 +1,5 @@
-import type { MeldNode } from '@core/syntax/types.js';
-import type { ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { MeldNode } from '@core/syntax/types';
+import type { ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService';
 
 /**
  * Client interface for ResolutionService functionality needed by DirectiveService

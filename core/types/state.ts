@@ -2,10 +2,10 @@
  * Types related to State management (IStateService, options).
  */
 
-import type { JsonValue } from './common.js';
-import type { VariableType, VariableMetadata, MeldVariable, TextVariable, DataVariable, IPathVariable, CommandVariable } from './variables.js';
-import type { IFilesystemPathState, IUrlPathState } from './paths.js';
-import type { ICommandDefinition } from './define.js';
+import type { JsonValue } from './common';
+import type { VariableType, VariableMetadata, MeldVariable, TextVariable, DataVariable, IPathVariable, CommandVariable } from './variables';
+import type { IFilesystemPathState, IUrlPathState } from './paths';
+import type { ICommandDefinition } from './define';
 
 // Import MeldNode from the correct index file
 import type { DirectiveKind, MeldNode } from '@core/syntax/types';

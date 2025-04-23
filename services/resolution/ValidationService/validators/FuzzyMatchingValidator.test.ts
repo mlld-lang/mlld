@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { validateFuzzyThreshold } from '@services/resolution/ValidationService/validators/FuzzyMatchingValidator.js';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
-import { createEmbedDirective, createLocation } from '@tests/utils/testFactories.js';
-import { ErrorCollector, expectThrowsInStrictButWarnsInPermissive } from '@tests/utils/ErrorTestUtils.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { validateFuzzyThreshold } from '@services/resolution/ValidationService/validators/FuzzyMatchingValidator';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
+import { createEmbedDirective, createLocation } from '@tests/utils/testFactories';
+import { ErrorCollector, expectThrowsInStrictButWarnsInPermissive } from '@tests/utils/ErrorTestUtils';
+import { ErrorSeverity } from '@core/errors/MeldError';
 
 describe('FuzzyMatchingValidator', () => {
   describe('Fuzzy threshold validation', () => {

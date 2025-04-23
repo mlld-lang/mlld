@@ -3,7 +3,7 @@ import type {
   RelativePath,
   RawPath,
   StructuredPath
-} from '@core/types/paths.js';
+} from '@core/types/paths';
 
 /**
  * Minimal interface for what FileSystemService needs from PathService.

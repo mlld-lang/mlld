@@ -6,22 +6,22 @@
 import 'reflect-metadata'; // Required for tsyringe
 import { container, DependencyContainer } from 'tsyringe'; // Import DependencyContainer
 import '@core/di-config.ts'; // Ensure DI config runs before resolving services
-import { MeldError } from '@core/errors/MeldError.js';
+import { MeldError } from '@core/errors/MeldError';
 // Do NOT import Meld class
-import type { ProcessOptions } from '@core/types/index.js'; // Correct path
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js'; // Import IFileSystem
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js'; // Import IOutputService
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { ProcessOptions } from '@core/types/index'; // Correct path
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem'; // Import IFileSystem
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IOutputService } from '@services/pipeline/OutputService/IOutputService'; // Import IOutputService
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 // +++ Import the concrete class +++
-import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
 // +++ Import logger and ILogger +++
-import logger, { ILogger } from '@core/utils/logger.js';
+import logger, { ILogger } from '@core/utils/logger';
 // +++ Import NodeFileSystem +++
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import type { MeldNode, TextNode } from '@core/syntax/types/index.js'; // <<< Add TextNode import
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
+import type { MeldNode, TextNode } from '@core/syntax/types/index'; // <<< Add TextNode import
 
 // DI Container is configured by importing @core/di-config.js elsewhere
 
@@ -29,7 +29,7 @@ import type { MeldNode, TextNode } from '@core/syntax/types/index.js'; // <<< Ad
 export { MeldError };
 export type { ProcessOptions };
 // Export other necessary types if needed, e.g.:
-export type { Location, Position } from '@core/types/index.js';
+export type { Location, Position } from '@core/types/index';
 export type { IResolutionService };
 // +++ Export the concrete class +++
 export { ResolutionService };

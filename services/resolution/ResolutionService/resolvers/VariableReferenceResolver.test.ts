@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach, type Mock } from 'vitest';
-import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
-import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
 
 // --- Corrected Core Type Imports ---
 import type { JsonValue, Result } from '@core/types';
@@ -14,7 +14,7 @@ import {
     type DataVariable, 
     type IPathVariable, 
     type CommandVariable
-} from '@core/types/variables.js';
+} from '@core/types/variables';
 import {
     MeldPath,
     PathContentType,
@@ -25,20 +25,20 @@ import {
 // Removed incorrect/conflicting imports from @core/types/index.js
 
 // --- Other Imports ---
-import type { VariableReferenceNode, TextNode } from '@core/ast/ast/astTypes.js';
-import { MeldResolutionError, FieldAccessError, VariableResolutionError } from '@core/errors/index.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js'; 
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { TestContextDI } from '@tests/utils/di/index.js';
+import type { VariableReferenceNode, TextNode } from '@core/ast/ast/astTypes';
+import { MeldResolutionError, FieldAccessError, VariableResolutionError } from '@core/errors/index';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService'; 
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { TestContextDI } from '@tests/utils/di/index';
 import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js'; 
-import { createVariableReferenceNode } from '@tests/utils/testFactories.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
+import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils'; 
+import { createVariableReferenceNode } from '@tests/utils/testFactories';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 // Removed duplicate import of IFilesystemPathState
-import { createStateServiceMock } from '@tests/utils/mocks/serviceMocks.js';
+import { createStateServiceMock } from '@tests/utils/mocks/serviceMocks';
 import { container, type DependencyContainer } from 'tsyringe'; // Import container and DependencyContainer
 
 // Define explicit mock types matching used methods

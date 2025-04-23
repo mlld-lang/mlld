@@ -14,7 +14,7 @@ import {
   isBinaryAvailable, 
   getBinaryVersion, 
   ensureBinaryAvailable 
-} from '@tests/utils/mermaid-ascii/binary.js';
+} from '@tests/utils/mermaid-ascii/binary';
 
 /**
  * Options for mermaid-ascii conversion

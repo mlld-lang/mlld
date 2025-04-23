@@ -1,5 +1,5 @@
 import { injectable, singleton } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
+import { Service } from '@core/ServiceProvider';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 

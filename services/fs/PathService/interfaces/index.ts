@@ -1,1 +1,1 @@
-export type { IPathServiceClient } from './IPathServiceClient.js'; 
+export type { IPathServiceClient } from './IPathServiceClient'; 

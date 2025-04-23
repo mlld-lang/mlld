@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IOutputService } from '@services/pipeline/OutputService/IOutputService';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index';
 // Mock StateVisualizationService
 class StateVisualizationService {}
 

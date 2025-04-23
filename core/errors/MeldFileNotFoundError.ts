@@ -1,5 +1,5 @@
-import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError.js';
-import { PathErrorMessages } from '@core/errors/messages/index.js';
+import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError';
+import { PathErrorMessages } from '@core/errors/messages/index';
 
 /**
  * Represents details specific to file not found errors.

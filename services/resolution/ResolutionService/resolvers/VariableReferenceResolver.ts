@@ -18,10 +18,10 @@ import { MeldPath, PathValidationContext, PathPurpose, RawPath, NormalizedAbsolu
 import type { IPathService } from '@services/fs/PathService/IPathService';
 import {
   Field as AstField
-} from '@core/syntax/types/shared-types.js';
-import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
-import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
-import { Service } from '@core/ServiceProvider.js';
+} from '@core/syntax/types/shared-types';
+import type { InterpolatableValue } from '@core/syntax/types/nodes';
+import { isInterpolatableValueArray } from '@core/syntax/types/guards';
+import { Service } from '@core/ServiceProvider';
 import { container, inject, injectable } from 'tsyringe';
 import { resolutionLogger as logger } from '@core/utils/logger';
 import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index';

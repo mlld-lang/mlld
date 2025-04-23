@@ -1,4 +1,4 @@
-import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService';
 
 /**
  * Error thrown when variable resolution fails

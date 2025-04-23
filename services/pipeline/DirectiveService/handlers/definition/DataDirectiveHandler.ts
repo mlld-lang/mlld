@@ -4,24 +4,24 @@ import type {
     VariableReferenceNode, 
     TextNode, 
     StructuredPath as AstStructuredPath
-} from '@core/syntax/types/nodes.js'; 
+} from '@core/syntax/types/nodes'; 
 // Remove imports for non-existent types
 // import type {
 //     DataDirectiveData, 
 //     EmbedRHSAst, 
 //     RunRHSAst   
-// } from '@core/syntax/types/directives.js'; 
-// import type { DataDirectiveNode } from '@core/syntax/types/nodes.js'; 
+// } from '@core/syntax/types/directives'; 
+// import type { DataDirectiveNode } from '@core/syntax/types/nodes'; 
 
-import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { directiveLogger as logger } from '@core/utils/logger.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
+import { directiveLogger as logger } from '@core/utils/logger';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { ErrorSeverity } from '@core/errors/MeldError';
 import { inject, injectable } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
+import { Service } from '@core/ServiceProvider';
 // Ensure SourceLocation is imported from the canonical source and aliased
 import { 
     JsonValue, 
@@ -32,32 +32,32 @@ import {
     createDataVariable,
     MeldVariable,
     VariableType
-} from '@core/types/index.js'; 
-import { SourceLocation } from '@core/types/common.js'; // Import SourceLocation directly
-import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+} from '@core/types/index'; 
+import { SourceLocation } from '@core/types/common'; // Import SourceLocation directly
+import { isInterpolatableValueArray } from '@core/syntax/types/guards';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 import { MeldResolutionError, FieldAccessError, PathValidationError, MeldError } from '@core/errors';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
-import type { DirectiveProcessingContext } from '@core/types/index.js';
+import type { DirectiveProcessingContext } from '@core/types/index';
 // Import command definition types and type guard
-import { ICommandDefinition, isBasicCommand } from '@core/types/define.js'; 
+import { ICommandDefinition, isBasicCommand } from '@core/types/define'; 
 // <<< Restore missing imports for path types >>>
 import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState } from '@core/types'; 
-import type { VariableDefinition } from '@core/types/variables.js'; // Use relative path
-import { isCommandVariable } from '@core/types/guards.js'; // <-- Corrected path based on previous findings
+import type { VariableDefinition } from '@core/types/variables'; // Use relative path
+import { isCommandVariable } from '@core/types/guards'; // <-- Corrected path based on previous findings
 // Re-add IStateService import as it's needed for context.state type checking
-import type { IStateService } from '@services/state/StateService/IStateService.js'; 
+import type { IStateService } from '@services/state/StateService/IStateService'; 
 
 // +++ Import ALL Concrete Handlers +++
-import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
-import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
-import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
-import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
-import { VarDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/VarDirectiveHandler.js'; // Assuming it exists
-import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
-import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
-import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
+import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler';
+import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler';
+import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler';
+import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler';
+import { VarDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/VarDirectiveHandler'; // Assuming it exists
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler';
+import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler';
 // +++ End Handler Imports +++
 
 // Define local interfaces mirroring expected AST structure for type safety

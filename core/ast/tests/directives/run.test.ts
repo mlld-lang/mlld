@@ -1,8 +1,8 @@
 /// <reference types="vitest" />
 import { expect, describe, it } from 'vitest';
-import { runTests, runInvalidTests } from '@core/syntax/types/test-fixtures.js';
-import { type ParserTestCase } from '@core/syntax/types/parser.js'
-import { testValidCase, testInvalidCase } from '../utils/test-utils.js';
+import { runTests, runInvalidTests } from '@core/syntax/types/test-fixtures';
+import { type ParserTestCase } from '@core/syntax/types/parser'
+import { testValidCase, testInvalidCase } from '../utils/test-utils';
 
 describe('directives/@run', () => {
   describe('valid cases', () => {

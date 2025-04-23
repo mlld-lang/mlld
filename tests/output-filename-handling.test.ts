@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { CLIService, IPromptService } from '@services/cli/CLIService/CLIService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { CLIService, IPromptService } from '@services/cli/CLIService/CLIService';
 
 describe('Output Filename Handling', () => {
   let context: TestContextDI;

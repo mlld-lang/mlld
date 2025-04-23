@@ -7,9 +7,9 @@
  * IMPORTANT: This file must NOT import from any service implementation files to avoid circular dependencies.
  */
 
-import type { NodeType, BaseNode } from './syntax/types/shared-types.js';
-import type { MeldNode, DirectiveNode, TextNode } from './syntax/types/index.js';
-import type { ResolutionContextBase, DirectiveContextBase } from './shared/types.js';
+import type { NodeType, BaseNode } from './syntax/types/shared-types';
+import type { MeldNode, DirectiveNode, TextNode } from './syntax/types/index';
+import type { ResolutionContextBase, DirectiveContextBase } from './shared/types';
 // Import the actual variable types
 import type {
   TextVariable,
@@ -21,13 +21,13 @@ import type {
   IUrlPathState,
   ICommandDefinition,
   MeldPath
-} from './types/index.js';
+} from './types/index';
 
 // Imports needed for base service interfaces defined below
 // These are OK because they import concrete types, not interfaces that might depend back
-import type { VariableType } from '@core/types/variables.js';
-import type { PathValidationContext, RawPath, ValidatedResourcePath } from '@core/types/paths.js';
-import type { StructuredPath } from '@core/syntax/types/nodes.js';
+import type { VariableType } from '@core/types/variables';
+import type { PathValidationContext, RawPath, ValidatedResourcePath } from '@core/types/paths';
+import type { StructuredPath } from '@core/syntax/types/nodes';
 
 /**
  * Common client factory interface

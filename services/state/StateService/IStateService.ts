@@ -1,7 +1,7 @@
-import type { MeldNode } from '@core/syntax/types/index.js';
-import type { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
-import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
-import type { StateNode } from './types.js';
+import type { MeldNode } from '@core/syntax/types/index';
+import type { IStateEventService } from '@services/state/StateEventService/IStateEventService';
+import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
+import type { StateNode } from './types';
 import type {
   JsonValue,
   TextVariable,
@@ -17,8 +17,8 @@ import type {
   IUrlPathState,
   ICommandDefinition,
   MeldPath
-} from '@core/types/index.js';
-import type { StateChanges } from '@core/directives/DirectiveHandler.js';
+} from '@core/types/index';
+import type { StateChanges } from '@core/directives/DirectiveHandler';
 
 /**
  * Service responsible for managing state in Meld documents.

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
-import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { 
   ErrorCollector,
   expectErrorSeverity,
@@ -14,7 +14,7 @@ import {
   createStrictModeOptions,
   createPermissiveModeOptions,
   ErrorModeTestOptions
-} from '@tests/utils/ErrorTestUtils.js';
+} from '@tests/utils/ErrorTestUtils';
 
 describe('ErrorTestUtils', () => {
   describe('ErrorCollector', () => {

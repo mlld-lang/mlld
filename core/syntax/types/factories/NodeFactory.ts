@@ -1,6 +1,6 @@
 import { injectable } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import { NodeType, SourceLocation, INode } from '@core/syntax/types/interfaces/index.js';
+import { Service } from '@core/ServiceProvider';
+import { NodeType, SourceLocation, INode } from '@core/syntax/types/interfaces/index';
 
 /**
  * Factory for creating base nodes

@@ -1,8 +1,8 @@
-import type { DirectiveNode } from '@core/syntax/types/index.js';
-import type { StateServiceLike } from '@core/shared-service-types.js';
+import type { DirectiveNode } from '@core/syntax/types/index';
+import type { StateServiceLike } from '@core/shared-service-types';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
-import type { DirectiveProcessingContext } from '@core/types/index.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { DirectiveProcessingContext } from '@core/types/index';
+import type { IStateService } from '@services/state/StateService/IStateService';
 
 /**
  * Client interface for DirectiveService functionality needed by other services

@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types/index.js';
+import type { MeldNode } from '@core/syntax/types/index';
 
 /**
  * Minimal interface for what ResolutionService needs from ParserService.

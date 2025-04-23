@@ -15,7 +15,7 @@
  * - Optional syntax highlighting libraries for code formatting
  */
 
-import { MeldError } from '@core/errors/MeldError.js';
+import { MeldError } from '@core/errors/MeldError';
 
 export interface IErrorDisplayService {
   /**

@@ -1,12 +1,12 @@
 import { injectable, inject, container as globalContainer, DependencyContainer } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import type { IInterpreterService } from '../IInterpreterService.js';
-import type { IInterpreterServiceClient } from '../interfaces/IInterpreterServiceClient.js';
-import { interpreterLogger as logger } from '@core/utils/logger.js';
-import type { MeldNode } from '@core/syntax/types/index.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { InterpreterOptionsBase } from '@core/shared-service-types.js';
-import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
+import { Service } from '@core/ServiceProvider';
+import type { IInterpreterService } from '../IInterpreterService';
+import type { IInterpreterServiceClient } from '../interfaces/IInterpreterServiceClient';
+import { interpreterLogger as logger } from '@core/utils/logger';
+import type { MeldNode } from '@core/syntax/types/index';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { InterpreterOptionsBase } from '@core/shared-service-types';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
 
 /**
  * Factory for creating interpreter service clients

@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { StringConcatenationHandler } from '@services/resolution/ResolutionService/resolvers/StringConcatenationHandler.js';
-import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { StringConcatenationHandler } from '@services/resolution/ResolutionService/resolvers/StringConcatenationHandler';
+import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService';
+import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
 import { container, DependencyContainer } from 'tsyringe';
 import { mock } from 'vitest-mock-extended';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
 
 describe('StringConcatenationHandler', () => {
   let testContainer: DependencyContainer;

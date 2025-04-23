@@ -1,4 +1,4 @@
-import { URLResponse } from './IURLContentResolver.js';
+import { URLResponse } from './IURLContentResolver';
 
 /**
  * Cache for URL responses

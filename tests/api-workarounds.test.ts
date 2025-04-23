@@ -5,11 +5,11 @@
  * output-literal mode implementation in the core pipeline.
  */
 
-import { TestContextDI } from '@tests/utils/di.js';
+import { TestContextDI } from '@tests/utils/di';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockDeep } from 'vitest-mock-extended';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 
 describe('API Workarounds', () => {
   describe('Workaround Removal Verification', () => {

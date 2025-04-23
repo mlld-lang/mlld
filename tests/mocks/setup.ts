@@ -1,11 +1,11 @@
 import { vi, beforeEach } from 'vitest';
-import type { DirectiveNode, MeldNode } from '@core/syntax/types.js';
+import type { DirectiveNode, MeldNode } from '@core/syntax/types';
 import { injectable } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import { InterpreterState } from '@tests/mocks/state.js';
-import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
-import { embedDirectiveHandler, importDirectiveHandler } from '@tests/mocks/directive-handlers.js';
+import { Service } from '@core/ServiceProvider';
+import { InterpreterState } from '@tests/mocks/state';
+import { MeldInterpreterError } from '@core/errors/MeldInterpreterError';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
+import { embedDirectiveHandler, importDirectiveHandler } from '@tests/mocks/directive-handlers';
 
 // Mock file system state
 const mockFiles: Record<string, string> = {};

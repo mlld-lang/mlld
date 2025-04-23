@@ -1,4 +1,4 @@
-import { BaseNode } from '../shared-types.js';
+import { BaseNode } from '../shared-types';
 
 // Define the node types
 export type NodeType = 

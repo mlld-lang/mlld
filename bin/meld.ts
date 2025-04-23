@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { main } from '../cli/index.js';
-import { cliLogger as logger } from '@core/utils/logger.js';
+import { main } from '../cli/index';
+import { cliLogger as logger } from '@core/utils/logger';
 
 // Store the original console.error
 const originalConsoleError = console.error;

@@ -1,11 +1,11 @@
 import { describe, expect, test, beforeEach, afterEach, vi } from 'vitest';
-import { SourceMapService, sourceMapService, SourceLocation, ISourceMapService } from '@core/utils/SourceMapService.js';
-import { extractErrorLocation, extractLocationFromErrorObject, addMapping, resetSourceMaps } from '@core/utils/sourceMapUtils.js';
-import { MeldError } from '@core/errors/MeldError.js';
-import { enhanceMeldErrorWithSourceInfo } from '@core/utils/sourceMapUtils.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { SourceMapService, sourceMapService, SourceLocation, ISourceMapService } from '@core/utils/SourceMapService';
+import { extractErrorLocation, extractLocationFromErrorObject, addMapping, resetSourceMaps } from '@core/utils/sourceMapUtils';
+import { MeldError } from '@core/errors/MeldError';
+import { enhanceMeldErrorWithSourceInfo } from '@core/utils/sourceMapUtils';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import { container, type DependencyContainer } from 'tsyringe';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { ErrorSeverity } from '@core/errors/MeldError';
 
 describe('SourceMapService', () => {
   // Test for non-DI mode

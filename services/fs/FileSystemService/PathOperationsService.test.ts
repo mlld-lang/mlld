@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
-import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
 import path from 'path';
 
 describe('PathOperationsService', () => {

@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach, MockedFunction } from 'vitest';
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import { MeldResolutionError, VariableResolutionError, PathValidationError, FieldAccessError, MeldError } from '@core/errors/index';
-import { PathErrorCode } from '@core/errors/PathValidationError.js';
+import { PathErrorCode } from '@core/errors/PathValidationError';
 import type { ResolutionContext } from '@core/types/resolution'; 
 import { isFilesystemPath } from '@core/types/guards'; 
 import { 
@@ -24,8 +24,8 @@ import {
   type IFilesystemPathState,
   type IUrlPathState
 } from '@core/types';
-import type { Field as AstField } from '@core/syntax/types/shared-types.js';
-import type { MeldNode, TextNode, VariableReferenceNode, CommentNode, DirectiveNode, StructuredPath } from '@core/syntax/types/nodes.js';
+import type { Field as AstField } from '@core/syntax/types/shared-types';
+import type { MeldNode, TextNode, VariableReferenceNode, CommentNode, DirectiveNode, StructuredPath } from '@core/syntax/types/nodes';
 import {
   MeldPath, 
   PathPurpose,
@@ -77,7 +77,7 @@ import { success, failure } from '@core/types'; // Keep extensionless
 import { container, type DependencyContainer } from 'tsyringe'; // Import container and DependencyContainer for direct registration
 import { mockDeep, MockProxy } from 'vitest-mock-extended'; // Import mockDeep
 import type { Mocked, Mock } from 'vitest'; // Import Mock
-import type { ILogger } from '@core/utils/logger.js'; // Added import for ILogger
+import type { ILogger } from '@core/utils/logger'; // Added import for ILogger
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;

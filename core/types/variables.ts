@@ -2,9 +2,9 @@
  * Core types for Meld variables, based on the refined specification.
  */
 
-import type { SourceLocation, JsonValue } from './common.js';
-import type { IFilesystemPathState, IUrlPathState } from './paths.js';
-import type { ICommandDefinition } from './define.js';
+import type { SourceLocation, JsonValue } from './common';
+import type { IFilesystemPathState, IUrlPathState } from './paths';
+import type { ICommandDefinition } from './define';
 
 // =========================================================================
 // CORE VARIABLE TYPES

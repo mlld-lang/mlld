@@ -3,11 +3,11 @@
  */
 
 // Placeholders for service interfaces - assumed defined elsewhere
-import type { IStateService } from './state.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { SourceLocation } from './common.js';
+import type { IStateService } from './state';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { SourceLocation } from './common';
 
 /**
  * Parameter metadata for command definitions

@@ -6,10 +6,10 @@
  * optimized for normal test runs with minimal output.
  */
 
-import type { IStateVisualizationService, VisualizationConfig, StateMetrics } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
-import type { IStateHistoryService, StateOperation, StateTransformation } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
-import type { IStateTrackingService, StateMetadata, StateRelationship } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
-import { serviceLogger } from '@core/utils/logger.js';
+import type { IStateVisualizationService, VisualizationConfig, StateMetrics } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService';
+import type { IStateHistoryService, StateOperation, StateTransformation } from '@tests/utils/debug/StateHistoryService/IStateHistoryService';
+import type { IStateTrackingService, StateMetadata, StateRelationship } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
+import { serviceLogger } from '@core/utils/logger';
 
 /**
  * Generates compact, test-friendly visualizations of state data

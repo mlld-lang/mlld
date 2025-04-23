@@ -1,9 +1,9 @@
 import { injectable, inject } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import type { IResolutionService, ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
-import { resolutionLogger as logger } from '@core/utils/logger.js';
-import type { MeldNode, VariableReferenceNode } from '@core/syntax/types.js';
+import { Service } from '@core/ServiceProvider';
+import type { IResolutionService, ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective';
+import { resolutionLogger as logger } from '@core/utils/logger';
+import type { MeldNode, VariableReferenceNode } from '@core/syntax/types';
 import { JsonValue } from '@core/types';
 
 /**

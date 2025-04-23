@@ -1,4 +1,4 @@
-import { ErrorSeverity } from '@core/errors/index.js';
+import { ErrorSeverity } from '@core/errors/index';
 
 /**
  * Standard error messages for path-related errors

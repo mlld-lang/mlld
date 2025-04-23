@@ -1,6 +1,6 @@
 import type { MeldNode, NodeType, SourceLocation, ParserTestCase } from '@core/syntax/types';
 import type { Parser } from 'peggy';
-import { MeldAstError, ParseErrorCode, ParseResult } from '@core/ast/types.js';
+import { MeldAstError, ParseErrorCode, ParseResult } from '@core/ast/types';
 import { vi, expect } from 'vitest';
 import { parse } from '@core/ast';
 

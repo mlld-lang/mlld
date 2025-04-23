@@ -1,4 +1,4 @@
-import type { INode } from './INode.js';
+import type { INode } from './INode';
 import { 
   VariableType as BaseVariableType, 
   Field as BaseField,
@@ -6,11 +6,11 @@ import {
   SPECIAL_PATH_VARS as BASE_SPECIAL_PATH_VARS,
   ENV_VAR_PREFIX as BASE_ENV_VAR_PREFIX,
   VAR_PATTERNS as BASE_VAR_PATTERNS
-} from '../shared-types.js';
+} from '../shared-types';
 
 // Re-export core types from shared-types
-export type { Field } from '../shared-types.js';
-export type { FormatOperator } from '../shared-types.js';
+export type { Field } from '../shared-types';
+export type { FormatOperator } from '../shared-types';
 
 /**
  * Extended variable types specific to Meld syntax

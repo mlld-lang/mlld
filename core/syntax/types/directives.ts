@@ -1,6 +1,6 @@
-import { DirectiveNode, DirectiveData } from '@core/syntax/types/nodes.js';
-import type { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types/nodes.js';
-import type { StructuredPath } from '@core/syntax/types/nodes.js';
+import { DirectiveNode, DirectiveData } from '@core/syntax/types/nodes';
+import type { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types/nodes';
+import type { StructuredPath } from '@core/syntax/types/nodes';
 
 export type DirectiveKind = 
   | 'run'

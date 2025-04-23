@@ -2,14 +2,14 @@
  * Debug script to check path resolution
  */
 
-import { PathService } from '@services/fs/PathService/PathService.js';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
-import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
-import { StateService } from '@services/state/StateService/StateService.js';
-import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { PathService } from '@services/fs/PathService/PathService';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
+import { StateService } from '@services/state/StateService/StateService';
+import { ParserService } from '@services/pipeline/ParserService/ParserService';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
 
 // The key issue here is a reference to stateService.getPathVar(), 
 // but we've identified the issue might be in the path resolver.

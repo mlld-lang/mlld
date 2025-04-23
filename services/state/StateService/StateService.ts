@@ -1,14 +1,14 @@
-import type { MeldNode, TextNode } from '@core/syntax/types/index.js';
-import { stateLogger as logger } from '@core/utils/logger.js';
-import type { IStateService, TransformationOptions } from '@services/state/StateService/IStateService.js';
-import type { StateNode } from '@services/state/StateService/types.js';
-import { StateFactory } from '@services/state/StateService/StateFactory.js';
-import type { IStateEventService, StateEvent, StateTransformEvent } from '@services/state/StateEventService/IStateEventService.js';
-import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import type { MeldNode, TextNode } from '@core/syntax/types/index';
+import { stateLogger as logger } from '@core/utils/logger';
+import type { IStateService, TransformationOptions } from '@services/state/StateService/IStateService';
+import type { StateNode } from '@services/state/StateService/types';
+import { StateFactory } from '@services/state/StateService/StateFactory';
+import type { IStateEventService, StateEvent, StateTransformEvent } from '@services/state/StateEventService/IStateEventService';
+import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
 import { inject, container, injectable, DependencyContainer } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
-import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+import { Service } from '@core/ServiceProvider';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory';
+import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient';
 import { randomUUID } from 'crypto';
 import type {
   TextVariable,
@@ -30,11 +30,11 @@ import {
   createPathVariable,
   createCommandVariable
 } from '@core/types';
-import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/guards.js';
-import cloneDeep from 'lodash/cloneDeep.js';
+import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/guards';
+import cloneDeep from 'lodash/cloneDeep';
 import * as crypto from 'crypto';
 import { VariableType } from '@core/types';
-import type { StateChanges } from '@core/directives/DirectiveHandler.js';
+import type { StateChanges } from '@core/directives/DirectiveHandler';
 import assert from 'node:assert';
 
 // Helper function to get the container

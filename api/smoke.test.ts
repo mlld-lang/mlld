@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { processMeld, ProcessOptions } from '@api/index.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import { processMeld, ProcessOptions } from '@api/index';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
 import { logger } from '@core/utils/logger';
 import type { ILogger } from '@core/utils/logger';
-import { StateService } from '@services/state/StateService/StateService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
-import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
+import { StateService } from '@services/state/StateService/StateService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory';
 
 describe('API Smoke Tests', () => {
   let context: TestContextDI;

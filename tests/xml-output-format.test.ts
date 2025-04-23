@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
-import { StateService } from '@services/state/StateService/StateService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { OutputService } from '@services/pipeline/OutputService/OutputService';
+import { StateService } from '@services/state/StateService/StateService';
 
 describe('XML Output Format', () => {
   let context: TestContextDI;

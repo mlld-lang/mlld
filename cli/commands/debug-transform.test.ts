@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as debugTransformModule from './debug-transform.js';
+import * as debugTransformModule from './debug-transform';
 import { container } from 'tsyringe';
-import { StateService } from '@services/state/StateService/StateService.js';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
-import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
-import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
-import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
-import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
+import { StateService } from '@services/state/StateService/StateService';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
+import { ParserService } from '@services/pipeline/ParserService/ParserService';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService';
+import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
+import { StateEventService } from '@services/state/StateEventService/StateEventService';
 
 // Mock the services
 vi.mock('@services/state/StateService/StateService.js');

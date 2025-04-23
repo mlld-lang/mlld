@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi, Mock } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { PathService } from '@services/fs/PathService/PathService.js';
-import { PathValidationError, PathErrorCode } from '@core/errors/PathValidationError.js';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
-import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { PathService } from '@services/fs/PathService/PathService';
+import { PathValidationError, PathErrorCode } from '@core/errors/PathValidationError';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
+import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver';
 import { container, DependencyContainer } from 'tsyringe';
 
 import {
@@ -25,13 +25,13 @@ import {
   isAbsolutePath,
   isRelativePath,
   PathContentType
-} from '@core/types/paths.js';
-import type { StructuredPath } from '@core/syntax/types/nodes.js';
+} from '@core/types/paths';
+import type { StructuredPath } from '@core/syntax/types/nodes';
 
 // Import necessary interfaces for mocks
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
 
 const createTestValidationContext = (overrides: Partial<PathValidationContext> = {}): PathValidationContext => {
   const defaultRules: PathValidationRules = {

@@ -1,15 +1,15 @@
 import { injectable, inject } from 'tsyringe';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ResolutionContext } from '@core/types/resolution.js';
-import { VariableType } from '@core/types/variables.js';
-import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
-import { isBasicCommand } from '@core/types/index.js';
-import type { IBasicCommandDefinition, ICommandDefinition, ICommandParameterMetadata } from '@core/types/define.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { logger } from '@core/utils/logger.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { ResolutionContext } from '@core/types/resolution';
+import { VariableType } from '@core/types/variables';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError';
+import { ErrorSeverity } from '@core/errors/MeldError';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import { VariableResolutionError } from '@core/errors/VariableResolutionError';
+import { isBasicCommand } from '@core/types/index';
+import type { IBasicCommandDefinition, ICommandDefinition, ICommandParameterMetadata } from '@core/types/define';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import { logger } from '@core/utils/logger';
 
 /**
  * Handles resolution and execution of command variables.

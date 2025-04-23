@@ -1,8 +1,8 @@
 import winston from 'winston';
 import path from 'path';
-import { loggingConfig } from '@core/config/logging.js';
+import { loggingConfig } from '@core/config/logging';
 import { injectable, singleton } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
+import { Service } from '@core/ServiceProvider';
 import fs from 'fs';
 
 /**

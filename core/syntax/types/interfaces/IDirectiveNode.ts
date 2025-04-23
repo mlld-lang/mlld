@@ -1,4 +1,4 @@
-import { INode } from './INode.js';
+import { INode } from './INode';
 
 /**
  * Directive kinds supported in Meld

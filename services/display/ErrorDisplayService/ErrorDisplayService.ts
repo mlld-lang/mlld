@@ -7,21 +7,21 @@
 import chalk from 'chalk';
 import fs from 'fs/promises';
 import { injectable, inject } from 'tsyringe';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
-import { MeldParseError } from '@core/errors/MeldParseError.js';
-import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
-import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
-import { MeldImportError } from '@core/errors/MeldImportError.js';
-import { MeldFileSystemError } from '@core/errors/MeldFileSystemError.js';
-import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
-import { MeldOutputError } from '@core/errors/MeldOutputError.js';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
-import { PathValidationError as CorePathValidationError } from '@core/errors/PathValidationError.js';
-import { ServiceInitializationError } from '@core/errors/ServiceInitializationError.js';
-import { sourceMapService } from '@core/utils/SourceMapService.js';
-import { extractLocationFromErrorObject } from '@core/utils/sourceMapUtils.js';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { MeldParseError } from '@core/errors/MeldParseError';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError';
+import { MeldInterpreterError } from '@core/errors/MeldInterpreterError';
+import { MeldImportError } from '@core/errors/MeldImportError';
+import { MeldFileSystemError } from '@core/errors/MeldFileSystemError';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError';
+import { MeldOutputError } from '@core/errors/MeldOutputError';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
+import { PathValidationError as CorePathValidationError } from '@core/errors/PathValidationError';
+import { ServiceInitializationError } from '@core/errors/ServiceInitializationError';
+import { sourceMapService } from '@core/utils/SourceMapService';
+import { extractLocationFromErrorObject } from '@core/utils/sourceMapUtils';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
 
 /**
  * Represents a source location with file path, line, and column

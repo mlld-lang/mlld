@@ -1,4 +1,4 @@
-import { IURLCache, URLResponse } from './IURLCache.js';
+import { IURLCache, URLResponse } from './IURLCache';
 
 /**
  * Simple in-memory implementation of IURLCache

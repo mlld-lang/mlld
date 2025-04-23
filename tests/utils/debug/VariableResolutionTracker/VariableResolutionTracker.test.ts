@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { VariableResolutionTracker, ResolutionAttempt } from '@tests/utils/debug/VariableResolutionTracker/VariableResolutionTracker.js';
+import { VariableResolutionTracker, ResolutionAttempt } from '@tests/utils/debug/VariableResolutionTracker/VariableResolutionTracker';
 
 describe('VariableResolutionTracker', () => {
   let tracker: VariableResolutionTracker;

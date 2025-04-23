@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types/index.js';
+import type { MeldNode } from '@core/syntax/types/index';
 
 /**
  * Types of variables supported in Meld

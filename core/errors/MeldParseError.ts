@@ -1,5 +1,5 @@
-import type { Location, Position } from '@core/types/index.js';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
+import type { Location, Position } from '@core/types/index';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
 
 interface SerializedParseError {
   name: string;

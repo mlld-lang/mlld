@@ -1,5 +1,5 @@
-import type { ClientFactory } from '@core/shared-service-types.js';
-import type { IDirectiveServiceClient } from '../interfaces/IDirectiveServiceClient.js';
+import type { ClientFactory } from '@core/shared-service-types';
+import type { IDirectiveServiceClient } from '../interfaces/IDirectiveServiceClient';
 
 /**
  * Factory interface for creating DirectiveServiceClient instances.

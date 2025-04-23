@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
-import { DirectiveNode, TextNode, MeldNode } from '@core/syntax/types.js';
+import { OutputService } from '@services/pipeline/OutputService/OutputService';
+import { DirectiveNode, TextNode, MeldNode } from '@core/syntax/types';
 
 // Mock dependency for IStateService
 const createMockState = (transformationEnabled = false, transformedNodes: MeldNode[] = []) => {

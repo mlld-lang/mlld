@@ -1,21 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
-import { MeldParseError } from '@core/errors/MeldParseError.js';
-import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode, VariableReferenceNode } from '@core/syntax/types.js';
-import type { Location, Position } from '@core/types/index.js';
+import { ParserService } from '@services/pipeline/ParserService/ParserService';
+import { MeldParseError } from '@core/errors/MeldParseError';
+import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode, VariableReferenceNode } from '@core/syntax/types';
+import type { Location, Position } from '@core/types/index';
 // Import the centralized syntax examples and helpers
 import { 
   textDirectiveExamples, 
   codefenceExamples, 
   contentExamples 
-} from '@core/syntax/index.js';
-import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
-import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
-import { NodeFactory } from '@core/syntax/types/factories/NodeFactory.js';
+} from '@core/syntax/index';
+import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers';
+import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory';
+import { NodeFactory } from '@core/syntax/types/factories/NodeFactory';
 import { container, type DependencyContainer } from 'tsyringe';
 import { mock, mockDeep } from 'vitest-mock-extended';
-import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
 
 // Define a type that combines the meld-spec Location with our filePath
 type LocationWithFilePath = {

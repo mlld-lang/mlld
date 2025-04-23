@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
-import type { StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
-import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService.js';
-import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
-import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
-import type { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
-import type { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService';
+import type { StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
+import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService';
+import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService';
+import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService';
+import type { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService';
+import type { IStateEventService } from '@services/state/StateEventService/IStateEventService';
 
 class MockStateEventService implements IStateEventService {
   private handlers = new Map<string, Array<{

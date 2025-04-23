@@ -1,6 +1,6 @@
-import { TestContext } from '../tests/utils/TestContext.js';
-import { main } from './index.js';
-import type { ProcessOptions, Services } from '@core/types/index.js';
+import { TestContext } from '../tests/utils/TestContext';
+import { main } from './index';
+import type { ProcessOptions, Services } from '@core/types/index';
 
 /**
  * This script helps debug path resolution issues by tracing a path directive

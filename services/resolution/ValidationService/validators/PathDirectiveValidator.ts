@@ -1,8 +1,8 @@
-import { DirectiveNode, PathDirectiveData } from '@core/syntax/types.js';
-import { MeldDirectiveError, DirectiveLocation } from '@core/errors/MeldDirectiveError.js';
-import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
-import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { DirectiveNode, PathDirectiveData } from '@core/syntax/types';
+import { MeldDirectiveError, DirectiveLocation } from '@core/errors/MeldDirectiveError';
+import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { ErrorSeverity } from '@core/errors/MeldError';
+import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
 
 /**
  * Converts AST SourceLocation to DirectiveLocation

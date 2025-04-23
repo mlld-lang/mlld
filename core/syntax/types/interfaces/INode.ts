@@ -1,5 +1,5 @@
-import { BaseNode } from '../shared-types.js';
-import { SourceLocation } from './common.js';
+import { BaseNode } from '../shared-types';
+import { SourceLocation } from './common';
 import { NodeType } from '../nodes';
 import { ISourceLocation, NodeId } from './common';
 

@@ -7,31 +7,31 @@ const mockLogger = {
 };
 
 import { describe, it, expect, beforeEach, vi, afterEach, type Mock } from 'vitest';
-import type { DirectiveNode, DirectiveData, MeldNode, VariableReferenceNode, TextNode, IDirectiveData } from '@core/syntax/types/index.js';
-import type { StructuredPath } from '@core/syntax/types/nodes.js';
-import { createMeldPath, unsafeCreateValidatedResourcePath, PathContentType, unsafeCreateAbsolutePath, MeldPath } from '@core/types/paths.js';
-import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { ResolutionContext } from '@core/types/resolution.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
-import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { createLocation, createEmbedDirective, createTextNode, createVariableReferenceNode } from '@tests/utils/testFactories.js';
-import { embedDirectiveExamples } from '@core/syntax/index.js';
-import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils.js';
-import { VariableType, TextVariable, DataVariable, VariableOrigin, type IPathVariable, MeldVariable } from '@core/types/variables.js';
-import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { PathValidationContext } from '@core/types/paths.js';
-import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
+import type { DirectiveNode, DirectiveData, MeldNode, VariableReferenceNode, TextNode, IDirectiveData } from '@core/syntax/types/index';
+import type { StructuredPath } from '@core/syntax/types/nodes';
+import { createMeldPath, unsafeCreateValidatedResourcePath, PathContentType, unsafeCreateAbsolutePath, MeldPath } from '@core/types/paths';
+import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { ResolutionContext } from '@core/types/resolution';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
+import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { createLocation, createEmbedDirective, createTextNode, createVariableReferenceNode } from '@tests/utils/testFactories';
+import { embedDirectiveExamples } from '@core/syntax/index';
+import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils';
+import { VariableType, TextVariable, DataVariable, VariableOrigin, type IPathVariable, MeldVariable } from '@core/types/variables';
+import type { InterpolatableValue } from '@core/syntax/types/nodes';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { PathValidationContext } from '@core/types/paths';
+import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
 import * as path from 'path';
-import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { EmbedDirectiveData } from '@core/syntax/types/directives.js';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { EmbedDirectiveData } from '@core/syntax/types/directives';
 import { DirectiveResult } from '@core/directives/DirectiveHandler';
 import { container, DependencyContainer } from 'tsyringe';
 import { 
@@ -43,9 +43,9 @@ import {
     createValidationServiceMock,
 } from '@tests/utils/mocks/serviceMocks.ts';
 import { mock } from 'vitest-mock-extended';
-import type { ILogger } from '@core/utils/logger.js';
-import { VariableMetadata } from '@core/types/variables.js';
-import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import type { ILogger } from '@core/utils/logger';
+import { VariableMetadata } from '@core/types/variables';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService';
 import { CircularityServiceMock } from '@tests/utils/mocks/serviceMocks.ts';
 
 /**

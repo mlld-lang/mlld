@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContext } from '@tests/utils/TestContext.js';
+import { TestContext } from '@tests/utils/TestContext';
 import * as path from 'path';
 
 describe('TestContext', () => {

@@ -1,13 +1,13 @@
 import { 
   MeldParseError, 
   ErrorSeverity 
-} from '@core/errors/index.js';
+} from '@core/errors/index';
 import { 
   createExample, 
   createInvalidExample, 
   combineExamples,
   SyntaxExampleGroup 
-} from '@core/syntax/helpers/index.js';
+} from '@core/syntax/helpers/index';
 
 /**
  * Collection of atomic @path directive examples

@@ -20,7 +20,7 @@ import type {
   ValidationContext,
   ValidationResult,
   Example
-} from '@core/syntax/types/index.js';
+} from '@core/syntax/types/index';
 
 // Re-export all imported types
 export type {

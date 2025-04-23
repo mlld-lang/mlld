@@ -1,11 +1,11 @@
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { Location } from '@core/types/index.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { Location } from '@core/types/index';
 // Import shared types
-import { PathServiceBase } from '@core/shared/types.js';
+import { PathServiceBase } from '@core/shared/types';
 // Remove old StructuredPath import
-// import { StructuredPath } from '@core/shared-service-types.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURLCache.js';
+// import { StructuredPath } from '@core/shared-service-types';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURLCache';
 
 // Import new path types
 import type {
@@ -16,9 +16,9 @@ import type {
   ValidatedResourcePath, // May use this as a more general validated return type
   PathValidationContext, // Import the new context
   MeldPath
-} from '@core/types/paths.js';
+} from '@core/types/paths';
 // Import StructuredPath from syntax/types
-import type { StructuredPath } from '@core/syntax/types/nodes.js';
+import type { StructuredPath } from '@core/syntax/types/nodes';
 
 /**
  * Options for URL validation and operations

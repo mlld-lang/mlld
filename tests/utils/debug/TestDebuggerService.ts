@@ -1,5 +1,5 @@
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IStateDebuggerService, DebugSessionConfig, DebugSessionResult, StateCaptureConfig, StateDiagnostic } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IStateDebuggerService, DebugSessionConfig, DebugSessionResult, StateCaptureConfig, StateDiagnostic } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService';
 
 export interface DebugData {
   operations: Array<{

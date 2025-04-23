@@ -3,12 +3,12 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { TestContext } from '@tests/utils/TestContext.js';
-import { main } from '@api/index.js';
-import { findFiles, getTestCaseName, setupTestContext, VALID_CASES_DIR, EXPECTED_EXTENSION } from '@tests/e2e/example-runner-setup.js';
+import { TestContext } from '@tests/utils/TestContext';
+import { main } from '@api/index';
+import { findFiles, getTestCaseName, setupTestContext, VALID_CASES_DIR, EXPECTED_EXTENSION } from '@tests/e2e/example-runner-setup';
 import { promises as realFs } from 'fs';
 import path from 'path';
-import type { Services } from '@core/types.js';
+import type { Services } from '@core/types';
 
 describe.skip('Command References in Run directives', async () => {
   // Test files to run

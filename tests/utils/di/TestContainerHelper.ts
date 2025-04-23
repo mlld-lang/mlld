@@ -5,7 +5,7 @@
 
 import { container, DependencyContainer, InjectionToken } from 'tsyringe';
 // Remove shouldUseDI import as we'll always use DI
-// import { shouldUseDI } from '@core/ServiceProvider.js';
+// import { shouldUseDI } from '@core/ServiceProvider';
 
 /**
  * Creates a container for testing that isolates registrations and prevents state leakage.

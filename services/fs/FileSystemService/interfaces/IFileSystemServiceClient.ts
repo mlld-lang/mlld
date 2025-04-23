@@ -1,4 +1,4 @@
-import type { ValidatedResourcePath } from '@core/types/paths.js';
+import type { ValidatedResourcePath } from '@core/types/paths';
 
 /**
  * Minimal interface for what PathService needs from FileSystemService.

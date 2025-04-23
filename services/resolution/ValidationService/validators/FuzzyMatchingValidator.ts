@@ -1,5 +1,5 @@
-import type { DirectiveNode } from '@core/syntax/types.js';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
+import type { DirectiveNode } from '@core/syntax/types';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 
 /**
  * Validates fuzzy matching threshold values in directives that support them.

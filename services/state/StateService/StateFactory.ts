@@ -1,11 +1,11 @@
-import type { StateNode, StateNodeOptions, IStateFactory, StateOperation } from '@services/state/StateService/types.js';
-import { stateLogger as logger } from '@core/utils/logger.js';
+import type { StateNode, StateNodeOptions, IStateFactory, StateOperation } from '@services/state/StateService/types';
+import { stateLogger as logger } from '@core/utils/logger';
 import { randomUUID } from 'crypto';
-import { Service } from '@core/ServiceProvider.js';
+import { Service } from '@core/ServiceProvider';
 import { injectable } from 'tsyringe';
-import cloneDeep from 'lodash/cloneDeep.js';
-import type { IStateService } from './IStateService.js';
-import type { TransformationOptions } from '@core/types/state.js';
+import cloneDeep from 'lodash/cloneDeep';
+import type { IStateService } from './IStateService';
+import type { TransformationOptions } from '@core/types/state';
 
 /**
  * Default transformation options

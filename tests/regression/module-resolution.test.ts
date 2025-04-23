@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 
 // 1. Test internal import with .js extension
-import { MeldError } from '@core/errors/MeldError.js';
+import { MeldError } from '@core/errors/MeldError';
 
 // 2. Test Node.js built-in module imports without .js extension
 import { EventEmitter } from 'events';
@@ -16,10 +16,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 // 3. Test API imports using @api alias
-import { main } from '@api/index.js';
+import { main } from '@api/index';
 
 // 4. Test explicit index.js in directory imports
-import { meld } from '@core/syntax/helpers/dedent.js';
+import { meld } from '@core/syntax/helpers/dedent';
 
 // 5. Test third-party dependency imports
 import 'reflect-metadata';

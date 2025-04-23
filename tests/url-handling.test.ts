@@ -1,9 +1,9 @@
-import { PathService } from '@services/fs/PathService/PathService.js';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import { URLValidationError, URLSecurityError } from '@services/resolution/URLContentResolver/errors/index.js';
+import { PathService } from '@services/fs/PathService/PathService';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
+import { URLValidationError, URLSecurityError } from '@services/resolution/URLContentResolver/errors/index';
 import { container } from 'tsyringe';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver.js';
+import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver';
 
 // Mock global fetch
 global.fetch = vi.fn();

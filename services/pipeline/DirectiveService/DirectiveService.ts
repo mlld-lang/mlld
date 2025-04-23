@@ -1,35 +1,35 @@
-import type { DirectiveNode, DirectiveKind, DirectiveData } from '@core/syntax/types/index.js';
-import { directiveLogger } from '@core/utils/logger.js';
-import { IDirectiveService, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import type { DirectiveNode, DirectiveKind, DirectiveData } from '@core/syntax/types/index';
+import { directiveLogger } from '@core/utils/logger';
+import { IDirectiveService, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
 import type { 
   ParserServiceLike, 
   InterpreterServiceLike,
   CircularityServiceLike, 
   InterpreterOptionsBase
-} from '@core/shared-service-types.js';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
-import type { ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
-import { Service } from '@core/ServiceProvider.js';
+} from '@core/shared-service-types';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import type { ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+import { Service } from '@core/ServiceProvider';
 import { inject, injectable, delay, injectAll } from 'tsyringe';
 import { container } from 'tsyringe';
-import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
-import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
+import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import type { ResolutionContext } from '@core/types/resolution.js';
-import type { DirectiveProcessingContext, OutputFormattingContext, ExecutionContext } from '@core/types/index.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
+import type { ResolutionContext } from '@core/types/resolution';
+import type { DirectiveProcessingContext, OutputFormattingContext, ExecutionContext } from '@core/types/index';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import type { RawPath, Location as CoreLocation } from '@core/types';
 import type { SourceLocation as SyntaxSourceLocation } from '@core/syntax/types';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
-import type { DirectiveLocation } from '@core/errors/MeldDirectiveError.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
+import type { DirectiveLocation } from '@core/errors/MeldDirectiveError';
 import { 
     VariableType, 
     VariableMetadata, 
@@ -38,19 +38,19 @@ import {
     createDataVariable, 
     createPathVariable, 
     createCommandVariable 
-} from '@core/types/variables.js';
-import { MeldVariable } from '@core/types/variables.js';
-import type { ICommandDefinition } from '@core/types/define.js';
-import { isBasicCommand } from '@core/types/define.js';
+} from '@core/types/variables';
+import { MeldVariable } from '@core/types/variables';
+import type { ICommandDefinition } from '@core/types/define';
+import { isBasicCommand } from '@core/types/define';
 
 // Import all handlers
-// import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
-// import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
-// import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
-// import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
-// import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
-// import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
-// import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
+// import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler';
+// import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler';
+// import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler';
+// import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler';
+// import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler';
+// import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+// import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler';
 
 export class MeldLLMXMLError extends Error {
   constructor(

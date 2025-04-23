@@ -1,4 +1,4 @@
-import type { StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import type { StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
 
 /**
  * Client interface for StateTrackingService functionality needed by StateService

@@ -7,7 +7,7 @@ import type {
   VariableReferenceNode,
   DirectiveNode,
   MeldNode
-} from '@core/ast/ast/astTypes.js';
+} from '@core/ast/ast/astTypes';
 
 describe('Parser', () => {
   describe('Text blocks', () => {

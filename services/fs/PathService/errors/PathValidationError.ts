@@ -1,5 +1,5 @@
-import { PathOptions } from '@services/fs/PathService/IPathService.js';
-import type { Location } from '@core/types/index.js';
+import { PathOptions } from '@services/fs/PathService/IPathService';
+import type { Location } from '@core/types/index';
 
 /**
  * Error codes for path validation failures

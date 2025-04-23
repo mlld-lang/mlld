@@ -1,6 +1,6 @@
-import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
-import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError';
+import { ErrorSeverity } from '@core/errors/MeldError';
+import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService';
 
 /**
  * Factory to create consistent error objects for variable resolution

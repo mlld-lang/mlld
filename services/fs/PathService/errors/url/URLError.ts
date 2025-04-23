@@ -1,4 +1,4 @@
-import { MeldError } from '@core/errors/MeldError.js';
+import { MeldError } from '@core/errors/MeldError';
 
 /**
  * Base error class for URL operations

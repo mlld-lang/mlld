@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as initModule from './init.js';
+import * as initModule from './init';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createInterface } from 'readline';

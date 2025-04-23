@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
-import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
-import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
-import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver';
+import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory';
+import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index';
 
 // Mock StateVisualizationService and StateTrackingService
 class StateVisualizationService {}

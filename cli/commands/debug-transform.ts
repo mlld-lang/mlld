@@ -1,30 +1,30 @@
 #!/usr/bin/env node
 
 import { container } from 'tsyringe';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError';
 import path from 'path';
 import chalk from 'chalk';
 import fs from 'fs/promises';
-import { initializeContextDebugger, StateVisualizationService } from '@tests/utils/debug/index.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import { initializeContextDebugger, StateVisualizationService } from '@tests/utils/debug/index';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 
 // Import concrete classes for direct instantiation
-import { StateService } from '@services/state/StateService/StateService.js';
-import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
-import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
-import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
-import { PathService } from '@services/fs/PathService/PathService.js';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
-import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
-import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
-import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import { StateService } from '@services/state/StateService/StateService';
+import { ParserService } from '@services/pipeline/ParserService/ParserService';
+import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService';
+import { PathService } from '@services/fs/PathService/PathService';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService';
 
 interface DebugTransformOptions {
   filePath: string;

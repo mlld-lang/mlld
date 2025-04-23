@@ -5,8 +5,8 @@
  * This is a minimal implementation for the initial release.
  */
 
-import { MeldError } from '@core/errors/MeldError.js';
-import { ErrorSeverity } from '@core/errors/ErrorSeverity.js';
+import { MeldError } from '@core/errors/MeldError';
+import { ErrorSeverity } from '@core/errors/ErrorSeverity';
 
 /**
  * Options for creating a test environment

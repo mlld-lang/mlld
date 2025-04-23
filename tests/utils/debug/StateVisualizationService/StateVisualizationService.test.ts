@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi, Mock } from 'vitest';
-import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService.js';
-import { IStateHistoryService, StateOperation, StateTransformation } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
-import type { IStateTrackingService, StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
-import { VisualizationConfig, VisualizationFormat } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
+import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService';
+import { IStateHistoryService, StateOperation, StateTransformation } from '@tests/utils/debug/StateHistoryService/IStateHistoryService';
+import type { IStateTrackingService, StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
+import { VisualizationConfig, VisualizationFormat } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService';
 import { mockDeep } from 'vitest-mock-extended';
 
 describe('StateVisualizationService', () => {

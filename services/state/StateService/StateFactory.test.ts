@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { StateFactory } from '@services/state/StateService/StateFactory.js';
-import type { StateNode, IStateFactory } from '@services/state/StateService/types.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { TransformationOptions } from '@core/types/state.js';
+import { StateFactory } from '@services/state/StateService/StateFactory';
+import type { StateNode, IStateFactory } from '@services/state/StateService/types';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { TransformationOptions } from '@core/types/state';
 import { createTextVariable } from '@core/types';
 import { mock } from 'vitest-mock-extended';
 

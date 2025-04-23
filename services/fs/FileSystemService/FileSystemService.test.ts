@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { container, DependencyContainer } from 'tsyringe';
 import { mockDeep, DeepMockProxy } from 'vitest-mock-extended';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
-import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
-import { MeldError } from '@core/errors/MeldError.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
+import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService';
+import { MeldError } from '@core/errors/MeldError';
 import path from 'path';
-import type { PathService } from '@services/fs/PathService/PathService.js';
-import type { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
-import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
-import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
+import type { PathService } from '@services/fs/PathService/PathService';
+import type { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
+import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory';
+import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient';
 import fs from 'fs-extra';
 
 describe('FileSystemService', () => {

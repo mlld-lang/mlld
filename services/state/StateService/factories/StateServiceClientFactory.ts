@@ -1,8 +1,8 @@
 import { injectable, inject } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IStateServiceClient } from '@services/state/StateService/interfaces/IStateServiceClient.js';
-import { stateLogger as logger } from '@core/utils/logger.js';
+import { Service } from '@core/ServiceProvider';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IStateServiceClient } from '@services/state/StateService/interfaces/IStateServiceClient';
+import { stateLogger as logger } from '@core/utils/logger';
 
 /**
  * Factory for creating state service clients

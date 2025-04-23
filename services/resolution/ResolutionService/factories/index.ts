@@ -1,1 +1,1 @@
-export * from './ResolutionServiceClientFactory.js'; 
+export * from './ResolutionServiceClientFactory'; 

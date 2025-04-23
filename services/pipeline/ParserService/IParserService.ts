@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types/index.js';
+import type { MeldNode } from '@core/syntax/types/index';
 
 /**
  * Service responsible for parsing Meld content into an Abstract Syntax Tree (AST).

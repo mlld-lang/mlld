@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
 import { parse } from '@core/ast';
 import { expect, describe, it } from 'vitest';
-import { DirectiveNode } from '@core/ast/types.js';
+import { DirectiveNode } from '@core/ast/types';
 
 describe('special path variables', () => {
   it('should parse $. in embed directive', async () => {

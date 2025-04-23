@@ -1,14 +1,14 @@
 import { injectable, inject } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
+import { Service } from '@core/ServiceProvider';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient';
 // Import needed types for the signature
 import type {
   AbsolutePath,
   RelativePath,
   RawPath,
   StructuredPath
-} from '@core/types/paths.js';
+} from '@core/types/paths';
 
 /**
  * Factory for creating PathServiceClient instances.

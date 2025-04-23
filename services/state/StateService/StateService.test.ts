@@ -20,16 +20,16 @@ import { mock } from 'vitest-mock-extended';
 import { container, type DependencyContainer } from 'tsyringe'; // Import DI container
 
 // Import Services and Interfaces
-import { StateService } from '@services/state/StateService/StateService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { StateFactory } from '@services/state/StateService/StateFactory.js';
-import type { IStateFactory } from '@services/state/StateService/types.js';
-import type { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService.js';
-import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
-import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+import { StateService } from '@services/state/StateService/StateService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { StateFactory } from '@services/state/StateService/StateFactory';
+import type { IStateFactory } from '@services/state/StateService/types';
+import type { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory';
+import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient';
 
 // Other necessary types
-import type { MeldNode, TextNode } from '@core/syntax/types/index.js';
+import type { MeldNode, TextNode } from '@core/syntax/types/index';
 import {
   VariableType, 
   PathContentType, 
@@ -49,8 +49,8 @@ import {
   type MeldVariable,
   type ICommandParameterMetadata,
   type IBasicCommandDefinition
-} from '@core/types/index.js';
-import { unsafeCreateValidatedResourcePath } from '@core/types/paths.js';
+} from '@core/types/index';
+import { unsafeCreateValidatedResourcePath } from '@core/types/paths';
 
 
 describe('StateService', () => {

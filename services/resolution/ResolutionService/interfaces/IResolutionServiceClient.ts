@@ -1,11 +1,11 @@
-import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { StructuredPath } from '@core/shared-service-types.js';
+import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import { StructuredPath } from '@core/shared-service-types';
 import type { 
     MeldNode, 
     InterpolatableValue, 
     TextNode, 
     VariableReferenceNode 
-} from '@core/syntax/types/nodes.js';
+} from '@core/syntax/types/nodes';
 import type { MeldResolutionError } from '@core/errors'; // For JSDoc
 
 /**

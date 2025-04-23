@@ -7,22 +7,22 @@ import type {
   DirectiveData
 } from '@core/syntax/types';
 import type { Location, Position } from '@core/types';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 import { vi, type Mock } from 'vitest';
 import { mock } from 'vitest-mock-extended';
-import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
-import type { InterpolatableValue, StructuredPath as AstStructuredPath, VariableReferenceNode } from '@core/syntax/types/nodes.js';
-import { VariableOrigin } from '@core/types/variables.js';
-import type { TextVariable, DataVariable, IPathVariable, CommandVariable, VariableMetadata, VariableType } from '@core/types/variables.js';
+import { isInterpolatableValueArray } from '@core/syntax/types/guards';
+import type { InterpolatableValue, StructuredPath as AstStructuredPath, VariableReferenceNode } from '@core/syntax/types/nodes';
+import { VariableOrigin } from '@core/types/variables';
+import type { TextVariable, DataVariable, IPathVariable, CommandVariable, VariableMetadata, VariableType } from '@core/types/variables';
 import type { JsonValue } from '@core/types';
-import type { ICommandDefinition } from '@core/types/define.js';
+import type { ICommandDefinition } from '@core/types/define';
 
 // Counter for generating unique node IDs in tests
 let testNodeIdCounter = 0;

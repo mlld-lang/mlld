@@ -6,13 +6,13 @@
  */
 
 import { injectable, inject } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
+import { Service } from '@core/ServiceProvider';
 import { 
   PathServiceLike, 
   FileSystemLike,
   ClientFactory,
   ServiceOptions
-} from '@core/shared-service-types.js';
+} from '@core/shared-service-types';
 
 /**
  * Simplified FileSystemService interface that uses shared types

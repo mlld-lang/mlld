@@ -1,5 +1,5 @@
-import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
-import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index';
+import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
 
 /**
  * Interface for field access configuration

@@ -1,7 +1,7 @@
 import type { Stats } from 'fs-extra';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import { FileSystemBase } from '@core/shared/types.js';
-import type { ValidatedResourcePath } from '@core/types/paths.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
+import { FileSystemBase } from '@core/shared/types';
+import type { ValidatedResourcePath } from '@core/types/paths';
 
 /**
  * Service responsible for file system operations.

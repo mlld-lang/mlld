@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import path from 'path';
 import fs from 'fs/promises'; 
 import { fileURLToPath } from 'url';
-import { processMeld } from '@api/index.js'; 
+import { processMeld } from '@api/index'; 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const validCasesDir = path.resolve(__dirname, '../cases/valid');

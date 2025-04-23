@@ -1,1 +1,1 @@
-export type { IResolutionServiceClient } from './IResolutionServiceClient.js'; 
+export type { IResolutionServiceClient } from './IResolutionServiceClient'; 

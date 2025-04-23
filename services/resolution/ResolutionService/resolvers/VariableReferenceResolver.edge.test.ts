@@ -1,25 +1,25 @@
 import { describe, it, expect, beforeEach, vi, afterEach, type Mock } from 'vitest';
-import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver';
 import { 
   createTextNode,
   createVariableReferenceNode
-} from '@tests/utils/testFactories.js';
+} from '@tests/utils/testFactories';
 import type { ResolutionContext } from '@core/types/resolution';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { MeldNode } from '@core/ast/ast/astTypes.js';
-import { MeldResolutionError, FieldAccessError, VariableResolutionError } from '@core/errors/index.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { MeldNode } from '@core/ast/ast/astTypes';
+import { MeldResolutionError, FieldAccessError, VariableResolutionError } from '@core/errors/index';
 import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { VariableType, TextVariable, DataVariable, MeldVariable, JsonValue } from '@core/types/index.js';
-import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import { createStateServiceMock } from '@tests/utils/mocks/serviceMocks.js';
-import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
-import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
-import type { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
-import type { VariableReferenceNode, TextNode } from '@core/ast/ast/astTypes.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
+import { VariableType, TextVariable, DataVariable, MeldVariable, JsonValue } from '@core/types/index';
+import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import { createStateServiceMock } from '@tests/utils/mocks/serviceMocks';
+import { isInterpolatableValueArray } from '@core/syntax/types/guards';
+import type { InterpolatableValue } from '@core/syntax/types/nodes';
+import type { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes';
+import type { VariableReferenceNode, TextNode } from '@core/ast/ast/astTypes';
 import { container, type DependencyContainer } from 'tsyringe';
 
 // Define mock types if helpful

@@ -1,18 +1,18 @@
-import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import type { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
-import type { ParserService } from '@services/pipeline/ParserService/ParserService.js';
-import type { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
-import type { StateService } from '@services/state/StateService/StateService.js';
-import type { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
-import type { PathService } from '@services/fs/PathService/PathService.js';
-import type { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
-import type { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
-import type { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
-import type { OutputService } from '@services/pipeline/OutputService/OutputService.js';
-import type { StateDebuggerService as DebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
-import type { TransformationOptions } from './state.js';
-import type { StateServiceLike } from '@core/shared-service-types.js';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
+import type { OutputFormat } from '@services/pipeline/OutputService/IOutputService';
+import type { ParserService } from '@services/pipeline/ParserService/ParserService';
+import type { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService';
+import type { StateService } from '@services/state/StateService/StateService';
+import type { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
+import type { PathService } from '@services/fs/PathService/PathService';
+import type { ValidationService } from '@services/resolution/ValidationService/ValidationService';
+import type { CircularityService } from '@services/resolution/CircularityService/CircularityService';
+import type { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService';
+import type { OutputService } from '@services/pipeline/OutputService/OutputService';
+import type { StateDebuggerService as DebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService';
+import type { TransformationOptions } from './state';
+import type { StateServiceLike } from '@core/shared-service-types';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
 import type { DependencyContainer } from 'tsyringe';
 import type {
   ResolutionContext as ResolutionContextImport,
@@ -22,7 +22,7 @@ import type {
   PathResolutionContext,
   PathConstraints,
   ParserFlags
-} from './resolution.js';
+} from './resolution';
 import type {
   EmbedType,
   BaseEmbedParams,
@@ -35,11 +35,11 @@ import type {
   EmbedResolutionContext,
   SourceLocation as EmbedSourceLocation,
   EmbedResult
-} from './embed.js';
-import type { MeldNode } from '@core/syntax/types/index.js';
-import type { DirectiveNode } from '@core/syntax/types/index.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
+} from './embed';
+import type { MeldNode } from '@core/syntax/types/index';
+import type { DirectiveNode } from '@core/syntax/types/index';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
 
 /**
  * Represents a position in a file
@@ -126,15 +126,15 @@ export {
   type DirectiveReplacement,
   StringLiteralType,
   type SourceLocation
-} from './common.js';
+} from './common';
 
-export * from './variables.js';
-export * from './paths.js';
-export * from './define.js';
-export * from './state.js';
-export * from '../errors/index.js';
-export * from './dependencies.js';
-export * from './guards.js';
+export * from './variables';
+export * from './paths';
+export * from './define';
+export * from './state';
+export * from '../errors/index';
+export * from './dependencies';
+export * from './guards';
 
 // Explicitly export types from resolution and embed using aliases where needed
 export type { 

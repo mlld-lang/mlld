@@ -27,7 +27,7 @@ import {
   createCommentNode,
   createErrorNode,
   createVariableReferenceNode
-} from '@core/syntax/types/index.js';
+} from '@core/syntax/types/index';
 
 describe('AST Factory Pattern Integration', () => {
   // Reset the container before each test

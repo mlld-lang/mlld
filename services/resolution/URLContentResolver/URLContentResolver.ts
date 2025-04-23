@@ -1,8 +1,8 @@
-import { Service } from '@core/ServiceProvider.js';
+import { Service } from '@core/ServiceProvider';
 import { injectable } from 'tsyringe';
-import { IURLContentResolver, URLFetchOptions, URLResponse, URLValidationOptions } from './IURLContentResolver.js';
-import { URLCache } from './URLCache.js';
-import { URLError, URLFetchError, URLSecurityError, URLValidationError } from './errors/index.js';
+import { IURLContentResolver, URLFetchOptions, URLResponse, URLValidationOptions } from './IURLContentResolver';
+import { URLCache } from './URLCache';
+import { URLError, URLFetchError, URLSecurityError, URLValidationError } from './errors/index';
 
 /**
  * Service for validating, fetching, and caching content from URLs

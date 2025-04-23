@@ -3,7 +3,7 @@
  * Sets up dependencies and invokes the main CLI logic.
  */
 import 'reflect-metadata';
-import { main } from './index.js';
+import { main } from './index';
 
 // Export the main function for programmatic use
 export { main };

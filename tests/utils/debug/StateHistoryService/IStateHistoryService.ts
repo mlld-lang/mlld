@@ -8,9 +8,9 @@
  * through history querying capabilities.
  */
 
-import { StateEvent } from '@services/state/StateEventService/IStateEventService.js';
-import { StateEventType } from '@core/shared/types.js';
-import { StateMetadata, StateRelationship } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { StateEvent } from '@services/state/StateEventService/IStateEventService';
+import { StateEventType } from '@core/shared/types';
+import { StateMetadata, StateRelationship } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
 
 /**
  * Represents a recorded state operation

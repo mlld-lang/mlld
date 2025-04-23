@@ -9,11 +9,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CLIService } from '@services/cli/CLIService/CLIService.js';
-import { MemfsTestFileSystemAdapter as FileSystemAdapter } from '@tests/utils/MemfsTestFileSystemAdapter.js';
-import { mockArgv } from '@tests/utils/cli/mockArgv.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { mockConsole as getMockConsole } from '@tests/utils/cli/mockConsole.js';
+import { CLIService } from '@services/cli/CLIService/CLIService';
+import { MemfsTestFileSystemAdapter as FileSystemAdapter } from '@tests/utils/MemfsTestFileSystemAdapter';
+import { mockArgv } from '@tests/utils/cli/mockArgv';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { mockConsole as getMockConsole } from '@tests/utils/cli/mockConsole';
 import fs from 'fs';
 import path from 'path';
 import { ensureDir } from 'fs-extra';

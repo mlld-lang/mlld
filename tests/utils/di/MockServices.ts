@@ -5,17 +5,17 @@
  */
 
 import { injectable } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
+import { Service } from '@core/ServiceProvider';
 import { vi } from 'vitest';
-import type { MeldNode } from '@core/syntax/types.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { MeldNode } from '@core/syntax/types';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 
 /**
  * Injectable mock validation service

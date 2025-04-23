@@ -1,26 +1,26 @@
-import type { MeldNode, SourceLocation, DirectiveNode, TextNode, VariableReferenceNode } from '@core/syntax/types/index.js';
-import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
-import { interpreterLogger as logger } from '@core/utils/logger.js';
-import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError.js';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
-import { Service } from '@core/ServiceProvider.js';
+import type { MeldNode, SourceLocation, DirectiveNode, TextNode, VariableReferenceNode } from '@core/syntax/types/index';
+import type { InterpolatableValue } from '@core/syntax/types/nodes';
+import { interpreterLogger as logger } from '@core/utils/logger';
+import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { Service } from '@core/ServiceProvider';
 import { inject, injectable, delay, container as globalContainer, DependencyContainer } from 'tsyringe';
-import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
-import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
-import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { DirectiveProcessingContext, ExecutionContext, OutputFormattingContext } from '@core/types/index.js';
-import type { ResolutionContext } from '@core/types/resolution.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory';
+import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import type { DirectiveProcessingContext, ExecutionContext, OutputFormattingContext } from '@core/types/index';
+import type { ResolutionContext } from '@core/types/resolution';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 import * as crypto from 'crypto';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
-import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
+import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',

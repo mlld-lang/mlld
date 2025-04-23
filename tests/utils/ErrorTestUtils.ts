@@ -1,9 +1,9 @@
 import { expect } from 'vitest';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
-import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
-import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
+import { MeldInterpreterError } from '@core/errors/MeldInterpreterError';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 
 /**
  * Error handler that collects errors for testing

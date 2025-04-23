@@ -3,9 +3,9 @@
  */
 
 import { vi } from 'vitest';
-import type { CommandResponse, CommandMapping } from '@tests/utils/fs/MockCommandExecutor.js';
-import { MockCommandExecutor, createCommonCommandMappings } from '@tests/utils/fs/MockCommandExecutor.js';
-import { CommandMockableFileSystem } from '@tests/utils/fs/CommandMockableFileSystem.js';
+import type { CommandResponse, CommandMapping } from '@tests/utils/fs/MockCommandExecutor';
+import { MockCommandExecutor, createCommonCommandMappings } from '@tests/utils/fs/MockCommandExecutor';
+import { CommandMockableFileSystem } from '@tests/utils/fs/CommandMockableFileSystem';
 
 /**
  * Options for setupCommandMocking

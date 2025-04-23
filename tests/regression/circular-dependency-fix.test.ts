@@ -4,17 +4,17 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js'; 
-import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { PathService } from '@services/fs/PathService/PathService.js';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
-import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory'; 
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
+import { PathService } from '@services/fs/PathService/PathService';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
 import { container } from 'tsyringe';
-import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver.js';
+import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver';
 
 describe('Circular Dependency Regression Tests', () => {
   let context: TestContextDI;

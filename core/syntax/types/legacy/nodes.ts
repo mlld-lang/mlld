@@ -4,7 +4,7 @@ import {
   DirectiveKindString,
   DirectiveData,
   NodeType
-} from '@core/syntax/types/interfaces/index.js';
+} from '@core/syntax/types/interfaces/index';
 import { 
   NodeFactory,
   DirectiveNodeFactory, 
@@ -12,7 +12,7 @@ import {
   CodeFenceNodeFactory,
   CommentNodeFactory,
   ErrorNodeFactory
-} from '@core/syntax/types/factories/index.js';
+} from '@core/syntax/types/factories/index';
 
 /**
  * Legacy function to create a directive node

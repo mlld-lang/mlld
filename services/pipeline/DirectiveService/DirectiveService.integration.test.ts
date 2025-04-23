@@ -1,17 +1,17 @@
 import { container, Lifecycle, type DependencyContainer } from 'tsyringe';
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
-import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
-import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService';
+import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import { DirectiveNode, TextNode, VariableReferenceNode, NodeType } from '@core/syntax/types/nodes';
-import { DirectiveKind, IDirectiveNode } from '@core/syntax/types/interfaces/IDirectiveNode.js';
-import { createTextNode, createVariableReferenceNode, createDirectiveNode } from '@tests/utils/testFactories.js';
-import { createStateServiceMock, createResolutionServiceMock } from '@tests/utils/mocks/serviceMocks.js';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import type { DirectiveProcessingContext } from '@core/types/index.js';
-import type { FormattingContext } from '@core/types/resolution.js';
-import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
+import { DirectiveKind, IDirectiveNode } from '@core/syntax/types/interfaces/IDirectiveNode';
+import { createTextNode, createVariableReferenceNode, createDirectiveNode } from '@tests/utils/testFactories';
+import { createStateServiceMock, createResolutionServiceMock } from '@tests/utils/mocks/serviceMocks';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
+import type { DirectiveProcessingContext } from '@core/types/index';
+import type { FormattingContext } from '@core/types/resolution';
+import type { InterpolatableValue } from '@core/syntax/types/nodes';
 
 // --- Import REAL Service Implementations for Integration Test ---
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
@@ -37,13 +37,13 @@ import { StateTrackingServiceClientFactory } from '@services/state/StateTracking
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService';
 
 // --- Import REAL Directive Handlers ---
-import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
-import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
-import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
-import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
-import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
-import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
-import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
+import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler';
+import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler';
+import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler';
+import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler';
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler';
+import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler';
 
 // Define a minimal logger interface for testing
 interface ITestLogger {

@@ -1,27 +1,27 @@
 import { injectable, inject, delay } from 'tsyringe';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
-import { MeldNode, TextNode, CodeFenceNode, VariableReferenceNode, DirectiveNode } from '@core/syntax/types/index.js';
-import { logger } from '@core/utils/logger.js';
+import { MeldNode, TextNode, CodeFenceNode, VariableReferenceNode, DirectiveNode } from '@core/syntax/types/index';
+import { logger } from '@core/utils/logger';
 import { OutputOptions, DEFAULT_OPTIONS, FormattingContext } from './types';
 import type { IOutputService } from './IOutputService';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ResolutionContext } from '@core/types/resolution.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
-import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
-import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
-import { VariableType } from '@core/types/variables.js';
-import { StateService } from '@services/state/StateService/StateService.js';
-import { Service } from '@core/ServiceProvider.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { ResolutionContext } from '@core/types/resolution';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory';
+import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory';
+import { VariableType } from '@core/types/variables';
+import { StateService } from '@services/state/StateService/StateService';
+import { Service } from '@core/ServiceProvider';
 import { createLLMXML } from 'llmxml';
-import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
-import { MeldOutputError } from '@core/errors/MeldOutputError.js';
-import { MeldError } from '@core/errors/MeldError.js';
-import { formatWithPrettier } from '@core/utils/prettierUtils.js';
-import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference.js';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
+import { MeldOutputError } from '@core/errors/MeldOutputError';
+import { MeldError } from '@core/errors/MeldError';
+import { formatWithPrettier } from '@core/utils/prettierUtils';
+import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference';
 import { container } from 'tsyringe';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
 
 /**
  * Tracking context for variable formatting to preserve formatting during substitution

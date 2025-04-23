@@ -3,7 +3,7 @@
  */
 
 // Placeholder for MeldNode - assumed defined elsewhere
-import type { MeldNode } from '@core/ast/ast/astTypes.js';
+import type { MeldNode } from '@core/ast/ast/astTypes';
 
 /**
  * JSON-compatible value types supported in data variables.

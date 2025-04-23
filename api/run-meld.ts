@@ -1,22 +1,22 @@
 /**
  * Simple API for processing meld content directly
  */
-import { createDefaultServices } from '@api/index.js';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { ProcessOptions } from '@core/types/index.js';
-import { validateServicePipeline } from '@core/utils/serviceValidation.js';
-import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem.js';
-import { resolveService, registerServiceInstance } from '@core/ServiceProvider.js';
-import { directiveLogger } from '@core/utils/logger.js';
+import { createDefaultServices } from '@api/index';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
+import { ProcessOptions } from '@core/types/index';
+import { validateServicePipeline } from '@core/utils/serviceValidation';
+import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
+import { resolveService, registerServiceInstance } from '@core/ServiceProvider';
+import { directiveLogger } from '@core/utils/logger';
 
 // Import service factory types
-import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
-import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
-import { StateServiceClientFactory } from '@services/state/StateService/factories/StateServiceClientFactory.js';
-import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
-import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
+import { StateServiceClientFactory } from '@services/state/StateService/factories/StateServiceClientFactory';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
 
 // Export the MemoryFileSystem for users who want to use it
 export { MemoryFileSystem };
@@ -30,7 +30,7 @@ export { MemoryFileSystem };
  *
  * @example
  * ```typescript
- * import { runMeld } from 'meld.js';
+ * import { runMeld } from 'meld';
  *
  * const meldContent = `
  *   @text greeting = "Hello"

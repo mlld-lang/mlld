@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { TestContext } from '@tests/utils/TestContext.js';
-import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
-import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
-import { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
-import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ProjectBuilder } from '@tests/utils/ProjectBuilder.js';
+import { TestContext } from '@tests/utils/TestContext';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory';
+import { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient';
+import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import { ProjectBuilder } from '@tests/utils/ProjectBuilder';
 
 describe('Enhanced Field Access', () => {
   let testContext: TestContext;

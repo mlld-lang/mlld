@@ -1,5 +1,5 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
 
 describe('NodeFileSystem', () => {
   let nodeFS: NodeFileSystem;

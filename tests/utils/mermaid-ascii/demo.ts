@@ -5,9 +5,9 @@
  * Run it with: npx ts-node tests/utils/mermaid-ascii/demo.ts
  */
 
-import { mermaidToAscii, getBinaryVersion, isBinaryAvailable } from '@tests/utils/mermaid-ascii/index.js';
-import { AsciiVisualizationAdapter, enhanceWithAsciiVisualization } from '@tests/utils/mermaid-ascii/integration.js';
-import { VisualizationConfig } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
+import { mermaidToAscii, getBinaryVersion, isBinaryAvailable } from '@tests/utils/mermaid-ascii/index';
+import { AsciiVisualizationAdapter, enhanceWithAsciiVisualization } from '@tests/utils/mermaid-ascii/integration';
+import { VisualizationConfig } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService';
 
 // Example: Basic usage of mermaid-ascii converter
 async function runBasicDemo() {

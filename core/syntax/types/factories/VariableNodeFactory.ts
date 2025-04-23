@@ -1,12 +1,12 @@
 import { injectable, inject } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
+import { Service } from '@core/ServiceProvider';
 import { 
   SourceLocation, 
   IVariableReference, 
   VariableType, 
   Field 
-} from '@core/syntax/types/interfaces/index.js';
-import { NodeFactory } from './NodeFactory.js';
+} from '@core/syntax/types/interfaces/index';
+import { NodeFactory } from './NodeFactory';
 
 /**
  * Factory for creating variable reference nodes

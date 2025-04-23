@@ -1,1 +1,1 @@
-export * from './PathServiceClientFactory.js'; 
+export * from './PathServiceClientFactory'; 

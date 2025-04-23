@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { MockCommandExecutor, createCommonCommandMappings } from '@tests/utils/fs/MockCommandExecutor.js';
-import { setupCommandMocking } from '@tests/utils/fs/commandMockingHelper.js';
+import { MockCommandExecutor, createCommonCommandMappings } from '@tests/utils/fs/MockCommandExecutor';
+import { setupCommandMocking } from '@tests/utils/fs/commandMockingHelper';
 
 describe('MockCommandExecutor', () => {
   let commandExecutor: MockCommandExecutor;

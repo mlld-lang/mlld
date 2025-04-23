@@ -1,24 +1,24 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import type { DirectiveNode, InterpolatableValue, VariableReferenceNode, TextNode, StructuredPath } from '@core/syntax/types/nodes.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
-import { ErrorSeverity, MeldError } from '@core/errors/MeldError.js';
-import { createLocation, createDirectiveNode as coreCreateDirectiveNode } from '@tests/utils/testFactories.js';
-import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError';
+import type { DirectiveNode, InterpolatableValue, VariableReferenceNode, TextNode, StructuredPath } from '@core/syntax/types/nodes';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { ErrorCollector } from '@tests/utils/ErrorTestUtils';
+import { ErrorSeverity, MeldError } from '@core/errors/MeldError';
+import { createLocation, createDirectiveNode as coreCreateDirectiveNode } from '@tests/utils/testFactories';
+import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
 import { mock, mockDeep, DeepMockProxy } from 'vitest-mock-extended';
-import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { DirectiveResult } from '@core/directives/DirectiveHandler';
-import { VariableDefinition, VariableType } from '@core/types/variables.js';
+import { VariableDefinition, VariableType } from '@core/types/variables';
 import { container, type DependencyContainer } from 'tsyringe';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 import path from 'path';
-import { PathPurpose } from '@core/types/paths.js';
+import { PathPurpose } from '@core/types/paths';
 
 /**
  * TextDirectiveHandler Integration Test Status

@@ -3,9 +3,9 @@ import {
   combineExamples,
   SyntaxExampleGroup,
   createInvalidExample
-} from '@core/syntax/helpers/index.js';
-import { ErrorSeverity } from '@core/errors/index.js';
-import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+} from '@core/syntax/helpers/index';
+import { ErrorSeverity } from '@core/errors/index';
+import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 
 /**
  * Collection of atomic comment examples

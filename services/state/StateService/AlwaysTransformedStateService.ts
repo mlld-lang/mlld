@@ -10,9 +10,9 @@
  * eliminating the previous dual-mode (transformation vs. normalized) complexity.
  */
 
-import type { IStateService } from './IStateService.js';
-import type { MeldNode } from '@core/syntax/types/index.js';
-import type { TransformationOptions } from './IStateService.js';
+import type { IStateService } from './IStateService';
+import type { MeldNode } from '@core/syntax/types/index';
+import type { TransformationOptions } from './IStateService';
 
 /**
  * Creates a proxy around an IStateService implementation that ensures transformation is always enabled.

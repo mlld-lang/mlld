@@ -1,4 +1,4 @@
-import { INode } from './INode.js';
+import { INode } from './INode';
 
 /**
  * Interface for code fence nodes

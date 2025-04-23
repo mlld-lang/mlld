@@ -1,8 +1,8 @@
-import { parse } from '@core/ast/parser.js';
+import { parse } from '@core/ast/parser';
 import type { MeldNode } from '@core/syntax/types';
-import { MeldAstError, ParseErrorCode } from '@core/ast/types.js';
-import type { ParseResult, ParserOptions } from '@core/ast/types.js';
-import { parse as grammarParse, SyntaxError } from '@core/ast/grammar/index.js';
+import { MeldAstError, ParseErrorCode } from '@core/ast/types';
+import type { ParseResult, ParserOptions } from '@core/ast/types';
+import { parse as grammarParse, SyntaxError } from '@core/ast/grammar/index';
 
 // Core functionality
 export { parse };
@@ -35,17 +35,17 @@ export type {
   ValidationContext,
   ValidationResult,
   Example
-} from '@core/syntax/types/index.js';
+} from '@core/syntax/types/index';
 
 // Additional types
 export type {
   PeggyError,
   PeggyLocation
-} from './types.js';
+} from './types';
 
 // Utilities
 export {
   createNode,
   getLocation,
   textJoin
-} from './grammar/helpers.js'; 
+} from './grammar/helpers'; 

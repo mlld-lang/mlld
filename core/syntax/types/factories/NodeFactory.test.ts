@@ -1,6 +1,6 @@
 import { container } from 'tsyringe';
-import { NodeFactory } from './NodeFactory.js';
-import { NodeType, SourceLocation } from '../interfaces/common.js';
+import { NodeFactory } from './NodeFactory';
+import { NodeType, SourceLocation } from '../interfaces/common';
 
 describe('NodeFactory', () => {
   let factory: NodeFactory;

@@ -1,1 +1,1 @@
-export * from './FileSystemServiceClientFactory.js'; 
+export * from './FileSystemServiceClientFactory'; 

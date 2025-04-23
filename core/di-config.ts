@@ -2,58 +2,58 @@ import 'reflect-metadata';
 import { container } from 'tsyringe';
 
 // Import all service classes
-import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
-import { StateService } from '@services/state/StateService/StateService.js';
-import { StateFactory } from '@services/state/StateService/StateFactory.js';
-import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
-import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
-import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
-import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
-import { PathService } from '@services/fs/PathService/PathService.js';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService.js';
-import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
-import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
-import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver.js';
-import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { SourceMapService } from '@core/utils/SourceMapService.js';
-import { CLIService, DefaultPromptService } from '@services/cli/CLIService/CLIService.js';
-import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
-import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
-import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
-import { VariableReferenceResolverFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverFactory.js';
-import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
-import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
-import { StateServiceClientFactory } from '@services/state/StateService/factories/StateServiceClientFactory.js';
-import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
-import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
+import { StateService } from '@services/state/StateService/StateService';
+import { StateFactory } from '@services/state/StateService/StateFactory';
+import { StateEventService } from '@services/state/StateEventService/StateEventService';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
+import { ParserService } from '@services/pipeline/ParserService/ParserService';
+import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService';
+import { PathService } from '@services/fs/PathService/PathService';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
+import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService';
+import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
+import { SourceMapService } from '@core/utils/SourceMapService';
+import { CLIService, DefaultPromptService } from '@services/cli/CLIService/CLIService';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory';
+import { VariableReferenceResolverFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverFactory';
+import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory';
+import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory';
+import { StateServiceClientFactory } from '@services/state/StateService/factories/StateServiceClientFactory';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
 import { 
   LoggerFactory, 
   logger as mainLogger, 
   // ... other loggers ...
-} from '@core/utils/logger.js';
+} from '@core/utils/logger';
 
 // Import AST factory classes
-import { NodeFactory } from '@core/syntax/types/factories/NodeFactory.js';
-import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
-import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNodeFactory.js';
+import { NodeFactory } from '@core/syntax/types/factories/NodeFactory';
+import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory';
+import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNodeFactory';
 // ... other AST factories ...
 
 // Import Directive Handlers
-import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
-import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
-import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
-import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
-import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
-import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
-import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
+import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler';
+import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler';
+import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler';
+import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler';
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler';
+import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler';
 
 // Import IFileSystem type
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
 
 // --- Standard Container Registrations ---
 

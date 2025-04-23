@@ -1,12 +1,12 @@
 import { injectable, inject } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
-import { resolutionLogger as logger } from '@core/utils/logger.js';
-import type { StructuredPath } from '@core/shared-service-types.js';
-import type { MeldNode, TextNode, VariableReferenceNode, StructuredPath as SyntaxStructuredPath, InterpolatableValue } from '@core/syntax/types/nodes.js';
-import { VariableType } from '@core/types/variables.js';
-import { MeldPath, createMeldPath, unsafeCreateValidatedResourcePath, RawPath } from '@core/types/paths.js';
+import { Service } from '@core/ServiceProvider';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
+import { resolutionLogger as logger } from '@core/utils/logger';
+import type { StructuredPath } from '@core/shared-service-types';
+import type { MeldNode, TextNode, VariableReferenceNode, StructuredPath as SyntaxStructuredPath, InterpolatableValue } from '@core/syntax/types/nodes';
+import { VariableType } from '@core/types/variables';
+import { MeldPath, createMeldPath, unsafeCreateValidatedResourcePath, RawPath } from '@core/types/paths';
 
 /**
  * Factory for creating resolution service clients for VariableReferenceResolver

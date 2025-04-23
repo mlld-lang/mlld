@@ -1,21 +1,21 @@
 import * as fsExtra from 'fs-extra';
-import { filesystemLogger as logger } from '@core/utils/logger.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
-import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
+import { filesystemLogger as logger } from '@core/utils/logger';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { MeldFileSystemError } from '@core/errors/MeldFileSystemError.js';
+import { MeldFileSystemError } from '@core/errors/MeldFileSystemError';
 import { injectable, inject, delay } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
-import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
-import type { ValidatedResourcePath } from '@core/types/paths.js';
-import { createRawPath } from '@core/types/paths.js';
+import { Service } from '@core/ServiceProvider';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory';
+import type { ValidatedResourcePath } from '@core/types/paths';
+import { createRawPath } from '@core/types/paths';
 
 const execAsync = promisify(exec);
 

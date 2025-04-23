@@ -1,7 +1,7 @@
-import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from '@core/errors/MeldError.js';
-import type { DirectiveProcessingContext } from '@core/types/index.js';
-import type { DirectiveNode, DirectiveKind } from '@core/syntax/types/index.js';
-import { MeldDirectiveError, DirectiveLocation, MeldDirectiveErrorOptions } from '@core/errors/MeldDirectiveError.js';
+import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from '@core/errors/MeldError';
+import type { DirectiveProcessingContext } from '@core/types/index';
+import type { DirectiveNode, DirectiveKind } from '@core/syntax/types/index';
+import { MeldDirectiveError, DirectiveLocation, MeldDirectiveErrorOptions } from '@core/errors/MeldDirectiveError';
 import type { Location } from '@core/types';
 
 /**

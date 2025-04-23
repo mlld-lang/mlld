@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { MeldImportError } from '@core/errors/MeldImportError.js';
-import type { TextNode, MeldNode, DirectiveNode } from '@core/syntax/types/nodes.js';
-import type { DirectiveProcessingContext } from '@core/types/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { MeldInterpreterError } from '@core/errors/MeldInterpreterError';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { MeldImportError } from '@core/errors/MeldImportError';
+import type { TextNode, MeldNode, DirectiveNode } from '@core/syntax/types/nodes';
+import type { DirectiveProcessingContext } from '@core/types/index';
 // Import centralized syntax helpers
-import { createNodeFromExample } from '@core/syntax/helpers/index.js';
+import { createNodeFromExample } from '@core/syntax/helpers/index';
 // Import relevant examples
 import { 
   textDirectiveExamples,
@@ -15,31 +15,31 @@ import {
   importDirectiveExamples,
   defineDirectiveExamples,
   integrationExamples
-} from '@core/syntax/index.js';
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
-import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { StateService } from '@services/state/StateService/StateService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
-import { logger } from '@core/utils/logger.js';
+} from '@core/syntax/index';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
+import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService';
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { StateService } from '@services/state/StateService/StateService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import { ParserService } from '@services/pipeline/ParserService/ParserService';
+import { logger } from '@core/utils/logger';
 // Import necessary factories and clients
-import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
-import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
+import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory';
+import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient';
 import { mock, mockDeep } from 'vitest-mock-extended';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import { container, type DependencyContainer } from 'tsyringe';
 // Import tokens and helpers for manual DI setup
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
+import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver';
 import { URL } from 'node:url';
 // Import interfaces/classes to mock
-import type { ILogger } from '@core/utils/logger.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
-import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { ILogger } from '@core/utils/logger';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 import { 
   VariableType, 
   PathContentType, 
@@ -55,22 +55,22 @@ import {
 import type { StateChanges } from '@core/directives/DirectiveHandler';
 import crypto from 'crypto';
 // Import IParserServiceClient for mocking
-import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
-import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
-import { StateFactory } from '@services/state/StateService/StateFactory.js';
-import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
-import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
-import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
+import { StateEventService } from '@services/state/StateEventService/StateEventService';
+import { StateFactory } from '@services/state/StateService/StateFactory';
+import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory';
+import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient';
 // Add imports for FileSystemService, PathOperationsService, and PathServiceClientFactory
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
-import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
-import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
-import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
-import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js'; // Fixed path
-import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js'; // Fixed path
-import { PathService } from '@services/fs/PathService/PathService.js'; // Added import
-import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory';
+import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient';
+import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
+import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService'; // Fixed path
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService'; // Fixed path
+import { PathService } from '@services/fs/PathService/PathService'; // Added import
+import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver';
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),

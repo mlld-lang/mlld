@@ -1,41 +1,41 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
-import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
-import { MeldOutputError } from '@core/errors/MeldOutputError.js';
-import type { MeldNode } from '@core/syntax/types/index.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
-import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
+import { OutputService } from '@services/pipeline/OutputService/OutputService';
+import { MeldOutputError } from '@core/errors/MeldOutputError';
+import type { MeldNode } from '@core/syntax/types/index';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import type { OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService';
+import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory';
 import {
   createTextNode,
   createDirectiveNode,
   createCodeFenceNode,
   createLocation
-} from '@tests/utils/testFactories.js';
+} from '@tests/utils/testFactories';
 // Import centralized syntax examples
 import { 
   textDirectiveExamples, 
   dataDirectiveExamples,
   defineDirectiveExamples
-} from '@core/syntax/index.js';
+} from '@core/syntax/index';
 // Import run examples directly
-import runDirectiveExamplesModule from '@core/syntax/run.js';
-import { createNodeFromExample } from '@core/syntax/helpers/index.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
-import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
-import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
-import type { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
+import runDirectiveExamplesModule from '@core/syntax/run';
+import { createNodeFromExample } from '@core/syntax/helpers/index';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
+import type { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient';
 import { createResolutionServiceMock, createStateServiceMock } from '@tests/utils/mocks/serviceMocks';
-import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
-import { VariableType } from '@core/types/variables.js';
+import { VariableResolutionError } from '@core/errors/VariableResolutionError';
+import { VariableType } from '@core/types/variables';
 import { createLLMXML } from 'llmxml';
-import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference.js';
-import { outputLogger as logger } from '@core/utils/logger.js';
+import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference';
+import { outputLogger as logger } from '@core/utils/logger';
 import { container, type DependencyContainer } from 'tsyringe';
-import type { ILogger } from '@core/utils/logger.js';
-import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
+import type { ILogger } from '@core/utils/logger';
+import type { IOutputService } from '@services/pipeline/OutputService/IOutputService';
 
 // Define FormatConverter locally for the test
 type FormatConverter = (

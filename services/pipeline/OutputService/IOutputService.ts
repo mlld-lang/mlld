@@ -1,5 +1,5 @@
-import type { MeldNode } from '@core/syntax/types/index.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { MeldNode } from '@core/syntax/types/index';
+import type { IStateService } from '@services/state/StateService/IStateService';
 
 /**
  * Supported output formats for Meld document conversion.

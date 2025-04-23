@@ -1,16 +1,16 @@
 import { vi } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
-import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers.js';
-import type { DirectiveNode, SourceLocation, StructuredPath } from '@core/syntax/types/nodes.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IDirectiveService, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import { DirectiveProcessingContext, DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
-import { createLocation } from '@tests/utils/testFactories.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IPathService } from '@services/path/IPathService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { MockFactory } from '@tests/utils/mocks/MockFactory';
+import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers';
+import type { DirectiveNode, SourceLocation, StructuredPath } from '@core/syntax/types/nodes';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IDirectiveService, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import { DirectiveProcessingContext, DirectiveResult } from '@services/pipeline/DirectiveService/types';
+import { createLocation } from '@tests/utils/testFactories';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IPathService } from '@services/path/IPathService';
 
 /**
  * Options for customizing the DirectiveTestFixture.

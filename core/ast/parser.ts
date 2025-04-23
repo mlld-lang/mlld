@@ -1,6 +1,6 @@
-import { parse as grammarParse } from '@core/ast/grammar/index.js';
-import type { MeldNode } from '@core/syntax/types.js';
-import { MeldAstError, ParseErrorCode, ParseResult, ParserOptions, PeggyError } from '@core/ast/types.js';
+import { parse as grammarParse } from '@core/ast/grammar/index';
+import type { MeldNode } from '@core/syntax/types';
+import { MeldAstError, ParseErrorCode, ParseResult, ParserOptions, PeggyError } from '@core/ast/types';
 
 const defaultOptions: Required<Omit<ParserOptions, 'onError'>> & Pick<ParserOptions, 'onError'> = {
   failFast: true,

@@ -1,10 +1,10 @@
 import { container } from 'tsyringe';
-import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
-import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService.js';
-import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
-import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
-import { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
-import { ContextDebuggerService } from '@tests/utils/debug/StateDebuggerService/ContextDebuggerService.js';
+import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService';
+import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService';
+import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService';
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService';
+import { IStateEventService } from '@services/state/StateEventService/IStateEventService';
+import { ContextDebuggerService } from '@tests/utils/debug/StateDebuggerService/ContextDebuggerService';
 
 /**
  * Initialize the context debugger with all required services
@@ -35,6 +35,6 @@ export function initializeContextDebugger(): ContextDebuggerService {
 }
 
 // Re-export types and classes
-export * from './IStateDebuggerService.js';
-export * from './StateDebuggerService.js';
-export * from './ContextDebuggerService.js'; 
+export * from './IStateDebuggerService';
+export * from './StateDebuggerService';
+export * from './ContextDebuggerService'; 

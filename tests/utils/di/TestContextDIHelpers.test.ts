@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { MockFactory } from '@tests/utils/mocks/MockFactory.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { MockFactory } from '@tests/utils/mocks/MockFactory';
 
 describe('TestContextDI Helpers', () => {
   const helpers = TestContextDI.createTestHelpers();

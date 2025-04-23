@@ -8,9 +8,9 @@
 // Example CLI command handler for debug-context
 function handleDebugContextCommand(file: string, options: { output: string }) {
   // Mock imports and services (in a real CLI command, you would use actual services)
-  // import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService.js';
-  // import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
-  // import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
+  // import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService';
+  // import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService';
+  // import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService';
   
   console.log(`Processing file: ${file}`);
   console.log(`Output format: ${options.output}`);

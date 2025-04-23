@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, afterEach, beforeEach, MockInstance } from 'vitest';
-import { setupCliTest } from '@tests/utils/cli/cliTestHelper.js';
-import * as cli from './index.js';
+import { setupCliTest } from '@tests/utils/cli/cliTestHelper';
+import * as cli from './index';
 import * as fs from 'fs/promises';
 import * as readline from 'readline';
 import { createInterface } from 'readline';
 import { Readable } from 'stream';
-import { mockArgv } from '@tests/utils/cli/mockArgv.js';
-import { mockInit } from '@tests/utils/cli/mockInitCommand.js';
-import { mockFilePrompt } from '@tests/utils/cli/mockPrompt.js';
-import { mockProcessExit } from '@tests/utils/cli/mockProcessExit.js';
-import { mockConsole } from '@tests/utils/cli/mockConsole.js';
-import { CLIService } from '@services/cli/CLIService/CLIService.js';
-import { mockExecuteCommand } from '@tests/utils/fs/MockCommandExecutor.js';
-import { IRunMeldOptions } from '@api/api.js';
-import { describeMockFile } from '@tests/utils/tests/mockFileHelpers.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { mockArgv } from '@tests/utils/cli/mockArgv';
+import { mockInit } from '@tests/utils/cli/mockInitCommand';
+import { mockFilePrompt } from '@tests/utils/cli/mockPrompt';
+import { mockProcessExit } from '@tests/utils/cli/mockProcessExit';
+import { mockConsole } from '@tests/utils/cli/mockConsole';
+import { CLIService } from '@services/cli/CLIService/CLIService';
+import { mockExecuteCommand } from '@tests/utils/fs/MockCommandExecutor';
+import { IRunMeldOptions } from '@api/api';
+import { describeMockFile } from '@tests/utils/tests/mockFileHelpers';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 
 // Create a proper async iterator for watch mode
 function createWatchAsyncIterable() {

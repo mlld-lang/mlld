@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
-import type { StateEvent, StateEventType } from '@services/state/StateEventService/IStateEventService.js';
+import { StateEventService } from '@services/state/StateEventService/StateEventService';
+import type { StateEvent, StateEventType } from '@services/state/StateEventService/IStateEventService';
 
 describe('State Instrumentation', () => {
   describe('Event Ordering', () => {

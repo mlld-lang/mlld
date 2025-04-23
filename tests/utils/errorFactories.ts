@@ -3,8 +3,8 @@
  * Uses vitest-mock-extended to ensure instanceof checks pass
  */
 import { mock } from 'vitest-mock-extended';
-import { Location } from '@core/syntax/types.js';
-import { PathValidationError, PathErrorCode } from '@services/fs/PathService/errors/PathValidationError.js';
+import { Location } from '@core/syntax/types';
+import { PathValidationError, PathErrorCode } from '@services/fs/PathService/errors/PathValidationError';
 
 /**
  * Details for creating a PathValidationError

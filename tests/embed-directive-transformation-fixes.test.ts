@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { DirectiveNode, TextNode } from '@core/syntax/types.js';
-import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
-import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { DirectiveNode, TextNode } from '@core/syntax/types';
+import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 
 // Mock dependencies
 const mockValidationService = {

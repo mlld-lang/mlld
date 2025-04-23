@@ -2,12 +2,12 @@
  * Types related to variable resolution context.
  */
 
-import type { VariableType } from './variables.js';
+import type { VariableType } from './variables';
 import type { IStateService } from '@services/state/StateService/IStateService';
-import type { StringLiteralType } from './common.js';
-import type { MeldNode } from '@core/ast/ast/astTypes.js';
-import type { Result } from './common.js';
-import type { MeldPath, PathContentType, PathPurpose } from './paths.js';
+import type { StringLiteralType } from './common';
+import type { MeldNode } from '@core/ast/ast/astTypes';
+import type { Result } from './common';
+import type { MeldPath, PathContentType, PathPurpose } from './paths';
 
 /**
  * Context passed during variable resolution.

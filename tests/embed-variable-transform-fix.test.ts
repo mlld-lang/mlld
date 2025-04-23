@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { main } from '@api/index.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { Services } from '@core/types/index.js';
-import type { DirectiveNode } from '@core/syntax/types.js';
-import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
-import { outputLogger } from '@core/utils/logger.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
+import { main } from '@api/index';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import type { Services } from '@core/types/index';
+import type { DirectiveNode } from '@core/syntax/types';
+import { OutputService } from '@services/pipeline/OutputService/OutputService';
+import { outputLogger } from '@core/utils/logger';
+import type { IStateService } from '@services/state/StateService/IStateService';
 
 /**
  * Implementation of variable resolution for embed directives

@@ -5,8 +5,8 @@
  * with ASCII rendering capabilities.
  */
 
-import { mermaidToAscii, MermaidAsciiOptions } from '@tests/utils/mermaid-ascii/index.js';
-import { IStateVisualizationService, VisualizationConfig } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
+import { mermaidToAscii, MermaidAsciiOptions } from '@tests/utils/mermaid-ascii/index';
+import { IStateVisualizationService, VisualizationConfig } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService';
 
 /**
  * Options for ASCII visualization

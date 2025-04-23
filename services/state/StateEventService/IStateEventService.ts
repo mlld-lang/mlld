@@ -5,7 +5,7 @@ import type {
   StateEventFilterBase,
   StateEventHandlerOptionsBase,
   StateEventServiceBase
-} from '@core/shared/types.js';
+} from '@core/shared/types';
 
 /**
  * Core event system for state tracking and instrumentation.

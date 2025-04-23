@@ -3,13 +3,13 @@
  */
 
 import { describe, test, expect, beforeEach } from 'vitest';
-import { sourceMapService } from '@core/utils/SourceMapService.js';
-import { registerSource, addMapping, resetSourceMaps, enhanceMeldErrorWithSourceInfo } from '@core/utils/sourceMapUtils.js';
-import { MeldError } from '@core/errors/MeldError.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
+import { sourceMapService } from '@core/utils/SourceMapService';
+import { registerSource, addMapping, resetSourceMaps, enhanceMeldErrorWithSourceInfo } from '@core/utils/sourceMapUtils';
+import { MeldError } from '@core/errors/MeldError';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem';
 // Import the main function from the API
-import { main as processFile } from '@api/index.js';
+import { main as processFile } from '@api/index';
 
 // Test helper to create a file system with test files
 async function createTestFileSystem() {

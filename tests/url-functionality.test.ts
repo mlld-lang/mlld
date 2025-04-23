@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { container } from 'tsyringe';
-import { PathService } from '@services/fs/PathService/PathService.js';
-import { URLError, URLValidationError, URLSecurityError, URLFetchError } from '@services/resolution/URLContentResolver/errors/index.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import { TestContext } from '@tests/utils/TestContext.js';
-import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver.js';
+import { PathService } from '@services/fs/PathService/PathService';
+import { URLError, URLValidationError, URLSecurityError, URLFetchError } from '@services/resolution/URLContentResolver/errors/index';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
+import { TestContext } from '@tests/utils/TestContext';
+import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver';
 
 // Mock fetch API
 global.fetch = vi.fn();

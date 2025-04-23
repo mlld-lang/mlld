@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
-import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { FieldAccess, FieldAccessType, FieldAccessError } from '@services/resolution/ResolutionService/resolvers/FieldAccess.js';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver';
+import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { FieldAccess, FieldAccessType, FieldAccessError } from '@services/resolution/ResolutionService/resolvers/FieldAccess';
 
 /**
  * This test file follows a hybrid approach:

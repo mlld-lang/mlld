@@ -5,24 +5,24 @@
  * but delegates the actual processing to the API.
  */
 
-import { main as apiMain } from '@api/index.js';
-import { cliLogger as logger } from '@core/utils/logger.js';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
-import { version } from '@core/version.js';
-import { createInterface } from 'readline.js';
+import { main as apiMain } from '@api/index';
+import { cliLogger as logger } from '@core/utils/logger';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { version } from '@core/version';
+import { createInterface } from 'readline';
 import { dirname, basename, extname } from 'path';
 import { join } from 'path';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ProcessOptions } from '@api/types.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
+import type { IOutputService } from '@services/pipeline/OutputService/IOutputService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { ProcessOptions } from '@api/types';
 import readline from 'readline';
 import { inject, injectable, delay } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import type { CLIOptions, ICLIService, IPromptService } from '@services/cli/CLIService/ICLIService.js';
+import { Service } from '@core/ServiceProvider';
+import type { CLIOptions, ICLIService, IPromptService } from '@services/cli/CLIService/ICLIService';
 import { PathContentType, IFilesystemPathState, createPathVariable, VariableOrigin } from '@core/types';
 
 /**

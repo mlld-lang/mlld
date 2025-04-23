@@ -1,13 +1,13 @@
 import 'reflect-metadata'; // Ensure this is the very first import
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { ProcessOptions, Services } from '@core/types/index.js';
-import { VariableType } from '@core/types/variables.js';
-import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import type { ProcessOptions, Services } from '@core/types/index';
+import { VariableType } from '@core/types/variables';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import * as path from 'path';
-import { TestDebuggerService } from '@tests/utils/debug/TestDebuggerService.js';
-import { SyntaxExample } from '@core/syntax/helpers/index.js';
+import { TestDebuggerService } from '@tests/utils/debug/TestDebuggerService';
+import { SyntaxExample } from '@core/syntax/helpers/index';
 import {
   textDirectiveExamples,
   dataDirectiveExamples,
@@ -16,54 +16,54 @@ import {
   embedDirectiveExamples,
   pathDirectiveExamples,
   createNodeFromExample
-} from '@core/syntax/index.js';
+} from '@core/syntax/index';
 // Import run examples directly
-import runDirectiveExamplesModule from '@core/syntax/run.js';
+import runDirectiveExamplesModule from '@core/syntax/run';
 // Add imports for core services needed
-import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import { StateService } from '@services/state/StateService/StateService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
-import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { PathService } from '@services/fs/PathService/PathService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import { unsafeCreateValidatedResourcePath, PathValidationContext, NormalizedAbsoluteDirectoryPath, createMeldPath, unsafeCreateNormalizedAbsoluteDirectoryPath } from '@core/types/paths.js';
-import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import type { MeldNode, DirectiveNode } from '@core/syntax/types/index.js';
-import { processMeld } from '@api/index.js';
+import { ParserService } from '@services/pipeline/ParserService/ParserService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
+import { StateService } from '@services/state/StateService/StateService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { OutputService } from '@services/pipeline/OutputService/OutputService';
+import type { IOutputService } from '@services/pipeline/OutputService/IOutputService';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import { PathService } from '@services/fs/PathService/PathService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import { unsafeCreateValidatedResourcePath, PathValidationContext, NormalizedAbsoluteDirectoryPath, createMeldPath, unsafeCreateNormalizedAbsoluteDirectoryPath } from '@core/types/paths';
+import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
+import type { MeldNode, DirectiveNode } from '@core/syntax/types/index';
+import { processMeld } from '@api/index';
 // === Manual DI Imports ===
 import { container, type DependencyContainer } from 'tsyringe';
 import { mock } from 'vitest-mock-extended';
 import { URL } from 'node:url';
-import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
-import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import type { ILogger } from '@core/utils/logger.js';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
+import type { ILogger } from '@core/utils/logger';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
 // Import PathOperationsService for registration
-import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
-import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
 // <<< Add import for CircularityService >>>
-import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService';
 // <<< ADDED: Import ValidationService >>>
-import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService';
 // Import the default logger instance
-import logger from '@core/utils/logger.js'; 
+import logger from '@core/utils/logger'; 
 // <<< ADDED: Import DirectiveService >>>
-import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService';
 // <<< CORRECTED: Import StateTrackingService from debug utils >>>
-import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService';
 // <<< ADDED: Import VariableReferenceResolverClientFactory >>>
-import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js'; // Corrected path
-import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js'; // <<< ADD IMPORT for manual instantiation
-import { VariableReferenceResolverFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverFactory.js';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory'; // Corrected path
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver'; // <<< ADD IMPORT for manual instantiation
+import { VariableReferenceResolverFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverFactory';
 
 // =========================
 

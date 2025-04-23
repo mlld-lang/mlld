@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { container } from 'tsyringe';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
-import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { OutputService } from '@services/pipeline/OutputService/OutputService';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory';
 import { mockDeep } from 'vitest-mock-extended';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { TextNode } from '@core/syntax/types.js';
-import { createLocation } from '@tests/utils/testFactories.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { TextNode } from '@core/syntax/types';
+import { createLocation } from '@tests/utils/testFactories';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 
 describe('Direct Container Resolution for OutputService', () => {
   let context: TestContextDI;

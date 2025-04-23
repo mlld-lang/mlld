@@ -1,6 +1,6 @@
-import type { IPathService, URLValidationOptions } from '@services/fs/PathService/IPathService.js';
-import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@core/errors/PathValidationError.js';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
+import type { IPathService, URLValidationOptions } from '@services/fs/PathService/IPathService';
+import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@core/errors/PathValidationError';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
 import type { Position, Location } from '@core/types/index';
 import * as path from 'path';
 import * as os from 'os';
@@ -18,13 +18,13 @@ import { Service } from '@core/ServiceProvider';
 import { injectable, inject, container, delay } from 'tsyringe';
 import { pathLogger as logger } from '@core/utils/logger';
 import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
 import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURLCache';
 import { 
   URLError 
 } from '@services/fs/PathService/errors/url/index';
-import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
-import type { StructuredPath } from '@core/syntax/types/nodes.js';
+import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver';
+import type { StructuredPath } from '@core/syntax/types/nodes';
 import {
   AbsolutePath,
   RelativePath,
@@ -46,7 +46,7 @@ import {
   type AnyPath,
   type MeldResolvedFilesystemPath,
   createRawPath
-} from '@core/types/paths.js';
+} from '@core/types/paths';
 import { ErrorSeverity } from '@core/errors/index';
 import type { PathValidationRules } from '@core/types/paths';
 

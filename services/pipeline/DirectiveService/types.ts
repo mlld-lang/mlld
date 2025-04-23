@@ -1,8 +1,8 @@
-import type { MeldNode } from '@core/syntax/types/index.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { VariableType, VariableMetadata } from '@core/types/variables.js';
+import type { MeldNode } from '@core/syntax/types/index';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { VariableType, VariableMetadata } from '@core/types/variables';
 // Import core types
-import type { DirectiveResult as CoreDirectiveResult, StateChanges as CoreStateChanges } from '@core/directives/DirectiveHandler.js';
+import type { DirectiveResult as CoreDirectiveResult, StateChanges as CoreStateChanges } from '@core/directives/DirectiveHandler';
 
 /**
  * Represents the definition of a variable's value within state changes.

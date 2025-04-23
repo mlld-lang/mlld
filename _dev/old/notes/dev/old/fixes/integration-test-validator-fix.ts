@@ -6,8 +6,8 @@
  */
 
 import { DirectiveNode, PathDirective } from '@core/syntax/types';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
-import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
+import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 
 /**
  * Validates @path directives

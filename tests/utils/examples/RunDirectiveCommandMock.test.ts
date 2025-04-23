@@ -2,13 +2,13 @@
  * Example of using the command mocking utilities with RunDirectiveHandler tests
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
-import { setupCommandMocking } from '@tests/utils/fs/commandMockingHelper.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler';
+import { setupCommandMocking } from '@tests/utils/fs/commandMockingHelper';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 
 describe('RunDirectiveHandler with Command Mocking', () => {
   // Mock services

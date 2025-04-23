@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
-import { IStateEventService, StateEvent } from '@tests/utils/debug/StateEventService/IStateEventService.js';
-import { StateOperation, StateTransformation } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
+import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService';
+import { IStateEventService, StateEvent } from '@tests/utils/debug/StateEventService/IStateEventService';
+import { StateOperation, StateTransformation } from '@tests/utils/debug/StateHistoryService/IStateHistoryService';
 
 describe('StateHistoryService', () => {
   let mockEventService: IStateEventService;

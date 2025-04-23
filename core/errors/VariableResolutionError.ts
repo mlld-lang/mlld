@@ -1,5 +1,5 @@
-import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError.js';
-import type { VariableType, ResolutionContext } from '@core/types/index.js';
+import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError';
+import type { VariableType, ResolutionContext } from '@core/types/index';
 
 /**
  * Represents details specific to variable resolution errors.

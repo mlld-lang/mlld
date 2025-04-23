@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { TestSnapshot } from '@tests/utils/TestSnapshot.js';
-import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
+import { TestSnapshot } from '@tests/utils/TestSnapshot';
+import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem';
 
 describe('TestSnapshot', () => {
   let fs: MemfsTestFileSystem;

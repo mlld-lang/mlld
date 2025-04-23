@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
-import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService';
 
 describe.skip('URL Resolver Delegation Pipeline Tests', () => {
   let context: TestContextDI;

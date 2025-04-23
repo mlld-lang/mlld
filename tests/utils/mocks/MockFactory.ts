@@ -1,23 +1,23 @@
 import { vi } from 'vitest';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
 import type { TextDocument } from 'vscode-languageserver-textdocument';
 import { Position, Range, Location } from 'vscode-languageserver-types';
 import { InjectionToken } from 'tsyringe';
-import type { StateNode } from '@services/state/StateService/types.js';
-import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IOutputService, OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
-import type { TransformationOptions } from '@core/types/state.js';
-import type { MeldPath, RawPath, AbsolutePath, RelativePath, ValidatedResourcePath, UrlPath } from '@core/types/paths.js';
-import { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js'; 
-import type { TextNode } from '@core/syntax/types/index.js'; 
-import { unsafeCreateValidatedResourcePath, PathContentType } from '@core/types/paths.js';
-import type { TextVariable, DataVariable, IPathVariable } from '@core/types/variables.js';
+import type { StateNode } from '@services/state/StateService/types';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import type { IOutputService, OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService';
+import type { TransformationOptions } from '@core/types/state';
+import type { MeldPath, RawPath, AbsolutePath, RelativePath, ValidatedResourcePath, UrlPath } from '@core/types/paths';
+import { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes'; 
+import type { TextNode } from '@core/syntax/types/index'; 
+import { unsafeCreateValidatedResourcePath, PathContentType } from '@core/types/paths';
+import type { TextVariable, DataVariable, IPathVariable } from '@core/types/variables';
 
 export class MockFactory {
   /**

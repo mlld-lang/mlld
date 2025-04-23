@@ -1,6 +1,6 @@
 import { parse } from '@core/ast';
 import { expect, describe, it } from 'vitest';
-import { VariableReferenceNode } from '@core/syntax/types.js';
+import { VariableReferenceNode } from '@core/syntax/types';
 
 describe('Numeric field access tests', () => {
   it('should parse numeric indices with dot notation', async () => {

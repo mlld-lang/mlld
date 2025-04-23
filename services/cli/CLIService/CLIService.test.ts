@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CLIService, IPromptService, ICLIService } from '@services/cli/CLIService/CLIService.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
-import { cliLogger, type Logger } from '@core/utils/logger.js';
+import { CLIService, IPromptService, ICLIService } from '@services/cli/CLIService/CLIService';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
+import type { IOutputService } from '@services/pipeline/OutputService/IOutputService';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import { ErrorCollector } from '@tests/utils/ErrorTestUtils';
+import { ErrorSeverity } from '@core/errors/MeldError';
+import { cliLogger, type Logger } from '@core/utils/logger';
 // Import the centralized syntax examples
-import { textDirectiveExamples } from '@core/syntax/index.js';
+import { textDirectiveExamples } from '@core/syntax/index';
 import { VariableType, createPathVariable, type IPathVariable, PathContentType, type IFilesystemPathState } from '@core/types';
 import { VariableOrigin } from '@core/types';
 import { container, type DependencyContainer } from 'tsyringe'; // Import container and DependencyContainer

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { ServiceInitializationError, ServiceInitializationErrorCode } from '@core/errors/ServiceInitializationError.js';
-import { validateServicePipeline } from '@core/utils/serviceValidation.js';
-import { Services } from '@services/types.js';
-import type { DebugSessionConfig } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { ServiceInitializationError, ServiceInitializationErrorCode } from '@core/errors/ServiceInitializationError';
+import { validateServicePipeline } from '@core/utils/serviceValidation';
+import { Services } from '@services/types';
+import type { DebugSessionConfig } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService';
 
 /**
  * Tests for pipeline validation logic

@@ -5,13 +5,13 @@
  * making it easier to debug issues related to object property access and text formatting.
  */
 
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
-import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
-import { Text, Root, DataVar, TextVar } from '@core/types.js';
-import { StateFactory } from '@services/state/StateService/StateFactory.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IOutputService } from '@services/pipeline/OutputService/IOutputService';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver';
+import { Text, Root, DataVar, TextVar } from '@core/types';
+import { StateFactory } from '@services/state/StateService/StateFactory';
 import { injectable, inject } from 'tsyringe';
-import { IStateVisualizationService } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
+import { IStateVisualizationService } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService';
 import fs from 'fs';
 import path from 'path';
 

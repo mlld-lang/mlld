@@ -1,23 +1,23 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
-import { createLocation, createDirectiveNode as coreCreateDirectiveNode } from '@tests/utils/testFactories.js'; // Use core factory
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { DirectiveNode, StructuredPath } from '@core/syntax/types/nodes.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler';
+import { createLocation, createDirectiveNode as coreCreateDirectiveNode } from '@tests/utils/testFactories'; // Use core factory
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import type { DirectiveNode, StructuredPath } from '@core/syntax/types/nodes';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { MeldPath, PathContentType, unsafeCreateValidatedResourcePath, createMeldPath, VariableType } from '@core/types';
-import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils.js'; // Keep for error tests
-import { VariableOrigin } from '@core/types/variables.js';
+import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils'; // Keep for error tests
+import { VariableOrigin } from '@core/types/variables';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
-import type { SourceLocation } from '@core/types/common.js';
-import type { PathValidationContext } from '@core/types/paths.js';
-import { PathPurpose } from '@core/types/paths.js';
+import type { SourceLocation } from '@core/types/common';
+import type { PathValidationContext } from '@core/types/paths';
+import { PathPurpose } from '@core/types/paths';
 import { container, type DependencyContainer } from 'tsyringe'; // Added
 import { mockDeep, DeepMockProxy } from 'vitest-mock-extended'; // Added
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js'; // Added
-import type { IPathService } from '@services/fs/PathService/IPathService.js'; // Added
-import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index.js'; // Added
-import type { VariableDefinition } from '@core/types/variables.js'; // Added
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService'; // Added
+import type { IPathService } from '@services/fs/PathService/IPathService'; // Added
+import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index'; // Added
+import type { VariableDefinition } from '@core/types/variables'; // Added
 import path from 'path'; // Added
 
 /**

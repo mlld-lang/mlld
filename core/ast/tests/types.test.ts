@@ -1,9 +1,9 @@
 /// <reference types="vitest" />
 import { describe, it, expect } from 'vitest';
-import type { MeldNode, NodeType, DirectiveNode, TextNode } from '@core/syntax/types.js';
+import type { MeldNode, NodeType, DirectiveNode, TextNode } from '@core/syntax/types';
 import { parse } from '@core/ast';
-import { MeldAstError, ParseErrorCode, ParseResult, ParserOptions } from '@core/ast/types.js';
-import { createMockNode, createMockLocation, createMockParser, hasErrors } from './utils/test-utils.js';
+import { MeldAstError, ParseErrorCode, ParseResult, ParserOptions } from '@core/ast/types';
+import { createMockNode, createMockLocation, createMockParser, hasErrors } from './utils/test-utils';
 
 // This file contains type tests that are checked by TypeScript
 // but not executed at runtime. The tests verify that our types

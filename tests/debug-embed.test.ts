@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { main } from '@api/index.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { Services } from '@core/types/index.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types.js';
-import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
-import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
-import { isVariableReferenceNode } from '@core/syntax/types/variables.js';
-import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
+import { main } from '@api/index';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import type { Services } from '@core/types/index';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types';
+import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+import { OutputService } from '@services/pipeline/OutputService/OutputService';
+import { isVariableReferenceNode } from '@core/syntax/types/variables';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver';
 
 describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
   let context: TestContextDI;

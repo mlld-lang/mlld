@@ -1,5 +1,5 @@
-import { IURLCache } from './IURLCache.js';
-import { URLResponse } from './IURLContentResolver.js';
+import { IURLCache } from './IURLCache';
+import { URLResponse } from './IURLContentResolver';
 
 /**
  * Simple in-memory implementation of IURLCache
