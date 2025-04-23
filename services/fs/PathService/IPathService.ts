@@ -265,4 +265,4 @@ export interface IPathService {
    fetchURL(url: UrlPath, options?: URLFetchOptions): Promise<URLResponse>; 
 }
 
-export type { URLValidationOptions, IPathService }; 
+export type { URLValidationOptions }; 

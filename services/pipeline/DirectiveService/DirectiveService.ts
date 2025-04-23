@@ -584,8 +584,67 @@ export class DirectiveService implements IDirectiveService {
     }
     // Pass arguments matching the client interface (parentState, filePath, options)
     const childStateLike = await this.interpreterClient.createChildContext(parentState, filePath, options);
-    // Keep cast for now
-    return childStateLike as IStateService; 
+    
+    // Verify the returned state has the minimum required methods
+    if (!this.isStateService(childStateLike)) {
+      throw new MeldError('Interpreter client returned invalid state object', { 
+        code: 'INVALID_STATE',
+        severity: ErrorSeverity.Fatal,
+        details: {
+          missingMethods: this.getMissingStateMethods(childStateLike)
+        }
+      });
+    }
+    
+    return childStateLike;
+  }
+
+  /**
+   * Type guard to check if an object implements IStateService
+   */
+  private isStateService(obj: any): obj is IStateService {
+    const requiredMethods = [
+      'setTransformationEnabled',
+      'setTransformationOptions',
+      'getParentState',
+      'getVariable',
+      'setVariable',
+      'createChildState',
+      'mergeChildState',
+      'clone',
+      'getStateId',
+      'getCurrentFilePath',
+      'setCurrentFilePath',
+      'getTextVar',
+      'getDataVar',
+      'hasVariable'
+    ];
+
+    return requiredMethods.every(method => typeof obj[method] === 'function');
+  }
+
+  /**
+   * Helper to get list of missing state methods for error reporting
+   */
+  private getMissingStateMethods(obj: any): string[] {
+    const requiredMethods = [
+      'setTransformationEnabled',
+      'setTransformationOptions',
+      'getParentState',
+      'getVariable',
+      'setVariable',
+      'createChildState',
+      'mergeChildState',
+      'clone',
+      'getStateId',
+      'getCurrentFilePath',
+      'setCurrentFilePath',
+      'getTextVar',
+      'getDataVar',
+      'hasVariable'
+    ];
+
+    return requiredMethods.filter(method => typeof obj[method] !== 'function');
   }
 
   /**
