@@ -15,6 +15,7 @@ import { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types/no
 import { ResolutionContextFactory } from '../ResolutionContextFactory';
 import { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference';
 import { createVariableReferenceNode } from '@core/syntax/types/variables';
+import { VariableType } from '@core/types/variables';
 
 /**
  * Factory for creating variable reference resolver clients
@@ -64,7 +65,7 @@ export class VariableReferenceResolverClientFactory {
         // Create a variable reference node for the text
         const varRefNode = createVariableReferenceNode(
           text,
-          'text', // Default to text type for string resolution
+          VariableType.TEXT,
           [], // No fields
           undefined, // No format
           {
@@ -88,7 +89,7 @@ export class VariableReferenceResolverClientFactory {
         // Create a variable reference node using the helper function
         const varRefNode = createVariableReferenceNode(
           varName,
-          'data', // Default to data type since we're accessing fields
+          VariableType.DATA,
           [], // No fields in the node since we'll process them separately
           undefined, // No format
           {

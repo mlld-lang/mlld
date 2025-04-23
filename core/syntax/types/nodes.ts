@@ -1,6 +1,7 @@
 import { DirectiveKind } from '@core/syntax/types/directives';
 import { MultiLineBlock } from '@core/syntax/types/syntax';
-import { VariableType, Field, VariableReferenceNode } from '@core/syntax/types/variables';
+import { Field, VariableReferenceNode } from '@core/syntax/types/variables';
+import { VariableType } from '@core/types/variables';
 
 export interface SourceLocation {
   start: { line: number; column: number };
@@ -96,7 +97,7 @@ export interface VariableNode extends MeldNode {
 }
 
 // Re-export the consolidated variable types
-export type { VariableType, Field, VariableReferenceNode };
+export type { Field, VariableReferenceNode };
 
 /**
  * Type alias for interpolated content parsed from strings/templates/paths.
@@ -137,4 +138,4 @@ export interface StructuredPath {
   isPathVariable?: boolean;
   /** Parsed nodes if path came from brackets/quotes (as per AST-VARIABLES.md) */
   interpolatedValue?: InterpolatableValue;
-} 
+}

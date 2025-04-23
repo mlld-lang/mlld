@@ -1,9 +1,5 @@
 import type { MeldNode } from '@core/syntax/types/index';
-
-/**
- * Types of variables supported in Meld
- */
-export type VariableType = 'text' | 'data' | 'path';
+import { VariableType } from '@core/types/variables';
 
 /**
  * Format operator specification
@@ -21,7 +17,7 @@ export interface FormatOperator {
   format: string;
   /** The variable being formatted */
   variable: {
-    type: 'text' | 'data';  // Path variables cannot be formatted
+    type: VariableType.TEXT | VariableType.DATA;  
     identifier: string;
     field?: string[];  // For data variables only
   };
@@ -62,7 +58,7 @@ export function isVariableReferenceNode(node: MeldNode): node is VariableReferen
   return (
     n.type === 'VariableReference' &&
     typeof n.identifier === 'string' &&
-    typeof n.valueType === 'string'
+    (n.valueType === VariableType.TEXT || n.valueType === VariableType.DATA || n.valueType === VariableType.PATH) 
   );
 
   // // Check for legacy TextVar nodes
@@ -218,8 +214,8 @@ export const ENV_VAR_PREFIX = 'ENV_';
  * Variable reference patterns
  */
 export const VAR_PATTERNS = {
-  TEXT: /\${([^}]+)}/,
-  DATA: /#{([^}]+)}/,
-  PATH: /\$([A-Za-z0-9_~]+)/,
-  FORMAT: />>\(([^)]+)\)/
+  TEXT: /\${([^}]+)}/, // Matches ${...}
+  DATA: /#{([^}]+)}/, // Matches #{...}
+  PATH: /\$([A-Za-z0-9_~.]+)/, // Matches $, including special $. and $~, and alphanumeric with underscores
+  FORMAT: />>\(([^)]+)\)/ // Matches >> (...) for formatting
 } as const; 

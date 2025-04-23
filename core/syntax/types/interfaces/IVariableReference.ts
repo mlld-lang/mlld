@@ -1,22 +1,16 @@
 import type { INode } from './INode';
 import { 
-  VariableType as BaseVariableType, 
   Field as BaseField,
   FormatOperator as BaseFormatOperator,
   SPECIAL_PATH_VARS as BASE_SPECIAL_PATH_VARS,
   ENV_VAR_PREFIX as BASE_ENV_VAR_PREFIX,
   VAR_PATTERNS as BASE_VAR_PATTERNS
 } from '../shared-types';
+import { VariableType } from '@core/types/variables';
 
 // Re-export core types from shared-types
 export type { Field } from '../shared-types';
 export type { FormatOperator } from '../shared-types';
-
-/**
- * Extended variable types specific to Meld syntax
- * Overrides the more general types from shared-types with specific Meld types
- */
-export type VariableType = 'text' | 'data' | 'path';
 
 /**
  * Format operator specification
@@ -28,9 +22,9 @@ export interface ExtendedFormatOperator {
   format: string;
   /** The variable being formatted */
   variable: {
-    type: 'text' | 'data';  // Path variables cannot be formatted
+    type: VariableType.TEXT | VariableType.DATA;  
     identifier: string;
-    field?: string[];  // For data variables only
+    field?: string[];  
   };
 }
 
