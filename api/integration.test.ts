@@ -138,17 +138,19 @@ describe('API Integration Tests', () => {
 
     // --- DI Fix for VariableReferenceResolver ---    
     // 1. Resolve dependencies needed by VariableReferenceResolverFactory.createResolver
-    const stateService = testContainer.resolve<IStateService>('IStateService');
-    const resolutionService = testContainer.resolve<IResolutionService>('IResolutionService');
-    const parserService = testContainer.resolve<IParserService>('IParserService');
-    const resolverFactory = testContainer.resolve(VariableReferenceResolverFactory);
+    // const stateService = testContainer.resolve<IStateService>('IStateService');
+    // const resolutionService = testContainer.resolve<IResolutionService>('IResolutionService');
+    // const parserService = testContainer.resolve<IParserService>('IParserService');
+    // const resolverFactory = testContainer.resolve(VariableReferenceResolverFactory);
     
     // 2. Create the actual VariableReferenceResolver instance
-    const resolverInstance = resolverFactory.createResolver(stateService, resolutionService, parserService);
+    // const resolverInstance = resolverFactory.createResolver(stateService, resolutionService, parserService);
     
     // 3. Register the *instance* so VariableReferenceResolverClientFactory's constructor can find it
-    testContainer.registerInstance(VariableReferenceResolver, resolverInstance);
-    // --- End DI Fix ---    
+    testContainer.registerSingleton(VariableReferenceResolverFactory, VariableReferenceResolverFactory);
+
+    // Register the class so DI can resolve its dependencies
+    testContainer.register(VariableReferenceResolver, { useClass: VariableReferenceResolver }); 
 
     // Clear mocks after setup, before tests
     vi.clearAllMocks();

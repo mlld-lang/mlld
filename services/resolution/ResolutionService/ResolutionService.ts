@@ -36,10 +36,9 @@ import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenc
 import { ResolutionContextFactory } from './ResolutionContextFactory';
 import { CommandResolver } from './resolvers/CommandResolver';
 import { ContentResolver } from './resolvers/ContentResolver';
-import { VariableReferenceResolver } from './resolvers/VariableReferenceResolver.js';
 import { logger } from '@core/utils/logger';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { inject, singleton, container } from 'tsyringe';
+import { inject, singleton, container, delay, injectable } from 'tsyringe';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index';
 import { Service } from '@core/ServiceProvider';
@@ -72,9 +71,12 @@ import {
   isValidatedResourcePath
 } from '@core/types/paths.js';
 import { PathValidationErrorDetails } from '@core/errors/PathValidationError.js';
-import { injectable } from 'tsyringe';
-// Import StructuredPath explicitly from syntax types
-import type { StructuredPath } from '@core/syntax/types/nodes.js'; 
+import {
+  // Import StructuredPath explicitly from syntax types
+  StructuredPath 
+} from '@core/syntax/types/nodes.js'; 
+// Import VariableReferenceResolver for constructor injection
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 
 /**
  * Internal type for heading nodes in the ResolutionService
@@ -154,13 +156,20 @@ export class ResolutionService implements IResolutionService {
    * @param fileSystemService - File system service for file operations
    * @param pathService - Path service for path operations
    * @param parserService - Parser service for parsing strings
+   * @param variableReferenceResolver - The resolver instance (injected)
    */
   constructor(
     @inject('IStateService') stateService?: IStateService,
     @inject('IFileSystemService') fileSystemService?: IFileSystemService, 
     @inject('IPathService') pathService?: IPathService,
-    @inject('IParserService') parserService?: IParserService
+    @inject('IParserService') parserService?: IParserService,
+    // Inject VariableReferenceResolver with delay
+    @inject(delay(() => VariableReferenceResolver)) variableReferenceResolver?: VariableReferenceResolver
   ) {
+    // Assign injected resolver
+    if (variableReferenceResolver) {
+        this.variableReferenceResolver = variableReferenceResolver;
+    }
     this.initializeFromParams(stateService, fileSystemService, pathService, parserService);
     
     // Move factory initialization here to ensure clients are ready earlier
@@ -364,12 +373,11 @@ export class ResolutionService implements IResolutionService {
     }
     this.commandResolver = new CommandResolver(this.stateService, this.fileSystemService, this.parserService);
     this.contentResolver = new ContentResolver(this.stateService);
-    this.variableReferenceResolver = new VariableReferenceResolver(
-      this.stateService,     // Arg 1: IStateService
-      this.pathService,      // Arg 2: IPathService
-      this,                 // Arg 3: IResolutionService (optional, passing instance)
-      this.parserService     // Arg 4: IParserService (optional)
-    );
+    // VariableReferenceResolver is now injected in the constructor
+    if (!this.variableReferenceResolver) {
+        // This should ideally not happen if DI is configured correctly
+        throw new Error('VariableReferenceResolver was not injected correctly into ResolutionService.');
+    }
   }
 
   /**

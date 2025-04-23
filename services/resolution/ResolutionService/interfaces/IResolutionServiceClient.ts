@@ -1,5 +1,12 @@
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { StructuredPath } from '@core/shared-service-types.js';
+import type { 
+    MeldNode, 
+    InterpolatableValue, 
+    TextNode, 
+    VariableReferenceNode 
+} from '@core/syntax/types/nodes.js';
+import type { MeldResolutionError } from '@core/errors'; // For JSDoc
 
 /**
  * Interface for ResolutionService functionality needed by clients.
@@ -57,4 +64,15 @@ export interface IResolutionServiceClient {
    * @throws {MeldFileSystemError} If the file cannot be read
    */
   resolveFile(path: string): Promise<string>;
-} 
+
+  /**
+   * Resolves an array of AST nodes (specifically TextNode and VariableReferenceNode) into a single string.
+   * Handles literal text and delegates VariableReferenceNodes to the appropriate resolver.
+   * 
+   * @param nodes - The InterpolatableValue array (TextNode | VariableReferenceNode)
+   * @param context - The resolution context.
+   * @returns The fully resolved and concatenated string content.
+   * @throws {MeldResolutionError} If variable resolution fails in strict mode.
+   */
+  resolveNodes(nodes: InterpolatableValue, context: ResolutionContext): Promise<string>;
+}

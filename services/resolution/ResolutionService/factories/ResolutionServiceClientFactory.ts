@@ -4,9 +4,9 @@ import type { IResolutionService, ResolutionContext } from '@services/resolution
 import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import type { StructuredPath } from '@core/shared-service-types.js';
-import { MeldPath, createMeldPath, unsafeCreateValidatedResourcePath, RawPath } from '@core/types/paths.js';
-import type { MeldNode, TextNode, VariableReferenceNode, StructuredPath as SyntaxStructuredPath } from '@core/syntax/types/nodes.js';
+import type { MeldNode, TextNode, VariableReferenceNode, StructuredPath as SyntaxStructuredPath, InterpolatableValue } from '@core/syntax/types/nodes.js';
 import { VariableType } from '@core/types/variables.js';
+import { MeldPath, createMeldPath, unsafeCreateValidatedResourcePath, RawPath } from '@core/types/paths.js';
 
 /**
  * Factory for creating resolution service clients for VariableReferenceResolver
@@ -56,23 +56,21 @@ export class ResolutionServiceClientFactory {
         return await this.resolutionService.resolveInContext(text, context);
       },
       
-      resolveFile: async (path: string) => {
+      resolveFile: async (path: string): Promise<string> => {
         if (!this.resolutionService) throw new Error('Resolution service not available in client');
-        const meldPath = createMeldPath(path as RawPath, unsafeCreateValidatedResourcePath(path));
-        return await this.resolutionService.resolveFile(meldPath);
+        try {
+          const meldPath = createMeldPath(path as RawPath, unsafeCreateValidatedResourcePath(path));
+          return await this.resolutionService.resolveFile(meldPath);
+        } catch (error) {
+          logger.error(`Error in resolveFile client adapter for path: ${path}`, { error });
+          throw error; // Re-throw the error
+        }
+      },
+      
+      resolveNodes: async (nodes: InterpolatableValue, context: ResolutionContext): Promise<string> => {
+        if (!this.resolutionService) throw new Error('Resolution service not available in client');
+        return await this.resolutionService.resolveNodes(nodes, context);
       }
     };
   }
 }
-
-// Helper function (consider moving to a shared test utility)
-const createMockVarNode = (identifier: string): VariableReferenceNode => {
-  return {
-    type: 'VariableReference',
-    identifier,
-    valueType: VariableType.TEXT, // Assume text for simplicity
-    fields: [],
-    isVariableReference: true,
-    location: { start: { line: 1, column: 1 }, end: { line: 1, column: identifier.length + 4 } }
-  };
-}; 
