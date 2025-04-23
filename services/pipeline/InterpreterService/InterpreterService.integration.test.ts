@@ -67,6 +67,8 @@ import { PathOperationsService } from '@services/fs/FileSystemService/PathOperat
 import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
 import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import { ICircularityService } from '@services/pipeline/CircularityService/ICircularityService.js';
+import { CircularityService } from '@services/pipeline/CircularityService/CircularityService.js';
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),
@@ -202,8 +204,14 @@ describe('InterpreterService Integration', () => {
     // Register REAL Service Implementations 
     testContainer.register('IInterpreterService', { useClass: InterpreterService });
     testContainer.register('IStateService', { useClass: StateService }); 
-    testContainer.register('IParserService', { useClass: ParserService }); 
     testContainer.register('IResolutionService', { useClass: ResolutionService }); // <<< Added registration for REAL ResolutionService
+    testContainer.register('IPathService', { useClass: PathService });
+    testContainer.register(ParserService, { useClass: ParserService });
+    testContainer.register('IParserService', { useToken: ParserService });
+    testContainer.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
+    testContainer.register('ICircularityService', { useClass: CircularityService }); // Added this line
+
+    // Register the container with itself for injection
     testContainer.registerInstance('DependencyContainer', testContainer);
     // --- End Registrations ---
     
@@ -445,7 +453,7 @@ describe('InterpreterService Integration', () => {
     it('handles state rollback on merge errors', async () => {
       const varName = 'error';
       const originalVarName = 'original';
-      const node = context.factory.createTextDirective(varName, '{{nonexistent}}', context.factory.createLocation(1, 1));
+      const node = context.factory.createTextDirective(varName, '{{nonexistent}}', context.factory.createLocation(1, 2));
       const parentState = state.createChildState();
       const originalValue = 'value';
       const attemptedValue = 'attempted_value';

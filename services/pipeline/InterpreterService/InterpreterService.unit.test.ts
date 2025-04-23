@@ -212,9 +212,8 @@ describe('InterpreterService Unit', () => {
     testContainer.registerInstance<IStateService>('IStateService', mockStateService);
     testContainer.registerInstance<DirectiveServiceClientFactory>(DirectiveServiceClientFactory, mockDirectiveClientFactory);
     testContainer.registerInstance<ParserServiceClientFactory>(ParserServiceClientFactory, mockParserClientFactory);
-    
+    testContainer.registerInstance<ICircularityService>('ICircularityService', mockCircularityService); // Added this line
     testContainer.registerInstance<IFileSystemService>('IFileSystemService', mockFileSystemService);
-    testContainer.registerInstance<ICircularityService>('ICircularityService', mockCircularityService);
     // Register the manual mock instance using Class token
     testContainer.registerInstance(ResolutionContextFactory, mockResolutionContextFactory);
     
@@ -354,17 +353,16 @@ describe('InterpreterService Unit', () => {
     // REMOVE SKIP
     it('sets file path in working state when provided in options', async () => {
       const textNode: TextNode = createTextNode('Test content');
-      const filePath = 'test-path.meld';
       // Use mock from beforeEach
       vi.spyOn(mockStateService, 'setCurrentFilePath');
       vi.spyOn(mockStateService, 'createChildState').mockReturnValue(mockStateService); // Ensure child state is created
 
-      await service.interpret([textNode], { initialState: mockStateService, filePath: filePath });
+      await service.interpret([textNode], { initialState: mockStateService, filePath: 'test-path.meld' });
       
       // FIX: Expect clone 4 times (init current, init snapshot, applyStateChanges, update lastGoodState)
       expect(mockStateService.clone).toHaveBeenCalledTimes(4); 
       // Check that setCurrentFilePath was called on the *cloned* working state
-      expect(mockStateService.setCurrentFilePath).toHaveBeenCalledWith(filePath);
+      expect(mockStateService.setCurrentFilePath).toHaveBeenCalledWith('test-path.meld');
     });
 
     it('passes context to directive client', async () => {

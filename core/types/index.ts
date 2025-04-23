@@ -39,6 +39,7 @@ import type {
 import type { MeldNode } from '@core/syntax/types/index.js';
 import type { DirectiveNode } from '@core/syntax/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 
 /**
  * Represents a position in a file
@@ -104,6 +105,10 @@ export interface ProcessOptions {
   pretty?: boolean;
   /** Optional pre-configured DI container - Might become redundant if passing services */
   container?: DependencyContainer;
+  /**
+   * A file path associated with the input content. Used for resolving relative paths in directives like @import.
+   */
+  filePath?: string;
 }
 
 /**
@@ -220,6 +225,8 @@ export interface DirectiveProcessingContext {
   executionContext?: ExecutionContext;
   /** The original directive node being processed. */
   directiveNode: DirectiveNode;
+  /** Optional service for tracking circular imports during processing. */
+  circularityService?: ICircularityService;
 }
 
 // --- END NEW CONTEXT TYPE DEFINITIONS ---

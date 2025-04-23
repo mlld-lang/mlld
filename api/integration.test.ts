@@ -759,7 +759,7 @@ Docs are at $docs
       // Process using processMeld API
       const result = await processMeld(mainContent, {
         container: testContainer,
-        // filePath: mainFilePath // Keep removed for now
+        filePath: mainFilePath // Provide the file path for correct relative import resolution
       });
       
       // console.log('Nested import result:', result);

@@ -224,11 +224,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // Direct sanity check on child state parent relationship
         process.stdout.write(`DEBUG [ImportHandler]: Created child state with ID: ${childState.getStateId()}, Has parent? ${!!childState.getParentState()}, Parent matches? ${childState.getParentState() === currentStateService}\n`);
 
-        process.stdout.write(`DEBUG [ImportHandler]: BEFORE interpret call for ${resolvedIdentifier}\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: BEFORE interpret call for ${resolvedPath.validatedPath}\n`);
         
         // CRITICAL FIX: Begin tracking this import in the circularity service BEFORE interpretation
         // This ensures the import stack is updated correctly before recursive imports
-        this.circularityService.beginImport(resolvedIdentifier);
+        this.circularityService.beginImport(resolvedPath.validatedPath);
         process.stdout.write(`DEBUG [ImportHandler]: AFTER beginImport, stack: ${JSON.stringify((this.circularityService as any)?._importStack || [])}\n`);
         
         let interpretedState;
@@ -236,7 +236,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           interpretedState = await this.interpreterServiceClient!.interpret(
             astNodes, 
             { 
-              filePath: resolvedIdentifier, 
+              filePath: resolvedPath.validatedPath, 
               mergeState: false, 
             }, 
             childState,
@@ -244,24 +244,24 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           );
           
           // Only end the import if interpretation completes successfully
-          this.circularityService.endImport(resolvedIdentifier);
+          this.circularityService.endImport(resolvedPath.validatedPath);
           process.stdout.write(`DEBUG [ImportHandler]: AFTER endImport, stack: ${JSON.stringify((this.circularityService as any)?._importStack || [])}\n`);
         } catch (error) {
           // Clean up the import stack even if interpretation fails
-          this.circularityService.endImport(resolvedIdentifier);
+          this.circularityService.endImport(resolvedPath.validatedPath);
           process.stdout.write(`DEBUG [ImportHandler]: AFTER error endImport, stack: ${JSON.stringify((this.circularityService as any)?._importStack || [])}\n`);
           throw error;
         }
-        process.stdout.write(`DEBUG [ImportHandler]: AFTER interpret call for ${resolvedIdentifier} (resolved)\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: AFTER interpret call for ${resolvedPath.validatedPath} (resolved)\n`);
 
         sourceStateChanges = { variables: interpretedState.getLocalChanges() };
 
       } catch (interpretErrorCaught) { 
-        process.stdout.write(`DEBUG [ImportHandler]: CAUGHT error during interpret for ${resolvedIdentifier}: ${interpretErrorCaught}\n`);
+        process.stdout.write(`DEBUG [ImportHandler]: CAUGHT error during interpret for ${resolvedPath.validatedPath}: ${interpretErrorCaught}\n`);
         const cause = interpretErrorCaught instanceof Error ? interpretErrorCaught : new Error(String(interpretErrorCaught));
         // Construct and throw the DirectiveError directly
         const directiveError = new DirectiveError(
-          `Failed to interpret imported content from ${resolvedIdentifier}. ${cause.message}`,
+          `Failed to interpret imported content from ${resolvedPath.validatedPath}. ${cause.message}`,
           this.kind,
           DirectiveErrorCode.EXECUTION_FAILED,
           { cause }
@@ -283,29 +283,29 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       if (Array.isArray(importsList) && importsList.length === 1 && importsList[0].name === '*' && importsList[0].alias == null) {
         if (sourceStateChanges) {
           // Treat [{ name: '*' }] the same as importsList === '*'
-          accumulatedStateChanges = this.importAllVariables(sourceStateChanges, importDirectiveLocation, resolvedIdentifier, currentFilePath ?? undefined);
+          accumulatedStateChanges = this.importAllVariables(sourceStateChanges, importDirectiveLocation, resolvedPath.validatedPath, currentFilePath ?? undefined);
           // process.stdout.write(`DEBUG [ImportHandler]: (Array *) Received from importAllVariables: ${JSON.stringify(accumulatedStateChanges)}\n`);
         } else {
-           logger.warn(`[ImportDirectiveHandler.handle] Skipping import * (array format) because source interpretation yielded no state changes for ${resolvedIdentifier}.\n`);
+           logger.warn(`[ImportDirectiveHandler.handle] Skipping import * (array format) because source interpretation yielded no state changes for ${resolvedPath.validatedPath}.\n`);
         }
       } else if (importsList === '*') { // Handle the simple string case
         if (sourceStateChanges) {
-          accumulatedStateChanges = this.importAllVariables(sourceStateChanges, importDirectiveLocation, resolvedIdentifier, currentFilePath ?? undefined);
+          accumulatedStateChanges = this.importAllVariables(sourceStateChanges, importDirectiveLocation, resolvedPath.validatedPath, currentFilePath ?? undefined);
           // process.stdout.write(`DEBUG [ImportHandler]: (String *) Received from importAllVariables: ${JSON.stringify(accumulatedStateChanges)}\n`);
         } else {
-           logger.warn(`[ImportDirectiveHandler.handle] Skipping import * (string format) because source interpretation yielded no state changes for ${resolvedIdentifier}.\n`);
+           logger.warn(`[ImportDirectiveHandler.handle] Skipping import * (string format) because source interpretation yielded no state changes for ${resolvedPath.validatedPath}.\n`);
         }
       } else if (Array.isArray(importsList)) { // Handle named imports
         if (sourceStateChanges) {
-          accumulatedStateChanges = await this.processStructuredImports(importsList, sourceStateChanges, importDirectiveLocation, resolvedIdentifier, currentFilePath ?? undefined);
+          accumulatedStateChanges = await this.processStructuredImports(importsList, sourceStateChanges, importDirectiveLocation, resolvedPath.validatedPath, currentFilePath ?? undefined);
           // process.stdout.write(`DEBUG [ImportHandler]: Received from processStructuredImports: ${JSON.stringify(accumulatedStateChanges)}\n`);
         } else {
-           logger.warn(`[ImportDirectiveHandler.handle] Skipping structured import because source interpretation yielded no state changes for ${resolvedIdentifier}.\n`);
+           logger.warn(`[ImportDirectiveHandler.handle] Skipping structured import because source interpretation yielded no state changes for ${resolvedPath.validatedPath}.\n`);
         }
       }
 
       // 8. Mark Import as Completed
-        this.circularityService.endImport(normalizedIdentifier);
+        this.circularityService.endImport(resolvedPath.validatedPath);
 
       if (this.debugEnabled) {
          logger.debug(`[ImportDirectiveHandler.handle] EXIT. Success. Accumulated changes: ${Object.keys(accumulatedStateChanges).length}\n`);
@@ -383,10 +383,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       }
 
       // Cleanup: End import tracking if an identifier was resolved
-      if (resolvedIdentifier) {
+      if (resolvedPath) {
         try {
-          const normalizedIdentifier = resolvedIdentifier.replace(/\\/g, '/'); // Use original normalization
-          this.circularityService.endImport(normalizedIdentifier);
+          this.circularityService.endImport(resolvedPath.validatedPath);
         } catch (cleanupError) {
           logger.warn('Error during import cleanup on error path', { error: cleanupError });
         }

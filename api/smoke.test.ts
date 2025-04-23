@@ -8,14 +8,18 @@ import type { ILogger } from '@core/utils/logger';
 import { StateService } from '@services/state/StateService/StateService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
 
 describe('API Smoke Tests', () => {
   let context: TestContextDI;
 
   beforeEach(async () => {
-    // Provide the REAL ResolutionService to prevent the mock from being used
+    // Provide REAL ResolutionService, StateService, AND the Factory
     context = await TestContextDI.createTestHelpers().setupWithStandardMocks({
-      'IResolutionService': ResolutionService 
+      'IResolutionService': ResolutionService,
+      'IStateService': StateService,
+      'VariableReferenceResolverClientFactory': VariableReferenceResolverClientFactory,
+      [VariableReferenceResolverClientFactory.name]: VariableReferenceResolverClientFactory
     });
   });
 

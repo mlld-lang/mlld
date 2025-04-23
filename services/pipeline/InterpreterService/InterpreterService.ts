@@ -66,27 +66,31 @@ export class InterpreterService implements IInterpreterService {
   private parserClientFactory?: ParserServiceClientFactory;
   private parserClient?: IParserServiceClient;
   private pathService!: IPathService;
+  private container: DependencyContainer;
 
   /**
    * Creates a new InterpreterService
    * 
    * @param resolutionService - Service for text resolution
    * @param pathService - Service for path operations
-   * @param directiveServiceClientFactory - Factory for creating directive service clients
    * @param stateService - Service for state management
+   * @param container - Dependency container for fallback resolution
+   * @param directiveServiceClientFactory - Factory for creating directive service clients
    * @param parserClientFactory - Factory for creating parser service clients
    */
   constructor(
     @inject('IResolutionService') resolutionService: IResolutionService,
     @inject('IPathService') pathService: IPathService,
+    @inject('IStateService') stateService: IStateService,
+    @inject('DependencyContainer') container: DependencyContainer,
     @inject(delay(() => DirectiveServiceClientFactory)) directiveServiceClientFactory?: DirectiveServiceClientFactory,
-    @inject('IStateService') stateService?: IStateService,
     @inject(ParserServiceClientFactory) parserClientFactory?: ParserServiceClientFactory
   ) {
     this.resolutionService = resolutionService;
     this.pathService = pathService;
-    this.directiveClientFactory = directiveServiceClientFactory;
     this.stateService = stateService;
+    this.container = container;
+    this.directiveClientFactory = directiveServiceClientFactory;
     this.parserClientFactory = parserClientFactory;
     
     logger.debug('InterpreterService constructor', {
@@ -299,7 +303,7 @@ export class InterpreterService implements IInterpreterService {
     nodes: MeldNode[],
     options?: InterpreterOptions,
     initialState?: IStateService,
-    circularityService?: ICircularityService
+    circularityService?: ICircularityService // Add optional service here
   ): Promise<IStateService> {
     // Log entry 
     process.stdout.write(`DEBUG [InterpreterService.interpret ENTRY] Has circularityService param? ${!!circularityService}\n`);
@@ -416,6 +420,10 @@ export class InterpreterService implements IInterpreterService {
       initialSnapshot = currentState!.clone() as IStateService; // Keep initial snapshot for potential error rollback
       lastGoodState = currentState; // Initialize lastGoodState *before* the loop without cloning
 
+      const effectiveOptions = { ...DEFAULT_OPTIONS, ...options }; // Combine default and provided options
+      // Resolve circularityService: use provided or get from the INJECTED container
+      const actualCircularityService = circularityService ?? this.container.resolve<ICircularityService>('ICircularityService');
+
       for (const node of nodes) {
         // If we enter the loop, *now* clone the lastGoodState for the first time if it hasn't been cloned yet
         // This ensures clone isn't called for empty node arrays.
@@ -427,8 +435,8 @@ export class InterpreterService implements IInterpreterService {
         try {
           const stateBeforeNode: IStateService | null = currentState;
 
-          // Step 1: Modify interpretNode call to receive tuple
-          const [intermediateState, nodeResult] = await this.interpretNode(node, currentState, opts);
+          // Step 1: Modify interpretNode call to receive tuple and pass circularityService
+          const [intermediateState, nodeResult] = await this.interpretNode(node, currentState, effectiveOptions, actualCircularityService); // Pass service here
           currentState = intermediateState;
           
           // <<< ADDED: Validate DirectiveResult structure >>>
@@ -490,7 +498,7 @@ export class InterpreterService implements IInterpreterService {
           lastGoodState = currentState.clone() as IStateService; 
         } catch (error) {
           try {
-            this.handleError(error instanceof Error ? error : new Error(String(error)), opts, node);
+            this.handleError(error instanceof Error ? error : new Error(String(error)), effectiveOptions, node);
             // Rollback to the last known good state *before* the failed node processing
             currentState = lastGoodState; // No clone needed here, revert to the state before the try block for this node
           } catch (fatalError) {
@@ -545,7 +553,8 @@ export class InterpreterService implements IInterpreterService {
   async interpretNode(
     node: MeldNode,
     state: IStateService,
-    options?: InterpreterOptions
+    options?: InterpreterOptions,
+    circularityService?: ICircularityService // Add optional service here
   ): Promise<[IStateService, DirectiveResult | undefined]> {
     this.ensureInitialized();
 
@@ -696,6 +705,7 @@ export class InterpreterService implements IInterpreterService {
           formattingContext: formattingContext,
           executionContext: executionContext, 
           directiveNode: directiveNode, 
+          circularityService: circularityService // Pass the service here
         };
 
         // Call the directive handler (now returns new DirectiveResult)
