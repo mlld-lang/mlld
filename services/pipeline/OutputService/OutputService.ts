@@ -2,7 +2,6 @@ import { injectable, inject, delay } from 'tsyringe';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { MeldNode, TextNode, CodeFenceNode, VariableReferenceNode, DirectiveNode } from '@core/syntax/types/index';
 import { logger } from '@core/utils/logger';
-import { OutputOptions, DEFAULT_OPTIONS, FormattingContext } from './types';
 import type { IOutputService } from './IOutputService';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import { ResolutionContext } from '@core/types/resolution';
@@ -22,6 +21,28 @@ import { formatWithPrettier } from '@core/utils/prettierUtils';
 import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference';
 import { container } from 'tsyringe';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
+
+/**
+ * Options for output generation
+ */
+interface OutputOptions {
+  /** Whether to pretty print the output */
+  pretty?: boolean;
+  /** Whether to preserve exact formatting from source */
+  preserveFormatting?: boolean;
+  /** Whether to preserve variable types in output */
+  preserveTypes?: boolean;
+  /** Default format to use for unknown node types */
+  defaultFormat?: string;
+}
+
+/** Default output options */
+const DEFAULT_OPTIONS: OutputOptions = {
+  pretty: false,
+  preserveFormatting: true,
+  preserveTypes: false,
+  defaultFormat: 'text'
+};
 
 /**
  * Tracking context for variable formatting to preserve formatting during substitution
@@ -433,13 +454,6 @@ type FormatConverter = (
   options?: OutputOptions
 ) => Promise<string>;
 
-const DEFAULT_OPTIONS: Required<OutputOptions> = {
-  includeState: false,
-  preserveFormatting: true,
-  pretty: false,
-  formatOptions: {}
-};
-
 @injectable()
 @Service({
   description: 'Service responsible for converting Meld nodes to different output formats',
@@ -569,11 +583,11 @@ export class OutputService implements IOutputService {
    * @deprecated Use dependency injection instead of manual initialization.
    * This method is kept for backward compatibility but will be removed in a future version.
    */
-  initialize(state: IStateService, resolutionService?: IResolutionService): void {
+  initialize(state: IStateService, resolutionService: IResolutionService): void {
     this.state = state;
     this.resolutionService = resolutionService;
     logger.debug('OutputService manually initialized with state service', {
-      hasResolutionService: !!resolutionService
+      hasResolutionService: true
     });
   }
 
