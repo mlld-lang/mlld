@@ -136,7 +136,12 @@ describe('RunDirectiveHandler', () => {
           mockStateService, 
           mockStateService.getCurrentFilePath() ?? undefined
       );
-      const mockFormattingContext: FormattingContext = { isBlock: false, preserveLiteralFormatting: false, preserveWhitespace: false };
+      const mockFormattingContext = { 
+        isBlock: false, 
+        preserveLiteralFormatting: false, 
+        preserveWhitespace: false,
+        isOutputLiteral: mockStateService.isTransformationEnabled()
+      };
       
       return {
           state: mockStateService,

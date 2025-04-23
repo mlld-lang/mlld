@@ -97,7 +97,7 @@ This document outlines a focused approach to implementing the already establishe
       - [x] TextDirectiveHandler
       - [x] RunDirectiveHandler
       - [x] DefineDirectiveHandler      
-      - [ ] EmbedDirectiveHandler
+      - [x] EmbedDirectiveHandler
       - [ ] ImportDirectiveHandler
    - [x] Update service interfaces to maintain consistency
 
