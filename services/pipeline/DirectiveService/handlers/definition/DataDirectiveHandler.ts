@@ -106,27 +106,35 @@ export class DataDirectiveHandler implements IDirectiveHandler {
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
     const currentFilePath = state.getCurrentFilePath();
-    // Pass the full context to error details
-    const errorDetails = { 
+    const baseErrorDetails = { 
       node: node, 
-      context: context // Pass the full context object
+      context: { currentFilePath: currentFilePath ?? undefined } 
     };
 
     // Assert directive exists before accessing properties
     if (!node.directive) {
        throw new DirectiveError(
-          `Directive node is missing the 'directive' property.`,
+          'Directive node is missing the directive property',
           this.kind, 
           DirectiveErrorCode.VALIDATION_FAILED, 
-          errorDetails // Pass updated errorDetails
+          baseErrorDetails
       );
     }
 
     const identifier = node.directive.identifier;
-    const source = node.directive.source ?? 'literal'; // Default source to literal if missing
-    const value = node.directive.value; // May be literal or InterpolatableValue
-    const embed = node.directive.embed; // Type should come from AST types
-    const run = node.directive.run; // Type should come from AST types
+    const source = node.directive.source ?? 'literal';
+    const value = node.directive.value;
+    const embed = node.directive.embed;
+    const run = node.directive.run;
+
+    if (!identifier) {
+      throw new DirectiveError(
+        'Data directive requires an identifier',
+        this.kind,
+        DirectiveErrorCode.VALIDATION_FAILED,
+        baseErrorDetails
+      );
+    }
 
     logger.debug('Processing data directive', {
       location: node.location,
@@ -139,205 +147,163 @@ export class DataDirectiveHandler implements IDirectiveHandler {
 
     try {
       let resolvedValue: unknown;
-      let valueToParse: unknown;
       
       // Define location using common SourceLocation type
-      let directiveSourceLocation: SourceLocation | undefined = undefined;
-      if (node.location?.start && typeof currentFilePath === 'string') {
-          directiveSourceLocation = { 
-              filePath: currentFilePath, 
-              line: node.location.start.line,
-              column: node.location.start.column,
-          };
-      }
+      const directiveSourceLocation: SourceLocation | undefined = node.location ? {
+         filePath: currentFilePath ?? 'unknown',
+         line: node.location.start.line,
+         column: node.location.start.column
+      } : undefined;
+
+      // Construct base metadata
+      const baseMetadata: VariableMetadata = {
+          definedAt: directiveSourceLocation,
+          origin: VariableOrigin.DIRECT_DEFINITION,
+          createdAt: Date.now(),
+          modifiedAt: Date.now()
+      };
 
       if (source === 'literal') {
         if (value === undefined) {
-             throw new DirectiveError('Missing value for @data directive with source=\"literal\"' , this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
+             throw new DirectiveError('Missing value for @data directive with source="literal"', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
         }
         // Resolve potential variables within the literal value first
-        valueToParse = await this.resolveInterpolatableValuesInData(value, resolutionContext);
+        resolvedValue = await this.resolveInterpolatableValuesInData(value, resolutionContext);
       } else if (source === 'run' && run) {
         try {
-          // Use direct properties from run (AST structure)
           const commandInput = run.command;
           const runSubtype = run.subtype;
-          if (!commandInput) throw new DirectiveError('Missing command input for @run source', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
+          if (!commandInput) {
+            throw new DirectiveError('Missing command input for @run source', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+          }
           
           let resolvedCommandString: string;
 
           if (runSubtype === 'runDefined') {
-             // Type assertion for commandInput based on subtype
-             const definedCommand = commandInput as { name: string, args: any[], raw: string };
+             const definedCommand = commandInput as { name: string };
              if (typeof definedCommand !== 'object' || !definedCommand.name) {
-                 throw new DirectiveError('Invalid command input structure for runDefined subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
+                 throw new DirectiveError('Invalid command input structure for runDefined subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
              }
-             // Use generic getVariable and type guard
-             const cmdVar = state.getVariable(definedCommand.name, VariableType.COMMAND); 
+             const cmdVar = state.getVariable(definedCommand.name, VariableType.COMMAND);
              if (cmdVar && isCommandVariable(cmdVar) && isBasicCommand(cmdVar.value)) { 
                 resolvedCommandString = cmdVar.value.commandTemplate; 
              } else {
                 const errorMsg = !cmdVar ? `Command definition '${definedCommand.name}' not found` : `Command '${definedCommand.name}' is not a basic command suitable for @data/@run`;
-                throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, errorDetails);
+                throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, baseErrorDetails);
              }
-          } else if (runSubtype === 'runCommand' || runSubtype === 'runCode' || runSubtype === 'runCodeParams') {
-             // Type assertion for commandInput based on subtype
-             const interpolatableCommand = commandInput as InterpolatableValue;
-             if (!isInterpolatableValueArray(interpolatableCommand)) {
-                throw new DirectiveError(`Expected InterpolatableValue for command input with subtype '${runSubtype}'`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
-             }
-             resolvedCommandString = await this.resolutionService.resolveNodes(interpolatableCommand, resolutionContext);
+          } else if (isInterpolatableValueArray(commandInput)) {
+             resolvedCommandString = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
           } else {
-             throw new DirectiveError(`Unsupported run subtype '${runSubtype}' encountered in @data handler`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
+             throw new DirectiveError('Invalid command input structure', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
           }
           
           const fsService = this.fileSystemService;
           if (!fsService) {
-            throw new DirectiveError('File system service is unavailable for @run execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, errorDetails);
+            throw new DirectiveError('File system service is unavailable for @run execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, baseErrorDetails);
           }
           
           const { stdout } = await fsService.executeCommand(resolvedCommandString, { cwd: fsService.getCwd() });
           
           try {
             resolvedValue = JSON.parse(stdout);
-          } catch (parseError) {
+          } catch (error) {
             throw new DirectiveError(
-              `Failed to parse command output as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`,
-              this.kind, 
-              DirectiveErrorCode.EXECUTION_FAILED, 
-              { ...errorDetails, cause: parseError instanceof Error ? parseError : undefined }
+              `Failed to parse command output as JSON: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              this.kind,
+              DirectiveErrorCode.EXECUTION_FAILED,
+              { ...baseErrorDetails, cause: error instanceof Error ? error : undefined }
             );
           }
-          logger.debug('Executed command and parsed JSON for @data directive', { resolvedCommand: resolvedCommandString, output: resolvedValue });
-          valueToParse = resolvedValue;
         } catch (error) {
-            if (error instanceof DirectiveError) throw error; 
-            const code = (error instanceof MeldResolutionError || error instanceof FieldAccessError) ? DirectiveErrorCode.RESOLUTION_FAILED : DirectiveErrorCode.EXECUTION_FAILED;
-            const message = (code === DirectiveErrorCode.RESOLUTION_FAILED) ? 'Failed to resolve command for @data directive' : `Failed to execute command for @data directive: ${error instanceof Error ? error.message : 'Unknown'}`;
-            throw new DirectiveError(message, this.kind, code, { ...errorDetails, cause: error instanceof Error ? error : undefined });
+          if (error instanceof DirectiveError) throw error;
+          const code = (error instanceof MeldResolutionError || error instanceof FieldAccessError) ? DirectiveErrorCode.RESOLUTION_FAILED : DirectiveErrorCode.EXECUTION_FAILED;
+          const message = code === DirectiveErrorCode.RESOLUTION_FAILED ? 'Failed to resolve command for @data directive' : `Failed to execute command for @data directive: ${error instanceof Error ? error.message : 'Unknown'}`;
+          throw new DirectiveError(message, this.kind, code, { ...baseErrorDetails, cause: error instanceof Error ? error : undefined });
         }
       } else if (source === 'embed' && embed) { 
          try {
-          // Use direct properties from embed (AST structure)
           const embedSubtype = embed.subtype;
           let fileContent: string;
 
           if (embedSubtype === 'embedPath') {
-              const embedPathObject = embed.path;
-              if (!embedPathObject) {
-                 throw new DirectiveError('Missing path for @embed source (subtype: embedPath)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails); 
-              }
-              // Resolve path string first
-              const valueToResolve = embedPathObject.interpolatedValue ?? embedPathObject.raw;
-              const resolvedEmbedPathString = await this.resolutionService.resolveInContext(valueToResolve, resolutionContext);
-              // Then validate the resolved path
-              const validatedMeldPath = await this.resolutionService.resolvePath(resolvedEmbedPathString, resolutionContext);
-              
-              if (validatedMeldPath.contentType !== 'filesystem') {
-                  throw new DirectiveError(`Cannot embed non-filesystem path: ${resolvedEmbedPathString}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails); 
-              }
+            const pathService = this.pathService;
+            if (!pathService) {
+              throw new DirectiveError('Path service is unavailable for @embed processing', this.kind, DirectiveErrorCode.EXECUTION_FAILED, baseErrorDetails);
+            }
 
-              const fsService = this.fileSystemService;
-              if (!fsService) {
-                throw new DirectiveError('File system service is unavailable for @embed execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, errorDetails); 
-              }
-              fileContent = await fsService.readFile(validatedMeldPath.validatedPath);
+            const fsService = this.fileSystemService;
+            if (!fsService) {
+              throw new DirectiveError('File system service is unavailable for @embed processing', this.kind, DirectiveErrorCode.EXECUTION_FAILED, baseErrorDetails);
+            }
 
+            const resolvedPath = await pathService.resolvePath(embed.path, currentFilePath);
+            if (!resolvedPath) {
+              throw new DirectiveError('Failed to resolve embed path', this.kind, DirectiveErrorCode.RESOLUTION_FAILED, baseErrorDetails);
+            }
+
+            fileContent = await fsService.readFile(resolvedPath);
           } else if (embedSubtype === 'embedVariable') {
-              const embedPathObject = embed.path;
-              if (!embedPathObject) {
-                 throw new DirectiveError('Missing variable reference for @embed source (subtype: embedVariable)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails); 
-              }
-              // Resolve the variable reference directly
-              fileContent = await this.resolutionService.resolveInContext(embedPathObject, resolutionContext);
+            const varName = embed.variable?.name;
+            if (!varName) {
+              throw new DirectiveError('Missing variable name in @embed source', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+            }
 
-          } else if (embedSubtype === 'embedTemplate') {
-              const templateContent = embed.content;
-              if (!templateContent || !isInterpolatableValueArray(templateContent)) {
-                  throw new DirectiveError('Missing or invalid content for @embed source (subtype: embedTemplate)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails); 
-              }
-              fileContent = await this.resolutionService.resolveNodes(templateContent, resolutionContext);
+            const embedVar = state.getVariable(varName);
+            if (!embedVar) {
+              throw new DirectiveError(`Variable '${varName}' not found for @embed source`, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, baseErrorDetails);
+            }
+
+            if (embedVar.type !== VariableType.TEXT && embedVar.type !== VariableType.DATA) {
+              throw new DirectiveError(
+                `Variable '${varName}' must be of type TEXT or DATA for @embed source in @data directive`,
+                this.kind,
+                DirectiveErrorCode.VALIDATION_FAILED,
+                baseErrorDetails
+              );
+            }
+
+            fileContent = String(embedVar.value);
           } else {
-             throw new DirectiveError(`Unsupported embed subtype: ${embedSubtype}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails); 
-          }
-          
-          if (embed.section) {
-             fileContent = await this.resolutionService.extractSection(fileContent, embed.section);
+            throw new DirectiveError(`Unsupported @embed subtype '${embedSubtype}' in @data directive`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
           }
 
           try {
             resolvedValue = JSON.parse(fileContent);
-          } catch (parseError) {
-             throw new DirectiveError(
-              `Failed to parse embedded content as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`,
-              this.kind, 
-              DirectiveErrorCode.EXECUTION_FAILED, 
-              { ...errorDetails, cause: parseError instanceof Error ? parseError : undefined }
+          } catch (error) {
+            throw new DirectiveError(
+              `Embedded content is not valid JSON: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              this.kind,
+              DirectiveErrorCode.EXECUTION_FAILED,
+              { ...baseErrorDetails, cause: error instanceof Error ? error : undefined }
             );
           }
-          logger.debug('Embedded content and parsed JSON for @data directive', { subtype: embedSubtype, section: embed.section, output: resolvedValue });
-          valueToParse = resolvedValue;
         } catch (error) {
-            if (error instanceof DirectiveError) throw error;
-            const code = (error instanceof MeldResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) ? DirectiveErrorCode.RESOLUTION_FAILED : DirectiveErrorCode.EXECUTION_FAILED;
-            const message = code === DirectiveErrorCode.RESOLUTION_FAILED ? 'Failed to resolve @embed source for @data directive' : `Failed to read/process embed source for @data directive: ${error instanceof Error ? error.message : 'Unknown'}`;
-            throw new DirectiveError(message, this.kind, code, { ...errorDetails, cause: error instanceof Error ? error : undefined });
+          if (error instanceof DirectiveError) throw error;
+          const code = (error instanceof MeldResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) ? DirectiveErrorCode.RESOLUTION_FAILED : DirectiveErrorCode.EXECUTION_FAILED;
+          const message = code === DirectiveErrorCode.RESOLUTION_FAILED ? 'Failed to resolve @embed source for @data directive' : `Failed to read/process embed source for @data directive: ${error instanceof Error ? error.message : 'Unknown'}`;
+          throw new DirectiveError(message, this.kind, code, { ...baseErrorDetails, cause: error instanceof Error ? error : undefined });
         }
       } else {
-         // Handle cases where source is set but the corresponding structure is missing or invalid
          const missingStructure = source === 'embed' ? 'embed' : source === 'run' ? 'run' : 'value';
          throw new DirectiveError(
               `Invalid @data directive: source is '${source}' but corresponding '${missingStructure}' property is missing or invalid.`,
               this.kind, 
               DirectiveErrorCode.VALIDATION_FAILED, 
-              errorDetails
+              baseErrorDetails
           );
       }
 
-      // --- Modify JSON Parsing Step --- 
-      let finalValue: JsonValue;
-      
-      // Always attempt to parse if the resolved value is a string
-      if (typeof valueToParse === 'string') { 
-        try {
-          finalValue = JSON.parse(valueToParse); 
-          logger.debug('Successfully parsed resolved string value as JSON', { identifier, source });
-        } catch (parseError) {
-          // If parsing fails, treat the resolved string as the final value (e.g., for non-JSON strings)
-          logger.warn(`Could not parse resolved string value for @data directive '${identifier}' as JSON. Using the raw string value.`, { parseError: parseError instanceof Error ? parseError.message : String(parseError) });
-          finalValue = valueToParse; // Use the string itself
-        }
-      } else {
-        // If not a string, assume it's already the intended JSON value (e.g., from @run/@embed parsing, or a literal number/boolean/null/object/array)
-        finalValue = valueToParse as JsonValue; 
-      }
-      // --- End JSON Parsing Step --- 
+      // Create the data variable using the factory function
+      const dataVariable = createDataVariable(identifier, resolvedValue as JsonValue, baseMetadata);
 
-      logger.info('[DataDirectiveHandler] Resolved data var:', { identifier, finalValue: JSON.stringify(finalValue) });
-      
-      const metadata: VariableMetadata = {
-          origin: VariableOrigin.DIRECT_DEFINITION, 
-          definedAt: directiveSourceLocation,
-          createdAt: Date.now(),
-          modifiedAt: Date.now()
+      // Return DirectiveResult with StateChanges
+      return {
+        stateChanges: {
+          variables: {
+            [identifier]: dataVariable
+          }
+        }
       };
-      
-      // <<< Create VariableDefinition for StateChanges >>>
-      const variableDefinition: VariableDefinition = {
-          name: identifier,
-          type: VariableType.DATA,
-          value: finalValue,
-          metadata: metadata
-      };
-      
-      // Return NEW DirectiveResult shape
-      return { 
-         stateChanges: { 
-            variables: { 
-                [identifier]: variableDefinition 
-            }
-         }
-      }; 
 
     } catch (error) {
       if (error instanceof DirectiveError) {
@@ -346,27 +312,26 @@ export class DataDirectiveHandler implements IDirectiveHandler {
             // Throw a new error, copying relevant info
             throw new DirectiveError(
                 error.message,
-                this.kind, // Use handler's kind
+                this.kind,
                 error.code,
                 { 
-                  ...(error.details || {}), // Copy existing details
-                  node: error.details?.node ?? node, // Ensure node is included
-                  context: context, // Pass the full context
-                  // Copy cause if it exists and is an Error
+                  ...(error.details || {}),
+                  node: error.details?.node ?? node,
+                  context: { currentFilePath: currentFilePath ?? undefined },
                   cause: error.details?.cause instanceof Error ? error.details.cause : undefined 
                 }
             );
          }
-         throw error; // Re-throw original if context was already present
+         throw error;
       } 
       // Wrap unexpected errors
       throw new DirectiveError(
         `Error processing data directive: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        this.kind, // Use this.kind
+        this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
         { 
-          node: node, // Ensure node is included
-          context: context, // Pass the full context
+          node: node,
+          context: { currentFilePath: currentFilePath ?? undefined },
           cause: error instanceof Error ? error : undefined,
         }
       );
@@ -378,29 +343,43 @@ export class DataDirectiveHandler implements IDirectiveHandler {
    */
   private async resolveInterpolatableValuesInData(
     data: unknown,
-    context: ResolutionContext // Ensure this uses the correct context
+    context: ResolutionContext
   ): Promise<JsonValue> {
+    // If it's an interpolatable value array, resolve it first
     if (isInterpolatableValueArray(data)) {
-      logger.debug('[resolveInterpolatableValuesInData] Resolving InterpolatableValue Array:', data);
       const resolvedString = await this.resolutionService.resolveNodes(data, context);
-      logger.debug('[resolveInterpolatableValuesInData] Resolved to:', resolvedString);
-      return resolvedString;
-    }
-    if (Array.isArray(data)) {
-      const resolvedArray: JsonValue[] = [];
-      for (const item of data) {
-          resolvedArray.push(await this.resolveInterpolatableValuesInData(item, context));
+      try {
+        // Try to parse the resolved string as JSON
+        return JSON.parse(resolvedString);
+      } catch {
+        // If it's not valid JSON, return the string itself
+        return resolvedString;
       }
+    }
+
+    // Handle arrays recursively
+    if (Array.isArray(data)) {
+      const resolvedArray = await Promise.all(
+        data.map(item => this.resolveInterpolatableValuesInData(item, context))
+      );
       return resolvedArray;
     }
+
+    // Handle objects recursively
     if (typeof data === 'object' && data !== null) {
-      const resolvedObject: Record<string, JsonValue> = {};
+      const resolvedObject: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(data)) {
-        logger.debug(`[resolveInterpolatableValuesInData] Resolving key "${key}":`, value);
-        resolvedObject[key] = await this.resolveInterpolatableValuesInData(value, context);
+        // Handle potential interpolation in both key and value
+        let resolvedKey = key;
+        if (isInterpolatableValueArray(key)) {
+          resolvedKey = await this.resolutionService.resolveNodes(key, context);
+        }
+        resolvedObject[resolvedKey] = await this.resolveInterpolatableValuesInData(value, context);
       }
       return resolvedObject;
     }
+
+    // For primitive values, return as is
     return data as JsonValue;
   }
 

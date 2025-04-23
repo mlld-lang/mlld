@@ -43,30 +43,30 @@ This document outlines a focused approach to implementing the already establishe
    - Update to import from the canonical source
 
 #### Files to Modify:
-- `/core/syntax/types/variables.ts` (update to use canonical)
-- `/core/syntax/types/interfaces/IVariableReference.ts` (update references)
-- Services and handlers using string literals instead of enum values
+- [x] `/core/syntax/types/variables.ts` (update to use canonical)
+- [x] `/core/syntax/types/interfaces/IVariableReference.ts` (update references)
+- [x] Services and handlers using string literals instead of enum values
 
 ### Step 2: Use the Canonical Variable Interfaces (1 day)
 
 1. **Verify the canonical interfaces**
-   - The interfaces in `/core/types/variables.ts` are already well-defined:
+   - [x] The interfaces in `/core/types/variables.ts` are already well-defined:
      - `BaseVariable<T>` with discriminated union pattern
      - Specific interfaces (`TextVariable`, `DataVariable`, etc.)
      - `MeldVariable` union type
 
 2. **Ensure correct imports**
-   - Update any file using variable types to import from `/core/types/variables.ts`
-   - Replace any homegrown interfaces with the canonical ones
+   - [x] Update any file using variable types to import from `/core/types/variables.ts`
+   - [x] Replace any homegrown interfaces with the canonical ones
 
 3. **Fix type usages in services**
-   - Update service implementations to use the correct variable interfaces
-   - Fix type annotations and return values
+   - [x] Update service implementations to use the correct variable interfaces
+   - [x] Fix type annotations and return values
 
 #### Files to Modify:
-- Service implementations using variables
-- Mock implementations for testing
-- Directive handlers
+- [x] Service implementations using variables
+- [x] Mock implementations for testing
+- [x] Directive handlers
 
 ### Step 3: Standardize State Change Types (1-2 days)
 
@@ -92,34 +92,34 @@ This document outlines a focused approach to implementing the already establishe
 
 - [ ] 3. **Update all implementations**
    - Fix directive handlers to use the canonical types
-      - ✅ PathDirectiveHandler
-      - ✅ DataDirectiveHandler
-      - ✅ TextDirectiveHandler
-      - DefineDirectiveHandler
-      - CommandDirectiveHandler
-      - EmbedDirectiveHandler
-      - ImportDirectiveHandler
-   - Update service interfaces to maintain consistency
+      - [x] PathDirectiveHandler
+      - [x] DataDirectiveHandler
+      - [x] TextDirectiveHandler
+      - [x] RunDirectiveHandler
+      - [x] DefineDirectiveHandler      
+      - [ ] EmbedDirectiveHandler
+      - [ ] ImportDirectiveHandler
+   - [x] Update service interfaces to maintain consistency
 
 #### Files to Modify:
-- `/services/pipeline/DirectiveService/types.ts` (replace VariableValueDefinition)
-- `/core/directives/DirectiveHandler.ts` (ensure consistent StateChanges)
-- Directive handler implementations using these types
+- [x] `/services/pipeline/DirectiveService/types.ts` (replace VariableValueDefinition)
+- [x] `/core/directives/DirectiveHandler.ts` (ensure consistent StateChanges)
+- [ ] Directive handler implementations using these types (partially complete)
 
 ### Step 4: Verification and Testing (1 day)
 
 1. **Run existing tests**
-   - Verify tests pass with the standardized types
-   - Fix any runtime issues that emerge
+   - [x] Verify tests pass with the standardized types
+   - [ ] Fix any runtime issues that emerge
 
 2. **Add specific type tests**
-   - Add tests to verify type safety with the discriminated unions
-   - Test that directive results correctly propagate state changes
+   - [ ] Add tests to verify type safety with the discriminated unions
+   - [ ] Test that directive results correctly propagate state changes
 
 3. **Documentation and cleanup**
-   - Update comments to reflect the standardized types
-   - Remove any unused imports or redundant definitions
-   - Create clear examples of correct usage
+   - [ ] Update comments to reflect the standardized types
+   - [ ] Remove any unused imports or redundant definitions
+   - [ ] Create clear examples of correct usage
 
 ## Implementation Examples
 

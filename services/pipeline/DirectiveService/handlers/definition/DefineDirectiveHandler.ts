@@ -48,9 +48,6 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
     };
 
     try {
-      // Removed commented-out validation call
-      // // await this.validationService.validate(node);
-
       // Assert directive node structure
       if (!node.directive || node.directive.kind !== 'define') {
           throw new DirectiveError('Invalid node type provided to DefineDirectiveHandler', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
@@ -140,26 +137,19 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
                     const errorMsg = cmdVar ? `Cannot define command '${nameMetadata.name}' using non-basic command '${definedCommand.name}'` : `Command definition '${definedCommand.name}' not found`;
                     throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, baseErrorDetails);
                  }
-            } else if (runSubtype === 'runCommand' || runSubtype === 'runCode' || runSubtype === 'runCodeParams') {
-                 const interpolatableCommand = commandInput as InterpolatableValue;
-                 if (!isInterpolatableValueArray(interpolatableCommand)) {
-                    throw new DirectiveError(`Expected InterpolatableValue for command input with subtype '${runSubtype}'`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
-                 }
-                 // Use resolution context from DirectiveProcessingContext
-                 resolvedCommandContent = await this.resolutionService.resolveNodes(interpolatableCommand, resolutionContext);
+            } else if (isInterpolatableValueArray(commandInput)) {
+                resolvedCommandContent = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
             } else {
-                 throw new DirectiveError(`Unsupported run subtype '${runSubtype}' encountered in @define handler`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+                throw new DirectiveError('Invalid command input structure', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
             }
         } catch (error) {
-             const errorMsg = `Failed to resolve @run content for command '${nameMetadata.name}'`;
-             logger.error(errorMsg, { error });
-             const cause = error instanceof Error ? error : undefined;
-             const details = { ...baseErrorDetails, cause };
-             throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, details);
+            const errorMsg = `Failed to resolve command content for '${nameMetadata.name}'`;
+            logger.error(errorMsg, { error });
+            const cause = error instanceof Error ? error : undefined;
+            const details = { ...baseErrorDetails, cause };
+            throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, details);
         }
 
-        // ---> ADD DEBUG LOG <-----
-        process.stdout.write(`DEBUG [DefineHandler]: runSubtype = ${runSubtype}, commandLanguage = ${commandLanguage}\n`);
         // Now create the definition based on the @run subtype
         if (runSubtype === 'runCommand' || runSubtype === 'runDefined') {
             commandDefinition = {
