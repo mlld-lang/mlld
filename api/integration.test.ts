@@ -1,3 +1,4 @@
+import 'reflect-metadata'; // Ensure this is the very first import
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { ProcessOptions, Services } from '@core/types/index.js';
@@ -59,6 +60,8 @@ import logger from '@core/utils/logger.js';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 // <<< CORRECTED: Import StateTrackingService from debug utils >>>
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
+// <<< ADDED: Import VariableReferenceResolverClientFactory >>>
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js'; // Corrected path
 // =========================
 
 // Define run examples directly
@@ -127,6 +130,10 @@ describe('API Integration Tests', () => {
     // <<< ADDED: Register ValidationService >>>
     testContainer.register('IValidationService', { useClass: ValidationService });
 
+    // <<< ADDED: Register VariableReferenceResolverClientFactory >>>
+    testContainer.registerSingleton(VariableReferenceResolverClientFactory, VariableReferenceResolverClientFactory);
+    testContainer.registerSingleton('VariableReferenceResolverClientFactory', VariableReferenceResolverClientFactory); // Register string token too
+
     // <<< ADDED: Register the container itself >>>
     testContainer.registerInstance('DependencyContainer', testContainer);
   });
@@ -136,6 +143,15 @@ describe('API Integration Tests', () => {
     await context?.cleanup(); // REVERTED: cleanupAsync -> cleanup
     vi.resetModules();
     vi.clearAllMocks();
+  });
+
+  describe('API Integration Tests', () => {
+    it('should resolve OutputService directly from test container', () => {
+      expect(() => {
+        const outputService = testContainer.resolve<IOutputService>('IOutputService');
+        expect(outputService).toBeDefined();
+      }).not.toThrow();
+    });
   });
 
   describe('Variable Definitions and References', () => {

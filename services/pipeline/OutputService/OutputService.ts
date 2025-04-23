@@ -466,7 +466,7 @@ export class OutputService implements IOutputService {
     @inject('IResolutionService') resolutionService: IResolutionService,
     @inject('IStateService') state?: IStateService,
     @inject('ResolutionServiceClientFactory') resolutionServiceClientFactory?: ResolutionServiceClientFactory,
-    @inject('VariableReferenceResolverClientFactory') variableResolverClientFactory?: VariableReferenceResolverClientFactory,
+    @inject(VariableReferenceResolverClientFactory) variableResolverClientFactory?: VariableReferenceResolverClientFactory,
     @inject('VariableNodeFactory') variableNodeFactory?: VariableNodeFactory
   ) {
     this.variableNodeFactory = variableNodeFactory;
