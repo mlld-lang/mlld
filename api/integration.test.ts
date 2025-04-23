@@ -63,6 +63,8 @@ import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/St
 // <<< ADDED: Import VariableReferenceResolverClientFactory >>>
 import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js'; // Corrected path
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js'; // <<< ADD IMPORT for manual instantiation
+import { VariableReferenceResolverFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverFactory.js';
+
 // =========================
 
 // Define run examples directly
@@ -134,18 +136,19 @@ describe('API Integration Tests', () => {
     // <<< ADDED: Register the container itself >>>
     testContainer.registerInstance('DependencyContainer', testContainer);
 
-    // <<< WORKAROUND: Manually instantiate and register the factory instance for the string token >>>
-    // 1. Manually resolve/instantiate the dependency (VariableReferenceResolver)
-    //    (Assuming it can be resolved from the main container or has simple deps)
-    //    NOTE: This might need adjustment if VariableReferenceResolver has complex dependencies itself.
-    //    For now, assume it can be resolved directly or manually created simply.
-    const resolver = testContainer.resolve(VariableReferenceResolver);
-
-    // 2. Manually create the factory instance
-    const factoryInstance = new VariableReferenceResolverClientFactory(resolver);
-
-    // 3. Register the INSTANCE for the STRING TOKEN
-    testContainer.registerInstance('VariableReferenceResolverClientFactory', factoryInstance);
+    // --- DI Fix for VariableReferenceResolver ---    
+    // 1. Resolve dependencies needed by VariableReferenceResolverFactory.createResolver
+    const stateService = testContainer.resolve<IStateService>('IStateService');
+    const resolutionService = testContainer.resolve<IResolutionService>('IResolutionService');
+    const parserService = testContainer.resolve<IParserService>('IParserService');
+    const resolverFactory = testContainer.resolve(VariableReferenceResolverFactory);
+    
+    // 2. Create the actual VariableReferenceResolver instance
+    const resolverInstance = resolverFactory.createResolver(stateService, resolutionService, parserService);
+    
+    // 3. Register the *instance* so VariableReferenceResolverClientFactory's constructor can find it
+    testContainer.registerInstance(VariableReferenceResolver, resolverInstance);
+    // --- End DI Fix ---    
 
     // Clear mocks after setup, before tests
     vi.clearAllMocks();

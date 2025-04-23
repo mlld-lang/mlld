@@ -250,3 +250,30 @@ Error: Cannot inject the dependency "variableResolverClientFactory" at position 
 2.  Re-examine the container logic within `processMeld` (`api/index.ts`) to ensure the `executionContainer` is correctly inheriting registrations from the main container or the provided test container.
 3.  Consider alternative injection patterns for `OutputService` if string token resolution remains problematic (though this feels like avoiding the root cause).
 4.  Address the unrelated lint error in `RunDirectiveHandler.ts` once this blocker is resolved.
+
+### Investigation Log
+
+*   Confirmed `reflect-metadata` is imported.
+*   Confirmed `tsconfig.json` has `experimentalDecorators` and `emitDecoratorMetadata` set to `true`.
+*   Checked imports in `di-config.ts`, `VariableReferenceResolverClientFactory.ts`, and `integration.test.ts` - they seem correct.
+*   Tried using `import type` vs direct import - no difference observed.
+*   Hypothesized issue might be child container resolution in `tsyringe`.
+*   Manually registered `VariableReferenceResolverClientFactory` in the `testContainer` in `integration.test.ts`'s `beforeEach`. This led to *different* DI errors (e.g., `StateService` needing `DependencyContainer`), suggesting the manual registration was overriding or conflicting with expected setup.
+*   Changed `OutputService` injection from `@inject(VariableReferenceResolverClientFactory)` to `@inject('VariableReferenceResolverClientFactory')`. This *partially* worked, fixing smoke tests but not integration tests.
+*   Reverted `OutputService` injection back to class type and tried `registerSingleton` for the class type in `di-config.ts`. This did *not* fix the integration tests.
+*   Restored `OutputService` injection to the string token `@inject('VariableReferenceResolverClientFactory')` as it showed the most progress (fixed smoke tests).
+
+## Latest Findings (2025-04-22)
+
+*   **String Token Injection is Key:** Changing `OutputService` to inject `VariableReferenceResolverClientFactory` using the string token `@inject('VariableReferenceResolverClientFactory')` **successfully resolved** the `TypeInfo not known` error in the *smoke tests*.
+    *   `smoke.test.ts > should process simple text content correctly` now passes.
+    *   `smoke.test.ts > should process a simple text variable substitution` now fails later during variable resolution (`Hello {{ERROR: message}}!`), not during DI. This confirms the injection itself worked in this context.
+*   **Global Registration:** The global `di-config.ts` correctly registers `'VariableReferenceResolverClientFactory'` using `container.register('VariableReferenceResolverClientFactory', { useClass: VariableReferenceResolverClientFactory });`. We also tried `registerSingleton` for the class type, but it didn't impact the integration test failures.
+*   **Integration Test Issue:** The `TypeInfo not known` error **persists** specifically in the *integration tests*.
+*   **Root Cause Hypothesis:** The problem seems to lie in how the `executionContainer` (created inside `processMeld`) inherits or resolves dependencies when a `testContainer` is passed via `options.container`. The globally registered string token `'VariableReferenceResolverClientFactory'` is not being found in this specific child/test container context, even though it's resolved correctly when `processMeld` uses the default global container.
+*   **`processMeld` Analysis:** Confirmed that `processMeld` uses the externally provided `testContainer` directly as its `executionContainer`. When no external container is provided (smoke tests), it uses an `internalContainer` (child of global). The fact that resolution *only* fails when using the `testContainer` pinpoints the issue to the interaction between `processMeld` and the specific `testContainer` instance regarding string token resolution/inheritance from the global container.
+
+## Next Steps
+
+1.  **Investigate `processMeld` Container Logic:** Examine how the `executionContainer` is created and configured within `api/index.ts:processMeld` when `options.container` is present. Ensure registrations from the global/parent container (especially string tokens) are correctly propagated or accessible.
+2.  **Test Container Setup:** Review the `beforeEach` setup in `api/integration.test.ts`. Is the `testContainer` being created correctly? Does it need explicit registration of the string token *as well*, even though it's registered globally?
