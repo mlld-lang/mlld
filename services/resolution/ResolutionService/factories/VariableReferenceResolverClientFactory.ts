@@ -7,6 +7,11 @@ import {
 } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient';
 import { resolutionLogger as logger } from '@core/utils/logger';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import { JsonValue } from '@core/types/common';
+import { Field } from '@core/syntax/types/shared-types';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
+import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
+import { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types/nodes';
 
 /**
  * Factory for creating variable reference resolver clients
@@ -18,11 +23,28 @@ import { ResolutionContext } from '@services/resolution/ResolutionService/IResol
   description: 'Factory for creating variable reference resolver clients with enhanced field access'
 })
 export class VariableReferenceResolverClientFactory {
+  private parserClient?: IParserServiceClient;
+
   /**
    * Creates a new VariableReferenceResolverClientFactory
    * @param variableReferenceResolver - The variable reference resolver to create clients for
+   * @param parserServiceClientFactory - Factory for creating parser service clients
    */
-  constructor(private variableReferenceResolver: VariableReferenceResolver) {}
+  constructor(
+    private variableReferenceResolver: VariableReferenceResolver,
+    private parserServiceClientFactory: ParserServiceClientFactory
+  ) {
+    this.initializeParserClient();
+  }
+
+  private initializeParserClient(): void {
+    try {
+      this.parserClient = this.parserServiceClientFactory.createClient();
+      logger.debug('Successfully created ParserServiceClient');
+    } catch (error) {
+      logger.warn('Failed to create ParserServiceClient', { error });
+    }
+  }
   
   /**
    * Creates a client for the variable reference resolver with enhanced field access support
@@ -42,38 +64,41 @@ export class VariableReferenceResolverClientFactory {
       /**
        * Resolve a field access expression
        */
-      resolveFieldAccess: (
+      resolveFieldAccess: async (
         varName: string, 
         fieldPath: string, 
         context: ResolutionContext,
         options?: FieldAccessOptions
       ): Promise<any> => {
-        // Get the preserve type flag - default to false
-        const preserveType = options?.preserveType ?? false;
-        
-        // Call the resolver's method with enhanced options support
-        return this.variableReferenceResolver.resolveFieldAccess(
-          varName, 
-          fieldPath, 
-          context, 
-          preserveType
-        ).then(value => {
-          // If using type preservation, make a deep copy to preserve the array/object
-          if (preserveType && value !== null && value !== undefined) {
-            if (Array.isArray(value)) {
-              return [...value]; // Return a copy of the array
-            } else if (typeof value === 'object') {
-              return {...value}; // Return a copy of the object
-            }
+        // Parse the field path into field access objects
+        const fields = fieldPath.split('.').map(field => {
+          // Check if this is a numeric index
+          const numIndex = parseInt(field, 10);
+          if (!isNaN(numIndex)) {
+            return { type: 'index' as const, value: numIndex };
           }
-          return value;
+          // Otherwise it's a field name
+          return { type: 'field' as const, value: field };
         });
+
+        const result = await this.variableReferenceResolver.accessFields(
+          varName as unknown as JsonValue, 
+          fields as Field[], 
+          varName,
+          context
+        );
+
+        if (!result.success) {
+          throw result.error;
+        }
+
+        return result.value;
       },
       
       /**
        * Access fields in an object using field path
        */
-      accessFields: (
+      accessFields: async (
         baseValue: any,
         fieldPath: string,
         context: ResolutionContext,
@@ -90,50 +115,77 @@ export class VariableReferenceResolverClientFactory {
           return { type: 'field' as const, value: field };
         });
         
-        // Call the underlying method with the parsed fields
-        // The type assertion is needed because the Field type is internal to the resolver
-        return this.variableReferenceResolver.accessFields(
+        const result = await this.variableReferenceResolver.accessFields(
           baseValue, 
-          fields as any, 
-          context, 
-          options?.variableName || 'anonymous'
-        ).then(result => {
-          // If preserveType is true, return the raw value
-          if (options?.preserveType) {
-            return result;
-          }
-          
-          // Otherwise convert to string with the appropriate formatting
-          return this.variableReferenceResolver.convertToString(result);
-        });
+          fields as Field[], 
+          options?.variableName || 'anonymous',
+          context
+        );
+
+        if (!result.success) {
+          throw result.error;
+        }
+
+        const value = result.value;
+
+        // If preserveType is true, return the raw value
+        if (options?.preserveType) {
+          return value;
+        }
+        
+        // Otherwise convert to string with the appropriate formatting
+        return this.variableReferenceResolver.convertToString(value, context);
       },
       
       /**
        * Convert a value to string with context-aware formatting
        */
       convertToString: (value: any, options?: FieldAccessOptions): string => {
-        // Enhanced convertToString with formatting context awareness
-        if (options?.formattingContext) {
-          // Call the resolver with the formatting context
-          return this.variableReferenceResolver.convertToString(value, options.formattingContext);
-        }
-        
-        // Default string conversion
-        return this.variableReferenceResolver.convertToString(value);
+        // Create a minimal context for string conversion
+        const context = new ResolutionContext({
+          strict: options?.strict ?? false,
+          depth: 0
+        });
+
+        return this.variableReferenceResolver.convertToString(value, context);
       },
       
       /**
-       * Extract variable references from text
+       * Extract variable references from text using AST parsing
        */
-      extractReferences: (text: string): Promise<string[]> => {
-        return this.variableReferenceResolver.extractReferencesAsync(text);
+      extractReferences: async (text: string): Promise<string[]> => {
+        if (!this.parserClient) {
+          logger.warn('ParserServiceClient not available for variable reference extraction');
+          return [];
+        }
+
+        try {
+          // Parse the text into AST nodes
+          const nodes = await this.parserClient.parseString(text);
+
+          // Extract unique variable identifiers from VariableReferenceNodes
+          const references = new Set<string>();
+          for (const node of nodes) {
+            if (node.type === 'VariableReference') {
+              const varNode = node as VariableReferenceNode;
+              // Get the base variable name (before any field access)
+              const baseName = varNode.identifier.split('.')[0];
+              references.add(baseName);
+            }
+          }
+
+          return Array.from(references);
+        } catch (error) {
+          logger.error('Failed to parse text for variable references', { error });
+          return [];
+        }
       },
       
       /**
        * Set the resolution tracker for debugging
        */
       setResolutionTracker: (tracker) => {
-        this.variableReferenceResolver.setResolutionTracker(tracker);
+        this.variableReferenceResolver.setTracker(tracker);
       }
     };
   }

@@ -30,8 +30,8 @@ export interface SourceLocation {
  * Describes the location of a node in the source file.
  */
 export interface ISourceLocation {
-  start: ISourcePosition;
-  end: ISourcePosition;
+  start: Position;
+  end: Position;
   filePath?: string;
 }
 

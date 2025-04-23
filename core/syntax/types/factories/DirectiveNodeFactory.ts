@@ -37,7 +37,8 @@ export class DirectiveNodeFactory {
         kind,
         ...data
       },
-      location
+      location,
+      nodeId: this.nodeFactory.generateNodeId()
     };
   }
 

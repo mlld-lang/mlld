@@ -549,21 +549,42 @@ export class DirectiveService implements IDirectiveService {
    * Uses the client if available, falls back to direct service reference
    */
   private async callInterpreterInterpret(nodes: any[], options?: any): Promise<IStateService> {
-    // Ensure factory is initialized
     this.ensureInterpreterFactoryInitialized();
     
-    // Try to use the client from factory first
+    // Try to use the client first
     if (this.interpreterClient) {
-      try {
-        return await this.interpreterClient.interpret(nodes, options) as IStateService;
-      } catch (error) {
-        this.logger.warn('Error using interpreterClient.interpret, falling back to direct service', { error });
+      const stateLike = await this.interpreterClient.interpret(nodes, options);
+      
+      // Verify the returned state has the minimum required methods
+      if (!this.isStateService(stateLike)) {
+        throw new MeldError('Interpreter client returned invalid state object', { 
+          code: 'INVALID_STATE',
+          severity: ErrorSeverity.Fatal,
+          details: {
+            missingMethods: this.getMissingStateMethods(stateLike)
+          }
+        });
       }
+      
+      return stateLike;
     }
     
     // Fall back to direct service reference
     if (this.interpreterService) {
-      return await this.interpreterService.interpret(nodes, options) as IStateService;
+      const stateLike = await this.interpreterService.interpret(nodes, options);
+      
+      // Verify the returned state has the minimum required methods
+      if (!this.isStateService(stateLike)) {
+        throw new MeldError('Interpreter service returned invalid state object', { 
+          code: 'INVALID_STATE',
+          severity: ErrorSeverity.Fatal,
+          details: {
+            missingMethods: this.getMissingStateMethods(stateLike)
+          }
+        });
+      }
+      
+      return stateLike;
     }
     
     throw new Error('No interpreter service available');

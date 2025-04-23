@@ -34,6 +34,15 @@ interface OutputOptions {
   preserveTypes?: boolean;
   /** Default format to use for unknown node types */
   defaultFormat?: string;
+  /** Current file path for error reporting */
+  currentFilePath?: string;
+  /** Whether to run in strict mode */
+  strict?: boolean;
+  /** Format-specific options */
+  formatOptions?: {
+    /** Pre-rendered markdown content */
+    markdown?: string;
+  };
 }
 
 /** Default output options */
@@ -900,7 +909,7 @@ export class OutputService implements IOutputService {
         output += handledContent;
       } else if (node.type === 'VariableReference') { 
           const varNode = node as VariableReferenceNode;
-          const resolutionContext = ResolutionContextFactory.create(state, opts.currentFilePath || state?.getCurrentFilePath() || '/unknown/path').withStrictMode(opts.strict ?? DEFAULT_OPTIONS.strict);
+          const resolutionContext = ResolutionContextFactory.create(state, opts.currentFilePath || state?.getCurrentFilePath() || '/unknown/path').withStrictMode(opts.strict ?? DEFAULT_OPTIONS.strict ?? false);
           try {
               const resolvedValue = await this.resolutionService.resolveNodes([varNode], resolutionContext);
               const handledContent = this.handleNewlines(resolvedValue, currentContext);

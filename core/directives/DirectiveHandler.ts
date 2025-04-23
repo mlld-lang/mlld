@@ -1,3 +1,5 @@
+import type { MeldNode } from '@core/syntax/types/index';
+
 // Define a serializable structure for state changes
 export interface StateChanges {
   variables: Record<string, any>;

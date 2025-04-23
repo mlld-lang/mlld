@@ -1,5 +1,6 @@
 import type { MeldNode, SourceLocation } from '@core/syntax/types/index';
-import type { DirectiveServiceLike, DirectiveResult } from '@core/shared-service-types';
+import type { DirectiveServiceLike } from '@core/shared-service-types';
+import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import type { MeldError } from '@core/errors/MeldError';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';

@@ -6,6 +6,9 @@ import type { SourceLocation, JsonValue } from './common';
 import type { IFilesystemPathState, IUrlPathState } from './paths';
 import type { ICommandDefinition } from './define';
 
+// Re-export path state types
+export type { IFilesystemPathState, IUrlPathState };
+
 // =========================================================================
 // CORE VARIABLE TYPES
 // =========================================================================

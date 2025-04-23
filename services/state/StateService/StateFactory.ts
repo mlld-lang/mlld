@@ -131,7 +131,7 @@ export class StateFactory implements IStateFactory {
     return merged;
   }
 
-  updateState(state: StateNode, updates: Partial<Omit<StateNode, 'stateId' | 'createdAt' | 'parentServiceRef'>>): StateNode {
+  updateState(state: StateNode, updates: Partial<Omit<StateNode, 'stateId' | 'createdAt'>>): StateNode {
     const now = Date.now();
     
     const source = (updates as any)?.source || 'unknown_update';
@@ -140,8 +140,6 @@ export class StateFactory implements IStateFactory {
     const approxBeforePathSize = JSON.stringify(state.variables.path).length;
     const approxBeforeCommandSize = JSON.stringify(state.commands).length;
     process.stdout.write(`DEBUG [StateFactory.updateState ENTRY] Source: ${source}, StateID: ${state.stateId}, ApproxSizes: Text=${approxBeforeTextSize}, Data=${approxBeforeDataSize}, Path=${approxBeforePathSize}, Cmd=${approxBeforeCommandSize}\n`);
-
-    const existingParentRef = state.parentServiceRef;
 
     // --- Corrected Map Merging Logic --- 
     // NOTE: [StateFactory Map Handling - 2024-08-XX]
