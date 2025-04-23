@@ -4,8 +4,8 @@ import type {
     VariableReferenceNode, 
     TextNode, 
     StructuredPath 
-} from '@core/syntax/types/nodes.js'; 
-import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+} from '@core/syntax/types/nodes'; 
+import type { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -16,13 +16,14 @@ import { ErrorSeverity, FieldAccessError, PathValidationError, MeldResolutionErr
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import type { VariableMetadata } from '@core/types/variables.js';
-import { VariableOrigin, VariableType, createTextVariable } from '@core/types/variables.js';
+import type { VariableMetadata, VariableDefinition } from '@core/types/variables.js';
+import { VariableType, VariableOrigin, createTextVariable } from '@core/types/variables.js';
 import type { SourceLocation } from '@core/types/common.js';
-import { isInterpolatableValueArray } from '@core/syntax/types/guards.js'; 
+import { isInterpolatableValueArray } from '@core/syntax/types/guards'; 
 import { ICommandDefinition, isBasicCommand } from '@core/types/define.js'; 
 import type { DirectiveProcessingContext } from '@core/types/index.js';
-import type { DirectiveResult, StateDelta, VariableValueDefinition, StateChanges } from '@core/directives/DirectiveHandler.ts';
+import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler'; 
+import { DirectiveKind } from '@core/syntax/types/directives'; 
 import { isCommandVariable } from '@core/types/guards.js';
 
 interface EmbedRHSStructure {
@@ -45,15 +46,16 @@ interface RunRHSStructure {
   description: 'Handler for @text directives'
 })
 export class TextDirectiveHandler implements IDirectiveHandler {
-  readonly kind = 'text';
+  readonly kind = 'text'; 
 
   constructor(
     @inject('IResolutionService') private resolutionService: IResolutionService,
     @inject('IFileSystemService') private fileSystemService: IFileSystemService 
-  ) {}
+  ) {
+  }
 
-  async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
-    const state = context.state;
+  async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> { 
+    const state = context.state; 
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
     const currentFilePath = state.getCurrentFilePath();
@@ -228,57 +230,47 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         );
       }
 
-      const now = Date.now();
-      const metadata: VariableMetadata = {
-        definedAt: directiveSourceLocation,
-        createdAt: now,
-        modifiedAt: now,
-        origin: VariableOrigin.DIRECT_DEFINITION, 
-      };
-
-      const variableDefinition: VariableValueDefinition = {
+      // Manually construct the VariableDefinition for state changes
+      const variableDefinition: VariableDefinition = {
         type: VariableType.TEXT,
-        value: resolvedValue, 
-        metadata: metadata,
+        value: resolvedValue ?? '', // Ensure value is not undefined
+        metadata: { // Construct metadata object
+          origin: VariableOrigin.DIRECT_DEFINITION,
+          definedAt: directiveSourceLocation,
+          createdAt: Date.now(), // Add timestamps
+          modifiedAt: Date.now(),
+        },
       };
 
-      const stateChanges: StateDelta = {
+      const stateChanges: StateChanges = {
         variables: {
           [identifier]: variableDefinition,
         },
       };
 
-      return {
-        state: state, 
-        stateChanges: stateChanges, 
-      };
+      logger.debug(`[${this.kind}] Defined variable`, {
+        identifier,
+        type: variableDefinition.type,
+        value: variableDefinition.value, // Log the actual value set
+        location: node.location?.start,
+      });
+
+      process.stdout.write(`DEBUG [TextDirectiveHandler.handle] Returning structure: ${JSON.stringify({ stateChanges }, null, 2)}\n`);
+      return { stateChanges }; // Return the structured result
 
     } catch (error) {
       logger.error('Error processing text directive:', error);
       if (error instanceof DirectiveError) {
-        if (!error.details?.context) { 
-           throw new DirectiveError(
-              error.message,
-              this.kind,
-              error.code,
-              { 
-                ...(error.details || {}), 
-                ...errorDetailsContext, 
-                cause: error.details?.cause instanceof Error ? error.details.cause : undefined 
-              }
-           );
-        }
         throw error;
       }
       
       throw new DirectiveError(
-        `Failed to process text directive: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Unexpected error processing text directive for identifier '${
+          identifier ?? 'unknown'
+        }': ${error instanceof Error ? error.message : String(error)}`,
         this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
-        { 
-          ...errorDetailsContext, 
-          cause: error instanceof Error ? error : undefined 
-        }
+        { ...errorDetailsContext, cause: error instanceof Error ? error : undefined }
       );
     }
   }

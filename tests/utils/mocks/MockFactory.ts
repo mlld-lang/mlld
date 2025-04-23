@@ -1,5 +1,8 @@
 import { vi } from 'vitest';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { TextDocument } from 'vscode-languageserver-textdocument';
+import { Position, Range, Location } from 'vscode-languageserver-types';
+import { InjectionToken } from 'tsyringe';
 import type { StateNode } from '@services/state/StateService/types.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
@@ -330,7 +333,7 @@ export class MockFactory {
    */
   static createClientFactory<T>(
     clientImpl: T, 
-    _factoryToken: string // Keep token for consistency with proposal, even if unused here
+    _factoryToken: InjectionToken<any> // Update type to match caller
   ): { factory: any, client: T } {
     const client = clientImpl;
     const factory = {
