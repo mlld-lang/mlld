@@ -6,7 +6,7 @@ This document tracks the investigation into the persistent `TypeInfo not known` 
 
 The API integration tests (`npm test api`), specifically those under the "Import Handling" suite and some smoke tests, consistently fail with the following error:
 
-```
+```u
 Error: Cannot inject the dependency "variableResolverClientFactory" at position #3 of "OutputService" constructor. Reason:
     TypeInfo not known for "VariableReferenceResolverClientFactory"
 ```
@@ -34,6 +34,54 @@ This occurs when `tsyringe` attempts to resolve the `OutputService` dependencies
 8.  **Added Isolating Test Case**: Added a test (`should resolve OutputService directly from test container`) in `api/integration.test.ts` to only resolve `OutputService` from the `testContainer`. **Result**: This test failed with the *exact same* `TypeInfo not known` error, confirming the problem lies in resolving the string-token dependency within the child container itself, independent of `processMeld` or file processing.
 9.  **Added `reflect-metadata` Import to Test**: Added `import 'reflect-metadata';` as the very first line in `api/integration.test.ts`. **Result**: Error persisted.
 10. **Changed Factory Registration Scope in Test**: Changed the registration of `VariableReferenceResolverClientFactory` (both class and string token) in the `testContainer` from `register`/`useClass` to `registerSingleton`. **Result**: Error persisted.
+
+## 3. Investigation Summary & Plan
+
+**Key Insight:**
+The root cause identified is a **circular dependency** involving `OutputService`, `ResolutionService`, and `VariableReferenceResolver`. The cycle looks like this:
+
+1.  `OutputService` -> needs `VariableReferenceResolverClientFactory`
+2.  `VariableReferenceResolverClientFactory` -> needs `VariableReferenceResolver`
+3.  `VariableReferenceResolver` -> **previously** needed `IResolutionService`
+4.  `ResolutionService` (which implements `IResolutionService`) -> constructs `VariableReferenceResolver`
+
+This circular dependency prevents `tsyringe` from determining the correct type information during dependency resolution, specifically when `OutputService` is requested.
+
+**Proposed Solution & Plan:**
+
+To break the cycle, `VariableReferenceResolver` should not directly depend on the full `IResolutionService`. Instead, it will depend on a **factory** (`ResolutionServiceClientFactory`) that provides a **client** object. This client exposes *only* the necessary methods from `ResolutionService` without creating the direct dependency loop at construction time.
+
+**Implementation Steps:**
+
+1.  **Modify `VariableReferenceResolver` (`.../resolvers/VariableReferenceResolver.ts`):**
+    *   Update the constructor to inject `@inject(ResolutionServiceClientFactory) resolutionServiceClientFactory: ResolutionServiceClientFactory` instead of `IResolutionService`.
+    *   Add a private field `private resolutionClient: IResolutionServiceClient;`.
+    *   In the constructor or an initialization method (`initializeResolutionClient`), create the client: `this.resolutionClient = this.resolutionServiceClientFactory.createClient();`.
+    *   Update internal logic (e.g., recursive resolution within command parts) to call methods on `this.resolutionClient` (e.g., `this.resolutionClient.resolveNodes(...)`).
+
+2.  **Define/Update `IResolutionServiceClient` (`.../interfaces/IResolutionServiceClient.ts`):**
+    *   Ensure this interface exists and accurately defines *all* methods that `VariableReferenceResolver` needs to call via its client.
+    *   Critically, this includes the method for recursive node resolution, which should be: `resolveNodes(nodes: MeldNode[], context: ResolutionContext): Promise<any[]>;`.
+
+3.  **Implement `ResolutionServiceClientFactory` (`.../factories/ResolutionServiceClientFactory.ts`):**
+    *   Ensure this factory exists and is `@injectable`.
+    *   Inject the *actual* service into its constructor: `constructor(@inject('IResolutionService') private resolutionService: IResolutionService) {}`.
+    *   Implement the `createClient(): IResolutionServiceClient` method.
+    *   The `createClient` method returns an object literal where each key matches a method name from the `IResolutionServiceClient` interface (e.g., `resolveNodes`). The value for each key should be an async function that calls the corresponding method on the injected `this.resolutionService` (e.g., `resolveNodes: async (nodes, context) => { return await this.resolutionService.resolveNodes(nodes, context); }`).
+
+4.  **Verify `VariableReferenceResolver` Usage:**
+    *   Double-check the point where `resolveNodes` is called within `VariableReferenceResolver`'s `resolve` method (inside the command variable handling).
+    *   Ensure it calls `this.resolutionClient.resolveNodes(...)`.
+    *   Ensure the first argument passed is an array of nodes (e.g., `[interpolatable.value]`).
+    *   Handle the returned array appropriately (e.g., taking the first element `resolvedResults[0]`).
+
+**Potential Pitfalls / Notes:**
+
+*   **Method Signature Alignment:** The most common source of recent errors was a mismatch in method names (`resolveNode` vs `resolveNodes`) or signatures between the interface, the factory implementation, and the calling code. Ensure these align *perfectly*.
+*   **Imports:** Ensure all necessary types (`MeldNode`, `ResolutionContext`, etc.) and decorators (`injectable`, `inject`) are imported correctly in all modified files.
+*   **DI Registration:** Confirm `ResolutionServiceClientFactory` is registered correctly with `tsyringe` in `core/di-config.ts` (likely already done).
+*   **Tool Errors:** Recent attempts to automate these edits failed due to internal errors. Manual application of changes might be required. If applying manually, do so carefully based on the steps above.
+*   **Rollback:** If these steps fail, rolling back the changes related to `ResolutionServiceClientFactory` and `VariableReferenceResolver`'s dependencies might be necessary to return to a less broken state before trying a different approach.
 
 ## 4. Relevant Code Snippets
 
