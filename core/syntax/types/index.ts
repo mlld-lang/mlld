@@ -1,6 +1,9 @@
 // First export the shared-types which have no dependencies
 export * from './shared-types';
 
+// Import VariableType from core types
+export { VariableType } from '@core/types/variables';
+
 // Then export interfaces with type-only exports
 export type { INode } from './interfaces/INode';
 export type { IDirectiveNode, DirectiveData as IDirectiveData, DirectiveKind } from './interfaces/IDirectiveNode';
@@ -10,7 +13,6 @@ export type { ICommentNode } from './interfaces/ICommentNode';
 export type { IErrorNode } from './interfaces/IErrorNode';
 export type { 
   IVariableReference, 
-  VariableType,
   Field,
   ExtendedFormatOperator as FormatOperator
 } from './interfaces/IVariableReference';

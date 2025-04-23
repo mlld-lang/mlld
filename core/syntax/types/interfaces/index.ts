@@ -1,13 +1,15 @@
 // First, include shared types for direct access
 export * from '../shared-types';
 
+// Import VariableType from core types
+export { VariableType } from '@core/types/variables';
+
 // Then export interfaces with proper type-only exports to avoid circular references
 export type { NodeType, Position, SourceLocation, NodeId } from './common';
 export type { INode } from './INode';
 export type { IDirectiveNode, DirectiveData, DirectiveKind, DirectiveKindString } from './IDirectiveNode';
 export type { 
   IVariableReference, 
-  VariableType, 
   Field, 
   ExtendedFormatOperator as FormatOperator 
 } from './IVariableReference';
