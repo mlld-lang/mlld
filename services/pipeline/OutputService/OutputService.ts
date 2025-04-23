@@ -1,4 +1,4 @@
-import { injectable, inject } from 'tsyringe';
+import { injectable, inject, delay } from 'tsyringe';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { MeldNode, TextNode, CodeFenceNode, VariableReferenceNode, DirectiveNode } from '@core/syntax/types/index.js';
 import { logger } from '@core/utils/logger.js';
@@ -466,7 +466,7 @@ export class OutputService implements IOutputService {
     @inject('IResolutionService') resolutionService: IResolutionService,
     @inject('IStateService') state?: IStateService,
     @inject('ResolutionServiceClientFactory') resolutionServiceClientFactory?: ResolutionServiceClientFactory,
-    @inject('VariableReferenceResolverClientFactory') variableResolverClientFactory?: VariableReferenceResolverClientFactory,
+    @inject(delay(() => VariableReferenceResolverClientFactory)) variableResolverClientFactory?: VariableReferenceResolverClientFactory,
     @inject('VariableNodeFactory') variableNodeFactory?: VariableNodeFactory
   ) {
     this.variableNodeFactory = variableNodeFactory;
