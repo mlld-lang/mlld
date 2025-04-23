@@ -59,7 +59,7 @@ export class ClientFactoryHelpers {
     const dsClient: IDirectiveServiceClient = {
       supportsDirective: vi.fn().mockReturnValue(true),
       getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data', 'path', 'define', 'run', 'embed', 'import']),
-      handleDirective: vi.fn().mockResolvedValue({ transformedContent: 'Mocked Result' }), // Return minimal valid result
+      handleDirective: vi.fn().mockResolvedValue({}), // Return minimal valid DirectiveResult
       validateDirective: vi.fn().mockResolvedValue(undefined)
     };
     factories.dsClient = ClientFactoryHelpers.registerClientFactory(context, DirectiveServiceClientFactory, dsClient);

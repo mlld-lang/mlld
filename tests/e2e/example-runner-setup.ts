@@ -43,9 +43,14 @@ export function getTestCaseName(filePath: string): string {
 
 // Create and setup test context
 export async function setupTestContext(testFiles: string[]): Promise<TestContextDI> {
-  const context = TestContextDI.create();
-  await context.initialize();
+  // <<< Await the creation and initialization >>>
+  const context = await TestContextDI.create(); 
   
+  // <<< Ensure context has necessary properties before proceeding (optional guard) >>>
+  if (!context || !context.registerMock || !context.fs) {
+    throw new Error('TestContextDI did not initialize correctly.');
+  }
+
   // Create a consistent CommandExecutionService mock for all tests
   const mockCommandExecutionService = {
     executeShellCommand: vi.fn().mockImplementation(async (command: string) => {
@@ -64,21 +69,20 @@ export async function setupTestContext(testFiles: string[]): Promise<TestContext
   // Register the mock service with the container
   context.registerMock('ICommandExecutionService', mockCommandExecutionService);
   
-  // Make it available directly on the services object
-  context.services.commandExecution = mockCommandExecutionService;
-  
-  // Enable transformation for test examples
+  // <<< Comment out call to non-existent method - Need to find replacement >>>
+  /*
   context.enableTransformation({
     variables: true,
     directives: true,
     commands: true,
     imports: true
   });
+  */
   
   // Add test files to the testing file system
   for (const filePath of testFiles) {
     const content = await realFs.readFile(filePath, 'utf-8');
-    await context.services.filesystem.writeFile(filePath, content);
+    await context.fs.writeFile(filePath, content);
     
     // Also add any related files in the same directory
     const dir = path.dirname(filePath);
@@ -90,7 +94,7 @@ export async function setupTestContext(testFiles: string[]): Promise<TestContext
         if (otherPath !== filePath && (otherFile.endsWith('.mld') || otherFile.endsWith('.md'))) {
           try {
             const otherContent = await realFs.readFile(otherPath, 'utf-8');
-            await context.services.filesystem.writeFile(otherPath, otherContent);
+            await context.fs.writeFile(otherPath, otherContent);
           } catch (error) {
             // Skip if can't read
           }
