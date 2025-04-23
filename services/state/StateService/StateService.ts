@@ -21,7 +21,8 @@ import type {
   IUrlPathState,
   ICommandDefinition,
   MeldVariable,
-  MeldPath
+  MeldPath,
+  VariableCopyOptions
 } from '@core/types';
 import { 
   VariableOrigin,
@@ -196,6 +197,11 @@ export class StateService implements IStateService {
         
         // Explicitly register parent-child relationship if parent exists
         if (parentService && parentId) {
+          console.log('DEBUG: Registering parent-child relationship in initializeState', {
+            parentId,
+            childId: this.currentState.stateId,
+            source: this.currentState.source || 'new'
+          });
           this.trackingClient.registerRelationship({
             sourceId: parentId,
             targetId: this.currentState.stateId,
@@ -483,7 +489,14 @@ export class StateService implements IStateService {
 
   async addNode(node: MeldNode): Promise<void> {
     this.checkMutable();
-    const nodeClone = cloneDeep(node);
+    // Clone everything except the nodeId
+    const { nodeId, ...rest } = node;
+    // Create new node with original nodeId
+    const nodeClone = {
+      ...cloneDeep(rest),
+      nodeId
+    };
+    
     const nodes = [...this.currentState.nodes, nodeClone];
     let transformedNodesUpdate: Partial<StateNode> = {};
 
@@ -511,7 +524,27 @@ export class StateService implements IStateService {
       return;
     }
 
-    const replacementClone = cloneDeep(replacement);
+    let replacementClone;
+    if (Array.isArray(replacement)) {
+      // Clone array of nodes while preserving nodeIds
+      replacementClone = replacement.map(node => {
+        const { nodeId, ...rest } = node;
+        return {
+          ...cloneDeep(rest),
+          nodeId
+        };
+      });
+    } else if (replacement !== undefined) {
+      // Clone single node while preserving nodeId
+      const { nodeId, ...rest } = replacement;
+      replacementClone = {
+        ...cloneDeep(rest),
+        nodeId
+      };
+    } else {
+      replacementClone = undefined;
+    }
+
     if (Array.isArray(replacementClone)) {
       baseTransformedNodes.splice(index, 1, ...replacementClone);
     } else if (replacementClone !== undefined) { 
@@ -615,86 +648,27 @@ export class StateService implements IStateService {
     return this._isImmutable;
   }
 
-  createChildState(options?: Partial<{ /* VariableCopyOptions TBD */ }>): IStateService {
-  process.stdout.write(`DEBUG [StateService.createChildState ENTRY] ParentStateID: ${this.getStateId()}, Container ID: ${(this.container as any)?.id || 'unknown'}, IsRegistered('ParentStateServiceForChild'): ${this.container.isRegistered('ParentStateServiceForChild')}
-`);
-  
-  // --- Method 1: Manual Child Service Creation ---
-  // This approach ensures more direct control over instance creation and parent/child relationships
-  try {
-    // First, create a new state factory instance using the same parent state factory
-    const childStateFactory = this.stateFactory;
+  createChildState(options?: Partial<VariableCopyOptions>): IStateService {
+    console.log('DEBUG: Creating child state', { options });
+    // Create child node with source from state factory
+    const childNode = this.stateFactory.createChildState(this.currentState, { 
+      source: 'child' // Use a fixed source since it's not part of VariableCopyOptions
+    });
     
-    // Then, create a new state service instance directly
+    // Create a new StateService instance with the same dependencies
     const childService = new StateService(
-      childStateFactory,            // Use the same state factory
-      this.container,               // Use the parent container
-      this.eventService,            // Share the event service
-      undefined,                    // No need for tracking factory
-      this,                         // Explicitly pass this instance as parent
-      undefined                     // No direct parent needed
+      this.stateFactory,
+      this.container,
+      this.eventService,
+      this.trackingServiceClientFactory,
+      this  // Pass the current service as the parent
     );
     
-    // Initialize the new child service (sets up state from parent)
-    childService.initializeState(this);
-    
-    process.stdout.write(`DEBUG [StateService.createChildState] Created MANUAL child state with ID: ${childService.getStateId()}, Has parent? ${!!childService.getParentState()}, Parent matches? ${childService.getParentState() === this}
-`);
+    // Set the child's state node
+    childService._setInternalStateNode(childNode);
     
     return childService;
-  } catch (error) {
-    process.stdout.write(`ERROR [StateService.createChildState] Failed to manually create child StateService: ${error instanceof Error ? error.message : String(error)}
-`);
-    
-    // Fall back to container-based approach if manual creation fails
-    process.stdout.write(`DEBUG [StateService.createChildState] Falling back to container-based child creation
-`);
-    
-    // --- Method 2: Container-based Child Service Creation (Fallback) ---
-    try {
-      // Create a child container
-      const childContainer = this.container.createChildContainer();
-      
-      // Register the current instance (parent) using a specific token
-      childContainer.registerInstance<IStateService>('ParentStateServiceForChild', this);
-      process.stdout.write(`DEBUG [StateService.createChildState] After registering ParentStateServiceForChild. ChildContainer ID: ${(childContainer as any)?.id || 'unknown'}, IsRegistered: ${childContainer.isRegistered('ParentStateServiceForChild')}
-`);
-
-      // Register shared singletons that need to persist across state instances
-      // Critical for maintaining service state during recursive imports
-      if (this.container.isRegistered('ICircularityService')) {
-        const circularityService = this.container.resolve('ICircularityService');
-        process.stdout.write(`DEBUG [StateService.createChildState] Registering CircularityService in child container. Stack size: ${(circularityService as any)?._importStack?.length || 'unknown'}
-`);
-        childContainer.registerInstance('ICircularityService', circularityService);
-      }
-
-      // Resolve StateService using the child container
-      const childService = childContainer.resolve(StateService);
-      process.stdout.write(`DEBUG [StateService.createChildState] Created CONTAINER child state with ID: ${childService.getStateId()}, Has parent? ${!!childService.getParentState()}, Parent matches? ${childService.getParentState() === this}
-`);
-      
-      // Verify that we have proper parent state linkage
-      if (!childService.getParentState()) {
-        process.stdout.write(`WARNING [StateService.createChildState] Child state created but parent reference is missing! This may cause recursive import issues.
-`);
-        
-        // CRITICAL FIX: Explicitly set the parent service if it's not set by DI
-        // This ensures the parent reference is maintained across state instances
-        (childService as any).parentService = this;
-        process.stdout.write(`DEBUG [StateService.createChildState] FIXED: Manually set parent reference. Rechecking: Has parent? ${!!childService.getParentState()}, Parent matches? ${childService.getParentState() === this}
-`);
-      }
-      
-      logger.debug(`[StateService ${this.getStateId()}] Child state created via container: ${childService.getStateId()}`);
-      return childService;
-    } catch (fallbackError) {
-      process.stdout.write(`ERROR [StateService.createChildState] Both creation methods failed: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}
-`);
-      throw fallbackError;
-    }
   }
-}  
 
   async mergeChildState(childState: IStateService): Promise<void> {
     this.checkMutable();

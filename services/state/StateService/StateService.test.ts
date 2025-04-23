@@ -665,4 +665,132 @@ describe('StateService', () => {
         );
     });
   });
+
+  describe('Node ID Preservation', () => {
+    it('should preserve nodeId when adding nodes', async () => {
+      const originalNode: TextNode = {
+        type: 'Text',
+        content: 'test content',
+        nodeId: 'test-node-id',
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      };
+
+      await stateService.addNode(originalNode);
+      const nodes = stateService.getNodes();
+      
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0].nodeId).toBe('test-node-id');
+    });
+
+    it('should preserve nodeIds when transforming nodes', async () => {
+      // Enable transformation
+      await stateService.setTransformationEnabled(true);
+
+      // Add original node
+      const originalNode: TextNode = {
+        type: 'Text',
+        content: 'original content',
+        nodeId: 'original-node-id',
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      };
+      await stateService.addNode(originalNode);
+
+      // Create replacement node
+      const replacementNode: TextNode = {
+        type: 'Text',
+        content: 'transformed content',
+        nodeId: 'replacement-node-id',
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      };
+
+      // Transform the node
+      await stateService.transformNode(0, replacementNode);
+      const transformedNodes = stateService.getTransformedNodes();
+
+      expect(transformedNodes).toHaveLength(1);
+      expect(transformedNodes[0].nodeId).toBe('replacement-node-id');
+    });
+
+    it('should preserve nodeIds when transforming with multiple nodes', async () => {
+      await stateService.setTransformationEnabled(true);
+
+      // Add original node
+      const originalNode: TextNode = {
+        type: 'Text',
+        content: 'original content',
+        nodeId: 'original-node-id',
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      };
+      await stateService.addNode(originalNode);
+
+      // Create replacement nodes
+      const replacementNodes: TextNode[] = [
+        {
+          type: 'Text',
+          content: 'first transformed',
+          nodeId: 'replacement-1',
+          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+        },
+        {
+          type: 'Text',
+          content: 'second transformed',
+          nodeId: 'replacement-2',
+          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+        }
+      ];
+
+      // Transform the node into multiple nodes
+      await stateService.transformNode(0, replacementNodes);
+      const transformedNodes = stateService.getTransformedNodes();
+
+      expect(transformedNodes).toHaveLength(2);
+      expect(transformedNodes[0].nodeId).toBe('replacement-1');
+      expect(transformedNodes[1].nodeId).toBe('replacement-2');
+    });
+
+    it('should preserve nodeIds through a sequence of operations', async () => {
+      await stateService.setTransformationEnabled(true);
+
+      // Add first node
+      const node1: TextNode = {
+        type: 'Text',
+        content: 'first content',
+        nodeId: 'node-1',
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      };
+      await stateService.addNode(node1);
+
+      // Add second node
+      const node2: TextNode = {
+        type: 'Text',
+        content: 'second content',
+        nodeId: 'node-2',
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      };
+      await stateService.addNode(node2);
+
+      // Transform first node
+      const transformedNode: TextNode = {
+        type: 'Text',
+        content: 'transformed content',
+        nodeId: 'transformed-1',
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      };
+      await stateService.transformNode(0, transformedNode);
+
+      // Verify final state
+      const nodes = stateService.getNodes();
+      const transformedNodes = stateService.getTransformedNodes();
+
+      // Original nodes should be unchanged
+      expect(nodes).toHaveLength(2);
+      expect(nodes[0].nodeId).toBe('node-1');
+      expect(nodes[1].nodeId).toBe('node-2');
+
+      // Transformed nodes should reflect the transformation
+      expect(transformedNodes).toHaveLength(2);
+      expect(transformedNodes[0].nodeId).toBe('transformed-1');
+      expect(transformedNodes[1].nodeId).toBe('node-2');
+    });
+  });
 }); 

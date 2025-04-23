@@ -1,4 +1,12 @@
-import type { DirectiveNode, DirectiveContext, MeldNode, TextNode, StructuredPath, VariableReferenceNode, InterpolatableValue } from '@core/syntax/types';
+import type { 
+  DirectiveNode, 
+  MeldNode, 
+  TextNode, 
+  VariableReferenceNode,
+  IDirectiveData,
+  DirectiveData
+} from '@core/syntax/types';
+import type { InterpolatableValue } from '@core/syntax/types/nodes';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
@@ -9,24 +17,26 @@ import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiv
 import { ErrorSeverity, MeldError, MeldResolutionError, FieldAccessError } from '@core/errors';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider';
-import type { RunDirectiveData } from '@core/syntax/types';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
 import { PathValidationError } from '@core/errors';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { randomBytes } from 'crypto';
-import type { DirectiveProcessingContext, ResolutionContext } from '@core/types/index';
-import type { ICommandDefinition } from '@core/types/define';
-import { isBasicCommand } from '@core/types/define';
-import type { SourceLocation } from '@core/types/common';
-import { type VariableMetadata, VariableOrigin } from '@core/types/variables';
-import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
 import * as os from 'os';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { createTextVariable, VariableType } from '@core/types/variables';
-import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
+import { randomBytes } from 'crypto';
+import type { DirectiveProcessingContext, ResolutionContext } from '@core/types';
+import type { ICommandDefinition, IBasicCommandDefinition } from '@core/types/define';
+import { isBasicCommand } from '@core/types/define';
+import type { SourceLocation } from '@core/types/common';
+import { 
+  type VariableMetadata, 
+  VariableOrigin, 
+  VariableType,
+  type VariableDefinition,
+  createTextVariable 
+} from '@core/types/variables';
+import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
+import type { JsonValue } from '@core/types/common';
 
 /**
  * Handler for @run directives
@@ -48,16 +58,17 @@ export class RunDirectiveHandler implements IDirectiveHandler {
   private async createTempScriptFile(content: string, language: string): Promise<string> {
     const filePath = this.getTempFilePath(language);
     try {
-      await this.fileSystemService.writeFile(filePath, content);
+      // Note: writeFile expects ValidatedResourcePath but we're using a temp file
+      // This is a special case where we know the path is safe as we generated it
+      await this.fileSystemService.writeFile(filePath as any, content);
       logger.debug('Created temporary script file', { path: filePath, language });
       return filePath;
     } catch (error) {
       logger.error('Failed to create temporary script file', { path: filePath, error });
-      // Re-throw as a more specific error or handle as appropriate
       throw new DirectiveError(
         `Failed to create temporary script file: ${error instanceof Error ? error.message : 'Unknown error'}`,
         this.kind,
-        DirectiveErrorCode.FILESYSTEM_ERROR,
+        DirectiveErrorCode.EXECUTION_FAILED,
         { cause: error instanceof Error ? error : undefined }
       );
     }
@@ -110,9 +121,8 @@ export class RunDirectiveHandler implements IDirectiveHandler {
              }
              commandToExecute = cmdVar.value.commandTemplate;
              if (definedCommand.args) {
-                 const resolvedArgsPromises = definedCommand.args.map(arg => this.resolutionService.resolveInContext(arg, resolutionContext));
+                 const resolvedArgsPromises = definedCommand.args.map(node => this.resolutionService.resolveInContext([node], resolutionContext));
                  commandArgs = await Promise.all(resolvedArgsPromises);
-                 // Apply args to commandTemplate here if needed
              }
           } else if (subtype === 'runCode' || subtype === 'runCodeParams') {
             if (!isInterpolatableValueArray(commandInput)) throw new DirectiveError('Invalid command input for runCode/runCodeParams', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
@@ -129,7 +139,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
             if (subtype === 'runCodeParams' && languageParams) {
               // Inner try for parameter resolution
               try { 
-                  const resolvedParamsPromises = languageParams.map(param => this.resolutionService.resolveInContext(param, resolutionContext));
+                  const resolvedParamsPromises = languageParams.map((param: InterpolatableValue) => this.resolutionService.resolveInContext(param, resolutionContext));
                   commandArgs = (await Promise.all(resolvedParamsPromises)).map(p => this.escapeArgument(p));
               } catch (paramError) {
                    const errorMsg = `Failed to resolve parameter variable${paramError instanceof Error ? ': ' + paramError.message : ''}`;
@@ -188,30 +198,41 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       }
       // --- End Execution Block ---
 
-      // <<< REMOVE Logging for stdout/stderr >>>
-      // process.stdout.write(`>>> RunDirectiveHandler: Raw stdout: [${stdout}]\n`);
-      // process.stdout.write(`>>> RunDirectiveHandler: Raw stderr: [${stderr}]\n`);
-      // <<< END Logging >>>
-
       // Store results using correct variable names extracted from the directive data
       const directiveSourceLocation: SourceLocation | undefined = node.location ? {
          filePath: currentFilePath ?? 'unknown',
          line: node.location.start.line,
          column: node.location.start.column
       } : undefined;
-      const outputMetadata: VariableMetadata = { definedAt: directiveSourceLocation, origin: VariableOrigin.COMMAND_OUTPUT, createdAt: Date.now(), modifiedAt: Date.now() };
-      const errorMetadata: VariableMetadata = { definedAt: directiveSourceLocation, origin: VariableOrigin.COMMAND_ERROR, createdAt: Date.now(), modifiedAt: Date.now() };
+      const outputMetadata: VariableMetadata = { 
+        definedAt: directiveSourceLocation, 
+        origin: VariableOrigin.TRANSFORMATION, 
+        createdAt: Date.now(), 
+        modifiedAt: Date.now() 
+      };
+      const errorMetadata: VariableMetadata = { 
+        definedAt: directiveSourceLocation, 
+        origin: VariableOrigin.TRANSFORMATION, 
+        createdAt: Date.now(), 
+        modifiedAt: Date.now() 
+      };
       
       const stateChanges: StateChanges = { variables: {} };
+
+      if (!stateChanges.variables) {
+        stateChanges.variables = {};
+      }
+
       stateChanges.variables[outputVariable] = {
-          type: VariableType.TEXT,
-          value: stdout || '',
-          metadata: outputMetadata
+        type: VariableType.TEXT,
+        value: stdout || '',
+        metadata: outputMetadata
       };
+
       stateChanges.variables[errorVariable] = {
-          type: VariableType.TEXT,
-          value: stderr || '',
-          metadata: errorMetadata
+        type: VariableType.TEXT,
+        value: stderr || '',
+        metadata: errorMetadata
       };
 
       // Handle transformation mode
@@ -224,14 +245,6 @@ export class RunDirectiveHandler implements IDirectiveHandler {
             location: node.location,
             nodeId: crypto.randomUUID() // Ensure nodeId is added
         };
-        // <<< REMOVE Logging for replacement node >>>
-        // try {
-        //    process.stdout.write(`>>> RunDirectiveHandler: Created replacementNode: ${JSON.stringify(replacementNode)}\n`);
-        // } catch (e) {
-        //    process.stdout.write(`>>> RunDirectiveHandler: Error stringifying replacementNode: ${e}\n`);
-        //    process.stdout.write(`>>> RunDirectiveHandler: Replacement node content: ${replacementNode.content}\n`);
-        // }
-        // <<< END Logging >>>
       }
 
       // Return NEW DirectiveResult shape
@@ -289,7 +302,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
   }
   
   private animationInterval: NodeJS.Timeout | null = null;
-  private isTestEnvironment: boolean = process.env.NODE_ENV === 'test' || process.env.VITEST;
+  private isTestEnvironment = Boolean(process.env.NODE_ENV === 'test' || process.env.VITEST);
   private showRunningCommandFeedback(command: string): void {
     if (this.isTestEnvironment) { return; }
     this.clearCommandFeedback();
@@ -323,9 +336,9 @@ export class RunDirectiveHandler implements IDirectiveHandler {
     return filePath.replace(/ /g, '\\ ').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
   }
 
-  private escapeArgument(arg: string): string {
+  private escapeArgument(arg: JsonValue): string {
     // Simple escaping for command line arguments
-    // This is highly dependent on the shell and context, use libraries for robust escaping if needed
-    return `"${arg.replace(/"/g, '\\"').replace(/\$/g, '\$').replace(/`/g, '\`')}"`;
+    const stringArg = String(arg);
+    return `"${stringArg.replace(/"/g, '\\"').replace(/\$/g, '\$').replace(/`/g, '\`')}"`;
   }
 }
