@@ -400,9 +400,18 @@ export class TestContextDI {
     // Register Factories SECOND
     this.registerFactories();
     
-    // Register standard mocks from MockFactory 
+    // Define core services to skip mocking
+    const coreServicesToSkip = [
+      'IStateService', 
+      'IParserService', 
+      'IInterpreterService', 
+      'IOutputService'
+    ];
+    
+    // Register standard mocks from MockFactory, EXCEPT for core services
     for (const [token, factory] of Object.entries(MockFactory.standardFactories)) {
-      if (!this.container.isRegistered(token)) {
+      // Check if token should be skipped
+      if (!this.container.isRegistered(token) && !coreServicesToSkip.includes(token)) { 
         this.container.registerMock(token, factory()); 
       }
     }
@@ -413,9 +422,21 @@ export class TestContextDI {
     // Register the container instance itself for StateService
     this.container.registerMock('DependencyContainer', this.container.getContainer());
 
-    // Register REAL StateService last
+    // Register REAL StateService (already present)
     this.container.registerService(StateFactory, StateFactory);
     this.container.registerService('IStateService', StateService);
+    
+    // Register REAL ParserService
+    // Assuming ParserFactory is registered by registerFactories()
+    this.container.registerService('IParserService', ParserService);
+    
+    // Register REAL InterpreterService
+    // Assuming InterpreterFactory is registered by registerFactories()
+    this.container.registerService('IInterpreterService', InterpreterService);
+    
+    // Register REAL OutputService
+    // Assuming OutputFactory is registered by registerFactories()
+    this.container.registerService('IOutputService', OutputService);
   }
 
   /**
@@ -482,7 +503,7 @@ export class TestContextDI {
    * Registers factory classes using ClientFactoryHelpers
    */
   private registerFactories(): void {
-    // === Change: Register standard factories UNCONDITIONALLY for now ===
+    // Register standard factories UNCONDITIONALLY for now
     ClientFactoryHelpers.registerStandardClientFactories(this);
     
     // Remove conditional logic for now

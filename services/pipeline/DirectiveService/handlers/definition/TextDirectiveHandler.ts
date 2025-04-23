@@ -264,23 +264,17 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       };
       
       // Create the variable definition structure directly for the state change
-      const variableChange: VariableDefinition = {
-          name: identifier,
-          type: VariableType.TEXT,
-          value: resolvedValue,
-          metadata: metadata
-      };
+      const variableChange = createTextVariable(identifier, resolvedValue, metadata);
 
       process.stdout.write(`DEBUG: [TextDirectiveHandler EXIT] Completed for ${identifier}. Returning state changes.\n`);
       
       return { 
-        stateChanges: {
-          variables: { 
-            [identifier]: variableChange // Use the created structure
-          }
-        }
-      };
+        state: state 
+        // No stateChanges or replacement needed for this handler type
+      }; 
+
     } catch (error) {
+      logger.error('Error processing text directive:', { error: error, identifier: identifier });
       // Ensure all thrown errors are DirectiveErrors with consistent details
       if (error instanceof DirectiveError) {
         // Ensure context is included in details if missing

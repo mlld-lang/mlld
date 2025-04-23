@@ -11,10 +11,10 @@ import type { IValidationService } from '@services/resolution/ValidationService/
 import type { IOutputService, OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
 import type { TransformationOptions } from '@core/types/state.js';
 import type { MeldPath, RawPath, AbsolutePath, RelativePath, ValidatedResourcePath, UrlPath } from '@core/types/paths.js';
-import { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
+import { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js'; 
+import type { TextNode } from '@core/syntax/types/index.js'; 
 import { unsafeCreateValidatedResourcePath, PathContentType } from '@core/types/paths.js';
 import type { TextVariable, DataVariable, IPathVariable } from '@core/types/variables.js';
-import type { TextNode, AstNode } from '@core/syntax/types/index.js'; 
 
 export class MockFactory {
   /**
@@ -251,7 +251,11 @@ export class MockFactory {
     const baseMock: IInterpreterService = {
       canHandleTransformations: vi.fn().mockReturnValue(true),
       initialize: vi.fn(),
-      interpret: vi.fn().mockResolvedValue(MockFactory.createStateService()), 
+      interpret: vi.fn().mockImplementation(async (ast: any): Promise<IStateService> => {
+        const mockState = MockFactory.createStateService();
+        mockState.getTransformedNodes = vi.fn().mockReturnValue(ast?.children || []);
+        return mockState;
+      }), 
       interpretNode: vi.fn().mockResolvedValue({}),
       createChildContext: vi.fn().mockResolvedValue({})
     };
@@ -266,7 +270,20 @@ export class MockFactory {
     const baseMock: IParserService = {
       parseString: vi.fn().mockResolvedValue([]),
       parseFile: vi.fn().mockResolvedValue([]),
-      parse: vi.fn().mockResolvedValue([]),
+      parse: vi.fn().mockImplementation(async (content: string): Promise<any> => {
+        const textNode: TextNode = { 
+          type: 'Text', 
+          content, 
+          location: undefined as any, 
+          nodeId: 'mock-text-node' 
+        }; 
+        return { 
+          type: 'Root', 
+          children: [textNode], 
+          location: undefined as any, 
+          nodeId: 'mock-root-node' 
+        };
+      }),
       parseWithLocations: vi.fn().mockResolvedValue([])
     };
     
@@ -293,7 +310,7 @@ export class MockFactory {
   static createOutputService(overrides: Partial<IOutputService> = {}): IOutputService {
     const baseMock: IOutputService = {
       canAccessTransformedNodes: vi.fn().mockReturnValue(true),
-      convert: vi.fn().mockImplementation(async (nodes: AstNode[]) => {
+      convert: vi.fn().mockImplementation(async (nodes: any[]) => { 
         // Simple mock: concatenate content of TextNodes
         return nodes
           .filter((node): node is TextNode => node.type === 'Text')
