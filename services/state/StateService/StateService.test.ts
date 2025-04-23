@@ -27,6 +27,7 @@ import type { IStateFactory } from '@services/state/StateService/types';
 import type { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory';
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient';
+import type { IStateTrackingService, StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
 
 // Other necessary types
 import type { MeldNode, TextNode } from '@core/syntax/types/index';
@@ -59,6 +60,7 @@ describe('StateService', () => {
   let mockEventService: IStateEventService;
   let mockTrackingClient: IStateTrackingServiceClient;
   let mockTrackingClientFactory: StateTrackingServiceClientFactory;
+  let mockTrackingService: IStateTrackingService;
 
   beforeEach(() => {
     testContainer = container.createChildContainer();
@@ -84,15 +86,38 @@ describe('StateService', () => {
         getRelationshipGraph: vi.fn(),
     } as unknown as IStateTrackingServiceClient; // Cast necessary
 
+    // Mock Tracking Service (Manual Object)
+    mockTrackingService = {
+        registerState: vi.fn(),
+        registerRelationship: vi.fn(),
+        addRelationship: vi.fn(),
+        getStateLineage: vi.fn().mockReturnValue([]),
+        getStateDescendants: vi.fn().mockReturnValue([]),
+        getAllStates: vi.fn().mockReturnValue([]),
+        getStateMetadata: vi.fn(),
+        trackContextBoundary: vi.fn(),
+        trackVariableCrossing: vi.fn(),
+        getContextBoundaries: vi.fn().mockReturnValue([]),
+        getVariableCrossings: vi.fn().mockReturnValue([]),
+        getContextHierarchy: vi.fn().mockReturnValue({
+            rootStateId: '',
+            states: [],
+            boundaries: [],
+            variableCrossings: []
+        })
+    } as unknown as IStateTrackingService;
+
     // Mock Tracking Client Factory (Manual Object returning the manual client)
     mockTrackingClientFactory = {
-        createClient: vi.fn().mockReturnValue(mockTrackingClient)
+        createClient: vi.fn().mockReturnValue(mockTrackingClient),
+        trackingService: mockTrackingService
     } as unknown as StateTrackingServiceClientFactory; // Cast as factory type
 
     // --- Register Dependencies ---
     // Register Mocks
     testContainer.registerInstance<IStateEventService>('IStateEventService', mockEventService);
-    testContainer.registerInstance<StateTrackingServiceClientFactory>('StateTrackingServiceClientFactory', mockTrackingClientFactory);
+    testContainer.registerInstance<IStateTrackingService>('IStateTrackingService', mockTrackingService);
+    testContainer.registerInstance<StateTrackingServiceClientFactory>(StateTrackingServiceClientFactory, mockTrackingClientFactory);
 
     // Register ParentStateServiceForChild using a factory returning null
     testContainer.register<IStateService | null>('ParentStateServiceForChild', { 

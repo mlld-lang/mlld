@@ -341,4 +341,4 @@ export interface IStateService {
   applyStateChanges(changes: StateChanges): Promise<IStateService>;
 }
 
-export type { TransformationOptions, IStateService, DataVariable }; 
+export type { TransformationOptions, DataVariable }; 

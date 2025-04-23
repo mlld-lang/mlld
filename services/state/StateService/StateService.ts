@@ -4,8 +4,8 @@ import type { IStateService, TransformationOptions } from '@services/state/State
 import type { StateNode } from '@services/state/StateService/types';
 import { StateFactory } from '@services/state/StateService/StateFactory';
 import type { IStateEventService, StateEvent, StateTransformEvent } from '@services/state/StateEventService/IStateEventService';
-import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
-import { inject, container, injectable, DependencyContainer } from 'tsyringe';
+import { inject, container, injectable } from 'tsyringe';
+import type { DependencyContainer } from 'tsyringe';
 import { Service } from '@core/ServiceProvider';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory';
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient';
@@ -36,6 +36,7 @@ import * as crypto from 'crypto';
 import { VariableType } from '@core/types';
 import type { StateChanges } from '@core/directives/DirectiveHandler';
 import assert from 'node:assert';
+import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
 
 // Helper function to get the container
 function getContainer() {
@@ -57,7 +58,6 @@ export class StateService implements IStateService {
   private currentState!: StateNode;
   private _isImmutable: boolean = false;
   private eventService?: IStateEventService;
-  private trackingService?: IStateTrackingService;
   private parentService?: IStateService;
   private container: DependencyContainer;
   
@@ -82,7 +82,7 @@ export class StateService implements IStateService {
     @inject('DependencyContainer') container: DependencyContainer,
     // Optional dependencies 
     @inject('IStateEventService', { isOptional: true }) eventService?: IStateEventService,
-    @inject('StateTrackingServiceClientFactory', { isOptional: true }) trackingServiceClientFactory?: StateTrackingServiceClientFactory,
+    @inject(StateTrackingServiceClientFactory, { isOptional: true }) trackingServiceClientFactory?: StateTrackingServiceClientFactory,
     // Optional parent state (either passed directly for root or injected for child)
     @inject('ParentStateServiceForChild', { isOptional: true }) injectedParentState?: IStateService,
     // Keep direct parentState for potential root-level creation (though DI is preferred)
@@ -124,7 +124,7 @@ export class StateService implements IStateService {
     this.factoryInitialized = true;
     
     try {
-      this.trackingServiceClientFactory = container.resolve('StateTrackingServiceClientFactory');
+      this.trackingServiceClientFactory = this.container.resolve(StateTrackingServiceClientFactory);
       this.initializeTrackingClient();
     } catch (error) {
       // Factory not available, will use direct service
@@ -213,8 +213,9 @@ export class StateService implements IStateService {
     }
     
     // Fall back to direct tracking service if available
-    if (this.trackingService) {
-      this.trackingService.registerState({
+    if (this.trackingServiceClientFactory) {
+      const client = this.trackingServiceClientFactory.createClient();
+      client.registerState({
         id: this.currentState.stateId,
         parentId,
         filePath: this.currentState.filePath,
@@ -225,7 +226,7 @@ export class StateService implements IStateService {
       
       // Explicitly register parent-child relationship if parent exists
       if (parentService && parentId) {
-        this.trackingService.registerRelationship({
+        client.registerRelationship({
           sourceId: parentId,
           targetId: this.currentState.stateId,
           type: 'parent-child',
@@ -722,26 +723,27 @@ export class StateService implements IStateService {
     this.ensureFactoryInitialized();
     const childId = childState.getStateId();
     if (childId) {
-    if (this.trackingClient) {
-      try {
-        this.trackingClient.registerRelationship({
-          sourceId: this.currentState.stateId,
+      if (this.trackingClient) {
+        try {
+          this.trackingClient.registerRelationship({
+            sourceId: this.currentState.stateId,
             targetId: childId,
+            type: 'merge-source',
+            timestamp: Date.now(),
+            source: 'merge'
+          });
+        } catch (error) {
+          logger.warn('Error registering merge relationship with trackingClient', { error });
+        }
+      } else if (this.trackingServiceClientFactory) {
+        const client = this.trackingServiceClientFactory.createClient();
+        client.registerRelationship({
+          sourceId: this.currentState.stateId,
+          targetId: childId,
           type: 'merge-source',
           timestamp: Date.now(),
           source: 'merge'
         });
-      } catch (error) {
-        logger.warn('Error registering merge relationship with trackingClient', { error });
-      }
-    } else if (this.trackingService) {
-      this.trackingService.registerRelationship({
-        sourceId: this.currentState.stateId,
-          targetId: childId,
-        type: 'merge-source',
-        timestamp: Date.now(),
-        source: 'merge'
-      });
       }
     }
   }
@@ -785,19 +787,24 @@ export class StateService implements IStateService {
         } catch (error) {
           logger.warn('Failed to register clone operation with tracking client', { error });
         }
-      } else if (this.trackingService) {
+      } else if (this.trackingServiceClientFactory) {
         try {
-          if (this.trackingService.registerState) {
-             this.trackingService.registerState({
-                id: cloneId,
-                parentId: this.parentService?.getStateId(),
-                source: clonedNode.source || 'clone',
-                filePath: clonedService.getCurrentFilePath() || undefined,
-                transformationEnabled: clonedService.isTransformationEnabled(),
-                createdAt: clonedNode.createdAt,
-             });
-          }
-          logger.debug('Tracking service fallback for clone relationship might need review.');
+          const client = this.trackingServiceClientFactory.createClient();
+          client.registerState({
+            id: cloneId,
+            parentId: this.parentService?.getStateId(),
+            source: clonedNode.source || 'clone',
+            filePath: clonedService.getCurrentFilePath() || undefined,
+            transformationEnabled: clonedService.isTransformationEnabled(),
+            createdAt: clonedNode.createdAt,
+          });
+          client.registerRelationship({
+            sourceId: originalId,
+            targetId: cloneId,
+            type: 'clone-original',
+            timestamp: Date.now(),
+            source: 'clone'
+          });
         } catch (error) {
           logger.warn('Failed to register clone operation with tracking service', { error });
         }
@@ -885,14 +892,16 @@ export class StateService implements IStateService {
 
   // Add back the setTrackingService method
   setTrackingService(trackingService: IStateTrackingService): void {
-    this.trackingService = trackingService;
+    // Create a new factory instance
+    const factory = new StateTrackingServiceClientFactory(trackingService);
+    this.trackingServiceClientFactory = factory;
     
     // Register existing state if not already registered
     if (this.currentState.stateId) {
-      // Ensure factory is initialized before trying to use it
+      // Ensure factory is initialized and client is created
       this.ensureFactoryInitialized();
       
-      // Try to use the client from the factory first
+      // Try to use the client from the factory
       if (this.trackingClient) {
         try {
           this.trackingClient.registerState({
@@ -902,24 +911,9 @@ export class StateService implements IStateService {
             transformationEnabled: this.isTransformationEnabled(),
             createdAt: Date.now()
           });
-          
-          return; // Successfully used the client, no need to try other methods
         } catch (error) {
-          logger.warn('Error using trackingClient in setTrackingService, will fall back to direct service', { error });
+          logger.warn('Failed to register existing state with tracking service', { error, stateId: this.currentState.stateId });
         }
-      }
-      
-      // Fall back to direct tracking service
-      try {
-        this.trackingService.registerState({
-          id: this.currentState.stateId,
-          source: this.currentState.source || 'new',  // Use original source or default to 'new'
-          filePath: this.getCurrentFilePath() || undefined,
-          transformationEnabled: this.isTransformationEnabled(),
-          createdAt: Date.now()
-        });
-      } catch (error) {
-        logger.warn('Failed to register existing state with tracking service', { error, stateId: this.currentState.stateId });
       }
     }
   }
