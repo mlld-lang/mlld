@@ -139,12 +139,11 @@ export class StateService implements IStateService {
     if (!this.trackingServiceClientFactory) {
       return;
     }
-    
+
     try {
       this.trackingClient = this.trackingServiceClientFactory.createClient();
-      logger.debug('Successfully created StateTrackingServiceClient using factory');
     } catch (error) {
-      logger.warn('Failed to create StateTrackingServiceClient, will use direct service if available', { error });
+      logger.warn('Failed to create tracking client', { error });
       this.trackingClient = undefined;
     }
   }
@@ -721,29 +720,20 @@ export class StateService implements IStateService {
     await this.updateState(updates, `mergeChild:${childNode.stateId}`);
 
     this.ensureFactoryInitialized();
+    this.initializeTrackingClient();
+
     const childId = childState.getStateId();
-    if (childId) {
-      if (this.trackingClient) {
-        try {
-          this.trackingClient.registerRelationship({
-            sourceId: this.currentState.stateId,
-            targetId: childId,
-            type: 'merge-source',
-            timestamp: Date.now(),
-            source: 'merge'
-          });
-        } catch (error) {
-          logger.warn('Error registering merge relationship with trackingClient', { error });
-        }
-      } else if (this.trackingServiceClientFactory) {
-        const client = this.trackingServiceClientFactory.createClient();
-        client.registerRelationship({
+    if (childId && this.trackingClient) {
+      try {
+        this.trackingClient.registerRelationship({
           sourceId: this.currentState.stateId,
           targetId: childId,
           type: 'merge-source',
           timestamp: Date.now(),
           source: 'merge'
         });
+      } catch (error) {
+        logger.warn('Error registering merge relationship with trackingClient', { error });
       }
     }
   }
@@ -763,51 +753,30 @@ export class StateService implements IStateService {
     clonedService._isImmutable = this._isImmutable;
 
     this.ensureFactoryInitialized();
+    this.initializeTrackingClient();
+
     const originalId = this.getStateId();
     const cloneId = clonedService.getStateId();
 
-    if (originalId && cloneId) {
-      if (this.trackingClient) {
-        try {
-          this.trackingClient.registerState({
-            id: cloneId,
-            parentId: this.parentService?.getStateId(),
-            source: clonedNode.source || 'clone',
-            filePath: clonedService.getCurrentFilePath() || undefined,
-            transformationEnabled: clonedService.isTransformationEnabled(),
-            createdAt: clonedNode.createdAt,
-          });
-          this.trackingClient.registerRelationship({
-            sourceId: originalId,
-            targetId: cloneId,
-            type: 'clone-original',
-            timestamp: Date.now(),
-            source: 'clone'
-          });
-        } catch (error) {
-          logger.warn('Failed to register clone operation with tracking client', { error });
-        }
-      } else if (this.trackingServiceClientFactory) {
-        try {
-          const client = this.trackingServiceClientFactory.createClient();
-          client.registerState({
-            id: cloneId,
-            parentId: this.parentService?.getStateId(),
-            source: clonedNode.source || 'clone',
-            filePath: clonedService.getCurrentFilePath() || undefined,
-            transformationEnabled: clonedService.isTransformationEnabled(),
-            createdAt: clonedNode.createdAt,
-          });
-          client.registerRelationship({
-            sourceId: originalId,
-            targetId: cloneId,
-            type: 'clone-original',
-            timestamp: Date.now(),
-            source: 'clone'
-          });
-        } catch (error) {
-          logger.warn('Failed to register clone operation with tracking service', { error });
-        }
+    if (originalId && cloneId && this.trackingClient) {
+      try {
+        this.trackingClient.registerState({
+          id: cloneId,
+          parentId: this.parentService?.getStateId(),
+          source: clonedNode.source || 'clone',
+          filePath: clonedService.getCurrentFilePath() || undefined,
+          transformationEnabled: clonedService.isTransformationEnabled(),
+          createdAt: clonedNode.createdAt,
+        });
+        this.trackingClient.registerRelationship({
+          sourceId: originalId,
+          targetId: cloneId,
+          type: 'clone-original',
+          timestamp: Date.now(),
+          source: 'clone'
+        });
+      } catch (error) {
+        logger.warn('Failed to register clone operation with tracking client', { error });
       }
     }
 

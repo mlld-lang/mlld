@@ -601,6 +601,8 @@ export class DirectiveService implements IDirectiveService {
 
   /**
    * Type guard to check if an object implements IStateService
+   * @param obj The object to check
+   * @returns True if the object implements IStateService
    */
   private isStateService(obj: any): obj is IStateService {
     const requiredMethods = [
@@ -617,10 +619,18 @@ export class DirectiveService implements IDirectiveService {
       'setCurrentFilePath',
       'getTextVar',
       'getDataVar',
-      'hasVariable'
+      'hasVariable',
+      'getAllTextVars',
+      'getAllDataVars',
+      'getAllPathVars',
+      'getAllCommands'
     ];
 
-    return requiredMethods.every(method => typeof obj[method] === 'function');
+    return (
+      typeof obj === 'object' && 
+      obj !== null && 
+      requiredMethods.every(method => typeof obj[method] === 'function')
+    );
   }
 
   /**
@@ -641,7 +651,11 @@ export class DirectiveService implements IDirectiveService {
       'setCurrentFilePath',
       'getTextVar',
       'getDataVar',
-      'hasVariable'
+      'hasVariable',
+      'getAllTextVars',
+      'getAllDataVars',
+      'getAllPathVars',
+      'getAllCommands'
     ];
 
     return requiredMethods.filter(method => typeof obj[method] !== 'function');
@@ -826,14 +840,6 @@ export class DirectiveService implements IDirectiveService {
         DirectiveErrorCode.INVALID_CONTEXT
       );
     }
-  }
-
-  /**
-   * Type guard to check if an object implements IStateService.
-   * Avoids instanceof checks that might fail with mocks/proxies.
-   */
-  private isStateService(obj: any): obj is IStateService {
-    return obj && typeof obj.getVariable === 'function' && typeof obj.clone === 'function';
   }
 
   // Simplified updateInterpreterService - assuming client is primary

@@ -136,6 +136,5 @@ export type {
   StateEvent,
   StateEventHandler,
   StateEventFilter,
-  StateEventHandlerOptions,
-  IStateEventService
+  StateEventHandlerOptions
 }; 

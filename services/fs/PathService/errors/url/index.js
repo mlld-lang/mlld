@@ -1,5 +1,4 @@
-// Export all URL error types
-export { URLError } from './URLError';
-export { URLValidationError } from './URLValidationError';
-export { URLSecurityError } from './URLSecurityError';
-export { URLFetchError } from './URLFetchError';
+export * from './URLError';
+export * from './URLFetchError';
+export * from './URLSecurityError';
+export * from './URLValidationError';
