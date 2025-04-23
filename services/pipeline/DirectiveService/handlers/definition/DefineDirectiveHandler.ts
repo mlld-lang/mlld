@@ -193,31 +193,22 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       
       logger.debug('Constructed command definition', { name: commandDefinition.name, type: commandDefinition.type });
 
-      // Store the ICommandDefinition using setCommandVar on the provided state
-      // <<< Remove direct state modification >>>
-      // const commandVariable = createCommandVariable(commandDefinition.name, commandDefinition, baseMetadata);
-      // await state.setVariable(commandVariable);
-      
-      logger.debug(`Stored command '${commandDefinition.name}'`, { definition: commandDefinition });
+      // Create the command variable using the factory function
+      const commandVariable = createCommandVariable(commandDefinition.name, commandDefinition, baseMetadata);
 
-      // Create VariableDefinition for StateChanges
-      // <<< FIX: Add name property >>>
-      const variableDefinition: VariableDefinition = {
-          name: commandDefinition.name, // Add the name property
-          type: VariableType.COMMAND,
-          value: commandDefinition,
-          metadata: baseMetadata
-      };
-
-      // Return NEW DirectiveResult shape
-      return { 
-         stateChanges: { 
-            variables: { 
-                [nameMetadata.name]: variableDefinition 
+      // Return DirectiveResult with StateChanges
+      return {
+        stateChanges: {
+          variables: {
+            [commandDefinition.name]: {
+              type: VariableType.COMMAND,
+              value: commandDefinition,
+              metadata: baseMetadata
             }
-         }
-         // No replacement nodes for @define
+          }
+        }
       };
+
     } catch (error) {
       // Wrap in DirectiveError if needed
       if (error instanceof DirectiveError) {
@@ -233,7 +224,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
         if (!error.details?.context) {
           newDetails.context = baseErrorDetails.context;
         } 
-        // Re-throw with original message, KIND FROM HANDLER (this.kind), original code, and combined details
+        // Re-throw with original message, kind from handler (this.kind), original code, and combined details
         throw new DirectiveError(error.message, this.kind, error.code, newDetails);
       }
 
@@ -244,6 +235,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
           
       const cause = error instanceof Error ? error : undefined;
       const details = { ...baseErrorDetails, cause };
+      
       const resolutionError = new DirectiveError(
         error instanceof Error ? error.message : 'Unknown error in define directive',
         this.kind,
