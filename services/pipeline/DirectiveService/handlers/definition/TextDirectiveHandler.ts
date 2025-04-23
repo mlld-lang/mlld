@@ -239,9 +239,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         metadata: { 
           origin: VariableOrigin.DIRECT_DEFINITION,
           definedAt: directiveSourceLocation,
-          // Timestamps should be handled by the state service upon application
-          // createdAt: Date.now(), 
-          // modifiedAt: Date.now(),
+          createdAt: Date.now(), 
+          modifiedAt: Date.now(),
         },
       };
 

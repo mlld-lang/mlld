@@ -92,6 +92,13 @@ This document outlines a focused approach to implementing the already establishe
 
 - [ ] 3. **Update all implementations**
    - Fix directive handlers to use the canonical types
+      - ✅ PathDirectiveHandler
+      - ✅ DataDirectiveHandler
+      - ✅ TextDirectiveHandler
+      - DefineDirectiveHandler
+      - CommandDirectiveHandler
+      - EmbedDirectiveHandler
+      - ImportDirectiveHandler
    - Update service interfaces to maintain consistency
 
 #### Files to Modify:

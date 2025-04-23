@@ -38,7 +38,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
     const state = context.state;
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
-    const currentFilePath = state.getCurrentFilePath();
+    const currentFilePath = resolutionContext.currentFilePath;
     const errorDetails = { 
       node: node, 
       context: context 
@@ -50,6 +50,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
     });
 
     try {
+      // Define source location for metadata
       const directiveSourceLocation: SourceLocation | undefined = node.location?.start ? {
         filePath: currentFilePath ?? 'unknown',
         line: node.location.start.line,
@@ -134,8 +135,18 @@ export class PathDirectiveHandler implements IDirectiveHandler {
           modifiedAt: Date.now()
       };
       
-      // Pass the adapted state object
-      const pathVariable = createPathVariable(identifier, pathStateForStorage, metadata);
+      // Construct the variable definition manually
+      // Factory functions like createPathVariable return the old structure with 'name'
+      const variableDefinition: VariableDefinition = {
+        type: VariableType.PATH,
+        value: pathStateForStorage,
+        metadata: {
+          origin: VariableOrigin.DIRECT_DEFINITION,
+          definedAt: directiveSourceLocation,
+          createdAt: Date.now(),
+          modifiedAt: Date.now(),
+        }
+      };
 
       logger.debug('Path directive processed successfully', {
         identifier,
@@ -148,11 +159,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       return { 
          stateChanges: { 
             variables: { 
-                [identifier]: {
-                    type: VariableType.PATH,
-                    value: pathStateForStorage,
-                    metadata: metadata
-                }
+                [identifier]: variableDefinition
             }
          }
          // No replacement nodes for @path
