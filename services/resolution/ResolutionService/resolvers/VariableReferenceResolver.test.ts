@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach, type Mock } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 
 // --- Corrected Core Type Imports ---
 import type { JsonValue, Result } from '@core/types';
@@ -52,6 +53,7 @@ describe('VariableReferenceResolver', () => {
   let parserService: Partial<IParserService>; // Use Partial for manual mocks
   let resolutionService: MockResolutionService; // Use explicit mock type
   let pathService: MockPathService; // Use explicit mock type
+  let resolutionServiceClientFactory: DeepMockProxy<ResolutionServiceClientFactory>;
   let context: ResolutionContext;
   // Remove fileSystemService if not directly needed by this resolver/tests
   // let fileSystemService: DeepMockProxy<IFileSystemService>; 
@@ -94,6 +96,7 @@ describe('VariableReferenceResolver', () => {
         resolvePath: vi.fn() as any, // Use as any to bypass type error
         validatePath: vi.fn() as any, // Use as any to bypass type error
     };
+    resolutionServiceClientFactory = mockDeep<ResolutionServiceClientFactory>();
 
     // --- Restore Full Mock implementation for getVariable --- 
     stateService.getVariable.mockImplementation((name: string): MeldVariable | undefined => {
@@ -149,7 +152,12 @@ describe('VariableReferenceResolver', () => {
     // await contextDI.resolve<IPathService>('IPathService');
 
     // --- RESOLVE the resolver from the MANUAL container --- 
-    resolver = testContainer.resolve(VariableReferenceResolver);
+    resolver = new VariableReferenceResolver(
+        stateService as any, 
+        pathService as any, 
+        resolutionServiceClientFactory as any,
+        parserService as any
+    );
 
     context = ResolutionContextFactory.create(stateService, 'test.meld')
                .withStrictMode(true); 
@@ -310,9 +318,9 @@ describe('VariableReferenceResolver', () => {
 
     beforeEach(() => {
       // Define the structure 
-      textNode1 = { type: 'Text', content: 'Outer ', location: { start: { line: 1, column: 1 }, end: { line: 1, column: 7 } } };
+      textNode1 = { type: 'Text', content: 'Outer ', location: { start: { line: 1, column: 1 }, end: { line: 1, column: 7 } }, nodeId: 'test-node-id-1' };
       innerVarNode = createVariableReferenceNode('greeting', VariableType.TEXT); 
-      textNode2 = { type: 'Text', content: ' Inner', location: { start: { line: 1, column: 8 }, end: { line: 1, column: 14 } } };
+      textNode2 = { type: 'Text', content: ' Inner', location: { start: { line: 1, column: 8 }, end: { line: 1, column: 14 } }, nodeId: 'test-node-id-2' };
       interpolatableValue = [textNode1, innerVarNode, textNode2];
       
       recursiveTextVar = { 
@@ -362,7 +370,7 @@ describe('VariableReferenceResolver', () => {
       const resolverWithoutService = new VariableReferenceResolver(
         stateService,      // Mock stateService from beforeEach
         pathService as any, // Mock pathService from beforeEach
-        undefined,         // Explicitly undefined for resolutionService
+        resolutionServiceClientFactory as any,
         parserService as any // Mock parserService from beforeEach
       );
 
