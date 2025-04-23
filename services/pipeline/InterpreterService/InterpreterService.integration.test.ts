@@ -67,8 +67,9 @@ import { PathOperationsService } from '@services/fs/FileSystemService/PathOperat
 import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
 import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import { ICircularityService } from '@services/pipeline/CircularityService/ICircularityService.js';
-import { CircularityService } from '@services/pipeline/CircularityService/CircularityService.js';
+import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js'; // Fixed path
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js'; // Fixed path
+import { PathService } from '@services/fs/PathService/PathService.js'; // Added import
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),
