@@ -55,7 +55,7 @@ describe('API Smoke Tests', () => {
   it('should process a simple text variable substitution', async () => {
     const content = 
 `@text message = "World"
-Hello {{message}}!`;
+@embed [[Hello {{message}}!]]`;
     
     const options: Partial<ProcessOptions> = {
       format: 'markdown',
@@ -75,6 +75,7 @@ Hello {{message}}!`;
 
     expect(error).toBeUndefined();
     expect(result).toBeDefined();
+    // Expect the literal string, as variables in plain text are not interpolated
     expect(result?.trim()).toBe('Hello World!');
   });
 

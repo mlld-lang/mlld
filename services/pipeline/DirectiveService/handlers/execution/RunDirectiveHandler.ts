@@ -69,9 +69,8 @@ export class RunDirectiveHandler implements IDirectiveHandler {
     const resolutionContext = context.resolutionContext;
     const currentFilePath = state.getCurrentFilePath();
     const baseErrorDetails = { 
-      node: node, 
-      context: { currentFilePath: currentFilePath ?? undefined } 
-    };
+      node: node 
+    }; 
     
     // <<< Declare tempFilePath *outside* the try block >>>
     let tempFilePath: string | undefined;
@@ -245,7 +244,12 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       if (error instanceof DirectiveError) {
          if (error.directiveKind !== this.kind) {
             const originalCause = error.details?.cause instanceof Error ? error.details.cause : undefined;
-            const newDetails = { ...baseErrorDetails, ...(error.details || {}), cause: originalCause };
+            // Construct details by taking base (node) and merging original error details, then adding cause
+            const newDetails = {
+              ...baseErrorDetails, // node
+              ...(error.details || {}), // Spread original details (might include context, location, etc.)
+              cause: originalCause
+            };
             throw new DirectiveError(error.message, this.kind, error.code, newDetails);
          } else {
             throw error;

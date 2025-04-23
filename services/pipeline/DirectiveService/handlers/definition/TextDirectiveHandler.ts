@@ -257,7 +257,6 @@ export class TextDirectiveHandler implements IDirectiveHandler {
 
       process.stdout.write(`DEBUG [TextDirectiveHandler.handle] Returning structure: ${JSON.stringify({ stateChanges }, null, 2)}\n`);
       return { stateChanges }; // Return the structured result
-
     } catch (error) {
       logger.error('Error processing text directive:', error);
       if (error instanceof DirectiveError) {
@@ -273,5 +272,6 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         { ...errorDetailsContext, cause: error instanceof Error ? error : undefined }
       );
     }
+    return {}; // Successful execution: Return an empty DirectiveResult
   }
 } 

@@ -442,7 +442,7 @@ export class InterpreterService implements IInterpreterService {
           // <<< ADDED: Validate DirectiveResult structure >>>
           if (node.type === 'Directive' && nodeResult && 
               (typeof nodeResult !== 'object' || 
-               (nodeResult.stateChanges === undefined && nodeResult.replacement === undefined && nodeResult.transformedContent === undefined)))
+               (nodeResult.stateChanges === undefined && nodeResult.replacement === undefined))) // Removed transformedContent check
           {
             logger.error('Invalid result type returned from directive handler client after interpretNode', { nodeResult, nodeId: node.nodeId, kind: (node as DirectiveNode).directive.kind });
             throw new MeldInterpreterError(
@@ -587,59 +587,7 @@ export class InterpreterService implements IInterpreterService {
     switch (node.type) {
       case 'Text':
         const textNode = node as TextNode;
-        let nodeToAdd: TextNode = textNode; // Start with the original node
-
-        // Check if content potentially needs resolution
-        if (textNode.content.includes('{{')) {
-            // << ADDED lazy initialization >>
-            this.ensureClientsInitialized(); 
-
-            // Ensure parser client is available after lazy init
-            if (this.parserClient && this.resolutionService) {
-                logger.debug(`[InterpreterService] TextNode content might need resolution: ${textNode.content.substring(0, 50)}...`);
-                try {
-                    // 1. Parse the string content into an InterpolatableValue array
-                    // Assuming parseString exists and returns INode[] - Needs Filtering
-                    const parsedNodesRaw = await this.parserClient.parseString(
-                        textNode.content, 
-                        { 
-                            // Linter Fix 3: Ensure filePath is string | undefined
-                            filePath: currentState.getCurrentFilePath() ?? undefined, 
-                            // Linter Fix 2: Removed unsupported 'startRule' option
-                        }
-                    );
-                    // Linter Fix 1: Filter/Cast the result to InterpolatableValue
-                    const parsedNodes: InterpolatableValue = parsedNodesRaw.filter(
-                      (node): node is TextNode | VariableReferenceNode => 
-                        node.type === 'Text' || node.type === 'VariableReference'
-                    );
-
-                    logger.debug(`[InterpreterService] Parsed TextNode content into ${parsedNodes?.length ?? 0} nodes.`);
-
-                    // 2. Resolve the parsed nodes
-                    const context = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
-                    const resolvedContent = await this.resolutionService.resolveNodes(parsedNodes, context);
-                    logger.debug(`[InterpreterService] Resolved TextNode content to: ${resolvedContent.substring(0, 50)}...`);
-
-                    // 3. Create a new node with resolved content
-                    nodeToAdd = {
-                        ...textNode, // Copy original properties (location, nodeId, etc.)
-                        content: resolvedContent, // Use the resolved content
-                    };
-
-                } catch (resolutionError) {
-                    logger.warn('[InterpreterService] Failed to parse/resolve TextNode content, adding original node instead.', {
-                        error: resolutionError instanceof Error ? resolutionError.message : String(resolutionError),
-                        originalContent: textNode.content.substring(0, 100),
-                        filePath: currentState.getCurrentFilePath()
-                    });
-                    // Fallback to adding the original node if resolution fails
-                    nodeToAdd = textNode;
-                }
-            }
-        }
-        // Add either the original node or the newly resolved node
-        currentState.addNode(nodeToAdd);
+        currentState.addNode(textNode);
         break;
 
       case 'CodeFence':
