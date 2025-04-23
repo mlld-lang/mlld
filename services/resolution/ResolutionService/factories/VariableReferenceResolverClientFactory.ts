@@ -6,12 +6,14 @@ import {
   IVariableReferenceResolverClient 
 } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient';
 import { resolutionLogger as logger } from '@core/utils/logger';
-import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
+import { ResolutionContext } from '@core/types/resolution';
 import { JsonValue } from '@core/types/common';
 import { Field } from '@core/syntax/types/shared-types';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
 import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
 import { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types/nodes';
+import { ResolutionContextFactory } from '../ResolutionContextFactory';
+import { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference';
 
 /**
  * Factory for creating variable reference resolver clients
@@ -70,6 +72,20 @@ export class VariableReferenceResolverClientFactory {
         context: ResolutionContext,
         options?: FieldAccessOptions
       ): Promise<any> => {
+        // Create a variable reference node to resolve the base variable
+        const varRefNode: VariableReferenceNode = {
+          type: 'VariableReference',
+          identifier: varName,
+          fields: [],
+          location: {
+            start: { line: 0, column: 0 },
+            end: { line: 0, column: 0 }
+          }
+        };
+
+        // Get the base variable value first
+        const baseValue = await this.variableReferenceResolver.resolve(varRefNode, context);
+
         // Parse the field path into field access objects
         const fields = fieldPath.split('.').map(field => {
           // Check if this is a numeric index
@@ -82,7 +98,7 @@ export class VariableReferenceResolverClientFactory {
         });
 
         const result = await this.variableReferenceResolver.accessFields(
-          varName as unknown as JsonValue, 
+          baseValue as JsonValue, 
           fields as Field[], 
           varName,
           context
@@ -116,7 +132,7 @@ export class VariableReferenceResolverClientFactory {
         });
         
         const result = await this.variableReferenceResolver.accessFields(
-          baseValue, 
+          baseValue as JsonValue, 
           fields as Field[], 
           options?.variableName || 'anonymous',
           context
@@ -142,10 +158,8 @@ export class VariableReferenceResolverClientFactory {
        */
       convertToString: (value: any, options?: FieldAccessOptions): string => {
         // Create a minimal context for string conversion
-        const context = new ResolutionContext({
-          strict: options?.strict ?? false,
-          depth: 0
-        });
+        const context = ResolutionContextFactory.create(this.variableReferenceResolver.getStateService())
+          .withFlags({ processNestedVariables: false });
 
         return this.variableReferenceResolver.convertToString(value, context);
       },

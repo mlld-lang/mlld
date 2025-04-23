@@ -2,7 +2,7 @@
 export * from '../shared-types';
 
 // Then export interfaces with proper type-only exports to avoid circular references
-export type { NodeType, Position, SourceLocation } from './common';
+export type { NodeType, Position, SourceLocation, NodeId } from './common';
 export type { INode } from './INode';
 export type { IDirectiveNode, DirectiveData, DirectiveKind, DirectiveKindString } from './IDirectiveNode';
 export type { 

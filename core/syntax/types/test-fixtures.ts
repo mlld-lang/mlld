@@ -8,6 +8,7 @@ export const dataTests: ParserTestCase[] = [
     input: '@data user = { name: "John", age: 30 }',
     expected: {
       type: 'Directive',
+      nodeId: 'test-node-1',
       directive: {
         kind: 'data',
         identifier: 'user',
@@ -30,6 +31,7 @@ export const dataTests: ParserTestCase[] = [
     input: '@data numbers = [1, 2, 3]',
     expected: {
       type: 'Directive',
+      nodeId: 'test-node-2',
       directive: {
         kind: 'data',
         identifier: 'numbers',
@@ -44,6 +46,7 @@ export const dataTests: ParserTestCase[] = [
     input: '@data user = { name: ${name}, age: 30, settings: { theme: ${theme}, enabled: true }, tags: [${tag1}, ${tag2}] }',
     expected: {
       type: 'Directive',
+      nodeId: 'test-node-3',
       directive: {
         kind: 'data',
         identifier: 'user',
@@ -60,6 +63,7 @@ export const dataInvalidTests: ParserTestCase[] = [
     input: '@data broken = { name: "John", }',
     expected: {
       type: 'Error',
+      nodeId: 'test-error-1',
       error: 'JSON parse error'
     }
   }
@@ -73,6 +77,7 @@ export const defineTests: ParserTestCase[] = [
     input: '@define list = @run [ls -la]',
     expected: {
       type: 'Directive',
+      nodeId: 'test-node-4',
       directive: {
         kind: 'define',
         name: 'list',
@@ -97,6 +102,7 @@ export const defineInvalidTests: ParserTestCase[] = [
     input: '@define badcmd = @nonexistent [value]',
     expected: {
       type: 'Error',
+      nodeId: 'test-error-2',
       error: 'Invalid command type'
     }
   }
@@ -110,6 +116,7 @@ export const embedTests: ParserTestCase[] = [
     input: '@embed [path/to/file.md]',
     expected: {
       type: 'Directive',
+      nodeId: 'test-node-5',
       directive: {
         kind: 'embed',
         subtype: 'embedPath',
@@ -134,6 +141,7 @@ export const embedTests: ParserTestCase[] = [
     input: '@embed [file.md:2]',
     expected: {
       type: 'Directive',
+      nodeId: 'test-node-6',
       directive: {
         kind: 'embed',
         subtype: 'embedPath',
@@ -159,6 +167,7 @@ export const embedTests: ParserTestCase[] = [
     input: '@embed [file.md#section:2]',
     expected: {
       type: 'Directive',
+      nodeId: 'test-node-7',
       directive: {
         kind: 'embed',
         subtype: 'embedPath',

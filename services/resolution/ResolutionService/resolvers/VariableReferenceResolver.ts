@@ -339,9 +339,9 @@ export class VariableReferenceResolver {
   }
 
   /**
-   * Converts a resolved value to its string representation for final output/use.
+   * Convert a value to string with context-aware formatting
    */
-  private convertToString(value: JsonValue | string | undefined, context: ResolutionContext): string {
+  public convertToString(value: JsonValue | string | undefined, context: ResolutionContext): string {
       if (value === undefined || value === null) {
           return '';
       }
@@ -361,5 +361,12 @@ export class VariableReferenceResolver {
           }
           return '[Unstringifiable Value]'; 
       }
+  }
+
+  /**
+   * Get the state service instance
+   */
+  public getStateService(): IStateService {
+    return this.stateService;
   }
 }
