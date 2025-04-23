@@ -9,9 +9,8 @@ import { directiveLogger as logger } from '@core/utils/logger';
 import { ErrorSeverity } from '@core/errors/MeldError';
 import { inject, injectable, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider';
-import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState, VariableMetadata, VariableType, createPathVariable } from '@core/types';
-import type { VariableDefinition } from '../../../../../core/variables/VariableTypes';
-import { VariableOrigin } from '@core/types/variables';
+import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState } from '@core/types/paths';
+import { VariableOrigin, VariableType, type VariableMetadata, type VariableDefinition, createPathVariable } from '@core/types/variables';
 import type { SourceLocation } from '@core/types/common';
 import type { DirectiveProcessingContext } from '@core/types/index';
 import type { ResolutionContext } from '@core/types/resolution';
@@ -42,7 +41,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
     const currentFilePath = state.getCurrentFilePath();
     const errorDetails = { 
       node: node, 
-      context: { currentFilePath: currentFilePath ?? undefined } 
+      context: context 
     };
 
     logger.debug('Processing path directive', {
@@ -137,7 +136,6 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       
       // Pass the adapted state object
       const pathVariable = createPathVariable(identifier, pathStateForStorage, metadata);
-      await state.setVariable(pathVariable);
 
       logger.debug('Path directive processed successfully', {
         identifier,
@@ -151,7 +149,6 @@ export class PathDirectiveHandler implements IDirectiveHandler {
          stateChanges: { 
             variables: { 
                 [identifier]: {
-                    name: identifier,
                     type: VariableType.PATH,
                     value: pathStateForStorage,
                     metadata: metadata

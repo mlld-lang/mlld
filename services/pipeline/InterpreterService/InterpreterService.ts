@@ -587,7 +587,7 @@ export class InterpreterService implements IInterpreterService {
     switch (node.type) {
       case 'Text':
         const textNode = node as TextNode;
-        currentState.addNode(textNode);
+        currentState.addNode(textNode); // Correct: Interpreter adds the node as-is
         break;
 
       case 'CodeFence':

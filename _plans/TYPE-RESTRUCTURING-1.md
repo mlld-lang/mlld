@@ -26,19 +26,19 @@ This document outlines a focused approach to implementing the already establishe
 
 ### Step 1: Enforce the Canonical VariableType (1 day)
 
-1. **Update `/core/syntax/types/variables.ts`**
+- [x] 1. **Update `/core/syntax/types/variables.ts`**
    - Replace the string union definition with imports from the canonical source:
    ```typescript
    import { VariableType } from '@core/types/variables';
    export { VariableType };
    ```
 
-2. **Fix all references to the string literal version**
+- [x] 2. **Fix all references to the string literal version**
    - Update imports to use the canonical enum
    - Replace string literals with enum values (e.g., `'text'` → `VariableType.TEXT`)
    - Update type guards and checks to use the enum values
 
-3. **Find and fix all inconsistent imports**
+- [x] 3. **Find and fix all inconsistent imports**
    - Identify files importing the string union version
    - Update to import from the canonical source
 
@@ -70,7 +70,7 @@ This document outlines a focused approach to implementing the already establishe
 
 ### Step 3: Standardize State Change Types (1-2 days)
 
-1. **Use the canonical `VariableDefinition` type**
+- [x] 1. **Use the canonical `VariableDefinition` type**
    - The core type already exists in `/core/types/variables.ts`:
    ```typescript
    export type VariableDefinition = {
@@ -81,7 +81,7 @@ This document outlines a focused approach to implementing the already establishe
    ```
    - Replace `VariableValueDefinition` in DirectiveService with this canonical type
 
-2. **Standardize state change representation**
+- [x] 2. **Standardize state change representation**
    - Use a consistent structure in DirectiveResult and StateService:
    ```typescript
    export interface StateChanges {
@@ -90,7 +90,7 @@ This document outlines a focused approach to implementing the already establishe
    }
    ```
 
-3. **Update all implementations**
+- [ ] 3. **Update all implementations**
    - Fix directive handlers to use the canonical types
    - Update service interfaces to maintain consistency
 

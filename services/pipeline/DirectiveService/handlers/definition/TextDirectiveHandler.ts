@@ -231,20 +231,23 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       }
 
       // Manually construct the VariableDefinition for state changes
+      // Factory functions like createTextVariable return the old structure with 'name',
+      // which is not suitable for the StateChanges record.
       const variableDefinition: VariableDefinition = {
         type: VariableType.TEXT,
         value: resolvedValue ?? '', // Ensure value is not undefined
-        metadata: { // Construct metadata object
+        metadata: { 
           origin: VariableOrigin.DIRECT_DEFINITION,
           definedAt: directiveSourceLocation,
-          createdAt: Date.now(), // Add timestamps
-          modifiedAt: Date.now(),
+          // Timestamps should be handled by the state service upon application
+          // createdAt: Date.now(), 
+          // modifiedAt: Date.now(),
         },
       };
 
       const stateChanges: StateChanges = {
         variables: {
-          [identifier]: variableDefinition,
+          [identifier]: variableDefinition, 
         },
       };
 
