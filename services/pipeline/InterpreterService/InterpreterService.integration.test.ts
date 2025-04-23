@@ -70,6 +70,7 @@ import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDir
 import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js'; // Fixed path
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js'; // Fixed path
 import { PathService } from '@services/fs/PathService/PathService.js'; // Added import
+import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver.js';
 
 // TODO: [Phase 5] Update InterpreterService integration tests.
 // This suite needs comprehensive updates to align with Phase 1 (StateService types),
@@ -211,6 +212,7 @@ describe('InterpreterService Integration', () => {
     testContainer.register('IParserService', { useToken: ParserService });
     testContainer.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
     testContainer.register('ICircularityService', { useClass: CircularityService }); // Added this line
+    testContainer.register('IURLContentResolver', { useClass: URLContentResolver }); // Added this line
 
     // Register the container with itself for injection
     testContainer.registerInstance('DependencyContainer', testContainer);
