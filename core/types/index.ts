@@ -126,13 +126,13 @@ export {
   type DirectiveReplacement,
   StringLiteralType,
   type SourceLocation
-} from './common';
+} from './common.js';
 
-export * from './variables';
-export * from './paths';
-export * from './define';
-export * from './state';
-export * from '../errors/index';
+export * from './variables.js';
+export * from './paths.js';
+export * from './define.js';
+export * from './state.js';
+export * from '../errors/index.js';
 export * from './dependencies.js';
 export * from './guards.js';
 

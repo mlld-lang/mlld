@@ -84,7 +84,7 @@ interface URLValidationOptions {
  * - IFileSystemService: For file and directory existence checks
  * - IParserService: Optional, for AST-based path handling
  */
-interface IPathService {
+export interface IPathService {
   /**
    * Initialize the path service with required dependencies.
    * Must be called before using any other methods.

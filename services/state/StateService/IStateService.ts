@@ -34,7 +34,7 @@ import type { StateChanges } from '@core/directives/DirectiveHandler.js';
  * - IStateEventService: For state change event notifications
  * - IStateTrackingService: For debugging and tracking state operations
  */
-interface IStateService {
+export interface IStateService {
   /**
    * Sets the event service for state change notifications.
    * 

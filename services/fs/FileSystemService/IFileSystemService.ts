@@ -17,7 +17,7 @@ import type { ValidatedResourcePath } from '@core/types/paths.js';
  * - IFileSystem: For low-level filesystem operations
  * - IPathService: For path validation and resolution
  */
-interface IFileSystemService extends FileSystemBase {
+export interface IFileSystemService extends FileSystemBase {
   /**
    * Reads the content of a file as a string.
    * 
@@ -188,6 +188,4 @@ interface IFileSystemService extends FileSystemBase {
    * @returns A promise that resolves when the file is deleted
    */
   deleteFile(filePath: string): Promise<void>;
-}
-
-export type { IFileSystemService }; 
+} 

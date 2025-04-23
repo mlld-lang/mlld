@@ -1,43 +1,43 @@
 // First export the shared-types which have no dependencies
-export * from './shared-types.js';
+export * from './shared-types';
 
 // Then export interfaces with type-only exports
-export type { INode } from './interfaces/INode.js';
-export type { IDirectiveNode, DirectiveData as IDirectiveData, DirectiveKind } from './interfaces/IDirectiveNode.js';
-export type { ITextNode } from './interfaces/ITextNode.js';
-export type { ICodeFenceNode } from './interfaces/ICodeFenceNode.js';
-export type { ICommentNode } from './interfaces/ICommentNode.js';
-export type { IErrorNode } from './interfaces/IErrorNode.js';
+export type { INode } from './interfaces/INode';
+export type { IDirectiveNode, DirectiveData as IDirectiveData, DirectiveKind } from './interfaces/IDirectiveNode';
+export type { ITextNode } from './interfaces/ITextNode';
+export type { ICodeFenceNode } from './interfaces/ICodeFenceNode';
+export type { ICommentNode } from './interfaces/ICommentNode';
+export type { IErrorNode } from './interfaces/IErrorNode';
 export type { 
   IVariableReference, 
   VariableType,
   Field,
   ExtendedFormatOperator as FormatOperator
-} from './interfaces/IVariableReference.js';
-export type { NodeType, SourceLocation, Position } from './interfaces/common.js';
+} from './interfaces/IVariableReference';
+export type { NodeType, SourceLocation, Position } from './interfaces/common';
 
 // Export factories using regular exports (these are values)
-export { NodeFactory } from './factories/NodeFactory.js';
-export { VariableNodeFactory } from './factories/VariableNodeFactory.js';
-export { DirectiveNodeFactory } from './factories/DirectiveNodeFactory.js';
-export { TextNodeFactory } from './factories/TextNodeFactory.js';
-export { CodeFenceNodeFactory } from './factories/CodeFenceNodeFactory.js';
-export { CommentNodeFactory } from './factories/CommentNodeFactory.js';
-export { ErrorNodeFactory } from './factories/ErrorNodeFactory.js';
+export { NodeFactory } from './factories/NodeFactory';
+export { VariableNodeFactory } from './factories/VariableNodeFactory';
+export { DirectiveNodeFactory } from './factories/DirectiveNodeFactory';
+export { TextNodeFactory } from './factories/TextNodeFactory';
+export { CodeFenceNodeFactory } from './factories/CodeFenceNodeFactory';
+export { CommentNodeFactory } from './factories/CommentNodeFactory';
+export { ErrorNodeFactory } from './factories/ErrorNodeFactory';
 
 // Export constants (these are values, not types)
 export { 
   SPECIAL_PATH_VARS,
   ENV_VAR_PREFIX,
   VAR_PATTERNS
-} from './interfaces/IVariableReference.js';
+} from './interfaces/IVariableReference';
 
 // Export legacy functions for backward compatibility
 export { 
   createVariableReferenceNode,
   isVariableReferenceNode,
   isValidFieldArray
-} from './legacy/variables.js';
+} from './legacy/variables';
 export {
   createDirectiveNode,
   isDirectiveNode,
@@ -55,24 +55,24 @@ export {
   isCodeFence,
   isComment,
   isError
-} from './legacy/nodes.js';
+} from './legacy/nodes';
 
 // Temporary re-export of existing types for backward compatibility
-export * from './directives.js';
-export * from './syntax.js';
-export * from './schema.js';
-export * from './parser.js';
-export * from './validation.js';
-export * from './test-fixtures.js';
+export * from './directives';
+export * from './syntax';
+export * from './schema';
+export * from './parser';
+export * from './validation';
+export * from './test-fixtures';
 
 // Import interfaces for type aliases
-import type { INode } from './interfaces/INode.js';
-import type { IDirectiveNode, DirectiveData as IDirectiveData } from './interfaces/IDirectiveNode.js';
-import type { ITextNode } from './interfaces/ITextNode.js';
-import type { ICodeFenceNode } from './interfaces/ICodeFenceNode.js';
-import type { ICommentNode } from './interfaces/ICommentNode.js';
-import type { IErrorNode } from './interfaces/IErrorNode.js';
-import type { IVariableReference } from './interfaces/IVariableReference.js';
+import type { INode } from './interfaces/INode';
+import type { IDirectiveNode, DirectiveData as IDirectiveData } from './interfaces/IDirectiveNode';
+import type { ITextNode } from './interfaces/ITextNode';
+import type { ICodeFenceNode } from './interfaces/ICodeFenceNode';
+import type { ICommentNode } from './interfaces/ICommentNode';
+import type { IErrorNode } from './interfaces/IErrorNode';
+import type { IVariableReference } from './interfaces/IVariableReference';
 
 // Define type aliases for backward compatibility
 type MeldNode = INode;
