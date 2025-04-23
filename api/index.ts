@@ -19,6 +19,8 @@ import type { IResolutionService } from '@services/resolution/ResolutionService/
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 // +++ Import logger and ILogger +++
 import logger, { ILogger } from '@core/utils/logger.js';
+// +++ Import NodeFileSystem +++
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import type { MeldNode, TextNode } from '@core/syntax/types/index.js'; // <<< Add TextNode import
 
 // DI Container is configured by importing @core/di-config.js elsewhere
@@ -47,6 +49,11 @@ export async function processMeld(content: string, options?: Partial<ProcessOpti
   if (!isExternalContainer) { 
     if (options?.fs) { // Register FS if provided *and* container is internal
       executionContainer.registerInstance<IFileSystem>('IFileSystem', options.fs);
+    } else {
+      // <<< Register default NodeFileSystem if none provided >>>
+      if (!executionContainer.isRegistered('IFileSystem')) {
+        executionContainer.registerInstance<IFileSystem>('IFileSystem', new NodeFileSystem());
+      }
     }
     // <<< Explicitly register logger in internal container >>>
     if (!executionContainer.isRegistered('MainLogger')) { 

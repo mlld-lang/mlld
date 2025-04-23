@@ -13,7 +13,9 @@ import type { IStateServiceClient } from '@services/state/StateService/interface
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 
 /**
  * Register a factory and its client for a service with circular dependencies
@@ -63,6 +65,13 @@ export class ClientFactoryHelpers {
       validateDirective: vi.fn().mockResolvedValue(undefined)
     };
     factories.dsClient = ClientFactoryHelpers.registerClientFactory(context, DirectiveServiceClientFactory, dsClient);
+    
+    // Parser service client
+    const psClient: IParserServiceClient = {
+      parseString: vi.fn().mockResolvedValue([]), // Return minimal AST (empty array)
+      parseFile: vi.fn().mockResolvedValue([])   // Return minimal AST (empty array)
+    };
+    factories.psClient = ClientFactoryHelpers.registerClientFactory(context, ParserServiceClientFactory, psClient);
     
     // Resolution service client for directive
     const rsClient: IResolutionServiceClientForDirective = {

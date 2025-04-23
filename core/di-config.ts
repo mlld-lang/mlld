@@ -102,7 +102,8 @@ container.registerSingleton(VariableReferenceResolverFactory);
 container.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
 container.register(ResolutionServiceClientForDirectiveFactory, { useClass: ResolutionServiceClientForDirectiveFactory });
 container.register(StateServiceClientFactory, { useClass: StateServiceClientFactory });
-container.register(StateTrackingServiceClientFactory, { useClass: StateTrackingServiceClientFactory });
+// <<< Comment out problematic factory registration >>>
+// container.register(StateTrackingServiceClientFactory, { useClass: StateTrackingServiceClientFactory }); 
 container.register(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory });
 
 // Register AST factory classes

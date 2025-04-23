@@ -2,68 +2,47 @@
  * Test runner for valid Meld examples
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { processMeld } from '@api/index.js';
-import { findFiles, getTestCaseName, setupTestContext, VALID_CASES_DIR, EXPECTED_EXTENSION } from '@tests/e2e/example-runner-setup.js';
-import { promises as realFs } from 'fs';
-import type { Services } from '@core/types.js';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystemService.js';
+import { describe, it, expect } from 'vitest';
+import path from 'path';
+import fs from 'fs/promises'; 
+import { fileURLToPath } from 'url';
+import { processMeld } from '@api/index.js'; 
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const validCasesDir = path.resolve(__dirname, '../cases/valid');
+
+async function findMeldFiles(dir: string): Promise<string[]> {
+  const dirents = await fs.readdir(dir, { withFileTypes: true });
+  const files = await Promise.all(dirents.map(async (dirent) => {
+    const res = path.resolve(dir, dirent.name);
+    return dirent.isDirectory() ? findMeldFiles(res) : dirent.name.endsWith('.mld') ? res : null;
+  }));
+  return files.flat().filter((file): file is string => file !== null);
+}
 
 describe('Valid Meld Test Cases', async () => {
-  const validTestCases = await findFiles(VALID_CASES_DIR, '.mld');
-  const context = await setupTestContext(validTestCases);
-  
-  beforeAll(async () => {
-    console.log(`Found ${validTestCases.length} valid test cases`);
-  });
-  
-  afterAll(async () => {
-    await context?.cleanup();
-  });
+  const meldFiles = await findMeldFiles(validCasesDir);
+  console.log(`Found ${meldFiles.length} valid test cases`);
 
-  // Create separate test for each valid file
-  for (const testPath of validTestCases) {
-    const testName = getTestCaseName(testPath);
-    
+  meldFiles.forEach((filePath) => {
+    const testName = path.relative(validCasesDir, filePath);
+    const expectedOutputPath = filePath.replace('.mld', '.expected');
+
     it(`processes ${testName} correctly`, async () => {
-      // Create a complete mock CommandExecutionService
-      const mockCommandExecutionService = {
-        executeShellCommand: vi.fn().mockImplementation(async (command) => {
-          return { stdout: `Mocked output for: ${command}`, stderr: '', exitCode: 0 };
-        }),
-        executeLanguageCode: vi.fn().mockImplementation(async (code, language) => {
-          return { stdout: `Mocked ${language} output`, stderr: '', exitCode: 0 };
-        })
-      };
+      const content = await fs.readFile(filePath, 'utf-8');
       
-      // Re-register the mock to ensure it's available
-      context.registerMock('ICommandExecutionService', mockCommandExecutionService);
-      
-      // Read file content using context.fs
-      const fileContent = await (context.fs as IFileSystem).readFile(testPath);
-      
-      // Process through processMeld API with DI container
-      const result = await processMeld(fileContent, { 
-        container: context.container.getContainer(),
-        sourcePath: testPath // Provide source path for context if needed
-      });
+      const result = await processMeld(content); 
 
-      // Verify basic expectations
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('string');
-      
-      // Check for expected output file
-      const expectedPath = testPath.replace('.mld', EXPECTED_EXTENSION);
-      const exists = await realFs.access(expectedPath).then(() => true).catch(() => false);
-      
-      if (exists) {
-        // If expected file exists, compare output
-        const expected = await realFs.readFile(expectedPath, 'utf-8');
-        expect(result.trim()).toEqual(expected.trim());
-      } else {
-        // Add a basic sanity check for output
-        expect(result.length).toBeGreaterThan(0);
+      let expectedOutput = '';
+      try {
+        expectedOutput = await fs.readFile(expectedOutputPath, 'utf-8');
+      } catch (error: any) {
+        if (error.code !== 'ENOENT') { 
+          throw error;
+        }
       }
+
+      expect(result).toEqual(expectedOutput);
     });
-  }
+  });
 });
