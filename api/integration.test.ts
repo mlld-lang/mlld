@@ -62,6 +62,7 @@ import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveS
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 // <<< ADDED: Import VariableReferenceResolverClientFactory >>>
 import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js'; // Corrected path
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js'; // <<< ADD IMPORT for manual instantiation
 // =========================
 
 // Define run examples directly
@@ -130,12 +131,24 @@ describe('API Integration Tests', () => {
     // <<< ADDED: Register ValidationService >>>
     testContainer.register('IValidationService', { useClass: ValidationService });
 
-    // <<< ADDED: Register VariableReferenceResolverClientFactory >>>
-    testContainer.registerSingleton(VariableReferenceResolverClientFactory, VariableReferenceResolverClientFactory);
-    testContainer.registerSingleton('VariableReferenceResolverClientFactory', VariableReferenceResolverClientFactory); // Register string token too
-
     // <<< ADDED: Register the container itself >>>
     testContainer.registerInstance('DependencyContainer', testContainer);
+
+    // <<< WORKAROUND: Manually instantiate and register the factory instance for the string token >>>
+    // 1. Manually resolve/instantiate the dependency (VariableReferenceResolver)
+    //    (Assuming it can be resolved from the main container or has simple deps)
+    //    NOTE: This might need adjustment if VariableReferenceResolver has complex dependencies itself.
+    //    For now, assume it can be resolved directly or manually created simply.
+    const resolver = testContainer.resolve(VariableReferenceResolver);
+
+    // 2. Manually create the factory instance
+    const factoryInstance = new VariableReferenceResolverClientFactory(resolver);
+
+    // 3. Register the INSTANCE for the STRING TOKEN
+    testContainer.registerInstance('VariableReferenceResolverClientFactory', factoryInstance);
+
+    // Clear mocks after setup, before tests
+    vi.clearAllMocks();
   });
 
   afterEach(async () => {

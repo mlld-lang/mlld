@@ -7,7 +7,7 @@ import type { IOutputService } from './IOutputService';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@core/types/resolution.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
+import { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
 import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
 import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
 import { VariableType } from '@core/types/variables.js';
@@ -466,7 +466,7 @@ export class OutputService implements IOutputService {
     @inject('IResolutionService') resolutionService: IResolutionService,
     @inject('IStateService') state?: IStateService,
     @inject('ResolutionServiceClientFactory') resolutionServiceClientFactory?: ResolutionServiceClientFactory,
-    @inject(VariableReferenceResolverClientFactory) variableResolverClientFactory?: VariableReferenceResolverClientFactory,
+    @inject('VariableReferenceResolverClientFactory') variableResolverClientFactory?: VariableReferenceResolverClientFactory,
     @inject('VariableNodeFactory') variableNodeFactory?: VariableNodeFactory
   ) {
     this.variableNodeFactory = variableNodeFactory;

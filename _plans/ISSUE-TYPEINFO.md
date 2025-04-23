@@ -207,3 +207,46 @@ Error: Cannot inject the dependency "variableResolverClientFactory" at position 
 *   ~~Verify `reflect-metadata` Import~~: (Done - Adding import to test file didn't help).
 *   ~~Experiment with Registration Scopes~~: (Done - `registerSingleton` didn't help).
 *   **Check `tsconfig.json`**: Briefly review `tsconfig.json` again for any relevant flags (`emitDecoratorMetadata`, `experimentalDecorators`).
+
+## Further Investigation (Session 2)
+
+### Checking `import type`
+
+- Based on `tsyringe` GH issues, checked if `import type` was used for the factory or its dependencies, potentially stripping metadata.
+- Verified `VariableReferenceResolverClientFactory` import in `di-config.ts` (no `type`).
+- Verified `VariableReferenceResolverClientFactory` import in `api/integration.test.ts` (no `type`).
+- Removed `type` from `IVariableReferenceResolverClient` import in `OutputService.ts`.
+- **Result:** No change. `import type` does not seem to be the cause.
+
+### Test-Specific Workaround: Manual Instance Registration
+
+- **Hypothesis:** If the issue is resolving the token in the child container, maybe manually creating the instance and registering it directly will bypass the problem.
+- **Steps:**
+    1. In `api/integration.test.ts`'s `beforeEach`, resolve `VariableReferenceResolver` from `testContainer`.
+    2. Manually create `const factoryInstance = new VariableReferenceResolverClientFactory(resolver);`
+    3. Register `testContainer.registerInstance('VariableReferenceResolverClientFactory', factoryInstance);`
+- **Initial Problem:** This caused a *new* DI error: `StateService` needed `DependencyContainer`, which wasn't registered yet when resolving `VariableReferenceResolver`.
+- **Fix:** Moved `testContainer.registerInstance('DependencyContainer', testContainer);` earlier in `beforeEach`.
+- **Problem 2:** The original `TypeInfo not known` error persisted in both `integration.test.ts` and `smoke.test.ts`. The error stack trace consistently pointed to the resolution attempt *inside* `processMeld`:
+  ```
+  ❯ Module.processMeld api/index.ts:64:44
+      64|   const outputService = executionContainer.resolve<IOutputService>('IOutputService');
+  ```
+- **Hypothesis 2:** Maybe the dual registration (`registerInstance` for string token AND `registerSingleton` for class type) was confusing.
+- **Step:** Removed `testContainer.registerSingleton(VariableReferenceResolverClientFactory, VariableReferenceResolverClientFactory);` from `beforeEach`.
+- **Result:** No change. The error still occurs inside `processMeld` when resolving `OutputService`.
+
+### Conclusion (Session 2)
+
+- The core problem lies in resolving the string token `'VariableReferenceResolverClientFactory'` when `OutputService` is instantiated within the `executionContainer` used by `processMeld`.
+- The test-specific workaround (`registerInstance` in `testContainer`) is **ineffective** because the `executionContainer` inside `processMeld` (even if it *is* the `testContainer` passed via options) doesn't seem to respect or find this instance registration when resolving via the string token.
+- This suggests the root cause is either:
+    - A fundamental issue with `tsyringe` resolving string tokens across container boundaries or within the context of `processMeld`'s setup.
+    - An incorrect assumption about how the `testContainer`'s registrations are inherited or used by the `executionContainer` within `processMeld`.
+
+## Next Steps
+
+1.  Focus on the **global DI configuration** (`di-config.ts`). Ensure `VariableReferenceResolverClientFactory` is explicitly registered using the string token `'VariableReferenceResolverClientFactory'` there, so it's available in the main container and any properly configured child container.
+2.  Re-examine the container logic within `processMeld` (`api/index.ts`) to ensure the `executionContainer` is correctly inheriting registrations from the main container or the provided test container.
+3.  Consider alternative injection patterns for `OutputService` if string token resolution remains problematic (though this feels like avoiding the root cause).
+4.  Address the unrelated lint error in `RunDirectiveHandler.ts` once this blocker is resolved.

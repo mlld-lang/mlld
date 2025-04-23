@@ -97,8 +97,7 @@ container.register(PathServiceClientFactory, { useClass: PathServiceClientFactor
 container.register(FileSystemServiceClientFactory, { useClass: FileSystemServiceClientFactory });
 container.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
 container.register(ResolutionServiceClientFactory, { useClass: ResolutionServiceClientFactory });
-container.register(VariableReferenceResolverClientFactory, { useClass: VariableReferenceResolverClientFactory });
-container.register('VariableReferenceResolverClientFactory', { useClass: VariableReferenceResolverClientFactory }); 
+container.registerSingleton(VariableReferenceResolverClientFactory, VariableReferenceResolverClientFactory); 
 container.register(VariableReferenceResolverFactory, { useClass: VariableReferenceResolverFactory });
 container.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
 container.register(ResolutionServiceClientForDirectiveFactory, { useClass: ResolutionServiceClientForDirectiveFactory });
