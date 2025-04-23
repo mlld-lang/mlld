@@ -6,12 +6,13 @@ import type { DirectiveResult as CoreDirectiveResult, StateChanges as CoreStateC
 
 /**
  * Represents the definition of a variable's value within state changes.
+ * @deprecated Use VariableDefinition from '@core/types/variables' via StateChanges instead.
  */
-export interface VariableValueDefinition {
-  type: VariableType;
-  value: any; // Value can be of different types based on VariableType
-  metadata?: VariableMetadata;
-}
+// export interface VariableValueDefinition {
+//   type: VariableType;
+//   value: any; // Value can be of different types based on VariableType
+//   metadata?: VariableMetadata;
+// }
 
 // Re-export core types for local usage if needed, though direct import is preferred
 export interface DirectiveResult extends CoreDirectiveResult {
@@ -21,3 +22,4 @@ export interface DirectiveResult extends CoreDirectiveResult {
 export type StateChanges = CoreStateChanges;
 
 // TODO: Review if VariableValueDefinition is still needed or if core VariableDefinition suffices.
+// --- Removed VariableValueDefinition ---

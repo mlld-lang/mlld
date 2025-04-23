@@ -230,7 +230,7 @@ const createMockInterpretedState = (vars: { text?: Map<string, VariableDefinitio
         addNode: vi.fn(),
         createChildState: vi.fn(),
         mergeChildState: vi.fn(),
-        getLocalChanges: vi.fn().mockReturnValue(combinedVars), // Added getLocalChanges
+        getLocalChanges: vi.fn().mockReturnValue(Object.keys(combinedVars)), // Return array of keys
         // Add any other methods if linting/errors indicate they are needed
     } as unknown as IStateService; // Use type assertion as we are partially mocking
 };

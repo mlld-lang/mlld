@@ -254,7 +254,20 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
         process.stdout.write(`DEBUG [ImportHandler]: AFTER interpret call for ${resolvedPath.validatedPath} (resolved)\n`);
 
-        sourceStateChanges = { variables: interpretedState.getLocalChanges() };
+        // Construct the stateChanges object with full variable definitions
+        const changedVarNames = interpretedState.getLocalChanges();
+        const variableDefinitions: Record<string, VariableDefinition> = {};
+        for (const name of changedVarNames) {
+          const variable = interpretedState.getVariable(name);
+          if (variable) {
+            variableDefinitions[name] = {
+              type: variable.type,
+              value: variable.value,
+              metadata: variable.metadata
+            };
+          }
+        }
+        sourceStateChanges = { variables: variableDefinitions };
 
       } catch (interpretErrorCaught) { 
         process.stdout.write(`DEBUG [ImportHandler]: CAUGHT error during interpret for ${resolvedPath.validatedPath}: ${interpretErrorCaught}\n`);

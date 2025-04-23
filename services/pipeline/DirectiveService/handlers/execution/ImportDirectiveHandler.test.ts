@@ -142,7 +142,7 @@ const createMockInterpretedState = (vars: {
       hasImport: vi.fn(),
       getImports: vi.fn(),
       hasLocalChanges: vi.fn(),
-      getLocalChanges: vi.fn().mockReturnValue(combinedVars),
+      getLocalChanges: vi.fn().mockReturnValue(Object.keys(combinedVars)), // Return array of keys
       setImmutable: vi.fn(),
       isImmutable: false, // Add isImmutable property
       transformNode: vi.fn(),
