@@ -8,11 +8,13 @@ import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDir
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import type { IOutputService, OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
 import type { TransformationOptions } from '@core/types/state.js';
 import type { MeldPath, RawPath, AbsolutePath, RelativePath, ValidatedResourcePath, UrlPath } from '@core/types/paths.js';
 import { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
 import { unsafeCreateValidatedResourcePath, PathContentType } from '@core/types/paths.js';
 import type { TextVariable, DataVariable, IPathVariable } from '@core/types/variables.js';
+import type { TextNode, AstNode } from '@core/syntax/types/index.js'; 
 
 export class MockFactory {
   /**
@@ -27,6 +29,7 @@ export class MockFactory {
     'IInterpreterService': () => MockFactory.createInterpreterService(),
     'IParserService': () => MockFactory.createParserService(),
     'IValidationService': () => MockFactory.createValidationService(),
+    'IOutputService': () => MockFactory.createOutputService(),
     // Add other core services as needed
   };
 
@@ -81,12 +84,10 @@ export class MockFactory {
       setCurrentFilePath: vi.fn(),
       setEventService: vi.fn(),
       setTrackingService: vi.fn(),
-      getStateId: vi.fn().mockReturnValue('mock-state-id'),
       hasLocalChanges: vi.fn().mockReturnValue(false),
       getLocalChanges: vi.fn().mockReturnValue([]),
       setImmutable: vi.fn(),
       get isImmutable() { return false; },
-      getCommand: vi.fn(),
       getCommandOutput: vi.fn(),
       getInternalStateNode: vi.fn().mockReturnValue({
         stateId: 'mock-state-id',
@@ -95,8 +96,19 @@ export class MockFactory {
         nodes: [],
         imports: new Set(),
         parentStateId: undefined,
-        filePath: '/mock/path.meld'
-      } as StateNode),
+        filePath: '/mock/path.meld',
+        transformationOptions: { 
+          enabled: true, 
+          preserveOriginal: true, 
+          transformNested: true,
+          selective: false, 
+          directiveKinds: new Set()
+        } as TransformationOptions, 
+        createdAt: Date.now(), 
+        modifiedAt: Date.now(), 
+      } as StateNode), 
+      getStateId: vi.fn().mockReturnValue('mockState'),
+      applyStateChanges: vi.fn(),
     };
     selfRefMock.current = { ...baseMock, ...overrides }; 
     return selfRefMock.current;
@@ -239,7 +251,7 @@ export class MockFactory {
     const baseMock: IInterpreterService = {
       canHandleTransformations: vi.fn().mockReturnValue(true),
       initialize: vi.fn(),
-      interpret: vi.fn().mockResolvedValue({}),
+      interpret: vi.fn().mockResolvedValue(MockFactory.createStateService()), 
       interpretNode: vi.fn().mockResolvedValue({}),
       createChildContext: vi.fn().mockResolvedValue({})
     };
@@ -270,6 +282,27 @@ export class MockFactory {
       registerValidator: vi.fn(),
       removeValidator: vi.fn(),
       getRegisteredDirectiveKinds: vi.fn().mockReturnValue(['text', 'data', 'path', 'define', 'run', 'embed', 'import'])
+    };
+    
+    return { ...baseMock, ...overrides };
+  }
+  
+  /**
+   * Create a typed mock output service
+   */
+  static createOutputService(overrides: Partial<IOutputService> = {}): IOutputService {
+    const baseMock: IOutputService = {
+      canAccessTransformedNodes: vi.fn().mockReturnValue(true),
+      convert: vi.fn().mockImplementation(async (nodes: AstNode[]) => {
+        // Simple mock: concatenate content of TextNodes
+        return nodes
+          .filter((node): node is TextNode => node.type === 'Text')
+          .map(node => node.content)
+          .join('');
+      }),
+      registerFormat: vi.fn(),
+      supportsFormat: vi.fn().mockImplementation((format: string) => ['markdown', 'xml'].includes(format)),
+      getSupportedFormats: vi.fn().mockReturnValue(['markdown', 'xml']),
     };
     
     return { ...baseMock, ...overrides };
