@@ -9,16 +9,12 @@ import { textDirectiveExamples } from '@core/syntax/index.js';
 import { ErrorSeverity, FieldAccessError, MeldResolutionError } from '@core/errors/index.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
-import type { VariableDefinition } from '@core/types/variables.js';
+import { VariableType } from '@core/types/variables.js';
 import { DirectiveHandler } from '@services/pipeline/DirectiveService/DirectiveHandler.js';
 import { DirectiveProcessingContext } from '@services/pipeline/DirectiveService/DirectiveProcessingContext.js';
 import { createMockDirectiveNode } from '@tests/utils/mocks/ASTNodeMocks.js';
 import { expectToThrowMeldError } from '@tests/utils/ErrorTestUtils.js';
-import { VariableType } from '@core/types/variables.js';
-import {
-  MeldError,
-  MeldErrorCodes,
-} from '@core/errors/index.js';
+import { MeldError, MeldErrorCodes, } from '@core/errors/index.js';
 import { container, type DependencyContainer } from 'tsyringe';
 import { mockDeep, DeepMockProxy } from 'vitest-mock-extended';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -225,7 +221,7 @@ describe('TextDirectiveHandler', () => {
 
       vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce(expectedValue); 
       const setVariableSpy = vi.spyOn(stateService, 'setVariable');
-      
+
       const result = await handler.handle(createMockProcessingContext(node)) as DirectiveResult;
       
       expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.directive.value, expect.anything());
@@ -277,7 +273,7 @@ describe('TextDirectiveHandler', () => {
       const node = await createNodeFromExample(example.code.split('\n')[2]);
       const expectedValue = 'Hello, World!';
       
-      vi.spyOn(stateService, 'setVariable');
+      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce(expectedValue);
       const setVariableSpy = vi.spyOn(stateService, 'setVariable');
 
       const result = await handler.handle(createMockProcessingContext(node)) as DirectiveResult;
