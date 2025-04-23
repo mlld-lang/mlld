@@ -5,7 +5,7 @@
  */
 import 'reflect-metadata'; // Required for tsyringe
 import { container, DependencyContainer } from 'tsyringe'; // Import DependencyContainer
-import '@core/di-config.js'; // Ensure DI config runs before resolving services
+import '@core/di-config.ts'; // Ensure DI config runs before resolving services
 import { MeldError } from '@core/errors/MeldError.js';
 // Do NOT import Meld class
 import type { ProcessOptions } from '@core/types/index.js'; // Correct path

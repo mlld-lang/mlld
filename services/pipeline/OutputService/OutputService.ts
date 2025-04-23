@@ -1,43 +1,27 @@
-import { createLLMXML } from 'llmxml';
+import { injectable, inject } from 'tsyringe';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import { MeldNode, TextNode, CodeFenceNode, VariableReferenceNode, DirectiveNode } from '@core/syntax/types/index.js';
+import { logger } from '@core/utils/logger.js';
+import { OutputOptions, DEFAULT_OPTIONS, FormattingContext } from './types';
+import type { IOutputService } from './IOutputService';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IOutputService, OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
+import { ResolutionContext } from '@core/types/resolution.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { ResolutionContext } from '@core/types/resolution.js';
-import { formatWithPrettier } from '@core/utils/prettierUtils.js';
-
-/**
- * This file uses "transformation mode" terminology throughout.
- * Transformation mode means that:
- * - Directives are replaced with their transformed results
- * - Original document formatting is preserved exactly as is
- * - No additional formatting is applied unless explicitly requested with the `pretty` option
- * 
- * Note: Previously, there was also "output-normalized"/"standard" mode that applied custom 
- * markdown formatting rules. This mode has been removed, and transformation is now always enabled.
- * Optional formatting is now handled by Prettier with the `pretty` option.
- */
-
-import type { 
-  MeldNode, 
-  TextNode, 
-  CodeFenceNode, 
-  DirectiveNode, 
-  Field 
-} from '@core/syntax/types/index.js';
-import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference.js';
-import { outputLogger as logger } from '@core/utils/logger.js';
-import { MeldOutputError } from '@core/errors/MeldOutputError.js';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { MeldError } from '@core/errors/MeldError.js';
-import { inject, injectable, container } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
-import { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
+import type { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
 import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
 import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
 import { VariableType } from '@core/types/variables.js';
 import { StateService } from '@services/state/StateService/StateService.js';
+import { Service } from '@core/ServiceProvider.js';
+import { createLLMXML } from 'llmxml';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import { MeldOutputError } from '@core/errors/MeldOutputError.js';
+import { MeldError } from '@core/errors/MeldError.js';
+import { formatWithPrettier } from '@core/utils/prettierUtils.js';
+import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference.js';
+import { container } from 'tsyringe';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 
 /**
  * Tracking context for variable formatting to preserve formatting during substitution
@@ -460,19 +444,61 @@ const DEFAULT_OPTIONS: Required<OutputOptions> = {
 @Service({
   description: 'Service responsible for converting Meld nodes to different output formats',
   dependencies: [
-    { token: 'IStateService', name: 'state' },
+    { token: 'IStateService', name: 'state', optional: true },
     { token: 'IResolutionService', name: 'resolutionService' },
-    { token: 'ResolutionServiceClientFactory', name: 'resolutionServiceClientFactory', optional: true }
+    { token: 'ResolutionServiceClientFactory', name: 'resolutionServiceClientFactory', optional: true },
+    { token: 'VariableReferenceResolverClientFactory', name: 'variableResolverClientFactory', optional: true },
+    { token: 'VariableNodeFactory', name: 'variableNodeFactory', optional: true } 
   ]
 })
 export class OutputService implements IOutputService {
   private formatters = new Map<string, FormatConverter>();
   private state: IStateService | undefined;
-  private resolutionService: IResolutionService | undefined;
+  private resolutionService!: IResolutionService; 
   private resolutionClient?: IResolutionServiceClient;
   private variableResolver?: IVariableReferenceResolverClient;
   private fieldAccessHandler: FieldAccessHandler;
   private contextStack: FormattingContext[] = [];
+
+  private readonly variableNodeFactory?: VariableNodeFactory;
+
+  constructor(
+    @inject('IResolutionService') resolutionService: IResolutionService,
+    @inject('IStateService') state?: IStateService,
+    @inject('ResolutionServiceClientFactory') resolutionServiceClientFactory?: ResolutionServiceClientFactory,
+    @inject('VariableReferenceResolverClientFactory') variableResolverClientFactory?: VariableReferenceResolverClientFactory,
+    @inject('VariableNodeFactory') variableNodeFactory?: VariableNodeFactory
+  ) {
+    this.variableNodeFactory = variableNodeFactory;
+    
+    this.resolutionService = resolutionService; 
+
+    if (resolutionServiceClientFactory) {
+      try {
+        this.resolutionClient = resolutionServiceClientFactory.createClient();
+      } catch (error) {
+        logger.warn('Failed to create resolution client', { error });
+      } 
+    }
+    if (variableResolverClientFactory) {
+      try {
+        this.variableResolver = variableResolverClientFactory.createClient();
+      } catch (error) {
+        logger.warn('Failed to create variable resolver client', { error });
+      }
+    }
+    
+    this.fieldAccessHandler = new FieldAccessHandler(
+      this.resolutionClient,
+      () => this.getVariableResolver()
+    );
+    
+    this.initializeFromParams(this.resolutionService, state, resolutionServiceClientFactory);
+  }
+
+  public canAccessTransformedNodes(): boolean {
+    return true;
+  }
 
   /**
    * Gets (or creates) the variable reference resolver client using direct container resolution
@@ -482,7 +508,6 @@ export class OutputService implements IOutputService {
   getVariableResolver(): IVariableReferenceResolverClient | undefined {
     if (!this.variableResolver) {
       try {
-        // Resolve the factory directly from the container to avoid circular dependencies
         const factory = container.resolve(VariableReferenceResolverClientFactory);
         this.variableResolver = factory.createClient();
         logger.debug('Created variable resolver client using direct container resolution');
@@ -496,164 +521,25 @@ export class OutputService implements IOutputService {
     return this.variableResolver;
   }
 
-  public canAccessTransformedNodes(): boolean {
-    return true;
-  }
-
-  /**
-   * Creates a new OutputService instance.
-   * Uses dependency injection for service dependencies.
-   * 
-   * @param state State service (injected)
-   * @param resolutionService Resolution service for variable resolution (injected)
-   * @param resolutionServiceClientFactory Factory for resolution client (injected)
-   */
-  constructor(
-    @inject('IStateService') state?: IStateService,
-    @inject('IResolutionService') resolutionService?: IResolutionService,
-    @inject('ResolutionServiceClientFactory') resolutionServiceClientFactory?: ResolutionServiceClientFactory,
-    @inject(VariableNodeFactory) private readonly variableNodeFactory?: VariableNodeFactory
-  ) {
-    this.initializeFromParams(state, resolutionService, resolutionServiceClientFactory);
-    
-    // Initialize field access handler with access to the variable resolver method
-    // This allows the handler to use the resolver when needed without creating circular dependencies
-    this.fieldAccessHandler = new FieldAccessHandler(
-      this.resolutionClient,
-      this.getVariableResolver.bind(this)
-    );
-    
-    // Initialize variable node factory with fallback to container resolution
-    if (!this.variableNodeFactory) {
-      try {
-        this.variableNodeFactory = container.resolve(VariableNodeFactory);
-      } catch (error) {
-        logger.warn('Failed to resolve VariableNodeFactory from container', {
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    }
-  }
-
-  /**
-   * Initialize this service with the given parameters.
-   * Always uses DI mode initialization.
-   */
   private initializeFromParams(
+    resolutionService: IResolutionService, 
     state?: IStateService,
-    resolutionService?: IResolutionService,
     resolutionServiceClientFactory?: ResolutionServiceClientFactory
   ): void {
-    // Register default formatters
+    this.registerDefaultFormatters();
+    this.state = state;
+    logger.debug('OutputService initialized with state service', {
+      hasResolutionService: !!(resolutionService as IResolutionService), 
+      hasResolutionClient: !!this.resolutionClient,
+      hasStateService: !!state
+    });
+  }
+
+  private registerDefaultFormatters(): void {
     this.registerFormat('markdown', this.convertToMarkdown.bind(this));
     this.registerFormat('md', this.convertToMarkdown.bind(this));
     this.registerFormat('xml', this.convertToXML.bind(this));
-
-    // Always initialize in DI mode
-    this.state = state;
-    this.resolutionService = resolutionService;
-    
-    // Initialize resolution client if factory is provided
-    if (resolutionServiceClientFactory) {
-      try {
-        this.resolutionClient = resolutionServiceClientFactory.createClient();
-        logger.debug('Created resolution client using factory');
-      } catch (error) {
-        logger.warn('Failed to create resolution client', { 
-          error: error instanceof Error ? error.message : String(error) 
-        });
-      }
-    }
-    
-    logger.debug('OutputService initialized with state service', {
-      hasResolutionService: !!resolutionService,
-      hasResolutionClient: !!this.resolutionClient,
-      formats: Array.from(this.formatters.keys())
-    });
-  }
-
-  /**
-   * @deprecated Use dependency injection instead of manual initialization.
-   * This method is kept for backward compatibility but will be removed in a future version.
-   */
-  initialize(state: IStateService, resolutionService?: IResolutionService): void {
-    this.state = state;
-    this.resolutionService = resolutionService;
-    
-    logger.debug('OutputService manually initialized with state service', {
-      hasResolutionService: !!resolutionService
-    });
-  }
-
-  async convert(
-    nodes: MeldNode[],
-    state: IStateService,
-    format: OutputFormat,
-    options?: OutputOptions
-  ): Promise<string> {
-    const opts = { ...DEFAULT_OPTIONS, ...options };
-    
-    // <<< ADD LOGGING >>>
-    logger.debug('[OutputService convert ENTRY]', {
-      format,
-      passedNodeCount: nodes?.length ?? 0,
-      passedFirstNodeType: nodes?.[0]?.type,
-      passedFirstNodeId: nodes?.[0]?.nodeId,
-      stateId: state?.getStateId()
-    });
-    // <<< END LOGGING >>>
-
-    const formatter = this.formatters.get(format);
-    if (!formatter) {
-      const supported = this.getSupportedFormats().join(', ');
-      throw new Error(`Unsupported output format: ${format}. Supported formats: ${supported}`);
-    }
-
-    try {
-      // Get the raw output from the formatter
-      let result = await formatter(nodes, state, opts);
-      
-      // Apply Prettier formatting if requested
-      if (opts.pretty) {
-        // Use the correct parser based on the format
-        const parser = format === 'xml' ? 'html' : 'markdown';
-        result = await formatWithPrettier(result, parser as 'markdown' | 'json' | 'html');
-        
-        logger.debug('Applied Prettier formatting', {
-          format,
-          parser,
-          resultLength: result.length
-        });
-      }
-      
-      logger.debug('Successfully converted output', {
-        format,
-        resultLength: result.length,
-        transformedNodesCount: nodes.length,
-        pretty: opts.pretty
-      });
-
-      // <<< Log the final string before returning >>>
-      process.stdout.write(`>>> OutputService.convert returning: ${JSON.stringify(result)}\n`);
-
-      return result;
-    } catch (error) {
-      logger.error('Failed to convert output', {
-        format,
-        error,
-        pretty: opts.pretty
-      });
-
-      if (error instanceof MeldOutputError) {
-        throw error;
-      }
-
-      throw new MeldOutputError(
-        'Failed to convert output',
-        format,
-        { cause: error instanceof Error ? error : undefined }
-      );
-    }
+    logger.debug('Registered default format converters: markdown, md, xml');
   }
 
   registerFormat(
@@ -677,6 +563,82 @@ export class OutputService implements IOutputService {
 
   getSupportedFormats(): string[] {
     return Array.from(this.formatters.keys());
+  }
+
+  /**
+   * @deprecated Use dependency injection instead of manual initialization.
+   * This method is kept for backward compatibility but will be removed in a future version.
+   */
+  initialize(state: IStateService, resolutionService?: IResolutionService): void {
+    this.state = state;
+    this.resolutionService = resolutionService;
+    logger.debug('OutputService manually initialized with state service', {
+      hasResolutionService: !!resolutionService
+    });
+  }
+
+  async convert(
+    nodes: MeldNode[],
+    state: IStateService,
+    format: string,
+    options?: OutputOptions
+  ): Promise<string> {
+    const opts = { ...DEFAULT_OPTIONS, ...options };
+    
+    logger.debug('[OutputService convert ENTRY]', {
+      format,
+      passedNodeCount: nodes?.length ?? 0,
+      passedFirstNodeType: nodes?.[0]?.type,
+      passedFirstNodeId: nodes?.[0]?.nodeId,
+      stateId: state?.getStateId()
+    });
+
+    const formatter = this.formatters.get(format);
+    if (!formatter) {
+      const supported = this.getSupportedFormats().join(', ');
+      throw new Error(`Unsupported output format: ${format}. Supported formats: ${supported}`);
+    }
+
+    try {
+      let result = await formatter(nodes, state, opts);
+      
+      if (opts.pretty) {
+        const parser = format === 'xml' ? 'html' : 'markdown';
+        result = await formatWithPrettier(result, parser as 'markdown' | 'json' | 'html');
+        logger.debug('Applied Prettier formatting', {
+          format,
+          parser,
+          resultLength: result.length
+        });
+      }
+      
+      logger.debug('Successfully converted output', {
+        format,
+        resultLength: result.length,
+        transformedNodesCount: nodes.length,
+        pretty: opts.pretty
+      });
+
+      process.stdout.write(`>>> OutputService.convert returning: ${JSON.stringify(result)}\n`);
+
+      return result;
+    } catch (error) {
+      logger.error('Failed to convert output', {
+        format,
+        error,
+        pretty: opts.pretty
+      });
+
+      if (error instanceof MeldOutputError) {
+        throw error;
+      }
+
+      throw new MeldOutputError(
+        'Failed to convert output',
+        format,
+        { cause: error instanceof Error ? error : undefined }
+      );
+    }
   }
 
   /**
@@ -735,7 +697,6 @@ export class OutputService implements IOutputService {
    */
   private getCurrentFormattingContext(): FormattingContext {
     if (this.contextStack.length === 0) {
-      // Default context if none exists
       const defaultContext = this.createFormattingContext('Text', true);
       this.contextStack.push(defaultContext);
     }
@@ -763,7 +724,6 @@ export class OutputService implements IOutputService {
     const hasInputNewlines = content.includes('\n');
     const endsWithNewline = content.endsWith('\n');
     
-    // Log input state
     logger.debug('Processing newlines in content', {
       nodeType: context.nodeType,
       contextType: context.contextType,
@@ -776,11 +736,6 @@ export class OutputService implements IOutputService {
       lastOutputEndedWithNewline: context.lastOutputEndedWithNewline
     });
     
-    // Always preserve content EXACTLY as is with NO modifications
-    // This is now the only mode - always output-literal
-    logger.debug('Output-literal mode: preserving content exactly as is', {
-      contentLength: content.length
-    });
     return content;
   }
 
@@ -798,45 +753,22 @@ export class OutputService implements IOutputService {
     context?: 'inline' | 'block',
     specialMarkdown?: string
   }): string {
-    // Handle null or undefined values
     if (value === null || value === undefined) {
       return '';
     }
     
-    // Enhanced formatting with special markdown context awareness
-    // This ensures consistent formatting in different markdown contexts
-    
-    // Get current formatting context
     const currentContext = this.getCurrentFormattingContext();
     
-    // Create field access options with proper formatting context
     const fieldOptions: FieldAccessOptions = {
       preserveType: formatOptions?.preserveType ?? false,
       formattingContext: {
         isBlock: formatOptions?.context === 'block',
         nodeType: 'Text', // Default to Text node
         linePosition: 'middle', // Default to middle of line
-        // Use transformation mode for formatting
         isTransformation: currentContext.transformationMode
       }
     };
     
-    // Log the formatting context being used
-    logger.debug('Converting value to string with formatting context', {
-      valueType: typeof value,
-      isArray: Array.isArray(value),
-      isObject: typeof value === 'object' && value !== null && !Array.isArray(value),
-      context: formatOptions?.context,
-      isOutputLiteral: currentContext.isOutputLiteral ?? currentContext.transformationMode,
-      specialMarkdown: formatOptions?.specialMarkdown
-    });
-    
-    // Add special markdown context if applicable
-    if (formatOptions?.specialMarkdown) {
-      (fieldOptions.formattingContext as any).specialMarkdown = formatOptions.specialMarkdown;
-    }
-    
-    // Check if we have a resolver client that can handle the conversion
     if (this.variableResolver) {
       try {
         const resolvedValue = this.variableResolver.convertToString(value, fieldOptions);
@@ -844,37 +776,19 @@ export class OutputService implements IOutputService {
         return resolvedValue;
       } catch (error) {
         logger.warn('Failed to convert using resolver client, falling back to direct conversion', { error });
-        // Fall through to direct conversion if resolver fails
       }
     }
     
-    // Create a formatting context for value formatting
-    const formattingContext: FormattingContext = {
-      nodeType: 'Text', // Default to Text node
-      transformationMode: currentContext.transformationMode,
-      isOutputLiteral: currentContext.isOutputLiteral,
-      contextType: formatOptions?.context || 'block',
-      atLineStart: currentContext.atLineStart,
-      atLineEnd: currentContext.atLineEnd,
-      indentation: currentContext.indentation,
-      lastOutputEndedWithNewline: currentContext.lastOutputEndedWithNewline,
-      specialMarkdown: formatOptions?.specialMarkdown as any,
-      preserveFormatting: currentContext.preserveFormatting ?? (currentContext.isOutputLiteral ?? currentContext.transformationMode)
-    };
-    
-    // Use our specialized formatters based on value type
     if (Array.isArray(value)) {
-      return this.formatArray(value, formattingContext);
+      return this.formatArray(value, currentContext);
     } else if (typeof value === 'object' && value !== null) {
-      return this.formatObject(value, formattingContext);
+      return this.formatObject(value, currentContext);
     } else if (typeof value === 'string') {
-      return this.formatString(value, formattingContext);
+      return this.formatString(value, currentContext);
     } else if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-      // Simple conversion for primitives
       return String(value);
     }
     
-    // Fallback for any other type
     return String(value);
   }
 
@@ -883,12 +797,10 @@ export class OutputService implements IOutputService {
    * ensuring proper type safety
    */
   private getTextContentFromNode(node: any): string {
-    // Handle undefined or null
     if (node === undefined || node === null) {
       return '';
     }
     
-    // Handle id or identifier properties
     if ('id' in node && typeof node.id === 'string') {
       return node.id;
     }
@@ -897,12 +809,10 @@ export class OutputService implements IOutputService {
       return node.identifier;
     }
     
-    // Handle direct text content
     if ('text' in node && node.text !== undefined && node.text !== null) {
       return String(node.text);
     }
     
-    // Handle value property which could be various types
     if ('value' in node) {
       const value = node.value;
       if (value === null || value === undefined) {
@@ -921,7 +831,6 @@ export class OutputService implements IOutputService {
       return String(value);
     }
     
-    // Handle content property as a fallback
     if ('content' in node) {
       const content = node.content;
       if (content === null || content === undefined) {
@@ -940,7 +849,6 @@ export class OutputService implements IOutputService {
       return String(content);
     }
     
-    // Final fallback
     return '';
   }
 
@@ -951,6 +859,7 @@ export class OutputService implements IOutputService {
   ): Promise<string> {
     let output = '';
     const opts = { ...DEFAULT_OPTIONS, ...options };
+    this.contextStack = [this.createFormattingContext('document', true)];
 
     logger.debug('[OutputService convertToMarkdown] Entry', {
       nodeCount: nodes?.length ?? 0,
@@ -965,36 +874,44 @@ export class OutputService implements IOutputService {
       });
     }
 
-    const initialContext = this.createFormattingContext('document', true);
-
     for (const node of nodes) { 
-      const currentContext = this.getCurrentFormattingContext(); // Context might still be needed by handleNewlines
+      const currentContext = this.getCurrentFormattingContext();
 
-      // <<< Log node being processed >>>
       process.stdout.write(`>>> convertToMarkdown Loop: Processing node type: ${node.type}, ID: ${node.nodeId}\n`);
 
       if (node.type === 'Text') {
-        const textContent = (node as TextNode).content;
-        const handledContent = this.handleNewlines(textContent, currentContext);
-        // <<< Log content being appended >>>
+        const textNode = node as TextNode;
+        const handledContent = this.handleNewlines(textNode.content, currentContext);
         process.stdout.write(`    Appending Text content: "${handledContent}"\n`);
         output += handledContent;
+      } else if (node.type === 'VariableReference') { 
+          const varNode = node as VariableReferenceNode;
+          const resolutionContext = ResolutionContextFactory.create(state, opts.currentFilePath || state?.getCurrentFilePath() || '/unknown/path').withStrictMode(opts.strict ?? DEFAULT_OPTIONS.strict);
+          try {
+              const resolvedValue = await this.resolutionService.resolveNodes([varNode], resolutionContext);
+              const handledContent = this.handleNewlines(resolvedValue, currentContext);
+              process.stdout.write(`    Resolving ${varNode.identifier} -> Appending Text content: "${handledContent}"\n`);
+              output += handledContent;
+          } catch (error) {
+              logger.error(`[OutputService] Error resolving variable reference ${varNode.identifier} in context ${resolutionContext.currentFilePath}:`, error);
+              process.stdout.write(`    Error resolving variable reference ${varNode.identifier}. Appending placeholder.\n`);
+              output += `{{ERROR: ${varNode.identifier}}}`;
+          }
       } else if (node.type === 'CodeFence') {
         const fenceContent = this.codeFenceToMarkdown(node as CodeFenceNode);
-        // <<< Log content being appended >>>
         process.stdout.write(`    Appending CodeFence content: "${fenceContent.substring(0,50)}..."\n`);
         output += fenceContent;
       } else {
-        // <<< Log ignored node >>>
         process.stdout.write(`    Ignoring node type: ${node.type}\n`);
       }
-      // Implicitly ignore Comment, Directive, and other node types
 
-      // Update context (if still needed by handleNewlines)
       const endsWithNewline = output.endsWith('\n');
-      this.getCurrentFormattingContext().atLineStart = endsWithNewline;
-      this.getCurrentFormattingContext().atLineEnd = false; 
-      this.getCurrentFormattingContext().lastOutputEndedWithNewline = endsWithNewline;
+      if (this.contextStack.length > 0) { 
+          const context = this.getCurrentFormattingContext();
+          context.atLineStart = endsWithNewline;
+          context.atLineEnd = false; 
+          context.lastOutputEndedWithNewline = endsWithNewline;
+      }
     }
     
     return output;
@@ -1006,36 +923,25 @@ export class OutputService implements IOutputService {
     options?: OutputOptions
   ): Promise<string> {
     try {
-      // First convert to markdown since XML is based on markdown
       let markdown;
       
-      // If formatOptions.markdown is provided, use it directly
       if (options?.formatOptions?.markdown) {
         markdown = options.formatOptions.markdown as string;
       } else {
-        // Otherwise, convert nodes to markdown
         markdown = await this.convertToMarkdown(nodes, state, options);
       }
       
-      // Log the markdown for debugging
       logger.debug('Converting markdown to XML', { markdown });
 
-      // Create LLMXML instance with more granular configuration
-      const llmxml = createLLMXML({
-        warningLevel: 'none'
-      });
-      
-      // Convert markdown to XML using llmxml with per-call configuration
+      const llmxml = createLLMXML();
       const xmlResult = await llmxml.toXML(markdown);
       
       logger.debug('Successfully converted to XML', { xmlLength: xmlResult.length });
       return xmlResult;
     } catch (error) {
-      // Handle error
       logger.error('LLMXML conversion error', {
         error: error instanceof Error ? error.message : String(error)
       });
-      
       throw new MeldOutputError(
           `XML conversion error: ${error instanceof Error ? error.message : 'Unknown error'}`,
           'xml',
@@ -1049,10 +955,8 @@ export class OutputService implements IOutputService {
   private formatStateVariables(state: IStateService): string {
     let output = '';
 
-    // Cast state to StateService
     const stateService = state as StateService;
 
-    // Format text variables
     const textVars = stateService.getAllTextVars();
     if (textVars.size > 0) {
       output += '# Text Variables\n\n';
@@ -1061,7 +965,6 @@ export class OutputService implements IOutputService {
       }
     }
 
-    // Format data variables
     const dataVars = stateService.getAllDataVars();
     if (dataVars.size > 0) {
       if (output) output += '\n\n';
@@ -1075,24 +978,20 @@ export class OutputService implements IOutputService {
   }
 
   private async nodeToMarkdown(node: MeldNode, state: IStateService): Promise<string> {
-    // Debug: Log node structure
     logger.debug('Processing node in nodeToMarkdown', {
       nodeType: node.type,
       nodeStructure: Object.keys(node),
       location: node.location,
-      // Add transformation info
       isTransformationEnabled: state.isTransformationEnabled(),
-      // Add boundary info from context stack
+      transformedNodeCountInState: state.getTransformedNodes()?.length,
       contextStackDepth: this.contextStack.length,
       hasPreviousContext: this.contextStack.length > 0
     });
 
-    // Track the previous node type for boundary detection
     const previousContext = this.contextStack.length > 0 
       ? this.contextStack[this.contextStack.length - 1] 
       : null;
     
-    // Track if this is a boundary between different node types
     const isNodeBoundary = previousContext && previousContext.nodeType !== node.type;
     
     if (isNodeBoundary) {
@@ -1114,13 +1013,11 @@ export class OutputService implements IOutputService {
         const textNode = node as TextNode;
         const content = textNode.content;
         
-        // Create a formatting context for this node
         const formattingContext = this.createFormattingContext(
           'Text', 
           state.isTransformationEnabled()
         );
         
-        // Check for formatting metadata to preserve context from directive transformations
         if (textNode.formattingMetadata) {
           logger.debug('Found formatting metadata in Text node', {
             isFromDirective: textNode.formattingMetadata.isFromDirective,
@@ -1129,14 +1026,10 @@ export class OutputService implements IOutputService {
             contentLength: content.length
           });
           
-          // If this node was created from a directive, use that information for context
           if (textNode.formattingMetadata.isFromDirective && textNode.formattingMetadata.originalNodeType) {
-            // Override the node type to match the original directive
             formattingContext.nodeType = textNode.formattingMetadata.originalNodeType;
             
-            // Explicitly preserve formatting if requested
             if (textNode.formattingMetadata.preserveFormatting) {
-              // Force output-literal mode for this node to preserve exact formatting
               formattingContext.transformationMode = true;
               formattingContext.isOutputLiteral = true;
               formattingContext.preserveFormatting = true;
@@ -1144,14 +1037,12 @@ export class OutputService implements IOutputService {
           }
         }
         
-        // Inherit properties from previous context if it exists
         if (previousContext) {
           formattingContext.lastOutputEndedWithNewline = previousContext.lastOutputEndedWithNewline;
           formattingContext.atLineStart = previousContext.lastOutputEndedWithNewline;
           formattingContext.parentContext = previousContext;
         }
         
-        // Log the context we're using
         logger.debug('Text node formatting context', {
           contextType: formattingContext.contextType,
           isOutputLiteral: formattingContext.isOutputLiteral ?? formattingContext.transformationMode,
@@ -1163,52 +1054,36 @@ export class OutputService implements IOutputService {
           hasNewlines: content.includes('\n')
         });
         
-        // Check if text starts at beginning of line
         formattingContext.atLineStart = content.startsWith('\n') || 
                                         !content.trim() || 
                                         content.trim().startsWith('\n');
         
-        // Check if text ends at end of line
         formattingContext.atLineEnd = content.endsWith('\n');
         
-        // Determine if this is block or inline context
-        // Improved detection for block vs. inline context:
-        // - Text with multiple lines is block context
-        // - Text with markdown headings is block context
-        // - Text with list markers is block context
-        // - Text inside tables is handled specially
         if (content.includes('\n')) {
           formattingContext.contextType = 'block';
         } else if (/^#{1,6}\s/.test(content.trim())) {
-          // Markdown heading - block context
           formattingContext.contextType = 'block';
           formattingContext.specialMarkdown = 'heading';
         } else if (/^[-*+]\s/.test(content.trim()) || /^\d+\.\s/.test(content.trim())) {
-          // List item - block context with special handling
           formattingContext.contextType = 'block';
           formattingContext.specialMarkdown = 'list';
         } else if (/^\|.*\|/.test(content.trim()) || content.includes('|')) {
-          // Table cell - inline context with special handling
           formattingContext.contextType = 'inline';
           formattingContext.specialMarkdown = 'table';
         } else {
-          // Default to inline context for single-line text
           formattingContext.contextType = 'inline';
         }
         
-        // Apply proper newline handling for the (now pre-resolved) content
         return this.handleNewlines(content, formattingContext);
       case 'VariableReference':
-        // Handle VariableReference nodes using the new approach
         try {
           const varNode = node as IVariableReference;
           
-          // 1. Serialize the node back to its string representation
           let serializedString = `{{${varNode.identifier}`;
           if (varNode.fields && varNode.fields.length > 0) {
             const fieldString = varNode.fields.map(field => {
               if (field.type === 'field') {
-                // Check if field value needs quotes (e.g., contains spaces or special chars)
                 const needsQuotes = !/^[a-zA-Z0-9_]+$/.test(String(field.value));
                 return needsQuotes ? `['${String(field.value).replace(/'/g, '\\\'')}']` : `.${field.value}`;
               } else if (field.type === 'index') {
@@ -1222,15 +1097,10 @@ export class OutputService implements IOutputService {
 
           logger.debug(`Serializing VariableReferenceNode: ${varNode.identifier} -> ${serializedString}`);
 
-          // 2. Resolve using resolutionService.resolveText
           let resolvedValue = serializedString; // Default to serialized string if resolution fails
-          if (this.resolutionService && state) { // Ensure both service and state are available
+          if (this.resolutionService && state) { 
             try {
-              // Create appropriate resolution context
-              const resolveContext: ResolutionContext = ResolutionContextFactory.forTextDirective(
-                state, // Correct argument order
-                state.getCurrentFilePath() ?? undefined // Provide file path
-              );
+              const resolveContext: ResolutionContext = ResolutionContextFactory.create(state, state.getCurrentFilePath() ?? undefined).withStrictMode(true);
 
               resolvedValue = await this.resolutionService.resolveInContext(serializedString, resolveContext);
               logger.debug(`Resolved VariableReferenceNode ${varNode.identifier} via resolveInContext to: ${resolvedValue}`);
@@ -1240,28 +1110,23 @@ export class OutputService implements IOutputService {
                 serializedString,
                 error: error instanceof Error ? error.message : String(error) 
               });
-              // Fallback to serializedString is handled by default value
             }
           } else {
              logger.warn('ResolutionService or StateService not available for VariableReference node processing');
           }
           
-          // TODO: Apply formatting based on contextStack if needed.
-          // For now, directly return the resolved value.
           return resolvedValue;
         } catch (error) {
           logger.error('Error processing VariableReference node', { 
             node: JSON.stringify(node), 
             error: error instanceof Error ? error.message : String(error) 
           });
-          // In case of error, output the original reference or empty string
           const identifier = (node as IVariableReference).identifier || 'error';
           const fields = (node as IVariableReference).fields?.map(f => f.value).join('.') || '';
-          return `{{${identifier}${fields ? '.' + fields : ''}}}`; // Or return '' depending on desired error handling
+          return `{{${identifier}${fields ? '.' + fields : ''}}}`; 
         }
       case 'CodeFence':
         const fence = node as CodeFenceNode;
-        // The content already includes the codefence markers, so we use it as-is
         return fence.content;
       case 'Directive':
         const directive = node as DirectiveNode;
@@ -1275,33 +1140,24 @@ export class OutputService implements IOutputService {
           directiveOptions: directive.directive
         });
 
-        // Definition directives always return empty string
         if (['text', 'data', 'path', 'import', 'define'].includes(kind)) {
           return '';
         }
 
-        // Handle run directives
         if (kind === 'run') {
-          // In non-transformation mode, return placeholder
           if (!state.isTransformationEnabled()) {
-            // Create a formatting context for this node
             const formattingContext = this.createFormattingContext(
               'Directive', 
               false // not in transformation mode
             );
             
-            // Apply proper newline handling
             const placeholder = '[run directive output placeholder]';
             
-            // We need to ensure the placeholder has trailing newlines
-            // This is a special case for run directives to match test expectations
             return placeholder + '\n\n';
           }
           
-          // In transformation mode, return the command output
           const transformedNodes = state.getTransformedNodes();
           if (transformedNodes && transformedNodes.length > 0) {
-            // First try exact line match (original behavior)
             const exactMatch = transformedNodes.find(n => 
               n.location?.start.line === node.location?.start.line
             );
@@ -1318,8 +1174,6 @@ export class OutputService implements IOutputService {
               return content.endsWith('\n') ? content : content + '\n';
             }
             
-            // If exact match not found, try to find the closest matching node
-            // This handles cases where line numbers have shifted during transformation
             let closestNode: MeldNode | null = null;
             let smallestLineDiff = Number.MAX_SAFE_INTEGER;
             
@@ -1332,7 +1186,6 @@ export class OutputService implements IOutputService {
                   transformedNode.location.start.line - node.location.start.line
                 );
                 
-                // Update closest node if this one is closer
                 if (lineDiff < smallestLineDiff) {
                   smallestLineDiff = lineDiff;
                   closestNode = transformedNode;
@@ -1340,7 +1193,6 @@ export class OutputService implements IOutputService {
               }
             }
             
-            // Use the closest node if it's within a reasonable range (5 lines)
             if (closestNode && smallestLineDiff <= 5) {
               logger.debug('Found closest transformed node for run directive', {
                 originalLine: node.location?.start.line,
@@ -1354,7 +1206,6 @@ export class OutputService implements IOutputService {
             }
           }
           
-          // If no transformed node found, return placeholder
           logger.warn('No transformed node found for run directive', {
             directiveLine: node.location?.start.line,
             command: directive.directive.command
@@ -1362,408 +1213,8 @@ export class OutputService implements IOutputService {
           return '[run directive output placeholder]\n';
         }
 
-        // Handle other execution directives
-        if (['embed'].includes(kind)) {
-          // Debug logging for embed directive - write to debug file
-          const fs = require('fs');
-          const debugContent = `
-EMBED DIRECTIVE DEBUG:
-Node: ${JSON.stringify(node, null, 2)}
-Path type: ${typeof directive.directive.path}
-Path value: ${JSON.stringify(directive.directive.path, null, 2)}
-Is variable reference?: ${typeof directive.directive.path === 'object' && 
-             directive.directive.path !== null && 
-             directive.directive.path.isVariableReference === true}
-Transformation enabled?: ${state.isTransformationEnabled()}
-`;
-          try {
-            fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', debugContent);
-          } catch (err) {
-            logger.error('Failed to write debug info:', err);
-          }
-          
-          // In non-transformation mode, return placeholder
-          if (!state.isTransformationEnabled()) {
-            return '[directive output placeholder]\n\n';
-          }
-          
-          // PHASE 4B FIX: Special handling for variable-based embed directives in transformation mode
-          // This special case handles embed directives with variable references like @embed {{role.architect}}
-          if (directive.directive.path && 
-              typeof directive.directive.path === 'object' && 
-              directive.directive.path.isVariableReference === true &&
-              state.isTransformationEnabled()) {
-          
-            // Debug logging
-            console.log('PHASE 4B SPECIAL HANDLING TRIGGERED for variable-based embed');
-            console.log('Directive path:', JSON.stringify(directive.directive.path));
-            
-            // Log detailed information about the variable-based embed directive to file
-            const fs = require('fs');
-            fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-              'PHASE 4B: Handling variable-based embed directive in transformation mode\n' +
-              'Path: ' + JSON.stringify(directive.directive.path, null, 2) + '\n'
-            );
-            
-            // Extract variable name based on AST structure
-            let varName;
-            if (directive.directive.path.identifier) {
-                // Direct identifier
-                varName = directive.directive.path.identifier;
-            } else if (directive.directive.path.variable && directive.directive.path.variable.identifier) {
-                // Variable in nested structure
-                varName = directive.directive.path.variable.identifier;
-            } else {
-                // Fallback: Try to extract from raw text
-                const raw = directive.directive.path.raw;
-                if (raw && typeof raw === 'string' && raw.startsWith('{{') && raw.endsWith('}}')) {
-                    const inner = raw.substring(2, raw.length - 2);
-                    varName = inner.split('.')[0];
-                }
-            }
-            
-            // Extract field path if present - handle different AST structures
-            let fieldPath = '';
-            
-            // Direct fields array
-            if (directive.directive.path.fields && Array.isArray(directive.directive.path.fields)) {
-              fieldPath = directive.directive.path.fields
-                .map((field: { type: 'field' | 'index'; value: string | number }) => {
-                  if (field.type === 'field') {
-                    return field.value;
-                  } else if (field.type === 'index') {
-                    return field.value;
-                  }
-                  return '';
-                })
-                .filter(Boolean)
-                .join('.');
-            } 
-            // Nested variable with fields
-            else if (directive.directive.path.variable && 
-                     directive.directive.path.variable.fields && 
-                     Array.isArray(directive.directive.path.variable.fields)) {
-              
-              fieldPath = directive.directive.path.variable.fields
-                .map((field: { type: 'field' | 'index'; value: string | number }) => {
-                  if (field.type === 'field') {
-                    return field.value;
-                  } else if (field.type === 'index') {
-                    return field.value;
-                  }
-                  return '';
-                })
-                .filter(Boolean)
-                .join('.');
-            }
-            // Fallback: Parse from raw text if available
-            else if (directive.directive.path.raw) {
-              const raw = directive.directive.path.raw;
-              if (typeof raw === 'string' && raw.startsWith('{{') && raw.endsWith('}}') && raw.includes('.')) {
-                const inner = raw.substring(2, raw.length - 2);
-                const parts = inner.split('.');
-                if (parts.length > 1) {
-                  fieldPath = parts.slice(1).join('.');
-                }
-              }
-            }
-            
-            fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-              'Variable name: ' + varName + '\n' +
-              'Field path: ' + fieldPath + '\n'
-            );
-            
-            // Resolve the variable value
-            let value;
-            
-            // Try data variable first
-            value = state.getVariable(varName, VariableType.DATA);
-            fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-              'Data variable value: ' + JSON.stringify(value) + '\n'
-            );
-            
-            // If not found as data variable, try text variable
-            if (value === undefined) {
-              value = state.getVariable(varName, VariableType.TEXT);
-              fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-                'Text variable value: ' + JSON.stringify(value) + '\n'
-              );
-            }
-            
-            // If not found as text variable, try path variable
-            if (value === undefined) {
-              value = state.getVariable(varName, VariableType.PATH);
-              fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-                'Path variable value: ' + JSON.stringify(value) + '\n'
-              );
-            }
-            
-            // Process field access if needed
-            if (value !== undefined && fieldPath) {
-              try {
-                const fields = fieldPath.split('.');
-                let current: any = value;
-                
-                fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-                  'Processing field access with fields: ' + JSON.stringify(fields) + '\n'
-                );
-                
-                for (const field of fields) {
-                  fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-                    'Accessing field: ' + field + ' from: ' + typeof current + ' ' + JSON.stringify(current) + '\n'
-                  );
-                  
-                  if (typeof current === 'object' && current !== null) {
-                    if (Array.isArray(current) && !isNaN(Number(field))) {
-                      // Handle array index access
-                      const index = parseInt(field, 10);
-                      if (index >= 0 && index < current.length) {
-                        current = current[index];
-                      } else {
-                        fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-                          'Array index out of bounds: ' + index + ' for array length: ' + current.length + '\n'
-                        );
-                        current = null;
-                        break;
-                      }
-                    } else if (field in current) {
-                      // Handle object property access
-                      current = current[field];
-                    } else {
-                      // Field not found
-                      fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-                        'Field not found in object: ' + field + '\n'
-                      );
-                      current = null;
-                      break;
-                    }
-                  } else {
-                    // Cannot access field on non-object
-                    fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-                      'Cannot access field on non-object: ' + field + ' value type: ' + typeof current + '\n'
-                    );
-                    current = null;
-                    break;
-                  }
-                }
-                
-                if (current !== null) {
-                  // Convert to string with proper type handling
-                  fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-                    'Final field value: ' + JSON.stringify(current) + '\n'
-                  );
-                  if (typeof current === 'string') {
-                    return current;
-                  } else if (current === null || current === undefined) {
-                    return '';
-                  } else if (typeof current === 'object') {
-                    return JSON.stringify(current, null, 2);
-                  } else {
-                    return String(current);
-                  }
-                }
-              } catch (error) {
-                fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-                  'Error resolving field: ' + error + '\n'
-                );
-                logger.warn(`Error resolving field ${fieldPath} in variable ${varName}:`, error);
-              }
-            } else if (value !== undefined) {
-              // Convert the whole variable to string if no field path
-              fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-                'Using whole variable value: ' + JSON.stringify(value) + '\n'
-              );
-              if (typeof value === 'string') {
-                return value;
-              } else if (value === null || value === undefined) {
-                return '';
-              } else if (typeof value === 'object') {
-                return JSON.stringify(value, null, 2);
-              } else {
-                return String(value);
-              }
-            }
-            
-            // If we couldn't resolve the variable, log a warning and continue with normal processing
-            fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
-              'Could not resolve variable reference: ' + varName + '\n'
-            );
-            logger.warn(`Could not resolve variable reference ${varName} in embed directive`);
-          }
-          
-          
-          // For non-variable embeds or if variable resolution failed, continue with normal processing
-          // In transformation mode, return the embedded content
-          const transformedNodes = state.getTransformedNodes();
-          
-          // Log all directive details for debugging
-          logger.debug('Detailed embed directive information:', {
-            node: JSON.stringify(node, null, 2),
-            directiveOptions: JSON.stringify(directive.directive, null, 2),
-            pathType: typeof directive.directive.path,
-            path: directive.directive.path,
-            transformedNodesCount: transformedNodes?.length || 0,
-            transformedNodeLines: transformedNodes?.map(n => n.location?.start?.line || 'unknown')
-          });
-          
-          if (transformedNodes && transformedNodes.length > 0) {
-            // First try exact line match (original behavior)
-            const exactMatch = transformedNodes.find(n => 
-              n.location?.start?.line === node.location?.start?.line
-            );
-            
-            logger.debug('Looking for transformed embed node', {
-              directiveLine: node.location?.start?.line || 'unknown',
-              transformedNodeCount: transformedNodes.length,
-              foundExactMatch: !!exactMatch,
-              exactMatchContent: exactMatch?.type === 'Text' ? (exactMatch as TextNode).content : 'not text node',
-              transformedNodeLines: transformedNodes.map(n => n.location?.start?.line || 'unknown')
-            });
-            
-            if (exactMatch && exactMatch.type === 'Text') {
-              const content = (exactMatch as TextNode).content;
-              logger.debug('Found exact match for embed transformation:', {
-                content: content.substring(0, 100),
-                contentLength: content.length,
-                line: exactMatch.location?.start?.line
-              });
-              return content.endsWith('\n') ? content : content + '\n';
-            }
-            
-            // If exact match not found, try to find by transformation ID
-            // The StateService gives each directive a unique ID for transformation tracking
-            const embedId = (node as any).id || (node as any).directiveId;
-            if (embedId) {
-              // Find the node with matching ID in transformed nodes
-              const idMatch = transformedNodes.find(n => (n as any).id === embedId || (n as any).directiveId === embedId);
-              
-              if (idMatch && idMatch.type === 'Text') {
-                const content = (idMatch as TextNode).content;
-                logger.debug('Found id match for embed transformation:', {
-                  id: embedId,
-                  content: content.substring(0, 100),
-                  contentLength: content.length,
-                  line: idMatch.location?.start?.line
-                });
-                return content.endsWith('\n') ? content : content + '\n';
-              }
-            }
-            
-            // If no ID match, try to find the closest matching node by line number
-            // This handles cases where line numbers have shifted during transformation
-            let closestNode: MeldNode | null = null;
-            let smallestLineDiff = Number.MAX_SAFE_INTEGER;
-            
-            for (const transformedNode of transformedNodes) {
-              if (transformedNode.type === 'Text' && 
-                  node.location?.start?.line && 
-                  transformedNode.location?.start?.line) {
-                
-                const lineDiff = Math.abs(
-                  transformedNode.location.start.line - node.location.start.line
-                );
-                
-                // Update closest node if this one is closer
-                if (lineDiff < smallestLineDiff) {
-                  smallestLineDiff = lineDiff;
-                  closestNode = transformedNode;
-                }
-              }
-            }
-            
-            // Use the closest node if it's within a reasonable range (5 lines)
-            if (closestNode && smallestLineDiff <= 5) {
-              logger.debug('Found closest transformed node for embed directive', {
-                originalLine: node.location?.start?.line || 'unknown',
-                closestNodeLine: closestNode.location?.start?.line || 'unknown',
-                lineDifference: smallestLineDiff,
-                nodeType: closestNode.type,
-                content: closestNode.type === 'Text' ? 
-                  ((closestNode as TextNode).content?.substring(0, 100) + '...') : 
-                  'not text node'
-              });
-              
-              const content = (closestNode as TextNode).content;
-              return content.endsWith('\n') ? content : content + '\n';
-            }
-            
-            // If still no match, look for content with specific embed directive markers
-            const embedPath = directive.directive.path;
-            if (embedPath) {
-              let embedPathStr = '';
-              try {
-                // Convert path to string for comparison
-                if (typeof embedPath === 'string') {
-                  embedPathStr = embedPath;
-                } else if (typeof embedPath === 'object' && embedPath !== null) {
-                  if ('raw' in embedPath) {
-                    embedPathStr = embedPath.raw as string;
-                  } else if ('value' in embedPath) {
-                    embedPathStr = embedPath.value as string;
-                  } else {
-                    embedPathStr = JSON.stringify(embedPath);
-                  }
-                }
-                
-                // Look for text nodes with content matching this embed path
-                for (const transformedNode of transformedNodes) {
-                  if (transformedNode.type === 'Text') {
-                    const textContent = (transformedNode as TextNode).content;
-                    // Skip empty or very short content nodes
-                    if (!textContent || textContent.length < 2) continue;
-                    
-                    // Check if this node looks like it might be our embed content
-                    const isLikelyVariableContent = 
-                      embedPathStr.includes('{{') && 
-                      !textContent.includes('@embed') &&
-                      !textContent.includes('[directive');
-                      
-                    if (isLikelyVariableContent) {
-                      logger.debug('Found potential variable embed content match', {
-                        embedPath: embedPathStr,
-                        content: textContent.substring(0, 100),
-                        contentLength: textContent.length,
-                        line: transformedNode.location?.start?.line
-                      });
-                      return textContent.endsWith('\n') ? textContent : textContent + '\n';
-                    }
-                  }
-                }
-              } catch (error) {
-                logger.warn('Error in content matching for embed directive', {
-                  error: error instanceof Error ? error.message : String(error),
-                  embedPath
-                });
-              }
-            }
-          }
-          
-          // If we reached here, we couldn't find a transformed node for this embed directive
-          logger.warn('No transformed node found for embed directive', {
-            directiveLine: node.location?.start?.line || 'unknown',
-            directivePath: directive.directive.path,
-            transformedNodesAvailable: transformedNodes?.length || 0
-          });
-          
-          // NOTE: Variable-based embed transformations have an issue that will be fixed in Phase 4B
-          // For now, we'll add a warning
-          if (directive.directive.path && 
-              typeof directive.directive.path === 'object' && 
-              directive.directive.path !== null &&
-              directive.directive.path.isVariableReference === true) {
-            logger.warn('Variable-based embed directive transformation will be fixed in Phase 4B', {
-              directivePath: directive.directive.path,
-              directiveLine: node.location?.start?.line
-            });
-          }
-          
-          // Final fallback: return placeholder
-          return '[directive output placeholder]\n';
-        }
-
         return '';
       case 'Comment':
-        // Comments should be ignored in the output
         logger.debug('Ignoring comment node in output');
         return '';
       default:
@@ -1772,24 +1223,19 @@ Transformation enabled?: ${state.isTransformationEnabled()}
   }
 
   private async nodeToXML(node: MeldNode, state: IStateService): Promise<string> {
-    // We need to handle CodeFence nodes explicitly to avoid double-rendering the codefence markers
     if (node.type === 'CodeFence') {
       const fence = node as CodeFenceNode;
-      // The content already includes the codefence markers, so we use it as-is
       return fence.content;
     }
     
-    // For other node types, use the same logic as markdown for consistent behavior
     return this.nodeToMarkdown(node, state);
   }
 
   private codeFenceToMarkdown(node: CodeFenceNode): string {
-    // The content already includes the codefence markers, so we use it as-is
     return node.content;
   }
 
   private codeFenceToXML(node: CodeFenceNode): string {
-    // Use the same logic as markdown for now since we want consistent behavior
     return this.codeFenceToMarkdown(node);
   }
 
@@ -1803,12 +1249,10 @@ Transformation enabled?: ${state.isTransformationEnabled()}
    * @returns The formatted array as a string
    */
   private formatArray(array: any[], context: FormattingContext): string {
-    // Handle empty arrays consistently
     if (array.length === 0) {
       return '[]';
     }
     
-    // In output-literal mode, use consistent JSON.stringify for all arrays
     if ((context.isOutputLiteral ?? context.transformationMode) || context.preserveFormatting) {
       try {
         return JSON.stringify(array, null, 2);
@@ -1816,17 +1260,13 @@ Transformation enabled?: ${state.isTransformationEnabled()}
         logger.warn('Error stringifying array in output-literal mode', { 
           error: error instanceof Error ? error.message : String(error)
         });
-        // Fall through to standard formatting if JSON.stringify fails
       }
     }
     
-    // Convert array items to strings
     const formattedItems = array.map(item => {
-      // Create a child context for each item, but force inline context for array items
       const itemContext = this.createChildContext(context, context.nodeType);
       itemContext.contextType = 'inline';
       
-      // Format each item based on its type
       if (typeof item === 'object' && item !== null) {
         return this.formatObject(item, itemContext);
       } else if (typeof item === 'string') {
@@ -1836,16 +1276,14 @@ Transformation enabled?: ${state.isTransformationEnabled()}
       }
     });
 
-    // Different formatting based on context
     if (context.contextType === 'block' && !context.specialMarkdown) {
-      // In block context (but not in special markdown), create a bullet list
-      const bulletList = formattedItems.map(item => `- ${item}`).join('\n');
-      
-      // If not at the start of a line, add a leading newline
-      return context.atLineStart ? bulletList : '\n' + bulletList;
+      return formattedItems.map(item => `- ${item}`).join('\n');
     }
     
-    // For inline context or within special markdown (table, etc.), use comma-separated
+    if (context.specialMarkdown === 'table' || context.specialMarkdown === 'list') {
+      return formattedItems.join(', ');
+    }
+    
     return formattedItems.join(', ');
   }
 
@@ -1859,44 +1297,37 @@ Transformation enabled?: ${state.isTransformationEnabled()}
    * @returns The formatted object as a string
    */
   private formatObject(obj: object, context: FormattingContext): string {
-    // Handle null check
     if (obj === null) {
       return '';
     }
     
-    // Empty object
     if (Object.keys(obj).length === 0) {
       return '{}';
     }
     
     try {
-      // In output-literal mode, use consistent JSON.stringify without code fences
       if ((context.isOutputLiteral ?? context.transformationMode) || context.preserveFormatting) {
         return JSON.stringify(obj, null, 2);
       }
       
-      // Standard mode processing follows
-      
-      // Block context and not already in a code fence
       if (context.contextType === 'block' && context.specialMarkdown !== 'code') {
-        // Pretty print with code fence
         const jsonString = JSON.stringify(obj, null, 2);
         const codeBlock = '```json\n' + jsonString + '\n```';
         
-        // If not at the start of a line, add a leading newline
-        return context.atLineStart ? codeBlock : '\n' + codeBlock;
+        if (!context.atLineStart) {
+          return '\n' + codeBlock;
+        }
+        return codeBlock;
       }
       
-      // Already in a code fence - don't add another one
       if (context.specialMarkdown === 'code') {
         return JSON.stringify(obj, null, 2);
       }
       
-      // Inline context - compact JSON
       return JSON.stringify(obj);
     } catch (error) {
       logger.error('Error formatting object', { error });
-      return '{}'; // Fallback
+      return '{}'; 
     }
   }
 
@@ -1913,34 +1344,27 @@ Transformation enabled?: ${state.isTransformationEnabled()}
     
     const hasNewlines = str.includes('\n');
     
-    // In output-literal mode or when preserve formatting is enabled, preserve all formatting exactly
     if ((context.isOutputLiteral ?? context.transformationMode) || context.preserveFormatting) {
       return str;
     }
     
-    // In inline context, convert newlines to spaces to avoid breaking the line
     if (context.contextType === 'inline' && hasNewlines) {
       return str.replace(/\n+/g, ' ');
     }
     
-    // In block context, leave newlines as they are but trim trailing newlines
-    // unless we're in a special context where preserving them is important
     if (context.contextType === 'block' && hasNewlines && !context.specialMarkdown) {
       return str.replace(/\n+$/g, '');
     }
     
-    // For all other cases, return as is
     return str;
   }
 }
 
 function isDataVarNode(node: MeldNode): node is any {
   const anyNode = node as any;
-  // Check for new-style VariableReference node with valueType 'data'
   if (anyNode.type === 'VariableReference' && anyNode.valueType === 'data') {
     return true;
   }
-  // Check for legacy DataVar node type
   if (anyNode.type === 'DataVar') {
     return true;
   }

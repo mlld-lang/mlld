@@ -98,6 +98,7 @@ container.register(FileSystemServiceClientFactory, { useClass: FileSystemService
 container.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
 container.register(ResolutionServiceClientFactory, { useClass: ResolutionServiceClientFactory });
 container.register(VariableReferenceResolverClientFactory, { useClass: VariableReferenceResolverClientFactory });
+container.register('VariableReferenceResolverClientFactory', { useClass: VariableReferenceResolverClientFactory }); 
 container.register(VariableReferenceResolverFactory, { useClass: VariableReferenceResolverFactory });
 container.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
 container.register(ResolutionServiceClientForDirectiveFactory, { useClass: ResolutionServiceClientForDirectiveFactory });
