@@ -6,9 +6,9 @@ import type { IStateService } from '@services/state/StateService/IStateService';
 import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
 import { Service } from '@core/ServiceProvider';
-import { inject, injectable, delay, container as globalContainer, DependencyContainer } from 'tsyringe';
+import { inject, injectable, delay, container as globalContainer, type DependencyContainer } from 'tsyringe';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory';
-import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient';
+import type { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
 import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
@@ -20,7 +20,7 @@ import type { ResolutionContext } from '@core/types/resolution';
 import type { IPathService } from '@services/fs/PathService/IPathService';
 import * as crypto from 'crypto';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
-import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',

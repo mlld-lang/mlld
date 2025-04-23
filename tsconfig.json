@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "NodeNext",
+    "module": "ESNext",
     "lib": ["ES2020", "DOM", "ES2022.Error"],
-    "moduleResolution": "NodeNext",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "allowJs": true,
     "esModuleInterop": true,
@@ -48,6 +48,15 @@
     "dist",
     "_old",
     "_meld",
-    "meld-ast"
+    "meld-ast",
+    "core/ast/grammar/build-grammar.mjs",
+    "core/ast/grammar/parser.cjs",
+    "core/ast/grammar/parser.js",
+    "core/ast/tests/debug-test.js",
+    "core/ast/tests/debug-text-directive.cjs",
+    "core/ast/tests/embed-double-bracket-test.js",
+    "tests/circular-dependency-test.js",
+    "tests/embed-variable-test.js",
+    "tests/utils/cli/mockArgv.js"
   ]
 } 

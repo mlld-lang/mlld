@@ -1,5 +1,5 @@
 import { IStateVisualizationService, VisualizationConfig, StateMetrics, NodeStyle, EdgeStyle, ContextVisualizationConfig } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService';
-import { IStateHistoryService, StateOperation, StateTransformation } from '@tests/utils/debug/StateHistoryService/IStateHistoryService';
+import type { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService';
 import type { IStateTrackingService, StateMetadata, StateRelationship, ContextBoundary, VariableCrossing, ContextHierarchyInfo } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
 import { injectable, inject } from 'tsyringe';
 

@@ -7857,6 +7857,14 @@ const peg$allowedStartRules = [
 
 
 
-// Export the parser function and error type
+// Export all symbols in a single block
+export {
+  peg$DefaultTracer as DefaultTracer,
+  peg$allowedStartRules as StartRules,
+  SyntaxError,
+  peg$parse as parse
+};
+
+// Export the parser function and error type as default
 const parser = { parse: peg$parse, SyntaxError };
 export default parser;

@@ -5,7 +5,7 @@ import type { MeldNode } from '@core/syntax/types.js';
 type ParseFunction = (input: string, options?: any) => MeldNode[];
 
 // Define SyntaxError type
-export class SyntaxError extends Error {
+class SyntaxError extends Error {
   expected: any;
   found: any;
   location: any;
@@ -10553,15 +10553,17 @@ const peg$allowedStartRules = [
   "Start"
 ];
 
+
+
+
+// Export all symbols in a single block
 export {
   peg$DefaultTracer as DefaultTracer,
   peg$allowedStartRules as StartRules,
-  peg$SyntaxError as SyntaxError,
+  SyntaxError,
   peg$parse as parse
 };
 
-
-// Export the parser function and error type
+// Export the parser function and error type as default
 const parser = { parse: peg$parse, SyntaxError };
 export default parser;
-export const parse = peg$parse;

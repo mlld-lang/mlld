@@ -51,7 +51,7 @@ import type { MeldNode } from '@core/syntax/types.js';
 type ParseFunction = (input: string, options?: any) => MeldNode[];
 
 // Define SyntaxError type
-export class SyntaxError extends Error {
+class SyntaxError extends Error {
   expected: any;
   found: any;
   location: any;
@@ -66,13 +66,19 @@ export class SyntaxError extends Error {
 }
 
 // Peggy-generated code below
-${tsSource}
+${tsSource.replace(/export \{[^}]+\};/g, '')}
 
-// Export the parser function and error type
+// Export all symbols in a single block
+export {
+  peg$DefaultTracer as DefaultTracer,
+  peg$allowedStartRules as StartRules,
+  SyntaxError,
+  peg$parse as parse
+};
+
+// Export the parser function and error type as default
 const parser = { parse: peg$parse, SyntaxError };
-export default parser;
-export const parse = peg$parse;
-`;
+export default parser;`;
 
 // Write TypeScript parser to src
 fs.writeFileSync(SRC_PARSER, tsWrapped);
@@ -119,12 +125,19 @@ class SyntaxError extends Error {
 }
 
 // Peggy-generated code below
-${esmSource.replace(/export \{[^}]+\};/, '')}
+${esmSource.replace(/export \{[^}]+\};/g, '')}
 
-// Export the parser function and error type
+// Export all symbols in a single block
+export {
+  peg$DefaultTracer as DefaultTracer,
+  peg$allowedStartRules as StartRules,
+  SyntaxError,
+  peg$parse as parse
+};
+
+// Export the parser function and error type as default
 const parser = { parse: peg$parse, SyntaxError };
-export default parser;
-`);
+export default parser;`);
 
 // Write CJS parser to dist
 fs.writeFileSync(DIST_PARSER_CJS, `// Generated CJS parser
@@ -150,8 +163,7 @@ ${cjsSource}
 
 // Export the parser function and error type
 const parser = { parse: peg$parse, SyntaxError };
-module.exports = parser;
-`);
+module.exports = parser;`);
 
 // Copy grammar file to dist
 fs.copyFileSync(GRAMMAR_FILE, GRAMMAR_DIST);

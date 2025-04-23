@@ -58,19 +58,12 @@ const getEsbuildOptions = (format: string) => (options: any) => {
   if (format === 'esm') {
     options.mainFields = ['module', 'main'];
     options.conditions = ['import', 'module', 'require', 'default'];
-    
-    // Add ESM-specific defines for compatibility
-    options.define = {
-      ...options.define,
-      '__dirname': 'import.meta.url',
-      '__filename': 'import.meta.url'
-    };
   }
   
   // Optimize for DI-based code
   options.keepNames = true; // Required for reflection-based DI
   
-  // Ensure proper JS extension handling for imports
+  // Ensure proper module resolution
   options.resolveExtensions = ['.ts', '.tsx', '.js', '.jsx', '.json'];
   options.format = format;
   options.target = 'es2020';
@@ -84,13 +77,12 @@ export default defineConfig([
     entry: {
       index: 'api/index.ts',
     },
-    format: ['esm'], // ESM format supports splitting
+    format: ['esm'],
     dts: true,
     clean: true,
     sourcemap: true,
-    splitting: true, // Splitting works with ESM only
+    splitting: true,
     treeshake: {
-      // Optimize tree shaking for DI-based code
       preset: 'recommended',
       moduleSideEffects: ['reflect-metadata', 'tsyringe']
     },
@@ -104,7 +96,16 @@ export default defineConfig([
     tsconfig: 'tsconfig.build.json',
     external: externalDependencies,
     noExternal: [
-      // If there are any dependencies that should be bundled, list them here
+      // Bundle all internal dependencies
+      '@core/*',
+      '@services/*',
+      '@parser/*',
+      '@interpreter/*',
+      '@output/*',
+      '@cli/*',
+      '@sdk/*',
+      '@api/*',
+      '@tests/*'
     ],
     esbuildOptions(options, { format }) {
       return getEsbuildOptions(format)(options);
@@ -116,10 +117,10 @@ export default defineConfig([
       index: 'api/index.ts',
     },
     format: ['cjs'],
-    dts: false, // Only generate dts files once (in the ESM build)
-    clean: false, // Don't clean here, we'll clean in the ESM build
+    dts: false,
+    clean: false,
     sourcemap: true,
-    splitting: false, // Don't use splitting for CJS
+    splitting: false,
     treeshake: {
       preset: 'recommended',
       moduleSideEffects: ['reflect-metadata', 'tsyringe']
@@ -132,6 +133,18 @@ export default defineConfig([
     },
     tsconfig: 'tsconfig.build.json',
     external: externalDependencies,
+    noExternal: [
+      // Bundle all internal dependencies
+      '@core/*',
+      '@services/*',
+      '@parser/*',
+      '@interpreter/*',
+      '@output/*',
+      '@cli/*',
+      '@sdk/*',
+      '@api/*',
+      '@tests/*'
+    ],
     esbuildOptions(options, { format }) {
       return getEsbuildOptions(format)(options);
     }
@@ -146,7 +159,6 @@ export default defineConfig([
     clean: false,
     sourcemap: true,
     treeshake: {
-      // Optimize tree shaking for DI-based code
       preset: 'recommended',
       moduleSideEffects: ['reflect-metadata', 'tsyringe']
     },
@@ -159,6 +171,18 @@ export default defineConfig([
     },
     tsconfig: 'tsconfig.build.json',
     external: externalDependencies,
+    noExternal: [
+      // Bundle all internal dependencies
+      '@core/*',
+      '@services/*',
+      '@parser/*',
+      '@interpreter/*',
+      '@output/*',
+      '@cli/*',
+      '@sdk/*',
+      '@api/*',
+      '@tests/*'
+    ],
     banner: {
       js: '#!/usr/bin/env node'
     },
