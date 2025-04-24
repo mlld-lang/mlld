@@ -52,33 +52,33 @@ export class CircularityService implements ICircularityService {
    * @throws {MeldImportError} If a circular import is detected
    */
   beginImport(filePath: string): void {
-
     const normalizedPath = this.normalizePath(filePath);
-    
-    // Get the filename part for safety checks
     const fileName = normalizedPath.split('/').pop() || normalizedPath;
+    
+    // Add detailed debug info about current state
+    console.log('DEBUG: CircularityService.beginImport', {
+      filePath,
+      normalizedPath,
+      fileName,
+      currentStackDepth: this.importStack.length,
+      currentStack: [...this.importStack],
+      currentImportCounts: Object.fromEntries(this.importCounts),
+      maxDepth: this.MAX_IMPORT_DEPTH,
+      maxSameFileImports: this.MAX_SAME_FILE_IMPORTS
+    });
     
     // Increment the import count for this file
     const currentCount = this.importCounts.get(fileName) || 0;
     this.importCounts.set(fileName, currentCount + 1);
-    
-    logger.debug('Beginning import', { 
-      filePath,
-      normalizedPath,
-      fileName,
-      currentCount: currentCount + 1,
-      stackDepth: this.importStack.length,
-      currentStack: this.importStack 
-    });
 
     // Check #1: Simple circular import detection (exact path match)
     if (this.isInStack(normalizedPath)) {
       const importChain = [...this.importStack, normalizedPath];
-
-      logger.error('Circular import detected (exact path match)', {
+      console.log('DEBUG: Circular import detected (exact path match)', {
         filePath,
         normalizedPath,
-        importChain
+        importChain,
+        stackDepth: this.importStack.length
       });
 
       throw new MeldImportError(
@@ -93,14 +93,14 @@ export class CircularityService implements ICircularityService {
     // Check #2: Safety check for maximum import depth
     if (this.importStack.length >= this.MAX_IMPORT_DEPTH) {
       const importChain = [...this.importStack, normalizedPath];
-
-      logger.error('Maximum import depth exceeded, likely circular import', {
+      console.log('DEBUG: Maximum import depth exceeded', {
         filePath,
         normalizedPath,
         maxDepth: this.MAX_IMPORT_DEPTH,
-        importChain
+        importChain,
+        stackDepth: this.importStack.length
       });
-      
+
       throw new MeldImportError(
         `Maximum import depth (${this.MAX_IMPORT_DEPTH}) exceeded, likely circular import: ${filePath}`,
         {
@@ -116,16 +116,16 @@ export class CircularityService implements ICircularityService {
     // Check #3: Safety check for too many imports of the same file
     if (currentCount + 1 >= this.MAX_SAME_FILE_IMPORTS) {
       const importChain = [...this.importStack, normalizedPath];
-
-      logger.error('Too many imports of the same file, likely circular import', {
+      console.log('DEBUG: Too many imports of same file', {
         filePath,
         normalizedPath,
         fileName,
         count: currentCount + 1,
         maxCount: this.MAX_SAME_FILE_IMPORTS,
-        importChain
+        importChain,
+        stackDepth: this.importStack.length
       });
-      
+
       throw new MeldImportError(
         `Too many imports (${currentCount + 1}) of file ${fileName}, likely circular import`,
         {
@@ -138,28 +138,14 @@ export class CircularityService implements ICircularityService {
         }
       );
     }
-    
-    // Check #4: Special case for circular-import test files
-    if (fileName.includes('circular-import') && 
-        this.importStack.some(p => p.includes('circular-import'))) {
-      const importChain = [...this.importStack, normalizedPath];
-
-      logger.error('Detected circular import in test files', {
-        fileName,
-        importStack: this.importStack
-      });
-      
-      throw new MeldImportError(
-        `Circular import detected for file: ${filePath}`,
-        {
-          code: 'CIRCULAR_IMPORT',
-          details: { importChain }
-        }
-      );
-    }
 
     this.importStack.push(normalizedPath);
-
+    console.log('DEBUG: Import added to stack', {
+      filePath,
+      normalizedPath,
+      newStackDepth: this.importStack.length,
+      newStack: [...this.importStack]
+    });
   }
 
   /**

@@ -37,165 +37,120 @@ import type { StateChanges } from '@core/directives/DirectiveHandler';
 export interface IStateService {
   /**
    * Sets the event service for state change notifications.
-   * 
-   * @param eventService - The event service to use
    */
   setEventService(eventService: IStateEventService): void;
 
   /**
    * Sets the tracking service for state debugging and analysis.
-   * 
-   * @param trackingService - The tracking service to use
    */
   setTrackingService(trackingService: IStateTrackingService): void;
   
   /**
    * Gets the unique identifier for this state instance.
-   * 
-   * @returns The state ID, if assigned, or undefined
    */
   getStateId(): string | undefined;
 
   /**
+   * Gets the minimal state data needed for parent-child relationships.
+   * This method returns only the essential data needed for state inheritance,
+   * excluding nodes and transformation data to prevent memory issues.
+   * @internal
+   */
+  getInternalStateNode(): Pick<StateNode, 'stateId' | 'variables' | 'commands' | 'imports'>;
+
+  /**
    * Gets all document nodes (original or transformed depending on mode).
-   * 
-   * @returns An array of document nodes
    */
   getNodes(): MeldNode[];
   
   /**
    * Adds a node to the document.
-   * 
-   * @param node - The node to add
-   * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable
    */
   addNode(node: MeldNode): Promise<void>;
   
   /**
    * Appends raw content to the document.
-   * 
-   * @param content - The content to append
-   * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable
    */
   appendContent(content: string): Promise<void>;
 
   /**
    * Gets transformed nodes for output generation.
-   * 
-   * @returns An array of transformed nodes
    */
   getTransformedNodes(): MeldNode[];
   
   /**
    * Sets the complete array of transformed nodes.
-   * 
-   * @param nodes - The transformed nodes to set
-   * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable
    */
   setTransformedNodes(nodes: MeldNode[]): Promise<void>;
   
   /**
    * Replaces the node at the specified index in the transformed nodes array.
-   * 
-   * @param index - The index of the node to replace
-   * @param replacement - The node or nodes to insert
-   * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable or index is out of bounds
    */
   transformNode(index: number, replacement: MeldNode | MeldNode[] | undefined): Promise<void>;
   
   /**
    * Checks if transformation is enabled.
-   * 
-   * @returns true if transformation is enabled, false otherwise
    */
   isTransformationEnabled(): boolean;
   
   /**
    * Enables or disables transformation.
-   * 
-   * @param enabled - Whether to enable transformation
-   * @returns A promise resolving to the updated state service instance.
    */
   setTransformationEnabled(enabled: boolean): Promise<void>;
   
   /**
    * Gets the current transformation options.
-   * 
-   * @returns The current transformation options
    */
   getTransformationOptions(): TransformationOptions;
   
   /**
    * Sets the transformation options.
-   * 
-   * @param options - The transformation options to set
-   * @returns A promise resolving to the updated state service instance.
    */
   setTransformationOptions(options: TransformationOptions): Promise<void>;
   
   /**
    * Registers an imported file path.
-   * 
-   * @param path - The path of the imported file
-   * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable
    */
   addImport(path: string): Promise<void>;
   
   /**
    * Removes an imported file path.
-   * 
-   * @param path - The path of the imported file to remove
-   * @returns A promise resolving to the updated state service instance.
    * @throws {MeldStateError} If the state is immutable
    */
   removeImport(path: string): Promise<void>;
   
   /**
    * Checks if a file has been imported.
-   * 
-   * @param path - The path to check
-   * @returns true if the file has been imported, false otherwise
    */
   hasImport(path: string): boolean;
   
   /**
    * Gets all imported file paths.
-   * 
-   * @returns A set of all imported file paths
    */
   getImports(): Set<string>;
 
   /**
    * Gets the path of the current file being processed.
-   * 
-   * @returns The current file path, or null if not set
    */
   getCurrentFilePath(): string | null;
   
   /**
    * Sets the path of the current file being processed.
-   * 
-   * @param path - The current file path
-   * @returns A promise resolving to the updated state service instance.
    */
   setCurrentFilePath(path: string): Promise<void>;
 
   /**
    * Checks if the state has local changes that haven't been merged.
-   * 
-   * @returns true if there are local changes, false otherwise
    */
   hasLocalChanges(): boolean;
   
   /**
    * Gets a list of local changes.
-   * 
-   * @returns An array of change descriptions
    */
   getLocalChanges(): string[];
   
@@ -211,132 +166,115 @@ export interface IStateService {
   
   /**
    * Creates a child state that inherits from this state.
-   * 
-   * @param options - Optional configuration for variable copying
-   * @returns A new child state
    */
   createChildState(options?: Partial<VariableCopyOptions>): IStateService;
   
   /**
    * Merges changes from a child state into this state.
-   * 
-   * @param childState - The child state to merge
-   * @returns A promise resolving to the updated state service instance (this instance after merge).
    * @throws {MeldStateError} If the state is immutable or the child state is invalid
    */
   mergeChildState(childState: IStateService): Promise<void>;
   
   /**
    * Creates a deep clone of this state.
-   * 
-   * @returns A new state with the same values
    */
   clone(): IStateService;
 
   /**
    * Gets the parent state, if this state is a child.
-   * 
-   * @returns The parent IStateService or undefined
    */
   getParentState(): IStateService | undefined;
 
+  // Variable Management Methods
+
   /**
    * Gets a variable by name, optionally specifying the expected type.
-   *
-   * @param name - The name of the variable.
-   * @param type - Optional variable type to filter by.
-   * @returns The MeldVariable object, or undefined if not found or type mismatch.
    */
   getVariable(name: string, type?: VariableType): MeldVariable | undefined;
 
   /**
    * Sets a variable using a pre-constructed MeldVariable object.
-   *
-   * @param variable - The MeldVariable object to set.
-   * @returns A promise resolving to the updated state service instance.
-   * @throws {MeldStateError} If the state is immutable.
+   * @throws {MeldStateError} If the state is immutable
    */
   setVariable(variable: MeldVariable): Promise<MeldVariable>;
 
   /**
-   * Checks if a variable exists, optionally specifying the type.
-   *
-   * @param name - The name of the variable.
-   * @param type - Optional variable type to check for.
-   * @returns True if the variable exists (and matches the type, if specified).
+   * Gets a text variable by name.
    */
-  hasVariable(name: string, type?: VariableType): boolean;
-
-  /**
-   * Removes a variable, optionally specifying the type.
-   *
-   * @param name - The name of the variable to remove.
-   * @param type - Optional variable type to target.
-   * @returns A promise resolving to the updated state service instance.
-   * @throws {MeldStateError} If the state is immutable.
-   */
-  removeVariable(name: string, type?: VariableType): Promise<boolean>;
-
-  /**
-   * Gets the output of a previously executed command (If state tracks this).
-   * @param command - The command string or identifier.
-   * @returns The command's stdout or undefined.
-   */
-  getCommandOutput(command: string): string | undefined;
-
-  /**
-   * Checks if the state implementation supports transformation features.
-   * @returns true if transformation is supported.
-   */
-  hasTransformationSupport(): boolean;
-
-  /**
-   * Gets the underlying StateNode object. 
-   * 
-   * WARNING: This provides access to internal state representation and 
-   * should be used sparingly, primarily for operations like state merging 
-   * or cloning that inherently require access to the full internal structure.
-   * 
-   * @returns The internal StateNode object.
-   */
-  getInternalStateNode(): StateNode;
-
-  /**
-   * Checks if a specific transformation type should be applied.
-   * Note: This seems less relevant if transformation is always enabled.
-   * 
-   * @param type - The transformation type string (e.g., 'directive', 'variable')
-   * @returns true if the transformation should occur.
-   */
-  shouldTransform(type: string): boolean;
-
-  // Type-specific getters from StateServiceLike
   getTextVar(name: string): TextVariable | undefined;
+
+  /**
+   * Gets a data variable by name.
+   */
   getDataVar(name: string): DataVariable | undefined;
+
+  /**
+   * Gets a path variable by name.
+   */
   getPathVar(name: string): IPathVariable | undefined;
+
+  /**
+   * Gets a command variable by name.
+   */
   getCommandVar(name: string): CommandVariable | undefined;
 
-  // Type-specific setters from StateServiceLike
+  /**
+   * Sets a text variable.
+   * @throws {MeldStateError} If the state is immutable
+   */
   setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<void>;
+
+  /**
+   * Sets a data variable.
+   * @throws {MeldStateError} If the state is immutable
+   */
   setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): Promise<void>;
+
+  /**
+   * Sets a path variable.
+   * @throws {MeldStateError} If the state is immutable
+   */
   setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): Promise<void>;
+
+  /**
+   * Sets a command variable.
+   * @throws {MeldStateError} If the state is immutable
+   */
   setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<void>;
 
-  // Get all variables by type from StateServiceLike
+  /**
+   * Gets all text variables.
+   */
   getAllTextVars(): Map<string, TextVariable>;
+
+  /**
+   * Gets all data variables.
+   */
   getAllDataVars(): Map<string, DataVariable>;
+
+  /**
+   * Gets all path variables.
+   */
   getAllPathVars(): Map<string, IPathVariable>;
+
+  /**
+   * Gets all command variables.
+   */
   getAllCommands(): Map<string, CommandVariable>;
 
-  // Get local variables by type from StateServiceLike
+  /**
+   * Gets local text variables (not inherited from parent).
+   */
   getLocalTextVars(): Map<string, TextVariable>;
+
+  /**
+   * Gets local data variables (not inherited from parent).
+   */
   getLocalDataVars(): Map<string, DataVariable>;
 
   /**
-   * Applies the given state changes to the current state, returning a new state instance.
-   * @param changes The state changes to apply.
-   * @returns A new IStateService instance reflecting the applied changes.
-   * @throws MeldError if changes are invalid or cannot be applied.
+   * Applies state changes to the current state.
+   * @throws {MeldError} If changes are invalid or cannot be applied
    */
   applyStateChanges(changes: StateChanges): Promise<IStateService>;
 }

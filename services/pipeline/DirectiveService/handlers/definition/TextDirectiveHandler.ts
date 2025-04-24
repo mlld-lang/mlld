@@ -230,35 +230,28 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         );
       }
 
-      // Manually construct the VariableDefinition for state changes
-      // Factory functions like createTextVariable return the old structure with 'name',
-      // which is not suitable for the StateChanges record.
-      const variableDefinition: VariableDefinition = {
-        type: VariableType.TEXT,
-        value: resolvedValue ?? '', // Ensure value is not undefined
-        metadata: { 
-          origin: VariableOrigin.DIRECT_DEFINITION,
-          definedAt: directiveSourceLocation,
-          createdAt: Date.now(), 
-          modifiedAt: Date.now(),
-        },
-      };
-
       const stateChanges: StateChanges = {
         variables: {
-          [identifier]: variableDefinition, 
-        },
+          [identifier]: {
+            type: VariableType.TEXT,
+            value: resolvedValue,
+            metadata: {
+              createdAt: Date.now(),
+              modifiedAt: Date.now(),
+              origin: VariableOrigin.DIRECT_DEFINITION
+            }
+          }
+        }
       };
 
       logger.debug(`[${this.kind}] Defined variable`, {
         identifier,
-        type: variableDefinition.type,
-        value: variableDefinition.value, // Log the actual value set
+        type: VariableType.TEXT,
+        value: resolvedValue,
         location: node.location?.start,
       });
 
-      // process.stdout.write(`DEBUG [TextDirectiveHandler.handle] Returning structure: ${JSON.stringify({ stateChanges }, null, 2)}\n`);
-      return { stateChanges }; // Return the structured result
+      return { stateChanges };
     } catch (error) {
       logger.error('Error processing text directive:', error);
       if (error instanceof DirectiveError) {
@@ -274,6 +267,5 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         { ...errorDetailsContext, cause: error instanceof Error ? error : undefined }
       );
     }
-    return {}; // Successful execution: Return an empty DirectiveResult
   }
 } 

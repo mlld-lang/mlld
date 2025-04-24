@@ -173,15 +173,48 @@ export class StateService implements IStateService {
    * Initialize the state, either as a fresh state or as a child of a parent state
    */
   private initializeState(parentService?: IStateService): void {
-    const parentNode = parentService?.getInternalStateNode(); 
+    const parentNode = parentService?.getInternalStateNode();
+    
+    console.log('DEBUG: [initializeState] Initializing state', {
+      hasParentService: !!parentService,
+      parentServiceId: parentService?.getStateId(),
+      parentNodeId: parentNode?.stateId,
+      hasStateFactory: !!this.stateFactory,
+      hasTrackingServiceFactory: !!this.trackingServiceClientFactory,
+      factoryInitialized: this.factoryInitialized
+    });
+
     this.currentState = this.stateFactory.createState({
       source: 'new',
+      parentState: parentNode ? {
+        stateId: parentNode.stateId,
+        variables: parentNode.variables,
+        commands: parentNode.commands,
+        imports: parentNode.imports,
+        // Add required properties with defaults
+        nodes: [],
+        transformationOptions: {
+          enabled: false,
+          preserveOriginal: true,
+          transformNested: true
+        },
+        createdAt: Date.now(),
+        modifiedAt: Date.now()
+      } : undefined
     });
     
     // Register state with tracking service if available
     this.ensureFactoryInitialized();
     
     const parentId = parentService ? parentService.getStateId() : undefined;
+    
+    console.log('DEBUG: [initializeState] State created', {
+      stateId: this.currentState.stateId,
+      source: this.currentState.source,
+      parentId,
+      hasTrackingClient: !!this.trackingClient,
+      factoryInitializedAfterEnsure: this.factoryInitialized
+    });
     
     // Try to use the client from the factory first
     if (this.trackingClient) {
@@ -197,7 +230,7 @@ export class StateService implements IStateService {
         
         // Explicitly register parent-child relationship if parent exists
         if (parentService && parentId) {
-          console.log('DEBUG: Registering parent-child relationship in initializeState', {
+          console.log('DEBUG: [initializeState] Registering parent-child relationship', {
             parentId,
             childId: this.currentState.stateId,
             source: this.currentState.source || 'new'
@@ -213,12 +246,23 @@ export class StateService implements IStateService {
         
         return; // Successfully used the client, no need to try other methods
       } catch (error) {
+        console.log('DEBUG: [initializeState] Error using trackingClient.registerState', {
+          error,
+          stateId: this.currentState.stateId,
+          trackingClientMethods: Object.keys(this.trackingClient),
+          trackingClientType: typeof this.trackingClient
+        });
         logger.warn('Error using trackingClient.registerState, will fall back to direct service if available', { error });
       }
     }
     
     // Fall back to direct tracking service if available
     if (this.trackingServiceClientFactory) {
+      console.log('DEBUG: [initializeState] Attempting to create new tracking client', {
+        hasFactory: !!this.trackingServiceClientFactory,
+        factoryMethods: Object.keys(this.trackingServiceClientFactory)
+      });
+
       const client = this.trackingServiceClientFactory.createClient();
       client.registerState({
         id: this.currentState.stateId,
@@ -649,23 +693,74 @@ export class StateService implements IStateService {
   }
 
   createChildState(options?: Partial<VariableCopyOptions>): IStateService {
-    console.log('DEBUG: Creating child state', { options });
+    // Add debug info about parent state
+    const parentStateId = this.getStateId();
+    const parentFilePath = this.getCurrentFilePath();
+    const parentStateVars = {
+      textVarCount: this.currentState.variables.text.size,
+      dataVarCount: this.currentState.variables.data.size,
+      pathVarCount: this.currentState.variables.path.size,
+      commandCount: this.currentState.commands.size,
+      importCount: this.currentState.imports.size
+    };
+
+    console.log('DEBUG: [createChildState] Creating child state', { 
+      parentStateId, 
+      parentFilePath,
+      options,
+      parentStateVars,
+      parentStateSource: this.currentState.source,
+      parentStateCreatedAt: this.currentState.createdAt,
+      parentStateModifiedAt: this.currentState.modifiedAt,
+      parentStateTransformationEnabled: this.isTransformationEnabled()
+    });
+
     // Create child node with source from state factory
     const childNode = this.stateFactory.createChildState(this.currentState, { 
       source: 'child' // Use a fixed source since it's not part of VariableCopyOptions
     });
     
-    // Create a new StateService instance with the same dependencies
-    const childService = new StateService(
-      this.stateFactory,
-      this.container,
-      this.eventService,
-      this.trackingServiceClientFactory,
-      this  // Pass the current service as the parent
-    );
+    // Create a child container to scope the parent state registration
+    const childContainer = this.container.createChildContainer();
+    
+    // Register this service as the parent in the child container
+    childContainer.register<IStateService>('ParentStateServiceForChild', {
+      useValue: this
+    });
+    
+    // Register the child container itself (needed by StateService constructor)
+    childContainer.registerInstance('DependencyContainer', childContainer);
+    
+    // Resolve a new StateService instance from the child container
+    const childService = childContainer.resolve<StateService>(StateService);
     
     // Set the child's state node
     childService._setInternalStateNode(childNode);
+
+    // Add debug info about child state
+    const childStateId = childService.getStateId();
+    const childFilePath = childService.getCurrentFilePath();
+    const childStateVars = {
+      textVarCount: childNode.variables.text.size,
+      dataVarCount: childNode.variables.data.size,
+      pathVarCount: childNode.variables.path.size,
+      commandCount: childNode.commands.size,
+      importCount: childNode.imports.size
+    };
+
+    console.log('DEBUG: [createChildState] Child state created', {
+      childStateId,
+      childFilePath,
+      childStateVars,
+      childStateSource: childNode.source,
+      childStateCreatedAt: childNode.createdAt,
+      childStateModifiedAt: childNode.modifiedAt,
+      childStateTransformationEnabled: childService.isTransformationEnabled(),
+      childStateParentId: childService.getParentState()?.getStateId()
+    });
+
+    // Add stack trace for debugging
+    console.log('DEBUG: [createChildState] Stack trace:', new Error().stack);
     
     return childService;
   }
@@ -679,18 +774,14 @@ export class StateService implements IStateService {
     }
 
     const childNode = childState.getInternalStateNode();
-    const mergedNode = this.stateFactory.mergeStates(this.currentState, childNode);
     const updates: Partial<Omit<StateNode, 'stateId' | 'createdAt' | 'parentServiceRef'>> = {
-        variables: mergedNode.variables,
-        commands: mergedNode.commands,
-        imports: mergedNode.imports,
-        nodes: mergedNode.nodes,
-        transformedNodes: mergedNode.transformedNodes,
-        filePath: mergedNode.filePath,
-        transformationOptions: mergedNode.transformationOptions,
-        source: mergedNode.source,
-        modifiedAt: mergedNode.modifiedAt
+      variables: childNode.variables,
+      commands: childNode.commands,
+      imports: childNode.imports,
+      source: 'merge',
+      modifiedAt: Date.now()
     };
+    
     await this.updateState(updates, `mergeChild:${childNode.stateId}`);
 
     this.ensureFactoryInitialized();
@@ -862,10 +953,16 @@ export class StateService implements IStateService {
   }
 
   /**
-   * Implement the new interface method
+   * Gets the minimal state data needed for parent-child relationships.
+   * @internal
    */
-  getInternalStateNode(): StateNode {
-    return this.currentState;
+  getInternalStateNode(): Pick<StateNode, 'stateId' | 'variables' | 'commands' | 'imports'> {
+    return {
+      stateId: this.currentState.stateId,
+      variables: this.currentState.variables,
+      commands: this.currentState.commands,
+      imports: this.currentState.imports
+    };
   }
 
   /**

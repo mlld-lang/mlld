@@ -52,6 +52,7 @@ import { ClientFactoryHelpers } from '@tests/utils/mocks/ClientFactoryHelpers';
 import type { IStateServiceClient } from '@services/state/StateService/interfaces/IStateServiceClient';
 import type { RawPath } from '@core/types/paths';
 import type { ILogger } from '@core/utils/logger';
+import { randomUUID } from 'crypto';
 
 /**
  * Options for creating a TestContextDI instance
@@ -479,22 +480,31 @@ export class TestContextDI {
    */
   private registerDebugServices(): void {
     if (!this.container.isRegistered('IStateTrackingService')) {
-    const mockStateTrackingService = {
-      trackState: vi.fn(),
-      getStateHistory: vi.fn().mockReturnValue([]),
-      clearHistory: vi.fn()
-    };
+      const mockStateTrackingService = {
+        registerState: vi.fn().mockImplementation((metadata) => {
+          return metadata.id || randomUUID();
+        }),
+        addRelationship: vi.fn(),
+        registerRelationship: vi.fn(),
+        getStateLineage: vi.fn().mockReturnValue([]),
+        getStateDescendants: vi.fn().mockReturnValue([]),
+        getAllStates: vi.fn().mockReturnValue([]),
+        getStateMetadata: vi.fn().mockReturnValue(undefined),
+        trackState: vi.fn(),
+        getStateHistory: vi.fn().mockReturnValue([]),
+        clearHistory: vi.fn()
+      };
       this.registerMock('IStateTrackingService', mockStateTrackingService);
     }
     if (!this.container.isRegistered('IStateDebuggerService')) {
-    const mockStateDebuggerService = {
-      debugState: vi.fn(),
-      createSnapshot: vi.fn(),
-      compareSnapshots: vi.fn().mockReturnValue([]),
-      enable: vi.fn(),
-      disable: vi.fn(),
-      isEnabled: vi.fn().mockReturnValue(false)
-    };
+      const mockStateDebuggerService = {
+        debugState: vi.fn(),
+        createSnapshot: vi.fn(),
+        compareSnapshots: vi.fn().mockReturnValue([]),
+        enable: vi.fn(),
+        disable: vi.fn(),
+        isEnabled: vi.fn().mockReturnValue(false)
+      };
       this.registerMock('IStateDebuggerService', mockStateDebuggerService);
     }
   }
