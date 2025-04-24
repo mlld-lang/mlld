@@ -9,6 +9,7 @@ import type {
 } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
 import { v4 as uuidv4 } from 'uuid';
 import { Service } from '@core/ServiceProvider';
+import { VariableType } from '@core/types/variables';
 
 /**
  * @package
@@ -451,7 +452,7 @@ export class StateTrackingService implements IStateTrackingService {
     sourceStateId: string,
     targetStateId: string,
     variableName: string,
-    variableType: 'text' | 'data' | 'path' | 'command',
+    variableType: VariableType,
     alias?: string
   ): void {
     if (!this.hasState(sourceStateId) || !this.hasState(targetStateId)) {

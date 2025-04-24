@@ -18,6 +18,8 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import type { DirectiveProcessingContext, ExecutionContext, OutputFormattingContext } from '@core/types/index';
 import type { ResolutionContext } from '@core/types/resolution';
 import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { DirectiveServiceLike } from '@core/shared-service-types';
+import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
 import * as crypto from 'crypto';
 import { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
@@ -247,21 +249,34 @@ export class InterpreterService implements IInterpreterService {
    * Required by the pipeline validation system
    */
   public canHandleTransformations(): boolean {
-    return this.stateService?.hasTransformationSupport?.() ?? true;
+    // Check if state service exists and supports transformations
+    return this.stateService?.isTransformationEnabled?.() ?? true;
   }
 
   /**
    * Explicitly initialize the service with all required dependencies.
    * @deprecated This method is maintained for backward compatibility. 
    * The service is automatically initialized via dependency injection.
+   * Use constructor injection instead:
+   * ```ts
+   * constructor(
+   *   @inject('IResolutionService') resolutionService: IResolutionService,
+   *   @inject('IPathService') pathService: IPathService,
+   *   @inject('IStateService') stateService: IStateService,
+   *   @inject('DependencyContainer') container: DependencyContainer,
+   *   @inject(delay(() => DirectiveServiceClientFactory)) directiveServiceClientFactory?: DirectiveServiceClientFactory,
+   *   @inject(ParserServiceClientFactory) parserClientFactory?: ParserServiceClientFactory
+   * )
+   * ```
    */
   initialize(
-    directiveService: any, // Keep type loose for deprecation
-    stateService: IStateService // Use strict type here
+    directiveService: IDirectiveService,
+    stateService: IStateService
   ): void {
     this.stateService = stateService;
+    // We don't store directiveService anymore as we use the client factory pattern
     this.initialized = true;
-    logger.warn('InterpreterService initialized manually (deprecated method)');
+    logger.warn('InterpreterService initialized manually (deprecated). Use constructor injection instead.');
   }
 
   /**

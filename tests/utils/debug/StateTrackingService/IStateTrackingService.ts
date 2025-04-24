@@ -3,6 +3,7 @@ import type {
   StateRelationshipBase,
   StateTrackingServiceBase
 } from '@core/shared/types';
+import { VariableType } from '@core/types/variables';
 
 /**
  * @package
@@ -90,7 +91,7 @@ interface IStateTrackingService extends StateTrackingServiceBase {
     sourceStateId: string,
     targetStateId: string,
     variableName: string,
-    variableType: 'text' | 'data' | 'path' | 'command',
+    variableType: VariableType,
     alias?: string
   ): void;
 

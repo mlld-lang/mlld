@@ -29,7 +29,7 @@ export class InterpreterServiceClientFactory {
     @inject('DependencyContainer') container: DependencyContainer
   ) {
     this.container = container || globalContainer; // Fallback just in case
-    const containerId = (this.container as any).id || (this.container === globalContainer ? 'global' : 'unknown');
+    const containerId = this.container === globalContainer ? 'global' : 'local';
 
     if (this.container === globalContainer) {
       logger.warn('InterpreterServiceClientFactory resolved using global container, might cause issues in tests.');
@@ -53,7 +53,7 @@ export class InterpreterServiceClientFactory {
    */
   private getInterpreterService(): IInterpreterService {
     if (!this.interpreterService) {
-      logger.debug('Lazily initializing IInterpreterService using factory container', { containerId: (this.container as any).id || 'global' });
+      logger.debug('Lazily initializing IInterpreterService using factory container', { containerId: this.container === globalContainer ? 'global' : 'local' });
       // Use the injected container instance
       this.interpreterService = this.container.resolve<IInterpreterService>('IInterpreterService');
     }

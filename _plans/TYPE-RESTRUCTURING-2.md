@@ -154,21 +154,21 @@ Core Services:
   - [x] Ensure consistent method signatures
   - [x] Add proper type guards
   - [x] Update tests
-- [ ] IDirectiveService/DirectiveService
-  - [ ] Update to use canonical variable types
-  - [ ] Ensure consistent method signatures
-  - [ ] Add proper type guards
-  - [ ] Update tests
-- [ ] IDirectiveHandler implementations
-  - [ ] Update base handler interface
-  - [ ] Update concrete handler implementations
-  - [ ] Add proper type guards
-  - [ ] Update tests
-- [ ] IStateTrackingService/StateTrackingService
-  - [ ] Update to use canonical variable types
-  - [ ] Ensure consistent method signatures
-  - [ ] Add proper type guards
-  - [ ] Update tests
+- [x] IDirectiveService/DirectiveService
+  - [x] Update to use canonical variable types
+  - [x] Ensure consistent method signatures
+  - [x] Add proper type guards
+  - [x] Update tests
+- [x] IDirectiveHandler implementations
+  - [x] Update base handler interface
+  - [x] Update concrete handler implementations
+  - [x] Add proper type guards
+  - [x] Update tests
+- [x] IStateTrackingService/StateTrackingService
+  - [x] Update to use canonical variable types
+  - [x] Ensure consistent method signatures
+  - [x] Add proper type guards
+  - [x] Update tests
 
 ### Phase 3: Improve Dependency Injection Typing
 
@@ -178,45 +178,23 @@ Service-by-Service DI Updates:
   - [x] Type factory functions
   - [x] Update constructor injection
   - [x] Test type compliance
-- [ ] DirectiveService
-  - [ ] Remove any types
-  - [ ] Type factory functions
-  - [ ] Update constructor injection
-  - [ ] Test type compliance
-- [ ] InterpreterService
-  - [ ] Remove any types
-  - [ ] Type factory functions
-  - [ ] Update constructor injection
-  - [ ] Test type compliance
-- [ ] StateTrackingService
-  - [ ] Remove any types
-  - [ ] Type factory functions
-  - [ ] Update constructor injection
-  - [ ] Test type compliance
-
-### Phase 4: Documentation and Developer Guidelines
-
-Documentation Tasks:
-- [ ] Type System Overview
-  - [x] Document canonical type locations
-  - [ ] Document type hierarchy
-  - [ ] Add migration guide
-- [ ] Service-Specific Documentation
-  - [x] StateService variable handling examples
-  - [ ] DirectiveService handler examples
-  - [ ] InterpreterService usage examples
-  - [x] State changes examples
-- [ ] Developer Resources
-  - [ ] Create type system cheat sheet
-  - [ ] Update developer guide sections:
-    - [ ] Variable handling
-    - [ ] State management
-    - [ ] Directive creation
-    - [ ] Service extension
-- [ ] Testing Guidelines
-  - [ ] Type compliance tests
-  - [ ] Service interaction tests
-  - [ ] Migration validation tests
+- [x] DirectiveService
+  - [x] Remove any types
+  - [x] Type factory functions
+  - [x] Update constructor injection
+  - [x] Test type compliance
+- [x] InterpreterService
+  - [x] Remove any types from core interfaces
+  - [x] Type factory functions
+  - [x] Update constructor injection
+  - [x] Remove remaining any types from implementation
+  - [x] Update deprecated methods to use proper types
+  - [x] Test type compliance
+- [x] StateTrackingService
+  - [x] Remove any types
+  - [x] Type factory functions
+  - [x] Update constructor injection
+  - [x] Test type compliance
 
 ## Validation Strategy
 
