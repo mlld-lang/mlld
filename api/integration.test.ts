@@ -714,27 +714,30 @@ Docs are at $docs
     it('should handle simple imports', async () => {
       const mainFilePath = 'main.meld';
       const importedFilePath = 'imported.meld';
+      const embedFilePath = 'embed.meld';
       const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
       const stateService = testContainer.resolve<IStateService>('IStateService'); // Resolve state service
 
       // Use actual newlines \n instead of escaped \\n
-      const mainContent = `Main file start.\n@import [${importedFilePath}]\nMain file end. @embed [[Imported var: {{importedVar}}]]`;
+      const mainContent = `Main file start.\n@import [${importedFilePath}]\nMain file end.\n@text result = "Imported var: {{importedVar}}"\n@embed [${embedFilePath}]`;
       const importedContent = `@text importedVar = "Imported Value"`;
+      const embedContent = `@text embedResult = "Embed file content: {{result}}"`;
 
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(mainFilePath), mainContent);
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(importedFilePath), importedContent);
+      await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(embedFilePath), embedContent);
 
       // Process using processMeld API
       const result = await processMeld(mainContent, {
         container: testContainer,
-        // filePath: mainFilePath // Removed to fix linter error - investigate options later
+        filePath: mainFilePath
       });
 
       // console.log('Simple import result:', result);
 
       // --- Corrected Assertions ---
       // Check the final output string - expecting import directive to be removed and imported var resolved
-      const expectedOutput = 'Main file start.\n\nMain file end. Imported var: Imported Value';
+      const expectedOutput = 'Main file start.\n\nMain file end.\nImported var: Imported Value\nEmbed file content: Imported var: Imported Value';
       expect(result.trim()).toBe(expectedOutput.trim());
 
       // Verify state after import

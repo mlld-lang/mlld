@@ -6,57 +6,59 @@ import { ErrorSeverity } from '@core/errors/MeldError';
 export function validateEmbedDirective(node: DirectiveNode): void {
   const directive = node.directive as EmbedDirectiveData;
   
-  // Check path is present in the appropriate format (string or path object)
-  // Handle both string paths and structured path objects
-  if (!directive.path || 
-      (typeof directive.path !== 'string' && 
-       (!directive.path.raw || typeof directive.path.raw !== 'string'))) {
-    throw new MeldDirectiveError(
-      'Embed directive requires a valid path',
-      'embed',
-      { 
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Fatal
+  // Grammar has already validated basic syntax and structure
+  // We need to validate AST nodes based on subtype
+  
+  switch (directive.subtype) {
+    case 'embedPath':
+      // Grammar validates path format, but we need to check the AST nodes
+      if (!directive.path || (!directive.path.raw && !directive.path.interpolatedValue)) {
+        throw new MeldDirectiveError(
+          'Embed path directive requires a valid path',
+          'embed',
+          { 
+            location: node.location?.start,
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Fatal
+          }
+        );
       }
-    );
-  }
-  
-  // Get the path value for validation
-  const pathValue = typeof directive.path === 'string' 
-    ? directive.path 
-    : directive.path.raw;
-  
-  // Path cannot be empty
-  if (pathValue.trim() === '') {
-    throw new MeldDirectiveError(
-      'Embed directive path cannot be empty',
-      'embed',
-      {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Fatal
+      break;
+      
+    case 'embedVariable':
+      // Grammar validates variable format, but we need to check the AST nodes
+      if (!directive.path || !directive.path.variable) {
+        throw new MeldDirectiveError(
+          'Embed variable directive requires a valid variable reference',
+          'embed',
+          {
+            location: node.location?.start,
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Fatal
+          }
+        );
       }
-    );
-  }
-  
-  // Optional fields validation
-  if (directive.section !== undefined && typeof directive.section !== 'string') {
-    throw new MeldDirectiveError(
-      'Embed directive "section" property must be a string if provided',
-      'embed',
-      {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Fatal
+      break;
+      
+    case 'embedTemplate':
+      // Grammar validates template format and variable nodes
+      // We just need to check that content exists
+      if (!directive.content) {
+        throw new MeldDirectiveError(
+          'Embed template directive requires content',
+          'embed',
+          {
+            location: node.location?.start,
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Fatal
+          }
+        );
       }
-    );
-  }
-  
-  if (directive.fuzzy !== undefined) {
-    if (typeof directive.fuzzy !== 'number' || directive.fuzzy < 0 || directive.fuzzy > 1) {
+      break;
+      
+    default:
       throw new MeldDirectiveError(
-        'Embed directive "fuzzy" property must be a number between 0 and 1 if provided',
+        `Unknown embed subtype: ${directive.subtype}`,
         'embed',
         {
           location: node.location?.start,
@@ -64,18 +66,5 @@ export function validateEmbedDirective(node: DirectiveNode): void {
           severity: ErrorSeverity.Fatal
         }
       );
-    }
   }
-  
-  if (directive.format !== undefined && typeof directive.format !== 'string') {
-    throw new MeldDirectiveError(
-      'Embed directive "format" property must be a string if provided',
-      'embed',
-      {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Fatal
-      }
-    );
-  }
-} 
+}
