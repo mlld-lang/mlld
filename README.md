@@ -57,7 +57,7 @@ const meldContent = `
   @text greeting = "Hello"
   @text name = "World"
   
-  ${greeting}, ${name}!
+  @embed [[{{greeting}}, {{name}}!]]
 `;
 
 // Simple usage
@@ -89,6 +89,8 @@ Meld is a simple scripting language designed to work within markdown-like docume
 ```
 
 ### Variables & Interpolation
+
+Must be inside an @ directive to be interpolated
 
 ```meld
 {{variable}}            # Reference a variable
