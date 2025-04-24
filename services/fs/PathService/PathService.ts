@@ -82,14 +82,6 @@ export class PathService implements IPathService {
     }
     this.homePath = homeEnv || '';
     this.projectPath = process.cwd();
-    
-    if (process.env.DEBUG === 'true') {
-      console.log('PathService: Initialized with', {
-        hasFileSystemClientFactory: !!this.fsClientFactory,
-        urlContentResolverAvailable: !!this.urlContentResolver,
-        testMode: this.testMode
-      });
-    }
   }
 
   /**
