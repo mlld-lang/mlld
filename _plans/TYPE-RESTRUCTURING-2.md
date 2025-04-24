@@ -148,31 +148,75 @@ Assuming Phase 1 from TYPE-RESTRUCTURING-1.md is complete, here's the punch list
 
 ### Phase 2: Update Service Interfaces
 
-- [ ] Update IStateService to use canonical variable types
-- [ ] Update IDirectiveService interface for state changes and handlers
-- [ ] Update IDirectiveHandler interface
-- [ ] Update IStateTrackingService interface
-- [ ] Ensure consistent method signatures and return types
-- [ ] Run tests to verify interface compatibility
+Core Services:
+- [x] IStateService/StateService
+  - [x] Update to use canonical variable types
+  - [x] Ensure consistent method signatures
+  - [x] Add proper type guards
+  - [x] Update tests
+- [ ] IDirectiveService/DirectiveService
+  - [ ] Update to use canonical variable types
+  - [ ] Ensure consistent method signatures
+  - [ ] Add proper type guards
+  - [ ] Update tests
+- [ ] IDirectiveHandler implementations
+  - [ ] Update base handler interface
+  - [ ] Update concrete handler implementations
+  - [ ] Add proper type guards
+  - [ ] Update tests
+- [ ] IStateTrackingService/StateTrackingService
+  - [ ] Update to use canonical variable types
+  - [ ] Ensure consistent method signatures
+  - [ ] Add proper type guards
+  - [ ] Update tests
 
 ### Phase 3: Improve Dependency Injection Typing
 
-- [ ] Audit DirectiveService for any types
-- [ ] Audit StateService implementation
-- [ ] Audit InterpreterService for any types
-- [ ] Update service implementations to match interfaces
-- [ ] Fix factory functions to use proper types
-- [ ] Create type guards where needed
-- [ ] Test all service implementations for interface compliance
+Service-by-Service DI Updates:
+- [x] StateService
+  - [x] Remove any types
+  - [x] Type factory functions
+  - [x] Update constructor injection
+  - [x] Test type compliance
+- [ ] DirectiveService
+  - [ ] Remove any types
+  - [ ] Type factory functions
+  - [ ] Update constructor injection
+  - [ ] Test type compliance
+- [ ] InterpreterService
+  - [ ] Remove any types
+  - [ ] Type factory functions
+  - [ ] Update constructor injection
+  - [ ] Test type compliance
+- [ ] StateTrackingService
+  - [ ] Remove any types
+  - [ ] Type factory functions
+  - [ ] Update constructor injection
+  - [ ] Test type compliance
 
 ### Phase 4: Documentation and Developer Guidelines
 
-- [ ] Document canonical type locations
-- [ ] Create examples for variable handling
-- [ ] Create examples for state changes
-- [ ] Add JSDoc comments to interfaces
-- [ ] Update developer guide
-- [ ] Create cheat sheet for type usage
+Documentation Tasks:
+- [ ] Type System Overview
+  - [x] Document canonical type locations
+  - [ ] Document type hierarchy
+  - [ ] Add migration guide
+- [ ] Service-Specific Documentation
+  - [x] StateService variable handling examples
+  - [ ] DirectiveService handler examples
+  - [ ] InterpreterService usage examples
+  - [x] State changes examples
+- [ ] Developer Resources
+  - [ ] Create type system cheat sheet
+  - [ ] Update developer guide sections:
+    - [ ] Variable handling
+    - [ ] State management
+    - [ ] Directive creation
+    - [ ] Service extension
+- [ ] Testing Guidelines
+  - [ ] Type compliance tests
+  - [ ] Service interaction tests
+  - [ ] Migration validation tests
 
 ## Validation Strategy
 
