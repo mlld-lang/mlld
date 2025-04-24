@@ -175,14 +175,14 @@ export class StateService implements IStateService {
   private initializeState(parentService?: IStateService): void {
     const parentNode = parentService?.getInternalStateNode();
     
-    console.log('DEBUG: [initializeState] Initializing state', {
-      hasParentService: !!parentService,
-      parentServiceId: parentService?.getStateId(),
-      parentNodeId: parentNode?.stateId,
-      hasStateFactory: !!this.stateFactory,
-      hasTrackingServiceFactory: !!this.trackingServiceClientFactory,
-      factoryInitialized: this.factoryInitialized
-    });
+    // console.log('DEBUG: [initializeState] Initializing state', {
+    //   hasParentService: !!parentService,
+    //   parentServiceId: parentService?.getStateId(),
+    //   parentNodeId: parentNode?.stateId,
+    //   hasStateFactory: !!this.stateFactory,
+    //   hasTrackingServiceFactory: !!this.trackingServiceClientFactory,
+    //   factoryInitialized: this.factoryInitialized
+    // });
 
     this.currentState = this.stateFactory.createState({
       source: 'new',
@@ -208,13 +208,13 @@ export class StateService implements IStateService {
     
     const parentId = parentService ? parentService.getStateId() : undefined;
     
-    console.log('DEBUG: [initializeState] State created', {
-      stateId: this.currentState.stateId,
-      source: this.currentState.source,
-      parentId,
-      hasTrackingClient: !!this.trackingClient,
-      factoryInitializedAfterEnsure: this.factoryInitialized
-    });
+    // console.log('DEBUG: [initializeState] State created', {
+    //   stateId: this.currentState.stateId,
+    //   source: this.currentState.source,
+    //   parentId,
+    //   hasTrackingClient: !!this.trackingClient,
+    //   factoryInitializedAfterEnsure: this.factoryInitialized
+    // });
     
     // Try to use the client from the factory first
     if (this.trackingClient) {
@@ -230,11 +230,11 @@ export class StateService implements IStateService {
         
         // Explicitly register parent-child relationship if parent exists
         if (parentService && parentId) {
-          console.log('DEBUG: [initializeState] Registering parent-child relationship', {
-            parentId,
-            childId: this.currentState.stateId,
-            source: this.currentState.source || 'new'
-          });
+          // console.log('DEBUG: [initializeState] Registering parent-child relationship', {
+          //   parentId,
+          //   childId: this.currentState.stateId,
+          //   source: this.currentState.source || 'new'
+          // });
           this.trackingClient.registerRelationship({
             sourceId: parentId,
             targetId: this.currentState.stateId,
@@ -246,22 +246,22 @@ export class StateService implements IStateService {
         
         return; // Successfully used the client, no need to try other methods
       } catch (error) {
-        console.log('DEBUG: [initializeState] Error using trackingClient.registerState', {
-          error,
-          stateId: this.currentState.stateId,
-          trackingClientMethods: Object.keys(this.trackingClient),
-          trackingClientType: typeof this.trackingClient
-        });
+        // console.log('DEBUG: [initializeState] Error using trackingClient.registerState', {
+        //   error,
+        //   stateId: this.currentState.stateId,
+        //   trackingClientMethods: Object.keys(this.trackingClient),
+        //   trackingClientType: typeof this.trackingClient
+        // });
         logger.warn('Error using trackingClient.registerState, will fall back to direct service if available', { error });
       }
     }
     
     // Fall back to direct tracking service if available
     if (this.trackingServiceClientFactory) {
-      console.log('DEBUG: [initializeState] Attempting to create new tracking client', {
-        hasFactory: !!this.trackingServiceClientFactory,
-        factoryMethods: Object.keys(this.trackingServiceClientFactory)
-      });
+      // console.log('DEBUG: [initializeState] Attempting to create new tracking client', {
+      //   hasFactory: !!this.trackingServiceClientFactory,
+      //   factoryMethods: Object.keys(this.trackingServiceClientFactory)
+      // });
 
       const client = this.trackingServiceClientFactory.createClient();
       client.registerState({
@@ -704,16 +704,16 @@ export class StateService implements IStateService {
       importCount: this.currentState.imports.size
     };
 
-    console.log('DEBUG: [createChildState] Creating child state', { 
-      parentStateId, 
-      parentFilePath,
-      options,
-      parentStateVars,
-      parentStateSource: this.currentState.source,
-      parentStateCreatedAt: this.currentState.createdAt,
-      parentStateModifiedAt: this.currentState.modifiedAt,
-      parentStateTransformationEnabled: this.isTransformationEnabled()
-    });
+    // console.log('DEBUG: [createChildState] Creating child state', { 
+    //   parentStateId, 
+    //   parentFilePath,
+    //   options,
+    //   parentStateVars,
+    //   parentStateSource: this.currentState.source,
+    //   parentStateCreatedAt: this.currentState.createdAt,
+    //   parentStateModifiedAt: this.currentState.modifiedAt,
+    //   parentStateTransformationEnabled: this.isTransformationEnabled()
+    // });
 
     // Create child node with source from state factory
     const childNode = this.stateFactory.createChildState(this.currentState, { 
@@ -748,19 +748,19 @@ export class StateService implements IStateService {
       importCount: childNode.imports.size
     };
 
-    console.log('DEBUG: [createChildState] Child state created', {
-      childStateId,
-      childFilePath,
-      childStateVars,
-      childStateSource: childNode.source,
-      childStateCreatedAt: childNode.createdAt,
-      childStateModifiedAt: childNode.modifiedAt,
-      childStateTransformationEnabled: childService.isTransformationEnabled(),
-      childStateParentId: childService.getParentState()?.getStateId()
-    });
+    // console.log('DEBUG: [createChildState] Child state created', {
+    //   childStateId,
+    //   childFilePath,
+    //   childStateVars,
+    //   childStateSource: childNode.source,
+    //   childStateCreatedAt: childNode.createdAt,
+    //   childStateModifiedAt: childNode.modifiedAt,
+    //   childStateTransformationEnabled: childService.isTransformationEnabled(),
+    //   childStateParentId: childService.getParentState()?.getStateId()
+    // });
 
     // Add stack trace for debugging
-    console.log('DEBUG: [createChildState] Stack trace:', new Error().stack);
+    // console.log('DEBUG: [createChildState] Stack trace:', new Error().stack);
     
     return childService;
   }
@@ -778,6 +778,12 @@ export class StateService implements IStateService {
       variables: childNode.variables,
       commands: childNode.commands,
       imports: childNode.imports,
+      // Add nodes to the updates
+      nodes: [...this.currentState.nodes, ...childState.getNodes()],
+      // Handle transformed nodes if transformation is enabled
+      transformedNodes: this.isTransformationEnabled() 
+        ? [...(this.currentState.transformedNodes || []), ...childState.getTransformedNodes()]
+        : this.currentState.transformedNodes,
       source: 'merge',
       modifiedAt: Date.now()
     };

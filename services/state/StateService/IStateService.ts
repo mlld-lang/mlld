@@ -16,9 +16,8 @@ import type {
   IFilesystemPathState,
   IUrlPathState,
   ICommandDefinition,
-  MeldPath
+  StateChanges
 } from '@core/types/index';
-import type { StateChanges } from '@core/directives/DirectiveHandler';
 
 /**
  * Service responsible for managing state in Meld documents.

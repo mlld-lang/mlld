@@ -182,7 +182,7 @@ describe('API Integration Tests', () => {
       const content = `${textVarExample.code}
 ${templateLiteralExample.code}
 
-Some text content with {{var1}} and {{message}}
+@embed [[Some text content with {{var1}} and {{message}}]]
 `;
 
       try {
@@ -220,7 +220,7 @@ Some text content with {{var1}} and {{message}}
       const content = `${dataVarExample.code}
 ${textVarExample.code}
 
-User info: {{user.name}} ({{user.id}})
+@embed [[User info: {{user.name}} ({{user.id}})]]
 `;
 
       const testFilePath = 'test.meld';
@@ -274,10 +274,12 @@ User info: {{user.name}} ({{user.id}})
   "env": "test"
 }
 
+@embed [[
 Greeting: {{greeting}}
 App name: {{config.app.name}}
 Version: {{config.app.version}}
 First feature: {{config.app.features.0}}
+]]
 `;
 
       const testFilePath = 'test.meld';
@@ -332,7 +334,9 @@ First feature: {{config.app.features.0}}
       // Create content with the example
       const content = `${templateExample.code}
 
+@embed [[
 Template result: {{message}}
+]]
 `;
 
       // Start debug session
@@ -696,7 +700,7 @@ Docs are at $docs
       testContainer.register('IFileSystemService', { useClass: FileSystemService });
       testContainer.register('IParserService', { useClass: ParserService });
       testContainer.register('IResolutionService', { useClass: ResolutionService });
-      testContainer.register('ICircularityService', { useClass: CircularityService });
+      testContainer.registerSingleton('ICircularityService', CircularityService);
       testContainer.register('IDirectiveService', { useClass: DirectiveService }); // Needed for handler resolution
       testContainer.register('IInterpreterService', { useClass: InterpreterService }); // Needed for import recursion
       testContainer.register('IValidationService', { useClass: ValidationService }); // Needed by DirectiveService
@@ -714,7 +718,7 @@ Docs are at $docs
       const stateService = testContainer.resolve<IStateService>('IStateService'); // Resolve state service
 
       // Use actual newlines \n instead of escaped \\n
-      const mainContent = `Main file start.\n@import [${importedFilePath}]\nMain file end. Imported var: {{importedVar}}`;
+      const mainContent = `Main file start.\n@import [${importedFilePath}]\nMain file end. @embed [[Imported var: {{importedVar}}]]`;
       const importedContent = `@text importedVar = "Imported Value"`;
 
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(mainFilePath), mainContent);
@@ -748,9 +752,9 @@ Docs are at $docs
       const stateService = testContainer.resolve<IStateService>('IStateService'); // Resolve state service
 
       // Use actual newlines \n instead of escaped \\n
-      const mainContent = `Main file start.\n@import [${level1FilePath}]\nMain file end. Level1Var: {{level1Var}}, Level2Var: {{level2Var}}`;
-      const level1Content = `Level 1 Start.\n@import [${level2FilePath}]\nLevel 1 End. Level1Var: {{level1Var}}, Level2Var: {{level2Var}}`;
-      const level2Content = `@text level2Var = "Level 2 Value"\n@text level1Var = "Value From Level 2 (using {{level2Var}})"\nLevel 2 Text Node. Level2Var: {{level2Var}}`;
+      const mainContent = `Main file start.\n@import [${level1FilePath}]\n@embed [[Main file end. Level1Var: {{level1Var}}, Level2Var: {{level2Var}}]]`;
+      const level1Content = `Level 1 Start.\n@import [${level2FilePath}]\n@embed [[Level 1 End. Level1Var: {{level1Var}}, Level2Var: {{level2Var}}]]`;
+      const level2Content = `@text level2Var = "Level 2 Value"\n@text level1Var = "Value From Level 2 (using {{level2Var}})"\n@embed [[Level 2 Text Node. Level2Var: {{level2Var}}]]`;
 
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(mainFilePath), mainContent);
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(level1FilePath), level1Content);
@@ -784,24 +788,19 @@ Docs are at $docs
       const fileBPath = 'fileB.meld';
       // Resolve services needed within the test
       const fileSystemService = testContainer.resolve<IFileSystemService>('IFileSystemService');
-      // const stateService = testContainer.resolve<IStateService>('IStateService'); // Not needed for processMeld call
-      // const parserService = testContainer.resolve<IParserService>('IParserService'); // Not needed for processMeld call
-      // const interpreterService = testContainer.resolve<IInterpreterService>('IInterpreterService'); // Not needed for processMeld call
 
-      // Use actual newlines \n instead of escaped \\n
-      const fileAContent = `File A start.\n@import [${fileBPath}]\nFile A end.`;
-      const fileBContent = `File B start.\n@import [${fileAPath}]\nFile B end.`;
+      // Create test files with circular imports
+      const fileAContent = `@import [${fileBPath}]\n@text valueA = "A"`;
+      const fileBContent = `@import [${fileAPath}]\n@text valueB = "B"`;
 
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(fileAPath), fileAContent);
       await fileSystemService.writeFile(unsafeCreateValidatedResourcePath(fileBPath), fileBContent);
 
-      // Use processMeld which internally handles interpretation
-      // Expect it to throw due to circular dependency detected by CircularityService
+      // Use processMeld with filePath to enable proper import resolution
       await expect(processMeld(fileAContent, {
         container: testContainer,
+        filePath: fileAPath // Add filePath for proper import resolution
       })).rejects.toThrow(/Circular import detected/i);
-
-      // console.log('✅ Circular import detected as expected.');
     });
   });
 });
