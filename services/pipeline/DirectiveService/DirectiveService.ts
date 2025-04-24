@@ -426,7 +426,7 @@ export class DirectiveService implements IDirectiveService {
       this.logger.debug(`Executing handler for directive: ${kind}`);
       
       // <<< ADD LOGGING HERE >>>
-      process.stdout.write(`DEBUG: [DirectiveService.handleDirective] BEFORE calling handler '${kind}'. Node: ${JSON.stringify(node)}\n`);
+      // process.stdout.write(`DEBUG: [DirectiveService.handleDirective] BEFORE calling handler '${kind}'. Node: ${JSON.stringify(node)}\n`);
 
       // Use the specifically cast handler
       const result: DirectiveResult = await specificHandler.handle(processingContext); 

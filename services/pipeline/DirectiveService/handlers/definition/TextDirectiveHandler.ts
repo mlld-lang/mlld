@@ -257,7 +257,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         location: node.location?.start,
       });
 
-      process.stdout.write(`DEBUG [TextDirectiveHandler.handle] Returning structure: ${JSON.stringify({ stateChanges }, null, 2)}\n`);
+      // process.stdout.write(`DEBUG [TextDirectiveHandler.handle] Returning structure: ${JSON.stringify({ stateChanges }, null, 2)}\n`);
       return { stateChanges }; // Return the structured result
     } catch (error) {
       logger.error('Error processing text directive:', error);

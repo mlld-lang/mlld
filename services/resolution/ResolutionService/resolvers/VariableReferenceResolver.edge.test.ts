@@ -153,19 +153,14 @@ describe('VariableReferenceResolver Edge Cases', () => {
         await resolver.resolve(node, resolutionContext);
         throw new Error('Test failed: Expected FieldAccessError was not thrown'); 
     } catch (error) {
-        process.stdout.write(`\n>>> CAUGHT ERROR DETAILS (edge test) <<<\n`);
-        process.stdout.write(`instanceof Error: ${error instanceof Error}\n`);
-        process.stdout.write(`constructor.name: ${error?.constructor?.name}\n`);
-        const message = error instanceof Error ? error.message : String(error);
-        process.stdout.write(`message: ${message}\n`);
-        process.stdout.write(`instanceof FieldAccessError: ${error instanceof FieldAccessError}\n`);
-        try {
-            const serialized = JSON.stringify(error, Object.getOwnPropertyNames(error));
-            process.stdout.write(`serialized: ${serialized}\n`);
-        } catch (e) {
-            process.stdout.write(`serialization failed: ${e instanceof Error ? e.message : String(e)}\n`);
-        }
-        process.stdout.write(`>>> END ERROR DETAILS <<<\n\n`);
+        // process.stdout.write(`\n>>> CAUGHT ERROR DETAILS (edge test) <<<\n`);
+        // process.stdout.write(`instanceof Error: ${error instanceof Error}\n`);
+        // process.stdout.write(`constructor.name: ${error?.constructor?.name}\n`);
+        // process.stdout.write(`message: ${message}\n`);
+        // process.stdout.write(`instanceof FieldAccessError: ${error instanceof FieldAccessError}\n`);
+        // process.stdout.write(`serialized: ${serialized}\n`);
+        // process.stdout.write(`serialization failed: ${e instanceof Error ? e.message : String(e)}\n`);
+        // process.stdout.write(`>>> END ERROR DETAILS <<<\n\n`);
         
         if (error instanceof Error) {
             expect(error.constructor.name).toBe('FieldAccessError');
@@ -211,7 +206,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     
     const node: VariableReferenceNode = createVariableReferenceNode('outer', VariableType.TEXT);
 
-    process.stdout.write(`DEBUG: [Nested Error Test] Context before resolve: ${resolutionContext ? 'Defined' : 'UNDEFINED'}\n`);
+    // process.stdout.write(`DEBUG: [Nested Error Test] Context before resolve: ${resolutionContext ? 'Defined' : 'UNDEFINED'}\n`);
     const result: string = await resolver.resolve(node, resolutionContext);
     expect(result).toBe(mockOuterVar.value);
         

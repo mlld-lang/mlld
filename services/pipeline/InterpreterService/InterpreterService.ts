@@ -205,14 +205,14 @@ export class InterpreterService implements IInterpreterService {
     this.ensureClientsInitialized(); 
     
     if (this.directiveClient && this.directiveClient.handleDirective) {
-      process.stdout.write(`DEBUG [callDirectiveHandleDirective] TRY block entered for ${node.directive.kind}\n`);
+      // process.stdout.write(`DEBUG [callDirectiveHandleDirective] TRY block entered for ${node.directive.kind}\n`);
       try {
-        process.stdout.write(`DEBUG [callDirectiveHandleDirective] BEFORE AWAIT directiveClient.handleDirective for ${node.directive.kind}\n`);
+        // process.stdout.write(`DEBUG [callDirectiveHandleDirective] BEFORE AWAIT directiveClient.handleDirective for ${node.directive.kind}\n`);
         const result = await this.directiveClient.handleDirective(node, context);
-        process.stdout.write(`DEBUG [callDirectiveHandleDirective] AFTER AWAIT directiveClient.handleDirective for ${node.directive.kind}. Received type: ${typeof result}, Structure: ${JSON.stringify(result, null, 2)}\n`);
+        // process.stdout.write(`DEBUG [callDirectiveHandleDirective] AFTER AWAIT directiveClient.handleDirective for ${node.directive.kind}. Received type: ${typeof result}, Structure: ${JSON.stringify(result, null, 2)}\n`);
         return result as DirectiveResult;
       } catch (error) {
-        process.stdout.write(`DEBUG [callDirectiveHandleDirective] CAUGHT error during client call for ${node.directive.kind}: ${error instanceof Error ? error.message : String(error)}\n`);
+        // process.stdout.write(`DEBUG [callDirectiveHandleDirective] CAUGHT error during client call for ${node.directive.kind}: ${error instanceof Error ? error.message : String(error)}\n`);
         // Re-throw the original error to preserve its type and details
         throw error;
       }
@@ -306,7 +306,7 @@ export class InterpreterService implements IInterpreterService {
     circularityService?: ICircularityService // Add optional service here
   ): Promise<IStateService> {
     // Log entry 
-    process.stdout.write(`DEBUG [InterpreterService.interpret ENTRY] Has circularityService param? ${!!circularityService}\n`);
+    // process.stdout.write(`DEBUG [InterpreterService.interpret ENTRY] Has circularityService param? ${!!circularityService}\n`);
     
     this.ensureInitialized();
 

@@ -877,7 +877,7 @@ export class StateService implements IStateService {
     const stateId = this.getStateId(); // Get ID once
 
     if (type) {
-      process.stdout.write(`DEBUG [getVariable LOOKUP] StateID: ${stateId}, Type: ${type}, Name: '${name}'\n`);
+      // process.stdout.write(`DEBUG [getVariable LOOKUP] StateID: ${stateId}, Type: ${type}, Name: '${name}'\n`);
       let targetMap: Map<string, MeldVariable> | undefined;
       let mapName: string = 'unknown';
       switch (type) {
@@ -887,14 +887,14 @@ export class StateService implements IStateService {
         case VariableType.COMMAND: targetMap = this.currentState.commands as Map<string, MeldVariable>; mapName='Command'; break;
       }
       if (targetMap) {
-          process.stdout.write(`DEBUG [getVariable SIZE] Type: ${mapName}, StateID: ${stateId}. Map size: ${targetMap.size}\n`);
+          // process.stdout.write(`DEBUG [getVariable SIZE] Type: ${mapName}, StateID: ${stateId}. Map size: ${targetMap.size}\n`);
           let keysFound = '';
           try {
             for (const key of targetMap.keys()) {
               keysFound += key + ', ';
             }
           } catch (e) { keysFound = 'ERROR_ITERATING_KEYS'; }
-          process.stdout.write(`DEBUG [getVariable ITERATED_KEYS] Type: ${mapName}, StateID: ${stateId}. Keys: [${keysFound}]\n`);
+          // process.stdout.write(`DEBUG [getVariable ITERATED_KEYS] Type: ${mapName}, StateID: ${stateId}. Keys: [${keysFound}]\n`);
           
           // +++ Log Instance Check +++
           let isSameInstance = false;
@@ -902,44 +902,44 @@ export class StateService implements IStateService {
           else if (mapName === 'Data') isSameInstance = Object.is(targetMap, this.currentState.variables.data);
           else if (mapName === 'Path') isSameInstance = Object.is(targetMap, this.currentState.variables.path);
           else if (mapName === 'Command') isSameInstance = Object.is(targetMap, this.currentState.commands);
-          process.stdout.write(`DEBUG [getVariable INSTANCE_CHECK] Type: ${mapName}, StateID: ${stateId}. Is targetMap same instance as currentState map? ${isSameInstance}\n`);
+          // process.stdout.write(`DEBUG [getVariable INSTANCE_CHECK] Type: ${mapName}, StateID: ${stateId}. Is targetMap same instance as currentState map? ${isSameInstance}\n`);
           // +++ End Instance Check +++
 
           const hasKey = targetMap.has(name);
-          process.stdout.write(`DEBUG [getVariable CHECK] Type: ${mapName}, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
+          // process.stdout.write(`DEBUG [getVariable CHECK] Type: ${mapName}, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
           const valueFromGet = targetMap.get(name);
-          process.stdout.write(`DEBUG [getVariable GET] Type: ${mapName}, StateID: ${stateId}. Value from .get('${name}'): ${valueFromGet !== undefined ? 'FOUND' : 'UNDEFINED'}\n`);
+          // process.stdout.write(`DEBUG [getVariable GET] Type: ${mapName}, StateID: ${stateId}. Value from .get('${name}'): ${valueFromGet !== undefined ? 'FOUND' : 'UNDEFINED'}\n`);
           variable = valueFromGet;
     } else {
-          process.stdout.write(`DEBUG [getVariable CHECK] Type: ${mapName}, StateID: ${stateId}. Target map is undefined!\n`);
+          // process.stdout.write(`DEBUG [getVariable CHECK] Type: ${mapName}, StateID: ${stateId}. Target map is undefined!\n`);
       }
 
     } else {
-      process.stdout.write(`DEBUG [getVariable LOOKUP] StateID: ${stateId}, Type: ANY, Name: '${name}'\n`);
+      // process.stdout.write(`DEBUG [getVariable LOOKUP] StateID: ${stateId}, Type: ANY, Name: '${name}'\n`);
       let textMap = this.currentState.variables.text;
       let hasKey = textMap.has(name);
-      process.stdout.write(`DEBUG [getVariable CHECK-ANY] Type: TEXT, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
+      // process.stdout.write(`DEBUG [getVariable CHECK-ANY] Type: TEXT, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
       const valueFromText = textMap.get(name);
       variable = valueFromText;
       
       if (!variable) {
           let dataMap = this.currentState.variables.data;
           hasKey = dataMap.has(name);
-          process.stdout.write(`DEBUG [getVariable CHECK-ANY] Type: DATA, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
+          // process.stdout.write(`DEBUG [getVariable CHECK-ANY] Type: DATA, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
           const valueFromData = dataMap.get(name);
           variable = valueFromData;
       }
       if (!variable) {
           let pathMap = this.currentState.variables.path;
           hasKey = pathMap.has(name);
-          process.stdout.write(`DEBUG [getVariable CHECK-ANY] Type: PATH, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
+          // process.stdout.write(`DEBUG [getVariable CHECK-ANY] Type: PATH, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
           const valueFromPath = pathMap.get(name);
           variable = valueFromPath;
       }
       if (!variable) {
           let commandMap = this.currentState.commands;
           hasKey = commandMap.has(name);
-          process.stdout.write(`DEBUG [getVariable CHECK-ANY] Type: COMMAND, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
+          // process.stdout.write(`DEBUG [getVariable CHECK-ANY] Type: COMMAND, StateID: ${stateId}. Map has key '${name}'? ${hasKey}\n`);
           const valueFromCommand = commandMap.get(name);
           variable = valueFromCommand;
       }
@@ -947,17 +947,17 @@ export class StateService implements IStateService {
 
     // If not found locally, check parent
     if (!variable && this.parentService) {
-      process.stdout.write(`DEBUG [getVariable PARENT] StateID: ${stateId}, Var '${name}' not local, checking parent: ${this.parentService.getStateId()}\n`);
+      // process.stdout.write(`DEBUG [getVariable PARENT] StateID: ${stateId}, Var '${name}' not local, checking parent: ${this.parentService.getStateId()}\n`);
       return this.parentService.getVariable(name, type);
     }
     
     // Type mismatch check
     if (variable && type && variable.type !== type) {
-        process.stdout.write(`DEBUG [getVariable TYPE-MISMATCH] StateID: ${stateId}, Var '${name}', Found: ${variable.type}, Expected: ${type}\n`);
+        // process.stdout.write(`DEBUG [getVariable TYPE-MISMATCH] StateID: ${stateId}, Var '${name}', Found: ${variable.type}, Expected: ${type}\n`);
         return undefined; 
     }
 
-    process.stdout.write(`DEBUG [getVariable FINAL] StateID: ${stateId}, Var '${name}', Found: ${!!variable} (Type: ${variable?.type})\n`);
+    // process.stdout.write(`DEBUG [getVariable FINAL] StateID: ${stateId}, Var '${name}', Found: ${!!variable} (Type: ${variable?.type})\n`);
     return variable;
   }
 
@@ -972,28 +972,28 @@ export class StateService implements IStateService {
     let newCommands = this.currentState.commands;
 
     // +++ Log variable being set +++
-    process.stdout.write(`DEBUG [setVariable ENTRY] Setting '${name}' (Type: ${type}). StateID: ${this.getStateId()}\n`);
+    // process.stdout.write(`DEBUG [setVariable ENTRY] Setting '${name}' (Type: ${type}). StateID: ${this.getStateId()}\n`);
 
     if (isTextVariable(variableClone)) {
         const textMap = new Map(newVariables.text);
         textMap.set(name, variableClone);
         newVariables = { ...newVariables, text: textMap };
         // +++ Log map content BEFORE updateState +++
-        process.stdout.write(`DEBUG [setVariable PRE-UPDATE] textMap for '${name}' has key? ${textMap.has(name)}\n`);
+        // process.stdout.write(`DEBUG [setVariable PRE-UPDATE] textMap for '${name}' has key? ${textMap.has(name)}\n`);
     } else if (isDataVariable(variableClone)) {
         const dataMap = new Map(newVariables.data);
         dataMap.set(name, variableClone);
         newVariables = { ...newVariables, data: dataMap };
-        process.stdout.write(`DEBUG [setVariable PRE-UPDATE] dataMap for '${name}' has key? ${dataMap.has(name)}\n`);
+        // process.stdout.write(`DEBUG [setVariable PRE-UPDATE] dataMap for '${name}' has key? ${dataMap.has(name)}\n`);
     } else if (isPathVariable(variableClone)) {
         const pathMap = new Map(newVariables.path);
         pathMap.set(name, variableClone);
         newVariables = { ...newVariables, path: pathMap };
-        process.stdout.write(`DEBUG [setVariable PRE-UPDATE] pathMap for '${name}' has key? ${pathMap.has(name)}\n`);
+        // process.stdout.write(`DEBUG [setVariable PRE-UPDATE] pathMap for '${name}' has key? ${pathMap.has(name)}\n`);
     } else if (isCommandVariable(variableClone)) {
         newCommands = new Map(newCommands);
         newCommands.set(name, variableClone);
-        process.stdout.write(`DEBUG [setVariable PRE-UPDATE] commands map for '${name}' has key? ${newCommands.has(name)}\n`);
+        // process.stdout.write(`DEBUG [setVariable PRE-UPDATE] commands map for '${name}' has key? ${newCommands.has(name)}\n`);
     } else {
         logger.error('Attempted to set unknown variable type', { variable });
         throw new Error(`Unsupported variable type: ${ (variable as any)?.type }`);
@@ -1007,7 +1007,7 @@ export class StateService implements IStateService {
     else if (type === VariableType.DATA) found = this.currentState.variables.data.has(name);
     else if (type === VariableType.PATH) found = this.currentState.variables.path.has(name);
     else if (type === VariableType.COMMAND) found = this.currentState.commands.has(name);
-    process.stdout.write(`DEBUG [setVariable POST-UPDATE] StateID: ${this.getStateId()}. Var '${name}' found in correct map? ${found}\n`);
+    // process.stdout.write(`DEBUG [setVariable POST-UPDATE] StateID: ${this.getStateId()}. Var '${name}' found in correct map? ${found}\n`);
     
     return variableClone;
   }

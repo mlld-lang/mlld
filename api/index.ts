@@ -78,18 +78,18 @@ export async function processMeld(content: string, options?: Partial<ProcessOpti
   });
 
   // <<< Log ID of received resultState >>>
-  process.stdout.write(`>>> [processMeld ENTRY] Received state ID: ${resultState?.getStateId()}\n`);
+  // process.stdout.write(`>>> [processMeld ENTRY] Received state ID: ${resultState?.getStateId()}\n`);
 
   // <<< Restore original getTransformedNodes call >>>
   const nodesToProcess = resultState.getTransformedNodes(); 
   // <<< Keep simple logging >>>
-  process.stdout.write(`\n>>> [processMeld DEBUG] Nodes PRE-OutputService (FROM resultState) (Count: ${nodesToProcess?.length ?? 0}) <<\n`);
+  // process.stdout.write(`\n>>> [processMeld DEBUG] Nodes PRE-OutputService (FROM resultState) (Count: ${nodesToProcess?.length ?? 0}) <<\n`);
   if (nodesToProcess && nodesToProcess.length > 0) {
-    process.stdout.write(`    First 3 nodes: ${JSON.stringify(nodesToProcess.slice(0, 3).map(n => ({ type: n.type, nodeId: n.nodeId, content: (n as any).content?.substring(0, 50) })), null, 2)}\n`);
+    // process.stdout.write(`    First 3 nodes: ${JSON.stringify(nodesToProcess.slice(0, 3).map(n => ({ type: n.type, nodeId: n.nodeId, content: (n as any).content?.substring(0, 50) })), null, 2)}\n`);
   } else {
-    process.stdout.write(`    Node list is empty or null.\n`);
+    // process.stdout.write(`    Node list is empty or null.\n`);
   }
-  process.stdout.write(`>>> [processMeld DEBUG] End Nodes PRE-OutputService <<\n\n`);
+  // process.stdout.write(`>>> [processMeld DEBUG] End Nodes PRE-OutputService <<\n\n`);
 
   // <<< Pass resultState directly to convert >>>
   const finalOutput = await outputService.convert(nodesToProcess, resultState, options?.format || 'xml'); 
@@ -100,7 +100,7 @@ export async function processMeld(content: string, options?: Partial<ProcessOpti
   }
 
   // <<< Log the actual value being returned >>>
-  process.stdout.write(`>>> processMeld returning: ${JSON.stringify(finalOutput)}\n`);
+  // process.stdout.write(`>>> processMeld returning: ${JSON.stringify(finalOutput)}\n`);
 
   return finalOutput;
 }

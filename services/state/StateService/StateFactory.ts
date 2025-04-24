@@ -139,7 +139,7 @@ export class StateFactory implements IStateFactory {
     const approxBeforeDataSize = JSON.stringify(state.variables.data).length;
     const approxBeforePathSize = JSON.stringify(state.variables.path).length;
     const approxBeforeCommandSize = JSON.stringify(state.commands).length;
-    process.stdout.write(`DEBUG [StateFactory.updateState ENTRY] Source: ${source}, StateID: ${state.stateId}, ApproxSizes: Text=${approxBeforeTextSize}, Data=${approxBeforeDataSize}, Path=${approxBeforePathSize}, Cmd=${approxBeforeCommandSize}\n`);
+    // process.stdout.write(`DEBUG [StateFactory.updateState ENTRY] Source: ${source}, StateID: ${state.stateId}, ApproxSizes: Text=${approxBeforeTextSize}, Data=${approxBeforeDataSize}, Path=${approxBeforePathSize}, Commands=${approxBeforeCommandsSize}\n`);
 
     // --- Corrected Map Merging Logic --- 
     // NOTE: [StateFactory Map Handling - 2024-08-XX]
@@ -201,7 +201,7 @@ export class StateFactory implements IStateFactory {
     const approxBeforeDataSize = JSON.stringify(originalState.variables.data).length;
     const approxBeforePathSize = JSON.stringify(originalState.variables.path).length;
     const approxBeforeCommandSize = JSON.stringify(originalState.commands).length;
-    process.stdout.write(`DEBUG [StateFactory.createClonedState ENTRY] Source: ${source}, OriginalStateID: ${originalState.stateId}, ApproxSizes: Text=${approxBeforeTextSize}, Data=${approxBeforeDataSize}, Path=${approxBeforePathSize}, Cmd=${approxBeforeCommandSize}\n`);
+    // process.stdout.write(`DEBUG [StateFactory.createClonedState ENTRY] Source: ${source}, OriginalStateID: ${originalState.stateId}, ApproxSizes: Text=${approxBeforeTextSize}, Data=${approxBeforeDataSize}, Path=${approxBeforePathSize}, Commands=${approxBeforeCommandsSize}\n`);
 
     const clonedVariables = {
         text: cloneDeep(originalState.variables.text),

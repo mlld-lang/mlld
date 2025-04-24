@@ -19,8 +19,8 @@ import { vi, type Mock } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards';
 import type { InterpolatableValue, StructuredPath as AstStructuredPath, VariableReferenceNode } from '@core/syntax/types/nodes';
-import { VariableOrigin } from '@core/types/variables';
-import type { TextVariable, DataVariable, IPathVariable, CommandVariable, VariableMetadata, VariableType } from '@core/types/variables';
+import { VariableOrigin, VariableType } from '@core/types/variables';
+import type { TextVariable, DataVariable, IPathVariable, CommandVariable, VariableMetadata } from '@core/types/variables';
 import type { JsonValue } from '@core/types';
 import type { ICommandDefinition } from '@core/types/define';
 
@@ -465,5 +465,68 @@ export function createVariableReferenceNode(
     isVariableReference: true,
     ...(fields ? { fields } : {}),
     location
+  };
+}
+
+/**
+ * Create a TextVariable instance for testing
+ */
+export function createTextVariable(value: string, metadata?: Partial<VariableMetadata>): TextVariable {
+  return {
+    type: VariableType.TEXT,
+    value,
+    metadata: metadata || {
+      origin: VariableOrigin.DIRECTIVE,
+      timestamp: Date.now()
+    }
+  };
+}
+
+/**
+ * Create a DataVariable instance for testing
+ */
+export function createDataVariable(value: JsonValue, metadata?: Partial<VariableMetadata>): DataVariable {
+  return {
+    type: VariableType.DATA,
+    value,
+    metadata: metadata || {
+      origin: VariableOrigin.DIRECTIVE,
+      timestamp: Date.now()
+    }
+  };
+}
+
+/**
+ * Create a PathVariable instance for testing
+ */
+export function createPathVariable(value: string, metadata?: Partial<VariableMetadata>): IPathVariable {
+  return {
+    type: VariableType.PATH,
+    value,
+    metadata: metadata || {
+      origin: VariableOrigin.DIRECTIVE,
+      timestamp: Date.now()
+    }
+  };
+}
+
+/**
+ * Create a CommandVariable instance for testing
+ */
+export function createCommandVariable(
+  value: string, 
+  execution: { stdout: string; stderr: string; exitCode: number },
+  metadata?: Partial<VariableMetadata>
+): CommandVariable {
+  return {
+    type: VariableType.COMMAND,
+    value,
+    stdout: execution.stdout,
+    stderr: execution.stderr,
+    exitCode: execution.exitCode,
+    metadata: metadata || {
+      origin: VariableOrigin.DIRECTIVE,
+      timestamp: Date.now()
+    }
   };
 } 

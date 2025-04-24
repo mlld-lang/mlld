@@ -74,14 +74,14 @@ export class VariableResolutionTracker {
       targetId?: string;
     }
   ): void {
-    process.stdout.write(`DEBUG: [Tracker] trackResolutionAttempt ENTERED. Name: ${variableName}, Enabled: ${this.config.enabled}\n`); // LOG ENTRY
+    // process.stdout.write(`DEBUG: [Tracker] trackResolutionAttempt ENTERED. Name: ${variableName}, Enabled: ${this.config.enabled}\n`); // LOG ENTRY
     // Skip when disabled for minimal performance impact
     if (!this.config.enabled) return;
-    process.stdout.write(`DEBUG: [Tracker] Passed enabled check.\n`);
+    // process.stdout.write(`DEBUG: [Tracker] Passed enabled check.\n`);
     
     // Apply sampling for high-volume scenarios
     if (this.config.samplingRate !== undefined && Math.random() >= this.config.samplingRate) return;
-    process.stdout.write(`DEBUG: [Tracker] Passed sampling check.\n`);
+    // process.stdout.write(`DEBUG: [Tracker] Passed sampling check.\n`);
     
     // Only track specifically watched variables if configured
     if (this.config.watchVariables && 
@@ -89,13 +89,13 @@ export class VariableResolutionTracker {
         !this.config.watchVariables.includes(variableName)) {
       return;
     }
-    process.stdout.write(`DEBUG: [Tracker] Passed watchVariables check.\n`);
+    // process.stdout.write(`DEBUG: [Tracker] Passed watchVariables check.\n`);
     
     // Enforce maximum attempts limit to prevent memory issues
     if (this.config.maxAttempts && this.attempts.length >= this.config.maxAttempts) {
       this.attempts.shift();
     }
-    process.stdout.write(`DEBUG: [Tracker] Passed maxAttempts check.\n`);
+    // process.stdout.write(`DEBUG: [Tracker] Passed maxAttempts check.\n`);
     
     // Track the attempt
     const attemptData = {
@@ -108,7 +108,7 @@ export class VariableResolutionTracker {
       contextBoundary
     };
     this.attempts.push(attemptData);
-    process.stdout.write(`DEBUG: [Tracker] Pushed attempt for ${variableName}. Total attempts: ${this.attempts.length}\n`); // LOG PUSH
+    // process.stdout.write(`DEBUG: [Tracker] Pushed attempt for ${variableName}. Total attempts: ${this.attempts.length}\n`); // LOG PUSH
   }
   
   /**

@@ -234,7 +234,7 @@ export class VariableReferenceResolver {
     const variable: MeldVariable | undefined = await currentState.getVariable(name, specificType as VariableType | undefined); 
 
     if (variable) {
-        process.stdout.write(`DEBUG: [VRefResolver.getVariable EXIT] Found var '${name}' (Type: ${variable?.type}). StateID=${currentState.getStateId() ?? 'N/A'}\n`);
+        // process.stdout.write(`DEBUG: [VRefResolver.getVariable EXIT] Found var '${name}' (Type: ${variable?.type}). StateID=${currentState.getStateId() ?? 'N/A'}\n`);
         if (context.allowedVariableTypes && !context.allowedVariableTypes.includes(variable.type)) {
             logger.warn(`Variable '${name}' found, but type ${variable.type} is not allowed in this context.`);
             if (this.resolutionTracker) {
@@ -258,7 +258,7 @@ export class VariableReferenceResolver {
         logger.debug(`Found ${variable.type} variable '${name}'.`);
         return variable;
     } else {
-        process.stdout.write(`DEBUG: [VRefResolver.getVariable EXIT] Var '${name}' not found. StateID=${currentState.getStateId() ?? 'N/A'}\n`);
+        // process.stdout.write(`DEBUG: [VRefResolver.getVariable EXIT] Var '${name}' not found. StateID=${currentState.getStateId() ?? 'N/A'}\n`);
         if (this.resolutionTracker) {
            this.resolutionTracker.trackResolutionAttempt(name, `variable-not-found (type hint: ${specificType ?? 'any'})`, false); 
         }

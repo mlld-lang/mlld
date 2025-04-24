@@ -642,7 +642,7 @@ export class OutputService implements IOutputService {
         pretty: opts.pretty
       });
 
-      process.stdout.write(`>>> OutputService.convert returning: ${JSON.stringify(result)}\n`);
+      // process.stdout.write(`>>> OutputService.convert returning: ${JSON.stringify(result)}\n`);
 
       return result;
     } catch (error) {
@@ -900,12 +900,12 @@ export class OutputService implements IOutputService {
     for (const node of nodes) { 
       const currentContext = this.getCurrentFormattingContext();
 
-      process.stdout.write(`>>> convertToMarkdown Loop: Processing node type: ${node.type}, ID: ${node.nodeId}\n`);
+      // process.stdout.write(`>>> convertToMarkdown Loop: Processing node type: ${node.type}, ID: ${node.nodeId}\n`);
 
       if (node.type === 'Text') {
         const textNode = node as TextNode;
         const handledContent = this.handleNewlines(textNode.content, currentContext);
-        process.stdout.write(`    Appending Text content: "${handledContent}"\n`);
+        // process.stdout.write(`    Appending Text content: "${handledContent}"\n`);
         output += handledContent;
       } else if (node.type === 'VariableReference') { 
           const varNode = node as VariableReferenceNode;
@@ -913,19 +913,19 @@ export class OutputService implements IOutputService {
           try {
               const resolvedValue = await this.resolutionService.resolveNodes([varNode], resolutionContext);
               const handledContent = this.handleNewlines(resolvedValue, currentContext);
-              process.stdout.write(`    Resolving ${varNode.identifier} -> Appending Text content: "${handledContent}"\n`);
+              // process.stdout.write(`    Resolving ${varNode.identifier} -> Appending Text content: "${handledContent}"\n`);
               output += handledContent;
           } catch (error) {
               logger.error(`[OutputService] Error resolving variable reference ${varNode.identifier} in context ${resolutionContext.currentFilePath}:`, error);
-              process.stdout.write(`    Error resolving variable reference ${varNode.identifier}. Appending placeholder.\n`);
+              // process.stdout.write(`    Error resolving variable reference ${varNode.identifier}. Appending placeholder.\n`);
               output += `{{ERROR: ${varNode.identifier}}}`;
           }
       } else if (node.type === 'CodeFence') {
         const fenceContent = this.codeFenceToMarkdown(node as CodeFenceNode);
-        process.stdout.write(`    Appending CodeFence content: "${fenceContent.substring(0,50)}..."\n`);
+        // process.stdout.write(`    Appending CodeFence content: "${fenceContent.substring(0,50)}..."\n`);
         output += fenceContent;
       } else {
-        process.stdout.write(`    Ignoring node type: ${node.type}\n`);
+        // process.stdout.write(`    Ignoring node type: ${node.type}\n`);
       }
 
       const endsWithNewline = output.endsWith('\n');

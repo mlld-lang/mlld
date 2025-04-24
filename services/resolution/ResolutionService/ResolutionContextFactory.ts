@@ -140,13 +140,7 @@ export class ResolutionContextFactory {
    */
   static create(state: IStateService, filePath?: string): ResolutionContext {
     // +++ USE process.stdout.write +++
-    try {
-      const stateId = state?.getStateId ? state.getStateId() : 'UNKNOWN_OR_MISSING_STATE';
-      // logger.debug(`[ResolutionContextFactory.create ENTRY]`, { stateId, filePath });
-      process.stdout.write(`DEBUG: [ResolutionContextFactory.create ENTRY] StateID=${stateId}, FilePath=${filePath ?? 'N/A'}\n`);
-    } catch (logError) {
-      console.error('Error logging in ResolutionContextFactory.create:', logError);
-    }
+    // process.stdout.write(`DEBUG: [ResolutionContextFactory.create ENTRY] StateID=${stateId}, FilePath=${filePath ?? 'N/A'}\n`);
     // +++ END LOGGING +++
     
     const baseProps: ResolutionContextBase = {

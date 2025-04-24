@@ -28,7 +28,7 @@ export class ParserServiceClientFactory {
    * @returns A client that provides the minimal interface needed by ResolutionService
    */
   createClient(): IParserServiceClient {
-    process.stdout.write('DEBUG [ParserServiceClientFactory] createClient() called.\n');
+    // process.stdout.write('DEBUG [ParserServiceClientFactory] createClient() called.\n');
     logger.debug('Creating ParserServiceClient');
     
     return {
