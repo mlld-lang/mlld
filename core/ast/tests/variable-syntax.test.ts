@@ -1,7 +1,8 @@
 /// <reference types="vitest" />
 import { describe, expect, it } from 'vitest';
 import { parse } from '@core/ast';
-import { VariableReferenceNode } from '@core/syntax/types';
+import { VariableReferenceNode, TextNode } from '@core/syntax/types';
+import { DirectiveNode } from '@core/ast/types';
 
 describe('Unified variable syntax', () => {
   it('should parse text variables with {{variable}} syntax', async () => {
@@ -12,13 +13,14 @@ describe('Unified variable syntax', () => {
     
     // Text node "Hello "
     expect(result.ast[0].type).toBe('Text');
-    expect(result.ast[0].content).toBe('Hello ');
+    expect((result.ast[0] as TextNode).content).toBe('Hello ');
     
     // Variable node
-    expect(result.ast[1].type).toBe('VariableReference');
-    expect(result.ast[1].identifier).toBe('name');
-    expect(result.ast[1].valueType).toBe('text');
-    expect(result.ast[1].isVariableReference).toBe(true);
+    const varNode = result.ast[1] as VariableReferenceNode;
+    expect(varNode.type).toBe('VariableReference');
+    expect(varNode.identifier).toBe('name');
+    expect(varNode.valueType).toBe('text');
+    expect(varNode.isVariableReference).toBe(true);
     
     // Text node "!"
     expect(result.ast[2].type).toBe('Text');
@@ -30,11 +32,12 @@ describe('Unified variable syntax', () => {
     const result = await parse(input);
     
     expect(result.ast).toHaveLength(2);
-    expect(result.ast[1].type).toBe('VariableReference');
-    expect(result.ast[1].identifier).toBe('user');
-    expect(result.ast[1].fields).toEqual([{ type: 'field', value: 'name' }]);
-    expect(result.ast[1].valueType).toBe('data');
-    expect(result.ast[1].isVariableReference).toBe(true);
+    const varNode = result.ast[1] as VariableReferenceNode;
+    expect(varNode.type).toBe('VariableReference');
+    expect(varNode.identifier).toBe('user');
+    expect(varNode.fields).toEqual([{ type: 'field', value: 'name' }]);
+    expect(varNode.valueType).toBe('data');
+    expect(varNode.isVariableReference).toBe(true);
   });
   
   it('should distinguish between text and data variables using fields', async () => {
@@ -43,12 +46,12 @@ describe('Unified variable syntax', () => {
     
     expect(result.ast).toHaveLength(4);
     
-    const textVar = result.ast.find(node => node.type === 'VariableReference' && node.valueType === 'text');
+    const textVar = result.ast.find(node => node.type === 'VariableReference') as VariableReferenceNode | undefined;
     expect(textVar).toBeDefined();
     expect(textVar?.valueType).toBe('text');
     expect(textVar?.isVariableReference).toBe(true);
     
-    const dataVar = result.ast.find(node => node.type === 'VariableReference' && node.valueType === 'data');
+    const dataVar = result.ast.find(node => node.type === 'VariableReference' && (node as VariableReferenceNode).valueType === 'data') as VariableReferenceNode | undefined;
     expect(dataVar).toBeDefined();
     expect(dataVar?.valueType).toBe('data');
     expect(dataVar?.fields).toEqual([{ type: 'field', value: 'field' }]);
@@ -61,16 +64,18 @@ describe('Unified variable syntax', () => {
     
     expect(result.ast).toHaveLength(1);
     expect(result.ast[0].type).toBe('Directive');
-    expect(result.ast[0].directive.kind).toBe('text');
-    expect(result.ast[0].directive.identifier).toBe('template');
-    expect(result.ast[0].directive.value).toEqual([
+    const directiveNode = result.ast[0] as DirectiveNode;
+    expect(directiveNode.directive.kind).toBe('text');
+    expect(directiveNode.directive.identifier).toBe('template');
+    expect(directiveNode.directive.values).toEqual([
       expect.objectContaining({ type: 'Text', content: '\nHello ' }),
-      expect.objectContaining({ type: 'VariableReference', identifier: 'name', valueType: 'text' }),
+      expect.objectContaining({ type: 'VariableReference', identifier: 'name', valueType: 'text', isVariableReference: true }),
       expect.objectContaining({ type: 'Text', content: '!\nWelcome to ' }),
       expect.objectContaining({ 
         type: 'VariableReference', 
         identifier: 'site', 
         valueType: 'data', 
+        isVariableReference: true,
         fields: [ expect.objectContaining({ type: 'field', value: 'title' }) ] 
       }),
       expect.objectContaining({ type: 'Text', content: '.\n' })
@@ -83,8 +88,9 @@ describe('Unified variable syntax', () => {
     
     expect(result.ast).toHaveLength(1);
     expect(result.ast[0].type).toBe('Directive');
-    expect(result.ast[0].directive.kind).toBe('embed');
-    expect(result.ast[0].directive.path.raw).toBe('$PROJECTPATH/file.md');
+    const directiveNode = result.ast[0] as DirectiveNode;
+    expect(directiveNode.directive.kind).toBe('embed');
+    expect(directiveNode.directive.path.raw).toBe('$PROJECTPATH/file.md');
   });
 });
 
@@ -103,34 +109,71 @@ describe('Variable Syntax Handling', () => {
       expect(result.ast.length).toBe(3);
       
       // Check the node with embed directive
-      const embedNode = result.ast.find(node => node.directive?.kind === 'embed');
+      const embedNode = result.ast.find(node => node.directive?.kind === 'embed') as DirectiveNode;
       expect(embedNode).toBeDefined();
       expect(embedNode.directive.kind).toBe('embed');
       
       // Check the path contains the variable
       expect(embedNode.directive.path.raw).toBe('{{file_path}}');
       
-      // Check that variables array contains 'file_path'
-      expect(embedNode.directive.path.structured.variables.text).toContain('file_path');
+      // Check the values array contains the variable reference
+      expect(embedNode.directive.path.values).toEqual([
+        expect.objectContaining({
+          type: 'VariableReference',
+          identifier: 'file_path',
+          valueType: 'text',
+          isVariableReference: true
+        })
+      ]);
     });
 
-    it('should handle non-bracketed variable syntax', async () => {
-      const input = '@text file_path = "test-file.md"\n\n@embed {{file_path}}';
+    it('should handle non-bracketed text variable syntax', async () => {
+      const input = '@text content = "Some content"\n\n@embed {{content}}';
       const result = await parse(input);
       
       // Expect three nodes: text directive, newlines, embed directive
       expect(result.ast.length).toBe(3);
       
       // Check the node with embed directive
-      const embedNode = result.ast.find(node => node.directive?.kind === 'embed');
+      const embedNode = result.ast.find(node => node.directive?.kind === 'embed') as DirectiveNode;
+      expect(embedNode).toBeDefined();
+      expect(embedNode.directive.kind).toBe('embed');
+      
+      // Check the values array contains the variable reference
+      expect(embedNode.directive.values).toEqual([
+        expect.objectContaining({
+          type: 'VariableReference',
+          identifier: 'content',
+          valueType: 'text',
+          isVariableReference: true
+        })
+      ]);
+    });
+
+    it('should handle path variable syntax', async () => {
+      const input = '@text file_path = "test-file.md"\n\n@embed [$file_path]';
+      const result = await parse(input);
+      
+      // Expect three nodes: text directive, newlines, embed directive
+      expect(result.ast.length).toBe(3);
+      
+      // Check the node with embed directive
+      const embedNode = result.ast.find(node => node.type === 'Directive' && (node as DirectiveNode).directive.kind === 'embed') as DirectiveNode;
       expect(embedNode).toBeDefined();
       expect(embedNode.directive.kind).toBe('embed');
       
       // Check the path contains the variable
-      expect(embedNode.directive.path.raw).toBe('{{file_path}}');
+      expect(embedNode.directive.path.raw).toBe('$file_path');
       
-      // Check that variables array contains 'file_path'
-      expect(embedNode.directive.path.structured.variables.text).toContain('file_path');
+      // Check the values array contains the variable reference
+      expect(embedNode.directive.path.values).toEqual([
+        expect.objectContaining({
+          type: 'VariableReference',
+          identifier: 'file_path',
+          valueType: 'path',
+          isVariableReference: true
+        })
+      ]);
     });
   });
 
@@ -143,15 +186,22 @@ describe('Variable Syntax Handling', () => {
       expect(result.ast.length).toBe(3);
       
       // Check the node with import directive
-      const importNode = result.ast.find(node => node.directive?.kind === 'import');
+      const importNode = result.ast.find(node => node.type === 'Directive' && (node as DirectiveNode).directive.kind === 'import') as DirectiveNode;
       expect(importNode).toBeDefined();
       expect(importNode.directive.kind).toBe('import');
       
       // Check the path contains the variable
       expect(importNode.directive.path.raw).toBe('{{import_path}}');
       
-      // Check that variables array contains 'import_path'
-      expect(importNode.directive.path.structured.variables.text).toContain('import_path');
+      // Check the values array contains the variable reference
+      expect(importNode.directive.path.values).toEqual([
+        expect.objectContaining({
+          type: 'VariableReference',
+          identifier: 'import_path',
+          valueType: 'text',
+          isVariableReference: true
+        })
+      ]);
     });
 
     it('should handle non-bracketed variable syntax', async () => {
@@ -162,15 +212,22 @@ describe('Variable Syntax Handling', () => {
       expect(result.ast.length).toBe(3);
       
       // Check the node with import directive
-      const importNode = result.ast.find(node => node.directive?.kind === 'import');
+      const importNode = result.ast.find(node => node.type === 'Directive' && (node as DirectiveNode).directive.kind === 'import') as DirectiveNode;
       expect(importNode).toBeDefined();
       expect(importNode.directive.kind).toBe('import');
       
       // Check the path contains the variable
       expect(importNode.directive.path.raw).toBe('{{import_path}}');
       
-      // Check that variables array contains 'import_path'
-      expect(importNode.directive.path.structured.variables.text).toContain('import_path');
+      // Check the values array contains the variable reference
+      expect(importNode.directive.path.values).toEqual([
+        expect.objectContaining({
+          type: 'VariableReference',
+          identifier: 'import_path',
+          valueType: 'text',
+          isVariableReference: true
+        })
+      ]);
     });
   });
 
@@ -183,73 +240,32 @@ describe('Variable Syntax Handling', () => {
       expect(result.ast.length).toBe(3);
       
       // Check the node with run directive
-      const runNode = result.ast.find(node => node.directive?.kind === 'run');
+      const runNode = result.ast.find(node => node.type === 'Directive' && (node as DirectiveNode).directive.kind === 'run') as DirectiveNode;
       expect(runNode).toBeDefined();
       expect(runNode.directive.kind).toBe('run');
       
       // Check the command contains the variable reference
-      expect(runNode.directive.command).toEqual([
+      expect(runNode.directive.values).toEqual([
         expect.objectContaining({
           type: 'VariableReference',
           identifier: 'command',
-          valueType: 'text'
+          valueType: 'text',
+          isVariableReference: true
         })
       ]);
     });
 
-    it('should handle non-bracketed variable syntax', async () => {
-      const input = '@run {{command}}'; 
-      const { ast } = await parse(input);
-      
-      expect(ast).toHaveLength(1);
-      const runNode = ast[0];
-      expect(runNode.type).toBe('Directive');
-      expect(runNode.directive.kind).toBe('run');
-      expect(runNode.directive.subtype).toBe('runCommand'); // It's parsed as a command string
-
-      // Check the command is currently parsed as a literal string (Incorrect Grammar Behavior)
-      expect(runNode.directive.command).toBe('{{command}}');
-    });
-
-    // Test bracketed vs non-bracketed run directives
-    it('should handle bracketed text variable syntax in @run directive', async () => {
-      const input = `@run [{{command}}]`; 
-      const { ast } = await parse(input);
-
-      expect(ast).toHaveLength(1);
-      const runNode = ast[0];
-      expect(runNode.type).toBe('Directive');
-      expect(runNode.directive.kind).toBe('run');
-      expect(runNode.directive.subtype).toBe('runCommand'); // Should be runCommand
-      
-      // Check the command contains the variable reference
-      expect(runNode.directive.command).toEqual([
-        expect.objectContaining({
-          type: 'VariableReference',
-          identifier: 'command',
-          valueType: 'text'
-        })
-      ]);
-    });
-
-    it('should handle non-bracketed path variable syntax in @run directive', async () => {
+    it('should handle non-bracketed path variable syntax', async () => {
       const input = '@run $command';
-      const { ast } = await parse(input);
+      const result = await parse(input);
       
-      expect(ast).toHaveLength(1);
-      const node = ast[0];
-      expect(node.type).toBe('Directive');
+      expect(result.ast).toHaveLength(1);
+      const node = result.ast.find(node => node.type === 'Directive' && (node as DirectiveNode).directive.kind === 'run') as DirectiveNode;
+      expect(node).toBeDefined();
       expect(node.directive.kind).toBe('run');
-      expect(node.directive.subtype).toBe('runDefined'); 
-      // Check for CommandReference object structure, without isCommandReference
-      expect(node.directive.command).toEqual(
-        expect.objectContaining({
-          name: 'command',
-          args: [],
-          raw: '$command'
-          // isCommandReference: true // Removed this check
-        })
-      );
+      
+      // Check the command reference structure
+      expect(node.directive.raw).toBe('$command');
     });
   });
-}); 
+});

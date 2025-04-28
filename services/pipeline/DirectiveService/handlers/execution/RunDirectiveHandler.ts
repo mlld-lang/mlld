@@ -100,22 +100,18 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           errorVariable = 'stderr' 
       } = directive;
 
-      let commandToExecute: string;
+      let commandToExecute: string = ''; // Initialize to satisfy compiler
       let commandArgs: string[] = [];
       const execOptions = { cwd: context.executionContext?.cwd || this.fileSystemService.getCwd() };
 
       // --- Resolution Block --- 
       try {
           if (subtype === 'runCommand') {
-            if (!isInterpolatableValueArray(commandInput)) {
-              throw new DirectiveError('Invalid command input for runCommand', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
-            }
+            // Validator ensures commandInput is InterpolatableValue[] for runCommand
             commandToExecute = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
           } else if (subtype === 'runDefined') {
-             const definedCommand = commandInput as { name: string; args?: InterpolatableValue };
-             if (typeof definedCommand !== 'object' || !definedCommand.name) {
-               throw new DirectiveError('Invalid command input structure for runDefined', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
-             }
+             const definedCommand = commandInput as { name: string; args?: InterpolatableValue[] };
+             // Validator ensures structure { name: string, args?: ... } for runDefined
              const cmdVar = state.getVariable(definedCommand.name, VariableType.COMMAND) as CommandVariable | undefined;
              if (!cmdVar?.value || !isBasicCommand(cmdVar.value)) {
                  const errorMsg = cmdVar ? `Cannot run non-basic command '${definedCommand.name}'` : `Command definition '${definedCommand.name}' not found`;
@@ -123,13 +119,12 @@ export class RunDirectiveHandler implements IDirectiveHandler {
              }
              commandToExecute = cmdVar.value.commandTemplate;
              if (definedCommand.args) {
-                 const resolvedArgsPromises = definedCommand.args.map(node => this.resolutionService.resolveInContext([node], resolutionContext));
+                 // Resolve each argument node individually within the context
+                 const resolvedArgsPromises = definedCommand.args.map(argNode => this.resolutionService.resolveNodes([argNode], resolutionContext)); 
                  commandArgs = await Promise.all(resolvedArgsPromises);
              }
           } else if (subtype === 'runCode' || subtype === 'runCodeParams') {
-            if (!isInterpolatableValueArray(commandInput)) {
-              throw new DirectiveError('Invalid command input for runCode/runCodeParams', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
-            }
+            // Validator ensures commandInput is InterpolatableValue[] for runCode/runCodeParams
             const scriptContent = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
             if (language) {
               tempFilePath = await this.createTempScriptFile(scriptContent, language);
@@ -155,11 +150,10 @@ export class RunDirectiveHandler implements IDirectiveHandler {
             if (commandArgs.length > 0 && (subtype === 'runCodeParams')) {
               commandToExecute = `${commandToExecute} ${commandArgs.join(' ')}`;
             }
-          } else {
-            throw new DirectiveError(`Unsupported run subtype '${subtype}'`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
           }
           
           if (commandArgs.length > 0 && !(subtype === 'runCodeParams')) {
+            // Ensure commandToExecute is assigned before appending
             commandToExecute += ` ${commandArgs.join(' ')}`;
           }
       } catch (resolutionError) {

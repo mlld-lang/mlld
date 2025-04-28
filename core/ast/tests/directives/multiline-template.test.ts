@@ -18,7 +18,7 @@ template without backticks.
     expect(directive.directive.kind).toBe('text');
     expect(directive.directive.identifier).toBe('template');
     expect(directive.directive.source).toBe('literal');
-    expect(directive.directive.value).toEqual([
+    expect(directive.directive.values).toEqual([
       expect.objectContaining({ type: 'Text', content: '\nHello, world!\nThis is a multi-line\ntemplate without backticks.\n' })
     ]);
   });
@@ -42,10 +42,14 @@ It is nice to meet you, {{name}}.
     );
     
     expect(templateDirective).toBeDefined();
+    if (!templateDirective) {
+      throw new Error('Expected to find template directive');
+    }
+
     expect(templateDirective.directive.kind).toBe('text');
     expect(templateDirective.directive.identifier).toBe('template');
     expect(templateDirective.directive.source).toBe('literal');
-    expect(templateDirective.directive.value).toEqual([
+    expect(templateDirective.directive.values).toEqual([
       expect.objectContaining({ type: 'Text', content: '\n' }),
       expect.objectContaining({ type: 'VariableReference', identifier: 'greeting', valueType: 'text' }),
       expect.objectContaining({ type: 'Text', content: '!\nIt is nice to meet you, ' }),

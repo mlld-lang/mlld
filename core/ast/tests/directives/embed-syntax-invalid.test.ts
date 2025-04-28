@@ -6,14 +6,20 @@ import type { MeldNode } from '@core/syntax/types';
 interface DirectiveNode extends MeldNode {
   directive: {
     kind: string;
-    content?: string;
+    content?: Array<{
+      type: string;
+      content: string;
+    }>;
     path?: {
       raw: string;
-      structured?: {
-        variables?: {
-          path?: string[];
-        };
-      };
+      values: Array<{
+        type: string;
+        valueType?: string;
+        identifier?: string;
+        isVariableReference?: boolean;
+        content?: string;
+        value?: string;
+      }>;
     };
     section?: string;
   };
@@ -61,7 +67,14 @@ describe('directives/@embed invalid syntax', () => {
     
     const node1 = result1.ast[0] as DirectiveNode;
     expect(node1.directive.path).toBeDefined();
-    expect(node1.directive.path?.structured?.variables?.path).toContain('file_path');
+    expect(node1.directive.path?.values).toEqual([
+      expect.objectContaining({
+        type: 'VariableReference',
+        valueType: 'path',
+        identifier: 'file_path',
+        isVariableReference: true
+      })
+    ]);
     
     // Path variable in double brackets should be treated as literal text
     const input2 = `@embed [[ $file_path ]]`;
@@ -88,7 +101,8 @@ describe('directives/@embed invalid syntax', () => {
       expect(true).toBe(false); // This should never execute
     } catch (error) {
       // We expect an error to be thrown
-      expect(error.message).toMatch(/missing closing bracket|expected/i);
+      const err = error as Error;
+      expect(err.message).toMatch(/missing closing bracket|expected/i);
     }
   });
 }); 

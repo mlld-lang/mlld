@@ -1,5 +1,6 @@
 import { parse as grammarParse } from '@core/ast/grammar/index';
 import type { MeldNode } from '@core/syntax/types';
+import type { NodeType } from '@core/syntax/types/shared-types';
 import { MeldAstError, ParseErrorCode, ParseResult, ParserOptions, PeggyError } from '@core/ast/types';
 
 const defaultOptions: Required<Omit<ParserOptions, 'onError'>> & Pick<ParserOptions, 'onError'> = {
@@ -112,6 +113,12 @@ function validateNodes(nodes: MeldNode[], errors: MeldAstError[]): void {
           }
           if ((node as any).language && typeof (node as any).language !== 'string') {
             throw new Error('CodeFence language must be string');
+          }
+          break;
+
+        case 'Newline':
+          if (typeof (node as any).content !== 'string') {
+            throw new Error('Newline node missing content');
           }
           break;
 

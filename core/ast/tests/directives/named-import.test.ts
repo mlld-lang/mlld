@@ -9,18 +9,13 @@ describe('directives/@import with named imports', () => {
       const result = await parse(input);
       
       expect(result.ast).toHaveLength(1);
-      expect(result.ast[0]).toMatchObject({
+      const node = result.ast[0];
+      expect(node).toMatchObject({
         type: 'Directive',
         directive: {
           kind: 'import',
           path: {
             raw: 'vars.meld',
-            structured: {
-              base: '.',
-              segments: ['vars.meld'],
-              variables: {},
-              cwd: true
-            }
           },
           imports: [
             { name: 'var1', alias: null },
@@ -35,18 +30,13 @@ describe('directives/@import with named imports', () => {
       const result = await parse(input);
       
       expect(result.ast).toHaveLength(1);
-      expect(result.ast[0]).toMatchObject({
+      const node = result.ast[0];
+      expect(node).toMatchObject({
         type: 'Directive',
         directive: {
           kind: 'import',
           path: {
             raw: 'vars.meld',
-            structured: {
-              base: '.',
-              segments: ['vars.meld'],
-              variables: {},
-              cwd: true
-            }
           },
           imports: [
             { name: 'var1', alias: null },
@@ -61,7 +51,8 @@ describe('directives/@import with named imports', () => {
       const result = await parse(input);
       
       expect(result.ast).toHaveLength(1);
-      expect(result.ast[0]).toMatchObject({
+      const node = result.ast[0];
+      expect(node).toMatchObject({
         type: 'Directive',
         directive: {
           kind: 'import',
@@ -80,7 +71,8 @@ describe('directives/@import with named imports', () => {
       const result = await parse(input);
       
       expect(result.ast).toHaveLength(1);
-      expect(result.ast[0]).toMatchObject({
+      const node = result.ast[0];
+      expect(node).toMatchObject({
         type: 'Directive',
         directive: {
           kind: 'import',
@@ -97,7 +89,8 @@ describe('directives/@import with named imports', () => {
       const result = await parse(input);
       
       expect(result.ast).toHaveLength(1);
-      expect(result.ast[0]).toMatchObject({
+      const node = result.ast[0];
+      expect(node).toMatchObject({
         type: 'Directive',
         directive: {
           kind: 'import',
@@ -116,7 +109,8 @@ describe('directives/@import with named imports', () => {
       const result = await parse(input);
       
       expect(result.ast).toHaveLength(1);
-      expect(result.ast[0]).toMatchObject({
+      const node = result.ast[0];
+      expect(node).toMatchObject({
         type: 'Directive',
         directive: {
           kind: 'import',

@@ -25,6 +25,7 @@ import {
 } from '@services/fs/PathService/errors/url/index';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver';
 import type { StructuredPath } from '@core/syntax/types/nodes';
+import type { TextNode, VariableReferenceNode } from '@core/syntax/types/nodes';
 import {
   AbsolutePath,
   RelativePath,
@@ -421,19 +422,33 @@ export class PathService implements IPathService {
 
     // TODO: Populate structured.variables properly based on parsing/resolution info if available
     // This current implementation is simplified.
+    // TODO: Refactor this method to accept the parsed path object from the AST/grammar
+    //       instead of just the raw string. This will allow using the actual 'values'
+    //       array and flags instead of the current placeholders/defaults.
     return {
-      raw: raw, // Use 'raw' instead of 'original'
-      normalized: normalized,
-      structured: { // Ensure structured object matches interface
-      segments: segments,
-         base: base,
-         url: isUrl,
-         // variables: {} // Initialize variables if needed
-      },
-      // These properties might depend on validation state, set defaults or omit if not applicable here
-      // isVariableReference: false, 
-      // isPathVariable: false,
-      // interpolatedValue: undefined 
+      raw: raw,
+      // Placeholder values - requires parsing logic similar to grammar
+      values: [
+        { 
+          type: 'Text', 
+          value: pathString, 
+          content: pathString, 
+          nodeId: 'placeholder-node-id', 
+          loc: { 
+            start: { offset: 0, line: 1, column: 1 }, 
+            end: { offset: pathString.length, line: 1, column: pathString.length + 1 } 
+          } 
+        } as TextNode
+      ],
+      // Defaults/Placeholders for flags and properties not easily determined here
+      isVariableReference: false, 
+      isPathVariable: false,
+      isAbsolute: path.isAbsolute(normalized),
+      isRelativeToCwd: !path.isAbsolute(normalized), // Simplified assumption
+      hasVariables: false, // Placeholder
+      hasTextVariables: false, // Placeholder
+      hasPathVariables: false, // Placeholder
+      variable_warning: false // Placeholder
     };
   }
 
@@ -619,7 +634,10 @@ export class PathService implements IPathService {
       const cause = error instanceof Error ? error : new Error(String(error)); 
       throw new PathValidationError(PathErrorMessages.INVALID_PATH, {
         code: PathErrorCode.INVALID_PATH,
-        details: { pathString: String(absolutePathToCheck), reason: 'Internal error during existence check' },
+        details: { 
+            pathString: String(absolutePathToCheck), 
+            reason: 'Internal error during existence check' 
+        },
         cause: cause,
         severity: ErrorSeverity.Fatal
       });
@@ -850,7 +868,10 @@ export class PathService implements IPathService {
   async fetchURL(url: UrlPath, options?: URLFetchOptions): Promise<URLResponse> {
     if (!this.urlContentResolver) {
         logger.error('Cannot fetch URL - URLContentResolver dependency is missing.');
-        throw new MeldError('URLContentResolver is required for URL fetching', { code: 'DEPENDENCY_MISSING', severity: ErrorSeverity.Fatal });
+        throw new MeldError('URLContentResolver is required for URL fetching', { 
+          code: 'DEPENDENCY_MISSING',
+          severity: ErrorSeverity.Fatal
+        });
     }
     try {
         return await this.urlContentResolver.fetchURL(url, options);

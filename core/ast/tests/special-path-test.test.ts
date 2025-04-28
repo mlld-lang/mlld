@@ -12,13 +12,19 @@ describe('special path variables', () => {
     expect(ast[0].type).toBe('Directive');
     const node = ast[0] as DirectiveNode;
     expect(node.directive.kind).toBe('embed');
-    expect(node.directive.path.raw).toBe('$./docs/UX.md');
-    expect(node.directive.path.structured.variables.special).toContain('PROJECTPATH');
-    expect(node.directive.path.structured.segments).toContain('docs');
-    expect(node.directive.path.structured.segments).toContain('UX.md');
+    expect(node.directive.path.raw).toBe('$PROJECTPATH/docs/UX.md');
+    expect(node.directive.path.values).toEqual([
+      expect.objectContaining({ type: 'VariableReference', identifier: 'PROJECTPATH', valueType: 'path' }),
+      expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+      expect.objectContaining({ type: 'Text', content: 'docs' }),
+      expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+      expect.objectContaining({ type: 'Text', content: 'UX' }),
+      expect.objectContaining({ type: 'DotSeparator', value: '.' }),
+      expect.objectContaining({ type: 'Text', content: 'md' })
+    ]);
     
     // Check path normalization
-    expect(node.directive.path.normalized).toBe('$PROJECTPATH/docs/UX.md');
+    // normalized path is no longer used
     console.log('AST for $.:', JSON.stringify(node.directive.path, null, 2));
   });
 
@@ -30,13 +36,19 @@ describe('special path variables', () => {
     expect(ast[0].type).toBe('Directive');
     const node = ast[0] as DirectiveNode;
     expect(node.directive.kind).toBe('embed');
-    expect(node.directive.path.raw).toBe('$~/docs/UX.md');
-    expect(node.directive.path.structured.variables.special).toContain('HOMEPATH');
-    expect(node.directive.path.structured.segments).toContain('docs');
-    expect(node.directive.path.structured.segments).toContain('UX.md');
+    expect(node.directive.path.raw).toBe('$HOMEPATH/docs/UX.md');
+    expect(node.directive.path.values).toEqual([
+      expect.objectContaining({ type: 'VariableReference', identifier: 'HOMEPATH', valueType: 'path' }),
+      expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+      expect.objectContaining({ type: 'Text', content: 'docs' }),
+      expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+      expect.objectContaining({ type: 'Text', content: 'UX' }),
+      expect.objectContaining({ type: 'DotSeparator', value: '.' }),
+      expect.objectContaining({ type: 'Text', content: 'md' })
+    ]);
     
     // Check path normalization
-    expect(node.directive.path.normalized).toBe('$HOMEPATH/docs/UX.md');
+    // normalized path is no longer used
     console.log('AST for $~:', JSON.stringify(node.directive.path, null, 2));
   });
   
@@ -49,10 +61,16 @@ describe('special path variables', () => {
     expect(ast[0].type).toBe('Directive');
     const node = ast[0] as DirectiveNode;
     expect(node.directive.kind).toBe('import');
-    expect(node.directive.path.raw).toBe('$./docs/UX.md');
-    expect(node.directive.path.structured.variables.special).toContain('PROJECTPATH');
-    expect(node.directive.path.structured.segments).toContain('docs');
-    expect(node.directive.path.structured.segments).toContain('UX.md');
+    expect(node.directive.path.raw).toBe('$PROJECTPATH/docs/UX.md');
+    expect(node.directive.path.values).toEqual([
+      expect.objectContaining({ type: 'VariableReference', identifier: 'PROJECTPATH', valueType: 'path' }),
+      expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+      expect.objectContaining({ type: 'Text', content: 'docs' }),
+      expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+      expect.objectContaining({ type: 'Text', content: 'UX' }),
+      expect.objectContaining({ type: 'DotSeparator', value: '.' }),
+      expect.objectContaining({ type: 'Text', content: 'md' })
+    ]);
     
     console.log('AST for $. in import:', JSON.stringify(node.directive.path, null, 2));
   });
@@ -68,7 +86,7 @@ describe('special path variables', () => {
       // The path likely won't have the segments properly included
     } catch (error) {
       // Expected to fail, but let's log the error
-      console.log('Error parsing non-bracketed path:', error.message);
+      console.log('Error parsing non-bracketed path:', (error as Error).message);
     }
   });
 }); 

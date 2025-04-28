@@ -71,7 +71,9 @@ export function validateDataDirective(node: DirectiveNode): void {
     );
   }
   
-  // If value is a string and source is literal, try to ensure it's valid JSON
+  // REMOVED: This check is problematic if the value is meant to be a plain string.
+  // The handler will attempt JSON.parse after interpolation if needed.
+  /*
   if (typeof directive.value === 'string' && directive.source === 'literal') {
     try {
       JSON.parse(directive.value);
@@ -88,6 +90,7 @@ export function validateDataDirective(node: DirectiveNode): void {
       );
     }
   }
+  */
   
   // Validate value is JSON-serializable
   try {

@@ -1,13 +1,11 @@
 // Mock the logger before any imports
-const mockLogger = {
-  debug: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn()
-};
-
 vi.mock('@core/utils/logger', () => ({
-  directiveLogger: mockLogger
+  directiveLogger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
+  }
 }));
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';

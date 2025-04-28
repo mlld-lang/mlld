@@ -110,32 +110,26 @@ export type InterpolatableValue = Array<TextNode | VariableReferenceNode>;
 export interface StructuredPath {
   /** The original raw path string */
   raw: string;
-  /** Parsed structure of the path */
-  structured: {
-    /** Path segments split by separators */
-    segments: string[];
-    /** Variables found in the path */
-    variables?: {
-      /** Special variables like $PROJECTPATH, $HOMEPATH */
-      special?: string[];
-      /** Path variables defined with @path directives */
-      path?: string[];
-      /** Text variables {{var}} */
-      text?: string[];
-    };
-    /** Whether the path is relative to current working directory */
-    cwd?: boolean;
-    /** Whether the path is a URL */
-    url?: boolean;
-    /** Path base (for special paths) */
-    base?: string;
-  };
-  /** Path in normalized form (typically absolute) */
-  normalized?: string;
+  /** Parsed array of literal text and variable nodes representing the path */
+  values: (TextNode | VariableReferenceNode)[];
   /** Whether this is a variable reference like {{var}} */
   isVariableReference?: boolean;
   /** Whether this is a path variable reference like $path_var */
   isPathVariable?: boolean;
-  /** Parsed nodes if path came from brackets/quotes (as per AST-VARIABLES.md) */
-  interpolatedValue?: InterpolatableValue;
+  /** Is the path absolute (starts with /)? */
+  isAbsolute: boolean;
+  /** Is the path relative to the current working directory (starts with ./ or no prefix)? */
+  isRelativeToCwd: boolean;
+  /** Does the path contain any variables ($VAR or {{VAR}})? */
+  hasVariables: boolean;
+  /** Does the path contain text variables ({{VAR}})? */
+  hasTextVariables: boolean;
+  /** Does the path contain path variables ($VAR)? */
+  hasPathVariables: boolean;
+  /** Warning flag (e.g., mixed variable types) */
+  variable_warning: boolean;
 }
+
+/**
+ * AST node for variable references
+ */

@@ -214,14 +214,8 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           // process.stdout.write('>>> EMBED HANDLER - Handling embedPath subtype <<<\n');
           const embedPathObject = directiveData.path as AstStructuredPath;
 
-          if (!embedPathObject) { 
-            throw new DirectiveError(
-              `Missing path property for embedPath subtype.`,
-              this.kind,
-              DirectiveErrorCode.VALIDATION_FAILED,
-              standardErrorDetails
-            );
-          }
+          // ValidationService.validate() already confirmed embedPathObject exists for this subtype.
+          // No need for the redundant check here.
 
           let resolvedPath: MeldPath;
           try {
@@ -276,32 +270,16 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           // process.stdout.write('>>> EMBED HANDLER - Handling embedVariable subtype <<<\n');
           const variablePathObject = directiveData.path as AstStructuredPath;
 
-          if (!variablePathObject) { 
-            throw new DirectiveError(
-              `Missing path property for embedVariable subtype.`,
-              this.kind,
-              DirectiveErrorCode.VALIDATION_FAILED,
-              standardErrorDetails
-            );
-          }
-          
+          // ValidationService.validate() already confirmed variablePathObject and its necessary
+          // internal structure (like variable reference) exist for this subtype.
+          // The redundant 'if' block below is removed.
+
+          // The code below relies on the validator having passed.
           try {
             // process.stdout.write(`Resolving embed variable/path\n`);
             const valueToResolveVar = variablePathObject.interpolatedValue ?? variablePathObject.raw;
-            const resolvedValue = await this.resolutionService.resolveInContext(valueToResolveVar, resolutionContext);
-
-            // Embed expects string content
-            if (typeof resolvedValue !== 'string') {
-              this.logger.warn('Resolved embed variable content is not a string', {
-                variable: JSON.stringify(directiveData.path),
-                type: typeof resolvedValue,
-                value: JSON.stringify(resolvedValue).substring(0, 100) // Log snippet
-              });
-              content = String(resolvedValue);
-            } else {
-              content = resolvedValue;
-            }
-            // process.stdout.write(`Resolved embed variable content\n`);
+            content = await this.resolutionService.resolveInContext(valueToResolveVar, resolutionContext);
+            // process.stdout.write(`Resolved embed variable to content of length: ${content?.length ?? 0}\n`);
           } catch (error) {
             throw new DirectiveError(
               `Error resolving embed variable/path: ${error instanceof Error ? error.message : String(error)}`,

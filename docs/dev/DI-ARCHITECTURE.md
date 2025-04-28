@@ -241,25 +241,18 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Dependencies: DirectiveService, StateService, ParserService, FileSystemService, PathService, CircularityService, `ParserServiceClientFactory`
 
 ### StateService  
-   - Stores variables in maps:
-       • textVars (for @text)  
-       • dataVars (for @data)  
-       • pathVars (for @path)  
-       • commands (for @define)  
-   - Tracks both original and transformed MeldNodes
-   - Provides transformation capabilities for directive processing
-   - Maintains transformation state during cloning
-   - Updated by DirectiveService based on handler results (stateChanges)
-   - Provides child states for nested imports  
-   - Supports immutability toggles  
-   - Dependencies: StateFactory, StateEventService, StateTrackingService
+   - Manages application state, including different types of variables (text, data, path, commands) and AST nodes. While it exposes methods like `getVariable(name, type?)`, `setVariable(variableDefinition)`, and importantly `applyStateChanges(changes)`, its internal storage (`StateNode`) uses type-specific maps for efficiency (`variables.text`, `variables.data`, `variables.path`, and `commands`). The `setVariable` and `applyStateChanges` methods handle the translation from the generic `VariableDefinition` (used in `StateChanges`) to the appropriate internal typed map.
+   - Tracks both original and transformed MeldNodes (when transformation is enabled)
+   - Manages the current file path associated with the state
+   - Emits events via StateEventService on state changes
+   - Provides child states for nested imports using `createChildState()`
+   - Supports immutability toggles (`setImmutable`)
+   - Dependencies: StateFactory, StateEventService, StateTrackingService, DependencyContainer, `ParentStateServiceForChild?`
 
 ### ResolutionService  
-   - Handles variable interpolation **within directives** based on the AST:
-       • Processes `VariableReferenceNode`s found in `InterpolatableValue` arrays.
-       • Path expansions ("$HOMEPATH/path")
-       • Command references
-   - Processes structured field access paths (`Field[]` from AST).
+   - Handles variable interpolation **within directive arguments/AST structures** based on the AST (e.g., `InterpolatableValue` arrays, `VariableReferenceNode`s) when invoked by directive handlers.
+   - Resolves variable references (`$varName`, `$varName.field`) to their string values using the current state.
+   - Path expansions ("$HOMEPATH/path")
    - Operates primarily on **structured AST nodes** (`InterpolatableValue`, `VariableReferenceNode`), minimizing string re-parsing.
    - Context-aware resolution using `ResolutionContext`.
    - Circular reference detection.
@@ -278,7 +271,7 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Enforces path security constraints  
    - Handles path joining and manipulation  
    - Supports test mode for path operations  
-   - Dependencies: FileSystemServiceClient (to check if paths exist)
+   - Dependencies: FileSystemServiceClient (to check if paths exist), StateService (for variable lookup during resolution)
 
 ### ValidationService  
    - Validates directive syntax and constraints  

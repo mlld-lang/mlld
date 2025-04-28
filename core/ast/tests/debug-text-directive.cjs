@@ -12,7 +12,7 @@ const testCases = [
           kind: 'embed',
           path: {
             raw: '$./embed-content.md',
-            normalized: '$PROJECTPATH/embed-content.md',
+            // normalized path is no longer used
             structured: {
               base: '$.',
               segments: ['embed-content.md'],
@@ -36,7 +36,7 @@ const testCases = [
           kind: 'embed',
           path: {
             raw: '$~/user-profile.md',
-            normalized: '$HOMEPATH/user-profile.md',
+            // normalized path is no longer used
             structured: {
               base: '$~',
               segments: ['user-profile.md'],
@@ -60,7 +60,7 @@ const testCases = [
           kind: 'embed',
           path: {
             raw: 'document.md',
-            normalized: './document.md',
+            // normalized path is no longer used
             structured: {
               base: '.',
               segments: ['document.md'],

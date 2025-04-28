@@ -1,50 +1,57 @@
 /// <reference types="vitest" />
 import { parse } from '@core/ast';
 import { expect, describe, it } from 'vitest';
+import { DirectiveNode } from '@core/ast/types';
 
 describe('directives/@embed with header levels', () => {
   it('should support header level with path syntax', async () => {
     const input = `@embed [file.md] as ###`;
-    const result = await parse(input);
+    const { ast } = await parse(input);
     
-    expect(result.ast).toHaveLength(1);
-    const directive = result.ast[0];
-    expect(directive.type).toBe('Directive');
-    expect(directive.directive.kind).toBe('embed');
-    expect(directive.directive.headerLevel).toBe(3);
+    expect(ast).toHaveLength(1);
+    const node = ast[0] as DirectiveNode;
+    expect(node.type).toBe('Directive');
+    expect(node.directive.kind).toBe('embed');
+    expect(node.directive.headerLevel).toBe(3);
     
     // Ensure the path is structured correctly
-    expect(directive.directive.path).toBeDefined();
-    expect(directive.directive.path.raw).toBe('file.md');
-    expect(directive.directive.path.normalized).toBe('./file.md');
-    expect(directive.directive.path.structured).toBeDefined();
-    expect(directive.directive.path.structured.base).toBe('.');
-    expect(directive.directive.path.structured.segments).toEqual(['file.md']);
-    expect(directive.directive.path.structured.variables).toEqual({});
-    // Accept that cwd might be undefined for now
-    expect([true, undefined]).toContain(directive.directive.path.structured.cwd);
+    expect(node.directive.path).toBeDefined();
+    expect(node.directive.path.raw).toBe('file.md');
+    // normalized path is no longer used
+    expect(node.directive.path.values).toBeDefined();
+    expect(node.directive.path.values).toEqual([
+      expect.objectContaining({ type: 'Text', content: 'file' }),
+      expect.objectContaining({ type: 'DotSeparator', value: '.' }),
+      expect.objectContaining({ type: 'Text', content: 'md' })
+    ]);
+    expect(node.directive.path.isRelativeToCwd).toBe(true);
+    expect(node.directive.path.isAbsolute).toBe(false);
   });
 
   it('should support section with header level', async () => {
     const input = `@embed [file.md # Introduction] as ##`;
-    const result = await parse(input);
+    const { ast } = await parse(input);
     
-    expect(result.ast).toHaveLength(1);
-    const directive = result.ast[0];
-    expect(directive.type).toBe('Directive');
-    expect(directive.directive.kind).toBe('embed');
-    expect(directive.directive.headerLevel).toBe(2);
-    expect(directive.directive.section).toBe('Introduction');
+    expect(ast).toHaveLength(1);
+    const node = ast[0] as DirectiveNode;
+    expect(node.type).toBe('Directive');
+    expect(node.directive.kind).toBe('embed');
+    expect(node.directive.headerLevel).toBe(2);
+    expect(node.directive.section).toBe('Introduction');
     
     // Ensure the path is structured correctly
-    expect(directive.directive.path).toBeDefined();
-    expect(directive.directive.path.raw).toBe('file.md');
-    expect(directive.directive.path.normalized).toBe('./file.md');
-    expect(directive.directive.path.structured).toBeDefined();
-    expect(directive.directive.path.structured.base).toBe('.');
-    expect(directive.directive.path.structured.segments).toEqual(['file.md']);
-    expect(directive.directive.path.structured.variables).toEqual({});
-    // Accept that cwd might be undefined for now
-    expect([true, undefined]).toContain(directive.directive.path.structured.cwd);
+    expect(node.directive.path).toBeDefined();
+    expect(node.directive.path.raw).toBe('file.md');
+    // normalized path is no longer used
+    expect(node.directive.path.values).toBeDefined();
+    expect(node.directive.path.values).toEqual([
+      expect.objectContaining({ type: 'Text', content: 'file' }),
+      expect.objectContaining({ type: 'DotSeparator', value: '.' }),
+      expect.objectContaining({ type: 'Text', content: 'md' }),
+      expect.objectContaining({ type: 'SectionMarker', value: '#' }),
+      expect.objectContaining({ type: 'Text', content: ' Introduction' })
+    ]);
+    expect(node.directive.path.isRelativeToCwd).toBe(true);
+    expect(node.directive.path.isAbsolute).toBe(false);
   });
 }); 

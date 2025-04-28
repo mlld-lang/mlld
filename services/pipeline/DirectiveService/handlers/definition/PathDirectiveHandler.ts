@@ -67,13 +67,6 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       const directive = node.directive as PathDirectiveData; 
       const identifier = directive.identifier;
       const pathObject = directive.path;
-      
-      if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
-        throw new DirectiveError('Path directive requires a valid identifier', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
-      }
-      if (!pathObject || typeof pathObject !== 'object' || !pathObject.raw || !pathObject.structured) {
-        throw new DirectiveError('Path directive requires a valid path object structure', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
-      }
 
       // Resolve the path object using the provided resolution context
       let resolvedPathString: string;

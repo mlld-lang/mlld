@@ -2,456 +2,19 @@
 // Meld grammar implementation
 
 {
-  // Disable debug logging for grammar
-  const DEBUG = false; // process.env.MELD_DEBUG === 'true' || false;
-  const crypto = require('crypto');
-
-  // --- START NEW HELPERS OBJECT ---
-  const helpers = {
-    debug(msg, ...args) {
-      if (DEBUG) {
-        const formattedArgs = args.map(arg => {
-          try {
-            return typeof arg === 'string' ? arg : JSON.stringify(arg);
-          } catch (e) {
-            return '[Unserializable]';
-          }
-        }).join(' ');
-        process.stdout.write(`[DEBUG GRAMMAR] ${msg} ${formattedArgs}\n`);
-      }
-    },
-
-    // Add function to check if position is at start of line
-    isLineStart(input, pos) {
-      helpers.debug("Checking line start at pos", pos, "char at pos-1:", JSON.stringify(pos > 0 ? input.charAt(pos - 1) : ''));
-      helpers.debug("Input:", JSON.stringify(input));
-      return pos === 0 || input.charAt(pos - 1) === '\n';
-    },
-
-    // Helper to check if an identifier is a special path variable name
-    isSpecialPathIdentifier(id) {
-      return ['HOMEPATH', '~', 'PROJECTPATH', '.'].includes(id);
-    },
-
-    // Helper to determine import subtype based on parsed imports list
-    getImportSubtype(importsList) {
-      if (!importsList || importsList.length === 0) {
-        // Should not happen with current grammar, but handle defensively
-        return 'importAll'; // Treat empty/null as wildcard
-      }
-      if (importsList.length === 1 && importsList[0].name === '*' && importsList[0].alias === null) {
-        return 'importAll';
-      }
-      if (importsList.some(item => item.alias !== null)) {
-        return 'importNamed';
-      }
-      return 'importStandard';
-    },
-
-    validateRunContent(content) {
-      // For now, just return the content as is
-      // We can add more validation later if needed
-      return content;
-    },
-
-    validateDefineContent(content) {
-      // For now, just return the content as is
-      // We can add more validation later if needed
-      return content;
-    },
-
-    validateEmbedPath(path) {
-      // Check if this looks like content that should use double bracket syntax
-      // Content with multiple lines is likely not a path, but we'll allow paths with spaces
-      // for backward compatibility with existing tests
-      const hasNewlines = path.includes('\n');
-      
-      if (hasNewlines) {
-        throw new Error(`Content with multiple lines or lengthy text should use double bracket syntax: @embed [[...]]`);
-      }
-      
-      // Make sure special variables like $path_var are properly recognized
-      // This is just validation; the actual variable extraction is done in validatePath
-      return path;
-    },
-
-    validateEmbedContent(content) {
-      helpers.debug("validateEmbedContent called with content:", content);
-      
-      // Check for variable patterns
-      const hasTextVars = content.includes('{{') && content.includes('}}');
-      const hasPathVars = /\$[a-zA-Z][a-zA-Z0-9_]*/.test(content);
-      
-      helpers.debug("Content has text variables:", hasTextVars);
-      helpers.debug("Content has path variables:", hasPathVars);
-      
-      // We explicitly allow all content in double brackets including variables
-      // No warnings should be generated for variable patterns
-      
-      // Ensure we don't generate warnings for content that contains variable references
-      // Path variables ($path_var) in double brackets should be treated as literal text,
-      // not extracted as variables or flagged as warnings.
-      return { content };
-    },
-
-    createNode(type, data, loc) {
-      return {
-        type,
-        ...(type === 'Directive' ? { directive: data } : data),
-        location: {
-          start: { line: loc.start.line, column: loc.start.column },
-          end: { line: loc.end.line, column: loc.end.column }
-        },
-        nodeId: crypto.randomUUID()
-      };
-    },
-
-    createDirective(kind, data, loc) {
-      return helpers.createNode('Directive', { kind, ...data }, loc);
-    },
-
-    createVariableReferenceNode(valueType, data, loc) {
-      return helpers.createNode('VariableReference', {
-        valueType,
-        isVariableReference: true,
-        ...data
-      }, loc);
-    },
-
-    normalizePathVar(id) {
-      return id;
-    },
-
-    reconstructRawString(nodes) {
-      if (!Array.isArray(nodes)) {
-        return String(nodes || '');
-      }
-      return nodes.map(node => {
-        if (!node || typeof node !== 'object') {
-          return '';
-        }
-        if (node.type === 'Text') { // Use string literal
-          return node.content || '';
-        }
-        if (node.type === 'VariableReference') { // Use string literal
-          let fieldsStr = '';
-          if (node.fields && node.fields.length > 0) {
-            fieldsStr = node.fields.map(f => {
-              if (f.type === 'field') return '.' + f.value;
-              if (f.type === 'index') {
-                  if (typeof f.value === 'string') {
-                      return `[${f.value}]`;
-                  } else {
-                      return `[${f.value}]`;
-                  }
-              }
-              return '';
-            }).join('');
-          }
-          let formatStr = node.format ? `>>${node.format}` : '';
-
-          if (node.valueType === 'path') {
-            return `$${node.identifier}${fieldsStr}${formatStr}`;
-          }
-          return `{{${node.identifier}${fieldsStr}${formatStr}}}`;
-        }
-        return '';
-      }).join('');
-    },
-
-    validatePath(path, options = {}) {
-      const { context } = options;
-      // First trim any surrounding quotes that might have been passed
-      if (typeof path === 'string') {
-        path = path.replace(/^["'`](.*)["'`]$/, '$1');
-      }
-      
-      helpers.debug("validatePath called with path:", path, "context:", context);
-      
-      // Check if this is a path variable (starts with $ but is not a special variable)
-      const isPathVar = typeof path === 'string' && 
-        path.startsWith('$') && 
-        !path.startsWith('$HOMEPATH') && 
-        !path.startsWith('$~') && 
-        !path.startsWith('$PROJECTPATH') && 
-        !path.startsWith('$.') &&
-        path.match(/^\$[a-zA-Z][a-zA-Z0-9_]*/);
-      
-      helpers.debug("isPathVar:", isPathVar, "for path:", path);
-      
-      // If this is a path variable, handle it specially
-      if (isPathVar) {
-        // Extract the variable name without the $ prefix
-        const varName = path.split('/')[0].substring(1);
-        const segments = path.includes('/') ? path.split('/').slice(1) : [];
-        
-        // Also check for text variables in the path parts
-        const textVars = [];
-        const textVarRegex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
-        let textVarMatch;
-        let pathWithTextVars = path;
-        
-        while ((textVarMatch = textVarRegex.exec(pathWithTextVars)) !== null) {
-          textVars.push(textVarMatch[1]);
-        }
-        
-        const result = {
-          raw: path,
-          isPathVariable: true,
-          structured: {
-            base: '.',  // Default to current directory
-            segments: segments.length > 0 ? segments : [path], // Include segments or the whole path
-            variables: {
-              path: [varName]
-            }
-          }
-        };
-        
-        // Add text variables if they exist
-        if (textVars.length > 0) {
-          result.structured.variables.text = textVars;
-          result.variable_warning = true;
-        }
-        
-        // Set cwd to false for path variables (unconditionally)
-        result.structured.cwd = false;
-        
-        helpers.debug("Path variable result:", JSON.stringify(result));
-        return result;
-      }
-      
-      // Determine if this is a URL path (starts with http://, https://, etc.)
-      const isUrl = /^https?:\/\//.test(path);
-      helpers.debug("isUrl:", isUrl, "for path:", path);
-      
-      // Allow relative paths
-      const isRelativePathTest = (path.includes('../') || path.startsWith('./'));
-      
-      // No longer reject paths with relative segments ('..' or './')
-
-      // Extract text variables
-      const textVars = [];
-      const textVarRegex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
-      let textVarMatch;
-      while ((textVarMatch = textVarRegex.exec(path)) !== null) {
-        textVars.push(textVarMatch[1]);
-      }
-
-      // Extract special variables
-      const specialVars = [];
-      const specialVarRegex = /\$([A-Z][A-Z0-9_]*|~|\.)/g;
-      let specialVarMatch;
-      while ((specialVarMatch = specialVarRegex.exec(path)) !== null) {
-        // Convert ~ to HOMEPATH and . to PROJECTPATH for the variables list
-        if (specialVarMatch[1] === '~') {
-          specialVars.push('HOMEPATH');
-        } else if (specialVarMatch[1] === '.') {
-          specialVars.push('PROJECTPATH');
-        } else {
-          specialVars.push(specialVarMatch[1]);
-        }
-      }
-
-      // Extract path variables (non-special variables)
-      const pathVars = [];
-      const pathVarRegex = /\$([a-z][a-zA-Z0-9_]*)(\/|$)/g;
-      let pathVarMatch;
-      while ((pathVarMatch = pathVarRegex.exec(path)) !== null) {
-        pathVars.push(pathVarMatch[1]);
-      }
-
-      // Determine if this is a CWD path (no slashes and doesn't start with $)
-      const isCwd = !path.includes('/') && !path.startsWith('$');
-      helpers.debug("isCwd:", isCwd, "for path:", path);
-      
-      // Determine if this is a special variable path (starts with $)
-      const isSpecialVarPath = path.startsWith('$');
-      helpers.debug("isSpecialVarPath:", isSpecialVarPath, "for path:", path);
-      
-      // Determine the base based on special variables
-      let base = '.';
-      if (specialVars.length > 0) {
-        // If there's a special variable, use it as the base
-        if (path.startsWith('$HOMEPATH') || path.startsWith('$~')) {
-          base = path.startsWith('$HOMEPATH') ? '$HOMEPATH' : '$~';
-        } else if (path.startsWith('$PROJECTPATH') || path.startsWith('$.')) {
-          base = path.startsWith('$PROJECTPATH') ? '$PROJECTPATH' : '$.';
-        }
-      } else if (path.startsWith('../')) {
-        base = '..';
-      } else if (path.startsWith('./')) {
-        base = '.';
-      }
-
-      // Get path segments, excluding the base path part
-      let segments = path.split('/').filter(Boolean);
-      
-      // If the path starts with a special variable, remove it from segments
-      if (path.startsWith('$HOMEPATH/') || path.startsWith('$~/') ||
-          path.startsWith('$PROJECTPATH/') || path.startsWith('$./')) {
-        segments = segments.slice(1);
-      } else if (path === '$HOMEPATH' || path === '$~' ||
-                 path === '$PROJECTPATH' || path === '$.') {
-        // If the path is just a special variable, use it as the only segment
-        segments = [path];
-      } else if (path.startsWith('../')) {
-        // For relative paths, remove the first segment (which is empty due to the leading ../)
-        segments = segments.slice(1);
-      } else if (path.startsWith('./')) {
-        // For current directory paths, remove the first segment (which is empty due to the leading ./)
-        segments = segments.slice(1);
-      }
-
-      // Build the structured object with variables
-      const structured = {
-        base: base,
-        segments: segments,
-        variables: {}
-      };
-
-      // Add variables if they exist
-      if (textVars.length > 0) {
-        structured.variables.text = textVars;
-      }
-      
-      if (specialVars.length > 0) {
-        structured.variables.special = specialVars;
-      }
-
-      if (pathVars.length > 0) {
-        structured.variables.path = pathVars;
-      }
-
-      // Add cwd property based on path structure
-      // Paths without slashes that don't start with $ or ./ are CWD paths (cwd: true)
-      // Paths that start with $ are not CWD paths (cwd: false)
-      if (isCwd) {
-        structured.cwd = true;
-        helpers.debug("Set structured.cwd = true for path:", path);
-      } else if (path.startsWith('$')) {
-        // Set cwd: false for special variables and path variables
-        structured.cwd = false;
-        helpers.debug("Set structured.cwd = false for path:", path);
-      }
-      
-      // Add url property for URL paths
-      if (isUrl) {
-        structured.url = true;
-        helpers.debug("Set structured.url = true for path:", path);
-      }
-
-      // Create the result object
-      const result = {
-        raw: path,
-        structured: structured
-      };
-
-      // Add variable_warning flag if text variables are detected
-      // Path variables ($path_var) are expected in paths, so no warning needed
-      if (textVars.length > 0) {
-        result.variable_warning = true;
-      }
-
-      // Set normalized property based on path structure
-      if (isCwd) {
-        result.normalized = `./${path}`;
-      } else if (isUrl) {
-        // Keep URLs as-is in normalization
-        result.normalized = path;
-        helpers.debug("Kept URL as-is in normalization:", path);
-      } else if (isPathVar) {
-        // For path variables, keep as-is (don't normalize)
-        result.normalized = path;
-        helpers.debug("Kept path variable as-is in normalization:", path);
-      } else {
-        // Handle special variable normalization
-        if (path.startsWith('$~/')) {
-          result.normalized = `$HOMEPATH/${path.substring(3)}`;
-        } else if (path.startsWith('$./')) {
-          result.normalized = `$PROJECTPATH/${path.substring(3)}`;
-        } else if (path.startsWith('../') || path.startsWith('./')) {
-          // For test cases that expect relative paths
-          result.normalized = path;
-        } else if (!path.includes('/')) {
-          // Single segment paths without $ are CWD paths
-          result.normalized = `./${path}`;
-        } else if (path.includes('[brackets]')) {
-          // Special case for paths with brackets
-          result.normalized = `./${path}`;
-        } else {
-          // For other paths, use as is
-          result.normalized = path;
-        }
-      }
-
-      // --- Start: Logic moved from PathValue ---
-      if (context === 'pathDirective') {
-        helpers.debug("Applying pathDirective context logic for:", path);
-        let originalBase = structured.base; // Keep track of original base for segment logic
-        let isBaseOnlyPath = false;
-
-        // Determine base from the raw path specifically for PathDirective context
-        // ALWAYS set base to canonical names
-        if (path.startsWith('$HOMEPATH') || path.startsWith('$~')) {
-          structured.base = '$HOMEPATH';
-          originalBase = path.startsWith('$HOMEPATH') ? '$HOMEPATH' : '$'; // Use $~ for segment logic below if alias was used
-          isBaseOnlyPath = (path === '$HOMEPATH' || path === '$');
-        } else if (path.startsWith('$PROJECTPATH') || path.startsWith('.')) {
-          structured.base = '$PROJECTPATH';
-          originalBase = path.startsWith('$PROJECTPATH') ? '$PROJECTPATH' : '.'; // Use $. for segment logic below if alias was used
-          isBaseOnlyPath = (path === '$PROJECTPATH' || path === '.');
-        } else {
-          helpers.debug("PathDirective context: No special base override for:", path, "keeping base:", structured.base);
-        }
-
-        // Extract segments specifically for PathDirective context
-        let directiveSegments = [];
-        if (isBaseOnlyPath) {
-          directiveSegments = []; // Segments are empty if path is just the base
-        } else {
-          const pathParts = path.split('/').filter(Boolean);
-          // Check if the path starts with a special variable/alias that should be stripped for segments
-          if (path.startsWith('$HOMEPATH/') || path.startsWith('$~/')) {
-            directiveSegments = pathParts.slice(1);
-          } else if (path.startsWith('$PROJECTPATH/') || path.startsWith('.')) {
-            directiveSegments = pathParts.slice(1);
-          } else {
-            // If no special prefix, use segments calculated by main logic
-            helpers.debug("PathDirective context: No special segment override for:", path, "keeping segments:", structured.segments);
-            directiveSegments = structured.segments;
-          }
-        }
-        structured.segments = directiveSegments;
-        helpers.debug("PathDirective context adjusted base:", structured.base, "segments:", structured.segments);
-      }
-      // --- End: Logic moved from PathValue ---
-
-      // Log the final result for debugging
-      helpers.debug("validatePath result:", JSON.stringify(result));
-
-      return result;
-    },
-
-    normalizePath(path) {
-      return helpers.validatePath(path);
-    },
-
-    // --- END NEW HELPERS OBJECT ---
-
-    // Allow overriding helpers via options passed to the parser
-    ...(options && options.helpers ? options.helpers : {})
-  };
-
+  // --- Constants ---
   const NodeType = {
     Text: 'Text',
     Comment: 'Comment',
     CodeFence: 'CodeFence',
     VariableReference: 'VariableReference',
-    TextVar: 'TextVar',
-    DataVar: 'DataVar',
-    PathVar: 'PathVar',
     Directive: 'Directive',
-    Error: 'Error'
+    PathSeparator: 'PathSeparator',
+    DotSeparator: 'DotSeparator',
+    Literal: 'Literal',
+    SectionMarker: 'SectionMarker',
+    Error: 'Error',
+    Newline: 'Newline'
   };
 
   const DirectiveKind = {
@@ -463,10 +26,273 @@
     path: 'path',
     embed: 'embed'
   };
+
+  const DEBUG = true; // Ensure this is true for logging
+
+  // --- Minimal Helpers ---
+  const helpers = {
+    debug(msg, ...args) { // Changed signature slightly based on doc example usage
+      if (DEBUG) {
+        let outputArgs = '';
+        if ((msg === 'CreateVAR' || msg === 'RawStringVAR') && args.length > 0 && typeof args[0] === 'object') {
+          // Custom formatting for variable node logs
+          const details = args[0]; // { rule?, node } or { varId, valueType, node }
+          const node = details.node || (args.length > 1 && typeof args[1] === 'object' ? args[1] : null); // Handle both log structures
+          const varId = details.varId || (node ? node.identifier : 'unknown');
+          const valueType = details.valueType || (node ? node.valueType : 'unknown');
+          const rule = details.rule || '';
+          outputArgs = `${rule ? `rule=${rule} ` : ''}varId=${varId} valueType=${valueType}`;
+        } else {
+          // Original serialization logic for other messages
+          outputArgs = args.map(arg => {
+            try {
+              const seen = new Set(); // Reset seen set for each top-level arg
+              return typeof arg === 'string' ? arg : JSON.stringify(arg, (key, value) => {
+                if (typeof value === 'object' && value !== null) {
+                  if (seen.has(value)) return '[Circular]';
+                  seen.add(value);
+                }
+                return value;
+              }, 2);
+            } catch (e) {
+              if (e instanceof TypeError && e.message.includes('circular structure')) {
+                return '[Circular]';
+              } else if (e instanceof TypeError && e.message.includes('BigInt')) {
+                return '[BigInt]';
+              }
+              return '[Unserializable]';
+            }
+          }).join(' ');
+        }
+        // Use process.stdout.write to avoid suppression by test runners
+        process.stdout.write(`[DEBUG GRAMMAR] ${msg} ${outputArgs}\n`);
+      }
+    },
+
+    isLogicalLineStart(input, pos) {
+      // Basic placeholder logic - checks if previous non-whitespace is newline
+      if (pos === 0) return true;
+      let i = pos - 1;
+      while (i >= 0 && (input[i] === ' ' || input[i] === '\t' || input[i] === '\r')) {
+        i--;
+      }
+      return i < 0 || input[i] === '\n';
+    },
+
+    createNode(type, properties = {}) {
+      // Base node structure
+      const baseNode = {
+        type: type,
+        nodeId: 'placeholder-id',
+        location: location()
+      };
+      // Explicitly assign properties instead of spreading
+      for (const key in properties) {
+        // Ensure it's an own property before assigning
+        if (Object.prototype.hasOwnProperty.call(properties, key)) {
+          baseNode[key] = properties[key];
+        }
+      }
+      Object.freeze(baseNode); // Freeze the node before returning
+      return baseNode;
+    },
+
+    createDirective(kind, data, loc) {
+      // Uses createNode, nests kind and data under 'directive' key
+      return helpers.createNode(NodeType.Directive, { directive: { kind, ...data } }, loc);
+    },
+
+    createVariableReferenceNode(valueType, data, loc) {
+      const node = helpers.createNode(NodeType.VariableReference,
+        { valueType, isVariableReference: true, ...data }, loc);
+      return node;
+    },
+
+    normalizePathVar(id) {
+      // Transform special path variables
+      switch (id) {
+        case '~':
+          return 'HOMEPATH';
+        case '.':
+          return 'PROJECTPATH';
+        default:
+          return id;
+      }
+    },
+
+    validateRunContent: () => true, // ADDED STUB
+    validateDefineContent: () => true, // ADDED STUB
+
+    validatePath(pathParts, directiveKind) {
+      // 1. Reconstruct Raw String (needed for output)
+      // Use the existing helper, assuming it handles the node array correctly.
+      const raw = helpers.reconstructRawString(pathParts).trim();
+
+      // 2. Calculate Flags by iterating through pathParts
+      let isAbsolute = false;
+      let isRelativeToCwd = true; // Default assumption
+      // Initialize flags
+      let hasVariables = false;
+      let hasTextVariables = false;
+      let hasPathVariables = false;
+      let variable_warning = false;
+
+      // Process path parts
+      if (pathParts && pathParts.length > 0) {
+        // Check for absolute path (only if first character is /)
+        const firstPart = pathParts[0];
+        if (firstPart.type === NodeType.PathSeparator && firstPart.value === '/') {
+          isAbsolute = true;
+          isRelativeToCwd = false;
+        }
+
+        // Check for variable types across all parts
+        helpers.debug('VALIDATE_PATH_PARTS', 'Checking path parts:', JSON.stringify(pathParts));
+        for (const node of pathParts) {
+          if (node.type === NodeType.VariableReference) {
+            hasVariables = true;
+            helpers.debug('VALIDATE_PATH_NODE', 'Found variable:', JSON.stringify(node));
+            // Track variable types independently
+            if (node.valueType === 'text') {
+              hasTextVariables = true;
+              variable_warning = true;
+              helpers.debug('VALIDATE_PATH_NODE', 'Found text variable:', JSON.stringify(node));
+            } else if (node.valueType === 'path') {
+              hasPathVariables = true;
+              // For imports, path variables should be relative to cwd
+              // For embeds, they should not be
+              if (directiveKind === DirectiveKind.embed) {
+                isRelativeToCwd = false;
+              }
+              helpers.debug('VALIDATE_PATH_NODE', 'Found path variable:', JSON.stringify(node));
+            }
+          }
+        }
+      }
+
+      // Update warning flag after all nodes are processed
+      variable_warning = hasTextVariables;
+
+      // 3. Construct Final Flags Object
+       const finalFlags = {
+        isAbsolute: isAbsolute,
+        isRelativeToCwd: isRelativeToCwd,
+        hasVariables: hasVariables,
+        hasTextVariables: hasTextVariables,
+        hasPathVariables: hasPathVariables,
+        variable_warning: variable_warning
+      };
+
+      // 4. Construct Result Object
+      const result = {
+        raw: raw,           // Use reconstructed raw string
+        values: pathParts,  // Use original pathParts array with locations
+        ...finalFlags       // Spread the calculated boolean flags
+      };
+
+      helpers.debug('PATH', 'validatePath final result:', JSON.stringify(result, null, 2));
+      return result;
+    },
+    // <<< END REFACTORED validatePath >>>
+    // <<< PRESERVING getImportSubtype and trace >>>
+    getImportSubtype(list) {
+      // Check for importAll: [*]
+      if (!list) return 'importAll';
+      if (list.length === 0) return 'importAll'; // Empty list `[]` from `[...]` => importAll
+      if (list.length === 1 && list[0].name === '*') return 'importAll';
+
+      // Check for importNamed: any item has an alias
+      // TODO: Bring this back
+      // const hasAlias = list.some(item => item.alias !== null);
+      // if (hasAlias) return 'importNamed';
+
+      // Otherwise, it's importStandard
+      return 'importStandard';
+    },
+
+    trace(pos, reason) {
+      // Placeholder - No output for now
+      // helpers.debug('TRACE', `Reject @${pos}: ${reason}`);
+    },
+
+    reconstructRawString(nodes) {
+      // Basic implementation - iterates nodes and concatenates
+      if (!Array.isArray(nodes)) {
+        // Handle cases where a single node might be passed (though likely expects array)
+        if (nodes && typeof nodes === 'object') {
+          if (nodes.type === NodeType.Text) return nodes.content || '';
+          if (nodes.type === NodeType.VariableReference) {
+            // CORRECTED: Only reconstruct path variables as $var. Text and Data use {{var}}.
+            const varId = nodes.identifier;
+            const valueType = nodes.valueType;
+            return valueType === 'path' ? `$${varId}` : `{{${varId}}}`; 
+          }
+        }
+        return String(nodes || ''); // Fallback
+      }
+
+      let raw = '';
+            for (const node of nodes) {
+        if (!node) continue;
+        if (node.type === NodeType.Text) {
+          raw += node.content || '';
+        } else if (node.type === NodeType.VariableReference) {
+          const varId = node.identifier;
+          const valueType = node.valueType;
+          // CORRECTED: Only reconstruct path variables as $var. Text and Data use {{var}}.
+          raw += valueType === 'path' ? `$${varId}` : `{{${varId}}}`; 
+        } else if (node.type === NodeType.PathSeparator) {
+          raw += node.value || ''; // Append '/' or '.'
+        } else if (node.type === NodeType.SectionMarker) {
+          raw += node.value || ''; // Append '#'
+        } else if (typeof node === 'string') {
+          // Handle potential raw string segments passed directly
+          raw += node;
+        } else {
+          // Fallback for other node types or structures
+          // NOTE: This fallback might indicate unhandled cases if hit often
+          raw += node.raw || node.content || node.value || ''; // Added node.value as potential source
+        }
+      }
+      return raw;
+    },
+
+  };
 }
 
+/* structural newline that should become an AST node */
+InterDirectiveNewline
+  = ws:[ \t\r]* term:LineTerminator &{
+      /* scan forward past spaces/tabs (NOT newlines) */
+      let i = offset();
+      while (i < input.length && (input[i] === ' ' || input[i] === '\t' || input[i] === '\r')) {
+        i++;
+      }
+      /* success only if the next real char starts a directive line */
+      return i < input.length && input[i] === '@' && helpers.isLogicalLineStart(input, i);
+    } {
+      return helpers.createNode(NodeType.Newline, { content: term }, location());
+    }
+
+/* plain newline that should stay a raw string */
+ContentEOL               /* ← drop-in replacement for the old EndOfLine */
+  = ws:[ \t\r]* term:LineTerminator { return term; }
+
+/* peek for newline/EOF without consuming */
+DirectiveEOL
+  = &( LineTerminator / EOF )
+  / _[ \t\r]* &( LineTerminator / EOF )
+
 Start
-  = nodes:(LineStartComment / Comment / CodeFence / Variable / Directive / TextBlock)* {
+  = nodes:(
+      LineStartComment
+    / Comment
+    / CodeFence
+    / Variable
+    / Directive              /* <— first try to match directives */
+    / InterDirectiveNewline   /* <— then capture newlines between directives */
+    / TextBlock
+    )* {
     helpers.debug('Start: Entered');
     return nodes;
   }
@@ -474,7 +300,7 @@ Start
 LineStartComment
   = &{ 
       const pos = offset();
-      const isAtLineStart = helpers.isLineStart(input, pos);
+      const isAtLineStart = helpers.isLogicalLineStart(input, pos);
       return isAtLineStart;
     } ">>" [ ] content:CommentContent {
     return helpers.createNode(NodeType.Comment, { content: content.trim() }, location());
@@ -491,10 +317,14 @@ CommentContent
   }
 
 _ "whitespace"
-  = [ \t\r\n]*
+  = [ \t\r\n\u200B\u200C\u200D]*
 
 __ "mandatory whitespace"
   = [ \t\r\n]+
+
+/* horizontal whitespace (NO newlines) */
+HWS "horizontal whitespace"
+  = [ \t\r\u200B\u200C\u200D]*
 
 TextBlock
   = first:TextPart rest:(TextPart)* {
@@ -504,14 +334,26 @@ TextBlock
 TextPart
   = !{ 
       const pos = offset();
-      const isAtLineStart = helpers.isLineStart(input, pos);
+      const isAtLineStart = helpers.isLogicalLineStart(input, pos);
       const isDirective = isAtLineStart && input.substr(pos, 1) === '@' && 
                          /[a-z]/.test(input.substr(pos+1, 1));
       
       const isComment = isAtLineStart && input.substr(pos, 2) === '>>';
       
       return isDirective || isComment;
-    } !("{{" / "}}" / "[" / "]" / "{" / "}" / BacktickSequence) char:. { return char; }
+    } !(
+       "{{"           /* still block the opening of a text-var */
+     / "}}"           /* …and its closing */
+     / "[["           /* block multiline-template opening */
+     / "]]"           /* …and its closing */
+     / BacktickSequence  /* keep blocking fence openers (``, ``` etc.) */
+    ) &{
+      const pos = offset();
+      helpers.trace(pos, 'brace/backtick guard');
+      return true;
+    } char:. { 
+      return char; 
+    }
 
 Variable
   = TextVar
@@ -519,34 +361,41 @@ Variable
   / PathVar
 
 TextVar
-  = "{{" _ id:Identifier format:VarFormat? _ "}}" !FieldAccess {
-    return helpers.createVariableReferenceNode('text', {
-      identifier: id,
-      ...(format ? { format } : {})
-    }, location());
+  = "{{" _ id:Identifier format:VarFormat? _ "}}" {
+      // helpers.debug('TEXTVAR_MATCH', `Matched TextVar: {{${id}}}`); // REMOVED DEBUG LOG
+      const node = helpers.createVariableReferenceNode('text', {
+        identifier: id,
+        ...(format ? { format } : {})
+      }, location());
+      helpers.debug('CreateVAR', { rule: 'TextVar', node }); // <<< ADD DEBUG LOG
+      helpers.debug('VAR_CREATE', `Created {{${id}}} node`, JSON.stringify(node)); // <<< ADDED DEBUG LOG
+      return node;
   }
 
 DataVar
   = "{{" _ id:Identifier accessElements:(FieldAccess / NumericFieldAccess / ArrayAccess)* format:VarFormat? _ "}}" {
-    return helpers.createVariableReferenceNode('data', {
+    const node = helpers.createVariableReferenceNode('data', {
       identifier: id,
       fields: accessElements || [],
       ...(format ? { format } : {})
     }, location());
+    helpers.debug('CreateVAR', { rule: 'DataVar', node }); // <<< ADD DEBUG LOG
+    return node;
   }
 
 PathVar
-  = "$" id:PathIdentifier {
-    const isSpecial = helpers.isSpecialPathIdentifier(id);
-    return helpers.createVariableReferenceNode('path', {
-      identifier: helpers.normalizePathVar(id),
-      isSpecial: isSpecial
-    }, location());
-  }
+  = "$" id:(SpecialPathChar / Identifier) {
+      const normalizedId = helpers.normalizePathVar(id);
+      const node = helpers.createVariableReferenceNode('path', {
+        identifier: normalizedId,
+      }, location());
+      helpers.debug('CreateVAR', { rule: 'PathVar', node }); // <<< ADD DEBUG LOG
+      return node;
+    }
 
 PathIdentifier
-  = SpecialPathIdentifier
-  / Identifier
+  = SpecialPathChar
+  / [a-zA-Z_][a-zA-Z0-9_]* { return text(); }
 
 SpecialPathIdentifier
   = "HOMEPATH" / "~" / "PROJECTPATH" / "." {
@@ -587,7 +436,7 @@ DoubleQuoteAllowedLiteralChar
 
 DoubleQuoteLiteralTextSegment
   = chars:DoubleQuoteAllowedLiteralChar+ {
-      return helpers.createNode('Text', { content: chars.join('') }, location());
+      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
     }
 
 DoubleQuoteInterpolatableContent
@@ -607,7 +456,7 @@ SingleQuoteAllowedLiteralChar
 
 SingleQuoteLiteralTextSegment
   = chars:SingleQuoteAllowedLiteralChar+ {
-      return helpers.createNode('Text', { content: chars.join('') }, location());
+      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
     }
 
 SingleQuoteInterpolatableContent
@@ -627,7 +476,7 @@ BacktickAllowedLiteralChar
 
 BacktickLiteralTextSegment
   = chars:BacktickAllowedLiteralChar+ {
-      return helpers.createNode('Text', { content: chars.join('') }, location());
+      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
     }
 
 BacktickInterpolatableContent
@@ -642,7 +491,8 @@ BacktickInterpolatableContentOrEmpty
 
 // Multiline [[...]]
 MultilineAllowedLiteralChar
-  = !']]' !'{{' char:. { return char; }
+  = !']]' !'{{' !('\\\\') char:. { return char; }
+  / '\\\\' esc:. { return '\\\\' + esc; }
 
 MultilineLiteralTextSegment
   = chars:MultilineAllowedLiteralChar+ {
@@ -663,6 +513,28 @@ MultilineInterpolatableContentOrEmpty
 
 // --- Interpolated Literal Rules ---
 
+PathStringLiteral "String literal with potential path variables"
+  = '"' content:PathStringContent '"' { return content; }
+  / "'" content:PathStringContent "'" { return content; }
+  / "`" content:PathStringContent "`" { return content; }
+
+PathStringContent
+  = parts:(PathVar / PathText / PathSeparator)+ {
+      return parts;
+    }
+
+PathText
+  = chars:PathAllowedChar+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
+    }
+
+PathAllowedChar
+  = !('"' / "'" / '`' / '$' / '/' / '\\') char:. { return char; }
+  / '\\' esc:. { return '\\' + esc; }
+
+PathSeparator
+  = '/' { return helpers.createNode(NodeType.PathSeparator, { value: '/' }, location()); }
+
 InterpolatedStringLiteral "String literal with potential variable interpolation"
   = '"' content:DoubleQuoteInterpolatableContentOrEmpty '"' { return content; }
   / "'" content:SingleQuoteInterpolatableContentOrEmpty "'" { return content; }
@@ -676,7 +548,7 @@ InterpolatedMultilineTemplate "Multiline template with potential variable interp
 // Helper rule for parsing RHS @embed variations
 // Returns { subtype: '...', ... } structure without 'source' field.
 _EmbedRHS
-   = _ "[[" content:MultilineInterpolatableContentOrEmpty "]]" options:DirectiveOptions? {
+   = _ "[[" content:MultilineInterpolatableContentOrEmpty "]]" _[ \t]* options:DirectiveOptions? {
      return {
        subtype: 'embedTemplate',
        content: content,
@@ -685,58 +557,45 @@ _EmbedRHS
      };
    }
    / _ "[" content:BracketInterpolatableContentOrEmpty "]" options:DirectiveOptions? {
-     const rawPath = helpers.reconstructRawString(content);
-     const [pathPart, section] = rawPath.split('#').map(s => s.trim());
-     const validationResult = helpers.validatePath(pathPart);
+     // 1. Find section marker and split the array
+     const sectionMarkerIndex = content.findIndex(p => p.type === NodeType.SectionMarker);
+     const pathParts = sectionMarkerIndex === -1 ? content : content.slice(0, sectionMarkerIndex);
+     const sectionParts = sectionMarkerIndex === -1 ? [] : content.slice(sectionMarkerIndex + 1);
 
-     const pathInterpolatedValue = content; // Use the original parsed content array
+     // DEBUG: Log pathParts before flag calculation
+     helpers.debug('EMBED_RHS_PRE_FLAGS', 'PathParts before flag calc:', JSON.stringify(pathParts));
 
-     let finalPathObject = validationResult;
-     if (finalPathObject && typeof finalPathObject === 'object') {
-       finalPathObject.interpolatedValue = pathInterpolatedValue;
-     } else {
-       finalPathObject = { raw: pathPart, structured: {}, interpolatedValue: pathInterpolatedValue };
-     }
+     // 2. Reconstruct raw strings (using the fixed helper)
+     const rawPath = helpers.reconstructRawString(content).trim();
+     const rawSection = helpers.reconstructRawString(sectionParts).trim() || null;
+     const pathOnly = helpers.reconstructRawString(pathParts).trim();
 
-     if (finalPathObject.normalized && finalPathObject.structured) {
-       const { raw, normalized, structured, ...rest } = finalPathObject;
-       finalPathObject = { raw, normalized, structured, ...rest };
-     }
+     // 3. Split content into path parts and section
+     helpers.debug('EMBED_RHS_CONTENT', 'Full content:', JSON.stringify(content));
+     helpers.debug('EMBED_RHS_PATH_PARTS', 'Path parts:', JSON.stringify(pathParts));
+     // Validate path using only the path-portion (before any # section)
+     const finalPathObject = helpers.validatePath(pathParts, DirectiveKind.embed);
+     finalPathObject.raw = pathOnly;
+     finalPathObject.values = content; // Keep all parts including section
+
+     helpers.debug('EmbedPath_New', { rawPath, rawSection, finalPathObject, content });
 
      return {
+       kind: 'embed',
        subtype: 'embedPath',
        path: finalPathObject,
-       ...(section ? { section } : {}),
+       ...(rawSection ? { section: rawSection } : {}),
        ...(options ? { options } : {})
      };
    }
    / _ variable:Variable options:DirectiveOptions? {
-     const variableText = helpers.reconstructRawString([variable]); 
-
-     if (variable.valueType === 'path') {
-       return {
-         subtype: 'embedVariable',
-         path: helpers.validatePath(variableText), // PathVar gets validated
-         ...(options ? { options } : {})
-       };
-     } else {
-       // Text/Data vars create a structure mimicking a path object for now
-       return {
-         subtype: 'embedVariable',
-         path: {
-           raw: variableText,
-           isVariableReference: true,
-           variable: variable,
-           structured: {
-             variables: {
-               text: [variable.identifier] // Treat both TextVar/DataVar as text source here
-             }
-           }
-         },
-         ...(options ? { options } : {})
-       };
-     }
-   }
+      // Handle variable references (e.g. {{variable}} or {{users[0].roles[1]}})
+      return {
+        subtype: 'embedVariable',
+        values: [variable],
+        ...(options ? { options } : {})
+      };
+    }
 
 // Helper rule for parsing RHS @run variations
 // Returns { subtype: '...', ... } structure without 'source' field.
@@ -756,7 +615,7 @@ _RunRHS
         command: commandObj
       };
     }
-  / _ lang:Identifier? _ params:RunVariableParams? _ "[[" content:MultilineInterpolatableContentOrEmpty "]]" {
+  / _ lang:Identifier? _ params:RunVariableParams? _ "[[" content:MultilineInterpolatableContentOrEmpty "]]" _[ \t]* {
       return {
         subtype: params ? 'runCodeParams' : 'runCode',
         command: content,
@@ -768,28 +627,12 @@ _RunRHS
   / _ "[" content:BracketInterpolatableContentOrEmpty "]" {
       return {
         subtype: 'runCommand',
-        command: content
+        values: content // Changed 'command' to 'values'
       };
     }
 
-Directive
-   = &{ return helpers.isLineStart(input, offset()) && input.charAt(offset()) === '@'; } 
-     "@" directive:(
-       ImportDirective
-     / EmbedDirective
-     / RunDirective
-     / DefineDirective
-     / DataDirective
-     / TextDirective
-     / PathDirective
-     / VarDirective
-   ) { 
-       return directive; 
-     }
-
-// Command reference parsing rule
 CommandReference
-  = "$" name:Identifier args:CommandArgs? {
+  = "$" name:Identifier _ args:CommandArgs? { 
       return {
         name,
         args: args || [],
@@ -804,61 +647,119 @@ CommandArgs
 
 CommandArgsList
   = first:CommandArg rest:(_ "," _ arg:CommandArg { return arg; })* {
-      return [first, ...rest];
+      const result = [first, ...rest];
+      return result;
     }
 
 CommandArg
-  = str:StringLiteral { return { type: 'string', value: str }; }
-  / varRef:Variable { return { type: 'variable', value: varRef }; }
-  / chars:RawArgChar+ { return { type: 'raw', value: chars.join('').trim() }; }
+  = str:StringLiteral { 
+      const result = { type: 'string', value: str };
+      return result; 
+  }
+  / varRef:Variable { 
+      return varRef; 
+  }
+  / chars:RawArgChar+ { 
+      const result = { type: 'raw', value: chars.join('').trim() }; 
+      return result;
+  }
 
 RawArgChar
   = !("," / ")") char:. { return char; }
 
-RunDirective
-  = "run" runResult:_RunRHS header:UnderHeader? {
-      const directiveData = {
-        ...runResult,
-        ...(header ? { underHeader: header } : {})
-      };
+Directive
+  = &{ return helpers.isLogicalLineStart(input, offset()); }
+    [ \t]* "@"                       // allow leading tabs/spaces
+    dir:(
+      ImportDirective_Simple / ImportDirective_WithClause
+    / EmbedDirective
+    / RunDirective
+    / DefineDirective
+    / DataDirective
+    / TextDirective
+    / PathDirective
+    / VarDirective
+    ) { return dir; }
 
-      return helpers.createDirective('run', directiveData, location());
-    }
-  / "run" _ variable:(TextVar / DataVar) !CommandReference header:UnderHeader? {
-      const variableText = helpers.reconstructRawString([variable]);
-      helpers.validateRunContent(variableText); 
+RunDirective
+  = "run" _ "[" content:BracketInterpolatableContent "]" {
+      const raw = content.map(n => {
+        if (n.type === 'Text') return n.content;
+        if (n.type === 'VariableReference') return `{{${n.identifier}}}`;
+        return '';
+      }).join('');
       return helpers.createDirective('run', {
         subtype: 'runCommand',
-        command: variableText,
+        raw,
+        values: content
+      }, location());
+    }
+  / "run" _ cmdRef:CommandReference _ HWS DirectiveEOL { 
+      const { name, args: params } = cmdRef;
+      return helpers.createDirective('run', {
+        subtype: 'runDefined',
+        raw: `$${name}`,
+        values: [
+          helpers.createVariableReferenceNode('path', { identifier: name, isVariableReference: true }, location())
+        ],
+        args: params || []
+      }, location());
+    }
+  / "run" _ language:Identifier _ "[" _ code:$([^\[\]]+) _ "]" {
+      return helpers.createDirective('run', {
+        subtype: 'runCode',
+        language,
+        values: [
+          helpers.createNode('Text', { content: code.trim() }, location())
+        ]
+      }, location());
+    }
+
+  / "run" _ lang:Identifier _ "(" params:RunVariableParams ")" _ "[" code:BracketInterpolatableContentOrEmpty "]" header:UnderHeader? HWS DirectiveEOL {
+      const clean = code.filter(
+        n => !(n.type === 'Text' && /^\s*$/.test(n.content))
+      ).map(node => {
+        if (node.type === 'Text') {
+          return helpers.createNode('Text', { content: node.content.trim() }, location());
+        }
+        return node;
+      });
+      return helpers.createDirective('run', {
+        subtype: 'runCodeParams',
+        language: lang,
+        values: clean,
+        args: params,
         ...(header ? { underHeader: header } : {})
       }, location());
     }
   RunVariableParams
-  = "(" _ params:RunParamsList? _ ")" {
+  = params:RunParamsList? {
       return params || [];
     }
 
 RunParamsList
   = first:RunParam rest:(_ "," _ param:RunParam { return param; })* {
-      return [first, ...rest];
+      return [first, ...rest].filter(Boolean);
     }
 
 RunParam
-  = variable:Variable { return variable; }
+  = varName:("{{" _ name:Identifier _ "}}" { return name; } / "(" _ name:Identifier _ ")" { return name; }) {
+      return helpers.createVariableReferenceNode('text', { identifier: varName }, location());
+    }
   / StringLiteral
   / identifier:Identifier { return identifier; }
 
-ImportDirective
-  = "import" _ "[" _ imports:ImportsList _ "]" _ "from" _ "[" pathParts:ImportInterpolatablePathOrEmpty "]" (LineTerminator / EOF) { 
-      const rawPath = helpers.reconstructRawString(pathParts); 
-      const validatedPath = helpers.validatePath(rawPath); 
-      if (validatedPath && typeof validatedPath === 'object') {
-        validatedPath.interpolatedValue = pathParts;
-      }
-      const isPathVar = validatedPath?.isPathVariable || (pathParts.length === 1 && pathParts[0].type === 'VariableReference' && pathParts[0].valueType === 'path');
-      if (isPathVar && validatedPath && !validatedPath.isPathVariable) {
-        validatedPath.isPathVar = true;
-      }
+ImportDirective_Simple
+  = _ "import" _ pathParts:PathValue _ { // Changed path to pathParts
+    // REMOVED: helpers.debug('IMPORT_BRACKET_PATH_RECEIVED_PARTS', 'Received parts:', JSON.stringify(pathParts)); // <<< ADDED DEBUG LOG
+    const pathData = helpers.validatePath(pathParts); // Pass parts directly
+    // UPDATED: Explicitly set subtype (Task 3.2)
+    return helpers.createDirective('import', { subtype: helpers.getImportSubtype([]), path: pathData, imports: undefined }, location());
+  }
+
+ImportDirective_WithClause
+  = "import" _ "[" _ imports:ImportsList _ "]" _ "from" _ "[" pathParts:BracketInterpolatableContentOrEmpty "]" HWS DirectiveEOL {
+      const validatedPath = helpers.validatePath(pathParts);
       const directiveData = {
         subtype: helpers.getImportSubtype(imports),
         path: validatedPath,
@@ -866,30 +767,19 @@ ImportDirective
       };
       return helpers.createDirective('import', directiveData, location());
     }
-  / "import" _ "[" _ imports:ImportsList _ "]" _ "from" __ variable:Variable (LineTerminator / EOF) {
-      const variableText = helpers.reconstructRawString([variable]); 
-      const validatedPath = helpers.validatePath(variableText);
-      if (variable.valueType === 'path' && validatedPath && !validatedPath.isPathVariable) {
-          validatedPath.isPathVariable = true;
-      }
-      const directiveData = {
-        subtype: helpers.getImportSubtype(imports),
-        path: validatedPath,
-        imports: imports
-      };
-      return helpers.createDirective('import', directiveData, location());
-    }
+  / "import" _ "[" _ imports:ImportsList _ "]" _ "from" __ variable:Variable HWS DirectiveEOL {
+    const validatedPath = helpers.validatePath([variable]);
+    const directiveData = {
+      subtype: helpers.getImportSubtype(imports),
+      path: validatedPath,
+      imports: imports
+    };
+    return helpers.createDirective('import', directiveData, location());
+  }
   / // Traditional import (backward compatibility)
-    "import" _ "[" pathParts:ImportInterpolatablePathOrEmpty "]" (LineTerminator / EOF) { 
-      const rawPath = helpers.reconstructRawString(pathParts); 
-      const validatedPath = helpers.validatePath(rawPath); 
-      if (validatedPath && typeof validatedPath === 'object') {
-        validatedPath.interpolatedValue = pathParts;
-      }
-      const isPathVar = validatedPath?.isPathVariable || (pathParts.length === 1 && pathParts[0].type === 'VariableReference' && pathParts[0].valueType === 'path');
-      if (isPathVar && validatedPath && !validatedPath.isPathVariable) {
-        validatedPath.isPathVariable = true;
-      }
+    "import" _ "[" pathParts:BracketInterpolatableContentOrEmpty "]" DirectiveEOL {
+      // REMOVED: helpers.debug('IMPORT_BRACKET_PATH_RECEIVED_PARTS', 'Received parts:', JSON.stringify(pathParts)); // <<< ADDED DEBUG LOG
+      const validatedPath = helpers.validatePath(pathParts);
       const implicitImports = [{name: "*", alias: null}];
       const directiveData = {
         subtype: helpers.getImportSubtype(implicitImports),
@@ -899,12 +789,8 @@ ImportDirective
       return helpers.createDirective('import', directiveData, location());
     }
   / // Traditional import with variable (backward compatibility)
-    "import" __ variable:Variable (LineTerminator / EOF) {
-      const variableText = helpers.reconstructRawString([variable]); 
-      const validatedPath = helpers.validatePath(variableText);
-      if (variable.valueType === 'path' && validatedPath && !validatedPath.isPathVariable) {
-          validatedPath.isPathVariable = true;
-      }
+    "import" __ variable:Variable DirectiveEOL {
+      const validatedPath = helpers.validatePath([variable]);
       const implicitImports = [{name: "*", alias: null}];
       const directiveData = {
         subtype: helpers.getImportSubtype(implicitImports),
@@ -927,8 +813,11 @@ ImportsList
     }
 
 ImportItem
-  = name:Identifier alias:ImportAlias? {
-      return {name, alias: alias || null};
+  = name:Identifier _ "as" _ alias:Identifier { // Explicitly match 'name as alias'
+      return {name, alias: alias};
+    }
+  / name:Identifier { // Fallback for 'name' without alias
+      return {name, alias: null};
     }
 
 ImportAlias
@@ -937,24 +826,31 @@ ImportAlias
     }
 
 EmbedDirective
-  = "embed" embedResult:_EmbedRHS header:HeaderLevel? under:UnderHeader? {
+  = "embed" embedResult:_EmbedRHS headerLevel:HeaderLevel? underHeader:UnderHeader? HWS DirectiveEOL {
       const directiveData = {
         ...embedResult,
-        ...(header ? { headerLevel: header } : {}),
-        ...(under ? { underHeader: under } : {})
+        ...(headerLevel ? { headerLevel } : {}),
+        ...(underHeader ? { underHeader } : {})
       };
 
       return helpers.createDirective('embed', directiveData, location());
     }
-  / "embed" _ "{" _ names:NameList _ "}" _ "from" _ content:DirectiveContent options:DirectiveOptions? header:HeaderLevel? under:UnderHeader? {
-    const [path, section] = content.split('#').map(s => s.trim());
+  / "embed" _ "[[" content:MultilineContent "]]" _ HWS DirectiveEOL {
+    return helpers.createDirective('embed', {
+      subtype: 'embedMultiline',
+      content: content,
+    }, location());
+  }
+  / "embed" _ "{" _ names:NameList _ "}" _ "from" _ content:DirectiveContent options:DirectiveOptions? header:HeaderLevel? under:UnderHeader? DirectiveEOL {
+    const [path, section] = content.split('#');
+    const sectionTrimmed = section ? section.trim() : null;
     
     helpers.validateEmbedPath(path);
     
     return helpers.createDirective('embed', {
       subtype: 'embedPath',
       path: helpers.validatePath(path),
-      ...(section ? { section } : {}),
+      ...(sectionTrimmed ? { section: sectionTrimmed } : {}),
       names,
       ...(options ? { options } : {}),
       ...(header ? { headerLevel: header } : {}),
@@ -984,7 +880,7 @@ IdentifierList
   }
 
 DefineDirective
-  = "define" _ id:DefineIdentifier params:DefineParams? _ "=" _ value:DefineValue {
+  = "define" _ id:DefineIdentifier params:DefineParams? _ "=" _ value:DefineValue HWS DirectiveEOL {
     if (value.type === "run") {
       helpers.validateRunContent(value.value.command);
     } else if (typeof value.value === "string") {
@@ -1031,7 +927,22 @@ DefineParams
   }
 
 DefineValue
-  = "@run" runResult:_RunRHS {
+  = "@run" _ "[" content:BracketInterpolatableContentOrEmpty "]" {
+      const raw = content.map(n => {
+        if (n.type === 'Text') return n.content;
+        if (n.type === 'VariableReference') return `{{${n.identifier}}}`;
+        return '';
+      }).join('');
+      return {
+        type: "run",
+        value: {
+          subtype: 'runCommand',
+          raw,
+          values: content
+        }
+      };
+    }
+  / "@run" runResult:_RunRHS {
       return {
         type: "run",
         value: runResult
@@ -1050,32 +961,43 @@ DirectiveContent
   }
 
 BracketContent
-  = chars:BracketChar* {
-    return chars.join('');
-  }
+  = parts:(BracketText / BracketVariable)+ {
+      return parts;
+    }
 
-BracketChar
-  = QuotedString
-  / NestedBrackets
-  / !"]" char:. { return char; }
+BracketText
+  = value:$(!([\\\]/.#{}] / '{{' / '$' / '\\') .)+ { // REVERTED: Restore original complex lookahead definition
+      return helpers.createNode(NodeType.Text, { content: value }, location());
+    }
+
+BracketVariable
+  = "{{" _ name:Identifier _ "}}" {
+      return helpers.createVariableReferenceNode('text', { identifier: name }, location());
+    }
 
 QuotedString
   = '"' chars:DoubleQuotedChars '"' { return '"' + chars + '"'; }
   / "'" chars:SingleQuotedChars "'" { return "'" + chars + "'"; }
-  / "`" chars:BacktickQuotedChars "`" { return "`" + chars + "`"; }
+  / "`" chars:BracketText "`" { return "`" + chars + "`"; }
 
 DoubleQuotedChars
-  = chars:(!'"' char:. { return char; })* { return chars.join(''); }
+  = chars:[^"]* { return chars.join(''); }
 
 SingleQuotedChars
-  = chars:(!"'" char:. { return char; })* { return chars.join(''); }
-
-BacktickQuotedChars
-  = chars:(!"`" char:. { return char; })* { return chars.join(''); }
+  = chars:[^']* { return chars.join(''); }
 
 NestedBrackets
-  = "[" content:BracketContent "]" {
-    return "[" + content + "]";
+  = "[[" content:BracketContent "]]" {
+    return content;
+  }
+
+MultilineContent
+  = content:TextUnMultilineContent { return content; }
+
+TextUnMultilineContent
+  = content:([^\]]*) { 
+    const text = content.join('');
+    return [{ type: 'Text', content: text }];
   }
 
 TextUntilNewline
@@ -1090,6 +1012,9 @@ DirectiveOption
   = _ key:Identifier _ "=" _ value:StringLiteral {
     return { [key]: value };
   }
+
+SpecialPathChar
+  = "." / "~"
 
 Identifier
   = first:[a-zA-Z_] rest:[a-zA-Z0-9_]* {
@@ -1108,14 +1033,14 @@ MultilineTemplateLiteral
     }
 
 DataDirective
-  = "data" _ id:Identifier schema:SchemaValidation? _ "=" _ value:DataValue {
+  = "data" _ id:Identifier schema:SchemaValidation? _ "=" _ value:DataValue HWS DirectiveEOL {
     return helpers.createDirective('data', {
       identifier: id,
       ...(schema ? { schema } : {}),
-      source: value.source,
-      ...(value.source === "embed" ? { embed: value.value } :
-          value.source === "run" ? { run: value.value } :
-          value.source === "call" ? { call: value.value } :
+      source: value.type,
+      ...(value.type === "embed" ? { embed: value.value } :
+          value.type === "run" ? { run: value.value } :
+          value.type === "call" ? { call: value.value } :
           { value: value.value })
     }, location());
   }
@@ -1126,19 +1051,19 @@ SchemaValidation
 DataValue
   = "@embed" embedResult:_EmbedRHS {
       return {
-        source: "embed",
+        type: "embed",
         embed: embedResult
       };
     }
   / "@run" runResult:_RunRHS {
       return {
-        source: "run",
+        type: "run",
         run: runResult
       };
     }
   / "@call" _ api:Identifier "." method:Identifier _ content:DirectiveContent {
     return {
-      source: "call",
+      type: "call",
       value: {
         kind: "call",
         api,
@@ -1149,13 +1074,13 @@ DataValue
   }
   / value:DataObjectLiteral {
     return {
-      source: "literal",
+      type: "literal",
       value
     };
   }
   / value:ArrayLiteral {
     return {
-      source: "literal",
+      type: "literal",
       value
     };
   }
@@ -1189,7 +1114,7 @@ PropertyValue
   / NullLiteral
   / DataObjectLiteral
   / ArrayLiteral
-  / varExpr:(Variable) { return text(); }
+  / varExpr:Variable { return varExpr; }
   / EmbedValue
   / RunValue
   / CallValue
@@ -1247,33 +1172,46 @@ ArrayItems
   }
 
 TextDirective
-  = "text" _ id:Identifier _ "=" _ value:TextValue {
+  = textAssignment / textBracketed
+
+textAssignment
+  = "text" _ id:Identifier _ "=" _ value:TextValue HWS DirectiveEOL {
+    helpers.debug('TEXT', { type: 'assignment', identifier: id, valueSource: value.type });
     return helpers.createDirective('text', {
       identifier: id,
-      source: value.source,
-      ...(value.source === "embed" ? { embed: value.embed } :
-          value.source === "run" ? { run: value.run } :
-          value.source === "call" ? { call: value.value } :
-          { value: value.value })
+      source: value.type,
+      values: value.values,
+      ...(value.type === "embed" ? { embed: value.embed } :
+          value.type === "run" ? { run: value.run } :
+          value.type === "call" ? { call: value.value } :
+          { values: value.values })
+    }, location());
+  }
+
+textBracketed
+  = "text" _ "[" content:BracketInterpolatableContent "]" HWS DirectiveEOL {
+    helpers.debug('TEXT', { type: 'bracketed', content });
+    return helpers.createDirective('text', {
+      values: content
     }, location());
   }
 
 TextValue
   = "@embed" embedResult:_EmbedRHS {
       return {
-        source: "embed",
+        type: "embed",
         embed: embedResult
       };
     }
   / "@run" runResult:_RunRHS {
       return {
-        source: "run",
+        type: "run",
         run: runResult
       };
     }
   / "@call" _ api:Identifier "." method:Identifier _ content:DirectiveContent {
     return {
-      source: "call",
+      type: "call",
       value: {
         kind: "call",
         api,
@@ -1283,45 +1221,42 @@ TextValue
     };
   }
   / value:InterpolatedStringLiteral {
+    const rawValue = helpers.reconstructRawString(value).trim();
+    const cleanValue = rawValue
+      .replace(/^(\[|\]\])|(\]|\[\[)$/g, '')   // drop stray [ or ]
+      .trim();
     return {
-      source: "literal",
-      value
+      type: "literal",
+      values: [{ type: 'Text', content: cleanValue }]
     };
   }
   / value:InterpolatedMultilineTemplate {
     return {
-      source: "literal",
-      value
+      type: "literal",
+      values: value
     };
   }
 
 PathDirective
-  = "path" __ id:Identifier __ "=" __ rhs:(
-      pv:PathVar {
-        const pathObject = helpers.validatePath(pv.identifier, { context: 'pathDirective' });
-        if (pathObject && typeof pathObject === 'object') {
-          pathObject.variableNode = pv;
-        } else {
-          return { identifier: id, path: { raw: pv.identifier, isPathVariable: true, variableNode: pv, structured: {} } };
-        }
+  = "path" __ id:Identifier __ "=" __ rhs:( // rhs captures the { identifier, path } object
+      pathStr:PathStringLiteral { // Case 1: Path String
+        // pathStr is an array of nodes
+        const pathObject = helpers.validatePath(pathStr, { context: 'pathDirective' });
+        // Return the directive data structure
         return { identifier: id, path: pathObject };
       }
-    / interpolatedArray:InterpolatedStringLiteral {
-      const rawString = helpers.reconstructRawString(interpolatedArray);
-      const pathObject = helpers.validatePath(rawString, { context: 'pathDirective' });
-      if (pathObject && typeof pathObject === 'object') {
-        pathObject.interpolatedValue = interpolatedArray;
-      } else {
-        return { identifier: id, path: { raw: rawString, structured: {}, interpolatedValue: interpolatedArray } };
-      }
-      return { identifier: id, path: pathObject };
-    }
   )
-   (LineTerminator / EOF)
-  { return helpers.createDirective('path', rhs, location()); }
+  (
+    DirectiveEOL          /* newline + returns Newline node */
+    / &EOF                  /* or just end of file, returns nothing */
+  )
+  { 
+    // rhs now holds { identifier, path }, create the directive node
+    return helpers.createDirective('path', rhs, location()); 
+  }
 
 VarDirective
-  = "var" _ id:Identifier _ "=" _ value:VarValue {
+  = "var" _ id:Identifier _ "=" _ value:VarValue DirectiveEOL {
     return helpers.createDirective('var', {
       identifier: id,
       value: {
@@ -1374,43 +1309,43 @@ CodeFenceLangID
   = chars:[^`\r\n]+ { return chars.join(''); }
 
 PathValue
-  = interpolatedArray:InterpolatedStringLiteral {
-      const rawString = helpers.reconstructRawString(interpolatedArray);
-      const validationResult = helpers.validatePath(rawString, { context: 'pathDirective' });
-
-      if (validationResult && typeof validationResult === 'object') {
-        validationResult.interpolatedValue = interpolatedArray;
-      }
-
-      return validationResult;
+  = interpolatedArray:InterpolatedStringLiteral { 
+      // Return the structured array directly
+      return interpolatedArray; 
     }
   / variable:PathVar {
-    return {
-        raw: `$${variable.identifier}`,
-        isPathVariable: true,
-        structured: {
-          base: '.',
-          segments: [`$${variable.identifier}`],
-          variables: {
-            path: [variable.identifier]
-          },
-          cwd: false
-        }
-      };
+    // Return an array containing the single VariableReference node
+    return [helpers.createVariableReferenceNode('path', { identifier: variable.identifier }, location())]; 
   }
+
+// --- Path Component Tokens ---
+PathSeparatorToken "Path Separator"
+  = "/" { return helpers.createNode(NodeType.PathSeparator, { value: "/" }, location()); }
+
+DotSeparatorToken "Dot Separator"
+  = "." { return helpers.createNode(NodeType.DotSeparator, { value: "." }, location()); }
+
+SectionMarkerToken "Section Marker"
+  = [ \t]* "#" { return helpers.createNode(NodeType.SectionMarker, { value: "#" }, location()); }
 
 // Brackets [...] Interpolation
 BracketAllowedLiteralChar
-  = !(']' / '{{' / '$') char:. { return char; }
+  = !([\\\]/.#{}] / '{{' / '$' / '\\\\') . // Disallow \, /, ., #, {, }, {{, $, \\
 
 BracketLiteralTextSegment
-  = chars:BracketAllowedLiteralChar+ {
-      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
+  = value:$(!([\\\]/.#{}] / '{{' / '$' / '\\' / [ \t]*'#') .)+ { // MODIFIED: Added lookahead for whitespace before #
+      return helpers.createNode(NodeType.Text, { content: value }, location());
     }
 
 // Define a single part that can appear inside brackets, guarded by lookahead
 BracketPart
-  = !( ']' / EOF ) part:(Variable / BracketLiteralTextSegment) { return part; }
+  = !']' part:(
+        PathSeparatorToken
+      / DotSeparatorToken
+      / SectionMarkerToken
+      / Variable
+      / BracketLiteralTextSegment // Literal is the fallback
+    ) { return part; }
 
 BracketInterpolatableContent
   = parts:BracketPart+ {
@@ -1418,9 +1353,8 @@ BracketInterpolatableContent
     }
 
 BracketInterpolatableContentOrEmpty
-  = result:BracketInterpolatableContent? {
-      return result || [];
-    }
+  = parts:BracketPart+ { return parts; }
+  / ""                 { return []; }
 
 // --- End Interpolation Rules ---
 
@@ -1429,37 +1363,43 @@ BracketInterpolatableContentOrEmpty
 LineTerminator
   = '\n' / '\r\n' / '\r' / '\u2028' / '\u2029'
 
+NewlineNode
+  = term:LineTerminator &{ 
+    const pos = offset();
+    const isBeforeDirective = input.substr(pos).match(/^\s*@[a-z]/i);
+    return isBeforeDirective;
+  } {
+    return helpers.createNode(NodeType.Newline, { content: term }, location());
+  }
+
 EOF
   = !.
+
+EndOfLine
+  = ws:[ \t\r]* term:LineTerminator &{ 
+      const pos = offset();
+      const isBeforeDirective = input.substr(pos).match(/^\s*@[a-z]/i);
+      return isBeforeDirective;
+    } { 
+      return helpers.createNode(NodeType.Newline, { content: term }, location());
+    }
+  / ws:[ \t\r]* term:LineTerminator { 
+      return helpers.createNode(NodeType.Newline, { content: term }, location());
+    }
+  / ws:[ \t\r]* &{ 
+      const atEof = offset() === input.length;
+      const nextChar = input[offset()];
+      return atEof || (nextChar === '@' && helpers.isLogicalLineStart(input, offset())); 
+    } { 
+      return helpers.createNode(NodeType.Newline, { content: '\n' }, location());
+    }
 
 // --- End Whitespace & EOF Rules ---
 
 // <<< START NEW RULES for Import Path Interpolation >>>
 // Similar to BracketInterpolatableContent but specific chars disallowed
 
-ImportPathAllowedLiteralChar
-  = !(']' / '{{' / '$') char:. { return char; }
 
-ImportPathLiteralTextSegment
-  = chars:ImportPathAllowedLiteralChar+ {
-      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-// Define a single part that can appear inside import path brackets
-ImportPathPart
-  = !( ']' / EOF ) part:(Variable / ImportPathLiteralTextSegment) { 
-      return part; 
-    }
-
-ImportInterpolatablePath
-  = parts:ImportPathPart+ {
-      return parts;
-    }
-
-ImportInterpolatablePathOrEmpty
-  = result:ImportInterpolatablePath? {
-      return result || []; // Return empty array if no content
-    }
 // <<< END NEW RULES >>>
 
 // +++ START DECOMPOSED IMPORT RULES FOR LOGGING +++
@@ -1473,11 +1413,19 @@ _ImportOpeningBracket
   = "[" { helpers.debug('Import Trace: Matched \"[\"'); return true; }
 
 _ImportPathContent
-  = pathParts:ImportInterpolatablePathOrEmpty { helpers.debug('Import Trace: Matched pathParts', `length=${pathParts.length}`); return pathParts; } // Return the matched parts
+  = pathParts:BracketInterpolatableContentOrEmpty { helpers.debug('Import Trace: Matched pathParts', `length=${pathParts.length}`); return pathParts; } // Return the matched parts
 
 _ImportClosingBracket
   = "]" { helpers.debug('Import Trace: Matched \"\"]\"'); return true; }
 
 _ImportEnd
-  = (LineTerminator / EOF) { helpers.debug('Import Trace: Matched End'); return true; }
+  = ContentEOL { helpers.debug('Import Trace: Matched End'); return true; }
 // +++ END DECOMPOSED IMPORT RULES +++
+
+ImportPathOrBracketed
+  = UnquotedImportPath
+  / ('[' _ path:BracketInterpolatableContentOrEmpty _ ']') // MODIFIED: Use new unified rule
+
+// Matches an unquoted path for import directives
+UnquotedImportPath
+  = chars:[^ \t\r\n\u200B\u200C\u200D]+ { return chars.join(''); }

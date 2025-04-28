@@ -15,7 +15,8 @@ type NodeType =
   | 'Comment'
   | 'Error'
   | 'VariableReference'
-  | 'Variable';
+  | 'Variable'
+  | 'Newline';
 
 // Position in a source file
 interface Position {

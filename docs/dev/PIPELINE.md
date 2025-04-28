@@ -154,9 +154,9 @@ The pipeline is organized into logical service groups, with strict initializatio
    - For `DirectiveNode`s:
      - Routes directives to appropriate handlers via `DirectiveService`.
      - Handlers process structured directive data (e.g., `InterpolatableValue`) and use `ResolutionService` as needed.
-     - Handlers return a `DirectiveResult` which may include replacement nodes and/or `stateChanges`.
-     - `DirectiveService` applies the `stateChanges` from the `DirectiveResult` to the `StateService`.
-     - `InterpreterService` applies node replacements (if any) to the transformed AST.
+     - Handlers return a `DirectiveResult` (defined in `@core/directives/DirectiveHandler.ts`). This result can optionally include a `stateChanges` property of type `StateChanges`. `StateChanges` contains `variables?: Record<string, VariableDefinition | null>`, where `VariableDefinition` (from `@core/types/variables.ts`) is a generic structure holding the variable's `name`, `type`, `value`, and `metadata`. Setting a variable name to `null` signifies removal.
+     - The `InterpreterService` receives the `DirectiveResult` from the handler (via `DirectiveService`). If `stateChanges` are present, the `InterpreterService` calls `IStateService.applyStateChanges(changes)` to update the current state.
+     - `InterpreterService` applies node replacements (if any) from the `DirectiveResult` to the transformed AST if transformation is enabled.
    - Handles file imports and embedding.
 
 5. **Output Generation** (`OutputService`)
@@ -207,5 +207,5 @@ When transformation mode is enabled, the pipeline handles directives and variabl
 3. **Variable Resolution Process**
    - Variables can be resolved at multiple stages:
      - During directive processing by handlers (using `ResolutionService` on `InterpolatableValue` arrays or `VariableReferenceNode`s from the AST).
-     - **During interpretation (`InterpreterService`) for `{{...}}` references within plain `TextNode` content.**
-   - `OutputService` **does not** perform variable resolution on `TextNode` content; it expects pre-resolved text. It may use `VariableReferenceResolverClient` for formatting complex values during final output generation.
+     - **During interpretation (`InterpreterService`) for `{{...}}` references within plain `TextNode` content.** The `InterpreterService` resolves these before adding the final `TextNode` to the state.
+   - `OutputService` **does not** perform variable resolution on `TextNode` content; it expects pre-resolved text provided by the `InterpreterService`. It may use `VariableReferenceResolverClient` for formatting complex values (like objects or arrays referenced by variables) during final output generation.

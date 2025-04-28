@@ -12,6 +12,15 @@ describe('directives/@embed', () => {
       // Make a deep copy to avoid modifying the original
       const testCopy = JSON.parse(JSON.stringify(test));
       
+      // Add cwd property to all path tests based on path structure
+      if (testCopy.expected?.directive?.path?.structured) {
+        // Simple paths - those that don't start with $ or / should have cwd: true
+        if (test.name === 'simple-path' || 
+            test.description === 'Embed directive with simple path') {
+          testCopy.expected.directive.path.structured.cwd = true;
+        }
+      }
+      
       // If this is a header level test, modify the expected structure to include cwd: true
       if (test.name === 'header-level' || 
           test.description === 'Embed with header level adjustment' ||

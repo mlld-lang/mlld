@@ -102,12 +102,22 @@ export function validateImportDirective(node: DirectiveNode): void {
     );
   }
 
-  // Validate imports - use structured imports array if available, otherwise use importList
-  if (directive.imports && Array.isArray(directive.imports)) {
-    validateStructuredImports(directive.imports, node);
-  } else if (directive.importList && directive.importList !== '*') {
-    validateImportList(directive.importList, node);
+  // Validate imports - Grammar MUST provide the structured 'imports' array.
+  if (!directive.imports || !Array.isArray(directive.imports)) {
+    // If imports array is missing or not an array, it's a grammar/AST generation issue.
+    throw new MeldDirectiveError(
+      'Invalid or missing structured imports array in AST node for @import', 
+      'import',
+      {
+        location: convertLocation(node.location),
+        code: DirectiveErrorCode.VALIDATION_FAILED, 
+        severity: ErrorSeverity.Fatal // Problem with core AST structure
+      }
+    );
   }
+
+  // Validate the structured imports array provided by the grammar.
+  validateStructuredImports(directive.imports, node);
 }
 
 /**
@@ -165,116 +175,3 @@ function validateStructuredImports(imports: ImportItem[], node: DirectiveNode): 
     }
   }
 }
-
-/**
- * Validates import list
- * @private
- */
-function validateImportList(importList: string, node: DirectiveNode): void {
-  if (importList === '*') {
-    return; // Wildcard import is valid
-  }
-
-  // Remove brackets if present using direct string manipulation
-  let cleanList = importList;
-  if (cleanList.startsWith('[') && cleanList.endsWith(']')) {
-    cleanList = cleanList.substring(1, cleanList.length - 1);
-  }
-  
-  // Split by commas and validate each part
-  const parts = cleanList.split(',');
-  
-  for (const part of parts) {
-    const trimmedPart = part.trim();
-    
-    if (trimmedPart === '') {
-      throw new MeldDirectiveError(
-        'Import list contains an empty item',
-        'import',
-        {
-          location: convertLocation(node.location),
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal
-        }
-      );
-    }
-    
-    // Handle colon syntax (var:alias)
-    if (trimmedPart.includes(':')) {
-      const [name, alias] = trimmedPart.split(':').map(s => s.trim());
-      
-      if (!name || name === '') {
-        throw new MeldDirectiveError(
-          'Import identifier cannot be empty',
-          'import',
-          {
-            location: convertLocation(node.location),
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal
-          }
-        );
-      }
-      
-      if (!alias || alias === '') {
-        throw new MeldDirectiveError(
-          'Import alias cannot be empty',
-          'import',
-          {
-            location: convertLocation(node.location),
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal
-          }
-        );
-      }
-      
-      continue;
-    }
-    
-    // Handle 'as' syntax (var as alias) without regex
-    const asIndex = trimmedPart.indexOf(' as ');
-    if (asIndex !== -1) {
-      const name = trimmedPart.substring(0, asIndex).trim();
-      const alias = trimmedPart.substring(asIndex + 4).trim();
-      
-      if (!name || name === '') {
-        throw new MeldDirectiveError(
-          'Import identifier cannot be empty',
-          'import',
-          {
-            location: convertLocation(node.location),
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal
-          }
-        );
-      }
-      
-      // When using 'as' syntax, the alias must not be empty
-      if (!alias || alias === '') {
-        throw new MeldDirectiveError(
-          'Import alias cannot be empty',
-          'import',
-          {
-            location: convertLocation(node.location),
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal
-          }
-        );
-      }
-      
-      continue;
-    }
-    
-    // Simple import without alias
-    if (trimmedPart === '') {
-      throw new MeldDirectiveError(
-        'Import identifier cannot be empty',
-        'import',
-        {
-          location: convertLocation(node.location),
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal
-        }
-      );
-    }
-  }
-} 

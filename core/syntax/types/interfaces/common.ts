@@ -24,6 +24,7 @@ export interface SourceLocation {
   start: Position;
   end: Position;
   filePath?: string;
+  source?: string | undefined;
 }
 
 /**
@@ -33,6 +34,7 @@ export interface ISourceLocation {
   start: Position;
   end: Position;
   filePath?: string;
+  source?: string | undefined;
 }
 
 export type NodeId = string;

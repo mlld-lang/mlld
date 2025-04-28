@@ -254,18 +254,22 @@ describe('Parser', () => {
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('import');
-      expect(node.directive.path).toEqual(expect.objectContaining({
+      expect(node.directive.path).toEqual({
         raw: 'path/to/file',
-        interpolatedValue: expect.arrayContaining([
-          expect.objectContaining({ type: 'Text', content: 'path/to/file' })
-        ]),
-        normalized: 'path/to/file',
-        structured: {
-          base: '.',
-          segments: ['path', 'to', 'file'],
-          variables: {},
-        },
-      }));
+        values: [
+          expect.objectContaining({ type: 'Text', content: 'path' }),
+          expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+          expect.objectContaining({ type: 'Text', content: 'to' }),
+          expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+          expect.objectContaining({ type: 'Text', content: 'file' })
+        ],
+        isAbsolute: false,
+        isRelativeToCwd: true,
+        hasVariables: false,
+        hasTextVariables: false,
+        hasPathVariables: false,
+        variable_warning: false
+      });
       expect(node.directive.subtype).toBe('importAll');
       expect(node.directive.imports).toEqual([{ name: '*', alias: null }]);
     });
@@ -278,7 +282,8 @@ describe('Parser', () => {
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('run');
-      expect(node.directive.command).toEqual([
+      expect(node.directive.raw).toBe('echo hello');
+      expect(node.directive.values).toEqual([
         expect.objectContaining({ type: 'Text', content: 'echo hello' })
       ]);
       expect(node.directive.subtype).toBe('runCommand');
@@ -294,7 +299,8 @@ describe('Parser', () => {
       expect(node.directive.kind).toBe('define');
       expect(node.directive.name).toBe('command');
       expect(node.directive.command.subtype).toBe('runCommand');
-      expect(node.directive.command.command).toEqual([
+      expect(node.directive.command.raw).toBe('echo hello');
+      expect(node.directive.command.values).toEqual([
         expect.objectContaining({ type: 'Text', content: 'echo hello' })
       ]);
     });
@@ -335,8 +341,11 @@ describe('Parser', () => {
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.structured.base).toBe('$HOMEPATH');
-      expect(node.directive.path.structured.segments).toEqual(['config']);
+      expect(node.directive.path.values).toEqual([
+        expect.objectContaining({ type: 'VariableReference', valueType: 'path', identifier: 'HOMEPATH' }),
+        expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+        expect.objectContaining({ type: 'Text', content: 'config' })
+      ]);
     });
 
     it('should parse a path directive with single quotes', async () => {
@@ -347,8 +356,11 @@ describe('Parser', () => {
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.structured.base).toBe('$HOMEPATH');
-      expect(node.directive.path.structured.segments).toEqual(['config']);
+      expect(node.directive.path.values).toEqual([
+        expect.objectContaining({ type: 'VariableReference', valueType: 'path', identifier: 'HOMEPATH' }),
+        expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+        expect.objectContaining({ type: 'Text', content: 'config' })
+      ]);
     });
 
     it('should parse a path directive with backticks', async () => {
@@ -359,8 +371,11 @@ describe('Parser', () => {
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.structured.base).toBe('$HOMEPATH');
-      expect(node.directive.path.structured.segments).toEqual(['config']);
+      expect(node.directive.path.values).toEqual([
+        expect.objectContaining({ type: 'VariableReference', valueType: 'path', identifier: 'HOMEPATH' }),
+        expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+        expect.objectContaining({ type: 'Text', content: 'config' })
+      ]);
     });
 
     it('should parse a path directive with $PROJECTPATH', async () => {
@@ -371,8 +386,15 @@ describe('Parser', () => {
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.structured.base).toBe('$PROJECTPATH');
-      expect(node.directive.path.structured.segments).toEqual(['config']);
+      expect(node.directive.path.values[0]).toEqual(expect.objectContaining({
+        type: 'VariableReference',
+        identifier: 'PROJECTPATH',
+        valueType: 'path'
+      }));
+      expect(node.directive.path.values.slice(1)).toEqual([
+        expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+        expect.objectContaining({ type: 'Text', content: 'config' })
+      ]);
     });
 
     it('should parse a path directive with $~', async () => {
@@ -383,8 +405,15 @@ describe('Parser', () => {
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.structured.base).toBe('$HOMEPATH');
-      expect(node.directive.path.structured.segments).toEqual(['config']);
+      expect(node.directive.path.values[0]).toEqual(expect.objectContaining({
+        type: 'VariableReference',
+        identifier: 'HOMEPATH',
+        valueType: 'path'
+      }));
+      expect(node.directive.path.values.slice(1)).toEqual([
+        expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+        expect.objectContaining({ type: 'Text', content: 'config' })
+      ]);
     });
 
     it('should parse a path directive with $.', async () => {
@@ -395,8 +424,15 @@ describe('Parser', () => {
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.structured.base).toBe('$.');
-      expect(node.directive.path.structured.segments).toEqual(['config']);
+      expect(node.directive.path.values[0]).toEqual(expect.objectContaining({
+        type: 'VariableReference',
+        identifier: 'PROJECTPATH',
+        valueType: 'path'
+      }));
+      expect(node.directive.path.values.slice(1)).toEqual([
+        expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+        expect.objectContaining({ type: 'Text', content: 'config' })
+      ]);
     });
 
     it('should parse an embed directive', async () => {
@@ -407,16 +443,16 @@ describe('Parser', () => {
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('embed');
-      expect(node.directive.path).toEqual({
-        raw: 'path/to/file',
-        interpolatedValue: [ expect.objectContaining({ type: 'Text', content: 'path/to/file' }) ],
-        normalized: 'path/to/file',
-        structured: {
-          base: '.',
-          segments: ['path', 'to', 'file'],
-          variables: {}
-        }
-      });
+      const path = node.directive.path;
+      expect(path.raw).toBe('path/to/file');
+      expect(path.values).toEqual([
+        expect.objectContaining({ type: 'Text', content: 'path' }),
+        expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+        expect.objectContaining({ type: 'Text', content: 'to' }),
+        expect.objectContaining({ type: 'PathSeparator', value: '/' }),
+        expect.objectContaining({ type: 'Text', content: 'file' })
+      ]);
+      // structured property is no longer used - we use values array instead
       expect(node.directive.subtype).toBe('embedPath');
     });
 

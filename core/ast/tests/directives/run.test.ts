@@ -20,4 +20,4 @@ describe('directives/@run', () => {
       });
     });
   });
-}); 
+});

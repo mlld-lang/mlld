@@ -4,10 +4,10 @@ This document provides guidance on how to debug the Meld parser, particularly wh
 
 ## Using the Debug Script
 
-The repository includes a debug script at `test/debug-test.js` that can help you understand what's happening with specific test cases. This script:
+The repository includes a debug script at `core/ast/tests/debug-test.js` that can help you understand what's happening with specific test cases. This script:
 
-1. Loads test cases from the `meld-spec` package
-2. Parses the input for each test case
+1. Uses ESM imports with proper path resolution to load the parser and test types
+2. Can test specific input cases that you add directly to the script
 3. Displays the input, expected output, and actual output for comparison
 
 ### Running the Debug Script
@@ -15,35 +15,47 @@ The repository includes a debug script at `test/debug-test.js` that can help you
 To run the debug script:
 
 ```bash
-node test/debug-test.js
+# Using tsx (recommended)
+npx tsx core/ast/tests/debug-test.js
+
+# Or using Node with experimental flags
+node --experimental-specifier-resolution=node --import ts-node/register core/ast/tests/debug-test.js
 ```
 
 ### What the Debug Script Shows
 
 For each test case, the script will output:
 - The input string being parsed
-- The expected output structure (from the test specification)
+- The expected output structure (from your test case or the test specification)
 - The actual output structure (from the parser)
+- Any parse errors that occur, including error messages and locations
+- Debug traces from the grammar if you've enabled them
 
-This makes it easy to spot differences between what the test expects and what the parser is actually producing.
+This makes it easy to spot differences between what you expect and what the parser is actually producing.
 
-## Common Issues and Solutions
+### Adding Your Own Test Cases
 
-### Path Validation Issues
+You can add your own test cases directly in the script. For example:
 
-Many test failures are related to path validation, particularly:
+```javascript
+const myTest = {
+  input: '@your [directive] here\n',
+  expected: {
+    // Expected AST structure
+  }
+};
 
-1. **CWD Property**: Some tests expect a `cwd: true` property in the `structured` object, while others don't.
-2. **Normalized Paths**: Tests may expect different formats for the `normalized` property.
-3. **Variable Handling**: Tests for paths with variables have specific expectations for how variables are extracted and represented.
-
-### Special Case Handling
-
-The parser uses special case handling for certain test cases. When adding new tests or modifying existing ones, you may need to update these special cases in:
-
-1. The `validatePath` function
-2. The `EmbedDirective` rule
-3. The `DataDirective` rule
+console.log('MY TEST:');
+console.log('Input:', myTest.input);
+console.log('Expected:', JSON.stringify(myTest.expected, null, 2));
+try {
+  const result = parse(myTest.input);
+  console.log('Actual:', JSON.stringify(result[0], null, 2));
+} catch (err) {
+  console.error('Parse error:', err.message);
+  console.error('Location:', err.location);
+}
+```
 
 ## Fixing Test Failures
 
@@ -53,7 +65,7 @@ When fixing test failures:
 2. Check if the test case needs special handling
 3. Update the appropriate rule or function
 4. Rebuild the parser with `npm run prebuild`
-5. Run the tests again with `npm test`
+5. Run the tests again with `npm test core/ast`
 
 Remember that changes to the grammar file require rebuilding the parser before they take effect.
 
@@ -137,4 +149,119 @@ The grammar's initializer block (`{ ... }` at the top) defines a `helpers.debug`
 4.  Once the build succeeds, run the relevant tests (`npm test core/ast` or specific API tests) and check the console output for your `[DEBUG GRAMMAR]` messages.
 5.  Remember to remove the debug logs once troubleshooting is complete.
 
-Remember that changes to the grammar file require rebuilding the parser before they take effect. 
+Remember that changes to the grammar file require rebuilding the parser before they take effect:
+
+```bash
+# Rebuild grammar and run tests
+npm run build:grammar && npm test core/ast
+```
+
+## Test Structure
+
+The tests in `core/ast/tests` are organized into several categories:
+
+### Main Tests
+- `parser.test.ts`: Core parser functionality (text blocks, code fences, variables, etc)
+- `types.test.ts`: Type system validation
+- `validation.test.ts`: AST validation rules
+
+### Directive Tests
+Located in `core/ast/tests/directives/`, these test specific directives:
+- `import.test.ts`: `@import` directive
+- `embed.test.ts`: `@embed` directive
+- `data.test.ts`: `@data` directive
+- `define.test.ts`: `@define` directive
+- And others for specific directive features (headers, variables, syntax variations)
+
+### Manual Tests
+Located in `core/ast/tests/manual/`, these contain specific test cases that need more control:
+- `data-array.test.ts`: Testing array handling in data directives
+
+### Debug Scripts
+- `debug-test.js`: Main debugging script for parser output
+- `debug-text-directive.cjs`: Specific debugging for text directives
+
+### Test Utilities
+Located in `core/ast/tests/utils/`:
+- `test-utils.ts`: Shared test helpers including:
+  - Mock node/parser creation
+  - Location stripping
+  - Test case validation
+  - Error handling utilities
+
+### Test Case Structure
+Most tests follow this pattern:
+```typescript
+describe('feature', () => {
+  describe('valid cases', () => {
+    // Test valid inputs
+    it('should parse X correctly', async () => {
+      const input = '...';  // Test input
+      const { ast } = await parse(input);
+      
+      expect(ast).toHaveLength(1);  // Validate output
+      const node = ast[0];
+      expect(node.type).toBe('...');
+      // ... more assertions
+    });
+  });
+
+  describe('invalid cases', () => {
+    // Test error conditions
+    it('should reject invalid input', async () => {
+      const input = '...';  // Invalid input
+      await expect(parse(input)).rejects.toThrow();
+    });
+  });
+});
+```
+
+### Test Fixtures and Test Cases
+Many tests use shared fixtures and helper functions from `test-utils.ts`. Here's how they work:
+
+#### Test Case Type
+```typescript
+interface ParserTestCase {
+  name: string;            // Test case identifier
+  description?: string;    // Optional description
+  input: string;          // Input to parse
+  expected: MeldNode      // Expected AST output
+                         // or { type: 'Error' } for invalid cases
+}
+```
+
+#### Helper Functions
+```typescript
+// For valid test cases
+async function testValidCase(test: ParserTestCase) {
+  const result = await parse(test.input);
+  const actual = stripLocations(result.ast[0]);
+  expect(actual).toEqual(test.expected);
+}
+
+// For invalid test cases
+async function testInvalidCase(test: ParserTestCase) {
+  await expect(parse(test.input)).rejects.toThrow();
+}
+```
+
+#### Using Test Fixtures
+```typescript
+import { importTests, importInvalidTests } from '@core/syntax/types/test-fixtures';
+
+describe('feature', () => {
+  // Test valid cases from fixtures
+  importTests.forEach((test: ParserTestCase) => {
+    it(test.description || test.name, async () => {
+      await testValidCase(test);
+    });
+  });
+
+  // Test invalid cases from fixtures
+  importInvalidTests.forEach((test: ParserTestCase) => {
+    it(test.description || test.name, async () => {
+      await testInvalidCase(test);
+    });
+  });
+});
+```

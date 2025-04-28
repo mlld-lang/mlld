@@ -35,8 +35,7 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
   // Cast to PathDirectiveData to access typed properties
   const directive = node.directive as PathDirectiveData;
   
-  // Fix for different field names: AST can use either 'id' or 'identifier'
-  const identifier = directive.identifier || (directive as any).id;
+  const identifier = directive.identifier; 
   
   // Check for required fields
   if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
@@ -65,47 +64,10 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
     );
   }
   
-  // Handle both direct string value and path object
-  const pathObject = directive.path;
-  let pathRaw: string | undefined;
-  
-  if (!pathObject) {
-    // If path is missing, check for value property as fallback
-    if (directive.value) {
-      pathRaw = typeof directive.value === 'string' 
-        ? directive.value
-        : (directive.value as any).raw || '';
-    } else {
-      throw new MeldDirectiveError(
-        'Path directive requires a path value',
-        'path',
-        {
-          location: convertLocation(node.location?.start),
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal
-        }
-      );
-    }
-  } else if (typeof pathObject === 'string') {
-    // Handle direct string path
-    pathRaw = pathObject;
-  } else if (typeof pathObject === 'object') {
-    // Handle path object with raw property
-    if (!pathObject.raw || typeof pathObject.raw !== 'string' || pathObject.raw.trim() === '') {
-      throw new MeldDirectiveError(
-        'Path directive requires a non-empty path value',
-        'path',
-        {
-          location: convertLocation(node.location?.start),
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal
-        }
-      );
-    }
-    pathRaw = pathObject.raw;
-  } else {
+  // NEW CHECKS: Validate the expected path object structure
+  if (!directive.path || typeof directive.path !== 'object') {
     throw new MeldDirectiveError(
-      'Path directive requires a valid path',
+      'Path directive requires a path object',
       'path',
       {
         location: convertLocation(node.location?.start),
@@ -114,11 +76,23 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
       }
     );
   }
-  
-  // Ensure we have a non-empty path
-  if (!pathRaw || pathRaw.trim() === '') {
+
+  if (!directive.path.raw || typeof directive.path.raw !== 'string' || directive.path.raw.trim() === '') {
     throw new MeldDirectiveError(
-      'Path directive requires a non-empty path value',
+      'Path directive requires a non-empty path.raw string',
+      'path',
+      {
+        location: convertLocation(node.location?.start),
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
+
+  // Ensure the path was processed into a values array
+  if (!Array.isArray(directive.path.values)) {
+    throw new MeldDirectiveError(
+      'Path directive requires a valid path.values array',
       'path',
       {
         location: convertLocation(node.location?.start),

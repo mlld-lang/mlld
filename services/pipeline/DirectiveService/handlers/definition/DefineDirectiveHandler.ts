@@ -42,18 +42,21 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
     const node = context.directiveNode as DirectiveNode;
     const resolutionContext = context.resolutionContext;
     const currentFilePath = state.getCurrentFilePath();
-    const baseErrorDetails = { 
-      node: node, 
-      context: { currentFilePath: currentFilePath ?? undefined } 
-    };
+    // Pass the full context for better error details
+    const baseErrorDetails = { node: node, context };
 
     try {
       // Assert directive node structure
       if (!node.directive || node.directive.kind !== 'define') {
-          throw new DirectiveError('Invalid node type provided to DefineDirectiveHandler', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+        throw new DirectiveError('Invalid node type provided to DefineDirectiveHandler', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { ...baseErrorDetails });
       }
       const directive = node.directive as IDirectiveData;
       const { name, parameters: paramNames, command, value } = directive;
+     
+      // Validator should ensure this, but check for compiler satisfaction
+      if (value === undefined && command === undefined) {
+        throw new DirectiveError('Internal Error: Define directive lacks required "command" or "value" property after validation.', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { ...baseErrorDetails });
+      }
       
       // Parse name for potential embedded metadata
       const nameMetadata = this.parseIdentifier(name);
@@ -82,24 +85,19 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       
       if (value !== undefined) {
         // Defined using literal value (e.g., @define cmd = "echo {{var}}")
-        if (!isInterpolatableValueArray(value)) {
-            throw new DirectiveError('Invalid literal value for @define directive', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
-        }
-        
-        // Resolve the InterpolatableValue to get the final command string
-        let resolvedCommandTemplate: string;
-        try {
+         // Resolve the InterpolatableValue to get the final command string
+         let resolvedCommandTemplate: string;
+         try {
             // Use resolution context from DirectiveProcessingContext
             resolvedCommandTemplate = await this.resolutionService.resolveNodes(value, resolutionContext);
-        } catch (error) {
+         } catch (error) {
              const errorMsg = `Failed to resolve literal value for command '${nameMetadata.name}'`;
              logger.error(errorMsg, { error });
              const cause = error instanceof Error ? error : undefined;
-             const details = { ...baseErrorDetails, cause };
-             throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, details);
-        }
+             throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { ...baseErrorDetails, cause });
+         }
 
-        commandDefinition = {
+         const commandDefinition: IBasicCommandDefinition = {
           type: 'basic',
           name: nameMetadata.name,
           parameters: mappedParameters,
@@ -109,15 +107,30 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
           definedAt: Date.now(),
           ...(nameMetadata.metadata && { ...nameMetadata.metadata }) 
         };
+
+        logger.debug('Constructed basic command definition', { name: commandDefinition.name });
+
+        // Create the command variable using the factory function
+        const variableDefinition = createCommandVariable(commandDefinition.name, commandDefinition, baseMetadata);
+
+        // Return DirectiveResult with StateChanges
+        return {
+          stateChanges: {
+            variables: {
+              [commandDefinition.name]: {
+                type: VariableType.COMMAND,
+                value: commandDefinition,
+                metadata: baseMetadata
+              }
+            }
+          }
+        };
+
       } else if (command) {
         // Defined using @run syntax
         const runData = command as DirectiveData;
         const runSubtype = runData.subtype;
-        const commandInput = runData.command;
-
-        if (!commandInput) {
-           throw new DirectiveError('Missing command value within @run for @define directive', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
-        }
+        const commandInput = runData.command; // Keep assignment, remove check
 
         let resolvedCommandContent: string;
         let commandIsMultiline = runData.isMultiLine ?? false;
@@ -126,44 +139,61 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
         // Resolve the command content string first
         try {
             if (runSubtype === 'runDefined') {
-                 const definedCommand = commandInput as { name: string };
-                 if (typeof definedCommand !== 'object' || !definedCommand.name) {
-                     throw new DirectiveError('Invalid command input structure for runDefined subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
-                 }
-                 const cmdVar = state.getVariable(definedCommand.name, VariableType.COMMAND);
-                 if (cmdVar?.value && isBasicCommand(cmdVar.value)) { 
-                    resolvedCommandContent = cmdVar.value.commandTemplate; 
+                 const definedCommand = commandInput as { name: string }; // Assume structure is valid
+                 const cmdVar = state.getVariable(definedCommand.name);
+                 // Ensure it's a COMMAND type and then check if it's a basic command
+                 if (cmdVar?.type === VariableType.COMMAND && cmdVar.value && cmdVar.value.type === 'basic') { 
+                    resolvedCommandContent = (cmdVar.value as IBasicCommandDefinition).commandTemplate; 
                  } else {
                     const errorMsg = cmdVar ? `Cannot define command '${nameMetadata.name}' using non-basic command '${definedCommand.name}'` : `Command definition '${definedCommand.name}' not found`;
-                    throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, baseErrorDetails);
+                    throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { ...baseErrorDetails });
                  }
-            } else if (isInterpolatableValueArray(commandInput)) {
-                resolvedCommandContent = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
             } else {
-                throw new DirectiveError('Invalid command input structure', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+                // If not 'runDefined', grammar guarantees it's an InterpolatableValueArray for other run subtypes
+                resolvedCommandContent = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
             }
         } catch (error) {
             const errorMsg = `Failed to resolve command content for '${nameMetadata.name}'`;
             logger.error(errorMsg, { error });
             const cause = error instanceof Error ? error : undefined;
-            const details = { ...baseErrorDetails, cause };
-            throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, details);
+            throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { ...baseErrorDetails, cause });
         }
 
         // Now create the definition based on the @run subtype
         if (runSubtype === 'runCommand' || runSubtype === 'runDefined') {
-            commandDefinition = {
-              type: 'basic',
-              name: nameMetadata.name,
-              parameters: mappedParameters,
-              commandTemplate: resolvedCommandContent, 
-              isMultiline: commandIsMultiline,
-              sourceLocation: directiveSourceLocation,
-              definedAt: Date.now(),
-              ...(nameMetadata.metadata && { ...nameMetadata.metadata })
-            };
-        } else if (runSubtype === 'runCode' || runSubtype === 'runCodeParams') {
-            commandDefinition = {
+          const commandDefinition: IBasicCommandDefinition = {
+            type: 'basic',
+            name: nameMetadata.name,
+            parameters: mappedParameters,
+            commandTemplate: resolvedCommandContent, 
+            isMultiline: commandIsMultiline,
+            sourceLocation: directiveSourceLocation,
+            definedAt: Date.now(),
+            ...(nameMetadata.metadata && { ...nameMetadata.metadata })
+          };
+
+          logger.debug('Constructed basic command definition via @run', { name: commandDefinition.name });
+
+          // Create the command variable using the factory function
+          const variableDefinition = createCommandVariable(commandDefinition.name, commandDefinition, baseMetadata);
+
+          // Return DirectiveResult with StateChanges
+          return {
+            stateChanges: {
+              variables: {
+                [commandDefinition.name]: {
+                  type: VariableType.COMMAND,
+                  value: commandDefinition,
+                  metadata: baseMetadata
+                }
+              }
+            }
+          };
+
+        } else {
+            // If it's not a basic command or runDefined, it must be a language command
+            // Grammar guarantees runSubtype is valid ('runCode' or 'runCodeParams')
+            const commandDefinition: ILanguageCommandDefinition = {
               type: 'language',
               name: nameMetadata.name,
               parameters: mappedParameters,
@@ -174,32 +204,34 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
               definedAt: Date.now(),
               ...(nameMetadata.metadata && { ...nameMetadata.metadata })
             };
-        } else {
-             throw new DirectiveError(`Unsupported @run subtype '${runSubtype}' within @define directive`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+
+            logger.debug('Constructed language command definition via @run', { name: commandDefinition.name });
+
+            // Create the command variable using the factory function
+            const variableDefinition = createCommandVariable(commandDefinition.name, commandDefinition, baseMetadata);
+
+            // Return DirectiveResult with StateChanges
+            return {
+              stateChanges: {
+                variables: {
+                  [commandDefinition.name]: {
+                    type: VariableType.COMMAND,
+                    value: commandDefinition,
+                    metadata: baseMetadata
+                  }
+                }
+              }
+            };
         }
       } else {
-         throw new DirectiveError('Invalid @define directive structure: must have a value or an @run command', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+        // This block should be unreachable due to the initial check L58
+        // Throw an internal error just in case.
+        throw new DirectiveError('Internal Error: Reached unreachable code in @define handler.', this.kind, DirectiveErrorCode.STATE_ERROR, { ...baseErrorDetails });
       }
-      
-      logger.debug('Constructed command definition', { name: commandDefinition.name, type: commandDefinition.type });
-
-      // Create the command variable using the factory function
-      const commandVariable = createCommandVariable(commandDefinition.name, commandDefinition, baseMetadata);
-
-      // Return DirectiveResult with StateChanges
-      return {
-        stateChanges: {
-          variables: {
-            [commandDefinition.name]: {
-              type: VariableType.COMMAND,
-              value: commandDefinition,
-              metadata: baseMetadata
-            }
-          }
-        }
-      };
 
     } catch (error) {
+      logger.error(`Error handling @define directive: ${error instanceof Error ? error.message : String(error)}`, { error, node: node });
+      
       // Wrap in DirectiveError if needed
       if (error instanceof DirectiveError) {
         // Get original cause from details
