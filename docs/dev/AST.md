@@ -85,6 +85,54 @@ interface VariableReferenceNode extends BaseNode {
   format?: string;          // Formatting hint (e.g., 'json' from {{var >> json}})
 }
 ```
+*Grammar Rules:*
+- `TextVar`: Handles `{{var}}` syntax for text variables
+- `DataVar`: Handles `{{var}}` syntax for data variables with field access
+- `PathVar`: Handles `$var` syntax for path variables
+- `BracketInterpolatableContent`: Handles mixed content in brackets including variables and separators
+- `SectionMarkerToken`: Handles section markers in paths
+
+*Note:* The `valueType` field is crucial for downstream processing to understand how to resolve the variable. Path variables use a simpler `$var` syntax while text and data variables use the `{{var}}` syntax.
+
+### Path Value Object
+
+Represents a path value with validation flags and components. Used in directives that accept paths (e.g., `@embed`, `@import`).
+
+```typescript
+interface PathValueObject {
+  raw: string;              // The raw path string as it appeared in the source
+  values: Array<            // Array of components that make up the path
+    | TextNode              // Plain text segments
+    | VariableReferenceNode // Variables (text or path)
+    | PathSeparatorNode     // Forward slashes
+    | DotSeparatorNode      // Dots
+    | SectionMarkerNode     // Section markers (#)
+  >;
+  
+  // Validation Flags
+  isAbsolute: boolean;      // True if path starts with /
+  isRelativeToCwd: boolean; // True if path should be resolved relative to cwd
+  hasVariables: boolean;    // True if path contains any variables
+  hasPathVariables: boolean; // True if path contains $var references
+  hasTextVariables: boolean; // True if path contains {{var}} references
+  variable_warning: boolean; // True if text variables were found (may need resolution)
+}
+
+interface PathSeparatorNode extends BaseNode {
+  type: 'PathSeparator';
+  value: '/';
+}
+
+interface DotSeparatorNode extends BaseNode {
+  type: 'DotSeparator';
+  value: '.';
+}
+
+interface SectionMarkerNode extends BaseNode {
+  type: 'SectionMarker';
+  value: '#';
+}
+```
 *Grammar Rules:* `TextVar`, `DataVar`, `PathVar` (via `createVariableReferenceNode` helper)
 *Note:* The `valueType` field is crucial for downstream processing to understand how to resolve the variable.
 
@@ -170,12 +218,14 @@ interface EmbedDirectiveNode extends BaseDirectiveNode {
     subtype: 'embedPath' | 'embedVariable' | 'embedTemplate'; // Determined by syntax
     
     // subtype = 'embedPath' specific fields
-    path?: PathValueObject; // Path to the file to embed from
-    section?: string;       // Optional section identifier (e.g., #sectionName)
-    names?: string[];       // Optional list of specific names to embed (from syntax @embed {n1,n2} from [...])
+    path?: PathValueObject;        // Object describing the path and its components
+    section?: string;              // Section identifier (e.g., #section)
+    options?: Record<string,any>;  // Key-value options (e.g., lang="javascript")
+    headerLevel?: number;          // Header level adjustment (e.g., as ##)
+    underHeader?: string;          // Target header for embedding (e.g., under "Header")
 
     // subtype = 'embedTemplate' specific fields
-    content?: InterpolatableValue; // <<< CHANGED: Represents parsed [[...]] content
+    content?: InterpolatableValue; // Represents parsed [[...]] content
 
     // subtype = 'embedVariable' specific fields
     // 'path' field is used, but structure varies:
@@ -192,7 +242,13 @@ interface EmbedDirectiveNode extends BaseDirectiveNode {
 
 *Grammar Rule:* `EmbedDirective` (uses `_EmbedRHS` helper)
 *Subtypes:*
-    *   `embedPath`: Embeds content from a file path (e.g., `@embed [./file.md]`, `@embed [./file.md#section]`, `@embed {$projectpath}/file.md`)
+    *   `embedPath`: Embeds content from a file path. Supports:
+        - Regular paths: `@embed [./file.md]`
+        - Sections: `@embed [./file.md#section]`
+        - Path variables: `@embed [$var/file.md]`
+        - Text variables: `@embed [path/{{var}}.md]`
+        - Combined: `@embed [$base/{{name}}.md#section]`
+        Note: When text variables are used in paths, `hasTextVariables` and `variable_warning` flags are set to true.
     *   `embedVariable`: Embeds the resolved value of a variable (e.g., `@embed {{textVar}}`, `@embed {{data.field}}`, `@embed $pathVar`). Note the different structure within the `path` field depending on variable type.
     *   `embedTemplate`: Embeds content directly from a multi-line template block (e.g., `@embed [[Inline content {{variable}}]]`).
 

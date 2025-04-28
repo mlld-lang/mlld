@@ -96,21 +96,53 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         );
       }
       
-      const { value, source = 'literal', embed, run } = directiveData;
+      logger.debug('TextDirectiveHandler: directiveData structure', {
+        directiveData,
+        directiveDataType: typeof directiveData,
+        directiveDataKeys: Object.keys(directiveData),
+        directiveDataToString: String(directiveData)
+      });
+
+      const { value, values, source = 'literal', embed, run } = directiveData;
       
       if (source === 'literal') {
+        logger.debug('TextDirectiveHandler: value/values structure', {
+          value,
+          values,
+          valueType: typeof value,
+          valuesType: typeof values,
+          isArray: Array.isArray(values),
+          valueToString: String(value),
+          valuesToString: String(values)
+        });
+
+        if (values && isInterpolatableValueArray(values)) {
+          resolvedValue = await this.resolutionService.resolveNodes(values, resolutionContext);
+        } else if (value) {
           if (typeof value === 'string') {
-              resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
+            const textNode: TextNode = {
+              type: 'Text',
+              nodeId: 'placeholder-id',
+              content: value,
+              location: {
+                start: { line: 1, column: 1 },
+                end: { line: 1, column: value.length + 1 }
+              }
+            };
+            resolvedValue = await this.resolutionService.resolveNodes([textNode], resolutionContext);
           } else if (isInterpolatableValueArray(value)) {
-              resolvedValue = await this.resolutionService.resolveNodes(value, resolutionContext);
+            resolvedValue = await this.resolutionService.resolveNodes(value, resolutionContext);
           } else {
-             throw new DirectiveError(
-               `Invalid value type for @text source 'literal'. Expected string or InterpolatableValue array.`,
-                this.kind, 
-                DirectiveErrorCode.VALIDATION_FAILED, 
-                errorDetailsContext
-             );
+            resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
           }
+        } else {
+          throw new DirectiveError(
+            'Invalid value type for @text source \'literal\'. Expected string or InterpolatableValue array.',
+            this.kind,
+            DirectiveErrorCode.VALIDATION_FAILED,
+            errorDetailsContext
+          );
+        }
       } else if (source === 'run' && run) {
         const runDetails = run as RunRHSStructure;
         try {

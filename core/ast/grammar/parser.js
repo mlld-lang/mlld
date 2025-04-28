@@ -1043,13 +1043,9 @@ function peg$parse(input, options) {
     };
   };
   var peg$f165 = function(value) {
-    const rawValue = helpers.reconstructRawString(value).trim();
-    const cleanValue = rawValue
-      .replace(/^(\[|\]\])|(\]|\[\[)$/g, '')   // drop stray [ or ]
-      .trim();
     return {
       type: "literal",
-      values: [{ type: 'Text', content: cleanValue }]
+      values: value
     };
   };
   var peg$f166 = function(value) {

@@ -1221,13 +1221,9 @@ TextValue
     };
   }
   / value:InterpolatedStringLiteral {
-    const rawValue = helpers.reconstructRawString(value).trim();
-    const cleanValue = rawValue
-      .replace(/^(\[|\]\])|(\]|\[\[)$/g, '')   // drop stray [ or ]
-      .trim();
     return {
       type: "literal",
-      values: [{ type: 'Text', content: cleanValue }]
+      values: value
     };
   }
   / value:InterpolatedMultilineTemplate {
