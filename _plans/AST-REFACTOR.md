@@ -1,56 +1,74 @@
-Phase 1 – extract helpers and constants
-	1.	mkdir -p grammar/helpers
-	2.	Create grammar/helpers/nodes.ts.
-Copy every item inside the { … } initializer of grammar/meld.peggy that is pure JavaScript ( NodeType, DirectiveKind, and the entire helpers object).  Export them:
-
-export const NodeType = { … } as const
-export const DirectiveKind = { … } as const
-export const helpers = { … }
-
-
-	3.	Delete the original initializer block from grammar/meld.peggy and replace it with
-
-{
-  import { NodeType, DirectiveKind, helpers } from "./helpers/nodes.js";
-}
-
-
-	4.	npm run build:grammar && npm test core/ast
-Commit: git commit -am "phase 1: helpers/constants extracted"
-
 Phase 2 – turn the build script into a multi-file builder
-	1.	Decide on a fixed compilation order: lexer files first, then directive files, then the root file.  For now create empty directories:
+	1.	Decide on a fixed compilation order: lexer files first, then directive files, then the root file. Create empty directories:
 
-mkdir -p grammar/lexer grammar/directives
+mkdir -p grammar/lexer
+mkdir -p grammar/directives
 
+	2.	Open grammar/build-grammar.mjs and make the following changes:
 
-	2.	Open grammar/build-grammar.mjs.
-Change only three things.
-a) Replace the single-file read with a merge of multiple files.
+a) Replace all single-file grammar reads with a merged multi-file approach:
 
--const grammar = fs.readFileSync(GRAMMAR_FILE, 'utf8');
-+const GRAMMAR_SOURCES = [
-+  // order matters
-+  ...fs.readdirSync(path.resolve(__dirname, './lexer'))
-+      .filter(f => f.endsWith('.peggy'))
-+      .sort()
-+      .map(f => fs.readFileSync(path.resolve(__dirname, './lexer', f), 'utf8')),
-+  ...fs.readdirSync(path.resolve(__dirname, './directives'))
-+      .filter(f => f.endsWith('.peggy'))
-+      .sort()
-+      .map(f => fs.readFileSync(path.resolve(__dirname, './directives', f), 'utf8')),
-+  fs.readFileSync(GRAMMAR_FILE, 'utf8') // root goes last
-+].join('\n');
+```js
+// Replace all instances of:
+// const grammar = fs.readFileSync(GRAMMAR_FILE, 'utf8');
+// with:
+const GRAMMAR_SOURCES = [
+  // order matters
+  ...fs.readdirSync(path.resolve(__dirname, './lexer'))
+      .filter(f => f.endsWith('.peggy'))
+      .sort()
+      .map(f => fs.readFileSync(path.resolve(__dirname, './lexer', f), 'utf8')),
+  ...fs.readdirSync(path.resolve(__dirname, './directives'))
+      .filter(f => f.endsWith('.peggy'))
+      .sort()
+      .map(f => fs.readFileSync(path.resolve(__dirname, './directives', f), 'utf8')),
+  fs.readFileSync(GRAMMAR_FILE, 'utf8') // root goes last
+].join('\n');
+```
 
-b) Rename the variable used by the generator calls:
+b) Ensure all peggy.generate calls use the common options with dependencies:
 
--peggy.generate(grammar, …
-+peggy.generate(GRAMMAR_SOURCES, …
+```js
+const commonOpts = {
+  output: 'source',
+  cache: false,
+  optimize: 'speed',
+  plugins: [],
+  allowedStartRules: ['Start'],
+  exportVar: false,
+  dependencies: {
+    NodeType:      './node-type.js',
+    DirectiveKind: './directive-kind.js',
+    helpers:       './helpers.js'
+  }
+};
 
-Do this in all peggy.generate calls.
-c) Remove the final “copy grammar to dist” step—it now has no single source file to copy.
+const tsSource  = peggy.generate(GRAMMAR_SOURCES, { ...commonOpts, format: 'es', trace: true });
+const esmSource = peggy.generate(GRAMMAR_SOURCES, { ...commonOpts, format: 'es' });
+const cjsSource = peggy.generate(GRAMMAR_SOURCES, { ...commonOpts, format: 'commonjs' });
+```
 
-	3.	npm run build:grammar && npm testcore/ast
+c) Remove the old "copy grammar to dist" step, but retain the dependency file copying:
+
+```js
+// Keep this block that copies the dependency files
+['node-type.js', 'directive-kind.js', 'helpers.js'].forEach(file => {
+  fs.copyFileSync(
+    path.resolve(__dirname, './deps', file),
+    path.resolve(path.dirname(DIST_PARSER_ESM), file)
+  );
+  fs.copyFileSync(
+    path.resolve(__dirname, './deps', file),
+    path.resolve(path.dirname(DIST_PARSER_CJS), file)
+  );
+  fs.copyFileSync(
+    path.resolve(__dirname, './deps', file),
+    path.resolve(path.dirname(SRC_PARSER), file)
+  );
+});
+```
+
+	3.	npm run build:grammar && vitest run core/ast
 Commit: git commit -am "phase 2: builder accepts multi-file input"
 
 Phase 3 – isolate lexer whitespace and basic tokens
@@ -89,7 +107,7 @@ Delete everything except the rules that clearly belong to that directive and its
 
 
 	3.	Delete those rules from grammar/meld.peggy.
-	4.	npm run build:grammar && npm testcore/ast
+	4.	npm run build:grammar && vitest run core/ast
 	5.	git add grammar/directives/<name>.peggy
 git commit -m "phase 6: <name> directive isolated"
 
