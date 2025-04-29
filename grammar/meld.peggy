@@ -5,7 +5,9 @@
   // NodeType, DirectiveKind, and helpers are injected via parser-dependencies
 }
 
-/* structural newline that should become an AST node */
+// --- These seem hierarchically necessary --- 
+
+// structural newline that should become an AST node
 InterDirectiveNewline
   = ws:[ \t\r]* term:LineTerminator &{
       /* scan forward past spaces/tabs (NOT newlines) */
@@ -19,14 +21,16 @@ InterDirectiveNewline
       return helpers.createNode(NodeType.Newline, { content: term }, location());
     }
 
-/* plain newline that should stay a raw string */
-ContentEOL               /* ← drop-in replacement for the old EndOfLine */
+// plain newline that should stay a raw string
+ContentEOL
   = ws:[ \t\r]* term:LineTerminator { return term; }
 
-/* peek for newline/EOF without consuming */
+// peek for newline/EOF without consuming
 DirectiveEOL
   = &( LineTerminator / EOF )
   / _[ \t\r]* &( LineTerminator / EOF )
+
+// --- End of hierarchically necessary section --- 
 
 Start
   = nodes:(
@@ -163,123 +167,8 @@ VarFormat
     return format;
   }
 
-// --- Interpolation Rules ---
 
-// Double Quotes
-DoubleQuoteAllowedLiteralChar
-  = !('"' / '{{' / '\\\\') char:. { return char; }
-  / '\\\\' esc:. { return '\\\\' + esc; }
 
-DoubleQuoteLiteralTextSegment
-  = chars:DoubleQuoteAllowedLiteralChar+ {
-      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-DoubleQuoteInterpolatableContent
-  = parts:(DoubleQuoteLiteralTextSegment / Variable)+ {
-      return parts;
-    }
-
-DoubleQuoteInterpolatableContentOrEmpty
-  = result:DoubleQuoteInterpolatableContent? {
-      return result || [];
-    }
-
-// Single Quotes
-SingleQuoteAllowedLiteralChar
-  = !('\'' / '{{' / '\\\\') char:. { return char; }
-  / '\\\\' esc:. { return '\\\\' + esc; }
-
-SingleQuoteLiteralTextSegment
-  = chars:SingleQuoteAllowedLiteralChar+ {
-      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-SingleQuoteInterpolatableContent
-  = parts:(SingleQuoteLiteralTextSegment / Variable)+ {
-      return parts;
-    }
-
-SingleQuoteInterpolatableContentOrEmpty
-  = result:SingleQuoteInterpolatableContent? {
-      return result || [];
-    }
-
-// Backticks (Template Literals)
-BacktickAllowedLiteralChar
-  = !('`' / '{{' / '\\\\') char:. { return char; }
-  / '\\\\' esc:. { return '\\\\' + esc; }
-
-BacktickLiteralTextSegment
-  = chars:BacktickAllowedLiteralChar+ {
-      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-BacktickInterpolatableContent
-  = parts:(BacktickLiteralTextSegment / Variable)+ {
-      return parts;
-    }
-
-BacktickInterpolatableContentOrEmpty
-  = result:BacktickInterpolatableContent? {
-      return result || [];
-    }
-
-// Multiline [[...]]
-MultilineAllowedLiteralChar
-  = !']]' !'{{' !('\\\\') char:. { return char; }
-  / '\\\\' esc:. { return '\\\\' + esc; }
-
-MultilineLiteralTextSegment
-  = chars:MultilineAllowedLiteralChar+ {
-      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-MultilineInterpolatableContent
-  = parts:(MultilineLiteralTextSegment / Variable)+ {
-      return parts;
-    }
-
-MultilineInterpolatableContentOrEmpty
-  = result:MultilineInterpolatableContent? {
-      return result || [];
-    }
-
-// --- End Interpolation Rules ---
-
-// --- Interpolated Literal Rules ---
-
-PathStringLiteral "String literal with potential path variables"
-  = '"' content:PathStringContent '"' { return content; }
-  / "'" content:PathStringContent "'" { return content; }
-  / "`" content:PathStringContent "`" { return content; }
-
-PathStringContent
-  = parts:(PathVar / PathText / PathSeparator)+ {
-      return parts;
-    }
-
-PathText
-  = chars:PathAllowedChar+ {
-      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-PathAllowedChar
-  = !('"' / "'" / '`' / '$' / '/' / '\\') char:. { return char; }
-  / '\\' esc:. { return '\\' + esc; }
-
-PathSeparator
-  = '/' { return helpers.createNode(NodeType.PathSeparator, { value: '/' }, location()); }
-
-InterpolatedStringLiteral "String literal with potential variable interpolation"
-  = '"' content:DoubleQuoteInterpolatableContentOrEmpty '"' { return content; }
-  / "'" content:SingleQuoteInterpolatableContentOrEmpty "'" { return content; }
-  / "`" content:BacktickInterpolatableContentOrEmpty "`" { return content; }
-
-InterpolatedMultilineTemplate "Multiline template with potential variable interpolation"
-  = "[[" content:MultilineInterpolatableContentOrEmpty "]]" { return content; }
-
-// --- End Interpolated Literal Rules ---
 
 // Helper rule for parsing RHS @embed variations
 // Returns { subtype: '...', ... } structure without 'source' field.
@@ -749,17 +638,6 @@ DirectiveOption
     return { [key]: value };
   }
 
-StringLiteral
-  = '"' chars:(!'"' char:. { return char; })* '"' { return chars.join(''); }
-  / "'" chars:(!"'" char:. { return char; })* "'" { return chars.join(''); }
-  / "`" chars:(!"`" char:. { return char; })* "`" { return chars.join(''); }
-
-// New rule for multiline template literals
-MultilineTemplateLiteral
-  = "[[" content:(!"]]" char:. { return char; })* "]]" { 
-      return content.join(''); 
-    }
-
 DataDirective
   = "data" _ id:Identifier schema:SchemaValidation? _ "=" _ value:DataValue HWS DirectiveEOL {
     return helpers.createDirective('data', {
@@ -873,18 +751,6 @@ CallValue
       path: content
     };
   }
-
-NumberLiteral
-  = "-"? digits:[0-9]+ decimal:("." [0-9]+)? {
-    return parseFloat((text().startsWith("-") ? "-" : "") + digits.join('') + (decimal ? decimal[0] + decimal[1].join('') : ''));
-  }
-
-BooleanLiteral
-  = "true" { return true; }
-  / "false" { return false; }
-
-NullLiteral
-  = "null" { return null; }
 
 ArrayLiteral
   = "[" _ items:ArrayItems? _ "]" {
@@ -1066,25 +932,6 @@ BracketInterpolatableContentOrEmpty
 
 // --- End Interpolation Rules ---
 
-// --- Whitespace & EOF Rules ---
-
-
-NewlineNode
-  = term:LineTerminator &{ 
-    const pos = offset();
-    const isBeforeDirective = input.substr(pos).match(/^\s*@[a-z]/i);
-    return isBeforeDirective;
-  } {
-    return helpers.createNode(NodeType.Newline, { content: term }, location());
-  }
-
-// --- End Whitespace & EOF Rules ---
-
-// <<< START NEW RULES for Import Path Interpolation >>>
-// Similar to BracketInterpolatableContent but specific chars disallowed
-
-
-// <<< END NEW RULES >>>
 
 // +++ START DECOMPOSED IMPORT RULES FOR LOGGING +++
 _ImportKeyword
