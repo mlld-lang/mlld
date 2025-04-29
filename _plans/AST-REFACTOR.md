@@ -1,179 +1,138 @@
-# Step-by-Step Grammar Refactor Plan (table-free edition)
+Phase 1 – extract helpers and constants
+	1.	mkdir -p grammar/helpers
+	2.	Create grammar/helpers/nodes.ts.
+Copy every item inside the { … } initializer of grammar/meld.peggy that is pure JavaScript ( NodeType, DirectiveKind, and the entire helpers object).  Export them:
 
-After every numbered task run:
-
-npm run build:parser && npm test core/ast
-
-Only commit on a green test-suite.
-
-⸻
-
-0. Preparation
-	1.	Create branch
-
-git switch -c refactor/split-grammar
+export const NodeType = { … } as const
+export const DirectiveKind = { … } as const
+export const helpers = { … }
 
 
-	2.	Confirm baseline is green
-
-npm run build:grammar
-npm test core/ast
-
-
-	3.	Create directory skeleton
-
-mkdir -p grammar/helpers
-mkdir -p grammar/lexer
-mkdir -p grammar/directives
-git add grammar
-
-⸻
-
-1. Extract helpers and constants
-	1.	Move everything inside the { … } initializer in meld.pegjs that is not a rule
-(NodeType, DirectiveKind, and the whole helpers object) to
-grammar/helpers/nodes.ts.
-	2.	Add import at the top of meld.pegjs:
+	3.	Delete the original initializer block from grammar/meld.peggy and replace it with
 
 {
   import { NodeType, DirectiveKind, helpers } from "./helpers/nodes.js";
 }
 
 
-	3.	Build and test. Commit with message helpers extracted.
+	4.	npm run build:grammar && npm test core/ast
+Commit: git commit -am "phase 1: helpers/constants extracted"
 
-⸻
+Phase 2 – turn the build script into a multi-file builder
+	1.	Decide on a fixed compilation order: lexer files first, then directive files, then the root file.  For now create empty directories:
 
-2. Wire a multi-file build
-	1.	Add script to package.json:
-
-"scripts": {
-  "build:parser": "peggy \
-      grammar/meld.peggy \
-      grammar/lexer/*.peggy \
-      grammar/directives/*.peggy \
-      -o core/ast/grammar/parser.ts --format es --cache"
-}
+mkdir -p grammar/lexer grammar/directives
 
 
-	2.	Run npm run build:parser. Commit multi-file build scaffold.
+	2.	Open grammar/build-grammar.mjs.
+Change only three things.
+a) Replace the single-file read with a merge of multiple files.
 
-⸻
+-const grammar = fs.readFileSync(GRAMMAR_FILE, 'utf8');
++const GRAMMAR_SOURCES = [
++  // order matters
++  ...fs.readdirSync(path.resolve(__dirname, './lexer'))
++      .filter(f => f.endsWith('.peggy'))
++      .sort()
++      .map(f => fs.readFileSync(path.resolve(__dirname, './lexer', f), 'utf8')),
++  ...fs.readdirSync(path.resolve(__dirname, './directives'))
++      .filter(f => f.endsWith('.peggy'))
++      .sort()
++      .map(f => fs.readFileSync(path.resolve(__dirname, './directives', f), 'utf8')),
++  fs.readFileSync(GRAMMAR_FILE, 'utf8') // root goes last
++].join('\n');
 
-3. Split the lexer
-	1.	Create grammar/lexer/whitespace.peggy containing _, __, HWS, LineTerminator, EOF.
-	2.	Create grammar/lexer/tokens.peggy with Identifier, SpecialPathChar, BacktickSequence, etc.
-	3.	Delete those rules from meld.pegjs.
-	4.	Build and test. Commit lexer isolated.
+b) Rename the variable used by the generator calls:
 
-⸻
+-peggy.generate(grammar, …
++peggy.generate(GRAMMAR_SOURCES, …
 
-4. Move literals and interpolation rules
-	1.	Add grammar/lexer/literals.peggy and move
-StringLiteral, NumberLiteral, BooleanLiteral, NullLiteral there.
-	2.	Add grammar/lexer/interpolation.peggy and move the whole “Interpolated Literal Rules” block.
-	3.	Remove moved rules from meld.pegjs.
-	4.	Build and test. Commit literals + interpolation isolated.
+Do this in all peggy.generate calls.
+c) Remove the final “copy grammar to dist” step—it now has no single source file to copy.
 
-⸻
+	3.	npm run build:grammar && npm testcore/ast
+Commit: git commit -am "phase 2: builder accepts multi-file input"
 
-5. Slim the root orchestrator
-	1.	Replace everything below Start in meld.pegjs with only the high-level structure:
+Phase 3 – isolate lexer whitespace and basic tokens
+	1.	Create grammar/lexer/whitespace.peggy and move rules: _, __, HWS, LineTerminator, EOF, EndOfLine.
+	2.	Create grammar/lexer/tokens.peggy and move: Identifier, SpecialPathChar, BacktickSequence, DotSeparatorToken, PathSeparatorToken, SectionMarkerToken.
+	3.	Delete those rules from grammar/meld.peggy.
+	4.	Build and test, then commit:
+git commit -am "phase 3: whitespace + token rules isolated"
 
-Start
-  = (LineStartComment
-   / Comment
-   / CodeFence
-   / Variable
-   / Directive
-   / InterDirectiveNewline
-   / TextBlock)*
+Phase 4 – move literals and interpolation primitives
+	1.	grammar/lexer/literals.peggy → StringLiteral, NumberLiteral, BooleanLiteral, NullLiteral, MultilineTemplateLiteral.
+	2.	grammar/lexer/interpolation.peggy → the full “Interpolated Literal Rules” and any small helpers they depend on.
+	3.	Remove the moved blocks from the root file.
+	4.	Build, test, commit:
+git commit -am "phase 4: literals + interpolation extracted"
 
-Directive
-  = ImportDirective
-  / EmbedDirective
-  / RunDirective
-  / DefineDirective
-  / DataDirective
-  / TextDirective
-  / PathDirective
-  / VarDirective
+Phase 5 – slim the root grammar
+	1.	In grammar/meld.peggy keep only:
+	•	the JavaScript import block
+	•	the Start rule
+	•	the Directive dispatch rule
+	•	any global comment or code-fence rules still needed
+	2.	Build, test, commit:
+git commit -am "phase 5: root grammar reduced to structure only"
 
+Phase 6 – extract each directive module
 
-	2.	Build and test. Commit root grammar slimmed.
-
-⸻
-
-6. Extract directives one-by-one
-
-Recommended extraction order:
-
-var → path → text → import → embed → run → define → data
-
-For each directive:
-	1.	Create file grammar/directives/<name>.peggy.
-	2.	Copy that directive’s rules (plus its private helpers) into the new file.
-	3.	Add initializer to the new file:
+Perform the following mini-procedure eight times in this order: var, path, text, import, embed, run, define, data.
+	1.	cp grammar/meld.peggy grammar/directives/<name>.peggy (temporary helper)
+Delete everything except the rules that clearly belong to that directive and its private helpers.
+	2.	At the top of the new file add:
 
 {
   import { NodeType, DirectiveKind, helpers } from "../helpers/nodes.js";
 }
 
 
-	4.	Delete the copied rules from meld.pegjs.
-	5.	Ensure build order: if rule-order errors appear, move the file earlier in the CLI glob list.
-	6.	Build and test.
-	7.	Commit directive:<name> extracted.
+	3.	Delete those rules from grammar/meld.peggy.
+	4.	npm run build:grammar && npm testcore/ast
+	5.	git add grammar/directives/<name>.peggy
+git commit -m "phase 6: <name> directive isolated"
 
-⸻
+Repeat until all directive families live under grammar/directives/ and the root file contains no directive logic.
 
-7. Prune unused code
-	1.	Use ripgrep to find orphan rules:
+Phase 7 – prune dead code
+	1.	rg -n "^[A-Z][A-Za-z0-9]*" grammar | sort | uniq
+For any rule not referenced elsewhere, delete it.
+	2.	Search helpers/nodes.ts for unused functions and remove them.
+	3.	Run the full test-suite once more and commit:
+git commit -am "phase 7: remove orphan rules and helpers"
 
-rg -n "^[A-Z][A-Za-z0-9]*" grammar/directives | sort | uniq
+Phase 8 – add a guardrail script
+	1.	Create scripts/check-grammar-root-size.js:
+
+import fs from 'fs';
+const root = fs.readFileSync('grammar/meld.peggy', 'utf8');
+if (root.split('\n').length > 400)
+  throw new Error('Root grammar should stay slim – extract into sub-files instead.');
 
 
-	2.	Remove unused rules or utilities.
-	3.	Build and test.
-	4.	Commit remove orphan rules.
+	2.	Add to "scripts" in package.json:
 
-⸻
+"pretest": "node scripts/check-grammar-root-size.js"
 
-8. Add CI guardrail
 
-Create scripts/check-grammar.js:
+	3.	Commit:
+git add scripts/check-grammar-root-size.js package.json
+git commit -m "phase 8: guardrail keeps root grammar small"
 
-const fs = require("fs");
-const root = fs.readFileSync("grammar/meld.peggy", "utf8");
-if ((root.match(/Directive\s*=/g) || []).length > 20) {
-  throw new Error("Root grammar is growing again; add a sub-grammar instead.");
-}
+Phase 9 – optional type-safety pass
+	1.	Modify grammar/build-grammar.mjs to call peggy.generate(…, { output: 'source', format: 'es', dts: true }) once and write parser.d.ts next to parser.ts.
+	2.	Export the generated types from @core/ast/grammar and use them in code.
+	3.	Add a TS test file that imports the parser and compiles with tsc --noEmit.
 
-Hook it into CI. Commit grammar size gate.
+Commit: git commit -am "phase 9: emit .d.ts for parser"
 
-⸻
+Phase 10 – documentation
+	1.	Update docs/CONTRIBUTING.md with:
+	•	the directory layout (grammar/helpers, grammar/lexer, grammar/directives)
+	•	“how to add a new directive” steps (copy template, import helpers, run tests)
+	2.	Add a badge or section in the project README that explains the multi-file grammar build.
 
-9. (Opt) Generate TypeScript types
-	1.	Append --dts to the build script to emit parser.d.ts.
-	2.	Import the types where you construct ASTs.
-	3.	Add a type-checking unit test.
+Commit: git commit -am "phase 10: docs for new grammar structure"
 
-Commit parser typings.
-
-⸻
-
-10. Document maintenance
-	1.	Update docs/CONTRIBUTING.md with directory layout and “how to add a directive”.
-	2.	Add a CODEOWNERS line for grammar/directives/*.
-
-Commit docs: grammar maintenance guide.
-
-⸻
-
-🎉 Refactor done
-
-You now have:
-	•	A single glanceable meld.peggy spec.
-	•	Lexer, literals, and each directive isolated.
-	•	Smaller merge conflicts and faster reviews.
-	•	A safety rail that prevents future monolith creep.
+All refactor phases are now complete.  The grammar is modular, every intermediate commit keeps the test-suite green, and the old single-file grammar remains intact for historical reference.
