@@ -256,7 +256,7 @@ describe('TextDirectiveHandler', () => {
       
       const result = await handler.handle(createMockProcessingContext(ast)) as DirectiveResult;
       
-      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(ast.directive.value, expect.anything());
+      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(ast.directive.values, expect.anything());
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('escaped');
       const varDef = result.stateChanges?.variables?.escaped;
@@ -274,7 +274,7 @@ describe('TextDirectiveHandler', () => {
 
       const result = await handler.handle(createMockProcessingContext(ast)) as DirectiveResult;
       
-      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(ast.directive.value, expect.anything());
+      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(ast.directive.values, expect.anything());
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('message');
       const varDef = result.stateChanges?.variables?.message;
@@ -292,7 +292,7 @@ describe('TextDirectiveHandler', () => {
 
       const result = await handler.handle(createMockProcessingContext(ast)) as DirectiveResult;
       
-      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(ast.directive.value, expect.anything());
+      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(ast.directive.values, expect.anything());
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('greeting');
       const varDef = result.stateChanges?.variables?.greeting;
@@ -310,7 +310,7 @@ describe('TextDirectiveHandler', () => {
 
       const result = await handler.handle(createMockProcessingContext(ast)) as DirectiveResult;
       
-      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(ast.directive.value, expect.anything());
+      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(ast.directive.values, expect.anything());
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('configText');
       const varDef = result.stateChanges?.variables?.configText;
@@ -346,7 +346,7 @@ describe('TextDirectiveHandler', () => {
 
       const result = await handler.handle(createMockProcessingContext(ast)) as DirectiveResult;
       
-      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(ast.directive.value, expect.anything());
+      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(ast.directive.values, expect.anything());
       expect(result.stateChanges).toBeDefined();
       expect(result.stateChanges?.variables).toHaveProperty('message');
       const varDef = result.stateChanges?.variables?.message;

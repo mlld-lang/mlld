@@ -84,7 +84,17 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       } : undefined;
 
       const directiveData = node.directive as any;
-      identifier = directiveData.identifier; 
+      identifier = directiveData.identifier;
+      const textValues = directiveData.values;
+      
+      if (!textValues) {
+        throw new DirectiveError(
+          'Text directive values are missing or invalid',
+          this.kind,
+          DirectiveErrorCode.VALIDATION_FAILED,
+          errorDetailsContext
+        );
+      }
       
       if (!identifier) {
         const baseErrorDetails = { node: node, context: context }; 
