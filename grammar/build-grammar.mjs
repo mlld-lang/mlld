@@ -20,16 +20,18 @@ if (!fs.existsSync(DIST_DIR)) {
 
 // Read and merge grammar files
 const GRAMMAR_SOURCES = [
-  // order matters
+  // Root file must go first (contains initializer)
+  fs.readFileSync(GRAMMAR_FILE, 'utf8'),
+  // Then lexer files
   ...fs.readdirSync(path.resolve(__dirname, './lexer'))
       .filter(f => f.endsWith('.peggy'))
       .sort()
       .map(f => fs.readFileSync(path.resolve(__dirname, './lexer', f), 'utf8')),
+  // Then directive files
   ...fs.readdirSync(path.resolve(__dirname, './directives'))
       .filter(f => f.endsWith('.peggy'))
       .sort()
-      .map(f => fs.readFileSync(path.resolve(__dirname, './directives', f), 'utf8')),
-  fs.readFileSync(GRAMMAR_FILE, 'utf8') // root goes last
+      .map(f => fs.readFileSync(path.resolve(__dirname, './directives', f), 'utf8'))
 ].join('\n');
 
 // Validate grammar

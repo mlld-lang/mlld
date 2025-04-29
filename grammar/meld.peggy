@@ -61,15 +61,6 @@ CommentContent
     return chars.join('');
   }
 
-_ "whitespace"
-  = [ \t\r\n\u200B\u200C\u200D]*
-
-__ "mandatory whitespace"
-  = [ \t\r\n]+
-
-/* horizontal whitespace (NO newlines) */
-HWS "horizontal whitespace"
-  = [ \t\r\u200B\u200C\u200D]*
 
 TextBlock
   = first:TextPart rest:(TextPart)* {
@@ -758,14 +749,6 @@ DirectiveOption
     return { [key]: value };
   }
 
-SpecialPathChar
-  = "." / "~"
-
-Identifier
-  = first:[a-zA-Z_] rest:[a-zA-Z0-9_]* {
-    return first + rest.join('');
-  }
-
 StringLiteral
   = '"' chars:(!'"' char:. { return char; })* '"' { return chars.join(''); }
   / "'" chars:(!"'" char:. { return char; })* "'" { return chars.join(''); }
@@ -1039,12 +1022,6 @@ CodeFence
       }, location());
     }
 
-BacktickSequence
-  = backticks:"`"+ &{
-    return backticks.length >= 3 && backticks.length <= 5;
-  } { 
-    return backticks;
-  }
 
 CodeFenceLangID
   = chars:[^`\r\n]+ { return chars.join(''); }
@@ -1058,16 +1035,6 @@ PathValue
     // Return an array containing the single VariableReference node
     return [helpers.createVariableReferenceNode('path', { identifier: variable.identifier }, location())]; 
   }
-
-// --- Path Component Tokens ---
-PathSeparatorToken "Path Separator"
-  = "/" { return helpers.createNode(NodeType.PathSeparator, { value: "/" }, location()); }
-
-DotSeparatorToken "Dot Separator"
-  = "." { return helpers.createNode(NodeType.DotSeparator, { value: "." }, location()); }
-
-SectionMarkerToken "Section Marker"
-  = [ \t]* "#" { return helpers.createNode(NodeType.SectionMarker, { value: "#" }, location()); }
 
 // Brackets [...] Interpolation
 BracketAllowedLiteralChar
@@ -1101,8 +1068,6 @@ BracketInterpolatableContentOrEmpty
 
 // --- Whitespace & EOF Rules ---
 
-LineTerminator
-  = '\n' / '\r\n' / '\r' / '\u2028' / '\u2029'
 
 NewlineNode
   = term:LineTerminator &{ 
@@ -1112,28 +1077,6 @@ NewlineNode
   } {
     return helpers.createNode(NodeType.Newline, { content: term }, location());
   }
-
-EOF
-  = !.
-
-EndOfLine
-  = ws:[ \t\r]* term:LineTerminator &{ 
-      const pos = offset();
-      const isBeforeDirective = input.substr(pos).match(/^\s*@[a-z]/i);
-      return isBeforeDirective;
-    } { 
-      return helpers.createNode(NodeType.Newline, { content: term }, location());
-    }
-  / ws:[ \t\r]* term:LineTerminator { 
-      return helpers.createNode(NodeType.Newline, { content: term }, location());
-    }
-  / ws:[ \t\r]* &{ 
-      const atEof = offset() === input.length;
-      const nextChar = input[offset()];
-      return atEof || (nextChar === '@' && helpers.isLogicalLineStart(input, offset())); 
-    } { 
-      return helpers.createNode(NodeType.Newline, { content: '\n' }, location());
-    }
 
 // --- End Whitespace & EOF Rules ---
 
