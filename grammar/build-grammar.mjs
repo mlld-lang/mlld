@@ -18,24 +18,33 @@ if (!fs.existsSync(DIST_DIR)) {
   fs.mkdirSync(DIST_DIR, { recursive: true });
 }
 
-// Read grammar file
-const grammar = fs.readFileSync(GRAMMAR_FILE, 'utf8');
+// Read and merge grammar files
+const GRAMMAR_SOURCES = [
+  // order matters
+  ...fs.readdirSync(path.resolve(__dirname, './lexer'))
+      .filter(f => f.endsWith('.peggy'))
+      .sort()
+      .map(f => fs.readFileSync(path.resolve(__dirname, './lexer', f), 'utf8')),
+  ...fs.readdirSync(path.resolve(__dirname, './directives'))
+      .filter(f => f.endsWith('.peggy'))
+      .sort()
+      .map(f => fs.readFileSync(path.resolve(__dirname, './directives', f), 'utf8')),
+  fs.readFileSync(GRAMMAR_FILE, 'utf8') // root goes last
+].join('\n');
 
 // Validate grammar
 console.log('Validating grammar...');
 try {
-  peggy.generate(grammar, { output: 'source' });
+  peggy.generate(GRAMMAR_SOURCES, { output: 'source' });
   console.log('Grammar validation successful');
 } catch (error) {
   console.error('Grammar validation failed:', error);
   process.exit(1);
 }
 
-// Generate TypeScript parser
-const tsSource = peggy.generate(grammar, {
+// Common options for all parser generations
+const commonOpts = {
   output: 'source',
-  format: 'es',
-  trace: true,
   cache: false,
   optimize: 'speed',
   plugins: [],
@@ -46,7 +55,10 @@ const tsSource = peggy.generate(grammar, {
     DirectiveKind: './directive-kind.js',
     helpers:       './helpers.js'
   }
-});
+};
+
+// Generate TypeScript parser
+const tsSource = peggy.generate(GRAMMAR_SOURCES, { ...commonOpts, format: 'es', trace: true });
 
 // Add imports at the top and export only what we need
 const tsWrapped = `// Generated TypeScript parser
@@ -89,37 +101,8 @@ export default parser;`;
 fs.writeFileSync(SRC_PARSER, tsWrapped);
 
 // Generate ESM and CJS versions
-const esmSource = peggy.generate(grammar, {
-  output: 'source',
-  format: 'es',
-  trace: false,
-  cache: false,
-  optimize: 'speed',
-  plugins: [],
-  allowedStartRules: ['Start'],
-  exportVar: false,
-  dependencies: {
-    NodeType:      './node-type.js',
-    DirectiveKind: './directive-kind.js',
-    helpers:       './helpers.js'
-  }
-});
-
-const cjsSource = peggy.generate(grammar, {
-  output: 'source',
-  format: 'commonjs',
-  trace: false,
-  cache: false,
-  optimize: 'speed',
-  plugins: [],
-  allowedStartRules: ['Start'],
-  exportVar: false,
-  dependencies: {
-    NodeType:      './node-type.js',
-    DirectiveKind: './directive-kind.js',
-    helpers:       './helpers.js'
-  }
-});
+const esmSource = peggy.generate(GRAMMAR_SOURCES, { ...commonOpts, format: 'es' });
+const cjsSource = peggy.generate(GRAMMAR_SOURCES, { ...commonOpts, format: 'commonjs' });
 
 // Write ESM parser to dist
 fs.writeFileSync(DIST_PARSER_ESM, `// Generated ESM parser
@@ -180,8 +163,7 @@ ${cjsSource}
 const parser = { parse: peg$parse, SyntaxError };
 module.exports = parser;`);
 
-// Copy grammar file to dist
-fs.copyFileSync(GRAMMAR_FILE, GRAMMAR_DIST);
+// No need to copy grammar file to dist anymore
 
 // Copy dependency files to both ESM and CJS locations
 ['node-type.js', 'directive-kind.js', 'helpers.js'].forEach(file => {
