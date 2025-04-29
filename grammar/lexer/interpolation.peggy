@@ -112,4 +112,31 @@ MultilineInterpolatableContentOrEmpty
       return result || [];
     }
 
-// --- End Interpolation Rules ---
+
+// Brackets [...] Interpolation
+BracketAllowedLiteralChar
+  = !([\\\]/.#{}] / '{{' / '$' / '\\\\') . // Disallow \, /, ., #, {, }, {{, $, \\
+
+BracketLiteralTextSegment
+  = value:$(!([\\\]/.#{}] / '{{' / '$' / '\\' / [ \t]*'#') .)+ { // MODIFIED: Added lookahead for whitespace before #
+      return helpers.createNode(NodeType.Text, { content: value }, location());
+    }
+
+// Define a single part that can appear inside brackets, guarded by lookahead
+BracketPart
+  = !']' part:(
+        PathSeparatorToken
+      / DotSeparatorToken
+      / SectionMarkerToken
+      / Variable
+      / BracketLiteralTextSegment // Literal is the fallback
+    ) { return part; }
+
+BracketInterpolatableContent
+  = parts:BracketPart+ {
+      return parts;
+    }
+
+BracketInterpolatableContentOrEmpty
+  = parts:BracketPart+ { return parts; }
+  / ""                 { return []; }
