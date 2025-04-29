@@ -40,7 +40,12 @@ const tsSource = peggy.generate(grammar, {
   optimize: 'speed',
   plugins: [],
   allowedStartRules: ['Start'],
-  exportVar: false
+  exportVar: false,
+  dependencies: {
+    NodeType:      './node-type.js',
+    DirectiveKind: './directive-kind.js',
+    helpers:       './helpers.js'
+  }
 });
 
 // Add imports at the top and export only what we need
@@ -92,7 +97,12 @@ const esmSource = peggy.generate(grammar, {
   optimize: 'speed',
   plugins: [],
   allowedStartRules: ['Start'],
-  exportVar: false
+  exportVar: false,
+  dependencies: {
+    NodeType:      './node-type.js',
+    DirectiveKind: './directive-kind.js',
+    helpers:       './helpers.js'
+  }
 });
 
 const cjsSource = peggy.generate(grammar, {
@@ -103,7 +113,12 @@ const cjsSource = peggy.generate(grammar, {
   optimize: 'speed',
   plugins: [],
   allowedStartRules: ['Start'],
-  exportVar: false
+  exportVar: false,
+  dependencies: {
+    NodeType:      './node-type.js',
+    DirectiveKind: './directive-kind.js',
+    helpers:       './helpers.js'
+  }
 });
 
 // Write ESM parser to dist
@@ -167,6 +182,25 @@ module.exports = parser;`);
 
 // Copy grammar file to dist
 fs.copyFileSync(GRAMMAR_FILE, GRAMMAR_DIST);
+
+// Copy dependency files to both ESM and CJS locations
+['node-type.js', 'directive-kind.js', 'helpers.js'].forEach(file => {
+  // Copy to ESM parser location
+  fs.copyFileSync(
+    path.resolve(__dirname, './deps', file),
+    path.resolve(path.dirname(DIST_PARSER_ESM), file)
+  );
+  // Copy to CJS parser location
+  fs.copyFileSync(
+    path.resolve(__dirname, './deps', file),
+    path.resolve(path.dirname(DIST_PARSER_CJS), file)
+  );
+  // Copy to TypeScript parser location
+  fs.copyFileSync(
+    path.resolve(__dirname, './deps', file),
+    path.resolve(path.dirname(SRC_PARSER), file)
+  );
+});
 
 console.log('Successfully generated parser:');
 console.log('- TypeScript:', SRC_PARSER);
