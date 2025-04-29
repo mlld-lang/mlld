@@ -711,16 +711,7 @@ Example (Embed Source with Schema):
 }
 ```
 
-## Final Steps & Open Questions
-{{ ... }}
-
- *   Review handling of template content vs variables in `@embed template = ...` (using `isTemplateContent` flag).
--*   Decide on final structure for `@define` command parameters (`args` vs specific structure?). (Resolved: Current `RunArgsNode[]` seems OK based on grammar)
--*   Clarify the exact structure expected for `PathValue.values` - just `TextNode` or others? (Resolved: Clarified in definition as `TextNode | VariableReferenceNode`)
--*   Address `@data` literal node types vs raw JS objects. (Decision: Use raw JS objects/arrays for now) (Resolved: Spec updated)
--*   Consider adding a generic `BaseDirectiveValues` with `raw`? (Resolved: Implemented)
- 
- ### Shared Structures
+### Shared Structures
 
 ```typescript
 // Base for directives that capture the RHS raw string
