@@ -1,4 +1,4 @@
-# AST Values Specification - Planning Checklist
+# AST Values Specification Draft - Planning Checklist
 
 **Goal:** Ensure the proposed AST structure in this specification accurately reflects the Meld grammar (`meld.pegjs`) and syntax (`SYNTAX.md`) before implementation.
 
@@ -25,7 +25,7 @@
 2.  **Specify Each Directive Variant:**
     *   For *each* unique `kind`/`subtype` combination:
         *   [ ] **Locate Grammar Rule:** Find the specific rule(s) in `core/ast/grammar/meld.pegjs` that parse this variant. (`@run`: L683-L733; `@embed`: L827-836 uses `_EmbedRHS` L549-597; `@import`: L751-800; `@define`: L881-904 uses helpers L906-955; `@text`: L1168-1196 uses L1198-1233; `@path`: L1000-1020; `@data`: L1035-1045 uses L1047-1085)
-        *   [ ] **Identify Grammar Labels:** Extract the exact labels used in the grammar rule for each captured component. (`@run`: done; `@embed`: done; `@import`: `subtype` (from helper), `path` (from helper), `imports`; `@define`: `id.name`, `id.field`, `params`, `value` (or `value.value` for run); `@text`: `content`, `id`, `value` (-> `embed`, `run`, `call`, `values`), `value.type` (-> `source`); `@path`: `path`; `@data`: `id`, `schema`, `value` (-> `embed`, `run`, `call`, `value`), `value.type` (-> `source`))
+        *   [ ] **Identify Grammar Labels:** Extract the exact labels used in the grammar rule for each captured component. (`@run`: done; `@embed`: done; `@import`: `subtype` (from helper), `path` (from helper), `imports`; `@define`: `id.name`, `id.field`, `params`, `value` (or `value.value` for run); `@text`: `content`, `id`, `value` (-> `embed`, `run`, `values`), `value.type` (-> `source`); `@path`: `path`; `@data`: `id`, `value` (-> `embed`, `run`, `value`), `value.type` (-> `source`))
         *   [ ] **Define/Refine `...Values` Interface:** Create or update the corresponding TypeScript interface. (`@run` updated; `@embed` updated; `@import` updated; `@define` updated; `@text` updated; `@path` updated; `@data` updated)
         *   [ ] **Specify Node Types:** Define the expected `INode` type(s) for each field. (`@run` updated; `@embed` updated; `@import` updated; `@define` updated; `@text` updated; `@path` updated; `@data` updated)
         *   [ ] **Add/Verify Example:** Include a clear JSON example demonstrating the expected AST output. (`@run` updated; `@embed` examples OK; `@import` examples OK; `@define` OK; `@text` OK; `@path` needs review; `@data` added)
@@ -283,13 +283,13 @@ interface ImportNamedValues extends BaseImportValues {
 Example:
 
 ```json
-// @import [apiKey, theme as siteTheme] from {{configSource}}
+// @import [apiKey, theme as siteTheme] from [$config]
 {
   "type": "Directive",
   "directive": {
     "kind": "import",
     "subtype": "importNamed",
-    "raw": "{{configSource}}",
+    "raw": "$config",
     "path": { 
       "type": "PathValue",
       "raw": "./config.meld",
@@ -306,7 +306,7 @@ Example:
 
 ##### `importStandard`
 
-*   **Syntax:** `@import [] from [path]` or `@import pathValue` (simple)
+*   **Syntax:** `@import [] from [path]` or `@import [pathValue]` (simple)
 *   **Purpose:** Imports the 'default' or standard export of the source (exact meaning TBD, could be file content or specific variable).
 
 ```typescript
@@ -488,20 +488,10 @@ Example:
 
 ##### `textAssignment`
 
-*   **Syntax:** `@text identifier = sourceValue` (where sourceValue can be literal, @embed, @run, @call)
+*   **Syntax:** `@text identifier = sourceValue` (where sourceValue can be literal, @embed, @run)
 *   **Purpose:** Assigns text content derived from a source to an identifier (likely for use in templating or later directives).
 
 ```typescript
-// Supporting Type for @call source
-interface CallValue {
-  kind: 'call';
-  /** Identifier for the API. Grammar: 'api' */
-  api: IdentifierNode;
-  /** Identifier for the API method. Grammar: 'method' */
-  method: IdentifierNode;
-  /** Content passed to the call. Grammar: 'path' */
-  path: INode[]; // BracketInterpolatableContent
-}
 
 // Interface for Assignment subtype
 interface TextAssignmentValues extends BaseTextValues {
@@ -513,17 +503,15 @@ interface TextAssignmentValues extends BaseTextValues {
   identifier: IdentifierNode;
   /** 
    * The type of the source providing the text value.
-   * Grammar label: Derived from TextValue rule ('embed', 'run', 'call', 'literal')
+   * Grammar label: Derived from TextValue rule ('embed', 'run', 'literal')
    */
-  source: 'embed' | 'run' | 'call' | 'literal';
+  source: 'embed' | 'run' | 'literal';
   
   // --- Conditional Fields based on 'source' --- 
   /** The embedded content definition (if source is 'embed'). Grammar label: 'embed' */
   embed?: EmbedDirectiveValues;
   /** The run command definition (if source is 'run'). Grammar label: 'run' */
   run?: RunDirectiveValues;
-  /** The API call definition (if source is 'call'). Grammar label: 'value' when type is 'call' */
-  call?: CallValue; 
   /** The literal nodes (if source is 'literal'). Grammar label: 'values' when type is 'literal' */
   values?: InterpolatedStringLiteralNode | InterpolatedMultilineTemplateNode; 
 }
@@ -581,7 +569,7 @@ Example (Embed Source):
 
 ### `@path` Directive
 
-*   **Syntax:** `@path identifier = pathValue`
+*   **Syntax:** `@path identifier = "pathValue"`
 *   **Purpose:** Defines a named path, potentially used in later directives.
 
 ```typescript
@@ -622,9 +610,9 @@ Example:
 
 ### `@data` Directive
 
-Defines a named data structure, potentially validated against a schema, sourced from inline literals, embeds, calls, or commands.
+Defines a named data structure, sourced from inline literals, embeds, or commands.
 
-*   **Syntax:** `@data identifier:schema? = sourceValue`
+*   **Syntax:** `@data identifier = sourceValue`
 *   **Purpose:** Creates a variable holding structured data.
 
 ```typescript
@@ -636,23 +624,16 @@ interface DataDirectiveValues extends BaseDirectiveValues {
    */
   identifier: IdentifierNode;
   /** 
-   * Optional identifier for a schema to validate against.
-   * Grammar label: 'schema'
-   */
-  schema?: IdentifierNode;
-  /** 
    * The type of the source providing the data.
-   * Grammar label: Derived from DataValue rule ('embed', 'run', 'call', 'literal')
+   * Grammar label: Derived from DataValue rule ('embed', 'run', 'literal')
    */
-  source: 'embed' | 'run' | 'call' | 'literal';
+  source: 'embed' | 'run' | 'literal';
   
   // --- Conditional Fields based on 'source' --- 
   /** The embedded content definition (if source is 'embed'). Grammar label: 'embed' */
   embed?: EmbedDirectiveValues;
   /** The run command definition (if source is 'run'). Grammar label: 'run' */
   run?: RunDirectiveValues;
-  /** The API call definition (if source is 'call'). Grammar label: 'value' when type is 'call' */
-  call?: CallValue; 
   /** 
    * The literal data structure (if source is 'literal'). 
    * Grammar label: 'value' when type is 'literal'. 
@@ -678,12 +659,12 @@ Example (Literal Object Source):
       "name": "{{defaultName}}", // String value containing potential interpolation markers
       "role": "admin"         // Simple string value
     }
-    // 'schema', 'embed', 'run', 'call' are absent
+    // 'embed', 'run' are absent
   }
 }
 ```
 
-Example (Embed Source with Schema):
+Example
 
 ```json
 // @data config:AppConfig = @embed [./config.yaml]
@@ -693,7 +674,6 @@ Example (Embed Source with Schema):
     "kind": "data",
     "raw": "= @embed [./config.yaml]",
     "identifier": { "type": "Identifier", "name": "config" },
-    "schema": { "type": "Identifier", "name": "AppConfig" },
     "source": "embed",
     "embed": { // EmbedPathValues structure for the *source* of the data
        "subtype": "embedPath",
@@ -706,7 +686,7 @@ Example (Embed Source with Schema):
        }
        // section, options etc. likely null/absent
     }
-    // 'value', 'run', 'call' are absent
+    // 'value', 'run' are absent
   }
 }
 ```

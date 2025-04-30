@@ -103,17 +103,22 @@ The pipeline is organized into logical service groups, with strict initializatio
          │
          ▼
    ┌─────────────┐
-   │  meld-ast   │
-   │   Parser    │
+   │  AST Tree   │ ← Uses grammar/meld.peggy and its
+   │  Generator  │   imported lexer/directive rules
    └─────┬───────┘
          │
          ▼
    ┌─────────────┐
    │ MeldNode[]  │
-   │  Rich AST   │  ← Context-aware: `{{...}}` only becomes `VariableReferenceNode`
-   └─────────────┘    where allowed. Directives contain `InterpolatableValue` arrays.
+   │   Array     │
+   └─────────────┘
    ```
-   - Reads the input file content
+   - Uses modular Peggy grammar rules organized in `grammar/`:
+     - `lexer/`: Basic tokens, literals, interpolation
+     - `directives/`: Specific directive syntax rules
+   - Each node has a specific type (Text, Comment, Directive, etc.).
+   - Adds source location information.
+   - **Adds a unique `nodeId` to every AST node.**
    - Parses into a rich, **context-aware** AST using `@core/ast`.
    - Variable syntax (`{{...}}`, `$var`) is parsed as `VariableReferenceNode` only in contexts where interpolation is allowed (e.g., directive values, certain string literals). Otherwise, it remains literal text within `TextNode`s.
    - Directive values (like strings, paths) that support interpolation are parsed into `InterpolatableValue` arrays (sequences of `TextNode` and `VariableReferenceNode`).

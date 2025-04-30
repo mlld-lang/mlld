@@ -57,6 +57,19 @@ project-root/
  │   └─ index.ts  
  ├─ bin/                    ← CLI entry point  
  │   └─ meld.ts  
+ ├─ grammar/               ← Grammar and parser rules
+ │   ├─ lexer/            ← Lexical analysis rules
+ │   │   ├─ tokens.peggy
+ │   │   ├─ literals.peggy
+ │   │   ├─ interpolation.peggy
+ │   │   └─ whitespace.peggy
+ │   ├─ directives/       ← Directive-specific rules
+ │   │   ├─ import.peggy
+ │   │   ├─ embed.peggy
+ │   │   ├─ run.peggy
+ │   │   └─ ... other directives
+ │   ├─ deps/            ← Grammar dependencies
+ │   └─ meld.peggy       ← Main grammar file
  ├─ cli/                    ← CLI implementation  
  │   ├─ cli.test.ts  
  │   └─ index.ts  
