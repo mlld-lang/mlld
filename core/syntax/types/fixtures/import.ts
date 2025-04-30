@@ -7,39 +7,41 @@ export const importTests: ParserTestCase[] = [
     input: '@import [*] from [file.md]',
     expected: {
       type: 'Directive',
+      kind: 'import',
+      subtype: 'importAll',
       nodeId: 'placeholder-id',
       location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
-      directive: {
-        kind: 'import',
-        subtype: 'importAll',
-        imports: [{ name: '*', alias: null }],
-        path: {
-          raw: 'file.md',
-          values: [{
+      values: {
+        imports: [
+          {
+            type: 'VariableReference',
+            identifier: '*',
+            valueType: 'import',
+            isVariableReference: true,
+            nodeId: 'placeholder-id',
+            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+          }
+        ],
+        path: [
+          {
             type: 'Text',
             nodeId: 'placeholder-id',
-            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 }, source: undefined },
+            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
             content: 'file'
           },
           {
             type: 'DotSeparator',
             nodeId: 'placeholder-id',
-            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 }, source: undefined },
+            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
             value: '.'
           },
           {
             type: 'Text',
             nodeId: 'placeholder-id',
-            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 }, source: undefined },
+            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
             content: 'md'
-          }],
-          hasVariables: false,
-          hasTextVariables: false,
-          hasPathVariables: false,
-          isAbsolute: false,
-          isRelativeToCwd: true,
-          variable_warning: false
-        }
+          }
+        ]
       }
     }
   },
@@ -50,21 +52,37 @@ export const importTests: ParserTestCase[] = [
   //   input: '@import [variable as var] from [file.md]',
   //   expected: {
   //     type: 'Directive',
+  //     kind: 'import',
+  //     subtype: 'named',
   //     nodeId: 'placeholder-id',
   //     location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
-  //     directive: {
-  //       kind: 'import',
-  //       subtype: 'importNamed',
-  //       imports: [{ name: 'variable', alias: 'var' }],
-  //       path: {
-  //         raw: 'file.md',
-  //         values: [{
+  //     values: {
+  //       imports: [
+  //         {
+  //           type: 'VariableReference',
+  //           identifier: 'variable',
+  //           valueType: 'import',
+  //           isVariableReference: true,
+  //           nodeId: 'placeholder-id',
+  //           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+  //           alias: {
+  //             type: 'VariableReference',
+  //             identifier: 'var',
+  //             valueType: 'import',
+  //             isVariableReference: true,
+  //             nodeId: 'placeholder-id',
+  //             location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
+  //           }
+  //         }
+  //       ],
+  //       path: [
+  //         {
   //           type: 'Text',
   //           nodeId: 'placeholder-id',
   //           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
   //           content: 'file.md'
-  //         }]
-  //       }
+  //         }
+  //       ]
   //     }
   //   }
   // },
@@ -74,41 +92,41 @@ export const importTests: ParserTestCase[] = [
     input: '@import [name] from [file.md]',
     expected: {
       type: 'Directive',
+      kind: 'import',
+      subtype: 'named',
       nodeId: 'placeholder-id',
       location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
-      directive: {
-        kind: 'import',
-        subtype: 'importStandard',
-        imports: [{ name: 'name', alias: null }],
-        path: {
-          raw: 'file.md',
-          values: [
-            {
-              type: 'Text',
-              nodeId: 'placeholder-id',
-              location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 }, source: undefined },
-              content: 'file'
-            },
-            {
-              type: 'DotSeparator',
-              nodeId: 'placeholder-id',
-              location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 }, source: undefined },
-              value: '.'
-            },
-            {
-              type: 'Text',
-              nodeId: 'placeholder-id',
-              location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 }, source: undefined },
-              content: 'md'
-            }
-          ],
-          hasVariables: false,
-          hasTextVariables: false,
-          hasPathVariables: false,
-          isAbsolute: false,
-          isRelativeToCwd: true,
-          variable_warning: false
-        }
+      values: {
+        imports: [
+          {
+            type: 'VariableReference',
+            identifier: 'name',
+            valueType: 'import',
+            isVariableReference: true,
+            nodeId: 'placeholder-id',
+            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+          }
+        ],
+        path: [
+          {
+            type: 'Text',
+            nodeId: 'placeholder-id',
+            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+            content: 'file'
+          },
+          {
+            type: 'DotSeparator',
+            nodeId: 'placeholder-id',
+            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+            value: '.'
+          },
+          {
+            type: 'Text',
+            nodeId: 'placeholder-id',
+            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+            content: 'md'
+          }
+        ]
       }
     }
   },
@@ -119,29 +137,31 @@ export const importTests: ParserTestCase[] = [
   //   input: '@import [name] from [{{path}}]',
   //   expected: {
   //     type: 'Directive',
+  //     kind: 'import',
+  //     subtype: 'named',
   //     nodeId: 'placeholder-id',
   //     location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
-  //     directive: {
-  //       kind: 'import',
-  //       subtype: 'importStandard',
-  //       imports: [{ name: 'name', alias: null }],
-  //       path: {
-  //         raw: '{{path}}',
-  //         hasVariables: true,
-  //         hasTextVariables: true,
-  //         hasPathVariables: false,
-  //         isAbsolute: false,
-  //         isRelativeToCwd: true,
-  //         values: [{
+  //     values: {
+  //       imports: [
+  //         {
+  //           type: 'VariableReference',
+  //           identifier: 'name',
+  //           valueType: 'import',
+  //           isVariableReference: true,
+  //           nodeId: 'placeholder-id',
+  //           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+  //         }
+  //       ],
+  //       path: [
+  //         {
   //           type: 'VariableReference',
   //           nodeId: 'placeholder-id',
   //           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
   //           valueType: 'text',
   //           identifier: 'path',
   //           isVariableReference: true
-  //         }],
-  //         variable_warning: true
-  //       }
+  //         }
+  //       ]
   //     }
   //   }
   // },
@@ -151,29 +171,31 @@ export const importTests: ParserTestCase[] = [
     input: '@import [name] from [$path]',
     expected: {
       type: 'Directive',
+      kind: 'import',
+      subtype: 'named',
       nodeId: 'placeholder-id',
       location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
-      directive: {
-        kind: 'import',
-        subtype: 'importStandard',
-        imports: [{ name: 'name', alias: null }],
-        path: {
-          raw: '$path',
-          hasVariables: true,
-          hasTextVariables: false,
-          hasPathVariables: true,
-          isAbsolute: false,
-          isRelativeToCwd: true,
-          values: [{
+      values: {
+        imports: [
+          {
+            type: 'VariableReference',
+            identifier: 'name',
+            valueType: 'import',
+            isVariableReference: true,
+            nodeId: 'placeholder-id',
+            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+          }
+        ],
+        path: [
+          {
             type: 'VariableReference',
             nodeId: 'placeholder-id',
-            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 }, source: undefined },
+            location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
             valueType: 'path',
             identifier: 'path',
             isVariableReference: true
-          }],
-          variable_warning: false
-        }
+          }
+        ]
       }
     }
   },
@@ -184,27 +206,28 @@ export const importTests: ParserTestCase[] = [
   //   input: '@import [name] from [$path/{{name}}]',
   //   expected: {
   //     type: 'Directive',
+  //     kind: 'import',
+  //     subtype: 'named',
   //     nodeId: 'placeholder-id',
   //     location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
-  //     directive: {
-  //       kind: 'import',
-  //       subtype: 'importStandard',
-  //       imports: [{ name: 'name', alias: null }],
-  //       path: {
-  //         raw: '$path/{{name}}',
-  //         isPathVariable: true,
-  //         hasVariables: true,
-  //         hasTextVariables: true,
-  //         hasPathVariables: true,
-  //         isAbsolute: false,
-  //         isRelativeToCwd: true,
-  //         values: [{
+  //     values: {
+  //       imports: [
+  //         {
+  //           type: 'VariableReference',
+  //           identifier: 'name',
+  //           valueType: 'import',
+  //           isVariableReference: true,
+  //           nodeId: 'placeholder-id',
+  //           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+  //         }
+  //       ],
+  //       path: [
+  //         {
   //           type: 'VariableReference',
   //           nodeId: 'placeholder-id',
   //           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
   //           valueType: 'path',
   //           identifier: 'path',
-  //           isSpecial: false,
   //           isVariableReference: true
   //         },
   //         {
@@ -220,8 +243,8 @@ export const importTests: ParserTestCase[] = [
   //           valueType: 'text',
   //           identifier: 'name',
   //           isVariableReference: true
-  //         }]
-  //       }
+  //         }
+  //       ]
   //     }
   //   }
   // },
@@ -232,20 +255,23 @@ export const importTests: ParserTestCase[] = [
   //   input: '@import [name] from [{{__cwd}}/file.md]',
   //   expected: {
   //     type: 'Directive',
+  //     kind: 'import',
+  //     subtype: 'named',
   //     nodeId: 'placeholder-id',
   //     location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
-  //     directive: {
-  //       kind: 'import',
-  //       subtype: 'importStandard',
-  //       imports: [{ name: 'name', alias: null }],
-  //       path: {
-  //         raw: '{{__cwd}}/file.md',
-  //         hasVariables: true,
-  //         hasTextVariables: true,
-  //         hasPathVariables: false,
-  //         isAbsolute: false,
-  //         isRelativeToCwd: true,
-  //         values: [{
+  //     values: {
+  //       imports: [
+  //         {
+  //           type: 'VariableReference',
+  //           identifier: 'name',
+  //           valueType: 'import',
+  //           isVariableReference: true,
+  //           nodeId: 'placeholder-id',
+  //           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+  //         }
+  //       ],
+  //       path: [
+  //         {
   //           type: 'VariableReference',
   //           nodeId: 'placeholder-id',
   //           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
@@ -258,9 +284,8 @@ export const importTests: ParserTestCase[] = [
   //           nodeId: 'placeholder-id',
   //           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
   //           content: '/file.md'
-  //         }],
-  //         variable_warning: true
-  //       }
+  //         }
+  //       ]
   //     }
   //   }
   // }

@@ -22,7 +22,14 @@ describe('directives/@import with path variables', () => {
     // expect(node.directive.path.hasTextVariables).toBe(false);
     // expect(node.directive.path.variable_warning).toBe(false);
     // Import directives have an imports property with a default wildcard import
-    expect(node.directive.imports).toEqual([{name: '*', alias: null}]);
+    expect(node.directive.imports).toEqual([
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: '*',
+        valueType: 'import',
+        isVariableReference: true,
+      }),
+    ]);
     // Assert the values array
     expect(node.directive.path.values).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -52,7 +59,14 @@ describe('directives/@import with path variables', () => {
     // expect(node.directive.path.hasPathVariables).toBe(true);
     // expect(node.directive.path.hasTextVariables).toBe(false);
     // expect(node.directive.path.variable_warning).toBe(false); // Corrected: Warning should be false when path vars are present
-    expect(node.directive.imports).toEqual([{name: '*', alias: null}]);
+    expect(node.directive.imports).toEqual([
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: '*',
+        valueType: 'import',
+        isVariableReference: true,
+      }),
+    ]);
     // Re-apply fix: Assert the values array using expect.arrayContaining and expect.objectContaining
     expect(node.directive.path.values).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'VariableReference', identifier: 'file_path', valueType: 'path', isVariableReference: true }), // Check identifier
@@ -85,7 +99,14 @@ describe('directives/@import with path variables', () => {
     // expect(node.directive.path.hasPathVariables).toBe(true);
     // expect(node.directive.path.hasTextVariables).toBe(true); // Contains text var
     // expect(node.directive.path.variable_warning).toBe(false); // Warning should be false because path variables ARE present
-    expect(node.directive.imports).toEqual([{name: '*', alias: null}]);
+    expect(node.directive.imports).toEqual([
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: '*',
+        valueType: 'import',
+        isVariableReference: true,
+      }),
+    ]);
     // Assert the values array
     expect(node.directive.path.values).toEqual([
       expect.objectContaining({ type: 'VariableReference', valueType: 'path', identifier: 'file_path' }),
@@ -114,7 +135,14 @@ describe('directives/@import with path variables', () => {
     // expect(node.directive.path.hasTextVariables).toBe(false);
     // expect(node.directive.path.variable_warning).toBe(false);
     // Imports should be undefined for non-bracketed path without 'from'
-    expect(node.directive.imports).toBeUndefined();
+    expect(node.directive.imports).toEqual([
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: '*',
+        valueType: 'import',
+        isVariableReference: true,
+      }),
+    ]);
     // Assert the values array
     expect(node.directive.path.values).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -146,8 +174,20 @@ describe('directives/@import with path variables', () => {
     // expect(node.directive.path.hasTextVariables).toBe(false);
     // expect(node.directive.path.variable_warning).toBe(false);
     expect(node.directive.imports).toEqual([
-      {name: 'component1', alias: null},
-      {name: 'component2', alias: null}
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: 'component1',
+        valueType: 'import',
+        isVariableReference: true,
+        alias: undefined,
+      }),
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: 'component2',
+        valueType: 'import',
+        isVariableReference: true,
+        alias: undefined,
+      }),
     ]);
     // Assert the values array
     expect(node.directive.path.values).toEqual(expect.arrayContaining([
@@ -180,8 +220,30 @@ describe('directives/@import with path variables', () => {
     // expect(node.directive.path.hasTextVariables).toBe(false);
     // expect(node.directive.path.variable_warning).toBe(false);
     expect(node.directive.imports).toEqual([
-      {name: 'component1', alias: 'comp1'},
-      {name: 'component2', alias: 'comp2'}
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: 'component1',
+        valueType: 'import',
+        isVariableReference: true,
+        alias: expect.objectContaining({
+          type: 'VariableReference',
+          identifier: 'comp1',
+          valueType: 'import',
+          isVariableReference: true,
+        }),
+      }),
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: 'component2',
+        valueType: 'import',
+        isVariableReference: true,
+        alias: expect.objectContaining({
+          type: 'VariableReference',
+          identifier: 'comp2',
+          valueType: 'import',
+          isVariableReference: true,
+        }),
+      }),
     ]);
     // Assert the values array
     expect(node.directive.path.values).toEqual(expect.arrayContaining([
@@ -213,7 +275,14 @@ describe('directives/@import with path variables', () => {
     // expect(node.directive.path.hasPathVariables).toBe(true);
     // expect(node.directive.path.hasTextVariables).toBe(false);
     // expect(node.directive.path.variable_warning).toBe(false);
-    expect(node.directive.imports).toEqual([{name: '*', alias: null}]);
+    expect(node.directive.imports).toEqual([
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: '*',
+        valueType: 'import',
+        isVariableReference: true,
+      }),
+    ]);
     // Assert the values array
     expect(node.directive.path.values).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -245,8 +314,20 @@ describe('directives/@import with path variables', () => {
     // expect(node.directive.path.hasTextVariables).toBe(false);
     // expect(node.directive.path.variable_warning).toBe(false);
     expect(node.directive.imports).toEqual([
-      {name: 'component1', alias: null},
-      {name: 'component2', alias: null}
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: 'component1',
+        valueType: 'import',
+        isVariableReference: true,
+        alias: undefined,
+      }),
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: 'component2',
+        valueType: 'import',
+        isVariableReference: true,
+        alias: undefined,
+      }),
     ]);
     // Assert the values array
     expect(node.directive.path.values).toEqual(expect.arrayContaining([
@@ -279,7 +360,14 @@ describe('directives/@import with path variables', () => {
     // expect(node.directive.path.hasPathVariables).toBe(true);
     // expect(node.directive.path.hasTextVariables).toBe(true); // Contains text var
     // expect(node.directive.path.variable_warning).toBe(false); // Warning should be false because path variables ARE present
-    expect(node.directive.imports).toEqual([{name: '*', alias: null}]);
+    expect(node.directive.imports).toEqual([
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: '*',
+        valueType: 'import',
+        isVariableReference: true,
+      }),
+    ]);
     // Assert the values array
     expect(node.directive.path.values).toEqual([
       expect.objectContaining({ type: 'VariableReference', valueType: 'path', identifier: 'file_path' }),

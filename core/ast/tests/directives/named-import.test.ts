@@ -56,11 +56,17 @@ describe('directives/@import with named imports', () => {
         type: 'Directive',
         directive: {
           kind: 'import',
+          subtype: 'importAll',
           path: {
             raw: 'vars.meld'
           },
           imports: [
-            { name: '*', alias: null }
+            {
+              type: 'VariableReference',
+              identifier: '*',
+              valueType: 'import',
+              isVariableReference: true,
+            },
           ]
         }
       });
@@ -94,11 +100,17 @@ describe('directives/@import with named imports', () => {
         type: 'Directive',
         directive: {
           kind: 'import',
+          subtype: 'importAll',
           path: {
             raw: 'vars.meld'
           },
           imports: [
-            { name: '*', alias: null }
+            {
+              type: 'VariableReference',
+              identifier: '*',
+              valueType: 'import',
+              isVariableReference: true,
+            },
           ]
         }
       });
