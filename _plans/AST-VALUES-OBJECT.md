@@ -10,13 +10,51 @@ The current `DirectiveNode` (implicitly or explicitly) uses a single, flat array
 
 ## Proposed Solution
 
-Modify the `DirectiveNode` structure so that its `values` property is an object where:
-*   **Keys:** Represent the semantic group of the input (e.g., `path`, `imports`, `code`, `language`).
-*   **Values:** Are arrays (`Node[]`) containing the AST nodes belonging to that specific group.
+Modify the `DirectiveNode` structure to:
 
-This provides explicit access paths for handlers (e.g., `directiveNode.values.path`, `directiveNode.values.code`).
+1.  Retain `kind` and `subtype` as top-level properties.
+2.  Use a `values` property that is an object where:
+    *   **Keys:** Represent the semantic group of the input (e.g., `path`, `imports`, `code`, `language`).
+    *   **Values:** Are arrays (`Node[]`) containing the AST nodes belonging to that specific group.
+3.  Introduce a new top-level `raw` property that is also an object:
+    *   **Keys:** Mirror the keys present in the `values` object for the specific directive.
+    *   **Values:** Are strings (`string`) containing the raw, unparsed text segment from the original input corresponding to that semantic group.
+4.  Introduce a new top-level `meta` property that is an object:
+    *   **Keys:** Represent metadata flags or derived information about the directive or its parts.
+    *   **Values:** Are values (`any`) containing the metadata or flags.
 
-**Required Keys for `values` Object:**
+This provides explicit access paths for handlers (e.g., `directiveNode.values.path`, `directiveNode.values.code`) while also preserving the raw input for each part (e.g., `directiveNode.raw.path`, `directiveNode.raw.code`) and storing metadata (e.g., `directiveNode.meta.isAbsolute`, `directiveNode.meta.hasVariables`).
+
+**Example AST Structure (`@import [name] from [file.md]`):**
+
+```typescript
+{
+  type: 'Directive',
+  nodeId: '...',
+  location: { ... },
+  kind: 'import',             // Top-level
+  subtype: 'importStandard',  // Top-level
+  raw: {                      // Raw segments grouped by logical part
+    imports: '[name]',
+    path: '[file.md]'
+  },
+  values: {                   // Structured nodes grouped by logical part
+    imports: [ /* VariableReference for 'name' */ ],
+    path: [ /* Text, DotSeparator, Text for 'file.md' */ ]
+  },
+  meta: {                     // Metadata flags
+    isAbsolute: false,
+    hasVariables: false,
+    isRelativeToHome: false,
+    isRelativeToWorkspace: false,
+    isRelativeToCurrentFile: false,
+    hasTextInterpolation: false,
+    variableWarning: false
+  }
+}
+```
+
+**Required Keys for `values` Object (and corresponding `raw` keys):**
 
 Based on current directive syntaxes, the following keys are needed:
 
@@ -68,21 +106,27 @@ Given the sensitivity of grammar modifications, we will follow a strict test-dri
 ## Implementation Steps
 
 1.  **Update AST Grammar Tests & Fixtures (`core/ast/` & `core/syntax/types/fixtures/`):**
-    *   Identify test files (e.g., `directive-syntax.test.ts`, `import-directive.test.ts`, etc.) corresponding to directives needing the `values` object refactor.
-    *   Update the expected AST output in test fixtures (likely JSON files in `core/syntax/types/fixtures/`) to use the new `values: { key: [Nodes...], ... }` structure.
+    *   Identify test files (e.g., `directive-syntax.test.ts`, `import-directive.test.ts`, etc.) corresponding to directives needing the refactor.
+    *   Update the expected AST output in test fixtures to use the new structure with top-level `kind`, `subtype`, the `values: { key: [Nodes...], ... }` object, and the parallel `raw: { key: "raw string", ... }` object.
     *   Modify assertions in the `.test.ts` files to verify this new structure.
     *   **Verify:** Run `npm test core/ast`. Confirm that the updated tests now *fail* as expected.
 
 2.  **Update AST Types (`core/syntax/types/nodes.ts`):**
     *   Locate or define the `DirectiveNode` interface.
-    *   Change the type definition of its `values` property from `Node[]` (or similar) to `Record<string, MeldNode[]>`. Consider adding known optional keys for better type hinting (e.g., `path?: MeldNode[]; code?: MeldNode[]; ...`).
+    *   Ensure `kind` and `subtype` are defined as top-level properties (if not already).
+    *   Change the type definition of its `values` property from `Node[]` (or similar) to `Record<string, MeldNode[]>`. Consider adding known optional keys for better type hinting.
+    *   Add the new `raw` property: `raw: Record<string, string>;`.
+    *   Add the new `meta` property: `meta: Record<string, any>;`.
 
 3.  **Incrementally Update Grammar (in `grammar/directives/`):**
     *   **Select Directive:** Choose one directive file to modify (e.g., `import.peggy`).
     *   **Modify Grammar Rules:**
         *   Adjust parsing rules to capture the raw AST nodes for each distinct input group (e.g., capture the array of nodes for the path, the array of nodes for imports).
+        *   Explicitly capture the raw text segments for each corresponding input group using Peggy's mechanisms (e.g., `$(...)` or `text()`).
         *   In the action block (`{ ... }`), construct the `values` object using the captured node arrays (e.g., `values: { path: pathNodes, imports: importNodes }`).
-        *   Use the standard `helpers.createNode(NodeType.Directive, { kind: ..., subtype: ..., values: values }, location())` to return the final node. Ensure `kind` and `subtype` are correctly determined.
+        *   Construct the parallel `raw` object using the captured raw text segments (e.g., `raw: { path: rawPathString, imports: rawImportsString }`).
+        *   Construct the `meta` object using the captured metadata (e.g., `meta: { isAbsolute: true, hasVariables: false }`).
+        *   Use the standard `helpers.createNode(NodeType.Directive, { kind: ..., subtype: ..., raw: rawObject, values: valuesObject, meta: metaObject }, location())` to return the final node. Ensure `kind` and `subtype` are correctly determined.
     *   **Build:** Run `npm run build:grammar`. Fix any errors.
     *   **Test:** Run `npm test core/ast`. Verify the tests for *this specific directive* now pass. Fix any failures.
     *   **Repeat:** Select the next directive file (e.g., `run.peggy`, `embed.peggy`) and repeat the Modify-Build-Test cycle until all affected directives are updated.
@@ -91,6 +135,8 @@ Given the sensitivity of grammar modifications, we will follow a strict test-dri
     *   Once all grammar changes are complete and `npm test core/ast` passes fully.
     *   Iterate through all directive handlers.
     *   Modify handler logic to access input nodes via the new `values` object structure (e.g., `directiveNode.values.path`, `directiveNode.values.code`).
+    *   Update handlers to also utilize the `raw` property where applicable (e.g., for logging, error messages, or direct manipulation of raw input).
+    *   Update handlers to also utilize the `meta` property where applicable (e.g., for conditional logic based on metadata flags).
 
 5.  **Update Handler & Integration Tests:**
     *   Update handler tests (`services/pipeline/**/*.test.ts`) and integration tests (`api/*.test.ts`) to reflect the changes in handler logic and ensure end-to-end functionality.

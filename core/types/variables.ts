@@ -23,7 +23,8 @@ export enum VariableType {
   TEXT = 'text',
   DATA = 'data',
   PATH = 'path',
-  COMMAND = 'command'
+  COMMAND = 'command',
+  IMPORT = 'import'
 }
 
 /**
@@ -150,6 +151,14 @@ export interface CommandVariable extends BaseVariable<ICommandDefinition> {
   type: VariableType.COMMAND;
 }
 
+/**
+ * Import variable - stores an import definition.
+ * Referenced with @importName syntax.
+ */
+export interface ImportVariable extends BaseVariable<unknown> {
+  type: VariableType.IMPORT;
+}
+
 // =========================================================================
 // VARIABLE UNION TYPES
 // =========================================================================
@@ -161,7 +170,8 @@ export type MeldVariable =
   | TextVariable
   | DataVariable
   | IPathVariable // Use the revised path variable type
-  | CommandVariable; 
+  | CommandVariable
+  | ImportVariable; // Add import variable type
 
 /**
  * Structure representing a variable definition for state changes.
@@ -245,3 +255,20 @@ export const createCommandVariable = (
     ...metadata
   }
 }); 
+
+// New createImportVariable factory
+export const createImportVariable = (
+  name: string,
+  value: unknown,
+  metadata?: Partial<VariableMetadata>
+): ImportVariable => ({
+  type: VariableType.IMPORT,
+  name,
+  value,
+  metadata: {
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    origin: VariableOrigin.DIRECT_DEFINITION,
+    ...metadata
+  }
+});
