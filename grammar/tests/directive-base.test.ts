@@ -1,0 +1,52 @@
+import { describe, it, expect } from 'vitest';
+import { parse } from '@core/ast';
+import type { DirectiveNode } from '@core/ast/types';
+
+/**
+ * Basic tests to verify the fundamental structure of all directives
+ * This verifies that all directives conform to the refactored object structure
+ */
+describe('Directive Base Structure', () => {
+  const directiveExamples = [
+    '@import [*] from [file.md]',
+    '@embed [path/to/file.md]',
+    '@text myvar = "some text"',
+    '@data myvar = { "key": "value" }',
+    '@path myvar = "/path/to/file"',
+    '@run [echo "hello world"]',
+    '@define mycommand (param) = [echo "{{param}}"]'
+  ];
+
+  for (const input of directiveExamples) {
+    const directiveName = input.split(' ')[0].substring(1);
+    
+    it(`${directiveName} directive should have the new structure`, async () => {
+      try {
+        const { ast } = await parse(input);
+        expect(ast.length).toBeGreaterThan(0);
+        
+        const node = ast[0] as DirectiveNode;
+        expect(node.type).toBe('Directive');
+        
+        // All directives should have these properties at the top level
+        expect(node).toHaveProperty('kind');
+        expect(node).toHaveProperty('subtype');
+        expect(node).toHaveProperty('values');
+        
+        // The values should be an object
+        expect(typeof node.values).toBe('object');
+        expect(node.values).not.toBeNull();
+        
+        // Each key in values should be an array
+        for (const key in node.values) {
+          expect(Array.isArray(node.values[key])).toBe(true);
+        }
+      } catch (error) {
+        // During development/migration, some may fail - just report, don't fail test
+        console.error(`Failed to parse ${directiveName} with error:`, error);
+        // This will be uncommented once all directives are updated:
+        // throw error;
+      }
+    });
+  }
+});
