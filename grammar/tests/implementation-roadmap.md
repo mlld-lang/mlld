@@ -2,6 +2,47 @@
 
 This document tracks progress on the refactoring of `DirectiveNode.values` from a flat array to a structured object.
 
+## Finalized DirectiveNode Structure
+
+```typescript
+// Union of all directive subtypes 
+type DirectiveSubtype = 
+  | 'importAll' | 'importNamed' | 'importStandard'
+  | 'embedPath' | 'embedVariable' | 'embedTemplate'
+  | 'textVariable' | 'textTemplate'
+  | 'dataVariable'
+  | 'pathVariable'
+  | 'runCommand' | 'runDefined' | 'runCode' | 'runCodeParams'
+  | 'defineCommand';
+
+interface DirectiveNode extends MeldNode {
+  type: 'Directive';
+  kind: DirectiveKind;  // Already exists: 'import', 'run', etc.
+  subtype: DirectiveSubtype;
+  values: { [key: string]: MeldNode[] };
+  raw: { [key: string]: string };
+  meta: { [key: string]: unknown };
+}
+```
+
+## Standard Keys for Values & Raw Objects
+
+These are the standard keys that will be used across directives:
+
+```
+path      - For paths in @import, @embed
+imports   - For imported variables in @import
+variables - For variable names in @text, @data, @path
+template  - For templates in @embed, @text, @define
+data      - For data content in @data
+content   - For text content in @text
+params    - For parameters in @define
+command   - For commands in @run
+arguments - For arguments in @run
+code      - For code blocks in @run
+language  - For language identifiers in @run
+```
+
 ## Approach Summary
 
 1. Create test fixtures for each directive with the new structure
@@ -38,11 +79,12 @@ This document tracks progress on the refactoring of `DirectiveNode.values` from 
 
 ### 1. Types & Interfaces
 
-- Updated the `DirectiveNode` interface in core/syntax/types/nodes.ts
-- Changed `values` type from `Node[]` to `Record<string, Node[]>`
-- Added `raw` and `meta` properties to store:
-  - Raw text segments (`raw`)
-  - Metadata and derived information (`meta`)
+- Update the `DirectiveNode` interface in core/syntax/types/nodes.ts:
+  - Change `values` type from `Node[]` to `{ [key: string]: MeldNode[] }`
+  - Add `raw: { [key: string]: string }` property for raw text segments
+  - Add `meta: { [key: string]: unknown }` property for metadata
+  - Define `DirectiveSubtype` union type for strong typing of subtypes
+  - Remove redundant `multiLine` property (this will be part of values)
 
 ### 2. Test Methodology
 
@@ -55,10 +97,52 @@ This document tracks progress on the refactoring of `DirectiveNode.values` from 
 The grammar files need to be updated one by one. For each directive:
 
 1. Modify the grammar rule to capture groups of nodes separately
-2. Capture raw text segments for each corresponding group
+2. Capture raw text segments for each corresponding group using Peggy's `$()` syntax
 3. Construct the `values` object using captured node arrays
 4. Construct the `raw` object using raw text segments
 5. Add metadata derived from the input (isAbsolute, hasVariables, etc.)
+
+Example for import directive (before):
+```peggy
+"import" _ "[" _ imports:ImportsList _ "]" _ "from" _ "[" pathParts:BracketInterpolatableContentOrEmpty "]" HWS DirectiveEOL {
+  const validatedPath = helpers.validatePath(pathParts);
+  const directiveData = {
+    subtype: helpers.getImportSubtype(imports),
+    path: validatedPath,
+    imports: imports
+  };
+  return helpers.createDirective('import', directiveData, location());
+}
+```
+
+Example for import directive (after):
+```peggy
+"import" _ "[" importsRaw:$(_ imports:ImportsList _) "]" _ "from" _ "[" pathRaw:$(pathParts:BracketInterpolatableContentOrEmpty) "]" HWS DirectiveEOL {
+  const validatedPath = helpers.validatePath(pathParts);
+  const values = {
+    path: validatedPath.values,
+    imports: imports
+  };
+  const raw = {
+    path: pathRaw,
+    imports: importsRaw.trim()
+  };
+  const meta = {
+    isAbsolute: validatedPath.isAbsolute,
+    hasVariables: validatedPath.hasVariables,
+    hasTextVariables: validatedPath.hasTextVariables,
+    hasPathVariables: validatedPath.hasPathVariables,
+    isRelativeToCwd: validatedPath.isRelativeToCwd
+  };
+  return helpers.createNode(NodeType.Directive, {
+    kind: 'import',
+    subtype: helpers.getImportSubtype(imports),
+    values,
+    raw,
+    meta
+  }, location());
+}
+```
 
 ### 4. Handler Updates
 
@@ -82,6 +166,7 @@ Implement directives in this order:
 
 ## Next Steps
 
+- Update DirectiveNode interface with the finalized structure
 - Complete Import directive implementation
 - Start Text directive
 - Regularly run tests and fix any issues before proceeding
