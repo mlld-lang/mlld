@@ -14,8 +14,7 @@ The documentation is organized by directive kind and subtype:
     /import
       import.md            # Import directive overview
       import.importAll.md  # ImportAll subtype documentation
-      import.importNamed.md
-      import.importStandard.md
+      import.importSelected.md  # ImportSelected subtype documentation
     /text
       text.md              # Text directive overview
       text.textVariable.md

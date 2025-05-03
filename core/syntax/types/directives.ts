@@ -15,7 +15,7 @@ export type DirectiveKind =
  * All possible directive subtypes
  */
 export type DirectiveSubtype = 
-  | 'importAll' | 'importNamed' | 'importStandard'
+  | 'importAll' | 'importSelected'
   | 'embedPath' | 'embedVariable' | 'embedTemplate'
   | 'textVariable' | 'textTemplate'
   | 'dataVariable'

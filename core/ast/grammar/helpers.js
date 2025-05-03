@@ -28,7 +28,19 @@ export default {
   },
 
   createDirective(kind, data) {
+    // Legacy method maintained for backward compatibility
     return this.createNode(NodeType.Directive, { directive: { kind, ...data } });
+  },
+  
+  // New method for creating directives with the updated structure
+  createStructuredDirective(kind, subtype, values, raw, meta, locationData) {
+    return this.createNode(NodeType.Directive, { 
+      kind, 
+      subtype, 
+      values, 
+      raw, 
+      meta 
+    }, locationData);
   },
 
   createVariableReferenceNode(valueType, data) {
@@ -122,13 +134,8 @@ export default {
     if (list.length === 0) return 'importAll'; // Empty list `[]` from `[...]` => importAll
     if (list.length === 1 && list[0].name === '*') return 'importAll';
 
-    // Check for importNamed: any item has an alias
-    // TODO: Bring this back
-    // const hasAlias = list.some(item => item.alias !== null);
-    // if (hasAlias) return 'importNamed';
-
-    // Otherwise, it's importStandard
-    return 'importStandard';
+    // Otherwise, it's importSelected (specific imports selected)
+    return 'importSelected';
   },
 
   trace(pos, reason) {

@@ -97,7 +97,7 @@ Finally, update directive handlers to:
 
 We'll implement the directives in this order, from simplest to most complex:
 
-1. Import (in progress)
+1. Import ✅
 2. Text
 3. Path
 4. Data
@@ -132,25 +132,41 @@ For each directive, we'll have a structured conversation covering:
 
 ## Current Status
 
-- Import directive: Grammar implementation complete, tests in progress
+- Import directive: Grammar implementation complete, documentation and tests complete
 - Additional directives: Planning phase
 
 ## Implementation Checklist
 
-For each directive:
+### Import Directive
+
+- [x] Have structured conversation about AST structure
+- [x] Create overview documentation (import.md)
+- [x] Create subtype documentation (import.importAll.md, import.importSelected.md)
+- [x] Define type interfaces (directives.ts, nodes.ts)
+- [x] Create test fixtures (import.ts)
+- [x] Update grammar implementation (import.peggy)
+- [x] Run and verify tests (import.test.ts)
+- [ ] Update handlers to use new structure
+
+### Text Directive
 
 - [ ] Have structured conversation about AST structure
-- [ ] Create overview documentation (kind.md)
-- [ ] Create subtype documentation (kind.subtype.md)
-- [ ] Define type interfaces (kind.types.ts, kind.subtype.types.ts)
-- [ ] Create test fixtures (kind.fixtures.ts, kind.subtype.fixtures.ts)
-- [ ] Update grammar implementation (kind.peggy, kind.subtype.peggy)
-- [ ] Run and verify tests (kind.test.ts, kind.subtype.test.ts)
+- [ ] Create overview documentation (text.md)
+- [ ] Create subtype documentation (text.textVariable.md, text.textTemplate.md)
+- [ ] Define type interfaces (directives.ts, nodes.ts)
+- [ ] Create test fixtures (text.ts)
+- [ ] Update grammar implementation (text.peggy)
+- [ ] Run and verify tests (text.test.ts)
 - [ ] Update handlers to use new structure
+
+### Remaining Directives
+
+- [ ] Continue with structured conversations for each directive
+- [ ] Complete documentation, testing and implementation for each
 
 ## Next Actions
 
-1. Complete Import directive implementation with tests
+1. Update directive handlers to use the new Import directive structure
 2. Proceed with Text directive structured conversation
 3. Continue through remaining directives in specified order
 
