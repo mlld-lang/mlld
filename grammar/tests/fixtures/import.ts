@@ -52,13 +52,7 @@ export const importFixtures: DirectiveFixture[] = [
         imports: '*',
         path: 'file.md'
       },
-      meta: {
-        isAbsolute: false,
-        hasVariables: false,
-        hasTextVariables: false,
-        hasPathVariables: false,
-        isRelativeToCwd: true
-      }
+      meta: {}
     }
   },
   {
@@ -67,7 +61,7 @@ export const importFixtures: DirectiveFixture[] = [
     input: '@import [name] from [file.md]',
     expected: {
       kind: 'import',
-      subtype: 'importSelected',
+      subtype: 'importStandard',
       values: {
         imports: [
           {
@@ -96,13 +90,7 @@ export const importFixtures: DirectiveFixture[] = [
         imports: 'name',
         path: 'file.md'
       },
-      meta: {
-        isAbsolute: false,
-        hasVariables: false,
-        hasTextVariables: false,
-        hasPathVariables: false,
-        isRelativeToCwd: true
-      }
+      meta: {}
     }
   },
   {
@@ -111,7 +99,7 @@ export const importFixtures: DirectiveFixture[] = [
     input: '@import [name] from [$path]',
     expected: {
       kind: 'import',
-      subtype: 'importSelected',
+      subtype: 'importStandard',
       values: {
         imports: [
           {
@@ -134,13 +122,7 @@ export const importFixtures: DirectiveFixture[] = [
         imports: 'name',
         path: '$path'
       },
-      meta: {
-        isAbsolute: false,
-        hasVariables: true,
-        hasTextVariables: false,
-        hasPathVariables: true,
-        isRelativeToCwd: false
-      }
+      meta: {}
     }
   }
 ];

@@ -52,11 +52,13 @@ This explicitly uses the `*` wildcard to indicate importing all content.
     path: 'path/to/file.md'
   },
   meta: {
-    isAbsolute: false,
-    hasVariables: false,
-    hasTextVariables: false,
-    hasPathVariables: false,
-    isRelativeToCwd: true
+    path: {
+      isAbsolute: false,
+      hasVariables: false,
+      hasTextVariables: false,
+      hasPathVariables: false,
+      isRelative: true
+    }
   }
 }
 ```
@@ -103,11 +105,13 @@ The AST for an absolute path will have `isAbsolute: true` in the `meta` object.
     path: '$path_var'
   },
   meta: {
-    isAbsolute: false,
-    hasVariables: true,
-    hasTextVariables: false,
-    hasPathVariables: true,
-    isRelativeToCwd: false
+    path: {
+      isAbsolute: false,
+      hasVariables: true,
+      hasTextVariables: false,
+      hasPathVariables: true,
+      isRelative: false
+    }
   }
 }
 ```
@@ -144,12 +148,13 @@ The AST for an absolute path will have `isAbsolute: true` in the `meta` object.
     path: '{{text_var}}'
   },
   meta: {
-    isAbsolute: false,
-    hasVariables: true,
-    hasTextVariables: true,
-    hasPathVariables: false,
-    isRelativeToCwd: true,
-    variable_warning: true
+    path: {
+      isAbsolute: false,
+      hasVariables: true,
+      hasTextVariables: true,
+      hasPathVariables: false,
+      isRelative: true
+    }
   }
 }
 ```
@@ -195,12 +200,13 @@ The AST for an absolute path will have `isAbsolute: true` in the `meta` object.
     path: '$base_path/{{filename}}.md'
   },
   meta: {
-    isAbsolute: false,
-    hasVariables: true,
-    hasTextVariables: true,
-    hasPathVariables: true,
-    isRelativeToCwd: false,
-    variable_warning: true
+    path: {
+      isAbsolute: false,
+      hasVariables: true,
+      hasTextVariables: true,
+      hasPathVariables: true,
+      isRelative: false
+    }
   }
 }
 ```
@@ -209,4 +215,4 @@ The AST for an absolute path will have `isAbsolute: true` in the `meta` object.
 
 - The `imports` array will always contain a single `VariableReferenceNode` with identifier `*`, even when using the implicit syntax.
 - The `path` array contains parsed path components representing the exact structure of the path.
-- When a path contains both text and path variables, the `meta` object will have `variable_warning: true` to indicate potential issues with mixing variable types.
+- When a path contains both text and path variables, the `meta.path` object will track both variable types to indicate potential issues with mixing variable types.

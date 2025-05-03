@@ -1,4 +1,3 @@
-
 ImportDirective_Simple
   = _ "import" _ pathValue:(pathParts:PathValue &{return true;} pathRaw:$([]) {return {pathParts, pathRaw: input.substring(peg$currPos - input.match(/[^\s]+$/)[0].length, peg$currPos)};}) _ { 
     const {pathParts, pathRaw} = pathValue;
@@ -18,13 +17,9 @@ ImportDirective_Simple
       path: pathRaw.trim()
     };
     
-    // Create meta object with metadata
+    // Create meta object with nested path metadata
     const meta = {
-      isAbsolute: pathData.isAbsolute,
-      hasVariables: pathData.hasVariables,
-      hasTextVariables: pathData.hasTextVariables,
-      hasPathVariables: pathData.hasPathVariables,
-      isRelativeToCwd: pathData.isRelativeToCwd
+      path: pathData.path // Path metadata now comes from the path property
     };
     
     return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
@@ -55,13 +50,9 @@ ImportDirective_WithClause
         path: pathRaw.trim()
       };
       
-      // Create meta object with metadata
+      // Create meta object with nested path metadata
       const meta = {
-        isAbsolute: validatedPath.isAbsolute,
-        hasVariables: validatedPath.hasVariables,
-        hasTextVariables: validatedPath.hasTextVariables,
-        hasPathVariables: validatedPath.hasPathVariables,
-        isRelativeToCwd: validatedPath.isRelativeToCwd
+        path: validatedPath.path // Path metadata now comes from the path property
       };
       
       return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
@@ -88,13 +79,9 @@ ImportDirective_WithClause
       path: variableRaw.trim()
     };
     
-    // Create meta object with metadata
+    // Create meta object with nested path metadata
     const meta = {
-      isAbsolute: validatedPath.isAbsolute,
-      hasVariables: validatedPath.hasVariables,
-      hasTextVariables: validatedPath.hasTextVariables,
-      hasPathVariables: validatedPath.hasPathVariables,
-      isRelativeToCwd: validatedPath.isRelativeToCwd
+      path: validatedPath.path // Path metadata now comes from the path property
     };
     
     return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
@@ -120,13 +107,9 @@ ImportDirective_WithClause
         path: pathRaw.trim()
       };
       
-      // Create meta object with metadata
+      // Create meta object with nested path metadata
       const meta = {
-        isAbsolute: validatedPath.isAbsolute,
-        hasVariables: validatedPath.hasVariables,
-        hasTextVariables: validatedPath.hasTextVariables,
-        hasPathVariables: validatedPath.hasPathVariables,
-        isRelativeToCwd: validatedPath.isRelativeToCwd
+        path: validatedPath.path // Path metadata now comes from the path property
       };
       
       return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
@@ -152,13 +135,9 @@ ImportDirective_WithClause
         path: variableRaw.trim()
       };
       
-      // Create meta object with metadata
+      // Create meta object with nested path metadata
       const meta = {
-        isAbsolute: validatedPath.isAbsolute,
-        hasVariables: validatedPath.hasVariables,
-        hasTextVariables: validatedPath.hasTextVariables,
-        hasPathVariables: validatedPath.hasPathVariables,
-        isRelativeToCwd: validatedPath.isRelativeToCwd
+        path: validatedPath.path // Path metadata now comes from the path property
       };
       
       return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());

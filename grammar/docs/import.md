@@ -29,11 +29,13 @@ All import directives share this basic structure in the AST:
     path: string      // Raw text of path
   },
   meta: {
-    isAbsolute: boolean,       // Path starts with /
-    hasVariables: boolean,     // Contains any variables
-    hasTextVariables: boolean, // Contains {{var}} syntax
-    hasPathVariables: boolean, // Contains $var syntax
-    isRelativeToCwd: boolean   // Relative to current working dir
+    path: {
+      isAbsolute: boolean,       // Path starts with /
+      hasVariables: boolean,     // Contains any variables
+      hasTextVariables: boolean, // Contains {{var}} syntax
+      hasPathVariables: boolean, // Contains $var syntax
+      isRelative: boolean        // Relative to current working dir
+    }
   }
 }
 ```

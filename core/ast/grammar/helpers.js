@@ -134,8 +134,13 @@ export default {
     if (list.length === 0) return 'importAll'; // Empty list `[]` from `[...]` => importAll
     if (list.length === 1 && list[0].name === '*') return 'importAll';
 
-    // Otherwise, it's importSelected (specific imports selected)
-    return 'importSelected';
+    // Check for importNamed: any item has an alias
+    // TODO: Bring this back
+    // const hasAlias = list.some(item => item.alias !== null);
+    // if (hasAlias) return 'importNamed';
+
+    // Otherwise, it's importStandard
+    return 'importStandard';
   },
 
   trace(pos, reason) {
