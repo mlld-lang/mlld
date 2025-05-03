@@ -31,13 +31,15 @@ ImportDirective_Simple
   }
 
 ImportDirective_WithClause
-  = "import" _ "[" importsContent:(_ imports:ImportsList _ &{return true;} importsRaw:$([]) {
-      return {imports, importsRaw: input.substring(peg$savedPos, peg$currPos).trim()};
-    }) "]" _ "from" _ "[" pathContent:(pathParts:BracketInterpolatableContentOrEmpty &{return true;} pathRaw:$([]) {
-      return {pathParts, pathRaw: input.substring(peg$savedPos, peg$currPos)};
-    }) "]" HWS DirectiveEOL {
-      const { imports, importsRaw } = importsContent;
-      const { pathParts, pathRaw } = pathContent;
+  = "import" _ 
+    "[" _ imports:ImportsList _ "]" _ "from" _ 
+    "[" pathParts:BracketInterpolatableContentOrEmpty "]"
+    HWS DirectiveEOL {
+      // Get the raw text by reconstructing from the parsed nodes
+      const importsRaw = imports.map(item => item.name).join(", ");
+      const pathRaw = helpers.reconstructRawString(pathParts);
+      
+      // Regular path processing
       const validatedPath = helpers.validatePath(pathParts);
       const subtype = helpers.getImportSubtype(imports);
       
