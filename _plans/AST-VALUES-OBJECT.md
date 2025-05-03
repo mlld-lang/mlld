@@ -93,43 +93,100 @@ The value array keys are essentially the arguments for each directive. Here are 
 `@import [variable, othervar] [file.mld]` <-- importStandard (uses 'imports', 'path')
 `@import [variable as var, myvar] from [file.mld]` <-- importNamed (uses 'imports', 'path')
 
-## Methodology: Test-First, Incremental Grammar Changes
+## Updated Methodology: Test-First, Incremental Grammar Changes
 
-Given the sensitivity of grammar modifications, we will follow a strict test-driven development (TDD) approach:
+Given the sensitivity of grammar modifications, we are following an enhanced test-driven development (TDD) approach with dedicated test infrastructure:
 
-1.  **Tests First:** Before modifying *any* grammar code, update the relevant tests and fixtures to expect the *target* AST structure. These tests will initially fail.
-2.  **Incremental Changes:** Modify the grammar one directive type at a time, focusing on a single file within `grammar/directives/`.
-3.  **Build & Test Constantly:** After *every* single grammar modification, no matter how small:
-    *   Run `npm run build:grammar`. Address any build errors immediately.
-    *   Run `npm test core/ast`. Ensure the tests corresponding to the modified directive now pass, while others remain unaffected (or fail as expected if they depend on directives not yet updated).
+1. **New Test Infrastructure:** We've created a new test environment in the `grammar/tests/` directory with:
+   * `fixtures/` - Type-safe directive test fixtures
+   * `snapshots/` - For AST comparison during transformation
+   * `utils/` - Helper functions for common testing operations
+   * Directive-specific test files (e.g., `import.test.ts`)
+
+2. **Finalized DirectiveNode Structure:**
+
+```typescript
+// Union of all directive subtypes 
+type DirectiveSubtype = 
+  | 'importAll' | 'importNamed' | 'importStandard'
+  | 'embedPath' | 'embedVariable' | 'embedTemplate'
+  | 'textVariable' | 'textTemplate'
+  | 'dataVariable'
+  | 'pathVariable'
+  | 'runCommand' | 'runDefined' | 'runCode' | 'runCodeParams'
+  | 'defineCommand';
+
+interface DirectiveNode extends MeldNode {
+  type: 'Directive';
+  kind: DirectiveKind;
+  subtype: DirectiveSubtype;
+  values: { [key: string]: MeldNode[] };
+  raw: { [key: string]: string };
+  meta: { [key: string]: unknown };
+}
+```
+
+3. **Directive-by-Directive Implementation:**
+   * Create fixtures and tests for one directive at a time
+   * Update the grammar for that directive
+   * Verify through tests before moving to the next
+
+4. **Grammar Capture Strategy:**
+   * Use Peggy's `$()` syntax to capture raw text segments
+   * Create helper method `createStructuredDirective` for consistent node creation
+   * Build values, raw, and meta objects with consistent structure
 
 ## Implementation Steps
 
-1.  **Update AST Grammar Tests & Fixtures (`core/ast/` & `core/syntax/types/fixtures/`):**
-    *   Identify test files (e.g., `directive-syntax.test.ts`, `import-directive.test.ts`, etc.) corresponding to directives needing the refactor.
-    *   Update the expected AST output in test fixtures to use the new structure with top-level `kind`, `subtype`, the `values: { key: [Nodes...], ... }` object, and the parallel `raw: { key: "raw string", ... }` object.
-    *   Modify assertions in the `.test.ts` files to verify this new structure.
-    *   **Verify:** Run `npm test core/ast`. Confirm that the updated tests now *fail* as expected.
+1. **Created Grammar Test Infrastructure in `grammar/tests/`:**
+   * Set up test utilities and fixtures
+   * Created a template pattern for directive tests
+   * Developed AST snapshot comparison utilities
+   * Added implementation roadmap document
 
-2.  **Update AST Types (`core/syntax/types/nodes.ts`):**
-    *   Locate or define the `DirectiveNode` interface.
-    *   Ensure `kind` and `subtype` are defined as top-level properties (if not already).
-    *   Change the type definition of its `values` property from `Node[]` (or similar) to `Record<string, MeldNode[]>`. Consider adding known optional keys for better type hinting.
-    *   Add the new `raw` property: `raw: Record<string, string>;`.
-    *   Add the new `meta` property: `meta: Record<string, any>;`.
+2. **Updated Type Definitions:**
+   * Added `DirectiveSubtype` union type in `directives.ts`
+   * Updated `DirectiveNode` interface with new structure:
+     * Top-level kind and subtype properties
+     * Structured values, raw, and meta objects
+     * Removed redundant multiLine property
+   * Marked old directive data interfaces as deprecated
 
-3.  **Incrementally Update Grammar (in `grammar/directives/`):**
-    *   **Select Directive:** Choose one directive file to modify (e.g., `import.peggy`).
-    *   **Modify Grammar Rules:**
-        *   Adjust parsing rules to capture the raw AST nodes for each distinct input group (e.g., capture the array of nodes for the path, the array of nodes for imports).
-        *   Explicitly capture the raw text segments for each corresponding input group using Peggy's mechanisms (e.g., `$(...)` or `text()`).
-        *   In the action block (`{ ... }`), construct the `values` object using the captured node arrays (e.g., `values: { path: pathNodes, imports: importNodes }`).
-        *   Construct the parallel `raw` object using the captured raw text segments (e.g., `raw: { path: rawPathString, imports: rawImportsString }`).
-        *   Construct the `meta` object using the captured metadata (e.g., `meta: { isAbsolute: true, hasVariables: false }`).
-        *   Use the standard `helpers.createNode(NodeType.Directive, { kind: ..., subtype: ..., raw: rawObject, values: valuesObject, meta: metaObject }, location())` to return the final node. Ensure `kind` and `subtype` are correctly determined.
-    *   **Build:** Run `npm run build:grammar`. Fix any errors.
-    *   **Test:** Run `npm test core/ast`. Verify the tests for *this specific directive* now pass. Fix any failures.
-    *   **Repeat:** Select the next directive file (e.g., `run.peggy`, `embed.peggy`) and repeat the Modify-Build-Test cycle until all affected directives are updated.
+3. **Added Grammar Helper Function:**
+   ```javascript
+   createStructuredDirective(kind, subtype, values, raw, meta, locationData) {
+     return this.createNode(NodeType.Directive, { 
+       kind, 
+       subtype, 
+       values, 
+       raw, 
+       meta 
+     }, locationData);
+   }
+   ```
+
+4. **Updating Import Directive Grammar:**
+   * Modified each rule in `import.peggy` to:
+     * Capture raw text with `$()` syntax: `pathRaw:$(pathParts:PathValue)`
+     * Create structured objects: `values: { imports: [...], path: [...] }`
+     * Use new helper: `return helpers.createStructuredDirective(...)`
+   * Built and verified the grammar compiles
+
+5. **Implementation Order:**
+   * Import directive (current)
+   * Text directive (next)
+   * Path directive
+   * Embed directive
+   * Data directive
+   * Run directive (complex)
+   * Define directive (most complex)
+
+For each directive, we follow the same pattern:
+1. Create type-safe fixtures for all variants
+2. Write tests that initially fail
+3. Update grammar and update helpers if needed
+4. Build and test until successful
+5. Only then move to the next directive
 
 4.  **Update Directive Handlers (`services/pipeline/DirectiveService/handlers/`):**
     *   Once all grammar changes are complete and `npm test core/ast` passes fully.
