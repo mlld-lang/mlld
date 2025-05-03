@@ -1,4 +1,4 @@
-import { DirectiveNode, DirectiveData } from '@core/syntax/types/nodes';
+import { DirectiveNode } from '@core/syntax/types/nodes';
 import type { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types/nodes';
 import type { StructuredPath } from '@core/syntax/types/nodes';
 
@@ -12,25 +12,39 @@ export type DirectiveKind =
   | 'data';
 
 /**
+ * All possible directive subtypes
+ */
+export type DirectiveSubtype = 
+  | 'importAll' | 'importNamed' | 'importStandard'
+  | 'embedPath' | 'embedVariable' | 'embedTemplate'
+  | 'textVariable' | 'textTemplate'
+  | 'dataVariable'
+  | 'pathVariable'
+  | 'runCommand' | 'runDefined' | 'runCode' | 'runCodeParams'
+  | 'defineCommand';
+
+/**
  * Risk level for commands
  */
 export type RiskLevel = 'high' | 'med' | 'low';
 
 /**
  * Import directive data
+ * @deprecated Use the new DirectiveNode structure instead
  */
-export interface ImportDirectiveData extends DirectiveData {
+export interface ImportDirectiveData {
   kind: 'import';
   path: StructuredPath;
 }
 
 /**
  * Embed directive data
+ * @deprecated Use the new DirectiveNode structure instead
  */
 type EmbedSubtype = 'embedPath' | 'embedVariable' | 'embedTemplate';
 type InterpolatableValue = Array<TextNode | VariableReferenceNode>;
 
-export interface EmbedDirectiveData extends DirectiveData {
+export interface EmbedDirectiveData {
   kind: 'embed';
   subtype: EmbedSubtype;
 
@@ -53,8 +67,9 @@ export interface EmbedDirectiveData extends DirectiveData {
 
 /**
  * Path directive data
+ * @deprecated Use the new DirectiveNode structure instead
  */
-export interface PathDirectiveData extends DirectiveData {
+export interface PathDirectiveData {
   kind: 'path';
   identifier: string;
   path: StructuredPath;
@@ -92,4 +107,4 @@ export interface CommandDefinition {
   };
   parameters?: string[];
   metadata?: CommandMetadata;
-} 
+}

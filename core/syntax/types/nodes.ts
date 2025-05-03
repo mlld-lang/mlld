@@ -1,4 +1,4 @@
-import { DirectiveKind } from '@core/syntax/types/directives';
+import { DirectiveKind, DirectiveSubtype } from '@core/syntax/types/directives';
 import { MultiLineBlock } from '@core/syntax/types/syntax';
 import { Field, VariableReferenceNode } from '@core/syntax/types/variables';
 import { VariableType } from '@core/types/variables';
@@ -18,14 +18,23 @@ export interface MeldNode {
 }
 
 /**
- * AST node for directives
+ * AST node for directives with refactored structure
  */
 export interface DirectiveNode extends MeldNode {
   type: 'Directive';
-  kind: DirectiveKind; // Added: Top-level kind
-  subtype?: string; // Added: Optional top-level subtype
-  values: Record<string, Node[]>; // Changed: Replaced 'directive', use Node[]
-  multiLine?: MultiLineBlock;
+  
+  // Top-level directive properties
+  kind: DirectiveKind;
+  subtype: DirectiveSubtype;
+  
+  // Structured values with semantic grouping
+  values: { [key: string]: MeldNode[] };
+  
+  // Raw text segments parallel to values
+  raw: { [key: string]: string };
+  
+  // Metadata and derived information
+  meta: { [key: string]: unknown };
 }
 
 /**
