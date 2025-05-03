@@ -67,7 +67,7 @@ language  - For language identifiers in @run
 
 | Directive | Fixtures Created | Tests Written | Grammar Updated | Handler Updated | Tests Passing |
 |-----------|------------------|---------------|----------------|----------------|--------------|
-| Import    | ✅               | ✅            | ✅             | ❌             | ❌           |
+| Import    | ✅               | ✅            | ✅             | ❌             | ✅           |
 | Embed     | ❌               | ❌            | ❌             | ❌             | ❌           |
 | Text      | ❌               | ❌            | ❌             | ❌             | ❌           |
 | Data      | ❌               | ❌            | ❌             | ❌             | ❌           |

@@ -67,7 +67,7 @@ export const importFixtures: DirectiveFixture[] = [
     input: '@import [name] from [file.md]',
     expected: {
       kind: 'import',
-      subtype: 'named',
+      subtype: 'importStandard',
       values: {
         imports: [
           {
@@ -111,7 +111,7 @@ export const importFixtures: DirectiveFixture[] = [
     input: '@import [name] from [$path]',
     expected: {
       kind: 'import',
-      subtype: 'named',
+      subtype: 'importStandard',
       values: {
         imports: [
           {

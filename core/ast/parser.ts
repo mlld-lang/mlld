@@ -177,11 +177,30 @@ function validateNodes(nodes: MeldNode[], errors: MeldAstError[]): void {
           break;
 
         case 'Directive':
-          if (!(node as any).directive || typeof (node as any).directive !== 'object') {
-            throw new Error('Directive node missing directive object');
-          }
-          if (typeof (node as any).directive.kind !== 'string') {
-            throw new Error('Directive missing kind');
+          // Support both old and new structure
+          if ((node as any).directive) {
+            // Old structure
+            if (typeof (node as any).directive !== 'object') {
+              throw new Error('Directive node directive property must be an object');
+            }
+            if (typeof (node as any).directive.kind !== 'string') {
+              throw new Error('Directive missing kind');
+            }
+          } else {
+            // New structure
+            if (typeof (node as any).kind !== 'string') {
+              throw new Error('Directive missing kind property');
+            }
+            // In the new structure, values, raw, and meta are objects
+            if ((node as any).values && typeof (node as any).values !== 'object') {
+              throw new Error('Directive values must be an object');
+            }
+            if ((node as any).raw && typeof (node as any).raw !== 'object') {
+              throw new Error('Directive raw must be an object');
+            }
+            if ((node as any).meta && typeof (node as any).meta !== 'object') {
+              throw new Error('Directive meta must be an object');
+            }
           }
           break;
 
