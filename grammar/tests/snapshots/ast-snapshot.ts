@@ -2,8 +2,8 @@
  * Utility for capturing and comparing AST snapshots
  * This helps ensure parsing is stable during refactoring
  */
-import { parse } from '@core/ast';
-import type { DirectiveNode, MeldNode } from '@core/ast/types';
+import { parse } from '../../../core/ast';
+import type { DirectiveNode, MeldNode } from '../../../core/ast/types';
 
 /**
  * Captures an AST snapshot for later comparison

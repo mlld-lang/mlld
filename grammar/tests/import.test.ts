@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parse } from '@core/ast';
+import { parse } from '../../core/ast';
 import { importFixtures } from './fixtures/import';
 import { parseDirective } from './utils/test-helpers';
 

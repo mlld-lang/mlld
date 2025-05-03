@@ -1,8 +1,8 @@
 /**
  * Helper utilities for grammar testing
  */
-import { parse } from '@core/ast';
-import type { DirectiveNode, MeldNode } from '@core/ast/types';
+import { parse } from '../../../core/ast';
+import type { DirectiveNode, MeldNode } from '../../../core/ast/types';
 
 /**
  * Parse input and return the first node, ensuring it's a directive

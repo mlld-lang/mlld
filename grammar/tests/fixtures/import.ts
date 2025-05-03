@@ -1,7 +1,7 @@
 /**
  * Test fixtures for import directive with the new AST structure
  */
-import type { DirectiveNode } from '@core/ast/types';
+import type { DirectiveNode } from '../../../core/ast/types';
 
 export interface DirectiveFixture {
   name: string;
