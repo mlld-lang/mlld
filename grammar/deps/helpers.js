@@ -28,7 +28,19 @@ export default {
   },
 
   createDirective(kind, data) {
+    // Legacy method maintained for backward compatibility
     return this.createNode(NodeType.Directive, { directive: { kind, ...data } });
+  },
+  
+  // New method for creating directives with the updated structure
+  createStructuredDirective(kind, subtype, values, raw, meta, locationData) {
+    return this.createNode(NodeType.Directive, { 
+      kind, 
+      subtype, 
+      values, 
+      raw, 
+      meta 
+    }, locationData);
   },
 
   createVariableReferenceNode(valueType, data) {

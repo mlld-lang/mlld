@@ -1,53 +1,146 @@
 
 ImportDirective_Simple
-  = _ "import" _ pathParts:PathValue _ { // Changed path to pathParts
-    // REMOVED: helpers.debug('IMPORT_BRACKET_PATH_RECEIVED_PARTS', 'Received parts:', JSON.stringify(pathParts)); // <<< ADDED DEBUG LOG
-    const pathData = helpers.validatePath(pathParts); // Pass parts directly
-    // UPDATED: Explicitly set subtype (Task 3.2)
-    return helpers.createDirective('import', { subtype: helpers.getImportSubtype([]), path: pathData, imports: undefined }, location());
+  = _ "import" _ pathRaw:$(pathParts:PathValue) _ { // Changed path to pathParts
+    const pathData = helpers.validatePath(pathParts);
+    const subtype = helpers.getImportSubtype([]);
+    const implicitImports = [{name: "*", alias: null}];
+    
+    // Create values object with node arrays
+    const values = {
+      imports: implicitImports.map(item => helpers.createVariableReferenceNode('import', { identifier: item.name })),
+      path: pathData.values
+    };
+    
+    // Create raw object with text segments
+    const raw = {
+      imports: "*",
+      path: pathRaw.trim()
+    };
+    
+    // Create meta object with metadata
+    const meta = {
+      isAbsolute: pathData.isAbsolute,
+      hasVariables: pathData.hasVariables,
+      hasTextVariables: pathData.hasTextVariables,
+      hasPathVariables: pathData.hasPathVariables,
+      isRelativeToCwd: pathData.isRelativeToCwd
+    };
+    
+    return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
   }
 
 ImportDirective_WithClause
-  = "import" _ "[" _ imports:ImportsList _ "]" _ "from" _ "[" pathParts:BracketInterpolatableContentOrEmpty "]" HWS DirectiveEOL {
+  = "import" _ "[" importsRaw:$(_ imports:ImportsList _) "]" _ "from" _ "[" pathRaw:$(pathParts:BracketInterpolatableContentOrEmpty) "]" HWS DirectiveEOL {
       const validatedPath = helpers.validatePath(pathParts);
-      const directiveData = {
-        subtype: helpers.getImportSubtype(imports),
-        path: validatedPath,
-        imports: imports
+      const subtype = helpers.getImportSubtype(imports);
+      
+      // Create values object with node arrays
+      const values = {
+        imports: imports.map(item => helpers.createVariableReferenceNode('import', { identifier: item.name })),
+        path: validatedPath.values
       };
-      return helpers.createDirective('import', directiveData, location());
+      
+      // Create raw object with text segments
+      const raw = {
+        imports: importsRaw.trim(),
+        path: pathRaw.trim()
+      };
+      
+      // Create meta object with metadata
+      const meta = {
+        isAbsolute: validatedPath.isAbsolute,
+        hasVariables: validatedPath.hasVariables,
+        hasTextVariables: validatedPath.hasTextVariables,
+        hasPathVariables: validatedPath.hasPathVariables,
+        isRelativeToCwd: validatedPath.isRelativeToCwd
+      };
+      
+      return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
     }
-  / "import" _ "[" _ imports:ImportsList _ "]" _ "from" __ variable:Variable HWS DirectiveEOL {
+  / "import" _ "[" importsRaw:$(_ imports:ImportsList _) "]" _ "from" __ variableRaw:$(variable:Variable) HWS DirectiveEOL {
     const validatedPath = helpers.validatePath([variable]);
-    const directiveData = {
-      subtype: helpers.getImportSubtype(imports),
-      path: validatedPath,
-      imports: imports
+    const subtype = helpers.getImportSubtype(imports);
+    
+    // Create values object with node arrays
+    const values = {
+      imports: imports.map(item => helpers.createVariableReferenceNode('import', { identifier: item.name })),
+      path: validatedPath.values
     };
-    return helpers.createDirective('import', directiveData, location());
+    
+    // Create raw object with text segments
+    const raw = {
+      imports: importsRaw.trim(),
+      path: variableRaw.trim()
+    };
+    
+    // Create meta object with metadata
+    const meta = {
+      isAbsolute: validatedPath.isAbsolute,
+      hasVariables: validatedPath.hasVariables,
+      hasTextVariables: validatedPath.hasTextVariables,
+      hasPathVariables: validatedPath.hasPathVariables,
+      isRelativeToCwd: validatedPath.isRelativeToCwd
+    };
+    
+    return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
   }
   / // Traditional import (backward compatibility)
-    "import" _ "[" pathParts:BracketInterpolatableContentOrEmpty "]" DirectiveEOL {
-      // REMOVED: helpers.debug('IMPORT_BRACKET_PATH_RECEIVED_PARTS', 'Received parts:', JSON.stringify(pathParts)); // <<< ADDED DEBUG LOG
+    "import" _ "[" pathRaw:$(pathParts:BracketInterpolatableContentOrEmpty) "]" DirectiveEOL {
       const validatedPath = helpers.validatePath(pathParts);
       const implicitImports = [{name: "*", alias: null}];
-      const directiveData = {
-        subtype: helpers.getImportSubtype(implicitImports),
-        path: validatedPath,
-        imports: implicitImports
+      const subtype = helpers.getImportSubtype(implicitImports);
+      
+      // Create values object with node arrays
+      const values = {
+        imports: implicitImports.map(item => helpers.createVariableReferenceNode('import', { identifier: item.name })),
+        path: validatedPath.values
       };
-      return helpers.createDirective('import', directiveData, location());
+      
+      // Create raw object with text segments
+      const raw = {
+        imports: "*",
+        path: pathRaw.trim()
+      };
+      
+      // Create meta object with metadata
+      const meta = {
+        isAbsolute: validatedPath.isAbsolute,
+        hasVariables: validatedPath.hasVariables,
+        hasTextVariables: validatedPath.hasTextVariables,
+        hasPathVariables: validatedPath.hasPathVariables,
+        isRelativeToCwd: validatedPath.isRelativeToCwd
+      };
+      
+      return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
     }
   / // Traditional import with variable (backward compatibility)
-    "import" __ variable:Variable DirectiveEOL {
+    "import" __ variableRaw:$(variable:Variable) DirectiveEOL {
       const validatedPath = helpers.validatePath([variable]);
       const implicitImports = [{name: "*", alias: null}];
-      const directiveData = {
-        subtype: helpers.getImportSubtype(implicitImports),
-        path: validatedPath,
-        imports: implicitImports
+      const subtype = helpers.getImportSubtype(implicitImports);
+      
+      // Create values object with node arrays
+      const values = {
+        imports: implicitImports.map(item => helpers.createVariableReferenceNode('import', { identifier: item.name })),
+        path: validatedPath.values
       };
-      return helpers.createDirective('import', directiveData, location());
+      
+      // Create raw object with text segments
+      const raw = {
+        imports: "*",
+        path: variableRaw.trim()
+      };
+      
+      // Create meta object with metadata
+      const meta = {
+        isAbsolute: validatedPath.isAbsolute,
+        hasVariables: validatedPath.hasVariables,
+        hasTextVariables: validatedPath.hasTextVariables,
+        hasPathVariables: validatedPath.hasPathVariables,
+        isRelativeToCwd: validatedPath.isRelativeToCwd
+      };
+      
+      return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
     }
 
 // Rules for parsing import lists
