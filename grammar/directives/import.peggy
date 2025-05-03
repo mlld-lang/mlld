@@ -1,6 +1,7 @@
 
 ImportDirective_Simple
-  = _ "import" _ pathRaw:$(pathParts:PathValue) _ { // Changed path to pathParts
+  = _ "import" _ pathValue:(pathParts:PathValue &{return true;} pathRaw:$([]) {return {pathParts, pathRaw: input.substring(peg$currPos - input.match(/[^\s]+$/)[0].length, peg$currPos)};}) _ { 
+    const {pathParts, pathRaw} = pathValue;
     const pathData = helpers.validatePath(pathParts);
     const subtype = helpers.getImportSubtype([]);
     const implicitImports = [{name: "*", alias: null}];
@@ -30,7 +31,13 @@ ImportDirective_Simple
   }
 
 ImportDirective_WithClause
-  = "import" _ "[" importsRaw:$(_ imports:ImportsList _) "]" _ "from" _ "[" pathRaw:$(pathParts:BracketInterpolatableContentOrEmpty) "]" HWS DirectiveEOL {
+  = "import" _ "[" importsContent:(_ imports:ImportsList _ &{return true;} importsRaw:$([]) {
+      return {imports, importsRaw: input.substring(peg$savedPos, peg$currPos).trim()};
+    }) "]" _ "from" _ "[" pathContent:(pathParts:BracketInterpolatableContentOrEmpty &{return true;} pathRaw:$([]) {
+      return {pathParts, pathRaw: input.substring(peg$savedPos, peg$currPos)};
+    }) "]" HWS DirectiveEOL {
+      const { imports, importsRaw } = importsContent;
+      const { pathParts, pathRaw } = pathContent;
       const validatedPath = helpers.validatePath(pathParts);
       const subtype = helpers.getImportSubtype(imports);
       
@@ -57,7 +64,13 @@ ImportDirective_WithClause
       
       return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
     }
-  / "import" _ "[" importsRaw:$(_ imports:ImportsList _) "]" _ "from" __ variableRaw:$(variable:Variable) HWS DirectiveEOL {
+  / "import" _ "[" importsContent:(_ imports:ImportsList _ &{return true;} importsRaw:$([]) {
+      return {imports, importsRaw: input.substring(peg$savedPos, peg$currPos).trim()};
+    }) "]" _ "from" __ variableContent:(variable:Variable &{return true;} variableRaw:$([]) {
+      return {variable, variableRaw: input.substring(peg$savedPos, peg$currPos)};
+    }) HWS DirectiveEOL {
+    const { imports, importsRaw } = importsContent;
+    const { variable, variableRaw } = variableContent;
     const validatedPath = helpers.validatePath([variable]);
     const subtype = helpers.getImportSubtype(imports);
     
@@ -85,7 +98,10 @@ ImportDirective_WithClause
     return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
   }
   / // Traditional import (backward compatibility)
-    "import" _ "[" pathRaw:$(pathParts:BracketInterpolatableContentOrEmpty) "]" DirectiveEOL {
+    "import" _ "[" pathContent:(pathParts:BracketInterpolatableContentOrEmpty &{return true;} pathRaw:$([]) {
+      return {pathParts, pathRaw: input.substring(peg$savedPos, peg$currPos)};
+    }) "]" DirectiveEOL {
+      const { pathParts, pathRaw } = pathContent;
       const validatedPath = helpers.validatePath(pathParts);
       const implicitImports = [{name: "*", alias: null}];
       const subtype = helpers.getImportSubtype(implicitImports);
@@ -114,7 +130,10 @@ ImportDirective_WithClause
       return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
     }
   / // Traditional import with variable (backward compatibility)
-    "import" __ variableRaw:$(variable:Variable) DirectiveEOL {
+    "import" __ variableContent:(variable:Variable &{return true;} variableRaw:$([]) {
+      return {variable, variableRaw: input.substring(peg$savedPos, peg$currPos)};
+    }) DirectiveEOL {
+      const { variable, variableRaw } = variableContent;
       const validatedPath = helpers.validatePath([variable]);
       const implicitImports = [{name: "*", alias: null}];
       const subtype = helpers.getImportSubtype(implicitImports);
