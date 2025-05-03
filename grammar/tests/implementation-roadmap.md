@@ -164,9 +164,23 @@ Implement directives in this order:
 6. Run (complex with multiple syntax variants)
 7. Define (most complex structure)
 
+## Lessons Learned and Adjustments
+
+1. **Text Capture Challenges**: Using `$()` to capture raw text in Peggy while also capturing parsed nodes is tricky. When labeled expressions are nested with the text capture operation (`$()`), the labels can be lost or misidentified.
+
+2. **Alternative Capture Strategy**: Instead of trying to capture the raw text inline with `$()`, we need a more reliable approach. One option is to:
+   - Capture positions before and after a parsing operation
+   - Use those positions to extract the original text segments from the input string
+
+3. **Parser API Exploration**: We need to investigate Peggy's API for accessing parsing positions and input content (e.g., `peg$savedPos`, `peg$currPos`, `input.substring()`).
+
 ## Next Steps
 
-- Update DirectiveNode interface with the finalized structure
-- Complete Import directive implementation
-- Start Text directive
+- Update DirectiveNode interface with the finalized structure ✅
+- Redo the import directive implementation with a simpler approach:
+  - Focus on one variant first to verify the approach works
+  - Use position tracking rather than direct text captures
+  - Use helper functions to simplify raw text extraction
+- Build a utility in the grammar helpers for capturing raw text
+- Start Text directive once import is working
 - Regularly run tests and fix any issues before proceeding
