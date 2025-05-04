@@ -95,7 +95,7 @@ Directive
     [ \t]* "@"                       // allow leading tabs/spaces
     dir:(
       ImportDirective   // Standard import syntax
-    / EmbedDirective
+    / AddDirective      // Renamed from EmbedDirective
     / RunDirective
     / DefineDirective
     / DataDirective

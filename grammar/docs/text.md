@@ -7,7 +7,7 @@ The Text directive is used to define and manipulate text variables in Meld. It s
 ```
 @text variable = "Hello, world!"              // Assignment with quoted content
 @text template = [This is a {{variable}}]     // Template with interpolation
-@text content = @embed "path/to/file.txt"     // Embed from file
+@text content = @add "path/to/file.txt"     // Add from file
 @text result = @run [echo "Hello, $USER"]     // Run command
 ```
 
@@ -15,8 +15,8 @@ The Text directive is used to define and manipulate text variables in Meld. It s
 
 The Text directive has two main subtypes:
 
-1. [textAssignment](./text.textAssignment.md) - Direct assignment of a value to a variable: `@text var = "value"`
-2. [textTemplate](./text.textTemplate.md) - Template text with interpolation: `@text var = [content with {{vars}}]`
+1. [textAssignment](./textAssignment.md) - Direct assignment of a value to a variable: `@text var = "value"`
+2. [textTemplate](./textTemplate.md) - Template text with interpolation: `@text var = [content with {{vars}}]`
 
 ## AST Structure
 
@@ -49,7 +49,7 @@ Values and raw structures will differ between subtypes, as detailed in their res
 The `textAssignment` subtype supports several variants based on the source of content:
 
 1. Literal text: `@text var = "Hello, world!"`
-2. Nested embed directive: `@text var = @embed "path/to/file.txt"`
+2. Nested add directive: `@text var = @add "path/to/file.txt"`
 3. Nested run directive: `@text var = @run [echo "Hello, world!"]`
 
 Each variant has specific structure and metadata as detailed in their documentation.
@@ -69,12 +69,12 @@ Text directives support a "directive nesting" feature, where other directives ca
     content: {
       // Full directive node structure
       type: 'Directive',
-      kind: 'embed',
-      subtype: 'embedPath',
+      kind: 'add',
+      subtype: 'addPath',
       values: {
         path: [/* Path nodes */]
       },
-      // ...rest of embed directive
+      // ...rest of add directive
     },
     source: 'directive'
   },
@@ -87,7 +87,7 @@ This allows for composable directive structures where one directive can use anot
 ## Variable References
 
 Text directives can use two types of variable references:
-- Path variables in commands and embeds: `$var` - Constrained by security rules
+- Path variables in commands and paths: `$var` - Constrained by security rules
 - Text variables in templates: `{{var}}` - General string interpolation
 
 Important: Interpolation with `{{var}}` is ONLY supported in template brackets `[...]`, not in quoted strings `"..."`. This provides a clear visual distinction between literal content and template content.
@@ -117,9 +117,9 @@ Multiline template:
 ]
 ```
 
-Using nested embed directive:
+Using nested add directive:
 ```
-@text content = @embed "path/to/file.txt"
+@text content = @add "path/to/file.txt"
 ```
 
 Using nested run directive:

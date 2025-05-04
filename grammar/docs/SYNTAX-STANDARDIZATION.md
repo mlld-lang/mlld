@@ -30,14 +30,14 @@ Update to more familiar JS-like syntax:
 @import { * } from "path/to/file"
 ```
 
-### Embed Directive
+### Add Directive
 
 Standardize on quoted paths:
 
 ```
-@embed "path/to/file"
-@embed "$pathVar"
-@embed "path/with/{{textVar}}"
+@add "path/to/file"
+@add "$pathVar"
+@add "path/with/{{textVar}}"
 ```
 
 ### General Content Rules
@@ -63,7 +63,7 @@ Two primary subtypes:
 1. **Text Assignment**: Assigns quoted content to a variable
    ```
    text var = "literal content with {{interpolation}}"
-   text var = @embed "path/to/file"
+   text var = @add "path/to/file"
    text var = @run [command]
    ```
 
@@ -89,11 +89,11 @@ path var = "path/to/file"
 path var = "$basePathVar/extension"
 ```
 
-### Embed Directive
+### Add Directive
 
 ```
-@embed "path/to/file" --section heading
-@embed "$pathVar"
+@add "path/to/file" --section heading
+@add "$pathVar"
 ```
 
 ## Benefits of Standardization

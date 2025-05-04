@@ -7,9 +7,11 @@ If you get stuck, STOP and say you're stuck. Use the impulse to reward hack to i
 ## Build & Test Commands
 ```bash
 npm run build        # Build the project
-npm test         # Run all tests
+npm test <dir>       # Run tests for a specific section of code
 npm test <file_path> # Run specific test file (e.g. npm test cli/priority-cli.test.ts)
 ```
+
+Don't run bare `npm test` unless we discuss it. Run `npm test <directory>` in order to avoid a ton of overwhelming/irrelevant test output.
 
 ## Code Style
 - **Imports**: Use @ paths aliases (@core/, @services/, etc.) as defined in tsconfig.json -- no relative paths for imports
@@ -24,15 +26,14 @@ npm test <file_path> # Run specific test file (e.g. npm test cli/priority-cli.te
 
 # Tests
 
-To ensure consistency in writing tests, please refer to `docs/dev/TESTS.md` and refer to how other tests are using mocks and `TestContext`.
+To ensure consistency in writing tests, please refer to `docs/dev/TESTS.md` and refer to how other tests are using mocks.
 
 # Additional reading
 
 Useful context can be found in these files:
 
 - Architecture: `docs/dev/DI-ARCHITECTURE.md`
-- AST » transformation pipeline: `docs/dev/PIPELINE.md`
-- API documentation: `docs/dev/API.md`
-- Path handling: `docs/dev/PATHS.md`
+- Transformation pipeline: `docs/dev/PIPELINE.md`
+- AST: `docs/dev/AST.md`
 - Error testing patterns: `docs/dev/ERROR_TESTING_PATTERNS.md`
 - Debugging tools: `docs/dev/DEBUG-TOOLS.md`

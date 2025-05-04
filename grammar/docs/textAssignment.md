@@ -12,7 +12,7 @@ Where:
 - `identifier`: A valid variable name
 - `value`: Can be one of:
   - A literal string: `"content"` or `'content'` or `"""multiline content"""`
-  - A nested embed directive: `@embed "path/to/file.txt"`
+  - A nested add directive: `@add "path/to/file.txt"`
   - A nested run directive: `@run [echo "Hello, world!"]`
 
 ## AST Structure
@@ -56,24 +56,24 @@ AST structure for literals:
 }
 ```
 
-### Nested Embed Directive
+### Nested Add Directive
 
-Assigns the content of a file to a variable using `@embed`.
+Assigns the content of a file to a variable using `@add`.
 
 ```
-@text content = @embed "path/to/file.txt"
+@text content = @add "path/to/file.txt"
 ```
 
-AST structure for nested embed directive:
+AST structure for nested add directive:
 ```typescript
 {
   values: {
     identifier: [/* Variable reference node */],
     content: {
-      // The full embed directive node directly nested
+      // The full add directive node directly nested
       type: 'Directive',
-      kind: 'embed',
-      subtype: 'embedPath',
+      kind: 'add',
+      subtype: 'addPath',
       values: {
         path: [/* Path nodes */]
       },
@@ -129,7 +129,7 @@ This design enables directives to serve as values for other directives, creating
 ## Variable References
 
 Text assignment directives can use two types of variable references:
-- Path variables in `@run` commands and `@embed` paths: `$var` - Constrained by security rules
+- Path variables in `@run` commands and `@add` paths: `$var` - Constrained by security rules
 - Text variables in string literals: `{{var}}` - General string interpolation
 
 Important: Interpolation with `{{var}}` is ONLY supported in template brackets `[...]`, not in quoted strings `"..."`. Use the textTemplate subtype for interpolation.
@@ -156,14 +156,14 @@ several lines.
 """
 ```
 
-Embed a file:
+Add a file:
 ```
-@text content = @embed "README.md"
+@text content = @add "README.md"
 ```
 
-Embed with path variable:
+Add with path variable:
 ```
-@text content = @embed "$SOURCE_DIR/config.json"
+@text content = @add "$SOURCE_DIR/config.json"
 ```
 
 Run a command:

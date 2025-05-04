@@ -1,69 +1,64 @@
-# Embed Directive
+# Add Directive
 
-The `@embed` directive is used to include content from external files or variables into a Meld document. It supports multiple subtypes for different embedding patterns, each with their own parsing rules and AST structure.
+The `@add` directive is used to include content from external files or variables into a Meld document. It supports multiple subtypes for different inclusion patterns, each with their own parsing rules and AST structure.
 
 ## Syntax Variations
 
-### Path Embedding
+### Path Inclusion
 
 ```meld
-@embed [path]
-@embed [path # section_text]
-@embed [path] as ###
-@embed [path # section_text] as ###
-@embed [path] under header_text
+@add "path"
+@add "path # section_text"
+@add "path" as ###
+@add "path # section_text" as ###
+@add "path" under header_text
 ```
 
-### Template Embedding
+### Template Inclusion
 
 ```meld
-@embed [[template_content]]
-```
-
-### Variable Embedding
-
-```meld
-@embed {{variable}}
-```
-
-### Multiline Embedding
-
-```meld
-@embed [[
+@add [template_content]
+@add [
   multiline
+  template
   content
-]]
+]
 ```
 
-### Named Exports Embedding
+### Variable Inclusion
 
 ```meld
-@embed {name1, name2} from [path]
+@add {{variable}}
+```
+
+### Named Exports Inclusion
+
+```meld
+@add {name1, name2} from "path"
 ```
 
 ## Subtypes
 
-1. `embedPath` - Embeds content from a file path, with optional section extraction, header level adjustment, and under header.
-2. `embedTemplate` - Embeds content from a multiline template.
-3. `embedVariable` - Embeds content from a variable reference.
-4. `embedMultiline` - Embeds multiline content directly.
+1. [`addPath`](./addPath.md) - Adds content from a file path, with optional section extraction, header level adjustment, and under header.
+2. [`addTemplate`](./addTemplate.md) - Adds content from a template, with support for both single-line and multiline content.
+3. [`addVariable`](./addVariable.md) - Adds content from a variable reference.
 
 ## AST Structure
 
-Each embed directive creates a node with the following structure:
+Each add directive creates a node with the following structure:
 
 ```typescript
 {
   type: 'Directive',
-  kind: 'embed',
-  subtype: 'embedPath' | 'embedTemplate' | 'embedVariable' | 'embedMultiline',
+  kind: 'add',
+  subtype: 'addPath' | 'addTemplate' | 'addVariable',
   values: {
-    path?: PathNodeArray,           // For embedPath
-    section?: TextNodeArray,        // For embedPath with section
+    path?: PathNodeArray,           // For addPath
+    section?: TextNodeArray,        // For addPath with section
     headerLevel?: TextNodeArray,    // For adjusting heading levels
     underHeader?: TextNodeArray,    // For adding header text
-    content?: TextNodeArray,        // For embedTemplate and embedMultiline
-    variable?: VariableNodeArray,   // For embedVariable
+    content?: TextNodeArray,        // For addTemplate
+    variable?: VariableNodeArray,   // For addVariable
     names?: VariableNodeArray,      // For named exports
   },
   raw: {
@@ -98,29 +93,29 @@ Each embed directive creates a node with the following structure:
 
 ## Examples
 
-1. Basic file embedding:
+1. Basic file inclusion:
    ```meld
-   @embed ["$PROJECTPATH/README.md"]
+   @add "$PROJECTPATH/README.md"
    ```
 
-2. Embedding with section extraction:
+2. Including with section extraction:
    ```meld
-   @embed ["guide.md # Getting Started"]
+   @add "guide.md # Getting Started"
    ```
 
 3. Heading level adjustment:
    ```meld
-   @embed ["api.md"] as ###
+   @add "api.md" as ###
    ```
 
 4. Adding headers:
    ```meld
-   @embed ["example.js"] under Code Example
+   @add "example.js" under Code Example
    ```
 
-5. Variable embedding:
+5. Variable inclusion:
    ```meld
-   @embed {{content}}
+   @add {{content}}
    ```
 
 ## Notes

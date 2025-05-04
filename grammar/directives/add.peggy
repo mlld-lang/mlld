@@ -1,13 +1,13 @@
-EmbedDirective
-  = "embed" embedResult:_EmbedRHS headerLevel:HeaderLevel? underHeader:UnderHeader? HWS DirectiveEOL {
+AddDirective
+  = "add" addResult:_AddRHS headerLevel:HeaderLevel? underHeader:UnderHeader? HWS DirectiveEOL {
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
       const underHeaderValue = underHeader ? underHeader : null;
       
       // Add header level and under header to values and raw if present
-      let values = { ...embedResult.values };
-      let raw = { ...embedResult.raw };
-      let meta = { ...embedResult.meta };
+      let values = { ...addResult.values };
+      let raw = { ...addResult.raw };
+      let meta = { ...addResult.meta };
       
       if (headerLevelValue !== null) {
         values.headerLevel = headerLevelValue;
@@ -21,45 +21,21 @@ EmbedDirective
 
       // Create the structured directive
       return helpers.createStructuredDirective(
-        'embed', 
-        embedResult.subtype, 
+        'add', 
+        addResult.subtype, 
         values, 
         raw, 
         meta, 
         location()
       );
     }
-  / "embed" _ "[[" content:MultilineContent "]]" _ HWS DirectiveEOL {
-      // Create the values object with content node array
-      const values = {
-        content: [helpers.createNode(NodeType.Text, { content, raw: content })]
-      };
-      
-      // Create the raw object with raw content
-      const raw = {
-        content
-      };
-      
-      // Create the meta object (empty for multiline)
-      const meta = {};
-      
-      // Create the structured directive
-      return helpers.createStructuredDirective(
-        'embed', 
-        'embedMultiline', 
-        values, 
-        raw, 
-        meta, 
-        location()
-      );
-    }
-  / "embed" _ "{" _ names:NameList _ "}" _ "from" _ content:DirectiveContent options:DirectiveOptions? header:HeaderLevel? under:UnderHeader? DirectiveEOL {
+  / "add" _ "{" _ names:NameList _ "}" _ "from" _ content:DirectiveContent options:DirectiveOptions? header:HeaderLevel? under:UnderHeader? DirectiveEOL {
       // Extract path and optional section from content
       const [path, section] = content.split('#');
       const sectionTrimmed = section ? section.trim() : null;
       
       // Validate the path
-      const validatedPath = helpers.validatePath(helpers.createNode(NodeType.Text, { content: path.trim(), raw: path.trim() }), { context: 'embedPath' });
+      const validatedPath = helpers.validatePath(helpers.createNode(NodeType.Text, { content: path.trim(), raw: path.trim() }), { context: 'addPath' });
       
       // Create variable nodes for the names
       const nameNodes = names.map(name => 
@@ -97,8 +73,8 @@ EmbedDirective
       
       // Create the structured directive
       return helpers.createStructuredDirective(
-        'embed', 
-        'embedPath', 
+        'add', 
+        'addPath', 
         values, 
         raw, 
         meta, 
@@ -126,10 +102,10 @@ UnderHeader
     return header.trim();
   }
 
-// Helper rule for parsing RHS @embed variations
+// Helper rule for parsing RHS @add variations
 // Returns structured values, raw, meta objects for different subtypes
-_EmbedRHS
-  = _ "[[" content:MultilineInterpolatableContentOrEmpty "]]" _[ \t]* options:DirectiveOptions? {
+_AddRHS
+  = _ "[" content:BracketInterpolatableContentOrEmpty "]" _[ \t]* options:DirectiveOptions? {
     // Create the values object with content node array
     const values = {
       content
@@ -146,39 +122,52 @@ _EmbedRHS
     };
     
     return {
-      subtype: 'embedTemplate',
+      subtype: 'addTemplate',
       values,
       raw,
       meta
     };
   }
-  / _ "[" content:BracketInterpolatableContentOrEmpty "]" options:DirectiveOptions? {
-    // Find section marker and split the array
-    const sectionMarkerIndex = content.findIndex(p => p.type === NodeType.SectionMarker);
-    const pathParts = sectionMarkerIndex === -1 ? content : content.slice(0, sectionMarkerIndex);
-    const sectionParts = sectionMarkerIndex === -1 ? [] : content.slice(sectionMarkerIndex + 1);
-
-    // Reconstruct raw strings
-    const rawContent = helpers.reconstructRawString(content).trim();
-    const rawPath = helpers.reconstructRawString(pathParts).trim();
-    const rawSection = helpers.reconstructRawString(sectionParts).trim() || null;
+  / _ path:StringLiteral options:DirectiveOptions? {
+    // Extract potential section from the path string
+    const pathValue = path.value || '';
+    const [pathPart, sectionPart] = pathValue.split('#');
+    const pathTrimmed = pathPart ? pathPart.trim() : pathValue;
+    const sectionTrimmed = sectionPart ? sectionPart.trim() : null;
+    
+    // Create validated path node
+    const pathNode = helpers.createNode(NodeType.StringLiteral, {
+      value: pathTrimmed,
+      raw: path.raw
+    });
     
     // Validate the path
-    const validatedPath = helpers.validatePath(pathParts, { context: 'embedPath' });
+    const validatedPath = helpers.validatePath(pathNode, { context: 'addPath' });
     
-    // Create the values object
+    // Create values object
     const values = {
-      path: pathParts,
-      ...(sectionParts.length > 0 ? { section: sectionParts } : {})
+      path: [validatedPath]
     };
     
-    // Create the raw object
+    // Add section if present
+    if (sectionTrimmed) {
+      values.section = [helpers.createNode(NodeType.Text, { 
+        content: sectionTrimmed, 
+        raw: sectionTrimmed 
+      })];
+    }
+    
+    // Create raw object
     const raw = {
-      path: rawPath,
-      ...(rawSection ? { section: rawSection } : {})
+      path: path.raw
     };
     
-    // Create the meta object with path metadata
+    // Add section to raw if present
+    if (sectionTrimmed) {
+      raw.section = sectionTrimmed;
+    }
+    
+    // Create meta object with path metadata
     const meta = {
       path: {
         isAbsolute: validatedPath.isAbsolute,
@@ -190,7 +179,7 @@ _EmbedRHS
     };
     
     return {
-      subtype: 'embedPath',
+      subtype: 'addPath',
       values,
       raw,
       meta
@@ -211,7 +200,7 @@ _EmbedRHS
     const meta = {};
     
     return {
-      subtype: 'embedVariable',
+      subtype: 'addVariable',
       values,
       raw,
       meta

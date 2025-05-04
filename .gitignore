@@ -74,3 +74,4 @@ repomix.config.json
 debug-embed.txt
 
 .env
+**/.claude/settings.local.json

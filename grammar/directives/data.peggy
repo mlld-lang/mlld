@@ -3,7 +3,7 @@ DataDirective
     helpers.debug('DATA', { type: 'assignment', identifier: id, valueType: value.type });
     
     // Capture raw text
-    const rawIdentifier = $(id);
+    const rawIdentifier = id.toString ? id.toString() : JSON.stringify(id);
     const rawValue = value.rawText || '';
     
     // Create structured values object
@@ -28,8 +28,8 @@ DataDirective
         items: value.value
       };
     } else {
-      // For primitive values, use content nodes array
-      values.value = value.value;
+      // For primitive values, ensure it's a ContentNodeArray
+      values.value = Array.isArray(value.value) ? value.value : [value.value];
     }
     
     // Return the directive node
@@ -47,39 +47,39 @@ DataDirective
   }
 
 DataValue
-  = embedDirective:EmbedDirective {
+  = "@" addDirective:AddDirective {
       return {
         type: "nestedDirective",
-        directive: embedDirective, // Store the complete directive node
-        rawText: $(embedDirective)
+        directive: addDirective, // Store the complete directive node
+        rawText: "@add " + (addDirective.raw && addDirective.raw.path ? addDirective.raw.path : "")
       };
     }
-  / runDirective:RunDirective {
+  / "@" runDirective:RunDirective {
       return {
         type: "nestedDirective",
         directive: runDirective, // Store the complete directive node
-        rawText: $(runDirective)
+        rawText: "@run " + (runDirective.raw && runDirective.raw.command ? runDirective.raw.command : "")
       };
     }
   / value:DataObjectLiteral {
     return {
       type: "object",
       value,
-      rawText: $(value)
+      rawText: JSON.stringify(value, null, 2)
     };
   }
   / value:ArrayLiteral {
     return {
       type: "array",
       value,
-      rawText: $(value)
+      rawText: JSON.stringify(value, null, 2)
     };
   }
   / value:PrimitiveValue {
     return {
       type: "primitive",
       value,
-      rawText: $(value)
+      rawText: value.toString ? value.toString() : JSON.stringify(value)
     };
   }
 
@@ -141,13 +141,13 @@ PropertyKey
   / str:StringLiteral { return str; }
 
 PropertyValue
-  = embedDirective:EmbedDirective {
+  = "@" addDirective:AddDirective {
       return {
         type: "nestedDirective",
-        directive: embedDirective
+        directive: addDirective
       };
     }
-  / runDirective:RunDirective {
+  / "@" runDirective:RunDirective {
       return {
         type: "nestedDirective",
         directive: runDirective
@@ -174,29 +174,25 @@ PropertyValue
 
 ArrayLiteral
   = "[" _ items:ArrayItems? _ "]" {
-    return processArrayItems(items || []);
+    const itemsArray = items || [];
+    return itemsArray.map(item => {
+      if (item.type === "nestedDirective" && item.directive) {
+        return item.directive;
+      } else if (item.type === "object") {
+        return {
+          type: 'object',
+          properties: item.value
+        };
+      } else if (item.type === "array") {
+        return {
+          type: 'array',
+          items: item.value
+        };
+      } else {
+        return item.value || item;
+      }
+    });
   }
-
-// Process array items to handle nested directives, objects, and arrays
-function processArrayItems(items) {
-  return items.map(item => {
-    if (item.type === "nestedDirective" && item.directive) {
-      return item.directive;
-    } else if (item.type === "object") {
-      return {
-        type: 'object',
-        properties: item.value
-      };
-    } else if (item.type === "array") {
-      return {
-        type: 'array',
-        items: item.value
-      };
-    } else {
-      return item.value || item;
-    }
-  });
-}
 
 ArrayItems
   = first:PropertyValue rest:(_ "," _ v:PropertyValue { return v; })* trailingComma:(_ ",")? {

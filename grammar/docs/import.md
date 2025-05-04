@@ -16,8 +16,8 @@ The `import` directive allows importing content from external files or from vari
 
 The import directive has two subtypes:
 
-- [importAll](./import.importAll.md): Imports all content from a source file
-- [importSelected](./import.importSelected.md): Imports specifically selected items from a source file
+- [importAll](./importAll.md): Imports all content from a source file
+- [importSelected](./importSelected.md): Imports specifically selected items from a source file
 
 ## Common Structure
 
@@ -74,5 +74,5 @@ This dual syntax approach is intentional and serves security purposes:
 
 For detailed implementation specifics, refer to the subtype documentation:
 
-- [importAll](./import.importAll.md)
-- [importSelected](./import.importSelected.md)
+- [importAll](./importAll.md)
+- [importSelected](./importSelected.md)

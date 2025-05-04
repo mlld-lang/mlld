@@ -5,8 +5,8 @@ textAssignment
   = "text" _ id:Identifier _ "=" _ value:TextValue HWS DirectiveEOL {
     helpers.debug('TEXT', { type: 'assignment', identifier: id, valueSource: value.type });
     
-    // Capture raw text
-    const rawIdentifier = $(id);
+    // Capture raw text - use the identifier toString() method instead of $()
+    const rawIdentifier = id.toString ? id.toString() : JSON.stringify(id);
     const rawContent = value.rawText || '';
     
     // Create structured values object
@@ -21,7 +21,7 @@ textAssignment
       values.source = 'directive'; // Mark this as having a directive source
     } else {
       // Use normal values array for non-directive content
-      values.content = value.values;
+      values.content = Array.isArray(value.values) ? value.values : [value.values];
       
       if (value.type) {
         values.source = value.type;
@@ -61,12 +61,12 @@ textTemplate
     helpers.debug('TEXT', { type: 'template', identifier, content });
     
     // Capture raw text
-    const rawIdentifier = identifier ? $(identifier) : undefined;
-    const rawContent = $(content);
+    const rawIdentifier = identifier ? (identifier.toString ? identifier.toString() : JSON.stringify(identifier)) : undefined;
+    const rawContent = content.map(item => item.content || (item.toString ? item.toString() : JSON.stringify(item))).join('');
     
     // Create values object with optional identifier
     const values = {
-      content: content
+      content: Array.isArray(content) ? content : [content]
     };
     
     if (identifier) {
@@ -87,33 +87,35 @@ textTemplate
   }
 
 TextValue
-  = embedDirective:EmbedDirective {
+  = "@" addDirective:AddDirective {
       return {
         type: "nestedDirective",
-        directive: embedDirective, // Store the complete directive node
+        directive: addDirective, // Store the complete directive node
         values: [], // Empty values since we're using the directive node directly
-        rawText: $(embedDirective)
+        rawText: "@add " + (addDirective.raw && addDirective.raw.path ? addDirective.raw.path : "")
       };
     }
-  / runDirective:RunDirective {
+  / "@" runDirective:RunDirective {
       return {
         type: "nestedDirective",
         directive: runDirective, // Store the complete directive node
         values: [], // Empty values since we're using the directive node directly
-        rawText: $(runDirective)
+        rawText: "@run " + (runDirective.raw && runDirective.raw.command ? runDirective.raw.command : "")
       };
     }
   / value:InterpolatedStringLiteral {
       return {
         type: "literal",
         values: value,
-        rawText: $(value)
+        // Join the content from each node in the array
+        rawText: value.map(item => item.content || '').join('')
       };
     }
   / value:InterpolatedMultilineTemplate {
       return {
         type: "literal",
         values: value,
-        rawText: $(value)
+        // Join the content from each node in the array
+        rawText: value.map(item => item.content || '').join('')
       };
     }

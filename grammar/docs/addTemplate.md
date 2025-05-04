@@ -1,33 +1,33 @@
-# Embed Template Subtype
+# Add Template Subtype
 
-The `embedTemplate` subtype of the `@embed` directive is used to embed content from a multiline template that can include variable interpolations.
+The `addTemplate` subtype of the `@add` directive is used to add content from a template that can include variable interpolations. It supports both single-line and multiline templates.
 
 ## Syntax
 
 ```meld
-@embed [[template_content]]
-@embed [[
+@add [template_content]
+@add [
   multiline
   template
   content
-]] as ###
-@embed [[template_content]] under header_text
+] as ###
+@add [template_content] under header_text
 ```
 
 Where:
-- `template_content` is the content to embed, which can include variable interpolations like `{{variable}}`
-- `###` is an optional heading level (number of # characters) for the embedded content
-- `header_text` is optional text to use as a header for the embedded content
+- `template_content` is the content to add, which can include variable interpolations like `{{variable}}`
+- `###` is an optional heading level (number of # characters) for the added content
+- `header_text` is optional text to use as a header for the added content
 
 ## AST Structure
 
-The `embedTemplate` subtype produces an AST node with the following structure:
+The `addTemplate` subtype produces an AST node with the following structure:
 
 ```typescript
 {
   type: 'Directive',
-  kind: 'embed',
-  subtype: 'embedTemplate',
+  kind: 'add',
+  subtype: 'addTemplate',
   values: {
     content: TextNodeArray,        // Array of nodes representing the template content
     headerLevel?: NumberNode,      // Node representing the heading level (if specified)
@@ -39,7 +39,7 @@ The `embedTemplate` subtype produces an AST node with the following structure:
     underHeader?: string,          // Raw underHeader string (if specified)
   },
   meta: {
-    isTemplateContent: boolean     // Always true for embedTemplate
+    isTemplateContent: boolean     // Always true for addTemplate
   }
 }
 ```
@@ -48,10 +48,10 @@ The `embedTemplate` subtype produces an AST node with the following structure:
 
 For the directive:
 ```meld
-@embed [[
+@add [
   # Example 
   This is a {{type}} template.
-]] as ## under Documentation
+] as ## under Documentation
 ```
 
 The AST would be:
@@ -59,8 +59,8 @@ The AST would be:
 ```json
 {
   "type": "Directive",
-  "kind": "embed",
-  "subtype": "embedTemplate",
+  "kind": "add",
+  "subtype": "addTemplate",
   "values": {
     "content": [
       {

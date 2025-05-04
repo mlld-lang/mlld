@@ -28,7 +28,8 @@
       "@sdk/*": ["api/*"],
       "@api/*": ["api/*"],
       "@api": ["api/index.ts", "api/index.js"],
-      "@tests/*": ["tests/*"]
+      "@tests/*": ["tests/*"],
+      "@grammar/*": ["grammar/*"]
     }
   },
   "include": [
@@ -40,6 +41,7 @@
     "cli/**/*",
     "api/**/*",
     "tests/**/*",
+    "grammar/**/*",
     "*.ts",
     "_dev/issues/active/audit/test-audit-script.ts"
   ],

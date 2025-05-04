@@ -45,6 +45,11 @@ DefineParams
     return params;
   }
 
+IdentifierList
+  = first:Identifier rest:(_ "," _ id:Identifier { return id; })* {
+    return [first, ...rest];
+  }
+
 DefineValue
   = "@run" _ "[" content:BracketInterpolatableContentOrEmpty "]" {
       const raw = content.map(n => {

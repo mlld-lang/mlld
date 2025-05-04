@@ -7,24 +7,59 @@ SpecialPathIdentifier
     return text();
   }
 
+/**
+ * Path Directive - @path identifier = "path_value"
+ * Creates a structured path directive node with values and raw text
+ */
 PathDirective
-  = "path" __ id:Identifier __ "=" __ rhs:( // rhs captures the { identifier, path } object
-      pathStr:PathStringLiteral { // Case 1: Path String
-        // pathStr is an array of nodes
-        const pathObject = helpers.validatePath(pathStr, { context: 'pathDirective' });
-        // Return the directive data structure
-        return { identifier: id, path: pathObject };
+  = "path" __ identifier:Identifier __ "=" __ path:(
+      quotedPath:PathStringLiteral { 
+        return { 
+          parts: quotedPath,
+          raw: helpers.reconstructRawString(quotedPath) 
+        };
       }
-  )
-  (
-    DirectiveEOL          /* newline + returns Newline node */
-    / &EOF                  /* or just end of file, returns nothing */
-  )
-  { 
-    // rhs now holds { identifier, path }, create the directive node
-    return helpers.createDirective('path', rhs, location()); 
+    ) (LineTerminator / &EOF)
+  {
+    // Store raw text values for reconstruction
+    const rawIdentifier = text().substring(5, text().indexOf('='));
+    const rawPath = path.raw.trim();
+    
+    // Validate the path and get metadata
+    const validatedPath = helpers.validatePath(path.parts, { context: 'pathDirective' });
+    const pathMeta = {
+      isAbsolute: validatedPath.isAbsolute,
+      hasVariables: validatedPath.hasVariables,
+      hasTextVariables: validatedPath.hasTextVariables,
+      hasPathVariables: validatedPath.hasPathVariables,
+      isRelative: validatedPath.isRelativeToCwd
+    };
+    
+    // Create values object with node arrays
+    const values = {
+      identifier: [helpers.createVariableReferenceNode('identifier', { identifier })],
+      path: validatedPath.values
+    };
+    
+    // Create raw object with text segments
+    const raw = {
+      identifier: rawIdentifier.trim(),
+      path: rawPath
+    };
+    
+    // Create meta object with nested path metadata
+    const meta = {
+      path: pathMeta
+    };
+    
+    // Create the structured directive node
+    return helpers.createStructuredDirective('path', 'pathAssignment', values, raw, meta, location());
   }
 
+/**
+ * Path Value - The right-hand side of a path assignment
+ * Can be a string literal, interpolated string, or variable reference
+ */
 PathValue
   = interpolatedArray:InterpolatedStringLiteral { 
       // Return the structured array directly

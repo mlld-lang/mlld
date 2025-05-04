@@ -7,10 +7,10 @@ The Data directive is used to define and manage structured data in Meld. It supp
 ```
 @data variable = { "key": "value" }      // Assignment with JSON object
 @data variable = [1, 2, 3]               // Assignment with JSON array
-@data content = @embed "path/to/file.json" // Embed from file
+@data content = @add "path/to/file.json" // Add from file
 @data result = @run [echo '{"key": "value"}'] // Run command
 @data complex = {                        // Object with nested directives
-  "content": @embed "file.md",
+  "content": @add "file.md",
   "systemInfo": @run [echo "hello world" | jq]
 }
 ```
@@ -53,7 +53,7 @@ type DataValue =
   | ContentNodeArray // String literals, numbers, booleans represented as content nodes
   | DataObjectValue  // Objects with nested properties
   | DataArrayValue   // Arrays with nested items
-  | DirectiveNode;   // Nested directive (embed, run, etc.)
+  | DirectiveNode;   // Nested directive (add, run, etc.)
 
 interface DataObjectValue {
   type: 'object';
@@ -74,13 +74,13 @@ Data directives support a powerful "directive nesting" feature, where other dire
 
 1. As the direct value of a data variable:
 ```
-@data content = @embed "file.json"
+@data content = @add "file.json"
 ```
 
 2. As properties within objects:
 ```
 @data config = {
-  "content": @embed "file.md",
+  "content": @add "file.md",
   "result": @run [echo "hello"]
 }
 ```
@@ -107,12 +107,12 @@ Data directives support a powerful "directive nesting" feature, where other dire
     value: {
       // Full directive node structure
       type: 'Directive',
-      kind: 'embed',
-      subtype: 'embedPath',
+      kind: 'add',
+      subtype: 'addPath',
       values: {
         path: [/* Path nodes */]
       },
-      // ...rest of embed directive
+      // ...rest of add directive
     }
   },
   // ...rest of data directive
@@ -131,8 +131,8 @@ Data directives support a powerful "directive nesting" feature, where other dire
         "content": {
           // Full directive node structure
           type: 'Directive',
-          kind: 'embed',
-          // ...rest of embed directive
+          kind: 'add',
+          // ...rest of add directive
         },
         "normalProp": "Normal value"
       }
@@ -178,9 +178,9 @@ Arrays:
 ]
 ```
 
-Nested embed directive:
+Nested add directive:
 ```
-@data config = @embed "config.json"
+@data config = @add "config.json"
 ```
 
 Nested run directive:
@@ -191,7 +191,7 @@ Nested run directive:
 Complex object with nested directives:
 ```
 @data dashboard = {
-  "content": @embed "dashboard.md",
+  "content": @add "dashboard.md",
   "systemInfo": @run [echo "System Info" | jq],
   "statistics": {
     "counts": @run [wc -l data.txt],
@@ -203,8 +203,8 @@ Complex object with nested directives:
 Array with nested directives:
 ```
 @data reports = [
-  @embed "report1.json",
-  @embed "report2.json",
+  @add "report1.json",
+  @add "report2.json",
   {
     "custom": true,
     "data": @run [generate-report]
@@ -217,14 +217,14 @@ Array with nested directives:
 Our current implementation already supports directives as direct values:
 
 ```
-@data config = @embed "config.json"
+@data config = @add "config.json"
 ```
 
 The next phase will be to update the grammar to fully support directives within structured data objects and arrays:
 
 ```
 @data complexConfig = { 
-  "content": @embed "file.md",
+  "content": @add "file.md",
   "systemInfo": @run [echo "hello world" | jq]
 }
 ```
@@ -236,7 +236,7 @@ type DataValue =
   | ContentNodeArray // String literals, numbers, booleans
   | DataObjectValue  // Objects with nested properties
   | DataArrayValue   // Arrays with nested items
-  | DirectiveNode;   // Nested directive (embed, run, etc.)
+  | DirectiveNode;   // Nested directive (add, run, etc.)
 
 interface DataObjectValue {
   type: 'object';

@@ -1,33 +1,33 @@
-# Embed Path Subtype
+# Add Path Subtype
 
-The `embedPath` subtype of the `@embed` directive is used to include content from an external file path, with optional section extraction, heading level adjustment, and header text.
+The `addPath` subtype of the `@add` directive is used to include content from an external file path, with optional section extraction, heading level adjustment, and header text.
 
 ## Syntax
 
 ```meld
-@embed [path]
-@embed [path # section_text]
-@embed [path] as ###
-@embed [path # section_text] as ###
-@embed [path] under header_text
-@embed [path # section_text] under header_text
+@add "path"
+@add "path # section_text"
+@add "path" as ###
+@add "path # section_text" as ###
+@add "path" under header_text
+@add "path # section_text" under header_text
 ```
 
 Where:
-- `path` is the path to the file to embed (can use path variables)
+- `path` is the path to the file to add (can use path variables)
 - `section_text` is optional text that identifies a specific section to extract
-- `###` is an optional heading level (number of # characters) for the embedded content
-- `header_text` is optional text to use as a header for the embedded content
+- `###` is an optional heading level (number of # characters) for the added content
+- `header_text` is optional text to use as a header for the added content
 
 ## AST Structure
 
-The `embedPath` subtype produces an AST node with the following structure:
+The `addPath` subtype produces an AST node with the following structure:
 
 ```typescript
 {
   type: 'Directive',
-  kind: 'embed',
-  subtype: 'embedPath',
+  kind: 'add',
+  subtype: 'addPath',
   values: {
     path: PathNodeArray,           // Array of nodes representing the path
     section?: TextNodeArray,       // Array of nodes representing the section (if specified)
@@ -54,13 +54,13 @@ The `embedPath` subtype produces an AST node with the following structure:
 
 ## Example AST
 
-For the directive `@embed ["$PROJECTPATH/README.md # Introduction"] as ## under Documentation`:
+For the directive `@add "$PROJECTPATH/README.md # Introduction" as ## under Documentation`:
 
 ```json
 {
   "type": "Directive",
-  "kind": "embed",
-  "subtype": "embedPath",
+  "kind": "add",
+  "subtype": "addPath",
   "values": {
     "path": [
       {

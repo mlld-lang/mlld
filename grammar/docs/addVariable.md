@@ -1,29 +1,29 @@
-# Embed Variable Subtype
+# Add Variable Subtype
 
-The `embedVariable` subtype of the `@embed` directive is used to embed content from a variable reference.
+The `addVariable` subtype of the `@add` directive is used to add content from a variable reference.
 
 ## Syntax
 
 ```meld
-@embed {{variable}}
-@embed {{variable}} as ###
-@embed {{variable}} under header_text
+@add {{variable}}
+@add {{variable}} as ###
+@add {{variable}} under header_text
 ```
 
 Where:
-- `variable` is the variable reference whose value will be embedded
-- `###` is an optional heading level (number of # characters) for the embedded content
-- `header_text` is optional text to use as a header for the embedded content
+- `variable` is the variable reference whose value will be added
+- `###` is an optional heading level (number of # characters) for the added content
+- `header_text` is optional text to use as a header for the added content
 
 ## AST Structure
 
-The `embedVariable` subtype produces an AST node with the following structure:
+The `addVariable` subtype produces an AST node with the following structure:
 
 ```typescript
 {
   type: 'Directive',
-  kind: 'embed',
-  subtype: 'embedVariable',
+  kind: 'add',
+  subtype: 'addVariable',
   values: {
     variable: VariableNodeArray,   // Array containing the variable reference node
     headerLevel?: NumberNode,      // Node representing the heading level (if specified)
@@ -34,19 +34,19 @@ The `embedVariable` subtype produces an AST node with the following structure:
     headerLevel?: string,          // Raw headerLevel string (if specified)
     underHeader?: string,          // Raw underHeader string (if specified)
   },
-  meta: {}                         // No specific metadata for variable embedding
+  meta: {}                         // No specific metadata for variable adding
 }
 ```
 
 ## Example AST
 
-For the directive `@embed {{content}} as ## under Documentation`:
+For the directive `@add {{content}} as ## under Documentation`:
 
 ```json
 {
   "type": "Directive",
-  "kind": "embed",
-  "subtype": "embedVariable",
+  "kind": "add",
+  "subtype": "addVariable",
   "values": {
     "variable": [
       {

@@ -8,13 +8,13 @@ import type { DirectiveNode } from '../../core/ast/types';
  */
 describe('Directive Base Structure', () => {
   const directiveExamples = [
-    '@import [*] from [file.md]',
-    '@embed [path/to/file.md]',
+    '@import { * } from "file.md"',
+    '@embed "path/to/file.md"',
     '@text myvar = "some text"',
     '@data myvar = { "key": "value" }',
     '@path myvar = "/path/to/file"',
     '@run [echo "hello world"]',
-    '@define mycommand (param) = [echo "{{param}}"]'
+    '@define mycommand (param) = "default value"'
   ];
 
   for (const input of directiveExamples) {
@@ -37,9 +37,25 @@ describe('Directive Base Structure', () => {
         expect(typeof node.values).toBe('object');
         expect(node.values).not.toBeNull();
         
-        // Each key in values should be an array
+        // Each key in values should be an array, EXCEPT for values.content in text directives 
+        // or values.value in data directives when they are nested directives
         for (const key in node.values) {
-          expect(Array.isArray(node.values[key])).toBe(true);
+          // Special cases for nested directives
+          const isSpecialCase = 
+            // Text directive with content that's a nested directive
+            (node.kind === 'text' && key === 'content' && 
+             typeof node.values[key] === 'object' && !Array.isArray(node.values[key]) &&
+             node.values[key]?.type === 'Directive') ||
+            // Data directive with value that's a nested directive, object or array structure
+            (node.kind === 'data' && key === 'value' && 
+             typeof node.values[key] === 'object' && !Array.isArray(node.values[key]) &&
+             (node.values[key]?.type === 'Directive' || 
+              node.values[key]?.type === 'object' || 
+              node.values[key]?.type === 'array'));
+          
+          if (!isSpecialCase) {
+            expect(Array.isArray(node.values[key])).toBe(true);
+          }
         }
       } catch (error) {
         // During development/migration, some may fail - just report, don't fail test

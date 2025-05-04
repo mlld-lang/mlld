@@ -11,15 +11,29 @@ The documentation is organized by directive kind and subtype:
   /docs
     README.md              # This file - overview and navigation
     PLAN.md                # Implementation plan and roadmap
-    /import
-      import.md            # Import directive overview
-      import.importAll.md  # ImportAll subtype documentation
-      import.importSelected.md  # ImportSelected subtype documentation
-    /text
-      text.md              # Text directive overview
-      text.textVariable.md
-      text.textTemplate.md
-    ... (similarly for other directives)
+    
+    # Directive overview files
+    import.md              # Import directive overview
+    text.md                # Text directive overview
+    path.md                # Path directive overview
+    data.md                # Data directive overview
+    add.md                 # Add directive overview
+    
+    # Subtype documentation files
+    importAll.md           # ImportAll subtype documentation
+    importSelected.md      # ImportSelected subtype documentation
+    textAssignment.md      # TextAssignment subtype documentation
+    textTemplate.md        # TextTemplate subtype documentation
+    pathAssignment.md      # PathAssignment subtype documentation
+    addPath.md             # AddPath subtype documentation
+    addTemplate.md         # AddTemplate subtype documentation
+    addVariable.md         # AddVariable subtype documentation
+    
+    # Process documentation
+    PLAN.md                # Implementation plan and roadmap
+    SYNTAX-STANDARDIZATION.md
+    PATHS.md
+    ... (other supporting documentation)
 ```
 
 This structure is mirrored in the implementation directories:
@@ -86,9 +100,9 @@ interface DirectiveNode {
 
 This design supports recursive nesting of directives, allowing:
 
-1. Directives as direct values: `@text content = @embed "file.txt"`
-2. Directives within data objects: `@data config = { "content": @embed "file.md" }`
-3. Directives within arrays: `@data results = [@run [command], @embed "file.txt"]`
+1. Directives as direct values: `@text content = @add "file.txt"`
+2. Directives within data objects: `@data config = { "content": @add "file.md" }`
+3. Directives within arrays: `@data results = [@run [command], @add "file.txt"]`
 
 ## Type Definitions
 
