@@ -16,7 +16,7 @@ export * from './raw';
 
 // Directive-specific types
 export * from './import';
-// export * from './text'; // To be implemented
+export * from './text'; // Implemented
 // export * from './embed'; // To be implemented
 // export * from './run'; // To be implemented
 // export * from './define'; // To be implemented

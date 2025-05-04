@@ -94,7 +94,7 @@ Directive
   = &{ return helpers.isLogicalLineStart(input, offset()); }
     [ \t]* "@"                       // allow leading tabs/spaces
     dir:(
-      ImportDirective_Simple / ImportDirective_WithClause
+      ImportDirective   // Standard import syntax
     / EmbedDirective
     / RunDirective
     / DefineDirective

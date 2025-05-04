@@ -20,7 +20,7 @@ export const importFixtures: DirectiveFixture[] = [
   {
     name: 'import-all',
     description: 'Import directive with wildcard import',
-    input: '@import [*] from [file.md]',
+    input: '@import { * } from "file.md"',
     expected: {
       kind: 'import',
       subtype: 'importAll',
@@ -52,16 +52,24 @@ export const importFixtures: DirectiveFixture[] = [
         imports: '*',
         path: 'file.md'
       },
-      meta: {}
+      meta: {
+        path: {
+          isAbsolute: false,
+          isRelative: true,
+          hasVariables: false,
+          hasTextVariables: false,
+          hasPathVariables: false
+        }
+      }
     }
   },
   {
     name: 'import-selected',
     description: 'Import directive with selected imports',
-    input: '@import [name] from [file.md]',
+    input: '@import { name } from "file.md"',
     expected: {
       kind: 'import',
-      subtype: 'importStandard',
+      subtype: 'importSelected',
       values: {
         imports: [
           {
@@ -90,16 +98,24 @@ export const importFixtures: DirectiveFixture[] = [
         imports: 'name',
         path: 'file.md'
       },
-      meta: {}
+      meta: {
+        path: {
+          isAbsolute: false,
+          isRelative: true,
+          hasVariables: false,
+          hasTextVariables: false,
+          hasPathVariables: false
+        }
+      }
     }
   },
   {
     name: 'import-with-dollar-variable',
     description: 'Import directive with path variable using $path format',
-    input: '@import [name] from [$path]',
+    input: '@import { name } from "$path"',
     expected: {
       kind: 'import',
-      subtype: 'importStandard',
+      subtype: 'importSelected',
       values: {
         imports: [
           {
@@ -131,7 +147,7 @@ export const importInvalidFixtures: DirectiveFixture[] = [
   {
     name: 'invalid-import',
     description: 'Import directive with invalid syntax',
-    input: '@import [name] from',
+    input: '@import { name } from',
     expected: {
       kind: 'error',
       subtype: 'syntaxError',

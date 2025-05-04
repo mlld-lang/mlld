@@ -4,6 +4,14 @@
 
 The `import` directive allows importing content from external files or from variables containing file paths. It's primarily used to include content from other Meld documents or to reference external resources.
 
+## Syntax
+
+```
+@import { var1, var2 } from "path/to/file.meld"
+@import { * } from "path/to/file.meld"
+@import { var1 as alias1 } from "$pathVariable"
+```
+
 ## Subtypes
 
 The import directive has two subtypes:
@@ -44,12 +52,23 @@ All import directives share this basic structure in the AST:
 
 Import paths can be specified in multiple ways:
 
-- Static paths: `@import [path/to/file.md]`
-- Path variables: `@import [imports] from [$path_var]`
-- Text variables: `@import [imports] from [{{text_var}}]`
-- Mixed variables: `@import [imports] from [$base_path/{{filename}}.md]`
+- Static paths: `@import { * } from "path/to/file.md"`
+- Path variables: `@import { imports } from "$path_var"`
+- Text variables: `@import { imports } from "path/to/{{text_var}}.md"`
+- Mixed variables: `@import { imports } from "$base_path/{{filename}}.md"`
 
 Each path form has different metadata flags in the `meta` object. See the subtype documentation for detailed examples.
+
+## Variable Reference Syntax
+
+Import paths can use two types of variable references:
+- Path variables: `$var` - Constrained by security rules to be within allowed paths
+- Text variables: `{{var}}` - General string interpolation
+
+This dual syntax approach is intentional and serves security purposes:
+- `$var` clearly indicates a path variable that must adhere to security constraints
+- `{{var}}` indicates general text interpolation
+
 
 ## See Also
 
