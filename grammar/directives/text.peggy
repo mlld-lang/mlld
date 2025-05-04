@@ -1,61 +1,119 @@
 TextDirective
-  = textAssignment / textBracketed
+  = textAssignment / textTemplate
 
 textAssignment
   = "text" _ id:Identifier _ "=" _ value:TextValue HWS DirectiveEOL {
     helpers.debug('TEXT', { type: 'assignment', identifier: id, valueSource: value.type });
-    return helpers.createDirective('text', {
-      identifier: id,
-      source: value.type,
-      values: value.values,
-      ...(value.type === "embed" ? { embed: value.embed } :
-          value.type === "run" ? { run: value.run } :
-          value.type === "call" ? { call: value.value } :
-          { values: value.values })
-    }, location());
+    
+    // Capture raw text
+    const rawIdentifier = $(id);
+    const rawContent = value.rawText || '';
+    
+    // Create structured values object
+    const values = {
+      identifier: [id]
+    };
+    
+    // Check if the value is a nested directive
+    if (value.type === "nestedDirective" && value.directive) {
+      // Use the full directive node directly in the content field
+      values.content = value.directive;
+      values.source = 'directive'; // Mark this as having a directive source
+    } else {
+      // Use normal values array for non-directive content
+      values.content = value.values;
+      
+      if (value.type) {
+        values.source = value.type;
+      }
+    }
+    
+    // Create structured raw object
+    const raw = {
+      identifier: rawIdentifier,
+      content: rawContent
+    };
+    
+    // Create structured meta object
+    const meta = {};
+    
+    // Add specific metadata based on type (for backward compatibility)
+    if (value.type === "embed" && value.embed) {
+      meta.embed = value.embed;
+    } else if (value.type === "run" && value.run) {
+      meta.run = value.run;
+    }
+    
+    return {
+      type: 'Directive',
+      kind: 'text',
+      subtype: 'textAssignment',
+      values,
+      raw,
+      meta
+    };
   }
 
-textBracketed
-  = "text" _ "[" content:BracketInterpolatableContent "]" HWS DirectiveEOL {
-    helpers.debug('TEXT', { type: 'bracketed', content });
-    return helpers.createDirective('text', {
-      values: content
-    }, location());
+textTemplate
+  = "text" _ id:(Identifier _ "=" _)? "[" content:BracketInterpolatableContent "]" HWS DirectiveEOL {
+    // Parse identifier if present
+    const identifier = id ? id[0] : null;
+    helpers.debug('TEXT', { type: 'template', identifier, content });
+    
+    // Capture raw text
+    const rawIdentifier = identifier ? $(identifier) : undefined;
+    const rawContent = $(content);
+    
+    // Create values object with optional identifier
+    const values = {
+      content: content
+    };
+    
+    if (identifier) {
+      values.identifier = [identifier];
+    }
+    
+    return {
+      type: 'Directive',
+      kind: 'text',
+      subtype: 'textTemplate',
+      values,
+      raw: {
+        identifier: rawIdentifier,
+        content: rawContent
+      },
+      meta: {}
+    };
   }
 
 TextValue
-  = "@embed" embedResult:_EmbedRHS {
+  = embedDirective:EmbedDirective {
       return {
-        type: "embed",
-        embed: embedResult
+        type: "nestedDirective",
+        directive: embedDirective, // Store the complete directive node
+        values: [], // Empty values since we're using the directive node directly
+        rawText: $(embedDirective)
       };
     }
-  / "@run" runResult:_RunRHS {
+  / runDirective:RunDirective {
       return {
-        type: "run",
-        run: runResult
+        type: "nestedDirective",
+        directive: runDirective, // Store the complete directive node
+        values: [], // Empty values since we're using the directive node directly
+        rawText: $(runDirective)
       };
     }
-  / "@call" _ api:Identifier "." method:Identifier _ content:DirectiveContent {
-    return {
-      type: "call",
-      value: {
-        kind: "call",
-        api,
-        method,
-        path: content
-      }
-    };
-  }
   / value:InterpolatedStringLiteral {
-    return {
-      type: "literal",
-      values: value
-    };
-  }
+      return {
+        type: "literal",
+        values: value,
+        rawText: $(value)
+      };
+    }
   / value:InterpolatedMultilineTemplate {
-    return {
-      type: "literal",
-      values: value
-    };
-  }
+      return {
+        type: "literal",
+        values: value,
+        rawText: $(value)
+      };
+    }

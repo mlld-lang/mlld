@@ -13,8 +13,8 @@ export interface TextValues {
   // Common to all text directive subtypes
   identifier?: VariableNodeArray;
   // Only for specific subtypes
-  content?: ContentNodeArray;
-  source?: string; // 'literal', 'embed', or 'run'
+  content?: ContentNodeArray | DirectiveNode; // Content can now be a nested directive
+  source?: string; // 'literal', 'embed', 'run', or 'directive'
 }
 
 /**
@@ -28,22 +28,17 @@ export interface TextDirectiveNode extends TypedDirectiveNode<'text', 'textAssig
 
 /**
  * Text Assignment directive - @text var = "value"
+ * Can be a literal string, template, or nested directive
  */
 export interface TextAssignmentDirectiveNode extends TextDirectiveNode {
   subtype: 'textAssignment';
   values: {
     identifier: VariableNodeArray;
-    content: ContentNodeArray;
+    content: ContentNodeArray | DirectiveNode; // Can be a content array OR a directive node
   };
   raw: {
     identifier: string;
     content: string;
-  };
-  
-  // Optional field when the source is another directive
-  sourceDirective?: {
-    directive: DirectiveNode; // The actual directive providing the value
-    type: 'embed' | 'run';    // Type discriminator
   };
 }
 
@@ -62,12 +57,38 @@ export interface TextTemplateDirectiveNode extends TextDirectiveNode {
   };
 }
 
-// Type guard helpers for source directives
-export function isTextWithEmbedSource(node: TextAssignmentDirectiveNode): boolean {
-  return !!node.sourceDirective && node.sourceDirective.type === 'embed';
+/**
+ * Type guard to check if content is a nested directive
+ */
+export function isNestedDirective(content: ContentNodeArray | DirectiveNode): content is DirectiveNode {
+  return !Array.isArray(content) && 'kind' in content;
 }
 
+/**
+ * Type guard to check if content is a nested embed directive
+ */
+export function isNestedEmbedDirective(content: ContentNodeArray | DirectiveNode): content is DirectiveNode {
+  return isNestedDirective(content) && content.kind === 'embed';
+}
+
+/**
+ * Type guard to check if content is a nested run directive
+ */
+export function isNestedRunDirective(content: ContentNodeArray | DirectiveNode): content is DirectiveNode {
+  return isNestedDirective(content) && content.kind === 'run';
+}
+
+/**
+ * Type guard to check if text node has an embed directive as content
+ */
+export function isTextWithEmbedSource(node: TextAssignmentDirectiveNode): boolean {
+  return isNestedEmbedDirective(node.values.content);
+}
+
+/**
+ * Type guard to check if text node has a run directive as content
+ */
 export function isTextWithRunSource(node: TextAssignmentDirectiveNode): boolean {
-  return !!node.sourceDirective && node.sourceDirective.type === 'run';
+  return isNestedRunDirective(node.values.content);
 }
 

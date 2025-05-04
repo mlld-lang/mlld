@@ -12,8 +12,8 @@ Where:
 - `identifier`: A valid variable name
 - `value`: Can be one of:
   - A literal string: `"content"` or `'content'` or `"""multiline content"""`
-  - An embed source: `@embed "path/to/file.txt"`
-  - A run command: `@run [echo "Hello, world!"]`
+  - A nested embed directive: `@embed "path/to/file.txt"`
+  - A nested run directive: `@run [echo "Hello, world!"]`
 
 ## AST Structure
 
@@ -24,7 +24,7 @@ interface TextAssignmentDirectiveNode {
   subtype: 'textAssignment';
   values: {
     identifier: VariableReferenceNode[];
-    content: (TextNode | VariableReferenceNode)[];
+    content: (TextNode | VariableReferenceNode)[] | DirectiveNode; // Can be content nodes OR a nested directive
   };
   raw: {
     identifier: string;
@@ -32,12 +32,6 @@ interface TextAssignmentDirectiveNode {
   };
   meta: {
     // Metadata based on the value source
-  };
-  
-  // Only present when the value comes from another directive
-  sourceDirective?: {
-    directive: DirectiveNode; // The actual directive providing the value
-    type: 'embed' | 'run';    // Type discriminator
   };
 }
 ```
@@ -58,12 +52,11 @@ AST structure for literals:
   values: {
     identifier: [/* Variable reference node */],
     content: [/* Text nodes (no variable interpolation) */]
-  },
-  // No sourceDirective since the content is a direct literal
+  }
 }
 ```
 
-### Embed Source
+### Nested Embed Directive
 
 Assigns the content of a file to a variable using `@embed`.
 
@@ -71,25 +64,29 @@ Assigns the content of a file to a variable using `@embed`.
 @text content = @embed "path/to/file.txt"
 ```
 
-AST structure for embed source:
+AST structure for nested embed directive:
 ```typescript
 {
   values: {
     identifier: [/* Variable reference node */],
-    content: [/* Processed content after embedding */]
-  },
-  sourceDirective: {
-    type: 'embed',
-    directive: {
-      // The full embed directive node with its own structure
+    content: {
+      // The full embed directive node directly nested
+      type: 'Directive',
       kind: 'embed',
-      // ...other embed directive properties
+      subtype: 'embedPath',
+      values: {
+        path: [/* Path nodes */]
+      },
+      raw: {
+        path: "path/to/file.txt"
+      },
+      meta: {}
     }
   }
 }
 ```
 
-### Run Command
+### Nested Run Directive
 
 Assigns the output of a command to a variable using `@run`.
 
@@ -97,29 +94,45 @@ Assigns the output of a command to a variable using `@run`.
 @text result = @run [echo "The current directory is: $PWD"]
 ```
 
-AST structure for run command:
+AST structure for nested run directive:
 ```typescript
 {
   values: {
     identifier: [/* Variable reference node */],
-    content: [/* Processed content after running command */]
-  },
-  sourceDirective: {
-    type: 'run',
-    directive: {
-      // The full run directive node with its own structure
+    content: {
+      // The full run directive node directly nested
+      type: 'Directive',
       kind: 'run',
-      // ...other run directive properties
+      subtype: 'runCommand',
+      values: {
+        command: [/* Command nodes */]
+      },
+      raw: {
+        command: "echo \"The current directory is: $PWD\""
+      },
+      meta: {}
     }
   }
 }
 ```
+
+## Recursive Directive Composition
+
+The nested directive structure enables fully composable directive trees, where:
+
+1. Directives can be nested directly in the values object
+2. The nested structure is maintained throughout AST processing
+3. The AST represents the exact directive relationships as written
+
+This design enables directives to serve as values for other directives, creating a clean, recursive structure that accurately models complex compositions.
 
 ## Variable References
 
 Text assignment directives can use two types of variable references:
 - Path variables in `@run` commands and `@embed` paths: `$var` - Constrained by security rules
 - Text variables in string literals: `{{var}}` - General string interpolation
+
+Important: Interpolation with `{{var}}` is ONLY supported in template brackets `[...]`, not in quoted strings `"..."`. Use the textTemplate subtype for interpolation.
 
 ## Examples
 

@@ -201,6 +201,61 @@ function validateNodes(nodes: MeldNode[], errors: MeldAstError[]): void {
             if ((node as any).meta && typeof (node as any).meta !== 'object') {
               throw new Error('Directive meta must be an object');
             }
+            
+            // Check for nested directives in values fields, which could be:
+            // 1. A direct directive node in content field (text directive)
+            // 2. A directive node in value field (data directive)
+            // 3. Directives nested in data object properties or array items
+            
+            const directiveNode = node as any;
+            if (directiveNode.values) {
+              // Check for directly nested directives in content (text directive)
+              if (directiveNode.values.content && 
+                  typeof directiveNode.values.content === 'object' && 
+                  !Array.isArray(directiveNode.values.content) &&
+                  directiveNode.values.content.type === 'Directive') {
+                // Recursively validate nested directive
+                validateNodes([directiveNode.values.content], errors);
+              }
+              
+              // Check for directly nested directives in value (data directive)
+              if (directiveNode.values.value && 
+                  typeof directiveNode.values.value === 'object' && 
+                  !Array.isArray(directiveNode.values.value) &&
+                  directiveNode.values.value.type === 'Directive') {
+                // Recursively validate nested directive
+                validateNodes([directiveNode.values.value], errors);
+              }
+              
+              // Check for nested objects with type 'object' (data directive object structure)
+              if (directiveNode.values.value && 
+                  typeof directiveNode.values.value === 'object' && 
+                  !Array.isArray(directiveNode.values.value) &&
+                  directiveNode.values.value.type === 'object' &&
+                  directiveNode.values.value.properties) {
+                // Check each property for directive nodes
+                for (const key in directiveNode.values.value.properties) {
+                  const prop = directiveNode.values.value.properties[key];
+                  if (prop && typeof prop === 'object' && prop.type === 'Directive') {
+                    validateNodes([prop], errors);
+                  }
+                }
+              }
+              
+              // Check for nested arrays with type 'array' (data directive array structure)
+              if (directiveNode.values.value && 
+                  typeof directiveNode.values.value === 'object' && 
+                  !Array.isArray(directiveNode.values.value) &&
+                  directiveNode.values.value.type === 'array' &&
+                  Array.isArray(directiveNode.values.value.items)) {
+                // Check each item for directive nodes
+                for (const item of directiveNode.values.value.items) {
+                  if (item && typeof item === 'object' && item.type === 'Directive') {
+                    validateNodes([item], errors);
+                  }
+                }
+              }
+            }
           }
           break;
 

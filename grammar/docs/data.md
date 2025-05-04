@@ -1,6 +1,6 @@
 # Data Directive
 
-The Data directive is used to define and manipulate structured data variables in Meld. It supports various ways to assign data to variables, including JSON literals, embedding from files, and running commands.
+The Data directive is used to define and manage structured data in Meld. It supports various types of values including primitives, objects, arrays, and nested directives for complex data structures.
 
 ## Syntax
 
@@ -9,6 +9,10 @@ The Data directive is used to define and manipulate structured data variables in
 @data variable = [1, 2, 3]               // Assignment with JSON array
 @data content = @embed "path/to/file.json" // Embed from file
 @data result = @run [echo '{"key": "value"}'] // Run command
+@data complex = {                        // Object with nested directives
+  "content": @embed "file.md",
+  "systemInfo": @run [echo "hello world" | jq]
+}
 ```
 
 ## Subtypes
@@ -28,7 +32,7 @@ interface DataDirectiveNode {
   subtype: 'dataAssignment';
   values: {
     identifier: VariableReferenceNode[];
-    value: (TextNode | VariableReferenceNode)[]; // Parsed as JSON later
+    value: DataValue; // Can be primitive, object, array, or directive
   };
   raw: {
     identifier: string;
@@ -40,93 +44,170 @@ interface DataDirectiveNode {
 }
 ```
 
-## Data Assignment Variants
+## Data Value Types
 
-The `dataAssignment` subtype supports several variants based on the source of content:
-
-1. JSON literal: `@data var = { "key": "value" }`
-2. Embed source: `@data var = @embed "path/to/file.json"`
-3. Run command: `@data var = @run [echo '{"key": "value"}']`
-
-Each variant can reference another directive as its source:
+The `DataValue` type is recursive and can contain:
 
 ```typescript
-interface DataAssignmentDirectiveNode {
-  // Standard directive structure
-  // ...
-  
-  // If assigned from another directive
-  sourceDirective?: {
-    directive: RunDirectiveNode | EmbedDirectiveNode; // The actual directive
-    type: 'run' | 'embed';                           // Type discriminator
-  }
+type DataValue = 
+  | ContentNodeArray // String literals, numbers, booleans represented as content nodes
+  | DataObjectValue  // Objects with nested properties
+  | DataArrayValue   // Arrays with nested items
+  | DirectiveNode;   // Nested directive (embed, run, etc.)
+
+interface DataObjectValue {
+  type: 'object';
+  properties: {
+    [key: string]: DataValue; // Each property can be any data value
+  };
+}
+
+interface DataArrayValue {
+  type: 'array';
+  items: DataValue[]; // Each item can be any data value
+}
+```
+
+## Nested Directives
+
+Data directives support a powerful "directive nesting" feature, where other directives can be directly nested:
+
+1. As the direct value of a data variable:
+```
+@data content = @embed "file.json"
+```
+
+2. As properties within objects:
+```
+@data config = {
+  "content": @embed "file.md",
+  "result": @run [echo "hello"]
+}
+```
+
+3. As items within arrays:
+```
+@data results = [
+  @run [command1],
+  @run [command2],
+  "static value"
+]
+```
+
+### AST Structure for Nested Directives
+
+```typescript
+// Example of a data directive with a nested embed directive
+{
+  type: 'Directive',
+  kind: 'data',
+  subtype: 'dataAssignment',
+  values: {
+    identifier: [/* Variable reference node */],
+    value: {
+      // Full directive node structure
+      type: 'Directive',
+      kind: 'embed',
+      subtype: 'embedPath',
+      values: {
+        path: [/* Path nodes */]
+      },
+      // ...rest of embed directive
+    }
+  },
+  // ...rest of data directive
+}
+
+// Example of a data directive with an object containing a nested directive
+{
+  type: 'Directive',
+  kind: 'data',
+  subtype: 'dataAssignment',
+  values: {
+    identifier: [/* Variable reference node */],
+    value: {
+      type: 'object',
+      properties: {
+        "content": {
+          // Full directive node structure
+          type: 'Directive',
+          kind: 'embed',
+          // ...rest of embed directive
+        },
+        "normalProp": "Normal value"
+      }
+    }
+  },
+  // ...rest of data directive
 }
 ```
 
 ## Variable References
 
-Data directives can use two types of variable references:
-- Path variables in commands and embeds: `$var` - Constrained by security rules
-- Text variables in JSON string literals: `{{var}}` - General string interpolation
+Data directives can use path variables in nested directives:
+- Path variables in nested commands and embeds: `$var` - Constrained by security rules
 
 ## Examples
 
-Simple assignment:
+Simple primitives:
 ```
-@data config = { "server": "localhost", "port": 8080 }
-```
-
-Using embed:
-```
-@data userData = @embed "user-config.json"
+@data count = 42
+@data name = "Alice"
+@data active = true
 ```
 
-Using run:
+Objects:
 ```
-@data systemInfo = @run [uname -a | jq -R '{system: .}']
-```
-
-## Future Features (Planned)
-
-### Nested Directive Support
-
-In future versions, we plan to support embedding directives within structured data:
-
-```
-@data complexConfig = { 
-  "content": @embed "file.md",
-  "systemInfo": @run [echo "hello world" | jq -R '{output: .}']
+@data person = {
+  "name": "John Doe",
+  "age": 30,
+  "address": {
+    "street": "123 Main St",
+    "city": "Anytown"
+  }
 }
 ```
 
-This would require a more complex AST structure:
+Arrays:
+```
+@data colors = ["red", "green", "blue"]
+@data matrix = [
+  [1, 2, 3],
+  [4, 5, 6],
+  [7, 8, 9]
+]
+```
 
-```typescript
-// For direct values in structured data
-interface DataValueNode {
-  type: 'DataValue';
-  valueType: 'string' | 'number' | 'boolean' | 'null' | 'directive';
-  value: string | number | boolean | null | DirectiveNode;
-}
+Nested embed directive:
+```
+@data config = @embed "config.json"
+```
 
-// For object properties
-interface DataObjectPropertyNode {
-  type: 'DataObjectProperty';
-  key: string;
-  value: DataValueNode | DataObjectNode | DataArrayNode;
-}
+Nested run directive:
+```
+@data systemInfo = @run [uname -a]
+```
 
-// For object structures
-interface DataObjectNode {
-  type: 'DataObject';
-  properties: DataObjectPropertyNode[];
-}
-
-// For array structures
-interface DataArrayNode {
-  type: 'DataArray';
-  items: (DataValueNode | DataObjectNode | DataArrayNode)[];
+Complex object with nested directives:
+```
+@data dashboard = {
+  "content": @embed "dashboard.md",
+  "systemInfo": @run [echo "System Info" | jq],
+  "statistics": {
+    "counts": @run [wc -l data.txt],
+    "createdAt": "2025-05-05"
+  }
 }
 ```
 
-This recursive structure would allow directives to be embedded at any level within objects and arrays while maintaining each directive's full structure and behavior.
+Array with nested directives:
+```
+@data reports = [
+  @embed "report1.json",
+  @embed "report2.json",
+  {
+    "custom": true,
+    "data": @run [generate-report]
+  }
+]
+```

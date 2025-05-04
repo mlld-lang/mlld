@@ -39,6 +39,15 @@ interface TextTemplateDirectiveNode {
 }
 ```
 
+## Distinction from Text Assignment
+
+Unlike the `textAssignment` subtype which can have a nested directive as its content value, the `textTemplate` subtype always uses an array of content nodes with variable interpolation. This provides a clear distinction between:
+
+- Assignment with literal strings, nested directives: `@text var = "value"` or `@text var = @embed "path.txt"`
+- Template syntax with interpolation: `@text var = [Template with {{variable}}]`
+
+The bracket syntax `[...]` clearly signals that this is a template with potential interpolation, while the other forms use different syntax for their specific purposes.
+
 ## Usage
 
 The text template directive is ideal for template-like content with interpolation. It can either be assigned to a variable or output directly. This directive:
@@ -53,6 +62,8 @@ The text template directive is ideal for template-like content with interpolatio
 Templates use `{{variable}}` syntax for interpolation, which makes them distinct from other variable references:
 - Text variables in templates: `{{var}}` - Used for general string interpolation
 - Unlike path variables (`$var`), template variables are not constrained by security rules
+
+Important: The use of `{{var}}` interpolation is ONLY available in template brackets `[...]`, not in quoted strings `"..."`. This provides a clear visual distinction between literal content and template content.
 
 ## Examples
 
@@ -102,3 +113,4 @@ With multiple variables:
 - Templates preserve whitespace exactly as written within the brackets
 - Variable interpolation is processed when the template is evaluated
 - Templates can be nested by referencing template variables inside other templates
+- Unlike textAssignment, textTemplate cannot have a nested directive in its content

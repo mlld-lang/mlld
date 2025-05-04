@@ -1,47 +1,129 @@
 DataDirective
   = "data" _ id:Identifier  _ "=" _ value:DataValue HWS DirectiveEOL {
-    return helpers.createDirective('data', {
-      identifier: id,
-      source: value.type,
-      ...(value.type === "embed" ? { embed: value.value } :
-          value.type === "run" ? { run: value.value } :
-          value.type === "call" ? { call: value.value } :
-          { value: value.value })
-    }, location());
+    helpers.debug('DATA', { type: 'assignment', identifier: id, valueType: value.type });
+    
+    // Capture raw text
+    const rawIdentifier = $(id);
+    const rawValue = value.rawText || '';
+    
+    // Create structured values object
+    const values = {
+      identifier: [id]
+    };
+    
+    // Handle different types of values
+    if (value.type === "nestedDirective" && value.directive) {
+      // Use the full directive node directly
+      values.value = value.directive;
+    } else if (value.type === "object") {
+      // Create a data object structure with nested properties
+      values.value = {
+        type: 'object',
+        properties: value.value
+      };
+    } else if (value.type === "array") {
+      // Create a data array structure
+      values.value = {
+        type: 'array',
+        items: value.value
+      };
+    } else {
+      // For primitive values, use content nodes array
+      values.value = value.value;
+    }
+    
+    // Return the directive node
+    return {
+      type: 'Directive',
+      kind: 'data',
+      subtype: 'dataAssignment',
+      values,
+      raw: {
+        identifier: rawIdentifier,
+        value: rawValue
+      },
+      meta: {}
+    };
   }
 
 DataValue
-  = "@embed" embedResult:_EmbedRHS {
+  = embedDirective:EmbedDirective {
       return {
-        type: "embed",
-        embed: embedResult
+        type: "nestedDirective",
+        directive: embedDirective, // Store the complete directive node
+        rawText: $(embedDirective)
       };
     }
-  / "@run" runResult:_RunRHS {
+  / runDirective:RunDirective {
       return {
-        type: "run",
-        run: runResult
+        type: "nestedDirective",
+        directive: runDirective, // Store the complete directive node
+        rawText: $(runDirective)
       };
     }
   / value:DataObjectLiteral {
     return {
-      type: "literal",
-      value
+      type: "object",
+      value,
+      rawText: $(value)
     };
   }
   / value:ArrayLiteral {
     return {
-      type: "literal",
-      value
+      type: "array",
+      value,
+      rawText: $(value)
+    };
+  }
+  / value:PrimitiveValue {
+    return {
+      type: "primitive",
+      value,
+      rawText: $(value)
     };
   }
 
+// Primitive values (string, number, boolean, null)
+PrimitiveValue
+  = StringLiteral
+  / NumberLiteral
+  / BooleanLiteral
+  / NullLiteral
+  / varExpr:Variable { return varExpr; }
+
 DataObjectLiteral
-  = "{{" _ props:ObjectProperties? _ "}}" {
-    return props ? Object.fromEntries(props) : {};
-  }
-  / "{" _ props:ObjectProperties? _ "}" {
-    return props ? Object.fromEntries(props) : {};
+  = "{" _ props:ObjectProperties? _ "}" {
+    const result = {};
+    
+    // Process properties into a structured format
+    if (props) {
+      for (const [key, value] of props) {
+        // Handle nested directives
+        if (value.type === "nestedDirective" && value.directive) {
+          result[key] = value.directive;
+        } 
+        // Handle nested objects
+        else if (value.type === "object") {
+          result[key] = {
+            type: 'object',
+            properties: value.value
+          };
+        } 
+        // Handle nested arrays
+        else if (value.type === "array") {
+          result[key] = {
+            type: 'array',
+            items: value.value
+          };
+        } 
+        // Handle primitive values
+        else {
+          result[key] = value.value || value;
+        }
+      }
+    }
+    
+    return result;
   }
 
 ObjectProperties
@@ -55,44 +137,66 @@ ObjectProperty
   }
 
 PropertyKey
-  = id:Identifier { return id; }
+  = id:Identifier { return id.identifier || id; }
   / str:StringLiteral { return str; }
 
 PropertyValue
-  = InterpolatedStringLiteral
-  / NumberLiteral
-  / BooleanLiteral
-  / NullLiteral
-  / DataObjectLiteral
-  / ArrayLiteral
-  / varExpr:Variable { return varExpr; }
-  / EmbedValue
-  / RunValue
-
-EmbedValue
-  = "@embed" _ content:DirectiveContent {
+  = embedDirective:EmbedDirective {
+      return {
+        type: "nestedDirective",
+        directive: embedDirective
+      };
+    }
+  / runDirective:RunDirective {
+      return {
+        type: "nestedDirective",
+        directive: runDirective
+      };
+    }
+  / value:DataObjectLiteral {
     return {
-      kind: "embed",
-      path: content
+      type: "object",
+      value
     };
   }
-
-RunValue
-  = "@run" _ content:DirectiveContent {
+  / value:ArrayLiteral {
     return {
-      kind: "run",
-      command: content,
-      ...(content.startsWith("$") ? { isReference: true } : {})
+      type: "array",
+      value
+    };
+  }
+  / value:PrimitiveValue {
+    return {
+      type: "primitive",
+      value
     };
   }
 
 ArrayLiteral
   = "[" _ items:ArrayItems? _ "]" {
-    return items || [];
+    return processArrayItems(items || []);
   }
-  / "[[" _ items:ArrayItems? _ "]]" {
-    return items || [];
-  }
+
+// Process array items to handle nested directives, objects, and arrays
+function processArrayItems(items) {
+  return items.map(item => {
+    if (item.type === "nestedDirective" && item.directive) {
+      return item.directive;
+    } else if (item.type === "object") {
+      return {
+        type: 'object',
+        properties: item.value
+      };
+    } else if (item.type === "array") {
+      return {
+        type: 'array',
+        items: item.value
+      };
+    } else {
+      return item.value || item;
+    }
+  });
+}
 
 ArrayItems
   = first:PropertyValue rest:(_ "," _ v:PropertyValue { return v; })* trailingComma:(_ ",")? {

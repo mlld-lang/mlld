@@ -1,6 +1,6 @@
 # Text Directive
 
-The Text directive is used to define and manipulate text variables in Meld. It supports various ways to assign content to variables, including literal text, interpolation, embedding from files, and running commands.
+The Text directive is used to define and manipulate text variables in Meld. It supports various ways to assign content to variables, including literal text, interpolation, embedding from files, running commands, and nested directives.
 
 ## Syntax
 
@@ -29,8 +29,8 @@ interface TextDirectiveNode {
   subtype: 'textAssignment' | 'textTemplate';
   values: {
     identifier?: VariableReferenceNode[];
-    content?: (TextNode | VariableReferenceNode)[];
-    source?: 'literal' | 'embed' | 'run';
+    content?: (TextNode | VariableReferenceNode)[] | DirectiveNode; // Can be content nodes OR a directive
+    source?: 'literal' | 'embed' | 'run' | 'directive';
   };
   raw: {
     identifier?: string;
@@ -49,10 +49,40 @@ Values and raw structures will differ between subtypes, as detailed in their res
 The `textAssignment` subtype supports several variants based on the source of content:
 
 1. Literal text: `@text var = "Hello, world!"`
-2. Embed source: `@text var = @embed "path/to/file.txt"`
-3. Run command: `@text var = @run [echo "Hello, world!"]`
+2. Nested embed directive: `@text var = @embed "path/to/file.txt"`
+3. Nested run directive: `@text var = @run [echo "Hello, world!"]`
 
 Each variant has specific structure and metadata as detailed in their documentation.
+
+## Nested Directives
+
+Text directives support a "directive nesting" feature, where other directives can be directly nested in the `content` field:
+
+```typescript
+// Example of a text directive with a nested embed directive
+{
+  type: 'Directive',
+  kind: 'text',
+  subtype: 'textAssignment',
+  values: {
+    identifier: [/* Variable reference node */],
+    content: {
+      // Full directive node structure
+      type: 'Directive',
+      kind: 'embed',
+      subtype: 'embedPath',
+      values: {
+        path: [/* Path nodes */]
+      },
+      // ...rest of embed directive
+    },
+    source: 'directive'
+  },
+  // ...rest of text directive
+}
+```
+
+This allows for composable directive structures where one directive can use another directive as its value source.
 
 ## Variable References
 
@@ -87,12 +117,12 @@ Multiline template:
 ]
 ```
 
-Using embed:
+Using nested embed directive:
 ```
 @text content = @embed "path/to/file.txt"
 ```
 
-Using run:
+Using nested run directive:
 ```
 @text result = @run [echo "The current directory is: $PWD"]
 ```
