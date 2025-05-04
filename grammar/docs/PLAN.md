@@ -1,5 +1,17 @@
 # AST Values Object Refactoring Implementation Plan
 
+> **IMPORTANT DIRECTIVE RENAMING**: As part of this refactoring, we are also implementing a consistent naming convention:
+> - All variable-storing directives will be four-letter nouns: 
+>   - `text` (already implemented)
+>   - `path` (already implemented)
+>   - `data` (already implemented)
+>   - `exec` (renamed from "define") - not yet implemented
+> - All action-performing directives will be three-letter verbs:
+>   - `add` (renamed from "embed") - in progress
+>   - `run` (already a three-letter verb) - not yet implemented
+> 
+> This renaming will require changes throughout the codebase but will create a more consistent and intuitive API.
+
 This document outlines the process for refactoring the `DirectiveNode` structure to use a structured object approach instead of a flat array, along with comprehensive type definitions that support recursive directive nesting.
 
 ## Goal
@@ -19,9 +31,9 @@ Create a robust, strongly-typed AST structure for Meld directives that:
 - Text directive: Grammar implementation complete, documentation, tests, and nested directive support complete ✅
 - Data directive: Type definitions and documentation complete, basic nested directive support implemented, object/array nesting planned ✅
 - Path directive: Grammar implementation complete, documentation and tests complete ✅
-- Embed directive: Grammar implementation complete, documentation and tests complete ✅
+- Embed directive (to be renamed to `add`): Grammar implementation complete, documentation and tests complete ✅
 - Run directive: Planning phase
-- Define directive: Planning phase
+- Define directive (to be renamed to `exec`): Planning phase
 
 We are currently progressing through Phase 5 (Grammar Implementation) with both core directive support and directive nesting features. 
 
@@ -173,12 +185,12 @@ This consistent structure makes directive nodes more semantically meaningful and
 We'll implement the directives in this order, from simplest to most complex:
 
 1. Import ✅
-2. Text ✅
+2. Text ✅ 
 3. Path ✅
 4. Data ✅
-5. Embed ✅
+5. Embed (to be renamed to `add`) ✅
 6. Run
-7. Define
+7. Define (to be renamed to `exec`)
 
 ## Conversation Schedule
 
@@ -211,9 +223,9 @@ For each directive, we'll have a structured conversation covering:
 - Text directive: Grammar implementation complete, documentation, tests, and nested directive support complete ✅
 - Data directive: Type definitions and documentation complete, basic nested directive support implemented, object/array nesting planned ✅
 - Path directive: Grammar implementation complete, documentation and tests complete ✅
-- Embed directive: Grammar implementation complete, documentation and tests complete ✅
+- Embed directive (to be renamed to `add`): Grammar implementation complete, documentation and tests complete ✅
 - Run directive: Planning phase
-- Define directive: Planning phase
+- Define directive (to be renamed to `exec`): Planning phase
 
 We are currently progressing through Phase 5 (Grammar Implementation) with both core directive support and directive nesting features. 
 
@@ -276,7 +288,7 @@ The path directive implementation includes:
 - Raw: `identifier` (string) and `path` (raw string)
 - Meta: Path metadata including `isAbsolute`, `hasVariables`, etc.
 
-### Embed Directive
+### Embed Directive (to be renamed to `add`)
 
 - [x] Have structured conversation about AST structure
 - [x] Create overview documentation (embed.md)
@@ -286,21 +298,22 @@ The path directive implementation includes:
 - [x] Update grammar implementation (embed.peggy) with structured format
 - [x] Run and verify tests with new structured format
 - [x] Ensure parser generates correct structured format
+- [ ] Rename to `add` directive with all related files and references
 - [ ] Update handlers to use new structure
 
-The embed directive implementation includes these structures:
+The embed (soon to be `add`) directive implementation includes these structures:
 
-**embedPath**:
+**embedPath** (to be renamed to `addPath`):
 - Values: `path` (array of path nodes), `section` (optional text nodes), `headerLevel` (optional number node), `underHeader` (optional text nodes)
 - Raw: `path` (string), `section` (optional string), `headerLevel` (optional string), `underHeader` (optional string)
 - Meta: Path metadata including `isAbsolute`, `hasVariables`, etc.
 
-**embedTemplate**:
+**embedTemplate** (to be renamed to `addTemplate`):
 - Values: `content` (array of text/variable nodes), `headerLevel` (optional), `underHeader` (optional)
 - Raw: `content` (string), `headerLevel` (optional), `underHeader` (optional)
 - Meta: `isTemplateContent: true`
 
-**embedVariable**:
+**embedVariable** (to be renamed to `addVariable`):
 - Values: `variable` (array with variable reference node), `headerLevel` (optional), `underHeader` (optional)
 - Raw: `variable` (string), `headerLevel` (optional), `underHeader` (optional)
 - Meta: (empty object)
