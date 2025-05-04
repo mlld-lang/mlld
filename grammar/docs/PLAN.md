@@ -1,6 +1,6 @@
 # AST Values Object Refactoring Implementation Plan
 
-This document outlines the process for refactoring the `DirectiveNode` structure to use a structured object approach instead of a flat array, along with comprehensive type definitions.
+This document outlines the process for refactoring the `DirectiveNode` structure to use a structured object approach instead of a flat array, along with comprehensive type definitions that support recursive directive nesting.
 
 ## Goal
 
@@ -10,7 +10,8 @@ Create a robust, strongly-typed AST structure for Meld directives that:
 2. Preserves raw text for each semantic group
 3. Captures relevant metadata
 4. Enforces type safety through comprehensive type definitions
-5. Is well-documented for future maintenance
+5. Supports recursive directive nesting for composability
+6. Is well-documented for future maintenance
 
 ## Implementation Structure
 
@@ -132,8 +133,10 @@ For each directive, we'll have a structured conversation covering:
 
 ## Current Status
 
-- Import directive: Grammar implementation complete, documentation and tests complete
-- Additional directives: Planning phase
+- Import directive: Grammar implementation complete, documentation and tests complete ✅
+- Text directive: Grammar implementation complete, documentation and tests complete ✅
+- Data directive: Type definitions and documentation complete, grammar partially implemented ✅
+- Remaining directives: Planning phase
 
 ## Implementation Checklist
 
@@ -150,25 +153,76 @@ For each directive, we'll have a structured conversation covering:
 
 ### Text Directive
 
-- [ ] Have structured conversation about AST structure
-- [ ] Create overview documentation (text.md)
-- [ ] Create subtype documentation (text.textVariable.md, text.textTemplate.md)
-- [ ] Define type interfaces (directives.ts, nodes.ts)
-- [ ] Create test fixtures (text.ts)
-- [ ] Update grammar implementation (text.peggy)
-- [ ] Run and verify tests (text.test.ts)
-- [ ] Update handlers to use new structure
+- [x] Have structured conversation about AST structure
+- [x] Create overview documentation (text.md)
+- [x] Create subtype documentation (text.textAssignment.md, text.textTemplate.md)
+- [x] Define type interfaces with directive nesting support (text.ts)
+- [x] Create test fixtures (nested-text-directives.test.ts)
+- [x] Update grammar implementation (text.peggy)
+- [x] Run and verify tests
+- [ ] Update handlers to use new structure with nested directives
+
+### Data Directive
+
+- [x] Have structured conversation about AST structure
+- [x] Create overview documentation (data.md)
+- [x] Define type interfaces with recursive structure (data.ts)
+- [x] Create test fixtures (nested-data-directives.test.ts)
+- [x] Implement basic directive nesting in grammar (direct embedding)
+- [ ] Complete grammar implementation for object and array nesting
+- [ ] Update handlers to use new structure with nested directives
 
 ### Remaining Directives
 
 - [ ] Continue with structured conversations for each directive
 - [ ] Complete documentation, testing and implementation for each
 
-## Next Actions
+## Next Potential Actions
 
-1. Update directive handlers to use the new Import directive structure
-2. Proceed with Text directive structured conversation
-3. Continue through remaining directives in specified order
+1. Update directive handlers to use the new structures
+2. Complete data directive grammar implementation for object and array nesting
+3. Continue with path directive implementation
+4. Consider cross-directive interoperability patterns
+5. Enhance validation for nested directives
+
+## Directive Nesting Implementation Stages
+
+For comprehensive directive nesting, we're implementing in stages:
+
+1. **Basic Nesting (Complete)** - Direct nesting of directives at the top level:
+   ```
+   @text content = @embed "file.txt"
+   @data config = @embed "config.json" 
+   ```
+
+2. **Object Property Nesting (Partial)** - Directives as object properties:
+   ```
+   @data dashboard = {
+     "content": @embed "file.md",
+     "stats": @run [command]
+   }
+   ```
+   
+3. **Array Item Nesting (Planned)** - Directives as array items:
+   ```
+   @data results = [
+     @embed "file1.json",
+     @embed "file2.json"
+   ]
+   ```
+
+4. **Mixed Nesting (Planned)** - Complex structures with directives at multiple levels:
+   ```
+   @data config = {
+     "reports": [
+       @embed "report1.json",
+       {
+         "content": @run [generate-report],
+         "timestamp": "2025-05-05"
+       }
+     ]
+   }
+   ```
 
 ## Benefits of This Approach
 

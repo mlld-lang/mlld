@@ -66,10 +66,15 @@ All directives follow a consistent AST structure:
 interface DirectiveNode {
   type: 'Directive';
   kind: DirectiveKind;       // 'import', 'text', etc.
-  subtype: DirectiveSubtype; // 'importAll', 'textVariable', etc.
+  subtype: DirectiveSubtype; // 'importAll', 'textAssignment', etc.
   
-  // Values contains arrays of nodes organized by semantic groups
-  values: { [key: string]: MeldNode[] };
+  // Values contains structured data organized by semantic groups
+  // Values can contain arrays of nodes or nested directives
+  values: { 
+    [key: string]: MeldNode[] | DirectiveNode | { 
+      [key: string]: MeldNode[] | DirectiveNode 
+    }
+  };
   
   // Raw contains the original text content for each value group
   raw: { [key: string]: string };
@@ -78,6 +83,12 @@ interface DirectiveNode {
   meta: { [key: string]: unknown };
 }
 ```
+
+This design supports recursive nesting of directives, allowing:
+
+1. Directives as direct values: `@text content = @embed "file.txt"`
+2. Directives within data objects: `@data config = { "content": @embed "file.md" }`
+3. Directives within arrays: `@data results = [@run [command], @embed "file.txt"]`
 
 ## Type Definitions
 

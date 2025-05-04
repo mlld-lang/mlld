@@ -211,3 +211,52 @@ Array with nested directives:
   }
 ]
 ```
+
+## Future Grammar Implementation
+
+Our current implementation already supports directives as direct values:
+
+```
+@data config = @embed "config.json"
+```
+
+The next phase will be to update the grammar to fully support directives within structured data objects and arrays:
+
+```
+@data complexConfig = { 
+  "content": @embed "file.md",
+  "systemInfo": @run [echo "hello world" | jq]
+}
+```
+
+We have already implemented the recursive type system needed for this feature:
+
+```typescript
+type DataValue = 
+  | ContentNodeArray // String literals, numbers, booleans
+  | DataObjectValue  // Objects with nested properties
+  | DataArrayValue   // Arrays with nested items
+  | DirectiveNode;   // Nested directive (embed, run, etc.)
+
+interface DataObjectValue {
+  type: 'object';
+  properties: {
+    [key: string]: DataValue; // Each property can be any data value
+  };
+}
+
+interface DataArrayValue {
+  type: 'array';
+  items: DataValue[]; // Each item can be any data value
+}
+```
+
+This recursive structure allows directives to be embedded at any level within objects and arrays while maintaining each directive's full structure and behavior. The types are already in place, but the grammar parser for data.peggy will need to be enhanced to fully parse these complex nested structures.
+
+### Implementation Plan
+
+1. Modify the data.peggy grammar to handle directive nodes in object properties and array items
+2. Add detailed parsing logic to correctly identify and nest directives within data structures
+3. Create robust testing for complex nested objects and arrays with directives
+4. Add validation for nested directive access in variable resolution
+5. Ensure consistent error handling for all nested cases
