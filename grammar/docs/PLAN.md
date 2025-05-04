@@ -13,6 +13,24 @@ Create a robust, strongly-typed AST structure for Meld directives that:
 5. Supports recursive directive nesting for composability
 6. Is well-documented for future maintenance
 
+## Current Status
+
+- Import directive: Grammar implementation complete, documentation and tests complete ✅
+- Text directive: Grammar implementation complete, documentation, tests, and nested directive support complete ✅
+- Data directive: Type definitions and documentation complete, basic nested directive support implemented, object/array nesting planned ✅
+- Path directive: Grammar implementation complete, documentation and tests complete ✅
+- Embed directive: Grammar implementation complete, documentation and tests complete ✅
+- Run directive: Planning phase
+- Define directive: Planning phase
+
+We are currently progressing through Phase 5 (Grammar Implementation) with both core directive support and directive nesting features. 
+
+Current implementation notes:
+- All directives are properly implemented to use the new structured format in their grammar files
+- Tests verify the correct structured format is being produced
+- Upon rebuilding the grammar, directives correctly use the structured format
+- Next steps involve implementing the remaining directives and updating handlers to use the new format
+
 ## Implementation Structure
 
 We're implementing this refactoring using a structured approach:
@@ -27,6 +45,36 @@ We're implementing this refactoring using a structured approach:
 ```
 
 All components are organized by directive kind, then by subtype for clarity and separation of concerns.
+
+## Implementation Requirements for Each Directive
+
+To fully implement a directive in the new structured format, we need to complete these deliverables:
+
+1. **Documentation**
+   - Overview document (`kind.md`) explaining purpose and AST structure
+   - Subtype-specific documents (`kind.subtype.md`) for each variant
+   - Example AST structures showing the new format
+
+2. **Types**
+   - Base interfaces for the directive (`{Kind}DirectiveNode`)
+   - Subtype interfaces (`{Subtype}DirectiveNode`)
+   - Value, raw, and metadata type definitions
+   - Type guards for runtime type checking
+
+3. **Tests**
+   - Comprehensive tests for all syntax variations
+   - Tests that specifically verify the structured format
+   - Tests for edge cases and special handling
+
+4. **Grammar**
+   - Updated grammar rules to generate the structured format
+   - Proper capture of raw text for each semantic group
+   - Metadata calculation and inclusion
+
+5. **Handlers**
+   - Updated handlers to use the new structure
+   - Type assertions to ensure type safety
+   - Utilization of the structured access patterns
 
 ## Implementation Process
 
@@ -94,15 +142,41 @@ Finally, update directive handlers to:
 3. Utilize raw text and metadata where appropriate
 4. Add type assertions for safety
 
+## Structured AST Format
+
+For each directive, we implement a consistent structured AST format with the following structure:
+
+```typescript
+{
+  type: 'Directive',
+  kind: string,              // e.g., 'embed', 'text', 'path'
+  subtype: string,           // e.g., 'embedPath', 'textAssignment'
+  values: {                  // Structured node arrays for each semantic group
+    [key: string]: NodeArray // e.g., path, content, variable, etc.
+  },
+  raw: {                     // Raw text for reconstruction
+    [key: string]: string    // Matches keys in values
+  },
+  meta: {                    // Metadata specific to directive
+    [key: string]: any       // e.g., path.isAbsolute, isTemplateContent
+  }
+}
+```
+
+This consistent structure makes directive nodes more semantically meaningful and easier to work with:
+- `values` contains parsed node arrays organized by semantic group
+- `raw` preserves original text for each group to support reconstruction
+- `meta` provides derived information like whether a path is absolute
+
 ## Directive Implementation Order
 
 We'll implement the directives in this order, from simplest to most complex:
 
 1. Import ✅
-2. Text
-3. Path
-4. Data
-5. Embed
+2. Text ✅
+3. Path ✅
+4. Data ✅
+5. Embed ✅
 6. Run
 7. Define
 
@@ -134,9 +208,20 @@ For each directive, we'll have a structured conversation covering:
 ## Current Status
 
 - Import directive: Grammar implementation complete, documentation and tests complete ✅
-- Text directive: Grammar implementation complete, documentation and tests complete ✅
-- Data directive: Type definitions and documentation complete, grammar partially implemented ✅
-- Remaining directives: Planning phase
+- Text directive: Grammar implementation complete, documentation, tests, and nested directive support complete ✅
+- Data directive: Type definitions and documentation complete, basic nested directive support implemented, object/array nesting planned ✅
+- Path directive: Grammar implementation complete, documentation and tests complete ✅
+- Embed directive: Grammar implementation complete, documentation and tests complete ✅
+- Run directive: Planning phase
+- Define directive: Planning phase
+
+We are currently progressing through Phase 5 (Grammar Implementation) with both core directive support and directive nesting features. 
+
+Current implementation notes:
+- All directives are properly implemented to use the new structured format in their grammar files
+- We are fully transitioning to the new structured format only and no longer supporting the legacy format
+- Tests now exclusively verify the new structured format is correct
+- All handlers will need to be updated to use the new structured format
 
 ## Implementation Checklist
 
@@ -159,7 +244,8 @@ For each directive, we'll have a structured conversation covering:
 - [x] Define type interfaces with directive nesting support (text.ts)
 - [x] Create test fixtures (nested-text-directives.test.ts)
 - [x] Update grammar implementation (text.peggy)
-- [x] Run and verify tests
+- [x] Implement nested directive support (@text var = @embed/run) ✅
+- [x] Run and verify tests with nested directives
 - [ ] Update handlers to use new structure with nested directives
 
 ### Data Directive
@@ -167,10 +253,57 @@ For each directive, we'll have a structured conversation covering:
 - [x] Have structured conversation about AST structure
 - [x] Create overview documentation (data.md)
 - [x] Define type interfaces with recursive structure (data.ts)
-- [x] Create test fixtures (nested-data-directives.test.ts)
-- [x] Implement basic directive nesting in grammar (direct embedding)
-- [ ] Complete grammar implementation for object and array nesting
+- [x] Create test fixtures (directive-nesting.test.ts)
+- [x] Implement basic directive nesting in grammar (@data var = @embed/run) ✅
+- [ ] Implement object property nesting (@data var = { "prop": @embed })
+- [ ] Implement array item nesting (@data var = [ @embed ])
 - [ ] Update handlers to use new structure with nested directives
+
+### Path Directive
+
+- [x] Have structured conversation about AST structure
+- [x] Create overview documentation (path.md)
+- [x] Create subtype documentation (path.pathAssignment.md)
+- [x] Define type interfaces (path.ts)
+- [x] Create test fixtures (path.test.ts)
+- [x] Update grammar implementation (path.peggy) with structured format
+- [x] Run and verify tests with new structured format
+- [x] Ensure parser generates correct structured format
+- [ ] Update handlers to use new structure
+
+The path directive implementation includes:
+- Values: `identifier` (variable reference node) and `path` (array of path nodes)
+- Raw: `identifier` (string) and `path` (raw string)
+- Meta: Path metadata including `isAbsolute`, `hasVariables`, etc.
+
+### Embed Directive
+
+- [x] Have structured conversation about AST structure
+- [x] Create overview documentation (embed.md)
+- [x] Create subtype documentation (embed.embedPath.md, embed.embedTemplate.md, embed.embedVariable.md, embed.embedMultiline.md)
+- [x] Define type interfaces (embed.ts)
+- [x] Create test fixtures (embed.test.ts)
+- [x] Update grammar implementation (embed.peggy) with structured format
+- [x] Run and verify tests with new structured format
+- [x] Ensure parser generates correct structured format
+- [ ] Update handlers to use new structure
+
+The embed directive implementation includes these structures:
+
+**embedPath**:
+- Values: `path` (array of path nodes), `section` (optional text nodes), `headerLevel` (optional number node), `underHeader` (optional text nodes)
+- Raw: `path` (string), `section` (optional string), `headerLevel` (optional string), `underHeader` (optional string)
+- Meta: Path metadata including `isAbsolute`, `hasVariables`, etc.
+
+**embedTemplate**:
+- Values: `content` (array of text/variable nodes), `headerLevel` (optional), `underHeader` (optional)
+- Raw: `content` (string), `headerLevel` (optional), `underHeader` (optional)
+- Meta: `isTemplateContent: true`
+
+**embedVariable**:
+- Values: `variable` (array with variable reference node), `headerLevel` (optional), `underHeader` (optional)
+- Raw: `variable` (string), `headerLevel` (optional), `underHeader` (optional)
+- Meta: (empty object)
 
 ### Remaining Directives
 
@@ -189,19 +322,21 @@ For each directive, we'll have a structured conversation covering:
 
 For comprehensive directive nesting, we're implementing in stages:
 
-1. **Basic Nesting (Complete)** - Direct nesting of directives at the top level:
+1. **Basic Nesting (Complete)** ✅ - Direct nesting of directives at the top level:
    ```
    @text content = @embed "file.txt"
    @data config = @embed "config.json" 
    ```
+   - Implementation notes: We chose to store nested directives directly in the `values.content` field for text directives and `values.value` field for data directives, rather than in arrays. This enables direct access to the nested directive. For text directives, we also set a `source: 'directive'` flag to indicate the content comes from a nested directive.
 
-2. **Object Property Nesting (Partial)** - Directives as object properties:
+2. **Object Property Nesting (Planned)** - Directives as object properties:
    ```
    @data dashboard = {
      "content": @embed "file.md",
      "stats": @run [command]
    }
    ```
+   - Initial grammar rules were implemented but require further refinement. Tests have been created but are currently skipped.
    
 3. **Array Item Nesting (Planned)** - Directives as array items:
    ```
@@ -210,6 +345,7 @@ For comprehensive directive nesting, we're implementing in stages:
      @embed "file2.json"
    ]
    ```
+   - Grammar rules need to be updated to support this pattern. Tests have been created but are currently skipped.
 
 4. **Mixed Nesting (Planned)** - Complex structures with directives at multiple levels:
    ```
@@ -223,6 +359,7 @@ For comprehensive directive nesting, we're implementing in stages:
      ]
    }
    ```
+   - This will be implemented after object property and array item nesting are working correctly.
 
 ## Benefits of This Approach
 
