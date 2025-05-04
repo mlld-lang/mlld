@@ -3,7 +3,7 @@
  */
 import { DirectiveNode } from './base';
 import { ImportDirectiveNode, ImportAllDirectiveNode, ImportSelectedDirectiveNode } from './import';
-import { TextDirectiveNode, TextAssignmentDirectiveNode, TextBracketedDirectiveNode, TextEmbedDirectiveNode, TextRunDirectiveNode, TextCallDirectiveNode } from './text';
+import { TextDirectiveNode, TextAssignmentDirectiveNode, TextTemplateDirectiveNode } from './text';
 import { VariableReferenceNode } from '@core/syntax/types/nodes';
 import { ImportWildcardNode } from './values';
 
@@ -39,20 +39,16 @@ export function isTextAssignmentDirective(node: DirectiveNode): node is TextAssi
   return node.kind === 'text' && node.subtype === 'textAssignment';
 }
 
-export function isTextBracketedDirective(node: DirectiveNode): node is TextBracketedDirectiveNode {
-  return node.kind === 'text' && node.subtype === 'textBracketed';
+export function isTextTemplateDirective(node: DirectiveNode): node is TextTemplateDirectiveNode {
+  return node.kind === 'text' && node.subtype === 'textTemplate';
 }
 
-export function isTextEmbedDirective(node: DirectiveNode): node is TextEmbedDirectiveNode {
-  return isTextAssignmentDirective(node) && 'source' in node.values && node.values.source === 'embed';
+export function isTextEmbedDirective(node: DirectiveNode): node is TextAssignmentDirectiveNode {
+  return isTextAssignmentDirective(node) && !!node.sourceDirective && node.sourceDirective.type === 'embed';
 }
 
-export function isTextRunDirective(node: DirectiveNode): node is TextRunDirectiveNode {
-  return isTextAssignmentDirective(node) && 'source' in node.values && node.values.source === 'run';
-}
-
-export function isTextCallDirective(node: DirectiveNode): node is TextCallDirectiveNode {
-  return isTextAssignmentDirective(node) && 'source' in node.values && node.values.source === 'call';
+export function isTextRunDirective(node: DirectiveNode): node is TextAssignmentDirectiveNode {
+  return isTextAssignmentDirective(node) && !!node.sourceDirective && node.sourceDirective.type === 'run';
 }
 
 /**

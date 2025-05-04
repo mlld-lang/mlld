@@ -1,20 +1,19 @@
 # Text Assignment Directive
 
-The `textAssignment` subtype of the Text directive assigns a value to a variable using the syntax: `text variable = value`.
+The `textAssignment` subtype of the Text directive assigns a value to a variable using the syntax: `@text variable = value`.
 
 ## Syntax
 
 ```
-text identifier = value
+@text identifier = value
 ```
 
 Where:
 - `identifier`: A valid variable name
 - `value`: Can be one of:
   - A literal string: `"content"` or `'content'` or `"""multiline content"""`
-  - An embed source: `@embed path/to/file.txt`
-  - A run command: `@run echo "Hello, world!"`
-  - An API call: `@call api.method parameters`
+  - An embed source: `@embed "path/to/file.txt"`
+  - A run command: `@run [echo "Hello, world!"]`
 
 ## AST Structure
 
@@ -26,7 +25,6 @@ interface TextAssignmentDirectiveNode {
   values: {
     identifier: VariableReferenceNode[];
     content: (TextNode | VariableReferenceNode)[];
-    source?: 'literal' | 'embed' | 'run' | 'call';
   };
   raw: {
     identifier: string;
@@ -34,6 +32,12 @@ interface TextAssignmentDirectiveNode {
   };
   meta: {
     // Metadata based on the value source
+  };
+  
+  // Only present when the value comes from another directive
+  sourceDirective?: {
+    directive: DirectiveNode; // The actual directive providing the value
+    type: 'embed' | 'run';    // Type discriminator
   };
 }
 ```
@@ -45,17 +49,17 @@ interface TextAssignmentDirectiveNode {
 The most common form, assigning a literal string to a variable.
 
 ```
-text greeting = "Hello, world!"
+@text greeting = "Hello, world!"
 ```
 
-AST structure specific to literals:
+AST structure for literals:
 ```typescript
 {
   values: {
     identifier: [/* Variable reference node */],
-    content: [/* Text nodes with potential variable interpolation */],
-    source: 'literal'
-  }
+    content: [/* Text nodes (no variable interpolation) */]
+  },
+  // No sourceDirective since the content is a direct literal
 }
 ```
 
@@ -64,25 +68,22 @@ AST structure specific to literals:
 Assigns the content of a file to a variable using `@embed`.
 
 ```
-text content = @embed path/to/file.txt
+@text content = @embed "path/to/file.txt"
 ```
 
-AST structure specific to embed:
+AST structure for embed source:
 ```typescript
 {
   values: {
     identifier: [/* Variable reference node */],
-    content: [/* Processed content after embedding */],
-    source: 'embed'
+    content: [/* Processed content after embedding */]
   },
-  meta: {
-    embed: {
-      // Embed-specific metadata
-      path: {
-        isAbsolute: boolean,
-        hasVariables: boolean,
-        // ... other path metadata
-      }
+  sourceDirective: {
+    type: 'embed',
+    directive: {
+      // The full embed directive node with its own structure
+      kind: 'embed',
+      // ...other embed directive properties
     }
   }
 }
@@ -93,69 +94,49 @@ AST structure specific to embed:
 Assigns the output of a command to a variable using `@run`.
 
 ```
-text result = @run echo "The current directory is: $PWD"
+@text result = @run [echo "The current directory is: $PWD"]
 ```
 
-AST structure specific to run:
+AST structure for run command:
 ```typescript
 {
   values: {
     identifier: [/* Variable reference node */],
-    content: [/* Processed content after running command */],
-    source: 'run'
+    content: [/* Processed content after running command */]
   },
-  meta: {
-    run: {
-      // Run-specific metadata
-      command: string,
-      // ... other run metadata
+  sourceDirective: {
+    type: 'run',
+    directive: {
+      // The full run directive node with its own structure
+      kind: 'run',
+      // ...other run directive properties
     }
   }
 }
 ```
 
-### API Call
+## Variable References
 
-Assigns the result of an API call to a variable using `@call`.
-
-```
-text response = @call api.fetchData parameters
-```
-
-AST structure specific to call:
-```typescript
-{
-  values: {
-    identifier: [/* Variable reference node */],
-    content: [/* Processed content after API call */],
-    source: 'call'
-  },
-  meta: {
-    call: {
-      api: string,
-      method: string,
-      // ... other call metadata
-    }
-  }
-}
-```
+Text assignment directives can use two types of variable references:
+- Path variables in `@run` commands and `@embed` paths: `$var` - Constrained by security rules
+- Text variables in string literals: `{{var}}` - General string interpolation
 
 ## Examples
 
 Simple literal:
 ```
-text greeting = "Hello, world!"
+@text greeting = "Hello, world!"
 ```
 
-With interpolation:
+Simple string literals (no interpolation):
 ```
-text name = "John"
-text greeting = "Hello, {{name}}!"
+@text name = "John"
+@text greeting = "Hello, John!"
 ```
 
 Multi-line content:
 ```
-text message = """
+@text message = """
 This is a multi-line
 text value with
 several lines.
@@ -164,10 +145,20 @@ several lines.
 
 Embed a file:
 ```
-text content = @embed ./README.md
+@text content = @embed "README.md"
+```
+
+Embed with path variable:
+```
+@text content = @embed "$SOURCE_DIR/config.json"
 ```
 
 Run a command:
 ```
-text files = @run ls -la
+@text files = @run [ls -la]
+```
+
+Run with command variables:
+```
+@text result = @run [find $SEARCH_PATH -name "*.js"]
 ```
