@@ -2,8 +2,8 @@ import { describe, test, expect } from 'vitest';
 import { parse } from '@core/ast/parser';
 
 describe('Directive Nesting Tests', () => {
-  test('Text directive with nested embed directive', async () => {
-    const content = `@text content = @embed [path/to/file.txt]`;
+  test('Text directive with nested add directive', async () => {
+    const content = `@text content = @add [path/to/file.txt]`;
     
     const result = await parse(content);
     expect(result.ast).toHaveLength(1);
@@ -26,7 +26,7 @@ describe('Directive Nesting Tests', () => {
         
         // Verify the nested directive structure
         expect(directive.values.content).toHaveProperty('directive');
-        expect(directive.values.content.directive.kind).toBe('embed');
+        expect(directive.values.content.directive.kind).toBe('add');
         expect(directive.values.source).toBe('directive');
       }
     }
@@ -56,8 +56,8 @@ describe('Directive Nesting Tests', () => {
     }
   });
   
-  test('Data directive with nested embed directive', async () => {
-    const content = `@data config = @embed [path/to/config.json]`;
+  test('Data directive with nested add directive', async () => {
+    const content = `@data config = @add [path/to/config.json]`;
     
     const result = await parse(content);
     expect(result.ast).toHaveLength(1);
@@ -79,7 +79,7 @@ describe('Directive Nesting Tests', () => {
         
         // Verify the nested directive structure
         expect(directive.values.value).toHaveProperty('directive');
-        expect(directive.values.value.directive.kind).toBe('embed');
+        expect(directive.values.value.directive.kind).toBe('add');
       }
     }
   });
@@ -108,8 +108,8 @@ describe('Directive Nesting Tests', () => {
   });
   
   // TODO: Support nested directives in data objects and arrays in future implementation
-  test.skip('Data directive with object containing nested embed directive', async () => {
-    const content = `@data dashboard = { "content": @embed [path/to/content.md] }`;
+  test.skip('Data directive with object containing nested add directive', async () => {
+    const content = `@data dashboard = { "content": @add [path/to/content.md] }`;
     
     const result = await parse(content);
     expect(result.ast).toHaveLength(1);
@@ -135,14 +135,14 @@ describe('Directive Nesting Tests', () => {
         // Verify that the object property contains a nested directive
         const contentProperty = properties.content;
         expect(contentProperty).toHaveProperty('directive');
-        expect(contentProperty.directive.kind).toBe('embed');
+        expect(contentProperty.directive.kind).toBe('add');
       }
     }
   });
   
   // TODO: Support nested directives in data arrays in future implementation
-  test.skip('Data directive with array containing nested embed directive', async () => {
-    const content = `@data items = [ @embed [path/to/items.json] ]`;
+  test.skip('Data directive with array containing nested add directive', async () => {
+    const content = `@data items = [ @add [path/to/items.json] ]`;
     
     const result = await parse(content);
     expect(result.ast).toHaveLength(1);
@@ -166,7 +166,7 @@ describe('Directive Nesting Tests', () => {
         // Verify that the array contains a nested directive
         const firstItem = directive.values.value.items[0];
         expect(firstItem).toHaveProperty('directive');
-        expect(firstItem.directive.kind).toBe('embed');
+        expect(firstItem.directive.kind).toBe('add');
       }
     }
   });

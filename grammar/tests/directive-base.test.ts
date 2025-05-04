@@ -9,12 +9,12 @@ import type { DirectiveNode } from '../../core/ast/types';
 describe('Directive Base Structure', () => {
   const directiveExamples = [
     '@import { * } from "file.md"',
-    '@embed "path/to/file.md"',
+    '@add "path/to/file.md"',
     '@text myvar = "some text"',
     '@data myvar = { "key": "value" }',
     '@path myvar = "/path/to/file"',
     '@run [echo "hello world"]',
-    '@define mycommand (param) = "default value"'
+    '@exec mycommand (param) = "default value"'
   ];
 
   for (const input of directiveExamples) {

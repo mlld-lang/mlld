@@ -17,11 +17,11 @@ export * from './raw';
 // Directive-specific types
 export * from './import';
 export * from './text'; // Implemented
-// export * from './embed'; // To be implemented
+export * from './add'; // Renamed from 'embed'
+export * from './exec'; // Renamed from 'define'
+export * from './path'; // Implemented
+export * from './data'; // Implemented
 // export * from './run'; // To be implemented
-// export * from './define'; // To be implemented
-// export * from './path'; // To be implemented
-// export * from './data'; // To be implemented
 
 // Type guards
 export * from './guards';

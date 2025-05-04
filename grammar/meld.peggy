@@ -97,7 +97,7 @@ Directive
       ImportDirective   // Standard import syntax
     / AddDirective      // Renamed from EmbedDirective
     / RunDirective
-    / DefineDirective
+    / ExecDirective     // Renamed from DefineDirective
     / DataDirective
     / TextDirective
     / PathDirective

@@ -31,17 +31,19 @@ Create a robust, strongly-typed AST structure for Meld directives that:
 - Text directive: Grammar implementation complete, documentation, tests, and nested directive support complete ✅
 - Data directive: Type definitions and documentation complete, basic nested directive support implemented, object/array nesting planned ✅
 - Path directive: Grammar implementation complete, documentation and tests complete ✅
-- Embed directive (to be renamed to `add`): Grammar implementation complete, documentation and tests complete ✅
-- Run directive: Planning phase
-- Define directive (to be renamed to `exec`): Planning phase
+- Add directive (renamed from `embed`): Grammar implementation complete, documentation and tests complete ✅
+- Run directive: Not yet implemented with structured format ❌
+- Exec directive (renamed from `define`): Only renamed, structured format not yet implemented ❌
 
 We are currently progressing through Phase 5 (Grammar Implementation) with both core directive support and directive nesting features. 
 
 Current implementation notes:
-- All directives are properly implemented to use the new structured format in their grammar files
-- Tests verify the correct structured format is being produced
-- Upon rebuilding the grammar, directives correctly use the structured format
-- Next steps involve implementing the remaining directives and updating handlers to use the new format
+- Several directives have been implemented to use the new structured format in their grammar files (import, text, data, path, add)
+- The run directive has not yet been updated to use the structured format
+- The exec directive has only been renamed from define, but not yet implemented with the structured format
+- Tests verify the correct structured format is being produced for completed directives
+- Upon rebuilding the grammar, implemented directives correctly use the structured format
+- Next steps involve properly designing and implementing the exec and run directives with the structured format and updating handlers
 
 ## Implementation Structure
 

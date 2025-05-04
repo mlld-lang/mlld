@@ -6,7 +6,7 @@ import { parse } from '@core/ast/parser';
 
 describe('Import Directive Structure', () => {
   test('Import All structure', async () => {
-    const content = `@import [path/to/file.meld]`;
+    const content = `@import { * } from "path/to/file.meld"`;
     const parseResult = await parse(content);
     
     // Log the structure
