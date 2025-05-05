@@ -1,15 +1,15 @@
 ImportDirective
-  = "@import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:(
+  = "import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:(
       quotedPath:StringLiteral { 
         return { 
           parts: quotedPath,
-          raw: $(quotedPath)
+          raw: quotedPath.raw || JSON.stringify(quotedPath.value)
         };
       }
       / variablePath:Variable {
         return {
           parts: [variablePath],
-          raw: $(variablePath)
+          raw: variablePath.raw || variablePath.identifier
         };
       }
     ) HWS DirectiveEOL {
