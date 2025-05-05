@@ -1,28 +1,31 @@
 # Exec Directive
 
-The `exec` directive (renamed from `define`) is used to define named values and commands that can be executed or referenced in other directives. The `exec` directive supports both string values and `@run` command values, allowing users to define reusable components.
+The `exec` directive (renamed from `define`) is used to define named commands that can be executed by the `@run` directive. It allows creating reusable command templates and code snippets that can be invoked throughout a Meld document.
 
 ## Subtypes
 
-The `exec` directive currently has one subtype:
+The `exec` directive has two subtypes:
 
-- [ExecCommand](./execCommand.md): Used to define named commands with `@run` syntax
-
-Note: More subtypes will be implemented in the future to mirror all run subtypes.
+- [execCommand](./execCommand.md): Defines a shell command
+- [execCode](./execCode.md): Defines a code snippet in a specific programming language
 
 ## Syntax
 
 ```meld
-@exec name = value
-@exec name.field = value
-@exec name(parameters) = value
+@exec commandName = @run [command]
+@exec commandName (param1, param2) = @run [command with $param1]
+@exec commandName = @run language [code]
+@exec commandName (param1, param2) = @run language [code using param1 and param2]
 ```
 
 Where:
-- `name`: An identifier for the exec definition
-- `field`: Optional metadata field (risk.high, risk.med, risk.low, risk, about, meta)
-- `parameters`: Optional comma-separated list of parameter names
-- `value`: Either a string value or a `@run` command expression
+- `commandName`: An identifier for the command definition
+- `param1, param2`: Optional parameters that can be referenced in the command
+- `command`: A shell command to execute
+- `language`: Programming language identifier (e.g., 'javascript', 'python', 'bash')
+- `code`: Code in the specified programming language
+
+Note: The space between command name and parameters is optional but preferred in documentation.
 
 ## AST Structure
 
@@ -32,24 +35,29 @@ The `exec` directive nodes follow this structure:
 {
   type: 'Directive',
   kind: 'exec',
-  subtype: 'execCommand',
+  subtype: 'execCommand' | 'execCode',
   values: {
-    name: TextNodeArray,
-    field?: TextNodeArray,
-    parameters?: VariableNodeArray[],
-    command: TextNodeArray,
+    // Values specific to each subtype
+    identifier: TextNodeArray,     // Command name
+    params: VariableNodeArray[],   // Parameter placeholders, may be empty
+    metadata?: TextNodeArray,      // Optional metadata information
+    command?: ContentNodeArray,    // Command content (for execCommand)
+    lang?: TextNodeArray,          // Language identifier (for execCode)
+    code?: ContentNodeArray        // Code content (for execCode)
   },
   raw: {
-    name: string,
-    field?: string,
-    parameters?: string[],
-    command: string,
+    // Raw text for each semantic group
+    identifier: string,
+    params: string[],
+    metadata?: string,
+    command?: string,
+    lang?: string,
+    code?: string
   },
   meta: {
-    isCommand: boolean,
-    field?: {
-      type: 'risk.high' | 'risk.med' | 'risk.low' | 'risk' | 'about' | 'meta'
-    }
+    // Metadata specific to subtype
+    parameterCount: number,
+    metadata?: object              // Structured metadata (future implementation)
   },
   nodeId: string,
   location: SourceLocation
@@ -58,38 +66,52 @@ The `exec` directive nodes follow this structure:
 
 ## Examples
 
-### ExecCommand Subtype
+### execCommand Subtype
 
-Define a command to list files:
+Define a simple command:
 
 ```meld
-@exec list = @run [ls -la]
+@exec listFiles = @run [ls -la]
 ```
 
 Define a command with parameters:
 
 ```meld
-@exec format(path, type) = @run [fmt $path --type=$type]
+@exec formatFile (file, type) = @run [fmt $file --type=$type]
 ```
 
-Define a command with risk level:
+### execCode Subtype
+
+Define a JavaScript function:
 
 ```meld
-@exec dangerous.risk.high = @run [rm -rf /]
+@exec greet = @run javascript [
+  console.log("Hello, world!");
+]
 ```
 
-Note: String value support will be added in a future implementation.
+Define a Python function with parameters:
+
+```meld
+@exec formatJson (data, style) = @run python [
+  import json
+  data_obj = json.loads(data)
+  print(json.dumps(data_obj, indent=4 if style == "pretty" else None))
+]
+```
 
 ## Handling
 
 Exec directives are used for:
 
-1. Defining named values that can be referenced in variable interpolation
-2. Creating reusable command templates that can be invoked with parameters
-3. Documenting command risk levels and metadata for security purposes
+1. Defining reusable commands and code snippets
+2. Creating parameterized command templates
+3. Organizing and centralizing common operations
+
+Commands defined with `@exec` can be executed using the `@run` directive with the `$commandName` syntax, optionally passing arguments to fill parameter placeholders.
 
 ## Related Directives
 
-- [@run](./run.md): Executes commands, can reference exec-defined commands
-- [@add](./add.md): Can use values defined by exec directives
-- [@text](./text.md): Can reference values defined by exec directives
+- [@run](./run.md): Executes commands, including those defined by `@exec`
+- [@text](./text.md): Can capture and format output from executed commands
+- [@data](./data.md): Can process structured data from command output

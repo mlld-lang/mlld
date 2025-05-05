@@ -320,9 +320,169 @@ The embed (soon to be `add`) directive implementation includes these structures:
 - Raw: `variable` (string), `headerLevel` (optional), `underHeader` (optional)
 - Meta: (empty object)
 
+### Run Directive Implementation Plan
+
+Based on our detailed design conversations, we've agreed on these implementation details for the run directive:
+
+#### Run Directive Subtypes
+
+1. **runCommand** - Basic shell command execution
+   ```
+   @run [command --with parameters]
+   ```
+   
+   Multi-line commands use the same bracket syntax:
+   ```
+   @run [
+     command --with parameters
+     | pipe to next command
+   ]
+   ```
+
+2. **runCode** - Code execution in a specific language
+   ```
+   @run javascript [
+   // JavaScript code here
+   ]
+   ```
+
+3. **runExec** - Execute a previously defined command (from exec directive)
+   ```
+   @run $commandName (arg1, arg2)
+   ```
+   
+   Note: The space between command name and arguments is optional but preferred in documentation.
+
+#### Run Values Object Structure
+
+For each subtype, the values object will be structured as follows:
+
+**runCommand**:
+- Values: `command` (ContentNodeArray) - Array of text/variable nodes for command content
+- Raw: `command` (string) - Raw text of command
+- Meta: `isMultiLine` (boolean) - Whether this is a multi-line command
+
+**runCode**:
+- Values: 
+  - `lang` (TextNodeArray) - Language identifier
+  - `args` (VariableNodeArray[]) - Array of argument arrays, may be empty
+  - `code` (ContentNodeArray) - Code content
+- Raw:
+  - `lang` (string) - Raw language name
+  - `args` (string[]) - Raw argument strings, may be empty array
+  - `code` (string) - Raw code text
+- Meta:
+  - `isMultiLine` (boolean) - Whether this is a multi-line code block
+
+**runExec**:
+- Values:
+  - `identifier` (TextNodeArray) - Reference to the defined command
+  - `args` (VariableNodeArray[]) - Array of argument arrays, may be empty
+- Raw:
+  - `identifier` (string) - Raw command name
+  - `args` (string[]) - Raw argument strings, may be empty array
+- Meta:
+  - `argumentCount` (number) - Number of provided arguments
+
+### Exec Directive Implementation Plan
+
+For the exec directive (renamed from define), we'll implement:
+
+#### Exec Directive Subtypes
+
+1. **execCommand** - Define a shell command that can be executed via runExec
+   ```
+   @exec commandName = @run [command]
+   ```
+
+2. **execCode** - Define a code snippet in a specific language that can be executed via runExec
+   ```
+   @exec commandName = @run javascript [ code ]
+   @exec commandName (param1, param2) = @run python [ print("Hello", param1, param2) ]
+   ```
+   
+   Note: The space between command name and parameters is optional but preferred in documentation.
+
+Both subtypes will support parameters using the same structure.
+
+#### Exec Values Object Structure
+
+**execCommand**:
+- Values:
+  - `identifier` (TextNodeArray) - Command name
+  - `params` (VariableNodeArray[]) - Parameter placeholders, may be empty
+  - `metadata` (TextNodeArray, optional) - Metadata information (risk, about, etc.)
+  - `command` (ContentNodeArray) - Command content
+- Raw:
+  - `identifier` (string) - Raw command name
+  - `params` (string[]) - Raw parameter names, may be empty array 
+  - `metadata` (string, optional) - Raw metadata string
+  - `command` (string) - Raw command string
+- Meta:
+  - `parameterCount` (number) - Number of parameters
+  - `metadata` (object, optional) - Structured metadata information (future implementation)
+
+**execCode**:
+- Values:
+  - `identifier` (TextNodeArray) - Command name
+  - `params` (VariableNodeArray[]) - Parameter placeholders, may be empty
+  - `metadata` (TextNodeArray, optional) - Metadata information
+  - `lang` (TextNodeArray) - Language identifier
+  - `code` (ContentNodeArray) - Code content
+- Raw:
+  - `identifier` (string) - Raw command name
+  - `params` (string[]) - Raw parameter names, may be empty array 
+  - `metadata` (string, optional) - Raw metadata string
+  - `lang` (string) - Raw language name
+  - `code` (string) - Raw code text
+- Meta:
+  - `parameterCount` (number) - Number of parameters
+  - `metadata` (object, optional) - Structured metadata information (future implementation)
+
+#### Implementation Notes:
+
+1. **Consistent Naming**:
+   - Using `identifier` consistently across directives that store variables (text, data, path, exec)
+   - Using `args` for arguments passed to commands in runExec and runCode
+   - Using `params` for parameters defined in execCommand and execCode
+
+2. **Metadata Handling**:
+   - Renamed `field` to `metadata` for clarity and descriptiveness
+   - Postponed implementation of detailed risk levels for later phases
+   - Will implement a structured metadata object in the future for risk, about, and meta fields
+
+3. **RunExec UX**:
+   - From a UX perspective, runExec doesn't need to know whether it's executing code or a shell command
+   - This provides a clean, intuitive interface for users where they just reference command names
+   - Internal handlers will determine the right execution strategy based on how the command was defined
+
+### Run Directive Implementation Checklist
+
+- [x] Have structured conversation about AST structure
+- [x] Create overview documentation (run.md)
+- [x] Create subtype documentation (runCommand.md, runCode.md, runExec.md)
+- [x] Define type interfaces (run.ts) with appropriate values, raw, and meta structures
+- [x] Create test fixtures for each subtype
+- [ ] Update grammar implementation (run.peggy) with structured format
+- [ ] Run and verify tests with new structured format
+- [ ] Ensure parser generates correct structured format
+- [ ] Update handlers to use new structure
+
+### Exec Directive Implementation Checklist
+
+- [x] Have structured conversation about AST structure
+- [x] Create overview documentation (exec.md)
+- [x] Create subtype documentation (execCommand.md, execCode.md)
+- [x] Define type interfaces (exec.ts) with appropriate values, raw, and meta structures
+- [x] Create test fixtures for each subtype
+- [ ] Update grammar implementation (exec.peggy) with structured format
+- [ ] Run and verify tests with new structured format
+- [ ] Ensure parser generates correct structured format
+- [ ] Update handlers to use new structure
+
 ### Remaining Directives
 
-- [ ] Continue with structured conversations for each directive
+- [ ] Continue with structured conversations for each additional directive
 - [ ] Complete documentation, testing and implementation for each
 
 ## Next Potential Actions

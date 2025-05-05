@@ -50,10 +50,6 @@ Standardize on quoted paths:
    - Content templates use brackets: `[Template with {{vars}}]`
    - Commands use brackets: `[command --with parameters]`
 
-3. **Options Passing**:
-   - Use familiar flag syntax: `--option1 value --option2`
-   - Options follow the main content: `@directive "content" --option1 value`
-
 ## Directive-Specific Standardization
 
 ### Text Directive
@@ -92,7 +88,7 @@ path var = "$basePathVar/extension"
 ### Add Directive
 
 ```
-@add "path/to/file" --section heading
+@add "path/to/file"
 @add "$pathVar"
 ```
 

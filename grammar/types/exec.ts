@@ -1,105 +1,123 @@
-import { 
-  DirectiveNode, 
-  NodeType, 
-  TextNode, 
-  TextNodeArray, 
-  TypedDirectiveNode, 
-  VariableNode, 
-  VariableNodeArray 
-} from './base';
+/**
+ * Exec directive type definitions
+ */
+import { DirectiveNode, TypedDirectiveNode } from './base';
+import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
 
-// ====================
-// Raw Value Interfaces
-// ====================
-
+/**
+ * Exec directive raw values
+ */
 export interface ExecRaw {
-  name: string;
-  field?: string;
-  parameters?: string[];
+  identifier: string;
+  params: string[];
+  metadata?: string;
   command?: string;
-  value?: string;
+  lang?: string;
+  code?: string;
 }
 
-export interface ExecCommandRaw extends ExecRaw {
-  name: string;
-  command: string;
-  field?: string;
-  parameters?: string[];
-}
-
-// ExecValueRaw removed - this was a hallucinated subtype
-
-// ====================
-// Value Interfaces
-// ====================
-
-export interface ExecValues {
-  name: TextNodeArray;
-  field?: TextNodeArray;
-  parameters?: VariableNodeArray[];
-  command?: TextNodeArray;
-  value?: TextNodeArray;
-}
-
-export interface ExecCommandValues extends ExecValues {
-  name: TextNodeArray;
-  command: TextNodeArray;
-  field?: TextNodeArray;
-  parameters?: VariableNodeArray[];
-}
-
-// ExecValueValues removed - this was a hallucinated subtype
-
-// ====================
-// Metadata Interfaces
-// ====================
-
+/**
+ * Exec directive metadata
+ */
 export interface ExecMeta {
-  field?: {
-    type: 'risk.high' | 'risk.med' | 'risk.low' | 'risk' | 'about' | 'meta';
-  };
-  isCommand?: boolean;
-}
-
-export interface ExecCommandMeta extends ExecMeta {
-  isCommand: true;
-  field?: {
-    type: 'risk.high' | 'risk.med' | 'risk.low' | 'risk' | 'about' | 'meta';
+  parameterCount: number;
+  metadata?: {
+    type?: string;
+    [key: string]: unknown;
   };
 }
 
-// ExecValueMeta removed - this was a hallucinated subtype
-
-// ====================
-// Node Interfaces
-// ====================
-
-export interface ExecDirectiveNode extends TypedDirectiveNode<'exec', 
-  'execCommand'> {
+/**
+ * Base Exec directive node
+ */
+export interface ExecDirectiveNode extends TypedDirectiveNode<'exec', ExecSubtype> {
   values: ExecValues;
   raw: ExecRaw;
   meta: ExecMeta;
 }
 
-export interface ExecCommandDirectiveNode extends ExecDirectiveNode {
-  subtype: 'execCommand';
-  values: ExecCommandValues;
-  raw: ExecCommandRaw;
-  meta: ExecCommandMeta;
+/**
+ * Exec subtypes
+ */
+export type ExecSubtype = 'execCommand' | 'execCode';
+
+/**
+ * Exec directive values - different structures based on subtype
+ */
+export interface ExecValues {
+  identifier: TextNodeArray;
+  params: VariableNodeArray[];
+  metadata?: TextNodeArray;
+  command?: ContentNodeArray;
+  lang?: TextNodeArray;
+  code?: ContentNodeArray;
 }
 
-// ExecValueDirectiveNode removed - this was a hallucinated subtype
+/**
+ * Exec Command directive - @exec commandName (params) = @run [command]
+ */
+export interface ExecCommandDirectiveNode extends ExecDirectiveNode {
+  subtype: 'execCommand';
+  values: {
+    identifier: TextNodeArray;
+    params: VariableNodeArray[];
+    metadata?: TextNodeArray;
+    command: ContentNodeArray;
+  };
+  raw: {
+    identifier: string;
+    params: string[];
+    metadata?: string;
+    command: string;
+  };
+  meta: {
+    parameterCount: number;
+    metadata?: {
+      type?: string;
+      [key: string]: unknown;
+    };
+  };
+}
 
-// ====================
-// Type Guards
-// ====================
+/**
+ * Exec Code directive - @exec commandName (params) = @run language [code]
+ */
+export interface ExecCodeDirectiveNode extends ExecDirectiveNode {
+  subtype: 'execCode';
+  values: {
+    identifier: TextNodeArray;
+    params: VariableNodeArray[];
+    metadata?: TextNodeArray;
+    lang: TextNodeArray;
+    code: ContentNodeArray;
+  };
+  raw: {
+    identifier: string;
+    params: string[];
+    metadata?: string;
+    lang: string;
+    code: string;
+  };
+  meta: {
+    parameterCount: number;
+    metadata?: {
+      type?: string;
+      [key: string]: unknown;
+    };
+  };
+}
 
+/**
+ * Type guards to check the type of an exec directive
+ */
 export function isExecDirectiveNode(node: DirectiveNode): node is ExecDirectiveNode {
   return node.kind === 'exec';
 }
 
-export function isExecCommandDirectiveNode(node: DirectiveNode): node is ExecCommandDirectiveNode {
-  return isExecDirectiveNode(node) && node.subtype === 'execCommand';
+export function isExecCommandDirective(node: ExecDirectiveNode): node is ExecCommandDirectiveNode {
+  return node.subtype === 'execCommand';
 }
 
-// isExecValueDirectiveNode removed - this was a hallucinated function
+export function isExecCodeDirective(node: ExecDirectiveNode): node is ExecCodeDirectiveNode {
+  return node.subtype === 'execCode';
+}

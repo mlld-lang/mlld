@@ -1,20 +1,20 @@
 # Exec Command Subtype
 
-The `execCommand` subtype of the `@exec` directive is used to define reusable, named commands that can be executed with the `@run` directive. It provides a way to create command templates that can be parameterized and reused throughout a project.
+The `execCommand` subtype of the `@exec` directive defines reusable shell commands that can be executed using the `@run` directive. It provides a way to create command templates that can be parameterized and reused throughout a Meld document.
 
 ## Syntax
 
 ```meld
-@exec name = @run [command]
-@exec name.field = @run [command]
-@exec name(parameters) = @run [command]
+@exec commandName = @run [command]
+@exec commandName (param1, param2) = @run [command with $param1 and $param2]
 ```
 
 Where:
-- `name`: An identifier for the command definition
-- `field`: Optional metadata field (risk.high, risk.med, risk.low, risk, about, meta)
-- `parameters`: Optional comma-separated list of parameter names
-- `command`: The command to execute, which can include variable references
+- `commandName`: An identifier for the command definition
+- `param1, param2`: Optional parameters that can be referenced in the command
+- `command`: The shell command to execute, which can include parameter references
+
+Note: The space between command name and parameters is optional but preferred in documentation.
 
 ## AST Structure
 
@@ -26,22 +26,20 @@ The `execCommand` subtype nodes have this structure:
   kind: 'exec',
   subtype: 'execCommand',
   values: {
-    name: TextNodeArray,       // The name of the command
-    field?: TextNodeArray,     // Optional metadata field
-    parameters?: VariableNodeArray[], // Parameter identifiers
-    command: TextNodeArray     // The command content
+    identifier: TextNodeArray,     // Command name
+    params: VariableNodeArray[],   // Parameter placeholders, may be empty
+    metadata?: TextNodeArray,      // Optional metadata information
+    command: ContentNodeArray      // Command content
   },
   raw: {
-    name: string,             // Raw name string
-    field?: string,           // Raw field string
-    parameters?: string[],    // Raw parameter names
-    command: string           // Raw command string
+    identifier: string,            // Raw command name
+    params: string[],              // Raw parameter names, may be empty array
+    metadata?: string,             // Raw metadata string
+    command: string                // Raw command string
   },
   meta: {
-    isCommand: true,          // Flag indicating this is a command
-    field?: {
-      type: 'risk.high' | 'risk.med' | 'risk.low' | 'risk' | 'about' | 'meta'
-    }
+    parameterCount: number,        // Number of parameters
+    metadata?: object              // Structured metadata (future implementation)
   },
   nodeId: string,
   location: SourceLocation
@@ -53,7 +51,7 @@ The `execCommand` subtype nodes have this structure:
 ### Basic Command
 
 ```meld
-@exec list = @run [ls -la]
+@exec listFiles = @run [ls -la]
 ```
 
 AST:
@@ -63,15 +61,17 @@ AST:
   kind: 'exec',
   subtype: 'execCommand',
   values: {
-    name: [{ type: 'Text', content: 'list' }],
+    identifier: [{ type: 'Text', content: 'listFiles' }],
+    params: [],
     command: [{ type: 'Text', content: 'ls -la' }]
   },
   raw: {
-    name: 'list',
+    identifier: 'listFiles',
+    params: [],
     command: 'ls -la'
   },
   meta: {
-    isCommand: true
+    parameterCount: 0
   }
 }
 ```
@@ -79,7 +79,7 @@ AST:
 ### Parameterized Command
 
 ```meld
-@exec format(path, type) = @run [fmt $path --type=$type]
+@exec formatFile (path, type) = @run [fmt $path --type=$type]
 ```
 
 AST:
@@ -89,28 +89,28 @@ AST:
   kind: 'exec',
   subtype: 'execCommand',
   values: {
-    name: [{ type: 'Text', content: 'format' }],
-    parameters: [
+    identifier: [{ type: 'Text', content: 'formatFile' }],
+    params: [
       [{ type: 'VariableReference', identifier: 'path' }],
       [{ type: 'VariableReference', identifier: 'type' }]
     ],
     command: [{ type: 'Text', content: 'fmt $path --type=$type' }]
   },
   raw: {
-    name: 'format',
-    parameters: ['path', 'type'],
+    identifier: 'formatFile',
+    params: ['path', 'type'],
     command: 'fmt $path --type=$type'
   },
   meta: {
-    isCommand: true
+    parameterCount: 2
   }
 }
 ```
 
-### Command with Risk Level
+### Command with Metadata (Future Implementation)
 
 ```meld
-@exec dangerous.risk.high = @run [rm -rf /]
+@exec cleanDirectory.risk.high = @run [rm -rf $dir]
 ```
 
 AST:
@@ -120,18 +120,20 @@ AST:
   kind: 'exec',
   subtype: 'execCommand',
   values: {
-    name: [{ type: 'Text', content: 'dangerous' }],
-    field: [{ type: 'Text', content: 'risk.high' }],
-    command: [{ type: 'Text', content: 'rm -rf /' }]
+    identifier: [{ type: 'Text', content: 'cleanDirectory' }],
+    metadata: [{ type: 'Text', content: 'risk.high' }],
+    params: [],
+    command: [{ type: 'Text', content: 'rm -rf $dir' }]
   },
   raw: {
-    name: 'dangerous',
-    field: 'risk.high',
-    command: 'rm -rf /'
+    identifier: 'cleanDirectory',
+    metadata: 'risk.high',
+    params: [],
+    command: 'rm -rf $dir'
   },
   meta: {
-    isCommand: true,
-    field: {
+    parameterCount: 0,
+    metadata: {
       type: 'risk.high'
     }
   }
@@ -143,13 +145,17 @@ AST:
 The `execCommand` subtype is used to:
 
 1. Define reusable command templates
-2. Document command risk levels
-3. Create parameterized commands that can be executed with arguments
+2. Create parameterized commands that can be executed with arguments
+3. Document command risk levels and metadata (future implementation)
 4. Group related commands with consistent naming
 
-Commands defined with `@exec` can be executed using the `@run` directive, passing in the command name and any required parameters.
+When a command is defined with `@exec`, it becomes available for execution using the `@run $commandName` syntax. Any parameters defined in the command are replaced with the arguments provided when the command is executed.
+
+## Parameter Substitution
+
+Parameters defined in the command template are referenced using the `$param` syntax within the command string. When the command is executed, these references are replaced with the actual argument values.
 
 ## Related Directives
 
-- [@run](./run.md): Executes commands, can reference exec-defined commands
 - [@exec](./exec.md): Parent directive with overview of all subtypes
+- [@run](./run.md): Executes commands, including those defined by `@exec`
