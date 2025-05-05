@@ -480,6 +480,200 @@ Both subtypes will support parameters using the same structure.
 - [ ] Ensure parser generates correct structured format
 - [ ] Update handlers to use new structure
 
+## Grammar Implementation Guidelines
+
+This section provides detailed guidelines for implementing the run and exec directive grammar files with the new structured format.
+
+### Development Environment Setup
+
+1. **Build the Grammar**:
+   ```bash
+   npm run build:grammar
+   ```
+   This step is essential after any grammar changes to generate the updated parser.
+
+2. **Run Tests**:
+   ```bash
+   npm test grammar/tests/run.test.ts
+   npm test grammar/tests/exec.test.ts
+   ```
+   These commands will verify your grammar implementation against the test fixtures.
+
+### Run Directive Grammar Implementation
+
+Follow these steps when implementing the run.peggy file:
+
+1. **Structure the Rules**:
+   - Create separate rules for each subtype (runCommand, runCode, runExec)
+   - Use helper rules for shared functionality (argument parsing, etc.)
+
+2. **runCommand Subtype**:
+   - Capture command content using BracketInterpolatableContent
+   - Build raw string by joining node content
+   - Set isMultiLine metadata based on content (check for newlines)
+   - Structure as:
+     ```
+     values: { command: ContentNodeArray }
+     raw: { command: string }
+     meta: { isMultiLine: boolean }
+     ```
+
+3. **runCode Subtype**:
+   - Capture language identifier, arguments, and code content
+   - Handle both with and without arguments
+   - Structure as:
+     ```
+     values: { 
+       lang: TextNodeArray,
+       args: VariableNodeArray[],
+       code: ContentNodeArray
+     }
+     raw: {
+       lang: string,
+       args: string[],
+       code: string
+     }
+     meta: { isMultiLine: boolean }
+     ```
+
+4. **runExec Subtype**:
+   - Parse command reference with optional arguments
+   - Make whitespace between identifier and arguments optional
+   - Structure as:
+     ```
+     values: {
+       identifier: TextNodeArray,
+       args: VariableNodeArray[]
+     }
+     raw: {
+       identifier: string,
+       args: string[]
+     }
+     meta: { argumentCount: number }
+     ```
+
+5. **Helper Functions**:
+   - Use createStructuredDirective() instead of createDirective()
+   - Calculate raw strings using helper.reconstructRawString() or similar
+
+### Exec Directive Grammar Implementation
+
+Follow these steps when implementing the exec.peggy file:
+
+1. **Structure the Rules**:
+   - Create separate rules for each subtype (execCommand, execCode)
+   - Use helper rules for metadata and parameter parsing
+
+2. **execCommand Subtype**:
+   - Parse identifier, optional metadata field, and parameters
+   - Capture command content from the @run directive
+   - Structure as:
+     ```
+     values: {
+       identifier: TextNodeArray,
+       params: VariableNodeArray[],
+       metadata?: TextNodeArray,
+       command: ContentNodeArray
+     }
+     raw: {
+       identifier: string,
+       params: string[],
+       metadata?: string,
+       command: string
+     }
+     meta: {
+       parameterCount: number,
+       metadata?: { type?: string }
+     }
+     ```
+
+3. **execCode Subtype**:
+   - Parse identifier, metadata, parameters, language, and code content
+   - Structure as:
+     ```
+     values: {
+       identifier: TextNodeArray,
+       params: VariableNodeArray[],
+       metadata?: TextNodeArray,
+       lang: TextNodeArray,
+       code: ContentNodeArray
+     }
+     raw: {
+       identifier: string,
+       params: string[],
+       metadata?: string,
+       lang: string,
+       code: string
+     }
+     meta: {
+       parameterCount: number,
+       metadata?: { type?: string }
+     }
+     ```
+
+4. **Parameter Handling**:
+   - Support optional parameters with proper whitespace handling
+   - Convert parameter identifiers to VariableNodeArray
+
+5. **Metadata Parsing**:
+   - Parse risk levels and other metadata fields
+   - Structure metadata in a consistent format for future expansion
+
+### Common Implementation Patterns
+
+1. **Node Creation**:
+   ```javascript
+   return {
+     type: 'Directive',
+     kind: 'run',  // or 'exec'
+     subtype: 'runCommand',  // or other subtype
+     values: {
+       // Structured content nodes
+     },
+     raw: {
+       // Raw text strings
+     },
+     meta: {
+       // Metadata flags and values
+     }
+   };
+   ```
+
+2. **Raw Text Capture**:
+   ```javascript
+   const rawCommand = content.map(n => {
+     if (n.type === 'Text') return n.content;
+     if (n.type === 'VariableReference') {
+       return n.valueType === 'path' ? `$${n.identifier}` : `{{${n.identifier}}}`;
+     }
+     return '';
+   }).join('');
+   ```
+
+3. **Parameter/Argument Transformation**:
+   ```javascript
+   const paramNodes = params.map(paramName => 
+     helpers.createVariableReferenceNode('text', { identifier: paramName }, location())
+   );
+   ```
+
+### Testing and Troubleshooting
+
+1. **Verify AST Structure**:
+   - The generated AST must match the expected structure in test fixtures
+   - Pay attention to values, raw, and meta objects
+
+2. **Debug Grammar Issues**:
+   - Use conditional logging with helpers.debug() to trace execution
+   - Check input text patterns against rules with tools like pegjs-online
+
+3. **Common Issues**:
+   - Variable reference format in raw strings
+   - Whitespace handling in multi-line content
+   - Object structure consistency
+
+By following these guidelines, you'll ensure a correct and consistent implementation of the run and exec directive grammar with the new structured format.
+
 ### Remaining Directives
 
 - [ ] Continue with structured conversations for each additional directive
