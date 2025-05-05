@@ -88,18 +88,20 @@ export default {
           hasVariables = true;
           this.debug('VALIDATE_PATH_NODE', 'Found variable:', JSON.stringify(node));
           // Track variable types independently
-          if (node.valueType === 'text') {
+          if (node.valueType === 'varInterpolation') {
+            // {{var}} - Treat as text variable
             hasTextVariables = true;
             variable_warning = true;
-            this.debug('VALIDATE_PATH_NODE', 'Found text variable:', JSON.stringify(node));
-          } else if (node.valueType === 'path') {
+            this.debug('VALIDATE_PATH_NODE', 'Found interpolation variable:', JSON.stringify(node));
+          } else if (node.valueType === 'varIdentifier') {
+            // @var - Treat as path variable
             hasPathVariables = true;
             // For imports, path variables should be relative to cwd
             // For embeds, they should not be
             if (directiveKind === DirectiveKind.embed) {
               isRelativeToCwd = false;
             }
-            this.debug('VALIDATE_PATH_NODE', 'Found path variable:', JSON.stringify(node));
+            this.debug('VALIDATE_PATH_NODE', 'Found @ variable:', JSON.stringify(node));
           }
         }
       }
@@ -157,25 +159,44 @@ export default {
       if (nodes && typeof nodes === 'object') {
         if (nodes.type === NodeType.Text) return nodes.content || '';
         if (nodes.type === NodeType.VariableReference) {
-          // CORRECTED: Only reconstruct path variables as $var. Text and Data use {{var}}.
+          // Handle different variable types with appropriate syntax
           const varId = nodes.identifier;
           const valueType = nodes.valueType;
-          return valueType === 'path' ? `$${varId}` : `{{${varId}}}`; 
+          
+          // Variable syntax handling:
+          // - 'varInterpolation' for {{var}} (in strings)
+          // - 'varIdentifier' for @var (direct reference)
+          if (valueType === 'varInterpolation') {
+            return `{{${varId}}}`;
+          } else if (valueType === 'varIdentifier') {
+            return `@${varId}`;
+          } else {
+            // Default case - should not happen with consistent valueTypes
+            return `{{${varId}}}`;
+          }
         }
       }
       return String(nodes || ''); // Fallback
     }
 
     let raw = '';
-          for (const node of nodes) {
+    for (const node of nodes) {
       if (!node) continue;
       if (node.type === NodeType.Text) {
         raw += node.content || '';
       } else if (node.type === NodeType.VariableReference) {
         const varId = node.identifier;
         const valueType = node.valueType;
-        // CORRECTED: Only reconstruct path variables as $var. Text and Data use {{var}}.
-        raw += valueType === 'path' ? `$${varId}` : `{{${varId}}}`; 
+        
+        // Use the same variable syntax handling logic as above
+        if (valueType === 'varInterpolation') {
+          raw += `{{${varId}}}`;
+        } else if (valueType === 'varIdentifier') {
+          raw += `@${varId}`;
+        } else {
+          // Default case - should not happen with consistent valueTypes
+          raw += `{{${varId}}}`;
+        }
       } else if (node.type === NodeType.PathSeparator) {
         raw += node.value || ''; // Append '/' or '.'
       } else if (node.type === NodeType.SectionMarker) {

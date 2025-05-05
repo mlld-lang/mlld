@@ -3,21 +3,14 @@ RunDirective
 
 // @run [command]
 runCommand
-  = "run" _ "[" content:BracketInterpolatableContent "]" {
+  = "run" _ command:WrappedCommandContent {
       // Calculate if this is a multi-line command by checking for newlines
-      const rawCommand = content.map(n => {
-        if (n.type === 'Text') return n.content;
-        if (n.type === 'VariableReference') {
-          return n.valueType === 'path' ? `$${n.identifier}` : `{{${n.identifier}}}`;
-        }
-        return '';
-      }).join('');
-      
+      const rawCommand = command.raw;
       const isMultiLine = rawCommand.includes('\n');
       
       // Create values object
       const values = {
-        command: content
+        command: command.parts
       };
       
       // Create raw object
@@ -36,7 +29,7 @@ runCommand
 // @run language [code]
 // @run language (arg1, arg2) [code]
 runCode
-  = "run" _ language:Identifier _ args:RunCodeArgs? _ "[" content:CodeBlockContent "]" {
+  = "run" _ language:Identifier _ args:RunCodeArgs? _ code:WrappedCodeContent {
       // Create language node
       const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
       
@@ -49,22 +42,15 @@ runCode
         return arg.content || '';
       }) : [];
       
-      // Properly preserve exact raw string content
-      const rawCode = content.map(n => {
-        if (n.type === 'Text') return n.content;
-        if (n.type === 'VariableReference') {
-          return n.valueType === 'path' ? `$${n.identifier}` : `{{${n.identifier}}}`;
-        }
-        return '';
-      }).join('');
-      
+      // Get raw code and check for multi-line
+      const rawCode = code.raw;
       const isMultiLine = rawCode.includes('\n');
       
       // Create values object
       const values = {
         lang: [langNode],
         args: args || [],
-        code: content
+        code: code.parts
       };
       
       // Create raw object
@@ -82,11 +68,11 @@ runCode
       return helpers.createStructuredDirective('run', 'runCode', values, raw, meta, location(), 'code');
     }
 
-// @run $commandName
-// @run $commandName(arg1, arg2)
-// @run $commandName (arg1, arg2)
+// @run @commandName
+// @run @commandName(arg1, arg2)
+// @run @commandName (arg1, arg2)
 runExec
-  = "run" _ "$" identifier:Identifier _ args:RunExecArgs? HWS DirectiveEOL {
+  = "run" _ "@" identifier:Identifier _ args:RunExecArgs? HWS DirectiveEOL {
       // Create text node from identifier
       const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
       
@@ -131,7 +117,7 @@ RunArgsList
 
 RunArg
   = varName:Identifier {
-      return helpers.createVariableReferenceNode('text', { identifier: varName }, location());
+      return helpers.createVariableReferenceNode('varInterpolation', { identifier: varName }, location());
     }
 
 // Helper rules for runExec arguments
@@ -163,7 +149,7 @@ RunExecArg
 _RunRHS
   = _ cmdRef:CommandReference {
       const commandObj = {
-        raw: `$${cmdRef.name}${cmdRef.args.length > 0 ? `(${cmdRef.args.map(arg => {
+        raw: `@${cmdRef.name}${cmdRef.args.length > 0 ? `(${cmdRef.args.map(arg => {
           if (arg.type === 'string') return `\"${arg.value}\"`;
           if (arg.type === 'variable') return arg.value.raw || '';
           return arg.value;
@@ -199,58 +185,52 @@ _RunRHS
         }
       };
     }
-  / _ lang:Identifier? _ params:RunVariableParams? _ "[" content:BracketInterpolatableContentOrEmpty "]" _[ \t]* {
-      // Create raw strings
-      const rawContent = content.map(n => {
-        if (n.type === 'Text') return n.content;
-        if (n.type === 'VariableReference') {
-          return n.valueType === 'path' ? `$${n.identifier}` : `{{${n.identifier}}}`;
+  / _ lang:Identifier _ params:RunVariableParams? _ code:WrappedCodeContent _[ \t]* {
+      // Create language node and get code content
+      const langNode = helpers.createNode(NodeType.Text, { content: lang }, location());
+      const rawCode = code.raw;
+      const isMultiLine = rawCode.includes('\n');
+      
+      // runCode subtype
+      return {
+        subtype: 'runCode',
+        values: {
+          lang: [langNode],
+          args: params || [],
+          code: code.parts
+        },
+        raw: {
+          lang,
+          args: params ? params.map(p => p.identifier) : [],
+          code: rawCode
+        },
+        meta: {
+          isMultiLine: isMultiLine
         }
-        return '';
-      }).join('');
+      };
+    }
+  / _ command:WrappedCommandContent _[ \t]* {
+      // Simple command case (no language)
+      const rawCommand = command.raw;
+      const isMultiLine = rawCommand.includes('\n');
       
-      const isMultiLine = rawContent.includes('\n');
-      
-      if (lang) {
-        // Create language node
-        const langNode = helpers.createNode(NodeType.Text, { content: lang.content }, location());
-      
-        // runCode subtype
-        return {
-          subtype: 'runCode',
-          values: {
-            lang: [langNode],
-            args: params || [],
-            code: content
-          },
-          raw: {
-            lang: lang.content,
-            args: params ? params.map(p => p.identifier) : [],
-            code: rawContent
-          },
-          meta: {
-            isMultiLine: isMultiLine
-          }
-        };
-      } else {
-        // runCommand subtype
-        return {
-          subtype: 'runCommand',
-          values: {
-            command: content
-          },
-          raw: {
-            command: rawContent
-          },
-          meta: {
-            isMultiLine: isMultiLine
-          }
-        };
-      }
+      // runCommand subtype
+      return {
+        subtype: 'runCommand',
+        values: {
+          command: command.parts
+        },
+        raw: {
+          command: rawCommand
+        },
+        meta: {
+          isMultiLine: isMultiLine
+        }
+      };
     }
 
 CommandReference
-  = "$" name:Identifier _ args:CommandArgs? { 
+  = "@" name:Identifier _ args:CommandArgs? { 
       return {
         name,
         args: args || [],
@@ -298,7 +278,7 @@ RunParamsList
 
 RunParam
   = varName:("{{" _ name:Identifier _ "}}" { return name; } / "(" _ name:Identifier _ ")" { return name; }) {
-      return helpers.createVariableReferenceNode('text', { identifier: varName }, location());
+      return helpers.createVariableReferenceNode('varInterpolation', { identifier: varName }, location());
     }
   / StringLiteral
   / identifier:Identifier { return identifier; }

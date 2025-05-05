@@ -16,6 +16,14 @@ LineTerminator
 
 EOF
   = !.
+  
+// --- Text Until End of Line ---
+
+// Simple text until the end of line
+TextUntilNewline
+  = text:[^\r\n]+ { 
+    return text.join(''); 
+  }
 
 EndOfLine
   = ws:[ \t\r]* term:LineTerminator &{ 

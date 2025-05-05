@@ -480,104 +480,105 @@ Both subtypes will support parameters using the same structure.
 - [x] Ensure parser generates correct structured format
 - [ ] Update handlers to use new structure
 
-## Universal @variable Syntax Implementation Plan
+## Universal @variable Syntax Implementation Plan - Updated
 
 As part of our syntax simplification strategy, we're adopting a universal `@variable` syntax across all directives. This will make `@` the central signifier for variable usage throughout Meld.
 
 ### Key Changes
 
-1. **String Interpolation**: Keep `{{mustache}}` syntax exclusively for interpolation inside strings
-2. **Direct References**: Use `@variable` syntax for direct references (in commands, paths, etc.)
+1. **String Interpolation**: Keep `{{mustache}}` syntax exclusively for interpolation inside strings (valueType: 'varInterpolation')
+2. **Direct References**: Use `@variable` syntax for direct references in commands, paths, etc. (valueType: 'varIdentifier')
 3. **Plain Text Handling**: `@xyz` inside strings is treated as plain text (not interpolated)
+
+### Implementation Progress
+
+We've implemented the initial changes required for the universal @variable syntax:
+
+- [x] Updated `variables.peggy` with `InterpolationVar` ({{var}}) and `AtVar` (@var) rules
+- [x] Updated `interpolation.peggy` to handle @ as potential variable marker
+- [x] Modified `helpers.js` to properly handle the new variable syntax types
+- [x] Updated path tests to use the new syntax
 
 ### Implementation Plan by File
 
-#### 1. variables.peggy
+#### 1. variables.peggy - ✅ Implemented
 
-- Update `Variable` rule to include both `InterpolationVar` ({{var}}) and `AtVar` (@var)
-- Create `InterpolationVar` rule for mustache syntax in strings:
-  ```javascript
-  "{{" _ id:Identifier ... _ "}}" {
-    // Create node with valueType 'interpolation'
-    return helpers.createVariableReferenceNode('interpolation', {
-      identifier: id,
-      ...
-    }, location());
-  }
-  ```
-- Create `AtVar` rule for @ syntax outside strings:
-  ```javascript
-  "@" id:Identifier ... {
-    // Create node with valueType 'variable'  
-    return helpers.createVariableReferenceNode('variable', {
-      identifier: id,
-      ...
-    }, location());
-  }
-  ```
-- Add special handling for path special characters (`@.`, `@~`, etc.)
-- Interpreter will determine the actual variable type at runtime
+- Created new valueTypes for variables:
+  - `varInterpolation` for {{var}} syntax (interpolation inside strings)
+  - `varIdentifier` for @var syntax (direct variable references)
+- Both types are exclusive and do not rely on legacy variable types
 
-#### 2. interpolation.peggy
+```javascript
+// AtVar for direct variable references
+"@" id:Identifier {
+  return helpers.createVariableReferenceNode('varIdentifier', {
+    identifier: id,
+  }, location());
+}
 
-- Update `PathAllowedChar` rule to handle @ as potential variable marker:
-  ```javascript
-  !('"' / "'" / '`' / '{{' / '/' / '\\') char:. { return char; }
-  ```
-- Update `BracketLiteralTextSegment` rule to handle @ variables:
-  ```javascript
-  value:$(!(']' / '{{') .)+ { 
-    return helpers.createNode(NodeType.Text, { content: value }, location());
-  }
-  ```
-- Update string content rules to handle Variable nodes (which now include AtVar)
+// InterpolationVar for string interpolation
+"{{" _ id:Identifier _ "}}" {
+  return helpers.createVariableReferenceNode('varInterpolation', {
+    identifier: id,
+  }, location());
+}
+```
 
-#### 3. run.peggy
+#### 2. interpolation.peggy - ✅ Implemented
 
-- Update `runExec` rule to use `@commandName` instead of `$commandName`:
-  ```javascript
-  "run" _ varRef:AtVar _ args:RunExecArgs? ...
-  ```
+- Updated `PathAllowedChar` rule to handle @ as potential variable marker
+- Updated `BracketLiteralTextSegment` rule to handle @ variables
+- Ensured string content rules handle both variable types properly
+
+#### 3. run.peggy - In Progress
+
+- Update `runExec` rule to use `@commandName` instead of `$commandName`
 - Update `CommandReference` rule to match AtVar instead of $ syntax
-- Modify raw string reconstruction for variables:
+- Update all variable references to use new valueTypes:
   ```javascript
   if (n.type === 'VariableReference') {
-    return n.valueType === 'interpolation' ? `{{${n.identifier}}}` : `@${n.identifier}`;
+    return n.valueType === 'varInterpolation' ? `{{${n.identifier}}}` : `@${n.identifier}`;
   }
   ```
-- Update variable reference creation to use 'variable' type
 
-#### 4. exec.peggy
+#### 4. exec.peggy - In Progress
 
 - Similar updates to run.peggy for command references
-- Update `ExecParam` rule to use new variable reference type:
+- Update `ExecParam` rule to use new variable type:
   ```javascript
-  return helpers.createVariableReferenceNode('variable', { identifier: paramName }, location());
+  return helpers.createVariableReferenceNode('varIdentifier', { identifier: paramName }, location());
   ```
-- Update raw string reconstruction to use @ format
 
-#### 5. path.peggy
+#### 5. path.peggy - In Progress
 
 - Update path variable references to use `@var` instead of `$var`
-- Update path validation to recognize @ variables
-- Modify raw string reconstruction for path variables
+- Update path validation to recognize `varIdentifier` variable types
+- Ensure all tests use the new @var syntax
 
-### Testing Updates
+### Testing Updates - In Progress
 
 - Update all relevant test cases to expect @ syntax for variable references
-- Ensure string interpolation tests still use {{mustache}} syntax
-- Verify command references use @ syntax
-- Test path variable references with @ syntax
+- Ensure string interpolation tests still use {{mustache}} syntax with `varInterpolation` type
+- Verify command references use @ syntax with `varIdentifier` type
 - Verify AST structure is correct with new valueType property values
+
+### Next Steps
+
+1. Complete updates to run.peggy, exec.peggy, and path.peggy
+2. Update all tests to use the new variable syntax and types
+3. Update handler functions to properly interpret the new variable types
+4. Verify the complete grammar works with the new variable system
 
 ### Benefits
 
-The universal `@variable` syntax will:
+The universal `@variable` syntax with the specialized valueTypes (`varInterpolation` and `varIdentifier`) will:
 1. Provide a cleaner, more consistent syntax across all directives
-2. Make `@` the central signifier for all variable references
-3. Allow the interpreter to determine variable type at runtime based on context
+2. Make `@` the central signifier for direct variable references
+3. Create a clearer distinction between interpolation and direct references
 4. Maintain the benefits of mustache syntax for string interpolation
 5. Simplify grammar rules and variable handling
+6. Improve type safety with more descriptive valueTypes
+7. Make it easier for handlers to interpret the variable intent
 
 ## Grammar Implementation Guidelines
 

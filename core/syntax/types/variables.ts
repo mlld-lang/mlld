@@ -58,7 +58,15 @@ export function isVariableReferenceNode(node: MeldNode): node is VariableReferen
   return (
     n.type === 'VariableReference' &&
     typeof n.identifier === 'string' &&
-    (n.valueType === VariableType.TEXT || n.valueType === VariableType.DATA || n.valueType === VariableType.PATH) 
+    (
+      // Legacy types
+      n.valueType === VariableType.TEXT || 
+      n.valueType === VariableType.DATA || 
+      n.valueType === VariableType.PATH ||
+      // New universal variable types
+      n.valueType === 'varInterpolation' ||
+      n.valueType === 'varIdentifier'
+    ) 
   );
 
   // // Check for legacy TextVar nodes

@@ -1,10 +1,10 @@
 export default {
     run:    'run',
-    import: 'import',
-    define: 'define',
+    add:    'add',
+    text:   'text',
+    exec:   'exec',
     data:   'data',
-    var:    'var',
     path:   'path',
-    embed:  'embed'
+    import: 'import'
   };
   

@@ -1,28 +1,17 @@
+// OREGON TRAIL GRAVEYARD 🪦 - Rewritten during the Great Grammar Rewrite of 2025
+// If you see errors after this change, you've made a wrong turn. Turn back before you catch dysentery.
 
+// New implementation using modern patterns
 DirectiveContent
-  = "[" content:BracketContent "]" {
-    return content;
+  = content:WrappedPathContent {
+    return content.parts;
   }
 
-BracketContent
-  = parts:(BracketText / BracketVariable)+ {
-      return parts;
-    }
-
-BracketText
-  = value:$(!([\\\]/.#{}] / '{{' / '$' / '\\') .)+ { // REVERTED: Restore original complex lookahead definition
-      return helpers.createNode(NodeType.Text, { content: value }, location());
-    }
-
-BracketVariable
-  = "{{" _ name:Identifier _ "}}" {
-      return helpers.createVariableReferenceNode('text', { identifier: name }, location());
-    }
-
+// Clean implementation of the quoted string patterns
 QuotedString
   = '"' chars:DoubleQuotedChars '"' { return '"' + chars + '"'; }
   / "'" chars:SingleQuotedChars "'" { return "'" + chars + "'"; }
-  / "`" chars:BracketText "`" { return "`" + chars + "`"; }
+  / "`" chars:BacktickQuotedChars "`" { return "`" + chars + "`"; }
 
 DoubleQuotedChars
   = chars:[^"]* { return chars.join(''); }
@@ -30,29 +19,27 @@ DoubleQuotedChars
 SingleQuotedChars
   = chars:[^']* { return chars.join(''); }
 
+BacktickQuotedChars
+  = chars:[^`]* { return chars.join(''); }
+
+// Use our modern WrappedTemplateContent
 NestedBrackets
-  = "[[" content:BracketContent "]]" {
-    return content;
+  = content:WrappedTemplateContent {
+    return content.parts;
   }
 
-MultilineContent
-  = content:TextUnMultilineContent { return content; }
-
-TextUnMultilineContent
-  = content:([^\]]*) { 
-    const text = content.join('');
-    return [{ type: 'Text', content: text }];
-  }
-
-TextUntilNewline
-  = chars:[^\n]+ { return chars.join(''); }
-
+// Common directive parts
 DirectiveOptions
-  = _ options:DirectiveOption+ {
-    return options.reduce((acc, opt) => ({ ...acc, ...opt }), {});
+  = options:DirectiveOptionsList {
+    return options;
+  }
+
+DirectiveOptionsList
+  = first:DirectiveOption rest:(_ "," _ option:DirectiveOption { return option; })* {
+    return [first, ...rest];
   }
 
 DirectiveOption
-  = _ key:Identifier _ "=" _ value:StringLiteral {
-    return { [key]: value };
+  = key:Identifier _ "=" _ value:QuotedString {
+    return { key, value };
   }

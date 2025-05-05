@@ -3,7 +3,7 @@ ExecDirective
 
 // @exec identifier (param1, param2) = @run [command]
 execCommand
-  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ "[" command:BracketInterpolatableContent "]" HWS DirectiveEOL {
+  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ command:WrappedCommandContent HWS DirectiveEOL {
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
       
@@ -17,20 +17,14 @@ execCommand
         return '';
       });
       
-      // Process command
-      const rawCommand = command.map(n => {
-        if (n.type === 'Text') return n.content;
-        if (n.type === 'VariableReference') {
-          return n.valueType === 'path' ? `$${n.identifier}` : `{{${n.identifier}}}`;
-        }
-        return '';
-      }).join('');
+      // Get command content from wrapped structure
+      const rawCommand = command.raw;
       
       // Create values object
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        command: command
+        command: command.parts
       };
       
       // Create raw object
@@ -57,7 +51,7 @@ execCommand
 
 // @exec identifier (param1, param2) = @run language [code]
 execCode
-  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ language:Identifier _ "[" code:CodeBlockContent "]" HWS DirectiveEOL {
+  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ language:Identifier _ code:WrappedCodeContent HWS DirectiveEOL {
       // Create nodes
       const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
       const languageNode = helpers.createNode(NodeType.Text, { content: language }, location());
@@ -77,7 +71,17 @@ execCode
       const rawCode = code.map(n => {
         if (n.type === 'Text') return n.content;
         if (n.type === 'VariableReference') {
-          return n.valueType === 'path' ? `$${n.identifier}` : `{{${n.identifier}}}`;
+          if (n.valueType === 'interpolation') {
+            return `{{${n.identifier}}}`;
+          } else if (n.valueType === 'variable') {
+            return `@${n.identifier}`;
+          } else if (n.valueType === 'path') {
+            // Legacy support
+            return `$${n.identifier}`;
+          } else {
+            // Legacy text/data type support
+            return `{{${n.identifier}}}`;
+          }
         }
         return '';
       }).join('');
@@ -231,5 +235,5 @@ ExecParamsList
 
 ExecParam
   = paramName:Identifier {
-      return helpers.createVariableReferenceNode('text', { identifier: paramName }, location());
+      return helpers.createVariableReferenceNode('variable', { identifier: paramName }, location());
     }

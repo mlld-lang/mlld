@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { parse } from '@core/ast/parser';
 import { isRunCommandDirective, isRunCodeDirective, isRunExecDirective } from '../types/run';
+import { VariableValueType } from '../types/variables';
 
 describe('Run directive', () => {
   describe('runCommand subtype', () => {
@@ -8,6 +9,7 @@ describe('Run directive', () => {
       const content = '@run [ls -la]';
       const parseResult = await parse(content);
       
+      // The tests now pass with a single directive node in the AST
       expect(parseResult.ast).toHaveLength(1);
       
       const directiveNode = parseResult.ast[0];
@@ -145,7 +147,7 @@ describe('Run directive', () => {
   
   describe('runExec subtype', () => {
     test('Basic command execution', async () => {
-      const content = '@run $listFiles';
+      const content = '@run @listFiles';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -168,7 +170,7 @@ describe('Run directive', () => {
     });
     
     test('Command with arguments (with space)', async () => {
-      const content = '@run $formatData ("large_file.json", "pretty")';
+      const content = '@run @formatData ("large_file.json", "pretty")';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -193,7 +195,7 @@ describe('Run directive', () => {
     });
     
     test('Command with arguments (without space)', async () => {
-      const content = '@run $formatData("large_file.json", "pretty")';
+      const content = '@run @formatData("large_file.json", "pretty")';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -218,7 +220,7 @@ describe('Run directive', () => {
     });
     
     test('Command with variable arguments', async () => {
-      const content = '@run $processFile ({{filename}}, {{options}})';
+      const content = '@run @processFile ({{filename}}, {{options}})';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);

@@ -123,15 +123,15 @@ UnderHeader
 // Helper rule for parsing RHS @add variations
 // Returns structured values, raw, meta objects for different subtypes
 _AddRHS
-  = _ "[" content:BracketInterpolatableContentOrEmpty "]" _[ \t]* options:DirectiveOptions? {
+  = _ content:WrappedTemplateContent _[ \t]* options:DirectiveOptions? {
     // Create the values object with content node array
     const values = {
-      content
+      content: content.parts
     };
     
     // Create the raw object with raw content
     const raw = {
-      content: helpers.reconstructRawString(content)
+      content: content.raw
     };
     
     // Create the meta object with isTemplateContent flag

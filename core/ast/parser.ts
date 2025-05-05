@@ -2,6 +2,7 @@ import { parse as grammarParse } from '@core/ast/grammar/index';
 import type { MeldNode } from '@core/syntax/types';
 import type { NodeType } from '@core/syntax/types/shared-types';
 import { MeldAstError, ParseErrorCode, ParseResult, ParserOptions, PeggyError } from '@core/ast/types';
+import { VALID_VARIABLE_TYPES } from '@grammar/types/variables';
 
 const defaultOptions: Required<Omit<ParserOptions, 'onError'>> & Pick<ParserOptions, 'onError'> = {
   failFast: true,
@@ -160,7 +161,7 @@ function validateNodes(nodes: MeldNode[], errors: MeldAstError[]): void {
             throw new Error('VariableReference node missing identifier');
           }
           if (typeof (node as any).valueType !== 'string' || 
-              !['text', 'data', 'path'].includes((node as any).valueType)) {
+              !VALID_VARIABLE_TYPES.includes((node as any).valueType)) {
             throw new Error('VariableReference node has invalid valueType');
           }
           if ((node as any).fields && !Array.isArray((node as any).fields)) {

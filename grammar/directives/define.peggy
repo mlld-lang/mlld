@@ -51,18 +51,13 @@ IdentifierList
   }
 
 DefineValue
-  = "@run" _ "[" content:BracketInterpolatableContentOrEmpty "]" {
-      const raw = content.map(n => {
-        if (n.type === 'Text') return n.content;
-        if (n.type === 'VariableReference') return `{{${n.identifier}}}`;
-        return '';
-      }).join('');
+  = "@run" _ command:WrappedCommandContent {
       return {
         type: "run",
         value: {
           subtype: 'runCommand',
-          raw,
-          values: content
+          raw: command.raw,
+          values: command.parts
         }
       };
     }
@@ -72,9 +67,9 @@ DefineValue
         value: runResult
       };
     }
-  / value:InterpolatedStringLiteral {
+  / text:WrappedTemplateContent {
     return {
       type: "string",
-      value
+      value: text.parts
     };
   }

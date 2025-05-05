@@ -56,18 +56,18 @@ textAssignment
   }
 
 textTemplate
-  = "text" _ id:(Identifier _ "=" _)? "[" content:BracketInterpolatableContent "]" HWS DirectiveEOL {
+  = "text" _ id:(Identifier _ "=" _)? content:WrappedTemplateContent HWS DirectiveEOL {
     // Parse identifier if present
     const identifier = id ? id[0] : null;
     helpers.debug('TEXT', { type: 'template', identifier, content });
     
     // Capture raw text
     const rawIdentifier = identifier ? (identifier.toString ? identifier.toString() : JSON.stringify(identifier)) : undefined;
-    const rawContent = content.map(item => item.content || (item.toString ? item.toString() : JSON.stringify(item))).join('');
+    const rawContent = content.raw;
     
     // Create values object with optional identifier
     const values = {
-      content: Array.isArray(content) ? content : [content]
+      content: content.parts
     };
     
     if (identifier) {
@@ -112,19 +112,10 @@ TextValue
         rawText: "@run " + (runDirective.raw && runDirective.raw.command ? runDirective.raw.command : "")
       };
     }
-  / value:InterpolatedStringLiteral {
+  / textContent:WrappedTemplateContent {
       return {
         type: "literal",
-        values: value,
-        // Join the content from each node in the array
-        rawText: value.map(item => item.content || '').join('')
-      };
-    }
-  / value:InterpolatedMultilineTemplate {
-      return {
-        type: "literal",
-        values: value,
-        // Join the content from each node in the array
-        rawText: value.map(item => item.content || '').join('')
+        values: textContent.parts,
+        rawText: textContent.raw
       };
     }

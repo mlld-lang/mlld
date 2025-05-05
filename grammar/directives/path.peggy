@@ -8,21 +8,19 @@ SpecialPathIdentifier
   }
 
 /**
- * Path Directive - @path identifier = "path_value"
+ * Path Directive - @path identifier = path_value
  * Creates a structured path directive node with values and raw text
+ * Supports PathStyleInterpolation: quotes, brackets, or unquoted paths with @var interpolation
  */
 PathDirective
-  = "path" __ identifier:Identifier __ "=" __ path:(
-      quotedPath:PathStringLiteral { 
-        return { 
-          parts: quotedPath,
-          raw: helpers.reconstructRawString(quotedPath) 
-        };
-      }
-    ) (LineTerminator / &EOF)
+  = "path" _ identifier:Identifier _ "=" _ path:WrappedPathContent (LineTerminator / &EOF)
   {
+    // The @ prefix is already matched in the Directive rule in meld.peggy,
+    // so this rule just matches "path" and the rest of the directive
+    
     // Store raw text values for reconstruction
-    const rawIdentifier = text().substring(5, text().indexOf('='));
+    // Extract just what this rule matched, not including the @ prefix
+    const rawIdentifier = identifier;
     const rawPath = path.raw.trim();
     
     // Validate the path and get metadata
@@ -43,7 +41,7 @@ PathDirective
     
     // Create raw object with text segments
     const raw = {
-      identifier: rawIdentifier.trim(),
+      identifier: rawIdentifier,
       path: rawPath
     };
     
@@ -56,16 +54,6 @@ PathDirective
     return helpers.createStructuredDirective('path', 'pathAssignment', values, raw, meta, location(), 'path');
   }
 
-/**
- * Path Value - The right-hand side of a path assignment
- * Can be a string literal, interpolated string, or variable reference
- */
-PathValue
-  = interpolatedArray:InterpolatedStringLiteral { 
-      // Return the structured array directly
-      return interpolatedArray; 
-    }
-  / variable:PathVar {
-    // Return an array containing the single VariableReference node
-    return [helpers.createVariableReferenceNode('path', { identifier: variable.identifier }, location())]; 
-  }
+// Using WrappedPathContent from interpolation-patterns.peggy
+
+// PathValue is now obsolete - replaced by the PathContent pattern from interpolation-patterns.peggy

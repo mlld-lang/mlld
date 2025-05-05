@@ -33,8 +33,8 @@ Start
       LineStartComment
     / Comment
     / CodeFence
-    / Variable
     / Directive              /* <— first try to match directives */
+    / Variable               /* <— Then try to match variables (moved after directives) */
     / InterDirectiveNewline   /* <— then capture newlines between directives */
     / TextBlock
     )* {
@@ -101,7 +101,6 @@ Directive
     / DataDirective
     / TextDirective
     / PathDirective
-    / VarDirective
     ) { return dir; }
 
 CodeFence

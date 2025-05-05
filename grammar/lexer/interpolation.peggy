@@ -1,143 +1,102 @@
-// --- Interpolated Literal Rules ---
+// -- CLEAN INTERPOLATION MODEL --
+// 1. Quoted strings ("", '', ``): Literal content, no interpolation
+// 2. Single brackets []: @var interpolation for paths/commands
+// 3. Double brackets [[]]: {{var}} interpolation for templates
 
-PathStringLiteral "String literal with potential path variables"
-  = '"' content:PathStringContent '"' { return content; }
-  / "'" content:PathStringContent "'" { return content; }
-  / "`" content:PathStringContent "`" { return content; }
+// -------------------------------------------------------------
+// QUOTED STRING LITERALS - No variable interpolation
+// -------------------------------------------------------------
 
-PathStringContent "Path string content"
-  = parts:(PathVar / PathText / PathSeparator)+ {
-      return parts;
+// Common literal string rule for all quote types (", ', `)
+LiteralStringContent "String literal content without interpolation"
+  = chars:LiteralStringChar+ {
+      return [helpers.createNode(NodeType.Text, { content: chars.join('') }, location())];
     }
+  / "" { return []; }
 
-PathText "Path text"
-  = chars:PathAllowedChar+ {
+LiteralStringChar
+  = !('"' / "'" / '`') char:. { return char; }
+  / '\\' esc:. { return esc; } // Handle escape sequences
+
+// String literal with quotes - no interpolation
+LiteralString "Non-interpolated string literal"
+  = '"' content:LiteralStringContent '"' { return content; }
+  / "'" content:LiteralStringContent "'" { return content; }
+  / "`" content:LiteralStringContent "`" { return content; }
+
+// -------------------------------------------------------------
+// SINGLE BRACKET CONTENT - @var interpolation (for paths/commands)
+// -------------------------------------------------------------
+
+// Literal text segment within brackets
+BracketLiteralSegment
+  = chars:(!(']' / '@') .)+ { 
       return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
     }
 
-PathAllowedChar
-  = !('"' / "'" / '`' / '$' / '/' / '\\') char:. { return char; }
-  / '\\' esc:. { return '\\' + esc; }
-
+// Path separator should be a distinct node in paths
 PathSeparator
   = '/' { return helpers.createNode(NodeType.PathSeparator, { value: '/' }, location()); }
 
-InterpolatedStringLiteral "String literal with potential variable interpolation"
-  = '"' content:DoubleQuoteInterpolatableContentOrEmpty '"' { return content; }
-  / "'" content:SingleQuoteInterpolatableContentOrEmpty "'" { return content; }
-  / "`" content:BacktickInterpolatableContentOrEmpty "`" { return content; }
+// Content inside single brackets - allows @var interpolation
+BracketContent "Content allowing @var interpolation"
+  = parts:(AtVar / BracketLiteralSegment / PathSeparator)+ {
+      return parts;
+    }
+  / "" { return []; }
 
-InterpolatedMultilineTemplate "Multiline template with potential variable interpolation"
-  = "[[" content:MultilineInterpolatableContentOrEmpty "]]" { return content; }
+// Single bracket container - for @var interpolation
+BracketContainer
+  = '[' content:BracketContent ']' { return content; }
 
-// --- Interpolation Rules ---
+// -------------------------------------------------------------
+// DOUBLE BRACKET CONTENT - {{var}} interpolation (for templates)
+// -------------------------------------------------------------
 
-// Double Quotes
-DoubleQuoteAllowedLiteralChar
-  = !('"' / '{{' / '\\\\') char:. { return char; }
-  / '\\\\' esc:. { return '\\\\' + esc; }
-
-DoubleQuoteLiteralTextSegment
-  = chars:DoubleQuoteAllowedLiteralChar+ {
+// Literal text segment within double brackets
+DoubleBracketLiteralSegment
+  = chars:(!(']]' / '{{') .)+ { 
       return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
     }
 
-DoubleQuoteInterpolatableContent
-  = parts:(DoubleQuoteLiteralTextSegment / Variable)+ {
+// Content inside double brackets - allows {{var}} interpolation
+DoubleBracketContent "Content allowing {{var}} interpolation"
+  = parts:(InterpolationVar / DoubleBracketLiteralSegment)+ {
+      return parts;
+    }
+  / "" { return []; }
+
+// Double bracket container - for {{var}} interpolation
+DoubleBracketContainer
+  = '[[' content:DoubleBracketContent ']]' { return content; }
+
+// -------------------------------------------------------------
+// PATH-SPECIFIC SYNTACTIC SUGAR
+// -------------------------------------------------------------
+
+// Special rule for paths without quotes/brackets (unquoted paths)
+// This is syntactic sugar for common use cases
+UnquotedPath "Unquoted path with @var interpolation"
+  = parts:(AtVar / UnquotedPathSegment / PathSeparator)+ {
       return parts;
     }
 
-DoubleQuoteInterpolatableContentOrEmpty
-  = result:DoubleQuoteInterpolatableContent? {
-      return result || [];
-    }
-
-// Single Quotes
-SingleQuoteAllowedLiteralChar
-  = !('\'' / '{{' / '\\\\') char:. { return char; }
-  / '\\\\' esc:. { return '\\\\' + esc; }
-
-SingleQuoteLiteralTextSegment
-  = chars:SingleQuoteAllowedLiteralChar+ {
+UnquotedPathSegment
+  = chars:(![ \t\r\n] !(PathSeparator / '@' / '$') .)+ {
       return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
     }
 
-SingleQuoteInterpolatableContent
-  = parts:(SingleQuoteLiteralTextSegment / Variable)+ {
+// -------------------------------------------------------------
+// COMMAND-SPECIFIC SYNTACTIC SUGAR
+// -------------------------------------------------------------
+
+// Special rule for command lines without quotes/brackets
+UnquotedCommand "Unquoted command with @var interpolation"
+  = parts:(AtVar / UnquotedCommandSegment)+ {
       return parts;
     }
 
-SingleQuoteInterpolatableContentOrEmpty
-  = result:SingleQuoteInterpolatableContent? {
-      return result || [];
-    }
-
-// Backticks (Template Literals)
-BacktickAllowedLiteralChar
-  = !('`' / '{{' / '\\\\') char:. { return char; }
-  / '\\\\' esc:. { return '\\\\' + esc; }
-
-BacktickLiteralTextSegment
-  = chars:BacktickAllowedLiteralChar+ {
+UnquotedCommandSegment
+  = chars:(![ \t\r\n;] !('@' / '$') .)+ {
       return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-BacktickInterpolatableContent
-  = parts:(BacktickLiteralTextSegment / Variable)+ {
-      return parts;
-    }
-
-BacktickInterpolatableContentOrEmpty
-  = result:BacktickInterpolatableContent? {
-      return result || [];
-    }
-
-// Multiline [[...]]
-MultilineAllowedLiteralChar
-  = !']]' !'{{' !('\\\\') char:. { return char; }
-  / '\\\\' esc:. { return '\\\\' + esc; }
-
-MultilineLiteralTextSegment
-  = chars:MultilineAllowedLiteralChar+ {
-      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-MultilineInterpolatableContent
-  = parts:(MultilineLiteralTextSegment / Variable)+ {
-      return parts;
-    }
-
-MultilineInterpolatableContentOrEmpty
-  = result:MultilineInterpolatableContent? {
-      return result || [];
-    }
-
-
-// Brackets [...] Interpolation
-// For interpolated content, we only want to split on variables
-BracketLiteralTextSegment
-  = value:$(!(']' / '{{' / '$') .)+ { 
-      return helpers.createNode(NodeType.Text, { content: value }, location());
-    }
-
-// Define a single part that can appear inside brackets, guarded by lookahead
-BracketPart
-  = !']' part:(
-        Variable
-      / BracketLiteralTextSegment // Everything else as plain text
-    ) { return part; }
-
-BracketInterpolatableContent
-  = parts:BracketPart+ {
-      return parts;
-    }
-
-BracketInterpolatableContentOrEmpty
-  = parts:BracketPart+ { return parts; }
-  / ""                 { return []; }
-  
-// For code blocks, we want to capture the entire content as a single text node
-CodeBlockContent
-  = content:$(!']' .)* { 
-      return [helpers.createNode(NodeType.Text, { content }, location())];
     }
