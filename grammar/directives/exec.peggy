@@ -1,133 +1,209 @@
 ExecDirective
-  = "exec" _ id:ExecIdentifier params:ExecParams? _ "=" _ value:ExecValue HWS DirectiveEOL {
-    if (value.type === "run") {
-      helpers.validateRunContent(value.command);
+  = execCommand / execCode / execRunExec
+
+// @exec identifier (param1, param2) = @run [command]
+execCommand
+  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ "[" command:BracketInterpolatableContent "]" HWS DirectiveEOL {
+      // Create identifier node
+      const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
       
-      // Create run command node
-      const nameNode = helpers.createNode(NodeType.Text, { content: id.name }, location());
+      // Calculate raw strings
+      const rawIdentifier = identifier;
       
-      // Create the values object
+      // Process parameters
+      const processedParams = params || [];
+      const rawParams = processedParams.map(param => {
+        if (param.type === 'VariableReference') return param.identifier;
+        return '';
+      });
+      
+      // Process command
+      const rawCommand = command.map(n => {
+        if (n.type === 'Text') return n.content;
+        if (n.type === 'VariableReference') {
+          return n.valueType === 'path' ? `$${n.identifier}` : `{{${n.identifier}}}`;
+        }
+        return '';
+      }).join('');
+      
+      // Create values object
       const values = {
-        name: [nameNode],
-        command: value.content
+        identifier: [identifierNode],
+        params: processedParams,
+        command: command
       };
       
-      // Add field if present
-      if (id.field) {
-        const fieldNode = helpers.createNode(NodeType.Text, { content: id.field }, location());
-        values.field = [fieldNode];
-      }
-      
-      // Add parameters if present
-      if (params) {
-        values.parameters = params.map(param => {
-          return [helpers.createNode(NodeType.VariableReference, { identifier: param }, location())];
-        });
-      }
-      
-      // Create the raw object
+      // Create raw object
       const raw = {
-        name: id.name,
-        command: value.raw
+        identifier: rawIdentifier,
+        params: rawParams,
+        command: rawCommand
       };
       
-      // Add field to raw if present
-      if (id.field) {
-        raw.field = id.field;
-      }
-      
-      // Add parameters to raw if present
-      if (params) {
-        raw.parameters = params;
-      }
-      
-      // Create the meta object
-      const meta = {
-        isCommand: true
+      // Create meta object
+      const metaObj = {
+        parameterCount: processedParams.length
       };
       
-      // Add field metadata if present
-      if (id.field) {
-        meta.field = {
-          type: id.field
-        };
+      // Add metadata if present
+      if (meta) {
+        values.metadata = [helpers.createNode(NodeType.Text, { content: meta }, location())];
+        raw.metadata = meta;
+        metaObj.metadata = { type: meta };
       }
       
-      return helpers.createDirective('exec', {
-        subtype: 'execCommand',
-        values,
-        raw,
-        meta
-      }, location());
-    } else if (typeof value.value === "string") {
-      helpers.validateDefineContent(value.value);
-      
-      // Create text value node
-      const nameNode = helpers.createNode(NodeType.Text, { content: id.name }, location());
-      const valueNode = helpers.createNode(NodeType.Text, { content: value.value }, location());
-      
-      // Create the values object
-      const values = {
-        name: [nameNode],
-        value: [valueNode]
-      };
-      
-      // Add field if present
-      if (id.field) {
-        const fieldNode = helpers.createNode(NodeType.Text, { content: id.field }, location());
-        values.field = [fieldNode];
-      }
-      
-      // Add parameters if present
-      if (params) {
-        values.parameters = params.map(param => {
-          return [helpers.createNode(NodeType.VariableReference, { identifier: param }, location())];
-        });
-      }
-      
-      // Create the raw object
-      const raw = {
-        name: id.name,
-        value: value.value
-      };
-      
-      // Add field to raw if present
-      if (id.field) {
-        raw.field = id.field;
-      }
-      
-      // Add parameters to raw if present
-      if (params) {
-        raw.parameters = params;
-      }
-      
-      // Create the meta object
-      const meta = {
-        isCommand: false
-      };
-      
-      // Add field metadata if present
-      if (id.field) {
-        meta.field = {
-          type: id.field
-        };
-      }
-      
-      return helpers.createDirective('exec', {
-        subtype: 'execValue',
-        values,
-        raw,
-        meta
-      }, location());
+      return helpers.createStructuredDirective('exec', 'execCommand', values, raw, metaObj, location());
     }
-  }
 
-ExecIdentifier
-  = name:Identifier field:ExecField? {
-    return { name, ...(field ? { field } : {}) };
-  }
+// @exec identifier (param1, param2) = @run language [code]
+execCode
+  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ language:Identifier _ "[" code:CodeBlockContent "]" HWS DirectiveEOL {
+      // Create nodes
+      const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
+      const languageNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      
+      // Calculate raw strings
+      const rawIdentifier = identifier;
+      const rawLanguage = language;
+      
+      // Process parameters
+      const processedParams = params || [];
+      const rawParams = processedParams.map(param => {
+        if (param.type === 'VariableReference') return param.identifier;
+        return '';
+      });
+      
+      // Process code
+      const rawCode = code.map(n => {
+        if (n.type === 'Text') return n.content;
+        if (n.type === 'VariableReference') {
+          return n.valueType === 'path' ? `$${n.identifier}` : `{{${n.identifier}}}`;
+        }
+        return '';
+      }).join('');
+      
+      // Create values object
+      const values = {
+        identifier: [identifierNode],
+        params: processedParams,
+        lang: [languageNode],
+        code: code
+      };
+      
+      // Create raw object
+      const raw = {
+        identifier: rawIdentifier,
+        params: rawParams,
+        lang: rawLanguage,
+        code: rawCode
+      };
+      
+      // Create meta object
+      const metaObj = {
+        parameterCount: processedParams.length
+      };
+      
+      // Add metadata if present
+      if (meta) {
+        values.metadata = [helpers.createNode(NodeType.Text, { content: meta }, location())];
+        raw.metadata = meta;
+        metaObj.metadata = { type: meta };
+      }
+      
+      return helpers.createStructuredDirective('exec', 'execCode', values, raw, metaObj, location());
+    }
 
-ExecField
+// @exec identifier (param1, param2) = @run runExec variant
+execRunExec
+  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" runExec:_RunRHS {
+      // Create identifier node
+      const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
+      
+      // Process parameters
+      const processedParams = params || [];
+      const rawParams = processedParams.map(param => {
+        if (param.type === 'VariableReference') return param.identifier;
+        return '';
+      });
+      
+      // Create values object and raw object based on runExec subtype
+      let values, raw, metaObj;
+      let subtype = 'execCommand'; // Default subtype
+      
+      if (runExec.subtype === 'runExec') {
+        // Handle the case for runExec
+        values = {
+          identifier: [identifierNode],
+          params: processedParams,
+          commandRef: runExec.values.identifier,
+          args: runExec.values.args
+        };
+        
+        raw = {
+          identifier: identifier,
+          params: rawParams,
+          commandRef: runExec.raw.identifier,
+          args: runExec.raw.args
+        };
+        
+        metaObj = {
+          parameterCount: processedParams.length,
+          argumentCount: runExec.meta.argumentCount
+        };
+      } else if (runExec.subtype === 'runCode') {
+        // Handle the case for runCode
+        values = {
+          identifier: [identifierNode],
+          params: processedParams,
+          lang: runExec.values.lang,
+          code: runExec.values.code
+        };
+        
+        raw = {
+          identifier: identifier,
+          params: rawParams,
+          lang: runExec.raw.lang,
+          code: runExec.raw.code
+        };
+        
+        metaObj = {
+          parameterCount: processedParams.length,
+          isMultiLine: runExec.meta.isMultiLine
+        };
+        
+        subtype = 'execCode';
+      } else {
+        // Default to runCommand
+        values = {
+          identifier: [identifierNode],
+          params: processedParams,
+          command: runExec.values.command
+        };
+        
+        raw = {
+          identifier: identifier,
+          params: rawParams,
+          command: runExec.raw.command
+        };
+        
+        metaObj = {
+          parameterCount: processedParams.length,
+          isMultiLine: runExec.meta.isMultiLine
+        };
+      }
+      
+      // Add metadata if present
+      if (meta) {
+        values.metadata = [helpers.createNode(NodeType.Text, { content: meta }, location())];
+        raw.metadata = meta;
+        metaObj.metadata = { type: meta };
+      }
+      
+      return helpers.createStructuredDirective('exec', subtype, values, raw, metaObj, location());
+    }
+
+// Helper rules for exec metadata (.risk.high, .meta, etc.)
+ExecMetadata
   = "." field:(
       "risk.high"
     / "risk.med"
@@ -139,37 +215,18 @@ ExecField
     return field;
   }
 
+// Helper rules for exec parameters
 ExecParams
-  = _ "(" _ params:ExecIdentifierList _ ")" {
-    return params;
-  }
-
-ExecIdentifierList
-  = first:Identifier rest:(_ "," _ id:Identifier { return id; })* {
-    return [first, ...rest];
-  }
-
-ExecValue
-  = "@run" _ "[" content:BracketInterpolatableContentOrEmpty "]" {
-      const raw = helpers.reconstructRawString(content);
-      return {
-        type: "run",
-        content,
-        raw,
-        command: raw
-      };
+  = _ "(" _ params:ExecParamsList? _ ")" {
+      return params || [];
     }
-  / "@run" runResult:_RunRHS {
-      return {
-        type: "run",
-        content: runResult.values.command,
-        raw: runResult.raw.command,
-        command: runResult.raw.command
-      };
+
+ExecParamsList
+  = first:ExecParam rest:(_ "," _ param:ExecParam { return param; })* {
+      return [first, ...rest];
     }
-  / value:InterpolatedStringLiteral {
-    return {
-      type: "string",
-      value
-    };
-  }
+
+ExecParam
+  = paramName:Identifier {
+      return helpers.createVariableReferenceNode('text', { identifier: paramName }, location());
+    }

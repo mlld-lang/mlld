@@ -29,6 +29,7 @@ export default {
 
   createDirective(kind, data) {
     // Legacy method maintained for backward compatibility
+    // NOTE: We do NOT want backward compatibility
     return this.createNode(NodeType.Directive, { directive: { kind, ...data } });
   },
   

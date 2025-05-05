@@ -32,18 +32,18 @@ Create a robust, strongly-typed AST structure for Meld directives that:
 - Data directive: Type definitions and documentation complete, basic nested directive support implemented, object/array nesting planned ✅
 - Path directive: Grammar implementation complete, documentation and tests complete ✅
 - Add directive (renamed from `embed`): Grammar implementation complete, documentation and tests complete ✅
-- Run directive: Not yet implemented with structured format ❌
-- Exec directive (renamed from `define`): Only renamed, structured format not yet implemented ❌
+- Run directive: Grammar implementation complete, testing complete ✅
+- Exec directive (renamed from `define`): Grammar implementation complete, testing complete ✅
 
 We are currently progressing through Phase 5 (Grammar Implementation) with both core directive support and directive nesting features. 
 
 Current implementation notes:
-- Several directives have been implemented to use the new structured format in their grammar files (import, text, data, path, add)
-- The run directive has not yet been updated to use the structured format
-- The exec directive has only been renamed from define, but not yet implemented with the structured format
-- Tests verify the correct structured format is being produced for completed directives
-- Upon rebuilding the grammar, implemented directives correctly use the structured format
-- Next steps involve properly designing and implementing the exec and run directives with the structured format and updating handlers
+- All directives have been implemented to use the new structured format in their grammar files (import, text, data, path, add, run, exec)
+- The run directive has been updated to use the structured format with proper handling of commands, code blocks, and variable references
+- The exec directive has been renamed from define and fully implemented with the structured format
+- Tests verify the correct structured format is being produced for all directives
+- Upon rebuilding the grammar, all directives correctly use the structured format
+- Next steps involve updating handlers to use the new structured format
 
 ## Implementation Structure
 
@@ -226,8 +226,8 @@ For each directive, we'll have a structured conversation covering:
 - Data directive: Type definitions and documentation complete, basic nested directive support implemented, object/array nesting planned ✅
 - Path directive: Grammar implementation complete, documentation and tests complete ✅
 - Embed directive (to be renamed to `add`): Grammar implementation complete, documentation and tests complete ✅
-- Run directive: Planning phase
-- Define directive (to be renamed to `exec`): Planning phase
+- Run directive: Grammar implementation complete, documentation and tests complete ✅
+- Exec directive (renamed from `define`): Grammar implementation complete, documentation and tests complete ✅
 
 We are currently progressing through Phase 5 (Grammar Implementation) with both core directive support and directive nesting features. 
 
@@ -348,7 +348,7 @@ Based on our detailed design conversations, we've agreed on these implementation
 
 3. **runExec** - Execute a previously defined command (from exec directive)
    ```
-   @run $commandName (arg1, arg2)
+   @run @commandName (arg1, arg2)
    ```
    
    Note: The space between command name and arguments is optional but preferred in documentation.
@@ -463,9 +463,9 @@ Both subtypes will support parameters using the same structure.
 - [x] Create subtype documentation (runCommand.md, runCode.md, runExec.md)
 - [x] Define type interfaces (run.ts) with appropriate values, raw, and meta structures
 - [x] Create test fixtures for each subtype
-- [ ] Update grammar implementation (run.peggy) with structured format
-- [ ] Run and verify tests with new structured format
-- [ ] Ensure parser generates correct structured format
+- [x] Update grammar implementation (run.peggy) with structured format
+- [x] Run and verify tests with new structured format
+- [x] Ensure parser generates correct structured format
 - [ ] Update handlers to use new structure
 
 ### Exec Directive Implementation Checklist
@@ -475,10 +475,109 @@ Both subtypes will support parameters using the same structure.
 - [x] Create subtype documentation (execCommand.md, execCode.md)
 - [x] Define type interfaces (exec.ts) with appropriate values, raw, and meta structures
 - [x] Create test fixtures for each subtype
-- [ ] Update grammar implementation (exec.peggy) with structured format
-- [ ] Run and verify tests with new structured format
-- [ ] Ensure parser generates correct structured format
+- [x] Update grammar implementation (exec.peggy) with structured format
+- [x] Run and verify tests with new structured format
+- [x] Ensure parser generates correct structured format
 - [ ] Update handlers to use new structure
+
+## Universal @variable Syntax Implementation Plan
+
+As part of our syntax simplification strategy, we're adopting a universal `@variable` syntax across all directives. This will make `@` the central signifier for variable usage throughout Meld.
+
+### Key Changes
+
+1. **String Interpolation**: Keep `{{mustache}}` syntax exclusively for interpolation inside strings
+2. **Direct References**: Use `@variable` syntax for direct references (in commands, paths, etc.)
+3. **Plain Text Handling**: `@xyz` inside strings is treated as plain text (not interpolated)
+
+### Implementation Plan by File
+
+#### 1. variables.peggy
+
+- Update `Variable` rule to include both `InterpolationVar` ({{var}}) and `AtVar` (@var)
+- Create `InterpolationVar` rule for mustache syntax in strings:
+  ```javascript
+  "{{" _ id:Identifier ... _ "}}" {
+    // Create node with valueType 'interpolation'
+    return helpers.createVariableReferenceNode('interpolation', {
+      identifier: id,
+      ...
+    }, location());
+  }
+  ```
+- Create `AtVar` rule for @ syntax outside strings:
+  ```javascript
+  "@" id:Identifier ... {
+    // Create node with valueType 'variable'  
+    return helpers.createVariableReferenceNode('variable', {
+      identifier: id,
+      ...
+    }, location());
+  }
+  ```
+- Add special handling for path special characters (`@.`, `@~`, etc.)
+- Interpreter will determine the actual variable type at runtime
+
+#### 2. interpolation.peggy
+
+- Update `PathAllowedChar` rule to handle @ as potential variable marker:
+  ```javascript
+  !('"' / "'" / '`' / '{{' / '/' / '\\') char:. { return char; }
+  ```
+- Update `BracketLiteralTextSegment` rule to handle @ variables:
+  ```javascript
+  value:$(!(']' / '{{') .)+ { 
+    return helpers.createNode(NodeType.Text, { content: value }, location());
+  }
+  ```
+- Update string content rules to handle Variable nodes (which now include AtVar)
+
+#### 3. run.peggy
+
+- Update `runExec` rule to use `@commandName` instead of `$commandName`:
+  ```javascript
+  "run" _ varRef:AtVar _ args:RunExecArgs? ...
+  ```
+- Update `CommandReference` rule to match AtVar instead of $ syntax
+- Modify raw string reconstruction for variables:
+  ```javascript
+  if (n.type === 'VariableReference') {
+    return n.valueType === 'interpolation' ? `{{${n.identifier}}}` : `@${n.identifier}`;
+  }
+  ```
+- Update variable reference creation to use 'variable' type
+
+#### 4. exec.peggy
+
+- Similar updates to run.peggy for command references
+- Update `ExecParam` rule to use new variable reference type:
+  ```javascript
+  return helpers.createVariableReferenceNode('variable', { identifier: paramName }, location());
+  ```
+- Update raw string reconstruction to use @ format
+
+#### 5. path.peggy
+
+- Update path variable references to use `@var` instead of `$var`
+- Update path validation to recognize @ variables
+- Modify raw string reconstruction for path variables
+
+### Testing Updates
+
+- Update all relevant test cases to expect @ syntax for variable references
+- Ensure string interpolation tests still use {{mustache}} syntax
+- Verify command references use @ syntax
+- Test path variable references with @ syntax
+- Verify AST structure is correct with new valueType property values
+
+### Benefits
+
+The universal `@variable` syntax will:
+1. Provide a cleaner, more consistent syntax across all directives
+2. Make `@` the central signifier for all variable references
+3. Allow the interpreter to determine variable type at runtime based on context
+4. Maintain the benefits of mustache syntax for string interpolation
+5. Simplify grammar rules and variable handling
 
 ## Grammar Implementation Guidelines
 
@@ -644,7 +743,8 @@ Follow these steps when implementing the exec.peggy file:
    const rawCommand = content.map(n => {
      if (n.type === 'Text') return n.content;
      if (n.type === 'VariableReference') {
-       return n.valueType === 'path' ? `$${n.identifier}` : `{{${n.identifier}}}`;
+       // Use mustache syntax for interpolation variables
+       return n.valueType === 'interpolation' ? `{{${n.identifier}}}` : `@${n.identifier}`;
      }
      return '';
    }).join('');
@@ -653,7 +753,7 @@ Follow these steps when implementing the exec.peggy file:
 3. **Parameter/Argument Transformation**:
    ```javascript
    const paramNodes = params.map(paramName => 
-     helpers.createVariableReferenceNode('text', { identifier: paramName }, location())
+     helpers.createVariableReferenceNode('variable', { identifier: paramName }, location())
    );
    ```
 

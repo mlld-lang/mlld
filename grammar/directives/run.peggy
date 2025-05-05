@@ -1,75 +1,165 @@
-
 RunDirective
+  = runCommand / runCode / runExec
+
+// @run [command]
+runCommand
   = "run" _ "[" content:BracketInterpolatableContent "]" {
-      const raw = content.map(n => {
+      // Calculate if this is a multi-line command by checking for newlines
+      const rawCommand = content.map(n => {
         if (n.type === 'Text') return n.content;
-        if (n.type === 'VariableReference') return `{{${n.identifier}}}`;
+        if (n.type === 'VariableReference') {
+          return n.valueType === 'path' ? `$${n.identifier}` : `{{${n.identifier}}}`;
+        }
         return '';
       }).join('');
-      return helpers.createDirective('run', {
-        subtype: 'runCommand',
-        raw,
-        values: content
-      }, location());
-    }
-  / "run" _ cmdRef:CommandReference _ HWS DirectiveEOL { 
-      const { name, args: params } = cmdRef;
-      return helpers.createDirective('run', {
-        subtype: 'runDefined',
-        raw: `$${name}`,
-        values: [
-          helpers.createVariableReferenceNode('path', { identifier: name, isVariableReference: true }, location())
-        ],
-        args: params || []
-      }, location());
-    }
-  / "run" _ language:Identifier _ "[" _ code:$([^\[\]]+) _ "]" {
-      return helpers.createDirective('run', {
-        subtype: 'runCode',
-        language,
-        values: [
-          helpers.createNode('Text', { content: code.trim() }, location())
-        ]
-      }, location());
+      
+      const isMultiLine = rawCommand.includes('\n');
+      
+      // Create values object
+      const values = {
+        command: content
+      };
+      
+      // Create raw object
+      const raw = {
+        command: rawCommand
+      };
+      
+      // Create meta object
+      const meta = {
+        isMultiLine: isMultiLine
+      };
+      
+      return helpers.createStructuredDirective('run', 'runCommand', values, raw, meta, location());
     }
 
-  / "run" _ lang:Identifier _ "(" params:RunVariableParams ")" _ "[" code:BracketInterpolatableContentOrEmpty "]" header:UnderHeader? HWS DirectiveEOL {
-      const clean = code.filter(
-        n => !(n.type === 'Text' && /^\s*$/.test(n.content))
-      ).map(node => {
-        if (node.type === 'Text') {
-          return helpers.createNode('Text', { content: node.content.trim() }, location());
+// @run language [code]
+// @run language (arg1, arg2) [code]
+runCode
+  = "run" _ language:Identifier _ args:RunCodeArgs? _ "[" content:CodeBlockContent "]" {
+      // Create language node
+      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      
+      // Reconstruct raw strings
+      const rawLang = language;
+      const rawArgs = args ? args.map(arg => {
+        if (arg.type === 'VariableReference') {
+          return arg.identifier;
         }
-        return node;
+        return arg.content || '';
+      }) : [];
+      
+      // Properly preserve exact raw string content
+      const rawCode = content.map(n => {
+        if (n.type === 'Text') return n.content;
+        if (n.type === 'VariableReference') {
+          return n.valueType === 'path' ? `$${n.identifier}` : `{{${n.identifier}}}`;
+        }
+        return '';
+      }).join('');
+      
+      const isMultiLine = rawCode.includes('\n');
+      
+      // Create values object
+      const values = {
+        lang: [langNode],
+        args: args || [],
+        code: content
+      };
+      
+      // Create raw object
+      const raw = {
+        lang: rawLang,
+        args: rawArgs,
+        code: rawCode
+      };
+      
+      // Create meta object
+      const meta = {
+        isMultiLine: isMultiLine
+      };
+      
+      return helpers.createStructuredDirective('run', 'runCode', values, raw, meta, location());
+    }
+
+// @run $commandName
+// @run $commandName(arg1, arg2)
+// @run $commandName (arg1, arg2)
+runExec
+  = "run" _ "$" identifier:Identifier _ args:RunExecArgs? HWS DirectiveEOL {
+      // Create text node from identifier
+      const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
+      
+      // Process arguments
+      const processedArgs = args || [];
+      const rawArgs = processedArgs.map(arg => {
+        if (arg.type === 'Text') return arg.content;
+        if (arg.type === 'VariableReference') return arg.identifier;
+        return '';
       });
-      return helpers.createDirective('run', {
-        subtype: 'runCodeParams',
-        language: lang,
-        values: clean,
-        args: params,
-        ...(header ? { underHeader: header } : {})
-      }, location());
-    }
-  RunVariableParams
-  = params:RunParamsList? {
-      return params || [];
+      
+      // Create values object
+      const values = {
+        identifier: [identifierNode],
+        args: processedArgs
+      };
+      
+      // Create raw object
+      const raw = {
+        identifier: identifier,
+        args: rawArgs
+      };
+      
+      // Create meta object
+      const meta = {
+        argumentCount: processedArgs.length
+      };
+      
+      return helpers.createStructuredDirective('run', 'runExec', values, raw, meta, location());
     }
 
-RunParamsList
-  = first:RunParam rest:(_ "," _ param:RunParam { return param; })* {
-      return [first, ...rest].filter(Boolean);
+// Helper rules for runCode arguments
+RunCodeArgs
+  = "(" _ args:RunArgsList? _ ")" {
+      return args || [];
     }
 
-RunParam
-  = varName:("{{" _ name:Identifier _ "}}" { return name; } / "(" _ name:Identifier _ ")" { return name; }) {
+RunArgsList
+  = first:RunArg rest:(_ "," _ arg:RunArg { return arg; })* {
+      return [first, ...rest];
+    }
+
+RunArg
+  = varName:Identifier {
       return helpers.createVariableReferenceNode('text', { identifier: varName }, location());
     }
-  / StringLiteral
-  / identifier:Identifier { return identifier; }
 
+// Helper rules for runExec arguments
+RunExecArgs
+  = "(" _ argList:RunExecArgsList? _ ")" {
+      return argList || [];
+    }
+
+RunExecArgsList
+  = first:RunExecArg rest:(_ "," _ arg:RunExecArg { return arg; })* {
+      return [first, ...rest];
+    }
+
+RunExecArg
+  = str:StringLiteral {
+      return helpers.createNode(NodeType.Text, { content: str }, location());
+    }
+  / varRef:Variable {
+      return varRef;
+    }
+  / val:$([^,)]+) {
+      // Plain value (raw argument)
+      return helpers.createNode(NodeType.Text, { content: val.trim() }, location());
+    }
 
 // Helper rule for parsing RHS @run variations
 // Returns { subtype: '...', ... } structure without 'source' field.
+// This rule is needed for compatibility with the define.peggy file
 _RunRHS
   = _ cmdRef:CommandReference {
       const commandObj = {
@@ -81,25 +171,82 @@ _RunRHS
         name: cmdRef.name,
         args: cmdRef.args
       };
+      
+      // Convert args to proper nodes
+      const argNodes = cmdRef.args.map(arg => {
+        if (arg.type === 'string') {
+          return helpers.createNode(NodeType.Text, { content: arg.value }, location());
+        } else if (arg.type === 'variable') {
+          return arg.value;
+        } else {
+          return helpers.createNode(NodeType.Text, { content: arg.value }, location());
+        }
+      });
+      
       return {
-        subtype: 'runDefined',
-        command: commandObj
+        subtype: 'runExec',
+        values: {
+          identifier: [helpers.createNode(NodeType.Text, { content: cmdRef.name }, location())],
+          args: argNodes
+        },
+        raw: {
+          identifier: cmdRef.name,
+          args: cmdRef.args.map(arg => arg.type === 'string' ? arg.value : 
+                              arg.type === 'variable' ? arg.value.identifier : arg.value)
+        },
+        meta: {
+          argumentCount: cmdRef.args.length
+        }
       };
     }
-  / _ lang:Identifier? _ params:RunVariableParams? _ "[[" content:MultilineInterpolatableContentOrEmpty "]]" _[ \t]* {
-      return {
-        subtype: params ? 'runCodeParams' : 'runCode',
-        command: content,
-        ...(lang ? { language: lang } : {}),
-        ...(params ? { parameters: params } : {}),
-        isMultiLine: true
-      };
-    }
-  / _ "[" content:BracketInterpolatableContentOrEmpty "]" {
-      return {
-        subtype: 'runCommand',
-        values: content // Changed 'command' to 'values'
-      };
+  / _ lang:Identifier? _ params:RunVariableParams? _ "[" content:BracketInterpolatableContentOrEmpty "]" _[ \t]* {
+      // Create raw strings
+      const rawContent = content.map(n => {
+        if (n.type === 'Text') return n.content;
+        if (n.type === 'VariableReference') {
+          return n.valueType === 'path' ? `$${n.identifier}` : `{{${n.identifier}}}`;
+        }
+        return '';
+      }).join('');
+      
+      const isMultiLine = rawContent.includes('\n');
+      
+      if (lang) {
+        // Create language node
+        const langNode = helpers.createNode(NodeType.Text, { content: lang.content }, location());
+      
+        // runCode subtype
+        return {
+          subtype: 'runCode',
+          values: {
+            lang: [langNode],
+            args: params || [],
+            code: content
+          },
+          raw: {
+            lang: lang.content,
+            args: params ? params.map(p => p.identifier) : [],
+            code: rawContent
+          },
+          meta: {
+            isMultiLine: isMultiLine
+          }
+        };
+      } else {
+        // runCommand subtype
+        return {
+          subtype: 'runCommand',
+          values: {
+            command: content
+          },
+          raw: {
+            command: rawContent
+          },
+          meta: {
+            isMultiLine: isMultiLine
+          }
+        };
+      }
     }
 
 CommandReference
@@ -126,15 +273,32 @@ CommandArg
   = str:StringLiteral { 
       const result = { type: 'string', value: str };
       return result; 
-  }
+    }
   / varRef:Variable { 
-      return varRef; 
-  }
+      return { type: 'variable', value: varRef }; 
+    }
   / chars:RawArgChar+ { 
       const result = { type: 'raw', value: chars.join('').trim() }; 
       return result;
-  }
+    }
 
 RawArgChar
   = !("," / ")") char:. { return char; }
 
+// Additional rules needed for _RunRHS compatibility
+RunVariableParams
+  = params:RunParamsList? {
+      return params || [];
+    }
+
+RunParamsList
+  = first:RunParam rest:(_ "," _ param:RunParam { return param; })* {
+      return [first, ...rest].filter(Boolean);
+    }
+
+RunParam
+  = varName:("{{" _ name:Identifier _ "}}" { return name; } / "(" _ name:Identifier _ ")" { return name; }) {
+      return helpers.createVariableReferenceNode('text', { identifier: varName }, location());
+    }
+  / StringLiteral
+  / identifier:Identifier { return identifier; }

@@ -114,22 +114,17 @@ MultilineInterpolatableContentOrEmpty
 
 
 // Brackets [...] Interpolation
-BracketAllowedLiteralChar
-  = !([\\\]/.#{}] / '{{' / '$' / '\\\\') . // Disallow \, /, ., #, {, }, {{, $, \\
-
+// For interpolated content, we only want to split on variables
 BracketLiteralTextSegment
-  = value:$(!([\\\]/.#{}] / '{{' / '$' / '\\' / [ \t]*'#') .)+ { // MODIFIED: Added lookahead for whitespace before #
+  = value:$(!(']' / '{{' / '$') .)+ { 
       return helpers.createNode(NodeType.Text, { content: value }, location());
     }
 
 // Define a single part that can appear inside brackets, guarded by lookahead
 BracketPart
   = !']' part:(
-        PathSeparatorToken
-      / DotSeparatorToken
-      / SectionMarkerToken
-      / Variable
-      / BracketLiteralTextSegment // Literal is the fallback
+        Variable
+      / BracketLiteralTextSegment // Everything else as plain text
     ) { return part; }
 
 BracketInterpolatableContent
@@ -140,3 +135,9 @@ BracketInterpolatableContent
 BracketInterpolatableContentOrEmpty
   = parts:BracketPart+ { return parts; }
   / ""                 { return []; }
+  
+// For code blocks, we want to capture the entire content as a single text node
+CodeBlockContent
+  = content:$(!']' .)* { 
+      return [helpers.createNode(NodeType.Text, { content }, location())];
+    }
