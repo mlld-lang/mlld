@@ -13,7 +13,7 @@ describe('Exec Directive Basic Test', () => {
     
     expect(result.ast.length).toBeGreaterThan(0);
     expect(result.ast[0].type).toBe('Directive');
-    expect(result.ast[0].directive.kind).toBe('exec');
+    expect(result.ast[0].kind).toBe('exec');
   });
   
   test('Basic exec command parses', async () => {
@@ -24,6 +24,6 @@ describe('Exec Directive Basic Test', () => {
     
     expect(result.ast.length).toBeGreaterThan(0);
     expect(result.ast[0].type).toBe('Directive');
-    expect(result.ast[0].directive.kind).toBe('exec');
+    expect(result.ast[0].kind).toBe('exec');
   });
 });

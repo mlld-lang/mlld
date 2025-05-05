@@ -32,18 +32,31 @@ DataDirective
       values.value = Array.isArray(value.value) ? value.value : [value.value];
     }
     
-    // Return the directive node
-    return {
-      type: 'Directive',
-      kind: 'data',
-      subtype: 'dataAssignment',
+    // Determine the source based on the value type
+    let source = null;
+    if (value.type === "nestedDirective" && value.directive) {
+      source = value.directive.subtype || 'directive';
+    } else if (value.type === "object") {
+      source = 'object';
+    } else if (value.type === "array") {
+      source = 'array';
+    } else if (value.type === "literal") {
+      source = 'literal';
+    }
+    
+    // Return the directive node using createStructuredDirective
+    return helpers.createStructuredDirective(
+      'data',
+      'dataAssignment',
       values,
-      raw: {
+      {
         identifier: rawIdentifier,
         value: rawValue
       },
-      meta: {}
-    };
+      {},
+      location(),
+      source
+    );
   }
 
 DataValue

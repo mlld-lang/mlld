@@ -14,17 +14,26 @@ textAssignment
       identifier: [id]
     };
     
+    // Create structured meta object
+    const meta = {};
+    
+    // Determine source for the top-level field
+    let sourceType = null;
+    
     // Check if the value is a nested directive
     if (value.type === "nestedDirective" && value.directive) {
       // Use the full directive node directly in the content field
       values.content = value.directive;
-      values.source = 'directive'; // Mark this as having a directive source
+      
+      // Set source to the nested directive's subtype
+      sourceType = value.directive.subtype || 'directive';
     } else {
       // Use normal values array for non-directive content
       values.content = Array.isArray(value.values) ? value.values : [value.values];
       
+      // Set source based on the value type
       if (value.type) {
-        values.source = value.type;
+        sourceType = value.type;
       }
     }
     
@@ -34,24 +43,16 @@ textAssignment
       content: rawContent
     };
     
-    // Create structured meta object
-    const meta = {};
-    
-    // Add specific metadata based on type (for backward compatibility)
-    if (value.type === "embed" && value.embed) {
-      meta.embed = value.embed;
-    } else if (value.type === "run" && value.run) {
-      meta.run = value.run;
-    }
-    
-    return {
-      type: 'Directive',
-      kind: 'text',
-      subtype: 'textAssignment',
+    // Return using createStructuredDirective for consistency
+    return helpers.createStructuredDirective(
+      'text',
+      'textAssignment',
       values,
       raw,
-      meta
-    };
+      meta,
+      location(),
+      sourceType
+    );
   }
 
 textTemplate
@@ -73,17 +74,25 @@ textTemplate
       values.identifier = [identifier];
     }
     
-    return {
-      type: 'Directive',
-      kind: 'text',
-      subtype: 'textTemplate',
-      values,
-      raw: {
-        identifier: rawIdentifier,
-        content: rawContent
-      },
-      meta: {}
+    // Create raw object
+    const raw = {
+      identifier: rawIdentifier,
+      content: rawContent
     };
+    
+    // Create meta object
+    const meta = {};
+    
+    // Return using createStructuredDirective for consistency
+    return helpers.createStructuredDirective(
+      'text',
+      'textTemplate',
+      values,
+      raw,
+      meta,
+      location(),
+      'template'  // Using 'template' as the source for interpolatable content
+    );
   }
 
 TextValue

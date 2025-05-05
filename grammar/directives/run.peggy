@@ -30,7 +30,7 @@ runCommand
         isMultiLine: isMultiLine
       };
       
-      return helpers.createStructuredDirective('run', 'runCommand', values, raw, meta, location());
+      return helpers.createStructuredDirective('run', 'runCommand', values, raw, meta, location(), 'command');
     }
 
 // @run language [code]
@@ -79,7 +79,7 @@ runCode
         isMultiLine: isMultiLine
       };
       
-      return helpers.createStructuredDirective('run', 'runCode', values, raw, meta, location());
+      return helpers.createStructuredDirective('run', 'runCode', values, raw, meta, location(), 'code');
     }
 
 // @run $commandName
@@ -115,7 +115,7 @@ runExec
         argumentCount: processedArgs.length
       };
       
-      return helpers.createStructuredDirective('run', 'runExec', values, raw, meta, location());
+      return helpers.createStructuredDirective('run', 'runExec', values, raw, meta, location(), 'exec');
     }
 
 // Helper rules for runCode arguments

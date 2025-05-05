@@ -52,8 +52,8 @@ PathDirective
       path: pathMeta
     };
     
-    // Create the structured directive node
-    return helpers.createStructuredDirective('path', 'pathAssignment', values, raw, meta, location());
+    // Create the structured directive node with 'path' as the source
+    return helpers.createStructuredDirective('path', 'pathAssignment', values, raw, meta, location(), 'path');
   }
 
 /**

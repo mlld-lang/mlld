@@ -52,7 +52,7 @@ execCommand
         metaObj.metadata = { type: meta };
       }
       
-      return helpers.createStructuredDirective('exec', 'execCommand', values, raw, metaObj, location());
+      return helpers.createStructuredDirective('exec', 'execCommand', values, raw, metaObj, location(), 'command');
     }
 
 // @exec identifier (param1, param2) = @run language [code]
@@ -110,7 +110,7 @@ execCode
         metaObj.metadata = { type: meta };
       }
       
-      return helpers.createStructuredDirective('exec', 'execCode', values, raw, metaObj, location());
+      return helpers.createStructuredDirective('exec', 'execCode', values, raw, metaObj, location(), 'code');
     }
 
 // @exec identifier (param1, param2) = @run runExec variant
@@ -199,7 +199,10 @@ execRunExec
         metaObj.metadata = { type: meta };
       }
       
-      return helpers.createStructuredDirective('exec', subtype, values, raw, metaObj, location());
+      // Determine source based on the subtype
+      const source = subtype === 'execCode' ? 'code' : 'command';
+      
+      return helpers.createStructuredDirective('exec', subtype, values, raw, metaObj, location(), source);
     }
 
 // Helper rules for exec metadata (.risk.high, .meta, etc.)

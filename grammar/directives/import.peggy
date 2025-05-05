@@ -1,8 +1,10 @@
 ImportDirective
   = "import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:(
       quotedPath:StringLiteral { 
+        // Convert string to structured Text node for consistent AST
+        const pathNode = helpers.createNode("Text", { content: quotedPath.value });
         return { 
-          parts: quotedPath,
+          parts: [pathNode],
           raw: quotedPath.raw || JSON.stringify(quotedPath.value)
         };
       }
@@ -28,21 +30,27 @@ ImportDirective
           identifier: item.name.identifier,
           alias: item.alias ? item.alias.identifier : null
         })),
-        path: validatedPath.values
+        path: Array.isArray(validatedPath.values) ? validatedPath.values : [validatedPath.values]
       };
       
       // Create raw object with text segments
       const raw = {
-        imports: importsRaw,
-        path: path.raw
+        imports: imports.length === 1 && imports[0].name === '*' ? '*' : importsRaw,
+        path: helpers.reconstructRawString(validatedPath.values)
       };
       
       // Create meta object with nested path metadata
       const meta = {
-        path: validatedPath.path
+        path: {
+          isAbsolute: validatedPath.isAbsolute,
+          hasVariables: validatedPath.hasVariables,
+          hasTextVariables: validatedPath.hasTextVariables,
+          hasPathVariables: validatedPath.hasPathVariables,
+          isRelative: validatedPath.isRelativeToCwd
+        }
       };
       
-      return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
+      return helpers.createStructuredDirective('import', subtype, values, raw, meta, location(), 'path');
     }
 
 // Rules for parsing import lists

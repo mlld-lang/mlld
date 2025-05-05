@@ -10,7 +10,12 @@ AddDirective
       let meta = { ...addResult.meta };
       
       if (headerLevelValue !== null) {
-        values.headerLevel = headerLevelValue;
+        // Create a node and put it in an array for consistency
+        const headerLevelNode = helpers.createNode(NodeType.Number, { 
+          value: headerLevelValue.value,
+          raw: headerLevelValue.raw
+        });
+        values.headerLevel = [headerLevelNode];
         raw.headerLevel = headerLevel.raw;
       }
       
@@ -19,6 +24,16 @@ AddDirective
         raw.underHeader = underHeaderValue;
       }
 
+      // Determine source based on subtype
+      let source = null;
+      if (addResult.subtype === 'addTemplate') {
+        source = 'template';
+      } else if (addResult.subtype === 'addPath') {
+        source = 'path';
+      } else if (addResult.subtype === 'addVariable') {
+        source = 'variable';
+      }
+      
       // Create the structured directive
       return helpers.createStructuredDirective(
         'add', 
@@ -26,7 +41,8 @@ AddDirective
         values, 
         raw, 
         meta, 
-        location()
+        location(),
+        source
       );
     }
   / "add" _ "{" _ names:NameList _ "}" _ "from" _ content:DirectiveContent options:DirectiveOptions? header:HeaderLevel? under:UnderHeader? DirectiveEOL {
@@ -47,7 +63,7 @@ AddDirective
         path: [validatedPath],
         names: nameNodes,
         ...(sectionTrimmed ? { section: [helpers.createNode(NodeType.Text, { content: sectionTrimmed, raw: sectionTrimmed })] } : {}),
-        ...(header ? { headerLevel: header } : {}),
+        ...(header ? { headerLevel: [helpers.createNode(NodeType.Number, { value: header.value, raw: header.raw })] } : {}),
         ...(under ? { underHeader: [helpers.createNode(NodeType.Text, { content: under, raw: under })] } : {})
       };
       
@@ -78,7 +94,8 @@ AddDirective
         values, 
         raw, 
         meta, 
-        location()
+        location(),
+        'path'  // This variant always uses path as the source
       );
     }
 
@@ -91,9 +108,10 @@ NameList
 HeaderLevel
   = _ "as" _ level:("#"+) {
     const value = level.length;
+    const raw = level.join('');
     return { 
       value: value,
-      raw: level.join('')
+      raw: raw
     };
   }
 

@@ -244,7 +244,7 @@ function peg$parse(input, options) {
   var peg$c41 = ")";
   var peg$c42 = "@run";
   var peg$c43 = "exec";
-  var peg$c44 = "@import";
+  var peg$c44 = "import";
   var peg$c45 = "*";
   var peg$c46 = "HOMEPATH";
   var peg$c47 = "~";
@@ -358,7 +358,7 @@ function peg$parse(input, options) {
   var peg$e79 = peg$classExpectation(["'"], true, false);
   var peg$e80 = peg$classExpectation(["]"], true, false);
   var peg$e81 = peg$literalExpectation("exec", false);
-  var peg$e82 = peg$literalExpectation("@import", false);
+  var peg$e82 = peg$literalExpectation("import", false);
   var peg$e83 = peg$literalExpectation("*", false);
   var peg$e84 = peg$literalExpectation("HOMEPATH", false);
   var peg$e85 = peg$literalExpectation("~", false);
@@ -574,7 +574,12 @@ function peg$parse(input, options) {
       let meta = { ...addResult.meta };
       
       if (headerLevelValue !== null) {
-        values.headerLevel = headerLevelValue;
+        // Create a node and put it in an array for consistency
+        const headerLevelNode = helpers.createNode(NodeType.Number, { 
+          value: headerLevelValue.value,
+          raw: headerLevelValue.raw
+        });
+        values.headerLevel = [headerLevelNode];
         raw.headerLevel = headerLevel.raw;
       }
       
@@ -583,6 +588,16 @@ function peg$parse(input, options) {
         raw.underHeader = underHeaderValue;
       }
 
+      // Determine source based on subtype
+      let source = null;
+      if (addResult.subtype === 'addTemplate') {
+        source = 'template';
+      } else if (addResult.subtype === 'addPath') {
+        source = 'path';
+      } else if (addResult.subtype === 'addVariable') {
+        source = 'variable';
+      }
+      
       // Create the structured directive
       return helpers.createStructuredDirective(
         'add', 
@@ -590,7 +605,8 @@ function peg$parse(input, options) {
         values, 
         raw, 
         meta, 
-        location()
+        location(),
+        source
       );
     };
   var peg$f82 = function(names, content, options, header, under) {
@@ -611,7 +627,7 @@ function peg$parse(input, options) {
         path: [validatedPath],
         names: nameNodes,
         ...(sectionTrimmed ? { section: [helpers.createNode(NodeType.Text, { content: sectionTrimmed, raw: sectionTrimmed })] } : {}),
-        ...(header ? { headerLevel: header } : {}),
+        ...(header ? { headerLevel: [helpers.createNode(NodeType.Number, { value: header.value, raw: header.raw })] } : {}),
         ...(under ? { underHeader: [helpers.createNode(NodeType.Text, { content: under, raw: under })] } : {})
       };
       
@@ -642,7 +658,8 @@ function peg$parse(input, options) {
         values, 
         raw, 
         meta, 
-        location()
+        location(),
+        'path'  // This variant always uses path as the source
       );
     };
   var peg$f83 = function(first, id) { return id; };
@@ -652,9 +669,10 @@ function peg$parse(input, options) {
   var peg$f85 = function() { return []; };
   var peg$f86 = function(level) {
     const value = level.length;
+    const raw = level.join('');
     return { 
       value: value,
-      raw: level.join('')
+      raw: raw
     };
   };
   var peg$f87 = function(header) {
@@ -794,18 +812,31 @@ function peg$parse(input, options) {
       values.value = Array.isArray(value.value) ? value.value : [value.value];
     }
     
-    // Return the directive node
-    return {
-      type: 'Directive',
-      kind: 'data',
-      subtype: 'dataAssignment',
+    // Determine the source based on the value type
+    let source = null;
+    if (value.type === "nestedDirective" && value.directive) {
+      source = value.directive.subtype || 'directive';
+    } else if (value.type === "object") {
+      source = 'object';
+    } else if (value.type === "array") {
+      source = 'array';
+    } else if (value.type === "literal") {
+      source = 'literal';
+    }
+    
+    // Return the directive node using createStructuredDirective
+    return helpers.createStructuredDirective(
+      'data',
+      'dataAssignment',
       values,
-      raw: {
+      {
         identifier: rawIdentifier,
         value: rawValue
       },
-      meta: {}
-    };
+      {},
+      location(),
+      source
+    );
   };
   var peg$f92 = function(addDirective) {
       return {
@@ -1095,7 +1126,7 @@ function peg$parse(input, options) {
         metaObj.metadata = { type: meta };
       }
       
-      return helpers.createStructuredDirective('exec', 'execCommand', values, raw, metaObj, location());
+      return helpers.createStructuredDirective('exec', 'execCommand', values, raw, metaObj, location(), 'command');
     };
   var peg$f141 = function(identifier, meta, params, language, code) {
       // Create nodes
@@ -1150,7 +1181,7 @@ function peg$parse(input, options) {
         metaObj.metadata = { type: meta };
       }
       
-      return helpers.createStructuredDirective('exec', 'execCode', values, raw, metaObj, location());
+      return helpers.createStructuredDirective('exec', 'execCode', values, raw, metaObj, location(), 'code');
     };
   var peg$f142 = function(identifier, meta, params, runExec) {
       // Create identifier node
@@ -1236,7 +1267,10 @@ function peg$parse(input, options) {
         metaObj.metadata = { type: meta };
       }
       
-      return helpers.createStructuredDirective('exec', subtype, values, raw, metaObj, location());
+      // Determine source based on the subtype
+      const source = subtype === 'execCode' ? 'code' : 'command';
+      
+      return helpers.createStructuredDirective('exec', subtype, values, raw, metaObj, location(), source);
     };
   var peg$f143 = function(field) {
     return field;
@@ -1252,15 +1286,17 @@ function peg$parse(input, options) {
       return helpers.createVariableReferenceNode('text', { identifier: paramName }, location());
     };
   var peg$f148 = function(imports, quotedPath) { 
+        // Convert string to structured Text node for consistent AST
+        const pathNode = helpers.createNode("Text", { content: quotedPath.value });
         return { 
-          parts: quotedPath,
-          raw: $(quotedPath)
+          parts: [pathNode],
+          raw: quotedPath.raw || JSON.stringify(quotedPath.value)
         };
       };
   var peg$f149 = function(imports, variablePath) {
         return {
           parts: [variablePath],
-          raw: $(variablePath)
+          raw: variablePath.raw || variablePath.identifier
         };
       };
   var peg$f150 = function(imports, path) {
@@ -1279,21 +1315,27 @@ function peg$parse(input, options) {
           identifier: item.name.identifier,
           alias: item.alias ? item.alias.identifier : null
         })),
-        path: validatedPath.values
+        path: Array.isArray(validatedPath.values) ? validatedPath.values : [validatedPath.values]
       };
       
       // Create raw object with text segments
       const raw = {
-        imports: importsRaw,
-        path: path.raw
+        imports: imports.length === 1 && imports[0].name === '*' ? '*' : importsRaw,
+        path: helpers.reconstructRawString(validatedPath.values)
       };
       
       // Create meta object with nested path metadata
       const meta = {
-        path: validatedPath.path
+        path: {
+          isAbsolute: validatedPath.isAbsolute,
+          hasVariables: validatedPath.hasVariables,
+          hasTextVariables: validatedPath.hasTextVariables,
+          hasPathVariables: validatedPath.hasPathVariables,
+          isRelative: validatedPath.isRelativeToCwd
+        }
       };
       
-      return helpers.createStructuredDirective('import', subtype, values, raw, meta, location());
+      return helpers.createStructuredDirective('import', subtype, values, raw, meta, location(), 'path');
     };
   var peg$f151 = function() {
       return [{name: "*", alias: null}];
@@ -1353,8 +1395,8 @@ function peg$parse(input, options) {
       path: pathMeta
     };
     
-    // Create the structured directive node
-    return helpers.createStructuredDirective('path', 'pathAssignment', values, raw, meta, location());
+    // Create the structured directive node with 'path' as the source
+    return helpers.createStructuredDirective('path', 'pathAssignment', values, raw, meta, location(), 'path');
   };
   var peg$f161 = function(interpolatedArray) { 
       // Return the structured array directly
@@ -1391,7 +1433,7 @@ function peg$parse(input, options) {
         isMultiLine: isMultiLine
       };
       
-      return helpers.createStructuredDirective('run', 'runCommand', values, raw, meta, location());
+      return helpers.createStructuredDirective('run', 'runCommand', values, raw, meta, location(), 'command');
     };
   var peg$f164 = function(language, args, content) {
       // Create language node
@@ -1436,7 +1478,7 @@ function peg$parse(input, options) {
         isMultiLine: isMultiLine
       };
       
-      return helpers.createStructuredDirective('run', 'runCode', values, raw, meta, location());
+      return helpers.createStructuredDirective('run', 'runCode', values, raw, meta, location(), 'code');
     };
   var peg$f165 = function(identifier, args) {
       // Create text node from identifier
@@ -1467,7 +1509,7 @@ function peg$parse(input, options) {
         argumentCount: processedArgs.length
       };
       
-      return helpers.createStructuredDirective('run', 'runExec', values, raw, meta, location());
+      return helpers.createStructuredDirective('run', 'runExec', values, raw, meta, location(), 'exec');
     };
   var peg$f166 = function(args) {
       return args || [];
@@ -1635,17 +1677,26 @@ function peg$parse(input, options) {
       identifier: [id]
     };
     
+    // Create structured meta object
+    const meta = {};
+    
+    // Determine source for the top-level field
+    let sourceType = null;
+    
     // Check if the value is a nested directive
     if (value.type === "nestedDirective" && value.directive) {
       // Use the full directive node directly in the content field
       values.content = value.directive;
-      values.source = 'directive'; // Mark this as having a directive source
+      
+      // Set source to the nested directive's subtype
+      sourceType = value.directive.subtype || 'directive';
     } else {
       // Use normal values array for non-directive content
       values.content = Array.isArray(value.values) ? value.values : [value.values];
       
+      // Set source based on the value type
       if (value.type) {
-        values.source = value.type;
+        sourceType = value.type;
       }
     }
     
@@ -1655,24 +1706,16 @@ function peg$parse(input, options) {
       content: rawContent
     };
     
-    // Create structured meta object
-    const meta = {};
-    
-    // Add specific metadata based on type (for backward compatibility)
-    if (value.type === "embed" && value.embed) {
-      meta.embed = value.embed;
-    } else if (value.type === "run" && value.run) {
-      meta.run = value.run;
-    }
-    
-    return {
-      type: 'Directive',
-      kind: 'text',
-      subtype: 'textAssignment',
+    // Return using createStructuredDirective for consistency
+    return helpers.createStructuredDirective(
+      'text',
+      'textAssignment',
       values,
       raw,
-      meta
-    };
+      meta,
+      location(),
+      sourceType
+    );
   };
   var peg$f194 = function(id, content) {
     // Parse identifier if present
@@ -1692,17 +1735,25 @@ function peg$parse(input, options) {
       values.identifier = [identifier];
     }
     
-    return {
-      type: 'Directive',
-      kind: 'text',
-      subtype: 'textTemplate',
-      values,
-      raw: {
-        identifier: rawIdentifier,
-        content: rawContent
-      },
-      meta: {}
+    // Create raw object
+    const raw = {
+      identifier: rawIdentifier,
+      content: rawContent
     };
+    
+    // Create meta object
+    const meta = {};
+    
+    // Return using createStructuredDirective for consistency
+    return helpers.createStructuredDirective(
+      'text',
+      'textTemplate',
+      values,
+      raw,
+      meta,
+      location(),
+      'template'  // Using 'template' as the source for interpolatable content
+    );
   };
   var peg$f195 = function(addDirective) {
       return {
@@ -7618,9 +7669,9 @@ function peg$parse(input, options) {
     var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13;
 
     s0 = peg$currPos;
-    if (input.substr(peg$currPos, 7) === peg$c44) {
+    if (input.substr(peg$currPos, 6) === peg$c44) {
       s1 = peg$c44;
-      peg$currPos += 7;
+      peg$currPos += 6;
     } else {
       s1 = peg$FAILED;
       if (peg$silentFails === 0) { peg$fail(peg$e82); }

@@ -14,7 +14,7 @@ describe('Directive Base Structure', () => {
     '@data myvar = { "key": "value" }',
     '@path myvar = "/path/to/file"',
     '@run [echo "hello world"]',
-    '@exec mycommand (param) = "default value"'
+    '@exec mycommand (param) = @run [echo "hello"]'
   ];
 
   for (const input of directiveExamples) {
@@ -26,6 +26,10 @@ describe('Directive Base Structure', () => {
         expect(ast.length).toBeGreaterThan(0);
         
         const node = ast[0] as DirectiveNode;
+        
+        // Output all directive structures for debugging
+        console.log(`${directiveName} directive structure:`, JSON.stringify(node, null, 2));
+        
         expect(node.type).toBe('Directive');
         
         // All directives should have these properties at the top level

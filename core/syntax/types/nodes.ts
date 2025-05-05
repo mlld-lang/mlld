@@ -18,6 +18,11 @@ export interface MeldNode {
 }
 
 /**
+ * Source values for content origin in directives
+ */
+export type DirectiveSource = 'literal' | 'variable' | 'template' | 'path' | 'command' | 'code' | 'exec' | string;
+
+/**
  * AST node for directives with refactored structure
  */
 export interface DirectiveNode extends MeldNode {
@@ -26,6 +31,9 @@ export interface DirectiveNode extends MeldNode {
   // Top-level directive properties
   kind: DirectiveKind;
   subtype: DirectiveSubtype;
+  
+  // Source of content (where the content originated)
+  source?: DirectiveSource;
   
   // Structured values with semantic grouping
   values: { [key: string]: MeldNode[] };

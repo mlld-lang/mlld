@@ -1,6 +1,18 @@
 import { describe, expect, test } from 'vitest';
 import { parse } from '@core/ast/parser';
 
+// Helper function to log all keys and check if values are arrays
+function checkValuesAreArrays(directive) {
+  console.log('Values object keys and types:');
+  for (const key in directive.values) {
+    const value = directive.values[key];
+    const isArray = Array.isArray(value);
+    const type = isArray ? `Array[${value.length}]` : typeof value;
+    console.log(`- ${key}: ${type}`);
+  }
+  return directive;
+}
+
 describe('Add Directive', () => {
   // ====================
   // AddPath Tests
@@ -15,6 +27,9 @@ describe('Add Directive', () => {
     
     // Get the directive from the parse result (should be the first node)
     const directiveNode = parseResult.ast[0];
+    
+    // Log the values structure
+    checkValuesAreArrays(directiveNode);
     
     // Verify we have a directive node
     expect(directiveNode.type).toBe('Directive');
@@ -67,7 +82,7 @@ describe('Add Directive', () => {
     // Check values structure
     expect(directiveNode.values).toHaveProperty('path');
     expect(directiveNode.values).toHaveProperty('headerLevel');
-    expect(directiveNode.values.headerLevel.value).toBe(3);
+    expect(directiveNode.values.headerLevel[0].value).toBe(3);
     
     // Check raw structure
     expect(directiveNode.raw).toHaveProperty('headerLevel');
@@ -118,7 +133,7 @@ describe('Add Directive', () => {
     expect(directiveNode.values).toHaveProperty('underHeader');
     
     // Check values content
-    expect(directiveNode.values.headerLevel.value).toBe(2);
+    expect(directiveNode.values.headerLevel[0].value).toBe(2);
     expect(directiveNode.values.underHeader[0].content).toBe('API Documentation');
     
     // Check raw structure
@@ -194,7 +209,7 @@ describe('Add Directive', () => {
     // Check values structure
     expect(directiveNode.values).toHaveProperty('content');
     expect(directiveNode.values).toHaveProperty('headerLevel');
-    expect(directiveNode.values.headerLevel.value).toBe(2);
+    expect(directiveNode.values.headerLevel[0].value).toBe(2);
     
     // Check raw structure
     expect(directiveNode.raw).toHaveProperty('headerLevel');
@@ -245,7 +260,7 @@ describe('Add Directive', () => {
     
     // Check values content
     expect(directiveNode.values.variable[0].identifier).toBe('document');
-    expect(directiveNode.values.headerLevel.value).toBe(2);
+    expect(directiveNode.values.headerLevel[0].value).toBe(2);
     expect(directiveNode.values.underHeader[0].content).toBe('Documentation');
     
     // Check raw structure

@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import * as parser from '../directives/text.peggy';
-import { TextAssignmentDirectiveNode, TextBracketedDirectiveNode } from '../types/text';
-import { isTextAssignmentDirective, isTextBracketedDirective } from '../types/guards';
+import { parse } from '@core/ast/parser';
+import { TextAssignmentDirectiveNode, TextTemplateDirectiveNode } from '../types/text';
+import { isTextAssignmentDirective, isTextTemplateDirective } from '../types/guards';
 
 describe('Text Directive Tests', () => {
   describe('Text Assignment', () => {
-    it('should parse a basic text assignment', () => {
-      const result = parser.parse('text greeting = "Hello, world!"') as TextAssignmentDirectiveNode;
+    it('should parse a basic text assignment', async () => {
+      const parseResult = await parse('@text greeting = "Hello, world!"');
+      console.log("Basic text assignment parsed result:", JSON.stringify(parseResult, null, 2));
+      const result = parseResult.ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
@@ -27,8 +29,8 @@ describe('Text Directive Tests', () => {
       expect(isTextAssignmentDirective(result)).toBe(true);
     });
     
-    it('should parse a text assignment with embed', () => {
-      const result = parser.parse('text content = @embed ./README.md') as TextAssignmentDirectiveNode;
+    it('should parse a text assignment with embed', async () => {
+      const result = (await parse('text content = @embed ./README.md')).ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
@@ -46,8 +48,8 @@ describe('Text Directive Tests', () => {
       expect(isTextAssignmentDirective(result)).toBe(true);
     });
     
-    it('should parse a text assignment with run', () => {
-      const result = parser.parse('text output = @run echo "Hello"') as TextAssignmentDirectiveNode;
+    it('should parse a text assignment with run', async () => {
+      const result = (await parse('text output = @run echo "Hello"')).ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
@@ -65,8 +67,8 @@ describe('Text Directive Tests', () => {
       expect(isTextAssignmentDirective(result)).toBe(true);
     });
     
-    it('should parse a text assignment with call', () => {
-      const result = parser.parse('text response = @call api.fetchData "param"') as TextAssignmentDirectiveNode;
+    it('should parse a text assignment with call', async () => {
+      const result = (await parse('text response = @call api.fetchData "param"')).ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
@@ -87,13 +89,13 @@ describe('Text Directive Tests', () => {
     });
   });
   
-  describe('Text Bracketed', () => {
-    it('should parse a basic bracketed text', () => {
-      const result = parser.parse('text [This is some text]') as TextBracketedDirectiveNode;
+  describe('Text Template', () => {
+    it('should parse a basic template text', async () => {
+      const result = (await parse('text [This is some text]')).ast[0] as TextTemplateDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
-      expect(result.subtype).toBe('textBracketed');
+      expect(result.subtype).toBe('textTemplate');
       
       // Check values
       expect(result.values.content).toBeDefined();
@@ -103,7 +105,7 @@ describe('Text Directive Tests', () => {
       expect(result.raw.content).toBeDefined();
       
       // Type guard
-      expect(isTextBracketedDirective(result)).toBe(true);
+      expect(isTextTemplateDirective(result)).toBe(true);
     });
   });
 });

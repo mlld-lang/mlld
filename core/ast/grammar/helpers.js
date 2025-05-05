@@ -34,10 +34,11 @@ export default {
   },
   
   // New method for creating directives with the updated structure
-  createStructuredDirective(kind, subtype, values, raw, meta, locationData) {
+  createStructuredDirective(kind, subtype, values, raw, meta, locationData, source = null) {
     return this.createNode(NodeType.Directive, { 
       kind, 
       subtype, 
+      source,  // New source field added
       values, 
       raw, 
       meta 
@@ -140,8 +141,8 @@ export default {
     // const hasAlias = list.some(item => item.alias !== null);
     // if (hasAlias) return 'importNamed';
 
-    // Otherwise, it's importStandard
-    return 'importStandard';
+    // Otherwise, it's importSelected (more descriptive name)
+    return 'importSelected';
   },
 
   trace(pos, reason) {
