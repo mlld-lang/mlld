@@ -19,7 +19,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic path add', async () => {
-    const content = `@add "$PROJECTPATH/README.md"`;
+    const content = `@add [@PROJECTPATH/README.md]`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -45,29 +45,11 @@ describe('Add Directive', () => {
     expect(directiveNode.meta.path).toHaveProperty('hasVariables');
   });
   
-  test('Path add with section', async () => {
-    const content = `@add "guide.md # Getting Started"`;
-    const parseResult = await parse(content);
-    
-    // Log the structure for debugging
-    console.log('Add Path with Section Structure:', JSON.stringify(parseResult.ast[0], null, 2));
-    
-    // Get the directive from the parse result (should be the first node)
-    const directiveNode = parseResult.ast[0];
-    
-    // Verify structure
-    expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addPath');
-    
-    // Check values structure
-    expect(directiveNode.values).toHaveProperty('path');
-    
-    // In the current simplified tests just verify that node exists, not the specific values
-  });
+  // This test is replaced by the new AddSection tests
+  // The old syntax @add [file.md # header] is deprecated
   
   test('Path add with headerLevel', async () => {
-    const content = `@add "README.md" as ###`;
+    const content = `@add [README.md] as ###`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -89,7 +71,7 @@ describe('Add Directive', () => {
   });
   
   test('Path add with underHeader', async () => {
-    const content = `@add "code.js" under Example Code`;
+    const content = `@add [code.js] under Example Code`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -112,7 +94,8 @@ describe('Add Directive', () => {
   });
   
   test('Complex path add with all modifiers', async () => {
-    const content = `@add "$PROJECTPATH/doc.md # API Reference" as ## under API Documentation`;
+    // Updated to use separate path with no section
+    const content = `@add [@PROJECTPATH/doc.md] as ## under API Documentation`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -144,12 +127,35 @@ describe('Add Directive', () => {
     expect(directiveNode.raw.underHeader).toBe('API Documentation');
   });
   
+  test('Complex section add with new title', async () => {
+    // The new recommended syntax for section extraction with a new title
+    const content = `@add "# API Reference" from [@PROJECTPATH/doc.md] as "## API"`;
+    const parseResult = await parse(content);
+    
+    // Get the directive from the parse result
+    const directiveNode = parseResult.ast[0];
+    
+    // Verify structure
+    expect(directiveNode.type).toBe('Directive');
+    expect(directiveNode.kind).toBe('add');
+    expect(directiveNode.subtype).toBe('addSection');
+    
+    // Check values structure
+    expect(directiveNode.values).toHaveProperty('sectionTitle');
+    expect(directiveNode.values).toHaveProperty('path');
+    expect(directiveNode.values).toHaveProperty('newTitle');
+    
+    // Check raw properties
+    expect(directiveNode.raw.sectionTitle).toBe('# API Reference');
+    expect(directiveNode.raw.newTitle).toBe('## API');
+  });
+  
   // ====================
   // AddTemplate Tests
   // ====================
   
   test('Basic template add', async () => {
-    const content = `@add [# Template Content]`;
+    const content = `@add [[# Template Content]]`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -173,7 +179,7 @@ describe('Add Directive', () => {
   });
   
   test('Template add with variable interpolation', async () => {
-    const content = `@add [Hello {{name}}!]`;
+    const content = `@add [[Hello {{name}}!]]`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -194,7 +200,7 @@ describe('Add Directive', () => {
   });
   
   test('Template add with headerLevel', async () => {
-    const content = `@add [# Content] as ##`;
+    const content = `@add [[# Content]] as ##`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -220,7 +226,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic variable add', async () => {
-    const content = `@add {{content}}`;
+    const content = `@add @content`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -241,7 +247,7 @@ describe('Add Directive', () => {
   });
   
   test('Variable add with headerLevel and underHeader', async () => {
-    const content = `@add {{document}} as ## under Documentation`;
+    const content = `@add @document as ## under Documentation`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -268,15 +274,92 @@ describe('Add Directive', () => {
   });
   
   // ====================
+  // AddSection Tests
+  // ====================
+  
+  test('Basic section add', async () => {
+    const content = `@add "# Header Title" from [document.md]`;
+    const parseResult = await parse(content);
+    
+    // Log the structure for debugging
+    console.log('Add Section Directive Structure:', JSON.stringify(parseResult.ast[0], null, 2));
+    
+    // Get the directive from the parse result (should be the first node)
+    const directiveNode = parseResult.ast[0];
+    
+    // Verify structure
+    expect(directiveNode.type).toBe('Directive');
+    expect(directiveNode.kind).toBe('add');
+    expect(directiveNode.subtype).toBe('addSection');
+    expect(directiveNode.source).toBe('section'); // Check source field
+    
+    // Check values structure
+    expect(directiveNode.values).toHaveProperty('sectionTitle');
+    expect(directiveNode.values).toHaveProperty('path');
+    expect(Array.isArray(directiveNode.values.sectionTitle)).toBe(true);
+    
+    // Check raw structure
+    expect(directiveNode.raw).toHaveProperty('sectionTitle');
+    expect(directiveNode.raw).toHaveProperty('path');
+    expect(directiveNode.raw.sectionTitle).toBe('# Header Title');
+  });
+  
+  test('Section add with as clause', async () => {
+    const content = `@add "# Original Header" from [document.md] as "## New Title"`;
+    const parseResult = await parse(content);
+    
+    // Get the directive from the parse result (should be the first node)
+    const directiveNode = parseResult.ast[0];
+    
+    // Verify structure
+    expect(directiveNode.type).toBe('Directive');
+    expect(directiveNode.kind).toBe('add');
+    expect(directiveNode.subtype).toBe('addSection');
+    
+    // Check values structure
+    expect(directiveNode.values).toHaveProperty('sectionTitle');
+    expect(directiveNode.values).toHaveProperty('path');
+    expect(directiveNode.values).toHaveProperty('newTitle');
+    
+    // Check raw structure
+    expect(directiveNode.raw).toHaveProperty('sectionTitle');
+    expect(directiveNode.raw).toHaveProperty('path');
+    expect(directiveNode.raw).toHaveProperty('newTitle');
+    expect(directiveNode.raw.sectionTitle).toBe('# Original Header');
+    expect(directiveNode.raw.newTitle).toBe('## New Title');
+  });
+  
+  test('Section add with variable in path', async () => {
+    const content = `@add "# API Reference" from [@PROJECTPATH/docs/api.md]`;
+    const parseResult = await parse(content);
+    
+    // Get the directive from the parse result (should be the first node)
+    const directiveNode = parseResult.ast[0];
+    
+    // Verify structure
+    expect(directiveNode.type).toBe('Directive');
+    expect(directiveNode.kind).toBe('add');
+    expect(directiveNode.subtype).toBe('addSection');
+    
+    // Check path has a variable
+    expect(directiveNode.meta.path.hasVariables).toBe(true);
+    
+    // Check values structure
+    expect(directiveNode.values).toHaveProperty('sectionTitle');
+    expect(directiveNode.values).toHaveProperty('path');
+    expect(directiveNode.raw.sectionTitle).toBe('# API Reference');
+  });
+  
+  // ====================
   // Multiline Template Test
   // ====================
   
   test('Multiline template add', async () => {
-    const content = `@add [
+    const content = `@add [[
 # Multiline Content
 - Item 1
 - Item 2
-]`;
+]]`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging

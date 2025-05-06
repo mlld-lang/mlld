@@ -6,17 +6,19 @@ We've completely redesigned the interpolation pattern system in `wrapped-content
 
 ## Current Issues
 
-1. The pattern of issues is consistent - Many directives are failing with similar errors about quotes:
-   - For example: Expected "@", Wrapped template content, or whitespace but "\"" found
-   - For add directives: Parse error: Expected "@", "{", "{{", Wrapped path content, Wrapped template content, or whitespace but "\"" found.
-2. Key failing directives and patterns:
-   - Import directives: Failing to detect variables in quoted paths:
-      - input = '@import { * } from "$pathVar"' - variables are being treated as text
-   - Quote handling in import paths is broken
-   - Add directives: Multiple failing tests, especially with quoted content:
-      - @add "$PROJECTPATH/README.md" - quoted path
-   - @add [# Template Content] - template content with brackets
-   - Variable reference detection issues
+  2. Import directive tests have two failures:
+    - Path variables in quotes aren't correctly processed (should update test for new syntax)
+    - Text variable detection in path isn't working
+  3. Add directive tests have several failures:
+    - Template content pattern doesn't match correctly (brackets not handled correctly)
+    - Variable subtype tests failing ({{var}} identification)
+    - Multiline template tests failing
+  4. Exec directive tests have multiple failures related to parsing code blocks, newlines, and multiline content.
+
+  The most promising area to focus on next would be the import directive tests, since we've already fixed a similar issue with path directives. Based on the new syntax rules:
+
+  1. For the import test with path variable: Instead of "$pathVar" it should be [$pathVar] (brackets for @var interpolation)
+  2. For the text variable test: Quotes shouldn't have variable interpolation, so we should update both the test and the BracketContent pattern.
 
 Do NOT try to fix this by adding string manipulation functions in directive-specific code. Instead, fix the interpolation patterns fundamentally.
 

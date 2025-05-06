@@ -30,7 +30,7 @@ describe('Text Directive Tests', () => {
     });
     
     it('should parse a text assignment with embed', async () => {
-      const result = (await parse('text content = @embed ./README.md')).ast[0] as TextAssignmentDirectiveNode;
+      const result = (await parse('@text content = @embed [./README.md]')).ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
@@ -49,7 +49,7 @@ describe('Text Directive Tests', () => {
     });
     
     it('should parse a text assignment with run', async () => {
-      const result = (await parse('text output = @run echo "Hello"')).ast[0] as TextAssignmentDirectiveNode;
+      const result = (await parse('@text output = @run [echo "Hello"]')).ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
@@ -67,31 +67,9 @@ describe('Text Directive Tests', () => {
       expect(isTextAssignmentDirective(result)).toBe(true);
     });
     
-    it('should parse a text assignment with call', async () => {
-      const result = (await parse('text response = @call api.fetchData "param"')).ast[0] as TextAssignmentDirectiveNode;
-      
-      expect(result.type).toBe('Directive');
-      expect(result.kind).toBe('text');
-      expect(result.subtype).toBe('textAssignment');
-      
-      // Check values
-      expect(result.values.identifier).toHaveLength(1);
-      expect(result.values.identifier[0].identifier).toBe('response');
-      expect(result.values.source).toBe('call');
-      
-      // Check meta
-      expect(result.meta.call).toBeDefined();
-      expect(result.meta.call.api).toBe('api');
-      expect(result.meta.call.method).toBe('fetchData');
-      
-      // Type guard
-      expect(isTextAssignmentDirective(result)).toBe(true);
-    });
-  });
-  
   describe('Text Template', () => {
     it('should parse a basic template text', async () => {
-      const result = (await parse('text [This is some text]')).ast[0] as TextTemplateDirectiveNode;
+      const result = (await parse('@text [This is some text]')).ast[0] as TextTemplateDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');

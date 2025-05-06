@@ -22,6 +22,8 @@ export interface AddRaw {
   content?: string;
   variable?: string;
   names?: string[];
+  sectionTitle?: string;
+  newTitle?: string;
 }
 
 export interface AddPathRaw extends AddRaw {
@@ -43,6 +45,12 @@ export interface AddVariableRaw extends AddRaw {
   underHeader?: string;
 }
 
+export interface AddSectionRaw extends AddRaw {
+  sectionTitle: string;
+  path: string;
+  newTitle?: string;
+}
+
 
 // ====================
 // Value Interfaces
@@ -56,6 +64,8 @@ export interface AddValues {
   content?: TextNodeArray;
   variable?: VariableNodeArray;
   names?: VariableNodeArray;
+  sectionTitle?: TextNodeArray;
+  newTitle?: TextNodeArray;
 }
 
 export interface AddPathValues extends AddValues {
@@ -75,6 +85,12 @@ export interface AddVariableValues extends AddValues {
   variable: VariableNodeArray;
   headerLevel?: number;
   underHeader?: TextNodeArray;
+}
+
+export interface AddSectionValues extends AddValues {
+  sectionTitle: TextNodeArray;
+  path: PathNodeArray;
+  newTitle?: TextNodeArray;
 }
 
 
@@ -99,12 +115,18 @@ export interface AddTemplateMeta extends AddMeta {
   isTemplateContent: boolean;
 }
 
+export interface AddSectionMeta extends AddMeta {
+  path: {
+    hasVariables: boolean;
+  };
+}
+
 // ====================
 // Node Interfaces
 // ====================
 
 export interface AddDirectiveNode extends TypedDirectiveNode<'add', 
-  'addPath' | 'addTemplate' | 'addVariable'> {
+  'addPath' | 'addTemplate' | 'addVariable' | 'addSection'> {
   values: AddValues;
   raw: AddRaw;
   meta: AddMeta;
@@ -131,6 +153,13 @@ export interface AddVariableDirectiveNode extends AddDirectiveNode {
   meta: AddMeta;
 }
 
+export interface AddSectionDirectiveNode extends AddDirectiveNode {
+  subtype: 'addSection';
+  values: AddSectionValues;
+  raw: AddSectionRaw;
+  meta: AddSectionMeta;
+}
+
 
 // ====================
 // Type Guards
@@ -150,5 +179,9 @@ export function isAddTemplateDirectiveNode(node: DirectiveNode): node is AddTemp
 
 export function isAddVariableDirectiveNode(node: DirectiveNode): node is AddVariableDirectiveNode {
   return isAddDirectiveNode(node) && node.subtype === 'addVariable';
+}
+
+export function isAddSectionDirectiveNode(node: DirectiveNode): node is AddSectionDirectiveNode {
+  return isAddDirectiveNode(node) && node.subtype === 'addSection';
 }
 

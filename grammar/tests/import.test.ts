@@ -46,7 +46,7 @@ describe('Import Directive Syntax Tests', () => {
     });
     
     it('should parse a wildcard import with path variable', async () => {
-      const input = '@import { * } from "$pathVar"';
+      const input = '@import { * } from [@pathVar]';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
@@ -120,8 +120,8 @@ describe('Import Directive Syntax Tests', () => {
       expect(isImportSelectedDirective(result)).toBe(true);
     });
     
-    it('should parse an import with text variable in path', async () => {
-      const input = '@import { var1 } from "prefix/{{textVar}}/suffix.meld"';
+    it('should parse an import with @var variable in path', async () => {
+      const input = '@import { var1 } from [prefix/@textVar/suffix.meld]';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
@@ -129,7 +129,7 @@ describe('Import Directive Syntax Tests', () => {
       expect(result.subtype).toBe('importSelected');
       expect(result.source).toBe('path'); // Check new source field
       
-      // Check meta - with text variables {{textVar}} not path variables $var
+      // Check meta for @var variable
       expect(result.meta.path.hasVariables).toBe(true);
       
       // Check type guard
