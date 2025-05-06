@@ -42,11 +42,7 @@ The `addPath` subtype produces an AST node with the following structure:
   },
   meta: {
     path: {                        // Path metadata
-      isAbsolute: boolean,         // Whether the path is absolute
       hasVariables: boolean,       // Whether the path contains variables
-      hasTextVariables: boolean,   // Whether the path contains text variables
-      hasPathVariables: boolean,   // Whether the path contains path variables
-      isRelative: boolean          // Whether the path is relative
     }
   }
 }
@@ -97,11 +93,7 @@ For the directive `@add "$PROJECTPATH/README.md # Introduction" as ## under Docu
   },
   "meta": {
     "path": {
-      "isAbsolute": true,
-      "hasVariables": true,
-      "hasTextVariables": false,
-      "hasPathVariables": true,
-      "isRelative": false
+      "hasVariables": true
     }
   }
 }

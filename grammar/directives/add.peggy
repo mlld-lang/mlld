@@ -79,11 +79,7 @@ AddDirective
       // Create the meta object with path metadata
       const meta = {
         path: {
-          isAbsolute: validatedPath.isAbsolute,
-          hasVariables: validatedPath.hasVariables,
-          hasTextVariables: validatedPath.hasTextVariables,
-          hasPathVariables: validatedPath.hasPathVariables,
-          isRelative: validatedPath.isRelativeToCwd
+          hasVariables: validatedPath.hasVariables
         }
       };
       
@@ -159,11 +155,7 @@ _AddRHS
     // Create meta object with path metadata
     const meta = {
       path: {
-        isAbsolute: validatedPath.isAbsolute,
-        hasVariables: validatedPath.hasVariables,
-        hasTextVariables: validatedPath.hasTextVariables,
-        hasPathVariables: validatedPath.hasPathVariables,
-        isRelative: validatedPath.isRelativeToCwd
+        hasVariables: validatedPath.hasVariables
       }
     };
     

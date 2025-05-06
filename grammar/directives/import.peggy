@@ -1,20 +1,5 @@
 ImportDirective
-  = "import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:(
-      quotedPath:StringLiteral { 
-        // Convert string to structured Text node for consistent AST
-        const pathNode = helpers.createNode("Text", { content: quotedPath.value });
-        return { 
-          parts: [pathNode],
-          raw: quotedPath.raw || JSON.stringify(quotedPath.value)
-        };
-      }
-      / variablePath:Variable {
-        return {
-          parts: [variablePath],
-          raw: variablePath.raw || variablePath.identifier
-        };
-      }
-    ) HWS DirectiveEOL {
+  = "import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:WrappedPathContent HWS DirectiveEOL {
       // Get the raw imports text
       const importsRaw = imports.map(item => 
         item.alias ? `${item.name.identifier} as ${item.alias.identifier}` : item.name.identifier
@@ -42,11 +27,7 @@ ImportDirective
       // Create meta object with nested path metadata
       const meta = {
         path: {
-          isAbsolute: validatedPath.isAbsolute,
-          hasVariables: validatedPath.hasVariables,
-          hasTextVariables: validatedPath.hasTextVariables,
-          hasPathVariables: validatedPath.hasPathVariables,
-          isRelative: validatedPath.isRelativeToCwd
+          hasVariables: validatedPath.hasVariables
         }
       };
       

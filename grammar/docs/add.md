@@ -72,11 +72,7 @@ Each add directive creates a node with the following structure:
   },
   meta: {
     path?: {                       // Path metadata
-      isAbsolute: boolean,
-      hasVariables: boolean,
-      hasTextVariables: boolean,
-      hasPathVariables: boolean,
-      isRelative: boolean
+      hasVariables: boolean
     }
   }
 }

@@ -29,11 +29,7 @@ PathDirective
     // Validate the path and get metadata
     const validatedPath = helpers.validatePath(path.parts, { context: 'pathDirective' });
     const pathMeta = {
-      isAbsolute: validatedPath.isAbsolute,
-      hasVariables: validatedPath.hasVariables,
-      hasTextVariables: validatedPath.hasTextVariables,
-      hasPathVariables: validatedPath.hasPathVariables,
-      isRelative: validatedPath.isRelativeToCwd
+      hasVariables: validatedPath.hasVariables
     };
     
     // Create values object with node arrays

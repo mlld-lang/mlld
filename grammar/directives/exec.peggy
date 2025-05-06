@@ -68,7 +68,7 @@ execCode
       });
       
       // Process code
-      const rawCode = code.map(n => {
+      const rawCode = Array.isArray(code.parts) ? code.parts.map(n => {
         if (n.type === 'Text') return n.content;
         if (n.type === 'VariableReference') {
           if (n.valueType === 'interpolation') {
@@ -84,7 +84,7 @@ execCode
           }
         }
         return '';
-      }).join('');
+      }).join('') : code.raw || '';
       
       // Create values object
       const values = {

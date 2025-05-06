@@ -3,17 +3,23 @@
 
 /* 
 # Pattern Hierarchy
+
 WrappedPathContent (Used by: path, import, exec, add)
-├── PathStyleInterpolation
-│   ├── LiteralString (handles quotes, removes them)
-│   ├── BracketContent (handles [..] with @var)
-│   │   ├── AtVar
-│   │   ├── PathSeparator
-│   │   └── TextSegment (for non-variable text)
-│   └── UnquotedPath (for paths without any delimiters)
-│       ├── AtVar
-│       ├── PathSeparator
-│       └── TextSegment
+├── Direct quote handling (double, single or backtick quotes)
+│   ├── AtVar
+│   ├── InterpolationVar
+│   ├── PathSeparator
+│   └── QuotedText
+└── PathStyleInterpolation (for unquoted values)
+    ├── LiteralString (quotes, properly excluded from content)
+    ├── BracketContent (handles [..] with @var)
+    │   ├── AtVar
+    │   ├── PathSeparator
+    │   └── TextSegment (for non-variable text)
+    └── UnquotedPath (for paths without any delimiters)
+        ├── AtVar
+        ├── PathSeparator
+        └── TextSegment
 
 WrappedTemplateContent (Used by: text, add)
 ├── TemplateStyleInterpolation
@@ -33,6 +39,12 @@ WrappedCommandContent (Used by: run, exec)
 
 WrappedCodeContent (Used by: run, exec)
 └── DirectCodeContent (no variable interpolation)
+
+IMPORTANT:
+- Delimiters (quotes, brackets) are handled at the pattern level
+- They define content boundaries and are NOT included in the AST
+- Each pattern has ONE responsibility (e.g., quote handling, bracket handling)
+- No string manipulation should happen after parsing
 */
 
 // -------------------------------------------------------------
@@ -41,7 +53,7 @@ WrappedCodeContent (Used by: run, exec)
 
 // Simple text segment without any special characters
 TextSegment "Plain text segment"
-  = chars:$(![ \t\r\n/\]@${{}] .)+ { 
+  = chars:$(![ \t\r\n/\]@${{}"'`] .)+ { 
       return helpers.createNode(NodeType.Text, { content: chars }, location());
     }
 
@@ -68,16 +80,25 @@ SectionMarker "Section marker"
 // -------------------------------------------------------------
 
 // Quoted string - captures content within quotes WITHOUT including the quotes
+// No interpolation for quoted strings - just literal text
 LiteralString "String literal without interpolation"
   = '"' content:$(!'"' .)* '"' { 
-      // Return only the content within quotes as a Text node
+      // Return only the content within quotes as a Text node (no variable processing)
       return [helpers.createNode(NodeType.Text, { content }, location())];
     }
-  / "'" content:$(!'\'')* "'" { 
+  / "'" content:$(!"'" .)* "'" { 
       return [helpers.createNode(NodeType.Text, { content }, location())];
     }
-  / "`" content:$(!'`')* "`" { 
+  / "`" content:$(!'`' .)* "`" { 
       return [helpers.createNode(NodeType.Text, { content }, location())];
+    }
+
+// Text segment within quotes (excludes quote characters and variables)
+// We don't need this anymore since LiteralString handles the entire content as one node
+// This rule can be deleted or replaced with a simpler version if needed elsewhere
+QuotedText "Plain text within quotes"
+  = chars:$(![@$/\[\]{}'"` \t\r\n] .)+ { 
+      return helpers.createNode(NodeType.Text, { content: chars }, location());
     }
 
 // Content inside single brackets with @var interpolation
@@ -92,6 +113,10 @@ DoubleBracketContent "Content with {{var}} interpolation"
   = '[[' parts:(InterpolationVar / TextSegment)* ']]' {
       // Return only the content within double brackets, not the brackets themselves
       return parts;
+    }
+  // Support direct {{var}} without requiring [[ ]] wrapper
+  / parts:InterpolationVar {
+      return [parts];
     }
 
 // Unquoted path with @var interpolation (no delimiters)
@@ -112,7 +137,7 @@ DirectCodeContent "Code content without interpolation"
       return [helpers.createNode(NodeType.Text, { content }, location())];
     }
   / content:$([^[\n]+) { 
-      // Fallback for unbracketed code
+      // Fallback for unbracketed code - must consume at least one character
       return [helpers.createNode(NodeType.Text, { content }, location())];
     }
 

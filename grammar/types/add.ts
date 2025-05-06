@@ -84,22 +84,14 @@ export interface AddVariableValues extends AddValues {
 
 export interface AddMeta {
   path?: {
-    isAbsolute: boolean;
     hasVariables: boolean;
-    hasTextVariables: boolean;
-    hasPathVariables: boolean;
-    isRelative: boolean;
   };
   isTemplateContent?: boolean;
 }
 
 export interface AddPathMeta extends AddMeta {
   path: {
-    isAbsolute: boolean;
     hasVariables: boolean;
-    hasTextVariables: boolean;
-    hasPathVariables: boolean;
-    isRelative: boolean;
   };
 }
 

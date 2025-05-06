@@ -39,8 +39,6 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check meta
       expect(result.meta.path).toBeDefined();
-      expect(result.meta.path.isAbsolute).toBe(false);
-      expect(result.meta.path.isRelative).toBe(true);
       expect(result.meta.path.hasVariables).toBe(false);
       
       // Check type guard
@@ -69,7 +67,6 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check meta
       expect(result.meta.path.hasVariables).toBe(true);
-      expect(result.meta.path.hasPathVariables).toBe(true);
       
       // Check type guard
       expect(isImportAllDirective(result)).toBe(true);
@@ -96,8 +93,7 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check meta
       expect(result.meta.path).toBeDefined();
-      expect(result.meta.path.isAbsolute).toBe(false);
-      expect(result.meta.path.isRelative).toBe(true);
+      expect(result.meta.path.hasVariables).toBe(false);
       
       // Check type guard
       expect(isImportSelectedDirective(result)).toBe(true);
@@ -135,7 +131,6 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check meta - with text variables {{textVar}} not path variables $var
       expect(result.meta.path.hasVariables).toBe(true);
-      expect(result.meta.path.hasTextVariables).toBe(true);
       
       // Check type guard
       expect(isImportSelectedDirective(result)).toBe(true);

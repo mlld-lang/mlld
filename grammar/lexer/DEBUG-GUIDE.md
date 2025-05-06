@@ -6,11 +6,17 @@ We've completely redesigned the interpolation pattern system in `wrapped-content
 
 ## Current Issues
 
-The tests are failing because quoted paths are including the quote characters in the path AST nodes:
-
-```
-expected '"@PROJECTPATH/documentation"' to be '@PROJECTPATH/documentation'
-```
+1. The pattern of issues is consistent - Many directives are failing with similar errors about quotes:
+   - For example: Expected "@", Wrapped template content, or whitespace but "\"" found
+   - For add directives: Parse error: Expected "@", "{", "{{", Wrapped path content, Wrapped template content, or whitespace but "\"" found.
+2. Key failing directives and patterns:
+   - Import directives: Failing to detect variables in quoted paths:
+      - input = '@import { * } from "$pathVar"' - variables are being treated as text
+   - Quote handling in import paths is broken
+   - Add directives: Multiple failing tests, especially with quoted content:
+      - @add "$PROJECTPATH/README.md" - quoted path
+   - @add [# Template Content] - template content with brackets
+   - Variable reference detection issues
 
 Do NOT try to fix this by adding string manipulation functions in directive-specific code. Instead, fix the interpolation patterns fundamentally.
 
@@ -18,7 +24,7 @@ Do NOT try to fix this by adding string manipulation functions in directive-spec
 
 1. **Delimiters Should Be Boundaries, Not Content**
    - Quotes, brackets, etc. should define the boundaries of content, not be included in it
-   - Fix issues at the pattern level, not with post-processing
+   - Fix issues at the pattern level, NEVER with post-processing in the directive code
 
 2. **Single Responsibility**
    - Each pattern should do ONE thing

@@ -63,61 +63,21 @@ export default {
     // Use the existing helper, assuming it handles the node array correctly.
     const raw = this.reconstructRawString(pathParts).trim();
 
-    // 2. Calculate Flags by iterating through pathParts
-    let isAbsolute = false;
-    let isRelativeToCwd = true; // Default assumption
     // Initialize flags
     let hasVariables = false;
-    let hasTextVariables = false;
-    let hasPathVariables = false;
-    let variable_warning = false;
 
     // Process path parts
     if (pathParts && pathParts.length > 0) {
-      // Check for absolute path (only if first character is /)
-      const firstPart = pathParts[0];
-      if (firstPart.type === NodeType.PathSeparator && firstPart.value === '/') {
-        isAbsolute = true;
-        isRelativeToCwd = false;
-      }
-
-      // Check for variable types across all parts
-      this.debug('VALIDATE_PATH_PARTS', 'Checking path parts:', JSON.stringify(pathParts));
       for (const node of pathParts) {
         if (node.type === NodeType.VariableReference) {
           hasVariables = true;
-          this.debug('VALIDATE_PATH_NODE', 'Found variable:', JSON.stringify(node));
-          // Track variable types independently
-          if (node.valueType === 'varInterpolation') {
-            // {{var}} - Treat as text variable
-            hasTextVariables = true;
-            variable_warning = true;
-            this.debug('VALIDATE_PATH_NODE', 'Found interpolation variable:', JSON.stringify(node));
-          } else if (node.valueType === 'varIdentifier') {
-            // @var - Treat as path variable
-            hasPathVariables = true;
-            // For imports, path variables should be relative to cwd
-            // For embeds, they should not be
-            if (directiveKind === DirectiveKind.embed) {
-              isRelativeToCwd = false;
-            }
-            this.debug('VALIDATE_PATH_NODE', 'Found @ variable:', JSON.stringify(node));
-          }
         }
       }
     }
 
-    // Update warning flag after all nodes are processed
-    variable_warning = hasTextVariables;
-
     // 3. Construct Final Flags Object
       const finalFlags = {
-      isAbsolute: isAbsolute,
-      isRelativeToCwd: isRelativeToCwd,
-      hasVariables: hasVariables,
-      hasTextVariables: hasTextVariables,
-      hasPathVariables: hasPathVariables,
-      variable_warning: variable_warning
+      hasVariables: hasVariables
     };
 
     // 4. Construct Result Object

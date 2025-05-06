@@ -53,11 +53,7 @@ This explicitly uses the `*` wildcard to indicate importing all content.
   },
   meta: {
     path: {
-      isAbsolute: false,
-      hasVariables: false,
-      hasTextVariables: false,
-      hasPathVariables: false,
-      isRelative: true
+      hasVariables: false
     }
   }
 }
@@ -70,8 +66,6 @@ This explicitly uses the `*` wildcard to indicate importing all content.
 ```
 @import [*] from [/absolute/path/to/file.md]
 ```
-
-The AST for an absolute path will have `isAbsolute: true` in the `meta` object.
 
 ### Path Variable
 
@@ -106,12 +100,7 @@ The AST for an absolute path will have `isAbsolute: true` in the `meta` object.
   },
   meta: {
     path: {
-      isAbsolute: false,
-      hasVariables: true,
-      hasTextVariables: false,
-      hasPathVariables: true,
-      isRelative: false
-    }
+      hasVariables: true
   }
 }
 ```
@@ -149,11 +138,7 @@ The AST for an absolute path will have `isAbsolute: true` in the `meta` object.
   },
   meta: {
     path: {
-      isAbsolute: false,
-      hasVariables: true,
-      hasTextVariables: true,
-      hasPathVariables: false,
-      isRelative: true
+      hasVariables: true
     }
   }
 }
@@ -201,12 +186,7 @@ The AST for an absolute path will have `isAbsolute: true` in the `meta` object.
   },
   meta: {
     path: {
-      isAbsolute: false,
-      hasVariables: true,
-      hasTextVariables: true,
-      hasPathVariables: true,
-      isRelative: false
-    }
+      hasVariables: true
   }
 }
 ```

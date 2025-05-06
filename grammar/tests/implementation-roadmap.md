@@ -100,7 +100,7 @@ The grammar files need to be updated one by one. For each directive:
 2. Capture raw text segments for each corresponding group using Peggy's `$()` syntax
 3. Construct the `values` object using captured node arrays
 4. Construct the `raw` object using raw text segments
-5. Add metadata derived from the input (isAbsolute, hasVariables, etc.)
+5. Add metadata derived from the input (hasVariables)
 
 Example for import directive (before):
 ```peggy
@@ -128,11 +128,7 @@ Example for import directive (after):
     imports: importsRaw.trim()
   };
   const meta = {
-    isAbsolute: validatedPath.isAbsolute,
-    hasVariables: validatedPath.hasVariables,
-    hasTextVariables: validatedPath.hasTextVariables,
-    hasPathVariables: validatedPath.hasPathVariables,
-    isRelativeToCwd: validatedPath.isRelativeToCwd
+    hasVariables: validatedPath.hasVariables
   };
   return helpers.createNode(NodeType.Directive, {
     kind: 'import',

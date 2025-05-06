@@ -14,11 +14,7 @@ export interface DirectiveMeta {
  * Path-specific metadata used by multiple directives
  */
 export interface PathMeta {
-  isAbsolute: boolean;      // Path starts with /
   hasVariables: boolean;    // Contains any variables (text or path)
-  hasTextVariables: boolean; // Contains {{var}} syntax
-  hasPathVariables: boolean; // Contains $var syntax
-  isRelative: boolean;      // Relative to current directory
 }
 
 /**

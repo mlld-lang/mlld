@@ -6,7 +6,8 @@ import { parse } from '@core/ast/parser';
 
 describe('Path Directive', () => {
   test('Basic path with special variable', async () => {
-    const content = `@path docs = "@PROJECTPATH/documentation"`;
+    // Using brackets for variable interpolation per new syntax rules
+    const content = `@path docs = [@PROJECTPATH/documentation]`;
     const parseResult = await parse(content);
     
     // Log the structure
@@ -53,11 +54,11 @@ describe('Path Directive', () => {
     // Check metadata
     expect(directiveNode.meta).toHaveProperty('path');
     expect(directiveNode.meta.path.hasVariables).toBe(true);
-    expect(directiveNode.meta.path.hasPathVariables).toBe(true);
   });
   
   test('Path with home directory alias', async () => {
-    const content = `@path home = "@~/meld/files"`;
+    // Using brackets for variable interpolation per new syntax rules
+    const content = `@path home = [@~/meld/files]`;
     const parseResult = await parse(content);
     const directiveNode = parseResult.ast[0];
     
@@ -85,11 +86,9 @@ describe('Path Directive', () => {
     expect(variableNode.identifier).toBe('HOMEPATH'); // Should be normalized
   });
   
-  test('Path with text variable interpolation', async () => {
-    // Adding a comment to clarify the test situation
-    // Currently, the parser doesn't detect {{variables}} in path values correctly
-    // This test will need to be revisited when the parser is updated to handle this
-    const content = '@path config = "@PROJECTPATH/{{configDir}}/settings"';
+  test('Path with variable interpolation', async () => {
+    // Paths only use @var interpolation with brackets
+    const content = '@path config = [@PROJECTPATH/@configDir/settings]';
     const parseResult = await parse(content);
     const directiveNode = parseResult.ast[0];
     
@@ -103,12 +102,11 @@ describe('Path Directive', () => {
     
     // Check metadata (though text variables aren't detected yet)
     expect(directiveNode.meta.path.hasVariables).toBe(true);
-    // TODO: Fix this when text variable interpolation is properly implemented
-    // expect(directiveNode.meta.path.hasTextVariables).toBe(true);
   });
   
   test('Path with relative project path', async () => {
-    const content = `@path src = "@./source"`;
+    // Using brackets for variable interpolation per new syntax rules
+    const content = `@path src = [@./source]`;
     const parseResult = await parse(content);
     const directiveNode = parseResult.ast[0];
     
@@ -138,7 +136,8 @@ describe('Path Directive', () => {
   
   // This test helps verify path variable reference handling
   test('Path referencing another path variable', async () => {
-    const content = `@path backup = "@mainPath/backup"`;
+    // Using brackets for variable interpolation per new syntax rules
+    const content = `@path backup = [@mainPath/backup]`;
     const parseResult = await parse(content);
     const directiveNode = parseResult.ast[0];
     
@@ -166,6 +165,5 @@ describe('Path Directive', () => {
     
     // Check metadata
     expect(directiveNode.meta.path.hasVariables).toBe(true);
-    expect(directiveNode.meta.path.hasPathVariables).toBe(true);
   });
 });

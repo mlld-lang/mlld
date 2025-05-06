@@ -288,7 +288,7 @@ Current implementation notes:
 The path directive implementation includes:
 - Values: `identifier` (variable reference node) and `path` (array of path nodes)
 - Raw: `identifier` (string) and `path` (raw string)
-- Meta: Path metadata including `isAbsolute`, `hasVariables`, etc.
+- Meta: Path metadata including `hasVariables`, etc.
 
 ### Embed Directive (to be renamed to `add`)
 
@@ -308,7 +308,7 @@ The embed (soon to be `add`) directive implementation includes these structures:
 **embedPath** (to be renamed to `addPath`):
 - Values: `path` (array of path nodes), `section` (optional text nodes), `headerLevel` (optional number node), `underHeader` (optional text nodes)
 - Raw: `path` (string), `section` (optional string), `headerLevel` (optional string), `underHeader` (optional string)
-- Meta: Path metadata including `isAbsolute`, `hasVariables`, etc.
+- Meta: Path metadata including `hasVariables`, etc.
 
 **embedTemplate** (to be renamed to `addTemplate`):
 - Values: `content` (array of text/variable nodes), `headerLevel` (optional), `underHeader` (optional)

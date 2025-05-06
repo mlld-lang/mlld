@@ -42,7 +42,6 @@ describe('Add Directive', () => {
     expect(directiveNode.values).toHaveProperty('path');
     
     // Check path metadata
-    expect(directiveNode.meta.path).toHaveProperty('isAbsolute');
     expect(directiveNode.meta.path).toHaveProperty('hasVariables');
   });
   

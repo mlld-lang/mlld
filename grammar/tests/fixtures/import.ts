@@ -54,11 +54,7 @@ export const importFixtures: DirectiveFixture[] = [
       },
       meta: {
         path: {
-          isAbsolute: false,
-          isRelative: true,
-          hasVariables: false,
-          hasTextVariables: false,
-          hasPathVariables: false
+          hasVariables: false
         }
       }
     }
@@ -100,11 +96,7 @@ export const importFixtures: DirectiveFixture[] = [
       },
       meta: {
         path: {
-          isAbsolute: false,
-          isRelative: true,
           hasVariables: false,
-          hasTextVariables: false,
-          hasPathVariables: false
         }
       }
     }
