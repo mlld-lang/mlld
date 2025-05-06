@@ -45,18 +45,35 @@ WrappedTemplateContent
 // For paths in path, import, exec, run directives
 WrappedPathContent
   = content:PathStyleInterpolation {
+      // Generate raw string representation
+      let rawString = helpers.reconstructRawString(content);
+      
+      // For paths specifically, if the raw string is quoted, we want to remove the quotes
+      // since the tests and other code expect path values without quotes
+      if (rawString.startsWith('"') && rawString.endsWith('"')) {
+        rawString = rawString.substring(1, rawString.length - 1);
+      }
+      
       return {
         parts: content,
-        raw: helpers.reconstructRawString(content)
+        raw: rawString
       };
     }
   
 // For pure path references (brackets and unquoted only)
 WrappedPurePath
   = content:BracketStyleInterpolation {
+      // Generate raw string representation
+      let rawString = helpers.reconstructRawString(content);
+      
+      // For consistency with WrappedPathContent
+      if (rawString.startsWith('"') && rawString.endsWith('"')) {
+        rawString = rawString.substring(1, rawString.length - 1);
+      }
+      
       return {
         parts: content,
-        raw: helpers.reconstructRawString(content)
+        raw: rawString
       };
     }
 
@@ -72,6 +89,14 @@ WrappedCommandContent
 // For code blocks in exec, run directives (no interpolation)
 WrappedCodeContent
   = "[" content:$(!']' .)* "]" { 
+      const textNode = [helpers.createNode(NodeType.Text, { content }, location())];
+      return {
+        parts: textNode,
+        raw: content
+      };
+    }
+  / content:$([^[\n]+) { 
+      // Handle unbracketed code as a fallback
       const textNode = [helpers.createNode(NodeType.Text, { content }, location())];
       return {
         parts: textNode,

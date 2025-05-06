@@ -179,9 +179,11 @@ export default {
       return String(nodes || ''); // Fallback
     }
 
+    // For path or command, construct a clean string without extra characters
     let raw = '';
     for (const node of nodes) {
       if (!node) continue;
+      
       if (node.type === NodeType.Text) {
         raw += node.content || '';
       } else if (node.type === NodeType.VariableReference) {
@@ -201,13 +203,16 @@ export default {
         raw += node.value || ''; // Append '/' or '.'
       } else if (node.type === NodeType.SectionMarker) {
         raw += node.value || ''; // Append '#'
+      } else if (node.type === NodeType.StringLiteral) {
+        // Handle string literals properly - avoids adding extra quotes
+        raw += node.value || '';
       } else if (typeof node === 'string') {
         // Handle potential raw string segments passed directly
         raw += node;
       } else {
         // Fallback for other node types or structures
-        // NOTE: This fallback might indicate unhandled cases if hit often
-        raw += node.raw || node.content || node.value || ''; // Added node.value as potential source
+        // Use content or value directly instead of raw to avoid extra characters
+        raw += node.content || node.value || node.raw || '';
       }
     }
     return raw;

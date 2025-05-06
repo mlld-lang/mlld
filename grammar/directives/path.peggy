@@ -21,7 +21,10 @@ PathDirective
     // Store raw text values for reconstruction
     // Extract just what this rule matched, not including the @ prefix
     const rawIdentifier = identifier;
-    const rawPath = path.raw.trim();
+    
+    // Always reconstruct the path raw string to ensure proper formatting
+    // This avoids issues with extra quotes and commas 
+    const rawPath = helpers.reconstructRawString(path.parts);
     
     // Validate the path and get metadata
     const validatedPath = helpers.validatePath(path.parts, { context: 'pathDirective' });

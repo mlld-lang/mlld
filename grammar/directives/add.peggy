@@ -123,44 +123,15 @@ UnderHeader
 // Helper rule for parsing RHS @add variations
 // Returns structured values, raw, meta objects for different subtypes
 _AddRHS
-  = _ content:WrappedTemplateContent _[ \t]* options:DirectiveOptions? {
-    // Create the values object with content node array
-    const values = {
-      content: content.parts
-    };
-    
-    // Create the raw object with raw content
-    const raw = {
-      content: content.raw
-    };
-    
-    // Create the meta object with isTemplateContent flag
-    const meta = {
-      isTemplateContent: true
-    };
-    
-    return {
-      subtype: 'addTemplate',
-      values,
-      raw,
-      meta
-    };
-  }
-  / _ path:StringLiteral options:DirectiveOptions? {
+  = _ path:WrappedPathContent options:DirectiveOptions? {
     // Extract potential section from the path string
-    const pathValue = path.value || '';
-    const [pathPart, sectionPart] = pathValue.split('#');
-    const pathTrimmed = pathPart ? pathPart.trim() : pathValue;
+    const rawPath = path.raw || '';
+    const [pathPart, sectionPart] = rawPath.split('#');
+    const pathTrimmed = pathPart ? pathPart.trim() : rawPath;
     const sectionTrimmed = sectionPart ? sectionPart.trim() : null;
     
-    // Create validated path node
-    const pathNode = helpers.createNode(NodeType.StringLiteral, {
-      value: pathTrimmed,
-      raw: path.raw
-    });
-    
-    // Validate the path
-    const validatedPath = helpers.validatePath(pathNode, { context: 'addPath' });
+    // Validate the path using path.parts directly
+    const validatedPath = helpers.validatePath(path.parts, { context: 'addPath' });
     
     // Create values object
     const values = {
@@ -198,6 +169,29 @@ _AddRHS
     
     return {
       subtype: 'addPath',
+      values,
+      raw,
+      meta
+    };
+  }
+  / _ content:WrappedTemplateContent _[ \t]* options:DirectiveOptions? {
+    // Create the values object with content node array
+    const values = {
+      content: content.parts
+    };
+    
+    // Create the raw object with raw content
+    const raw = {
+      content: content.raw
+    };
+    
+    // Create the meta object with isTemplateContent flag
+    const meta = {
+      isTemplateContent: true
+    };
+    
+    return {
+      subtype: 'addTemplate',
       values,
       raw,
       meta

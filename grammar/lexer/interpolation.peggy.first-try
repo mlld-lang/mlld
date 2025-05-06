@@ -9,20 +9,24 @@
 
 // Common literal string rule for all quote types (", ', `)
 LiteralStringContent "String literal content without interpolation"
-  = chars:LiteralStringChar+ {
-      return [helpers.createNode(NodeType.Text, { content: chars.join('') }, location())];
+  = chars:$((!('"' / "'" / '`') .) / ('\\' .))* {
+      // Create a single Text node with the entire content string
+      return [helpers.createNode(NodeType.Text, { content: chars }, location())];
     }
-  / "" { return []; }
-
-LiteralStringChar
-  = !('"' / "'" / '`') char:. { return char; }
-  / '\\' esc:. { return esc; } // Handle escape sequences
 
 // String literal with quotes - no interpolation
+// The quotes are matched but NOT included in the content returned
 LiteralString "Non-interpolated string literal"
-  = '"' content:LiteralStringContent '"' { return content; }
-  / "'" content:LiteralStringContent "'" { return content; }
-  / "`" content:LiteralStringContent "`" { return content; }
+  = '"' content:$((!('"' / "'" / '`') .) / ('\\' .))* '"' { 
+      // Create a clean text node from the content without quotes
+      return [helpers.createNode(NodeType.Text, { content }, location())]; 
+    }
+  / "'" content:$((!('"' / "'" / '`') .) / ('\\' .))* "'" { 
+      return [helpers.createNode(NodeType.Text, { content }, location())]; 
+    }
+  / "`" content:$((!('"' / "'" / '`') .) / ('\\' .))* "`" { 
+      return [helpers.createNode(NodeType.Text, { content }, location())]; 
+    }
 
 // -------------------------------------------------------------
 // SINGLE BRACKET CONTENT - @var interpolation (for paths/commands)
@@ -30,8 +34,9 @@ LiteralString "Non-interpolated string literal"
 
 // Literal text segment within brackets
 BracketLiteralSegment
-  = chars:(!(']' / '@') .)+ { 
-      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
+  = chars:$(!(']' / '@') .)+ { 
+      // Use $ to capture the whole segment as a string instead of individual characters
+      return helpers.createNode(NodeType.Text, { content: chars }, location());
     }
 
 // Path separator should be a distinct node in paths
@@ -55,8 +60,9 @@ BracketContainer
 
 // Literal text segment within double brackets
 DoubleBracketLiteralSegment
-  = chars:(!(']]' / '{{') .)+ { 
-      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
+  = chars:$(!(']]' / '{{') .)+ { 
+      // Use $ to capture the whole segment as a string
+      return helpers.createNode(NodeType.Text, { content: chars }, location());
     }
 
 // Content inside double brackets - allows {{var}} interpolation
@@ -82,8 +88,9 @@ UnquotedPath "Unquoted path with @var interpolation"
     }
 
 UnquotedPathSegment
-  = chars:(![ \t\r\n] !(PathSeparator / '@' / '$') .)+ {
-      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
+  = chars:$(![ \t\r\n] !(PathSeparator / '@' / '$') .)+ {
+      // Use $ to capture the whole segment as a single string
+      return helpers.createNode(NodeType.Text, { content: chars }, location());
     }
 
 // -------------------------------------------------------------
@@ -97,6 +104,7 @@ UnquotedCommand "Unquoted command with @var interpolation"
     }
 
 UnquotedCommandSegment
-  = chars:(![ \t\r\n;] !('@' / '$') .)+ {
-      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
+  = chars:$(![ \t\r\n;] !('@' / '$') .)+ {
+      // Use $ to capture the whole segment as a single string
+      return helpers.createNode(NodeType.Text, { content: chars }, location());
     }
