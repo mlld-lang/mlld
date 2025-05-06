@@ -54,7 +54,9 @@ SectionAddDirective
 
 // Template add directive - e.g. @add [[Template content]]
 TemplateAddDirective
-  = "add" _ content:WrappedTemplateContent headerLevel:HeaderLevel? underHeader:UnderHeader? HWS DirectiveEOL {
+  = "add" _ t:WrappedTemplateContent _ headerLevel:HeaderLevel? underHeader:UnderHeader? HWS DirectiveEOL {
+      // Use the content correctly from WrappedTemplateContent
+      const content = t;
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
       const underHeaderValue = underHeader ? underHeader : null;
