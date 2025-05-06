@@ -3,7 +3,6 @@ AddDirective
   / SectionAddDirective     // Then section pattern
   / VariableAddDirective    // Then variable pattern  
   / PathAddDirective        // Then path pattern
-  / NamedAddDirective       // Then named pattern
 
 // Section add directive - e.g. @add "# Header" from [path.md] as "## New Title"
 SectionAddDirective
@@ -55,6 +54,14 @@ SectionAddDirective
 // Template add directive - e.g. @add [[Template content]]
 TemplateAddDirective
   = "add" _ t:WrappedTemplateContent _ headerLevel:HeaderLevel? underHeader:UnderHeader? HWS DirectiveEOL {
+      helpers.debug('TemplateAddDirective matched', { 
+        content: t,
+        isArray: Array.isArray(t),
+        keys: Object.keys(t),
+        parts: t.parts && Array.isArray(t.parts) ? t.parts.length : 'not array',
+        raw: t.raw
+      });
+      
       // Use the content correctly from WrappedTemplateContent
       const content = t;
       // Extract header level and under header if provided
@@ -172,6 +179,11 @@ VariableAddDirective
 // Path add directive - e.g. @add [path/to/file.md]
 PathAddDirective
   = "add" _ path:WrappedPathContent _ headerLevel:HeaderLevel? underHeader:UnderHeader? HWS DirectiveEOL {
+      helpers.debug('PathAddDirective matched', { 
+        path: path,
+        pathPartsLength: path.parts ? path.parts.length : 'unknown',
+        raw: path.raw
+      });
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
       const underHeaderValue = underHeader ? underHeader : null;
@@ -231,64 +243,7 @@ PathAddDirective
       );
     }
 
-// Named add directive with multiple imports - e.g. @add {name1, name2} from file.md
-NamedAddDirective
-  = "add" _ "{" _ names:NameList _ "}" _ "from" _ content:DirectiveContent options:DirectiveOptions? header:HeaderLevel? under:UnderHeader? DirectiveEOL {
-      // Extract path and optional section from content
-      const [path, section] = content.split('#');
-      const sectionTrimmed = section ? section.trim() : null;
-      
-      // Validate the path
-      const validatedPath = helpers.validatePath(helpers.createNode(NodeType.Text, { content: path.trim(), raw: path.trim() }), { context: 'addPath' });
-      
-      // Create variable nodes for the names
-      const nameNodes = names.map(name => 
-        helpers.createVariableReferenceNode('identifier', { identifier: name })
-      );
-      
-      // Create the values object
-      const values = {
-        path: [validatedPath],
-        names: nameNodes,
-        ...(sectionTrimmed ? { section: [helpers.createNode(NodeType.Text, { content: sectionTrimmed, raw: sectionTrimmed })] } : {}),
-        ...(header ? { headerLevel: [helpers.createNode(NodeType.Number, { value: header.value, raw: header.raw })] } : {}),
-        ...(under ? { underHeader: [helpers.createNode(NodeType.Text, { content: under, raw: under })] } : {})
-      };
-      
-      // Create the raw object
-      const raw = {
-        path: path.trim(),
-        names: names.join(', '),
-        ...(sectionTrimmed ? { section: sectionTrimmed } : {}),
-        ...(header ? { headerLevel: header.raw } : {}),
-        ...(under ? { underHeader: under } : {})
-      };
-      
-      // Create the meta object with path metadata
-      const meta = {
-        path: {
-          hasVariables: validatedPath.hasVariables
-        }
-      };
-      
-      // Create the structured directive
-      return helpers.createStructuredDirective(
-        'add', 
-        'addPath', 
-        values, 
-        raw, 
-        meta, 
-        location(),
-        'path'  // This variant always uses path as the source
-      );
-    }
 
-NameList
-  = first:Identifier rest:(_ "," _ id:Identifier { return id; })* {
-    return [first, ...rest];
-  }
-  / _ { return []; }
-  
 // Special helper rule for variable references in add directive
 VariableReference
   = "@" id:Identifier {

@@ -111,11 +111,22 @@ BracketContent "Content with @var interpolation"
 // Content inside double brackets with {{var}} interpolation
 DoubleBracketContent "Content with {{var}} interpolation"
   = '[[' parts:(InterpolationVar / TextSegment)* ']]' {
+      helpers.debug('DoubleBracketContent matched [[...]]', { 
+        parts: parts,
+        isArray: Array.isArray(parts),
+        length: Array.isArray(parts) ? parts.length : 'not array'
+      });
+      
       // Return only the content within double brackets, not the brackets themselves
       return parts;
     }
   // Support direct {{var}} without requiring [[ ]] wrapper
   / parts:InterpolationVar {
+      helpers.debug('DoubleBracketContent matched {{var}}', { 
+        parts: parts,
+        type: parts ? parts.type : 'unknown'
+      });
+      
       return [parts];
     }
 
@@ -153,8 +164,18 @@ PathStyleInterpolation "Path interpolation patterns"
 
 // Template-style interpolation: quotes or double brackets
 TemplateStyleInterpolation "Template interpolation patterns"
-  = LiteralString
-  / DoubleBracketContent
+  = rule:LiteralString {
+      helpers.debug('TemplateStyleInterpolation matched LiteralString', { rule });
+      return rule;
+    }
+  / rule:DoubleBracketContent {
+      helpers.debug('TemplateStyleInterpolation matched DoubleBracketContent', { 
+        rule, 
+        isArray: Array.isArray(rule),
+        length: Array.isArray(rule) ? rule.length : 'not array'
+      });
+      return rule;
+    }
 
 // Command-style interpolation: all types
 CommandStyleInterpolation "Command interpolation patterns"
@@ -182,6 +203,13 @@ WrappedPathContent "Wrapped path content"
 // For templates in text, add directives
 WrappedTemplateContent "Wrapped template content"
   = content:TemplateStyleInterpolation {
+      helpers.debug('WrappedTemplateContent matched', { 
+        contentType: typeof content,
+        isArray: Array.isArray(content),
+        contentLength: Array.isArray(content) ? content.length : 'not array',
+        firstItemType: Array.isArray(content) && content.length > 0 ? content[0].type : 'no items'
+      });
+      
       // Construct raw string from the content nodes
       const rawString = helpers.reconstructRawString(content);
       
