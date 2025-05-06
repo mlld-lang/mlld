@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
 import peggy from 'peggy';
@@ -6,188 +7,92 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const GRAMMAR_FILE = path.resolve(__dirname, './meld.peggy');
-const DIST_DIR = path.resolve(__dirname, '../core/ast/grammar');
-const SRC_PARSER = path.resolve(DIST_DIR, './parser.ts');
-const GRAMMAR_DIST = path.resolve(DIST_DIR, 'meld.pegjs');
-const DIST_PARSER_ESM = path.resolve(DIST_DIR, 'parser.js');
-const DIST_PARSER_CJS = path.resolve(DIST_DIR, 'parser.cjs');
+// ---------- paths ----------
+const ROOT_GRAMMAR = path.join(__dirname, 'meld.peggy');
+const DIST_DIR = path.join(__dirname, '../core/ast/grammar');
+const DIST_PARSER = path.join(DIST_DIR, 'parser.js');
 
-// Ensure dist directory exists
-if (!fs.existsSync(DIST_DIR)) {
-  fs.mkdirSync(DIST_DIR, { recursive: true });
-}
+// ensure dist dir
+fs.mkdirSync(DIST_DIR, { recursive: true });
 
-// Read and merge grammar files
-const GRAMMAR_SOURCES = [
-  // Root file must go first (contains initializer)
-  fs.readFileSync(GRAMMAR_FILE, 'utf8'),
-  // Then lexer files
-  ...fs.readdirSync(path.resolve(__dirname, './lexer'))
-      .filter(f => f.endsWith('.peggy'))
-      .sort()
-      .map(f => fs.readFileSync(path.resolve(__dirname, './lexer', f), 'utf8')),
-  // Then directive files
-  ...fs.readdirSync(path.resolve(__dirname, './directives'))
-      .filter(f => f.endsWith('.peggy'))
-      .sort()
-      .map(f => fs.readFileSync(path.resolve(__dirname, './directives', f), 'utf8'))
-].join('\n');
+// ---------- fold all grammar sources ----------
+const sources =
+  [
+    fs.readFileSync(ROOT_GRAMMAR, 'utf8'),
+    ...fs.readdirSync(path.join(__dirname, 'lexer'))
+        .filter(f => f.endsWith('.peggy'))
+        .sort()
+        .map(f => fs.readFileSync(path.join(__dirname, 'lexer', f), 'utf8')),
+    ...fs.readdirSync(path.join(__dirname, 'directives'))
+        .filter(f => f.endsWith('.peggy'))
+        .sort()
+        .map(f => fs.readFileSync(path.join(__dirname, 'directives', f), 'utf8')),
+  ].join('\n');
 
-// Validate grammar
-console.log('Validating grammar...');
-try {
-  peggy.generate(GRAMMAR_SOURCES, { output: 'source' });
-  console.log('Grammar validation successful');
-} catch (error) {
-  console.error('Grammar validation failed:', error);
-  process.exit(1);
-}
-
-// Common options for all parser generations
-const commonOpts = {
+// ---------- peggy generate ----------
+const peggyOpts = {
+  format: 'es',
   output: 'source',
-  cache: false,
   optimize: 'speed',
-  plugins: [],
   allowedStartRules: ['Start'],
-  exportVar: false,
+  // Native TypeScript type file!
+  dts: true,
+  returnTypes: { Start: 'import("@core/syntax").MeldNode[]' },
   dependencies: {
-    NodeType:      './node-type.js',
-    DirectiveKind: './directive-kind.js',
-    helpers:       './helpers.js'
-  }
+    NodeType: './deps/node-type.js',
+    DirectiveKind: './deps/directive-kind.js',
+    helpers: './deps/helpers.js',
+  },
 };
 
-// Generate TypeScript parser
-const tsSource = peggy.generate(GRAMMAR_SOURCES, { ...commonOpts, format: 'es', trace: true });
+console.log('Generating parser...');
+let parserSource = peggy.generate(sources, peggyOpts);
 
-// Add imports at the top and export only what we need
-const tsWrapped = `// Generated TypeScript parser
-import type { MeldNode } from '@core/syntax/types.js';
-
-// Define return type for the parser
-type ParseFunction = (input: string, options?: any) => MeldNode[];
-
-// Define SyntaxError type
-class SyntaxError extends Error {
-  expected: any;
-  found: any;
-  location: any;
-  name: string;
-  constructor(message: string, expected?: any, found?: any, location?: any) {
-    super(message);
-    this.expected = expected;
-    this.found = found;
-    this.location = location;
-    this.name = "SyntaxError";
-  }
-}
-
-// Peggy-generated code below
-${tsSource.replace(/export \{[^}]+\};/g, '')}
-
-// Export all symbols in a single block
-export {
-  peg$DefaultTracer as DefaultTracer,
-  peg$allowedStartRules as StartRules,
-  SyntaxError,
-  peg$parse as parse
+// Modify the generated parser.js to include a default export
+const defaultExportAddition = `
+// Add a default export for compatibility
+const parser = { 
+  parse: peg$parse, 
+  SyntaxError: peg$SyntaxError,
+  StartRules: peg$allowedStartRules
 };
+export default parser;
+`;
 
-// Export the parser function and error type as default
-const parser = { parse: peg$parse, SyntaxError };
-export default parser;`;
+parserSource += defaultExportAddition;
+fs.writeFileSync(DIST_PARSER, parserSource);
+console.log('✓ parser.js written with default export');
 
-// Write TypeScript parser to src
-fs.writeFileSync(SRC_PARSER, tsWrapped);
+// ---------- copy runtime deps ----------
+// Create deps directory in the output directory
+fs.mkdirSync(path.join(DIST_DIR, 'deps'), { recursive: true });
 
-// Generate ESM and CJS versions
-const esmSource = peggy.generate(GRAMMAR_SOURCES, { ...commonOpts, format: 'es' });
-const cjsSource = peggy.generate(GRAMMAR_SOURCES, { ...commonOpts, format: 'commonjs' });
+// Copy grammar-core.js first
+const coreJsPath = path.join(__dirname, 'core/grammar-core.js');
+const destCoreJsPath = path.join(DIST_DIR, 'grammar-core.js');
+fs.copyFileSync(coreJsPath, destCoreJsPath);
+console.log(`✓ Copied ${coreJsPath} to ${destCoreJsPath}`);
 
-// Write ESM parser to dist
-fs.writeFileSync(DIST_PARSER_ESM, `// Generated ESM parser
+// Create deps directory in output dir
+const depsDir = path.join(DIST_DIR, 'deps');
+fs.mkdirSync(depsDir, { recursive: true });
 
-// Define return type for the parser
-/** @typedef {import('@core/syntax/types.js').MeldNode} MeldNode */
-/** @type {(input: string, options?: any) => MeldNode[]} */
-
-// Define SyntaxError type
-class SyntaxError extends Error {
-  constructor(message, expected, found, location) {
-    super(message);
-    this.expected = expected;
-    this.found = found;
-    this.location = location;
-    this.name = "SyntaxError";
-  }
+// Copy shim files with correct imports 
+for (const f of [
+  'node-type.js',
+  'directive-kind.js',
+  'helpers.js',
+]) {
+  const srcPath = path.join(__dirname, 'deps', f);
+  const destPath = path.join(depsDir, f);
+  
+  // Read the file, adjust the import path if needed, and write to destination
+  let content = fs.readFileSync(srcPath, 'utf8');
+  content = content.replace('../core/grammar-core.js', '../grammar-core.js');
+  
+  fs.writeFileSync(destPath, content);
+  console.log(`✓ Copied and fixed imports for ${f}`);
 }
 
-// Peggy-generated code below
-${esmSource.replace(/export \{[^}]+\};/g, '')}
-
-// Export all symbols in a single block
-export {
-  peg$DefaultTracer as DefaultTracer,
-  peg$allowedStartRules as StartRules,
-  SyntaxError,
-  peg$parse as parse
-};
-
-// Export the parser function and error type as default
-const parser = { parse: peg$parse, SyntaxError };
-export default parser;`);
-
-// Write CJS parser to dist
-fs.writeFileSync(DIST_PARSER_CJS, `// Generated CJS parser
-"use strict";
-
-// Define return type for the parser
-/** @typedef {import('@core/syntax/types.js').MeldNode} MeldNode */
-/** @typedef {(input: string, options?: any) => MeldNode[]} ParseFunction */
-
-// Define SyntaxError type
-class SyntaxError extends Error {
-  constructor(message, expected, found, location) {
-    super(message);
-    this.expected = expected;
-    this.found = found;
-    this.location = location;
-    this.name = "SyntaxError";
-  }
-}
-
-// Peggy-generated code below
-${cjsSource}
-
-// Export the parser function and error type
-const parser = { parse: peg$parse, SyntaxError };
-module.exports = parser;`);
-
-// No need to copy grammar file to dist anymore
-
-// Copy dependency files to both ESM and CJS locations
-['node-type.js', 'directive-kind.js', 'helpers.js'].forEach(file => {
-  // Copy to ESM parser location
-  fs.copyFileSync(
-    path.resolve(__dirname, './deps', file),
-    path.resolve(path.dirname(DIST_PARSER_ESM), file)
-  );
-  // Copy to CJS parser location
-  fs.copyFileSync(
-    path.resolve(__dirname, './deps', file),
-    path.resolve(path.dirname(DIST_PARSER_CJS), file)
-  );
-  // Copy to TypeScript parser location
-  fs.copyFileSync(
-    path.resolve(__dirname, './deps', file),
-    path.resolve(path.dirname(SRC_PARSER), file)
-  );
-});
-
-console.log('Successfully generated parser:');
-console.log('- TypeScript:', SRC_PARSER);
-console.log('- ESM:', DIST_PARSER_ESM);
-console.log('- CJS:', DIST_PARSER_CJS);
-console.log('- Grammar:', GRAMMAR_DIST);
+console.log('✓ helper modules copied');
+console.log('Parser generation complete!');

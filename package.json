@@ -22,7 +22,8 @@
     "meld": "./bin/meld-wrapper.js"
   },
   "scripts": {
-    "build:grammar": "node grammar/build-grammar.mjs",
+    "build:grammar:core": "npx tsc grammar/core/grammar-core.ts --outDir grammar/core",
+    "build:grammar": "npm run build:grammar:core && node grammar/build-grammar.mjs",
     "build": "npm run build:grammar && tsup",
     "reinstall": "npm run build && npm uninstall meld && npm install -g .",
     "dev": "tsup --watch",

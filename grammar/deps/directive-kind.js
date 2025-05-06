@@ -1,10 +1,2 @@
-export default {
-    run:    'run',
-    add:    'add',
-    text:   'text',
-    exec:   'exec',
-    data:   'data',
-    path:   'path',
-    import: 'import'
-  };
-  
+import { DirectiveKind } from '../core/grammar-core.js';
+export default DirectiveKind;

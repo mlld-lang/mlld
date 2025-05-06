@@ -42,6 +42,7 @@
     "api/**/*",
     "tests/**/*",
     "grammar/**/*",
+    "grammar/core/**/*.ts",
     "*.ts",
     "_dev/issues/active/audit/test-audit-script.ts"
   ],
