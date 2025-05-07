@@ -61,7 +61,7 @@ describe('Exec directive', () => {
     });
     
     test('Exec command with parameters (without space)', async () => {
-      const content = '@exec formatFile(file, type) = @run [fmt {{file}} --type={{type}}]';
+      const content = '@exec formatFile(file, type) = @run [fmt @file --type=@type]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
