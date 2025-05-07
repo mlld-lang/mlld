@@ -3,6 +3,10 @@
 
 {
   // NodeType, DirectiveKind, and helpers are injected via parser-dependencies
+  
+  // Initialize options for context tracking
+  options.rhsDirectiveType = '';
+  options.afterDirectiveType = '';
 }
 
 // structural newline that should become an AST node
@@ -69,24 +73,22 @@ TextBlock
 TextPart
   = !{ 
       const pos = offset();
-      const isAtLineStart = helpers.isLogicalLineStart(input, pos);
       
-      // Check if we're inside an RHS expression
-      let inRHS = false;
+      // Use our comprehensive context detection
+      let context;
       try {
-        // Try to match the IsInsideRHS rule at this position without consuming
-        // If it matches, we're inside an RHS expression
-        inRHS = IsInsideRHS();
+        context = DetectAtContext();
       } catch (e) {
-        // If there's an error, assume we're not in RHS
-        inRHS = false;
+        // If there's an error with detection, default to safe behavior
+        helpers.debug('Context detection error:', e);
+        context = { contextType: 'unknown' };
       }
       
-      // Only match as a directive if at line start AND not in RHS assignment
-      const isDirective = isAtLineStart && !inRHS && 
-                          input.substr(pos, 1) === '@' && 
-                          /[a-z]/.test(input.substr(pos+1, 1));
+      // Only treat as a directive if it's a top-level directive context
+      const isDirective = context.contextType === 'top-level-directive';
       
+      // Check for comment lines
+      const isAtLineStart = helpers.isLogicalLineStart(input, pos);
       const isComment = isAtLineStart && input.substr(pos, 2) === '>>';
       
       return isDirective || isComment;
