@@ -70,8 +70,22 @@ TextPart
   = !{ 
       const pos = offset();
       const isAtLineStart = helpers.isLogicalLineStart(input, pos);
-      const isDirective = isAtLineStart && input.substr(pos, 1) === '@' && 
-                         /[a-z]/.test(input.substr(pos+1, 1));
+      
+      // Check if we're inside an RHS expression
+      let inRHS = false;
+      try {
+        // Try to match the IsInsideRHS rule at this position without consuming
+        // If it matches, we're inside an RHS expression
+        inRHS = IsInsideRHS();
+      } catch (e) {
+        // If there's an error, assume we're not in RHS
+        inRHS = false;
+      }
+      
+      // Only match as a directive if at line start AND not in RHS assignment
+      const isDirective = isAtLineStart && !inRHS && 
+                          input.substr(pos, 1) === '@' && 
+                          /[a-z]/.test(input.substr(pos+1, 1));
       
       const isComment = isAtLineStart && input.substr(pos, 2) === '>>';
       

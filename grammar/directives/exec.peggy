@@ -3,7 +3,13 @@ ExecDirective
 
 // @exec identifier (param1, param2) = @run [command]
 execCommand
-  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ command:WrappedCommandContent HWS DirectiveEOL {
+  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ runValue:("@run" _ command:WrappedCommandContent {
+      return {
+        type: "command",
+        parts: command.parts,
+        raw: command.raw
+      };
+    }) HWS DirectiveEOL {
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
       
@@ -17,14 +23,14 @@ execCommand
         return '';
       });
       
-      // Get command content from wrapped structure
-      const rawCommand = command.raw;
+      // Get command content from the runValue structure
+      const rawCommand = runValue.raw;
       
       // Create values object
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        command: command.parts
+        command: runValue.parts
       };
       
       // Create raw object
@@ -51,14 +57,21 @@ execCommand
 
 // @exec identifier (param1, param2) = @run language [code]
 execCode
-  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ language:Identifier _ code:WrappedCodeContent HWS DirectiveEOL {
+  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ runLangValue:("@run" _ language:Identifier _ code:WrappedCodeContent {
+      return {
+        type: "code",
+        language: language,
+        parts: code.parts,
+        raw: code.raw
+      };
+    }) HWS DirectiveEOL {
       // Create nodes
       const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
-      const languageNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      const languageNode = helpers.createNode(NodeType.Text, { content: runLangValue.language }, location());
       
       // Calculate raw strings
       const rawIdentifier = identifier;
-      const rawLanguage = language;
+      const rawLanguage = runLangValue.language;
       
       // Process parameters
       const processedParams = params || [];
@@ -67,31 +80,15 @@ execCode
         return '';
       });
       
-      // Process code
-      const rawCode = Array.isArray(code.parts) ? code.parts.map(n => {
-        if (n.type === 'Text') return n.content;
-        if (n.type === 'VariableReference') {
-          if (n.valueType === 'interpolation') {
-            return `{{${n.identifier}}}`;
-          } else if (n.valueType === 'variable') {
-            return `@${n.identifier}`;
-          } else if (n.valueType === 'path') {
-            // Legacy support
-            return `$${n.identifier}`;
-          } else {
-            // Legacy text/data type support
-            return `{{${n.identifier}}}`;
-          }
-        }
-        return '';
-      }).join('') : code.raw || '';
+      // Process code - get code content from runLangValue
+      const rawCode = runLangValue.raw || '';
       
       // Create values object
       const values = {
         identifier: [identifierNode],
         params: processedParams,
         lang: [languageNode],
-        code: code
+        code: runLangValue.parts
       };
       
       // Create raw object
