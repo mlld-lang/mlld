@@ -86,7 +86,7 @@ describe('Exec directive', () => {
     });
     
     test('Exec command with metadata', async () => {
-      const content = '@exec dangerous.risk.high = @run [rm -rf $dir]';
+      const content = '@exec dangerous.risk.high = @run [rm -rf @dir]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
