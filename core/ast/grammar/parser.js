@@ -502,18 +502,15 @@ function peg$parse(input, options) {
       // Return only the content within brackets, not the brackets themselves
       return parts;
     };
-  var peg$f51 = function(content) {
-      helpers.debug('DoubleBracketContent matched [[...]]', { content });
+  var peg$f51 = function(parts) {
+      helpers.debug('DoubleBracketContent matched [[...]]', { 
+        parts: parts,
+        isArray: Array.isArray(parts),
+        length: Array.isArray(parts) ? parts.length : 'not array'
+      });
       
-      // Process the content string to create nodes for template content
-      // This handles interpolation vars and whitespace properly
-      const contentNodes = [];
-      
-      // For now, create a simple text node with the full content
-      // This could be enhanced later to handle {{var}} interpolation
-      contentNodes.push(helpers.createNode(NodeType.Text, { content }, location()));
-      
-      return contentNodes;
+      // Return only the content within double brackets, not the brackets themselves
+      return parts;
     };
   var peg$f52 = function(parts) {
       helpers.debug('DoubleBracketContent matched {{var}}', { 
@@ -635,24 +632,20 @@ function peg$parse(input, options) {
         'section'  // This is a new source type
       );
     };
-  var peg$f64 = function(t, headerLevel, underHeader) {
-      helpers.debug('TemplateAddDirective matched', { 
-        content: t,
-        isArray: Array.isArray(t),
-        keys: Object.keys(t),
-        parts: t.parts && Array.isArray(t.parts) ? t.parts.length : 'not array',
-        raw: t.raw
-      });
+  var peg$f64 = function(content, headerLevel, underHeader) {
+      helpers.debug('TemplateAddDirective matched [[...]]', { content });
       
-      // Use the content correctly from WrappedTemplateContent
-      const content = t;
+      // For template content in add directive, create a single text node
+      // This makes it easier to handle Markdown, spaces, and special characters
+      const contentNodes = [helpers.createNode(NodeType.Text, { content }, location())];
+      
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
       const underHeaderValue = underHeader ? underHeader : null;
       
       // Create values object with template content
       const values = {
-        content: content.parts
+        content: contentNodes
       };
       
       // Add headerLevel and underHeader if present
@@ -672,7 +665,7 @@ function peg$parse(input, options) {
       
       // Create raw object with raw content string
       const raw = {
-        content: content.raw
+        content: content
       };
       
       // Add headerLevel and underHeader to raw if present
@@ -4386,7 +4379,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDoubleBracketContent() {
-    var s0, s1, s2, s3, s4, s5, s6;
+    var s0, s1, s2, s3;
 
     peg$silentFails++;
     s0 = peg$currPos;
@@ -4398,84 +4391,18 @@ function peg$parse(input, options) {
       if (peg$silentFails === 0) { peg$fail(peg$e7); }
     }
     if (s1 !== peg$FAILED) {
-      s2 = peg$currPos;
-      s3 = [];
-      s4 = peg$currPos;
-      s5 = peg$currPos;
-      peg$silentFails++;
-      if (input.substr(peg$currPos, 2) === peg$c5) {
-        s6 = peg$c5;
-        peg$currPos += 2;
-      } else {
-        s6 = peg$FAILED;
-        if (peg$silentFails === 0) { peg$fail(peg$e8); }
+      s2 = [];
+      s3 = peg$parseInterpolationVar();
+      if (s3 === peg$FAILED) {
+        s3 = peg$parseTextSegment();
       }
-      peg$silentFails--;
-      if (s6 === peg$FAILED) {
-        s5 = undefined;
-      } else {
-        peg$currPos = s5;
-        s5 = peg$FAILED;
-      }
-      if (s5 !== peg$FAILED) {
-        if (input.length > peg$currPos) {
-          s6 = input.charAt(peg$currPos);
-          peg$currPos++;
-        } else {
-          s6 = peg$FAILED;
-          if (peg$silentFails === 0) { peg$fail(peg$e9); }
-        }
-        if (s6 !== peg$FAILED) {
-          s5 = [s5, s6];
-          s4 = s5;
-        } else {
-          peg$currPos = s4;
-          s4 = peg$FAILED;
-        }
-      } else {
-        peg$currPos = s4;
-        s4 = peg$FAILED;
-      }
-      while (s4 !== peg$FAILED) {
-        s3.push(s4);
-        s4 = peg$currPos;
-        s5 = peg$currPos;
-        peg$silentFails++;
-        if (input.substr(peg$currPos, 2) === peg$c5) {
-          s6 = peg$c5;
-          peg$currPos += 2;
-        } else {
-          s6 = peg$FAILED;
-          if (peg$silentFails === 0) { peg$fail(peg$e8); }
-        }
-        peg$silentFails--;
-        if (s6 === peg$FAILED) {
-          s5 = undefined;
-        } else {
-          peg$currPos = s5;
-          s5 = peg$FAILED;
-        }
-        if (s5 !== peg$FAILED) {
-          if (input.length > peg$currPos) {
-            s6 = input.charAt(peg$currPos);
-            peg$currPos++;
-          } else {
-            s6 = peg$FAILED;
-            if (peg$silentFails === 0) { peg$fail(peg$e9); }
-          }
-          if (s6 !== peg$FAILED) {
-            s5 = [s5, s6];
-            s4 = s5;
-          } else {
-            peg$currPos = s4;
-            s4 = peg$FAILED;
-          }
-        } else {
-          peg$currPos = s4;
-          s4 = peg$FAILED;
+      while (s3 !== peg$FAILED) {
+        s2.push(s3);
+        s3 = peg$parseInterpolationVar();
+        if (s3 === peg$FAILED) {
+          s3 = peg$parseTextSegment();
         }
       }
-      s2 = input.substring(s2, peg$currPos);
       if (input.substr(peg$currPos, 2) === peg$c5) {
         s3 = peg$c5;
         peg$currPos += 2;
@@ -4973,7 +4900,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parseTemplateAddDirective() {
-    var s0, s1, s2, s3, s4, s5, s6, s7, s8;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10;
 
     s0 = peg$currPos;
     if (input.substr(peg$currPos, 3) === peg$c20) {
@@ -4985,22 +4912,118 @@ function peg$parse(input, options) {
     }
     if (s1 !== peg$FAILED) {
       s2 = peg$parse_();
-      s3 = peg$parseWrappedTemplateContent();
+      if (input.substr(peg$currPos, 2) === peg$c4) {
+        s3 = peg$c4;
+        peg$currPos += 2;
+      } else {
+        s3 = peg$FAILED;
+        if (peg$silentFails === 0) { peg$fail(peg$e7); }
+      }
       if (s3 !== peg$FAILED) {
-        s4 = peg$parse_();
-        s5 = peg$parseHeaderLevel();
-        if (s5 === peg$FAILED) {
-          s5 = null;
+        s4 = peg$currPos;
+        s5 = [];
+        s6 = peg$currPos;
+        s7 = peg$currPos;
+        peg$silentFails++;
+        if (input.substr(peg$currPos, 2) === peg$c5) {
+          s8 = peg$c5;
+          peg$currPos += 2;
+        } else {
+          s8 = peg$FAILED;
+          if (peg$silentFails === 0) { peg$fail(peg$e8); }
         }
-        s6 = peg$parseUnderHeader();
-        if (s6 === peg$FAILED) {
-          s6 = null;
+        peg$silentFails--;
+        if (s8 === peg$FAILED) {
+          s7 = undefined;
+        } else {
+          peg$currPos = s7;
+          s7 = peg$FAILED;
         }
-        s7 = peg$parseHWS();
-        s8 = peg$parseDirectiveEOL();
-        if (s8 !== peg$FAILED) {
-          peg$savedPos = s0;
-          s0 = peg$f64(s3, s5, s6);
+        if (s7 !== peg$FAILED) {
+          if (input.length > peg$currPos) {
+            s8 = input.charAt(peg$currPos);
+            peg$currPos++;
+          } else {
+            s8 = peg$FAILED;
+            if (peg$silentFails === 0) { peg$fail(peg$e9); }
+          }
+          if (s8 !== peg$FAILED) {
+            s7 = [s7, s8];
+            s6 = s7;
+          } else {
+            peg$currPos = s6;
+            s6 = peg$FAILED;
+          }
+        } else {
+          peg$currPos = s6;
+          s6 = peg$FAILED;
+        }
+        while (s6 !== peg$FAILED) {
+          s5.push(s6);
+          s6 = peg$currPos;
+          s7 = peg$currPos;
+          peg$silentFails++;
+          if (input.substr(peg$currPos, 2) === peg$c5) {
+            s8 = peg$c5;
+            peg$currPos += 2;
+          } else {
+            s8 = peg$FAILED;
+            if (peg$silentFails === 0) { peg$fail(peg$e8); }
+          }
+          peg$silentFails--;
+          if (s8 === peg$FAILED) {
+            s7 = undefined;
+          } else {
+            peg$currPos = s7;
+            s7 = peg$FAILED;
+          }
+          if (s7 !== peg$FAILED) {
+            if (input.length > peg$currPos) {
+              s8 = input.charAt(peg$currPos);
+              peg$currPos++;
+            } else {
+              s8 = peg$FAILED;
+              if (peg$silentFails === 0) { peg$fail(peg$e9); }
+            }
+            if (s8 !== peg$FAILED) {
+              s7 = [s7, s8];
+              s6 = s7;
+            } else {
+              peg$currPos = s6;
+              s6 = peg$FAILED;
+            }
+          } else {
+            peg$currPos = s6;
+            s6 = peg$FAILED;
+          }
+        }
+        s4 = input.substring(s4, peg$currPos);
+        if (input.substr(peg$currPos, 2) === peg$c5) {
+          s5 = peg$c5;
+          peg$currPos += 2;
+        } else {
+          s5 = peg$FAILED;
+          if (peg$silentFails === 0) { peg$fail(peg$e8); }
+        }
+        if (s5 !== peg$FAILED) {
+          s6 = peg$parse_();
+          s7 = peg$parseHeaderLevel();
+          if (s7 === peg$FAILED) {
+            s7 = null;
+          }
+          s8 = peg$parseUnderHeader();
+          if (s8 === peg$FAILED) {
+            s8 = null;
+          }
+          s9 = peg$parseHWS();
+          s10 = peg$parseDirectiveEOL();
+          if (s10 !== peg$FAILED) {
+            peg$savedPos = s0;
+            s0 = peg$f64(s4, s7, s8);
+          } else {
+            peg$currPos = s0;
+            s0 = peg$FAILED;
+          }
         } else {
           peg$currPos = s0;
           s0 = peg$FAILED;

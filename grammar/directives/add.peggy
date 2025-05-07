@@ -53,24 +53,20 @@ SectionAddDirective
 
 // Template add directive - e.g. @add [[Template content]]
 TemplateAddDirective
-  = "add" _ t:WrappedTemplateContent _ headerLevel:HeaderLevel? underHeader:UnderHeader? HWS DirectiveEOL {
-      helpers.debug('TemplateAddDirective matched', { 
-        content: t,
-        isArray: Array.isArray(t),
-        keys: Object.keys(t),
-        parts: t.parts && Array.isArray(t.parts) ? t.parts.length : 'not array',
-        raw: t.raw
-      });
+  = "add" _ '[[' content:$((!(']]') .)*) ']]' _ headerLevel:HeaderLevel? underHeader:UnderHeader? HWS DirectiveEOL {
+      helpers.debug('TemplateAddDirective matched [[...]]', { content });
       
-      // Use the content correctly from WrappedTemplateContent
-      const content = t;
+      // For template content in add directive, create a single text node
+      // This makes it easier to handle Markdown, spaces, and special characters
+      const contentNodes = [helpers.createNode(NodeType.Text, { content }, location())];
+      
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
       const underHeaderValue = underHeader ? underHeader : null;
       
       // Create values object with template content
       const values = {
-        content: content.parts
+        content: contentNodes
       };
       
       // Add headerLevel and underHeader if present
@@ -90,7 +86,7 @@ TemplateAddDirective
       
       // Create raw object with raw content string
       const raw = {
-        content: content.raw
+        content: content
       };
       
       // Add headerLevel and underHeader to raw if present

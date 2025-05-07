@@ -103,18 +103,15 @@ BracketContent "Content with @var interpolation"
 
 // Content inside double brackets with {{var}} interpolation
 DoubleBracketContent "Content with {{var}} interpolation"
-  = '[[' content:$((!(']]') .)*) ']]' {
-      helpers.debug('DoubleBracketContent matched [[...]]', { content });
+  = '[[' parts:(InterpolationVar / TextSegment)* ']]' {
+      helpers.debug('DoubleBracketContent matched [[...]]', { 
+        parts: parts,
+        isArray: Array.isArray(parts),
+        length: Array.isArray(parts) ? parts.length : 'not array'
+      });
       
-      // Process the content string to create nodes for template content
-      // This handles interpolation vars and whitespace properly
-      const contentNodes = [];
-      
-      // For now, create a simple text node with the full content
-      // This could be enhanced later to handle {{var}} interpolation
-      contentNodes.push(helpers.createNode(NodeType.Text, { content }, location()));
-      
-      return contentNodes;
+      // Return only the content within double brackets, not the brackets themselves
+      return parts;
     }
   // Support direct {{var}} without requiring [[ ]] wrapper
   / parts:InterpolationVar {
