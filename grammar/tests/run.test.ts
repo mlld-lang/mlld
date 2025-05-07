@@ -49,7 +49,7 @@ describe('Run directive', () => {
     });
     
     test('Command with variable interpolation', async () => {
-      const content = '@run [ls -la {{directory}}]';
+      const content = '@run [ls -la @directory]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -64,7 +64,7 @@ describe('Run directive', () => {
       expect(directiveNode.values.command).toHaveLength(2);
       expect(directiveNode.values.command[0].content).toBe('ls -la ');
       expect(directiveNode.values.command[1].identifier).toBe('directory');
-      expect(directiveNode.raw.command).toBe('ls -la {{directory}}');
+      expect(directiveNode.raw.command).toBe('ls -la @directory');
       
       // Type guard
       expect(isRunCommandDirective(directiveNode)).toBe(true);
