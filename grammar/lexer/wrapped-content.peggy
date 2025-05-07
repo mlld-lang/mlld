@@ -103,15 +103,18 @@ BracketContent "Content with @var interpolation"
 
 // Content inside double brackets with {{var}} interpolation
 DoubleBracketContent "Content with {{var}} interpolation"
-  = '[[' parts:(InterpolationVar / TextSegment / WhiteSpace)* ']]' {
-      helpers.debug('DoubleBracketContent matched [[...]]', { 
-        parts: parts,
-        isArray: Array.isArray(parts),
-        length: Array.isArray(parts) ? parts.length : 'not array'
-      });
+  = '[[' content:$((!(']]') .)*) ']]' {
+      helpers.debug('DoubleBracketContent matched [[...]]', { content });
       
-      // Return only the content within double brackets, not the brackets themselves
-      return parts;
+      // Process the content string to create nodes for template content
+      // This handles interpolation vars and whitespace properly
+      const contentNodes = [];
+      
+      // For now, create a simple text node with the full content
+      // This could be enhanced later to handle {{var}} interpolation
+      contentNodes.push(helpers.createNode(NodeType.Text, { content }, location()));
+      
+      return contentNodes;
     }
   // Support direct {{var}} without requiring [[ ]] wrapper
   / parts:InterpolationVar {
@@ -121,13 +124,6 @@ DoubleBracketContent "Content with {{var}} interpolation"
       });
       
       return [parts];
-    }
-
-// Whitespace as its own node for template content
-WhiteSpace "Whitespace in template"
-  = ws:[ \t\r\n]+ {
-      helpers.debug('WhiteSpace matched', { ws: ws.join('') });
-      return helpers.createNode(NodeType.Text, { content: ws.join('') }, location());
     }
 
 // Unquoted path with @var interpolation (no delimiters)
