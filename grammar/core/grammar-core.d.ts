@@ -10,6 +10,7 @@ export declare const NodeType: {
     readonly SectionMarker: "SectionMarker";
     readonly Error: "Error";
     readonly Newline: "Newline";
+    readonly StringLiteral: "StringLiteral";
 };
 export type NodeTypeKey = keyof typeof NodeType;
 export declare const DirectiveKind: {
@@ -28,14 +29,14 @@ export declare const helpers: {
     createNode<T extends object>(type: NodeTypeKey, props: T & {
         location?: any;
     }): Readonly<{
-        type: "Directive" | "Text" | "CodeFence" | "Comment" | "Error" | "VariableReference" | "Newline" | "Literal" | "DotSeparator" | "PathSeparator" | "SectionMarker";
+        type: "Text" | "Comment" | "CodeFence" | "VariableReference" | "Directive" | "PathSeparator" | "DotSeparator" | "Literal" | "SectionMarker" | "Error" | "Newline" | "StringLiteral";
         nodeId: "placeholder-id";
         location: any;
     } & T & {
         location?: any;
     }>;
     createDirective(kind: DirectiveKindKey, data: any): Readonly<{
-        type: "Directive" | "Text" | "CodeFence" | "Comment" | "Error" | "VariableReference" | "Newline" | "Literal" | "DotSeparator" | "PathSeparator" | "SectionMarker";
+        type: "Text" | "Comment" | "CodeFence" | "VariableReference" | "Directive" | "PathSeparator" | "DotSeparator" | "Literal" | "SectionMarker" | "Error" | "Newline" | "StringLiteral";
         nodeId: "placeholder-id";
         location: any;
     } & {
@@ -44,16 +45,17 @@ export declare const helpers: {
         location?: any;
     }>;
     createStructuredDirective(kind: DirectiveKindKey, subtype: string, values: any, raw: string, meta: any, locationData: any, source?: any): Readonly<{
-        type: "Directive" | "Text" | "CodeFence" | "Comment" | "Error" | "VariableReference" | "Newline" | "Literal" | "DotSeparator" | "PathSeparator" | "SectionMarker";
+        type: "Text" | "Comment" | "CodeFence" | "VariableReference" | "Directive" | "PathSeparator" | "DotSeparator" | "Literal" | "SectionMarker" | "Error" | "Newline" | "StringLiteral";
         nodeId: "placeholder-id";
         location: any;
     } & {
-        kind: "text" | "data" | "import" | "path" | "run" | "exec" | "add";
+        kind: "run" | "add" | "text" | "exec" | "data" | "path" | "import";
         subtype: string;
         source: any;
         values: any;
         raw: string;
         meta: any;
+        location: any;
     } & {
         location?: any;
     }>;

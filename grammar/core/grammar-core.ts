@@ -60,8 +60,9 @@ export const helpers = {
       source,
       values, 
       raw, 
-      meta 
-    }, locationData);
+      meta,
+      location: locationData
+    });
   },
 
   createVariableReferenceNode(valueType: string, data: any) {

@@ -1,27 +1,4 @@
-"use strict";
-var __assign = (this && this.__assign) || function () {
-    __assign = Object.assign || function(t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-            s = arguments[i];
-            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
-                t[p] = s[p];
-        }
-        return t;
-    };
-    return __assign.apply(this, arguments);
-};
-var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.helpers = exports.DirectiveKind = exports.NodeType = void 0;
-exports.NodeType = {
+export const NodeType = {
     Text: 'Text',
     Comment: 'Comment',
     CodeFence: 'CodeFence',
@@ -35,7 +12,7 @@ exports.NodeType = {
     Newline: 'Newline',
     StringLiteral: 'StringLiteral', // Added missing type
 };
-exports.DirectiveKind = {
+export const DirectiveKind = {
     run: 'run',
     add: 'add',
     text: 'text',
@@ -44,80 +21,83 @@ exports.DirectiveKind = {
     path: 'path',
     import: 'import',
 };
-exports.helpers = {
-    debug: function (msg) {
-        var args = [];
-        for (var _i = 1; _i < arguments.length; _i++) {
-            args[_i - 1] = arguments[_i];
-        }
+export const helpers = {
+    debug(msg, ...args) {
         if (process.env.DEBUG_MELD_GRAMMAR)
-            console.log.apply(console, __spreadArray(['[DEBUG GRAMMAR]', msg], args, false));
+            console.log('[DEBUG GRAMMAR]', msg, ...args);
     },
-    isLogicalLineStart: function (input, pos) {
+    isLogicalLineStart(input, pos) {
         if (pos === 0)
             return true;
-        var i = pos - 1;
+        let i = pos - 1;
         while (i >= 0 && ' \t\r'.includes(input[i]))
             i--;
         return i < 0 || input[i] === '\n';
     },
-    createNode: function (type, props) {
-        var _a;
-        return Object.freeze(__assign({ type: type, nodeId: 'placeholder-id', location: (_a = props.location) !== null && _a !== void 0 ? _a : { start: { offset: 0, line: 1, column: 1 },
-                end: { offset: 0, line: 1, column: 1 } } }, props));
+    createNode(type, props) {
+        return Object.freeze({
+            type,
+            nodeId: 'placeholder-id',
+            location: props.location ?? { start: { offset: 0, line: 1, column: 1 },
+                end: { offset: 0, line: 1, column: 1 } },
+            ...props,
+        });
     },
-    createDirective: function (kind, data) {
+    createDirective(kind, data) {
         // Legacy method maintained for backward compatibility
-        return this.createNode(exports.NodeType.Directive, { directive: __assign({ kind: kind }, data) });
+        return this.createNode(NodeType.Directive, { directive: { kind, ...data } });
     },
     // New method for creating directives with the updated structure
-    createStructuredDirective: function (kind, subtype, values, raw, meta, locationData, source) {
-        if (source === void 0) { source = null; }
-        return this.createNode(exports.NodeType.Directive, {
-            kind: kind,
-            subtype: subtype,
-            source: source,
-            values: values,
-            raw: raw,
-            meta: meta
-        }, locationData);
+    createStructuredDirective(kind, subtype, values, raw, meta, locationData, source = null) {
+        return this.createNode(NodeType.Directive, {
+            kind,
+            subtype,
+            source,
+            values,
+            raw,
+            meta,
+            location: locationData
+        });
     },
-    createVariableReferenceNode: function (valueType, data) {
-        return this.createNode(exports.NodeType.VariableReference, __assign({ valueType: valueType, isVariableReference: true }, data));
+    createVariableReferenceNode(valueType, data) {
+        return this.createNode(NodeType.VariableReference, { valueType, isVariableReference: true, ...data });
     },
-    normalizePathVar: function (id) {
+    normalizePathVar(id) {
         if (id === '~')
             return 'HOMEPATH';
         if (id === '.')
             return 'PROJECTPATH';
         return id;
     },
-    validateRunContent: function () { return true; },
-    validateDefineContent: function () { return true; },
-    validatePath: function (pathParts, directiveKind) {
+    validateRunContent: () => true,
+    validateDefineContent: () => true,
+    validatePath(pathParts, directiveKind) {
         // 1. Reconstruct Raw String (needed for output)
-        var raw = this.reconstructRawString(pathParts).trim();
+        const raw = this.reconstructRawString(pathParts).trim();
         // Initialize flags
-        var hasVariables = false;
+        let hasVariables = false;
         // Process path parts
         if (pathParts && pathParts.length > 0) {
-            for (var _i = 0, pathParts_1 = pathParts; _i < pathParts_1.length; _i++) {
-                var node = pathParts_1[_i];
-                if (node.type === exports.NodeType.VariableReference) {
+            for (const node of pathParts) {
+                if (node.type === NodeType.VariableReference) {
                     hasVariables = true;
                 }
             }
         }
         // 3. Construct Final Flags Object
-        var finalFlags = {
+        const finalFlags = {
             hasVariables: hasVariables
         };
         // 4. Construct Result Object
-        var result = __assign({ raw: raw, values: pathParts }, finalFlags);
+        const result = {
+            raw: raw,
+            values: pathParts,
+            ...finalFlags
+        };
         this.debug('PATH', 'validatePath final result:', JSON.stringify(result, null, 2));
         return result;
     },
-    getImportSubtype: function (list) {
+    getImportSubtype(list) {
         // Check for importAll: [*]
         if (!list)
             return 'importAll';
@@ -128,69 +108,68 @@ exports.helpers = {
         // Otherwise, it's importSelected
         return 'importSelected';
     },
-    trace: function (pos, reason) {
+    trace(pos, reason) {
         // Placeholder - No output for now
         // this.debug('TRACE', `Reject @${pos}: ${reason}`);
     },
-    reconstructRawString: function (nodes) {
+    reconstructRawString(nodes) {
         // Basic implementation - iterates nodes and concatenates
         if (!Array.isArray(nodes)) {
             // Handle cases where a single node might be passed (though likely expects array)
             if (nodes && typeof nodes === 'object') {
-                if (nodes.type === exports.NodeType.Text)
+                if (nodes.type === NodeType.Text)
                     return nodes.content || '';
-                if (nodes.type === exports.NodeType.VariableReference) {
+                if (nodes.type === NodeType.VariableReference) {
                     // Handle different variable types with appropriate syntax
-                    var varId = nodes.identifier;
-                    var valueType = nodes.valueType;
+                    const varId = nodes.identifier;
+                    const valueType = nodes.valueType;
                     // Variable syntax handling:
                     // - 'varInterpolation' for {{var}} (in strings)
                     // - 'varIdentifier' for @var (direct reference)
                     if (valueType === 'varInterpolation') {
-                        return "{{".concat(varId, "}}");
+                        return `{{${varId}}}`;
                     }
                     else if (valueType === 'varIdentifier') {
-                        return "@".concat(varId);
+                        return `@${varId}`;
                     }
                     else {
                         // Default case - should not happen with consistent valueTypes
-                        return "{{".concat(varId, "}}");
+                        return `{{${varId}}}`;
                     }
                 }
             }
             return String(nodes || ''); // Fallback
         }
         // For path or command, construct a clean string without extra characters
-        var raw = '';
-        for (var _i = 0, nodes_1 = nodes; _i < nodes_1.length; _i++) {
-            var node = nodes_1[_i];
+        let raw = '';
+        for (const node of nodes) {
             if (!node)
                 continue;
-            if (node.type === exports.NodeType.Text) {
+            if (node.type === NodeType.Text) {
                 raw += node.content || '';
             }
-            else if (node.type === exports.NodeType.VariableReference) {
-                var varId = node.identifier;
-                var valueType = node.valueType;
+            else if (node.type === NodeType.VariableReference) {
+                const varId = node.identifier;
+                const valueType = node.valueType;
                 // Use the same variable syntax handling logic as above
                 if (valueType === 'varInterpolation') {
-                    raw += "{{".concat(varId, "}}");
+                    raw += `{{${varId}}}`;
                 }
                 else if (valueType === 'varIdentifier') {
-                    raw += "@".concat(varId);
+                    raw += `@${varId}`;
                 }
                 else {
                     // Default case - should not happen with consistent valueTypes
-                    raw += "{{".concat(varId, "}}");
+                    raw += `{{${varId}}}`;
                 }
             }
-            else if (node.type === exports.NodeType.PathSeparator) {
+            else if (node.type === NodeType.PathSeparator) {
                 raw += node.value || ''; // Append '/' or '.'
             }
-            else if (node.type === exports.NodeType.SectionMarker) {
+            else if (node.type === NodeType.SectionMarker) {
                 raw += node.value || ''; // Append '#'
             }
-            else if (node.type === exports.NodeType.StringLiteral) {
+            else if (node.type === NodeType.StringLiteral) {
                 // Handle string literals properly - avoids adding extra quotes
                 raw += node.value || '';
             }

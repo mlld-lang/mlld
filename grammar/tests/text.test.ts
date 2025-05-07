@@ -66,7 +66,8 @@ describe('Text Directive Tests', () => {
       // Type guard
       expect(isTextAssignmentDirective(result)).toBe(true);
     });
-    
+  });
+  
   describe('Text Template', () => {
     it('should parse a basic template text', async () => {
       const result = (await parse('@text [This is some text]')).ast[0] as TextTemplateDirectiveNode;
