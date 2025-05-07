@@ -399,25 +399,43 @@ function peg$parse(input, options) {
   };
   var peg$f9 = function() { 
       const pos = offset();
+      const isAtLineStart = helpers.isLogicalLineStart(input, pos);
+      const isAtStartChar = input[pos] === '@';
       
-      // Use our comprehensive context detection
-      let context;
-      try {
-        context = DetectAtContext();
-      } catch (e) {
-        // If there's an error with detection, default to safe behavior
-        helpers.debug('Context detection error:', e);
-        context = { contextType: 'unknown' };
+      // Is this potentially a directive?
+      if (isAtLineStart && isAtStartChar) {
+        // Check if we're a top-level directive using IsTopLevelDirective
+        let isTopLevel = false;
+        try {
+          isTopLevel = IsTopLevelDirective();
+        } catch (e) {
+          helpers.debug('Top level directive detection error:', e);
+        }
+        
+        if (isTopLevel) {
+          return true; // Treat as directive, don't consume as text
+        }
       }
       
-      // Only treat as a directive if it's a top-level directive context
-      const isDirective = context.contextType === 'top-level-directive';
+      // Is this potentially an @ after a directive like @run?
+      if (isAtStartChar) {
+        // Check if we're after a directive keyword using IsAfterDirectiveKeyword
+        let isAfterDirective = false;
+        try {
+          isAfterDirective = IsAfterDirectiveKeyword();
+        } catch (e) {
+          helpers.debug('After directive detection error:', e);
+        }
+        
+        if (isAfterDirective) {
+          return false; // Don't treat as directive, consume as normal text
+        }
+      }
       
-      // Check for comment lines
-      const isAtLineStart = helpers.isLogicalLineStart(input, pos);
+      // For regular comment handling
       const isComment = isAtLineStart && input.substr(pos, 2) === '>>';
       
-      return isDirective || isComment;
+      return isAtLineStart && isAtStartChar || isComment;
     };
   var peg$f10 = function() {
       const pos = offset();
@@ -1719,9 +1737,10 @@ function peg$parse(input, options) {
       };
     };
   var peg$f153 = function(core) {
+      // Explicitly set subtype to runExec to ensure it's correct
       return helpers.createStructuredDirective(
         'run', 
-        core.subtype, 
+        'runExec',  // Explicitly set
         core.values, 
         core.raw, 
         core.meta, 
@@ -7657,11 +7676,11 @@ function peg$parse(input, options) {
   function peg$parseRunDirective() {
     var s0;
 
-    s0 = peg$parserunCommand();
+    s0 = peg$parserunExec();
     if (s0 === peg$FAILED) {
       s0 = peg$parserunCode();
       if (s0 === peg$FAILED) {
-        s0 = peg$parserunExec();
+        s0 = peg$parserunCommand();
       }
     }
 
@@ -9018,8 +9037,10 @@ function peg$parse(input, options) {
   // NodeType, DirectiveKind, and helpers are injected via parser-dependencies
   
   // Initialize options for context tracking
-  options.rhsDirectiveType = '';
-  options.afterDirectiveType = '';
+  if (typeof options !== 'undefined') {
+    options.rhsDirectiveType = '';
+    options.afterDirectiveType = '';
+  }
 
   peg$result = peg$startRuleFunction();
 

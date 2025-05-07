@@ -23,7 +23,7 @@ RunCommandCore
 
 // Top-level directive definition
 RunDirective
-  = runCommand / runCode / runExec
+  = runExec / runCode / runCommand
 
 // @run [command] - uses the core rule
 runCommand
@@ -145,9 +145,10 @@ RunExecCore
 // @run @commandName (arg1, arg2)
 runExec
   = "run" _ "@" core:RunExecCore DirectiveEOL {
+      // Explicitly set subtype to runExec to ensure it's correct
       return helpers.createStructuredDirective(
         'run', 
-        core.subtype, 
+        'runExec',  // Explicitly set
         core.values, 
         core.raw, 
         core.meta, 
