@@ -19,7 +19,7 @@ describe('Text Directive Tests', () => {
       expect(result.values.identifier[0].identifier).toBe('greeting');
       expect(result.values.content).toBeDefined();
       expect(result.values.content.length).toBeGreaterThan(0);
-      expect(result.values.source).toBe('literal');
+      expect(result.source).toBe('literal');
       
       // Check raw
       expect(result.raw.identifier).toBe('greeting');
@@ -29,8 +29,8 @@ describe('Text Directive Tests', () => {
       expect(isTextAssignmentDirective(result)).toBe(true);
     });
     
-    it('should parse a text assignment with embed', async () => {
-      const result = (await parse('@text content = @embed [./README.md]')).ast[0] as TextAssignmentDirectiveNode;
+    it('should parse a text assignment with add', async () => {
+      const result = (await parse('@text content = @add [./README.md]')).ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
@@ -39,10 +39,10 @@ describe('Text Directive Tests', () => {
       // Check values
       expect(result.values.identifier).toHaveLength(1);
       expect(result.values.identifier[0].identifier).toBe('content');
-      expect(result.values.source).toBe('embed');
+      expect(result.source).toBe('add');
       
       // Check meta
-      expect(result.meta.embed).toBeDefined();
+      expect(result.meta.add).toBeDefined();
       
       // Type guard
       expect(isTextAssignmentDirective(result)).toBe(true);
@@ -58,7 +58,7 @@ describe('Text Directive Tests', () => {
       // Check values
       expect(result.values.identifier).toHaveLength(1);
       expect(result.values.identifier[0].identifier).toBe('output');
-      expect(result.values.source).toBe('run');
+      expect(result.source).toBe('run');
       
       // Check meta
       expect(result.meta.run).toBeDefined();

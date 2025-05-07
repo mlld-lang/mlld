@@ -1825,36 +1825,40 @@ function peg$parse(input, options) {
   var peg$f183 = function(id, value) {
     helpers.debug('TEXT', { type: 'assignment', identifier: id, valueSource: value.type });
     
-    // Capture raw text - use the identifier toString() method instead of $()
-    const rawIdentifier = id.toString ? id.toString() : JSON.stringify(id);
+    // Create variable reference node for identifier
+    const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+    const rawIdentifier = id;
     const rawContent = value.rawText || '';
     
     // Create structured values object
     const values = {
-      identifier: [id]
+      identifier: [idNode]
     };
     
     // Create structured meta object
     const meta = {};
     
     // Determine source for the top-level field
-    let sourceType = null;
+    let sourceType = 'literal'; // Default source type
     
     // Check if the value is a nested directive
     if (value.type === "nestedDirective" && value.directive) {
       // Use the full directive node directly in the content field
       values.content = value.directive;
       
-      // Set source to the nested directive's subtype
-      sourceType = value.directive.subtype || 'directive';
+      // Set source and populate meta based on directive type
+      if (value.directive.kind === 'run') {
+        sourceType = 'run';
+        meta.run = { type: value.directive.subtype };
+      } else if (value.directive.kind === 'add') {
+        sourceType = 'add';
+        meta.add = { type: value.directive.subtype };
+      } else {
+        sourceType = value.directive.kind || 'directive';
+      }
     } else {
       // Use normal values array for non-directive content
       values.content = Array.isArray(value.values) ? value.values : [value.values];
-      
-      // Set source based on the value type
-      if (value.type) {
-        sourceType = value.type;
-      }
     }
     
     // Create structured raw object
@@ -1880,7 +1884,7 @@ function peg$parse(input, options) {
     helpers.debug('TEXT', { type: 'template', identifier, content });
     
     // Capture raw text
-    const rawIdentifier = identifier ? (identifier.toString ? identifier.toString() : JSON.stringify(identifier)) : undefined;
+    const rawIdentifier = identifier;
     const rawContent = content.raw;
     
     // Create values object with optional identifier
@@ -1889,7 +1893,9 @@ function peg$parse(input, options) {
     };
     
     if (identifier) {
-      values.identifier = [identifier];
+      // Create variable reference node for identifier
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: identifier });
+      values.identifier = [idNode];
     }
     
     // Create raw object
