@@ -66,7 +66,7 @@ IsInsideRHS "Check if we're in RHS of assignment"
           // If we reached a line start or the beginning, this is a directive assignment
           if (j < 0 || input[j] === '\n') {
             // Only consider valid directive kinds that can have nested directives
-            const validAssignmentDirectives = ['exec', 'text'];
+            const validAssignmentDirectives = ['exec', 'text', 'data'];
             if (validAssignmentDirectives.includes(textContext)) {
               isInsideRHS = true;
             }

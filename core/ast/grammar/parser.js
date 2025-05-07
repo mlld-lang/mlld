@@ -526,7 +526,7 @@ function peg$parse(input, options) {
           // If we reached a line start or the beginning, this is a directive assignment
           if (j < 0 || input[j] === '\n') {
             // Only consider valid directive kinds that can have nested directives
-            const validAssignmentDirectives = ['exec', 'text'];
+            const validAssignmentDirectives = ['exec', 'text', 'data'];
             if (validAssignmentDirectives.includes(textContext)) {
               isInsideRHS = true;
             }
@@ -7810,31 +7810,19 @@ function peg$parse(input, options) {
   }
 
   function peg$parseRunExecCore() {
-    var s0, s1, s2, s3, s4, s5;
+    var s0, s1, s2, s3, s4;
 
     s0 = peg$currPos;
-    if (input.charCodeAt(peg$currPos) === 64) {
-      s1 = peg$c6;
-      peg$currPos++;
-    } else {
-      s1 = peg$FAILED;
-      if (peg$silentFails === 0) { peg$fail(peg$e11); }
-    }
+    s1 = peg$parseIdentifier();
     if (s1 !== peg$FAILED) {
-      s2 = peg$parseIdentifier();
-      if (s2 !== peg$FAILED) {
-        s3 = peg$parse_();
-        s4 = peg$parseRunExecArgs();
-        if (s4 === peg$FAILED) {
-          s4 = null;
-        }
-        s5 = peg$parseHWS();
-        peg$savedPos = s0;
-        s0 = peg$f147(s2, s4);
-      } else {
-        peg$currPos = s0;
-        s0 = peg$FAILED;
+      s2 = peg$parse_();
+      s3 = peg$parseRunExecArgs();
+      if (s3 === peg$FAILED) {
+        s3 = null;
       }
+      s4 = peg$parseHWS();
+      peg$savedPos = s0;
+      s0 = peg$f147(s1, s3);
     } else {
       peg$currPos = s0;
       s0 = peg$FAILED;
@@ -7844,7 +7832,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parserunExec() {
-    var s0, s1, s2, s3, s4;
+    var s0, s1, s2, s3, s4, s5;
 
     s0 = peg$currPos;
     if (input.substr(peg$currPos, 3) === peg$c47) {
@@ -7856,12 +7844,24 @@ function peg$parse(input, options) {
     }
     if (s1 !== peg$FAILED) {
       s2 = peg$parse_();
-      s3 = peg$parseRunExecCore();
+      if (input.charCodeAt(peg$currPos) === 64) {
+        s3 = peg$c6;
+        peg$currPos++;
+      } else {
+        s3 = peg$FAILED;
+        if (peg$silentFails === 0) { peg$fail(peg$e11); }
+      }
       if (s3 !== peg$FAILED) {
-        s4 = peg$parseDirectiveEOL();
+        s4 = peg$parseRunExecCore();
         if (s4 !== peg$FAILED) {
-          peg$savedPos = s0;
-          s0 = peg$f148(s3);
+          s5 = peg$parseDirectiveEOL();
+          if (s5 !== peg$FAILED) {
+            peg$savedPos = s0;
+            s0 = peg$f148(s4);
+          } else {
+            peg$currPos = s0;
+            s0 = peg$FAILED;
+          }
         } else {
           peg$currPos = s0;
           s0 = peg$FAILED;
@@ -7879,7 +7879,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parseRunRHS() {
-    var s0, s1;
+    var s0, s1, s2;
 
     peg$silentFails++;
     s0 = peg$currPos;
@@ -7899,12 +7899,26 @@ function peg$parse(input, options) {
       s0 = s1;
       if (s0 === peg$FAILED) {
         s0 = peg$currPos;
-        s1 = peg$parseRunExecCore();
-        if (s1 !== peg$FAILED) {
-          peg$savedPos = s0;
-          s1 = peg$f151(s1);
+        if (input.charCodeAt(peg$currPos) === 64) {
+          s1 = peg$c6;
+          peg$currPos++;
+        } else {
+          s1 = peg$FAILED;
+          if (peg$silentFails === 0) { peg$fail(peg$e11); }
         }
-        s0 = s1;
+        if (s1 !== peg$FAILED) {
+          s2 = peg$parseRunExecCore();
+          if (s2 !== peg$FAILED) {
+            peg$savedPos = s0;
+            s0 = peg$f151(s2);
+          } else {
+            peg$currPos = s0;
+            s0 = peg$FAILED;
+          }
+        } else {
+          peg$currPos = s0;
+          s0 = peg$FAILED;
+        }
       }
     }
     peg$silentFails--;

@@ -101,9 +101,9 @@ runCode
       );
     }
 
-// Core rule for run exec - extracts just the command reference processing
+// Core rule for run exec - extracts just the command reference processing without the @ prefix
 RunExecCore
-  = "@" identifier:Identifier _ args:RunExecArgs? HWS {
+  = identifier:Identifier _ args:RunExecArgs? HWS {
       // Create text node from identifier
       const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
       
@@ -144,7 +144,7 @@ RunExecCore
 // @run @commandName(arg1, arg2)
 // @run @commandName (arg1, arg2)
 runExec
-  = "run" _ core:RunExecCore DirectiveEOL {
+  = "run" _ "@" core:RunExecCore DirectiveEOL {
       return helpers.createStructuredDirective(
         'run', 
         core.subtype, 
@@ -161,7 +161,7 @@ runExec
 RunRHS "Right-hand side run directive"
   = core:RunCommandCore { return core; }
   / core:RunCodeCore { return core; }
-  / core:RunExecCore { return core; }
+  / "@" core:RunExecCore { return core; }
 
 // Helper rules for runCode arguments
 RunCodeArgs
