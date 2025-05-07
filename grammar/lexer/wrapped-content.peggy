@@ -11,7 +11,7 @@ WrappedPathContent (Used by: path, import, exec, add)
 │   ├── PathSeparator
 │   └── QuotedText
 └── PathStyleInterpolation (for unquoted values)
-    ├── LiteralString (quotes, properly excluded from content)
+    ├── LiteralContent (quotes, properly excluded from content)
     ├── BracketContent (handles [..] with @var)
     │   ├── AtVar
     │   ├── PathSeparator
@@ -23,14 +23,14 @@ WrappedPathContent (Used by: path, import, exec, add)
 
 WrappedTemplateContent (Used by: text, add)
 ├── TemplateStyleInterpolation
-│   ├── LiteralString (handles quotes, removes them)
+│   ├── LiteralContent (handles quotes, removes them)
 │   └── DoubleBracketContent (handles [[..]] with {{var}})
 │       ├── InterpolationVar
 │       └── TextSegment
 
 WrappedCommandContent (Used by: run, exec)
 ├── CommandStyleInterpolation
-│   ├── LiteralString
+│   ├── LiteralContent
 │   ├── BracketContent
 │   ├── DoubleBracketContent
 │   └── UnquotedCommand
@@ -54,6 +54,7 @@ IMPORTANT:
 // Simple text segment without any special characters
 TextSegment "Plain text segment"
   = chars:$(![ \t\r\n/\]@${{}"'`] .)+ { 
+      helpers.debug('TextSegment matched', { chars });
       return helpers.createNode(NodeType.Text, { content: chars }, location());
     }
 
@@ -81,7 +82,7 @@ SectionMarker "Section marker"
 
 // Quoted string - captures content within quotes WITHOUT including the quotes
 // No interpolation for quoted strings - just literal text
-LiteralString "String literal without interpolation"
+LiteralContent "Literal content without interpolation"
   = '"' content:$(!'"' .)* '"' { 
       // Return only the content within quotes as a Text node (no variable processing)
       return [helpers.createNode(NodeType.Text, { content }, location())];
@@ -93,14 +94,6 @@ LiteralString "String literal without interpolation"
       return [helpers.createNode(NodeType.Text, { content }, location())];
     }
 
-// Text segment within quotes (excludes quote characters and variables)
-// We don't need this anymore since LiteralString handles the entire content as one node
-// This rule can be deleted or replaced with a simpler version if needed elsewhere
-QuotedText "Plain text within quotes"
-  = chars:$(![@$/\[\]{}'"` \t\r\n] .)+ { 
-      return helpers.createNode(NodeType.Text, { content: chars }, location());
-    }
-
 // Content inside single brackets with @var interpolation
 BracketContent "Content with @var interpolation"
   = '[' parts:(AtVar / TextSegment / PathSeparator)* ']' {
@@ -110,7 +103,7 @@ BracketContent "Content with @var interpolation"
 
 // Content inside double brackets with {{var}} interpolation
 DoubleBracketContent "Content with {{var}} interpolation"
-  = '[[' parts:(InterpolationVar / TextSegment)* ']]' {
+  = '[[' parts:(InterpolationVar / TextSegment / WhiteSpace)* ']]' {
       helpers.debug('DoubleBracketContent matched [[...]]', { 
         parts: parts,
         isArray: Array.isArray(parts),
@@ -128,6 +121,13 @@ DoubleBracketContent "Content with {{var}} interpolation"
       });
       
       return [parts];
+    }
+
+// Whitespace as its own node for template content
+WhiteSpace "Whitespace in template"
+  = ws:[ \t\r\n]+ {
+      helpers.debug('WhiteSpace matched', { ws: ws.join('') });
+      return helpers.createNode(NodeType.Text, { content: ws.join('') }, location());
     }
 
 // Unquoted path with @var interpolation (no delimiters)
@@ -158,14 +158,14 @@ DirectCodeContent "Code content without interpolation"
 
 // Path-style interpolation: quotes, brackets, or unquoted
 PathStyleInterpolation "Path interpolation patterns"
-  = LiteralString
+  = LiteralContent
   / BracketContent
   / UnquotedPath
 
 // Template-style interpolation: quotes or double brackets
 TemplateStyleInterpolation "Template interpolation patterns"
-  = rule:LiteralString {
-      helpers.debug('TemplateStyleInterpolation matched LiteralString', { rule });
+  = rule:LiteralContent {
+      helpers.debug('TemplateStyleInterpolation matched LiteralContent', { rule });
       return rule;
     }
   / rule:DoubleBracketContent {
@@ -179,7 +179,7 @@ TemplateStyleInterpolation "Template interpolation patterns"
 
 // Command-style interpolation: all types
 CommandStyleInterpolation "Command interpolation patterns"
-  = LiteralString
+  = LiteralContent
   / BracketContent
   / DoubleBracketContent
   / UnquotedCommand

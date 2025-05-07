@@ -6,7 +6,7 @@ AddDirective
 
 // Section add directive - e.g. @add "# Header" from [path.md] as "## New Title"
 SectionAddDirective
-  = "add" _ sectionTitle:LiteralString _ "from" _ path:WrappedPathContent _ asTitle:AsNewTitle? HWS DirectiveEOL {
+  = "add" _ sectionTitle:LiteralContent _ "from" _ path:WrappedPathContent _ asTitle:AsNewTitle? HWS DirectiveEOL {
       // Process the section title and path
       const sectionTitleNode = sectionTitle[0]; // Get the first node from the array
       const validatedPath = helpers.validatePath(path.parts);
@@ -269,6 +269,6 @@ UnderHeader
 
 // Helper rule for the "as newTitle" part of the Section add directive
 AsNewTitle
-  = _ "as" _ title:LiteralString {
+  = _ "as" _ title:LiteralContent {
       return title;
     }
