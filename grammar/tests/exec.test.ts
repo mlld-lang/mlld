@@ -53,7 +53,7 @@ describe('Exec directive', () => {
       
       expect(directiveNode.raw.identifier).toBe('formatFile');
       expect(directiveNode.raw.params).toEqual(['file', 'type']);
-      expect(directiveNode.raw.command).toBe('fmt {{file}} --type={{type}}');
+      expect(directiveNode.raw.command).toBe('fmt @file --type=@type');
       expect(directiveNode.meta.parameterCount).toBe(2);
       
       // Type guard
