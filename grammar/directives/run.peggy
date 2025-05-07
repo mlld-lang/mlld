@@ -1,35 +1,48 @@
-RunDirective
-  = runCommand / runCode / runExec
+// Core rules that can be used by both top-level directives and RHS directives
 
-// @run [command]
-runCommand
-  = "run" _ command:WrappedCommandContent {
+// Core rule for run command - extract just the command content processing
+RunCommandCore
+  = command:WrappedCommandContent {
       // Calculate if this is a multi-line command by checking for newlines
       const rawCommand = command.raw;
       const isMultiLine = rawCommand.includes('\n');
       
-      // Create values object
-      const values = {
-        command: command.parts
+      return {
+        subtype: 'runCommand',
+        values: {
+          command: command.parts
+        },
+        raw: {
+          command: rawCommand
+        },
+        meta: {
+          isMultiLine: isMultiLine
+        }
       };
-      
-      // Create raw object
-      const raw = {
-        command: rawCommand
-      };
-      
-      // Create meta object
-      const meta = {
-        isMultiLine: isMultiLine
-      };
-      
-      return helpers.createStructuredDirective('run', 'runCommand', values, raw, meta, location(), 'command');
     }
 
-// @run language [code]
-// @run language (arg1, arg2) [code]
-runCode
-  = "run" _ language:Identifier _ args:RunCodeArgs? _ code:WrappedCodeContent {
+// Top-level directive definition
+RunDirective
+  = runCommand / runCode / runExec
+
+// @run [command] - uses the core rule
+runCommand
+  = "run" _ core:RunCommandCore {
+      // Use the core result to create the directive
+      return helpers.createStructuredDirective(
+        'run', 
+        core.subtype, 
+        core.values, 
+        core.raw, 
+        core.meta, 
+        location(), 
+        'command'
+      );
+    }
+
+// Core rule for run code - extract just the code content processing
+RunCodeCore
+  = language:Identifier _ args:RunCodeArgs? _ code:WrappedCodeContent {
       // Create language node
       const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
       
@@ -65,14 +78,32 @@ runCode
         isMultiLine: isMultiLine
       };
       
-      return helpers.createStructuredDirective('run', 'runCode', values, raw, meta, location(), 'code');
+      return {
+        subtype: 'runCode',
+        values: values,
+        raw: raw,
+        meta: meta
+      };
     }
 
-// @run @commandName
-// @run @commandName(arg1, arg2)
-// @run @commandName (arg1, arg2)
-runExec
-  = "run" _ "@" identifier:Identifier _ args:RunExecArgs? HWS DirectiveEOL {
+// @run language [code]
+// @run language (arg1, arg2) [code]
+runCode
+  = "run" _ core:RunCodeCore {
+      return helpers.createStructuredDirective(
+        'run', 
+        core.subtype, 
+        core.values, 
+        core.raw, 
+        core.meta, 
+        location(), 
+        'code'
+      );
+    }
+
+// Core rule for run exec - extracts just the command reference processing
+RunExecCore
+  = "@" identifier:Identifier _ args:RunExecArgs? HWS {
       // Create text node from identifier
       const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
       
@@ -101,8 +132,36 @@ runExec
         argumentCount: processedArgs.length
       };
       
-      return helpers.createStructuredDirective('run', 'runExec', values, raw, meta, location(), 'exec');
+      return {
+        subtype: 'runExec',
+        values: values,
+        raw: raw,
+        meta: meta
+      };
     }
+
+// @run @commandName
+// @run @commandName(arg1, arg2)
+// @run @commandName (arg1, arg2)
+runExec
+  = "run" _ core:RunExecCore DirectiveEOL {
+      return helpers.createStructuredDirective(
+        'run', 
+        core.subtype, 
+        core.values, 
+        core.raw, 
+        core.meta, 
+        location(), 
+        'exec'
+      );
+    }
+
+// A rule that can be used for RHS assignments in exec or text directives
+// This combines all run variants into a single rule that returns structured data
+RunRHS "Right-hand side run directive"
+  = core:RunCommandCore { return core; }
+  / core:RunCodeCore { return core; }
+  / core:RunExecCore { return core; }
 
 // Helper rules for runCode arguments
 RunCodeArgs
@@ -147,86 +206,9 @@ RunExecArg
 // Returns { subtype: '...', ... } structure without 'source' field.
 // This rule is needed for compatibility with the define.peggy file
 _RunRHS
-  = _ cmdRef:CommandReference {
-      const commandObj = {
-        raw: `@${cmdRef.name}${cmdRef.args.length > 0 ? `(${cmdRef.args.map(arg => {
-          if (arg.type === 'string') return `\"${arg.value}\"`;
-          if (arg.type === 'variable') return arg.value.raw || '';
-          return arg.value;
-        }).join(', ')})` : ''}`,
-        name: cmdRef.name,
-        args: cmdRef.args
-      };
-      
-      // Convert args to proper nodes
-      const argNodes = cmdRef.args.map(arg => {
-        if (arg.type === 'string') {
-          return helpers.createNode(NodeType.Text, { content: arg.value }, location());
-        } else if (arg.type === 'variable') {
-          return arg.value;
-        } else {
-          return helpers.createNode(NodeType.Text, { content: arg.value }, location());
-        }
-      });
-      
-      return {
-        subtype: 'runExec',
-        values: {
-          identifier: [helpers.createNode(NodeType.Text, { content: cmdRef.name }, location())],
-          args: argNodes
-        },
-        raw: {
-          identifier: cmdRef.name,
-          args: cmdRef.args.map(arg => arg.type === 'string' ? arg.value : 
-                              arg.type === 'variable' ? arg.value.identifier : arg.value)
-        },
-        meta: {
-          argumentCount: cmdRef.args.length
-        }
-      };
-    }
-  / _ lang:Identifier _ params:RunVariableParams? _ code:WrappedCodeContent _[ \t]* {
-      // Create language node and get code content
-      const langNode = helpers.createNode(NodeType.Text, { content: lang }, location());
-      const rawCode = code.raw;
-      const isMultiLine = rawCode.includes('\n');
-      
-      // runCode subtype
-      return {
-        subtype: 'runCode',
-        values: {
-          lang: [langNode],
-          args: params || [],
-          code: code.parts
-        },
-        raw: {
-          lang,
-          args: params ? params.map(p => p.identifier) : [],
-          code: rawCode
-        },
-        meta: {
-          isMultiLine: isMultiLine
-        }
-      };
-    }
-  / _ command:WrappedCommandContent _[ \t]* {
-      // Simple command case (no language)
-      const rawCommand = command.raw;
-      const isMultiLine = rawCommand.includes('\n');
-      
-      // runCommand subtype
-      return {
-        subtype: 'runCommand',
-        values: {
-          command: command.parts
-        },
-        raw: {
-          command: rawCommand
-        },
-        meta: {
-          isMultiLine: isMultiLine
-        }
-      };
+  = _ "@run" _ rhsDirective:RunRHS {
+      // This uses our newly unified RunRHS rule
+      return rhsDirective;
     }
 
 CommandReference

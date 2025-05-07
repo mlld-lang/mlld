@@ -94,9 +94,16 @@ LiteralContent "Literal content without interpolation"
       return [helpers.createNode(NodeType.Text, { content }, location())];
     }
 
+// Special text segment for command content that allows quotes and most characters
+CommandTextSegment "Command text segment"
+  = chars:$(![/\]@${}] .)+ { 
+      helpers.debug('CommandTextSegment matched', { chars });
+      return helpers.createNode(NodeType.Text, { content: chars }, location());
+    }
+
 // Content inside single brackets with @var interpolation
 BracketContent "Content with @var interpolation"
-  = '[' parts:(AtVar / TextSegment / PathSeparator)* ']' {
+  = '[' parts:(AtVar / CommandTextSegment / PathSeparator)* ']' {
       // Return only the content within brackets, not the brackets themselves
       return parts;
     }

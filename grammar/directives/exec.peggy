@@ -3,13 +3,7 @@ ExecDirective
 
 // @exec identifier (param1, param2) = @run [command]
 execCommand
-  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ runValue:("@run" _ command:WrappedCommandContent {
-      return {
-        type: "command",
-        parts: command.parts,
-        raw: command.raw
-      };
-    }) HWS DirectiveEOL {
+  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ core:RunCommandCore HWS DirectiveEOL {
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
       
@@ -23,14 +17,14 @@ execCommand
         return '';
       });
       
-      // Get command content from the runValue structure
-      const rawCommand = runValue.raw;
+      // Get command content from the core rule
+      const rawCommand = core.raw.command;
       
       // Create values object
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        command: runValue.parts
+        command: core.values.command
       };
       
       // Create raw object
@@ -57,21 +51,12 @@ execCommand
 
 // @exec identifier (param1, param2) = @run language [code]
 execCode
-  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ runLangValue:("@run" _ language:Identifier _ code:WrappedCodeContent {
-      return {
-        type: "code",
-        language: language,
-        parts: code.parts,
-        raw: code.raw
-      };
-    }) HWS DirectiveEOL {
+  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ core:RunCodeCore HWS DirectiveEOL {
       // Create nodes
       const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
-      const languageNode = helpers.createNode(NodeType.Text, { content: runLangValue.language }, location());
       
       // Calculate raw strings
       const rawIdentifier = identifier;
-      const rawLanguage = runLangValue.language;
       
       // Process parameters
       const processedParams = params || [];
@@ -80,23 +65,20 @@ execCode
         return '';
       });
       
-      // Process code - get code content from runLangValue
-      const rawCode = runLangValue.raw || '';
-      
-      // Create values object
+      // Create values object - using core values
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        lang: [languageNode],
-        code: runLangValue.parts
+        lang: core.values.lang,
+        code: core.values.code
       };
       
-      // Create raw object
+      // Create raw object - using core raw values
       const raw = {
         identifier: rawIdentifier,
         params: rawParams,
-        lang: rawLanguage,
-        code: rawCode
+        lang: core.raw.lang,
+        code: core.raw.code
       };
       
       // Create meta object
@@ -116,7 +98,7 @@ execCode
 
 // @exec identifier (param1, param2) = @run runExec variant
 execRunExec
-  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" runExec:_RunRHS {
+  = "exec" _ identifier:Identifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ core:RunExecCore {
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: identifier }, location());
       
@@ -127,71 +109,28 @@ execRunExec
         return '';
       });
       
-      // Create values object and raw object based on runExec subtype
-      let values, raw, metaObj;
-      let subtype = 'execCommand'; // Default subtype
+      // Using the RunExecCore directly, which is guaranteed to be a runExec subtype
+      const values = {
+        identifier: [identifierNode],
+        params: processedParams,
+        commandRef: core.values.identifier,
+        args: core.values.args
+      };
       
-      if (runExec.subtype === 'runExec') {
-        // Handle the case for runExec
-        values = {
-          identifier: [identifierNode],
-          params: processedParams,
-          commandRef: runExec.values.identifier,
-          args: runExec.values.args
-        };
-        
-        raw = {
-          identifier: identifier,
-          params: rawParams,
-          commandRef: runExec.raw.identifier,
-          args: runExec.raw.args
-        };
-        
-        metaObj = {
-          parameterCount: processedParams.length,
-          argumentCount: runExec.meta.argumentCount
-        };
-      } else if (runExec.subtype === 'runCode') {
-        // Handle the case for runCode
-        values = {
-          identifier: [identifierNode],
-          params: processedParams,
-          lang: runExec.values.lang,
-          code: runExec.values.code
-        };
-        
-        raw = {
-          identifier: identifier,
-          params: rawParams,
-          lang: runExec.raw.lang,
-          code: runExec.raw.code
-        };
-        
-        metaObj = {
-          parameterCount: processedParams.length,
-          isMultiLine: runExec.meta.isMultiLine
-        };
-        
-        subtype = 'execCode';
-      } else {
-        // Default to runCommand
-        values = {
-          identifier: [identifierNode],
-          params: processedParams,
-          command: runExec.values.command
-        };
-        
-        raw = {
-          identifier: identifier,
-          params: rawParams,
-          command: runExec.raw.command
-        };
-        
-        metaObj = {
-          parameterCount: processedParams.length,
-          isMultiLine: runExec.meta.isMultiLine
-        };
-      }
+      const raw = {
+        identifier: identifier,
+        params: rawParams,
+        commandRef: core.raw.identifier,
+        args: core.raw.args
+      };
+      
+      const metaObj = {
+        parameterCount: processedParams.length,
+        argumentCount: core.meta.argumentCount
+      };
+      
+      // We know the subtype is execCommand with command reference
+      const subtype = 'execCommand';
       
       // Add metadata if present
       if (meta) {
