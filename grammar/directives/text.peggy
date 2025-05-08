@@ -31,9 +31,20 @@ AtText
       );
     }
   / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ runCommand:RunDirectiveRef {
+      // Hardcoded values to start with (same as before)
+      const subtype = 'textAssignment';
+      const sourceType = 'directive';
+      
+      // Create meta object with hardcoded values for now
+      const meta = { 
+        sourceType: sourceType,
+        directive: 'run',
+        hasVariables: false
+      };
+      
       return helpers.createStructuredDirective(
         'text',
-        'textAssignment',
+        subtype,
         {
           identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
           content: runCommand
@@ -42,10 +53,7 @@ AtText
           identifier: id,
           content: `@run ${runCommand.raw.command || ''}`
         },
-        {
-          sourceType: 'directive',
-          directive: 'run'
-        },
+        meta,
         location(),
         'run'
       );
