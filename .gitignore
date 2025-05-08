@@ -79,3 +79,5 @@ d.ts.map
 
 .env
 **/.claude/settings.local.json
+
+debug-combined-grammar.peggy
