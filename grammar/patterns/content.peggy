@@ -1,80 +1,35 @@
-// MELD WRAPPED CONTENT PATTERNS
-// A comprehensive system for handling interpolation in different contexts
+// MELD CONTENT PATTERNS
+// A comprehensive system for handling text segments and interpolation in different contexts
 
 /* 
 # Pattern Hierarchy
 
-WrappedPathContent (Used by: path, import, exec, add)
-├── Direct quote handling (double, single or backtick quotes)
-│   ├── AtVar
-│   ├── InterpolationVar
-│   ├── PathSeparator
-│   └── QuotedText
-└── PathStyleInterpolation (for unquoted values)
-    ├── LiteralContent (quotes, properly excluded from content)
-    ├── BracketContent (handles [..] with @var)
-    │   ├── AtVar
-    │   ├── PathSeparator
-    │   └── TextSegment (for non-variable text)
-    └── UnquotedPath (for paths without any delimiters)
-        ├── AtVar
-        ├── PathSeparator
-        └── TextSegment
-
-WrappedTemplateContent (Used by: text, add)
-├── TemplateStyleInterpolation
-│   ├── LiteralContent (handles quotes, removes them)
-│   └── DoubleBracketContent (handles [[..]] with {{var}})
-│       ├── InterpolationVar
-│       └── TextSegment
-
-WrappedCommandContent (Used by: run, exec)
-├── CommandStyleInterpolation
-│   ├── LiteralContent
-│   ├── BracketContent
-│   ├── DoubleBracketContent
-│   └── UnquotedCommand
-│       ├── AtVar
-│       └── TextSegment
-
-WrappedCodeContent (Used by: run, exec)
-└── DirectCodeContent (no variable interpolation)
-
-IMPORTANT:
-- Delimiters (quotes, brackets) are handled at the pattern level
-- They define content boundaries and are NOT included in the AST
-- Each pattern has ONE responsibility (e.g., quote handling, bracket handling)
-- No string manipulation should happen after parsing
+CONTENT TYPES
+├── PathContent (Used by: path, import, exec, add)
+│   ├── Quoted content (double, single or backtick quotes)
+│   └── Unquoted content with variable interpolation
+│       ├── Bracketed content [with @var]
+│       └── Plain path segments with @var
+│
+├── TemplateContent (Used by: text, add)
+│   ├── Quoted literal content (no interpolation)
+│   └── Content with variable interpolation
+│       ├── Double bracket content [[with {{var}}]]
+│       └── Direct {{var}} references
+│
+├── CommandContent (Used by: run, exec)
+│   ├── Quoted literal commands 
+│   ├── Bracketed command segments
+│   └── Unquoted command with variables
+│
+└── CodeContent (Used by: run, exec)
+    └── Literal code blocks
 */
 
-// -------------------------------------------------------------
-// BASE PATTERNS - Atomic elements used by higher-level patterns
-// -------------------------------------------------------------
-
-// Simple text segment without any special characters
-TextSegment "Plain text segment"
-  = chars:$(![ \t\r\n/\]@${{}"'`] .)+ { 
-      helpers.debug('TextSegment matched', { chars });
-      return helpers.createNode(NodeType.Text, { content: chars }, location());
-    }
-
-// Path separator character as a distinct node
-PathSeparator "Path separator"
-  = '/' { 
-      return helpers.createNode(NodeType.PathSeparator, { value: '/' }, location()); 
-    }
-
-// Section marker character as a distinct node
-SectionMarker "Section marker"
-  = '#' { 
-      return helpers.createNode(NodeType.SectionMarker, { value: '#' }, location()); 
-    }
-
-// @var variable reference (directly uses AtVar from variable-access.peggy)
-// Note: @var is an imported rule defined in variable-access.peggy
-
-// {{var}} variable interpolation (directly uses InterpolationVar from variable-access.peggy)
-// Note: InterpolationVar is an imported rule defined in variable-access.peggy
+// Import base definitions
+import './base/tokens.peggy';
+import './base/segments.peggy';
+import './patterns/variables.peggy';
 
 // -------------------------------------------------------------
 // MID-LEVEL PATTERNS - Handle delimiters and basic structures
@@ -94,20 +49,6 @@ LiteralContent "Literal content without interpolation"
       return [helpers.createNode(NodeType.Text, { content }, location())];
     }
 
-// Special text segment for command content that allows quotes and most characters
-CommandTextSegment "Command text segment"
-  = chars:$(![/\]@${}] .)+ { 
-      helpers.debug('CommandTextSegment matched', { chars });
-      return helpers.createNode(NodeType.Text, { content: chars }, location());
-    }
-
-// Special text segment for template content that allows most characters except interpolation
-TemplateTextSegment "Template text segment"
-  = chars:$(!('{{' / '}}' / '[[' / ']]') .)+ { 
-      helpers.debug('TemplateTextSegment matched', { chars });
-      return helpers.createNode(NodeType.Text, { content: chars }, location());
-    }
-
 // Content inside single brackets with @var interpolation
 BracketContent "Content with @var interpolation"
   = '[' parts:(AtVar / CommandTextSegment / PathSeparator)* ']' {
@@ -117,8 +58,7 @@ BracketContent "Content with @var interpolation"
 
 // Content inside double brackets with {{var}} interpolation
 DoubleBracketContent "Content with {{var}} interpolation"
-  = &{ helpers.debug('Trying to match DoubleBracketContent with [[...]]'); return true; }
-    '[[' parts:(InterpolationVar / TemplateTextSegment)* ']]' {
+  = '[[' parts:(InterpolationVar / TemplateTextSegment)* ']]' {
       helpers.debug('DoubleBracketContent matched [[...]]', { 
         parts: parts,
         isArray: Array.isArray(parts),
@@ -141,13 +81,13 @@ DoubleBracketContent "Content with {{var}} interpolation"
 
 // Unquoted path with @var interpolation (no delimiters)
 UnquotedPath "Unquoted path with @var interpolation"
-  = parts:(AtVar / TextSegment / PathSeparator)+ {
+  = parts:(AtVar / BaseTextSegment / PathSeparator)+ {
       return parts;
     }
 
 // Unquoted command with @var interpolation (no delimiters)
 UnquotedCommand "Unquoted command with @var interpolation"
-  = parts:(AtVar / TextSegment)+ {
+  = parts:(AtVar / BaseTextSegment)+ {
       return parts;
     }
 
@@ -173,8 +113,7 @@ PathStyleInterpolation "Path interpolation patterns"
 
 // Template-style interpolation: quotes or double brackets
 TemplateStyleInterpolation "Template interpolation patterns"
-  = &{ helpers.debug('Trying to match TemplateStyleInterpolation...'); return true; }
-    // Direct handling of double bracket content as first alternative
+  = // Direct handling of double bracket content as first alternative
     '[[' content:(InterpolationVar / TemplateTextSegment)* ']]' {
       helpers.debug('TemplateStyleInterpolation matched [[...]] directly', { 
         content, 
@@ -187,8 +126,7 @@ TemplateStyleInterpolation "Template interpolation patterns"
       helpers.debug('TemplateStyleInterpolation matched LiteralContent', { rule });
       return rule;
     }
-  / &{ helpers.debug('Trying DoubleBracketContent in TemplateStyleInterpolation...'); return true; }
-    rule:DoubleBracketContent {
+  / rule:DoubleBracketContent {
       helpers.debug('TemplateStyleInterpolation matched DoubleBracketContent', { 
         rule, 
         isArray: Array.isArray(rule),
@@ -222,8 +160,7 @@ WrappedPathContent "Wrapped path content"
 
 // For templates in text, add directives
 WrappedTemplateContent "Wrapped template content"
-  = &{ helpers.debug('Trying to match WrappedTemplateContent...'); return true; }
-    content:TemplateStyleInterpolation {
+  = content:TemplateStyleInterpolation {
       helpers.debug('WrappedTemplateContent matched', { 
         contentType: typeof content,
         isArray: Array.isArray(content),
