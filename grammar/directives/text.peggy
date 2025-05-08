@@ -8,6 +8,12 @@ AtText
       const subtype = 'textAssignment';
       const sourceType = 'literal';
       
+      // Create meta object with hardcoded values for now
+      const meta = { 
+        sourceType: sourceType,
+        hasVariables: false
+      };
+      
       return helpers.createStructuredDirective(
         'text',
         subtype,
@@ -19,9 +25,7 @@ AtText
           identifier: id,
           content: template.raw.content
         },
-        { 
-          sourceType: sourceType
-        },
+        meta,
         location(),
         sourceType
       );
