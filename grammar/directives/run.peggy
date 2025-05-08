@@ -20,44 +20,17 @@ It can be used in three main forms:
 
 // Primary @run directive 
 AtRun
-  = DirectiveContext "@run" _ language:RunCodeLanguage _ args:RunCodeArgs? _ code:DirectCodeContent {
-      helpers.debug('AtRun matched language code block', { language, args, code });
+  = DirectiveContext "@run" _ runCode:RunLanguageCodeCore {
+      helpers.debug('AtRun matched language code block using shared abstraction', runCode);
       
-      // Create language node
-      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
-      
-      // Process code content
-      // The code is in a bracketed format [...]
-      const codeContent = code[0].content;
-      
-      // Add language and args to values
-      const values = {
-        lang: [langNode],
-        args: args || [],
-        code: code
-      };
-      
-      // Add language and args to raw representation
-      const raw = {
-        lang: language,
-        args: args ? args.map(arg => arg.identifier || '') : [],
-        code: codeContent
-      };
-      
-      // Add metadata
-      const meta = {
-        isMultiLine: codeContent.includes('\n'),
-        language: language,
-        isBracketed: true
-      };
-      
+      // Since we're using the shared abstraction, we just need to format it for this context
       return helpers.createStructuredDirective(
         'run',
         'runCode',
-        values,
-        raw,
-        meta,
-        location(),
+        runCode.values,
+        runCode.raw,
+        runCode.meta,
+        runCode.location,
         'code'  // Source parameter
       );
     }
@@ -106,33 +79,20 @@ AtRun
 
 // Run directive reference in RHS contexts (nested in other directives)
 RunDirectiveRef
-  = language:RunCodeLanguage _ code:DirectCodeContent {
-      helpers.debug('RunDirectiveRef matched code in RHS', { language, code });
+  = RunCodeBlockContext runCode:RunLanguageCodeCore {
+      helpers.debug('RunDirectiveRef matched code in RHS using shared abstraction', runCode);
       
-      // Create language node
-      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
-      
-      // Process code content
-      const codeContent = code[0].content;
-      
+      // Use the shared abstraction but add RHS-specific metadata
       return helpers.createStructuredDirective(
         'run',
         'runCode',
-        {
-          lang: [langNode],
-          code: code
-        },
-        {
-          lang: language,
-          code: codeContent
-        },
+        runCode.values,
+        runCode.raw,
         { 
-          isRHSRef: true,
-          language: language,
-          isMultiLine: codeContent.includes('\n'),
-          isBracketed: true
+          ...runCode.meta,
+          isRHSRef: true
         },
-        location()
+        runCode.location
       );
     }
   / command:CommandCore {
@@ -155,23 +115,6 @@ RunDirectiveRef
 // -------------------------------------------------------------
 // HELPER RULES
 // -------------------------------------------------------------
-
-
-// Optional arguments for code blocks
-RunCodeArgs
-  = "(" _ args:RunArgsList? _ ")" {
-      return args || [];
-    }
-
-RunArgsList
-  = first:RunArg rest:(_ "," _ arg:RunArg { return arg; })* {
-      return [first, ...rest];
-    }
-
-RunArg
-  = varName:BaseIdentifier {
-      return helpers.createVariableReferenceNode('varInterpolation', { identifier: varName }, location());
-    }
 
 // Command reference structure (for @run @command)
 RunCommandReference

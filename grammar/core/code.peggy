@@ -12,6 +12,10 @@ Code blocks can be:
 - Bracketed with [...] for multi-line code
 - Unbracketed for simple expressions
 - Without variable interpolation (unlike commands)
+
+This file includes the RunLanguageCodeCore abstraction which provides a unified
+handling of language + code block patterns that can be used consistently in both
+top-level directive contexts and RHS contexts.
 */
 
 
@@ -82,6 +86,56 @@ LanguageCodeCore
       };
     }
 
+// -------------------------------------------------------------
+// RUN LANGUAGE CODE CORE - Unified language + code block pattern
+// -------------------------------------------------------------
+
+// This is the key abstraction that can be used by both run.peggy and exec.peggy
+// for consistent handling of language + code block patterns in different contexts
+RunLanguageCodeCore
+  = language:RunCodeLanguage _ args:RunCodeArgs? _ code:DirectCodeContent {
+      helpers.debug('RunLanguageCodeCore matched', { language, args, code });
+      
+      // Create language node
+      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      
+      // Process code content - get from bracketed content
+      const codeContent = code[0].content;
+      
+      // Build values and raw objects
+      const values = {
+        lang: [langNode],
+        args: args || [],
+        code: code
+      };
+      
+      const raw = {
+        lang: language,
+        args: args ? args.map(arg => arg.identifier || '') : [],
+        code: codeContent
+      };
+      
+      // Add metadata
+      const meta = {
+        isMultiLine: codeContent.includes('\n'),
+        language: language,
+        isBracketed: true
+      };
+      
+      // Return a structured result that can be used by both directives
+      return {
+        type: 'runCode',
+        values,
+        raw,
+        meta,
+        location: location()
+      };
+    }
+
+// -------------------------------------------------------------
+// SHARED CODE HELPERS
+// -------------------------------------------------------------
+
 // Simple code language identifier
 CodeLanguage
   = lang:$(BaseIdentifier ("." BaseIdentifier)*) {
@@ -92,4 +146,20 @@ CodeLanguage
 RunCodeLanguage
   = language:BaseIdentifier {
       return language;
+    }
+
+// Optional arguments for code blocks
+RunCodeArgs
+  = "(" _ args:RunArgsList? _ ")" {
+      return args || [];
+    }
+
+RunArgsList
+  = first:RunArg rest:(_ "," _ arg:RunArg { return arg; })* {
+      return [first, ...rest];
+    }
+
+RunArg
+  = varName:BaseIdentifier {
+      return helpers.createVariableReferenceNode('varInterpolation', { identifier: varName }, location());
     }
