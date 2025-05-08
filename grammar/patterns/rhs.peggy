@@ -128,10 +128,10 @@ DataValue
         value
       };
     }
-  / var:InterpolationVar {
+  / varRef:InterpolationVar {
       return {
         type: 'variable',
-        reference: var
+        reference: varRef
       };
     }
 
