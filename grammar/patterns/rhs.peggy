@@ -31,12 +31,12 @@ IsInRHS "In right-hand side of assignment"
 
 // RHS value for @text directive
 TextRHS
-  = "@run" IsInRHS _ RunDirectiveRef {
+  = "@run" _ RunDirectiveRef {
       // Handle nested @run directive
       helpers.debug('TextRHS matched @run reference');
       return { type: 'directive', directive: 'run' };
     }
-  / "@add" IsInRHS _ AddDirectiveRef {
+  / "@add" _ AddDirectiveRef {
       // Handle nested @add directive
       helpers.debug('TextRHS matched @add reference');
       return { type: 'directive', directive: 'add' };

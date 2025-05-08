@@ -126,11 +126,24 @@ TemplateStyleInterpolation "Template interpolation patterns"
         isArray: Array.isArray(content),
         length: Array.isArray(content) ? content.length : 'not array'
       });
-      return content;
+      
+      // Instead of returning just the content, return an object with content and wrapper type
+      return {
+        content: content,
+        wrapperType: 'doubleBracket'
+      };
     }  
   / rule:LiteralContent {
       helpers.debug('TemplateStyleInterpolation matched LiteralContent', { rule });
-      return rule;
+      
+      // If this is a quote-wrapped literal, determine its quote type
+      let wrapperType = 'none';
+      
+      // For now, just mark it as not a template wrapper
+      return {
+        content: rule,
+        wrapperType: wrapperType
+      };
     }
   / rule:DoubleBracketContent {
       helpers.debug('TemplateStyleInterpolation matched DoubleBracketContent', { 
@@ -138,7 +151,11 @@ TemplateStyleInterpolation "Template interpolation patterns"
         isArray: Array.isArray(rule),
         length: Array.isArray(rule) ? rule.length : 'not array'
       });
-      return rule;
+      
+      return {
+        content: rule,
+        wrapperType: 'doubleBracket'
+      };
     }
 
 // Command-style interpolation: all types
@@ -171,15 +188,17 @@ WrappedTemplateContent "Wrapped template content"
         contentType: typeof content,
         isArray: Array.isArray(content),
         contentLength: Array.isArray(content) ? content.length : 'not array',
-        firstItemType: Array.isArray(content) && content.length > 0 ? content[0].type : 'no items'
+        firstItemType: Array.isArray(content.content) && content.content.length > 0 ? content.content[0].type : 'no items',
+        wrapperType: content.wrapperType
       });
       
       // Construct raw string from the content nodes
-      const rawString = helpers.reconstructRawString(content);
+      const rawString = helpers.reconstructRawString(content.content);
       
       return {
-        parts: content,
-        raw: rawString
+        parts: content.content,
+        raw: rawString,
+        wrapperType: content.wrapperType
       };
     }
 

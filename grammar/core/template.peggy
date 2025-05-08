@@ -23,6 +23,16 @@ TemplateCore
   = template:WrappedTemplateContent {
       helpers.debug('TemplateCore matched template', { template });
     
+      // Determine if this content has variables
+      const hasVariables = template.parts.some(part => 
+        part && part.type === NodeType.VariableReference
+      );
+      
+      // Use wrapper type to determine if this is template content
+      // Double brackets [[...]] always indicate template content
+      // For now, use direct string comparison rather than WrapperType constant
+      const isTemplateContent = template.wrapperType === 'doubleBracket';
+    
       // Structure for outputting a template
       return {
         type: 'template',
@@ -34,9 +44,9 @@ TemplateCore
           content: template.raw 
         },
         meta: {
-          hasVariables: template.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
+          hasVariables: hasVariables,
+          isTemplateContent: isTemplateContent,
+          wrapperType: template.wrapperType
         }
       };
     }

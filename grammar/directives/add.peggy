@@ -21,7 +21,56 @@ It can be used in these forms:
 
 // Primary @add directive with all variants
 AtAdd
-  = DirectiveContext "@add" _ template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  = DirectiveContext "@add" _ sectionTitle:QuotedContent _ "from" _ path:PathCore _ asTitle:AsNewTitle? {
+      // This rule should match section syntax FIRST before the template rule below
+      helpers.debug('AtAdd matched section', { sectionTitle, path, asTitle });
+      
+      // Process the section title and path
+      const sectionTitleNode = sectionTitle[0]; // Get the first node from the array
+      
+      // Create values object
+      const values = {
+        sectionTitle: sectionTitle,
+        path: path.values.path
+      };
+      
+      // Add new title if provided
+      if (asTitle) {
+        values.newTitle = asTitle;
+      }
+      
+      // Create raw object
+      const raw = {
+        sectionTitle: sectionTitleNode.content,
+        path: path.raw.path
+      };
+      
+      // Add new title to raw if present
+      if (asTitle) {
+        raw.newTitle = asTitle[0].content;
+      }
+      
+      // Create meta object with path metadata
+      const meta = {
+        path: {
+          hasVariables: path.meta.hasVariables,
+          isAbsolute: path.meta.isAbsolute,
+          hasExtension: path.meta.hasExtension,
+          extension: path.meta.extension
+        }
+      };
+      
+      return helpers.createStructuredDirective(
+        'add', 
+        'addSection', 
+        values, 
+        raw, 
+        meta, 
+        location(),
+        'section'  // Added source parameter
+      );
+    }
+  / DirectiveContext "@add" _ template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched template content', { template, headerLevel, underHeader });
       
       // Extract header level and under header if provided
@@ -196,54 +245,6 @@ AtAdd
         'path'  // Added source parameter
       );
     }
-  / DirectiveContext "@add" _ sectionTitle:QuotedContent _ "from" _ path:PathCore _ asTitle:AsNewTitle? {
-      helpers.debug('AtAdd matched section', { sectionTitle, path, asTitle });
-      
-      // Process the section title and path
-      const sectionTitleNode = sectionTitle[0]; // Get the first node from the array
-      
-      // Create values object
-      const values = {
-        sectionTitle: sectionTitle,
-        path: path.values.path
-      };
-      
-      // Add new title if provided
-      if (asTitle) {
-        values.newTitle = asTitle;
-      }
-      
-      // Create raw object
-      const raw = {
-        sectionTitle: sectionTitleNode.content,
-        path: path.raw.path
-      };
-      
-      // Add new title to raw if present
-      if (asTitle) {
-        raw.newTitle = asTitle[0].content;
-      }
-      
-      // Create meta object with path metadata
-      const meta = {
-        path: {
-          hasVariables: path.meta.hasVariables,
-          isAbsolute: path.meta.isAbsolute,
-          hasExtension: path.meta.hasExtension,
-          extension: path.meta.extension
-        }
-      };
-      
-      return helpers.createStructuredDirective(
-        'add', 
-        'addSection', 
-        values, 
-        raw, 
-        meta, 
-        location(),
-        'section'  // Added source parameter
-      );
-    }
 
 // -------------------------------------------------------------
 // HELPER RULES
@@ -251,7 +252,20 @@ AtAdd
 
 // Reference for other directives to use
 AddDirectiveRef
-  = RHSContext _ path:$([^\r\n]*) {
+  = RHSContext _ path:WrappedPathContent {
+      return {
+        subtype: 'addPath',
+        values: { path: path.parts },
+        raw: { path: path.raw },
+        meta: { 
+          path: {
+            hasVariables: path.parts.some(part => part && part.type === NodeType.VariableReference)
+          }
+        }
+      };
+    }
+  / RHSContext _ path:$([^\r\n]*) {
+      // Fallback for simple path text
       return {
         subtype: 'addPath',
         values: { path: [helpers.createNode(NodeType.Text, { content: path }, location())] },

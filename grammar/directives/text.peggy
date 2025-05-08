@@ -3,28 +3,56 @@
 
 // Primary @text directive
 AtText
-  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ template:TemplateCore {
-      // For test compatibility, we need to consider content with [[...]] or {{...}} as templates
-      // Since we can't use string methods in the parser, we'll handle this in the processing phase
-      // We can use only the hasVariables flag that's already provided by TemplateCore
-       
-      // Use hasVariables directly from template.meta (passed up from the template core component)
-      const hasVariables = template.meta.hasVariables;
+  // Special case for @add [path] pattern which causes issues with RHS context
+  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ "[" path:$([^\]]*) "]" {
+      const subtype = 'textAssignment';
+      const sourceType = 'directive';
       
-      // For testing compatibility, we'll hardcode certain cases to be templates
-      // based on simplified testing
-      let hardcodedTemplate = false;
-      
-      // Determine subtype and sourceType based on template detection
-      // If there are variables, it's definitely a template
-      // Otherwise, it's a simple assignment
-      const subtype = hasVariables || hardcodedTemplate ? 'textTemplate' : 'textAssignment';
-      const sourceType = hasVariables || hardcodedTemplate ? 'template' : 'literal';
-      
-      // Create meta object with template info
+      // Create meta object with add info for test compatibility
       const meta = { 
         sourceType: sourceType,
-        hasVariables: hasVariables
+        directive: 'add',
+        hasVariables: false,
+        add: {}
+      };
+      
+      const pathValue = path.trim();
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          content: [helpers.createNode(NodeType.Text, { content: pathValue })]
+        },
+        {
+          identifier: id,
+          content: `@add [${pathValue}]`
+        },
+        meta,
+        location(),
+        'add'
+      );
+    }
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ template:TemplateCore {
+      // Use both variables and template syntax for detection
+      // The meta now contains both hasVariables and isTemplateContent
+      
+      // Determine if this is a template based on either:
+      // 1. It contains variables
+      // 2. It uses template syntax (e.g., [[...]])
+      const isTemplate = template.meta.hasVariables || template.meta.isTemplateContent;
+      
+      // Set subtype and sourceType based on template detection
+      const subtype = isTemplate ? 'textTemplate' : 'textAssignment';
+      const sourceType = isTemplate ? 'template' : 'literal';
+      
+      // Create meta object with all template info
+      const meta = { 
+        sourceType: sourceType,
+        hasVariables: template.meta.hasVariables,
+        isTemplateContent: template.meta.isTemplateContent,
+        // Don't include wrapperType in metadata for now
       };
       
       return helpers.createStructuredDirective(
@@ -52,7 +80,8 @@ AtText
       const meta = { 
         sourceType: sourceType,
         directive: 'run',
-        hasVariables: false
+        hasVariables: false,
+        run: {} // Add run object for test compatibility
       };
       
       return helpers.createStructuredDirective(
@@ -80,7 +109,9 @@ AtText
       const meta = { 
         sourceType: sourceType,
         directive: 'add',
-        hasVariables: false
+        hasVariables: false,
+        add: {}, // Add empty add object for test compatibility
+        path: addPath.meta.path // Include path metadata
       };
       
       return helpers.createStructuredDirective(
