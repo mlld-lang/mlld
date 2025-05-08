@@ -4,37 +4,24 @@ This directory contains structured documentation for the Meld grammar, AST struc
 
 ## Directory Structure
 
-The documentation is organized by directive kind and subtype:
+The documentation is organized by directive kind with comprehensive documentation for each directive:
 
 ```
 /grammar
   /docs
     README.md              # This file - overview and navigation
-    PLAN.md                # Implementation plan and roadmap
     
-    # Directive overview files
-    import.md              # Import directive overview
-    text.md                # Text directive overview
-    path.md                # Path directive overview
-    data.md                # Data directive overview
-    add.md                 # Add directive overview
-    
-    # Subtype documentation files
-    importAll.md           # ImportAll subtype documentation
-    importSelected.md      # ImportSelected subtype documentation
-    textAssignment.md      # TextAssignment subtype documentation
-    textTemplate.md        # TextTemplate subtype documentation
-    pathAssignment.md      # PathAssignment subtype documentation
-    addPath.md             # AddPath subtype documentation
-    addTemplate.md         # AddTemplate subtype documentation
-    addVariable.md         # AddVariable subtype documentation
-    
-    # Process documentation
-    PLAN.md                # Implementation plan and roadmap
-    SYNTAX-STANDARDIZATION.md
-    PATHS.md
-    ... (other supporting documentation)
+    # Directive documentation files
+    import.md              # Import directive with all subtypes
+    text.md                # Text directive with all subtypes
+    path.md                # Path directive with all subtypes
+    data.md                # Data directive with all subtypes 
+    add.md                 # Add directive with all subtypes
+    run.md                 # Run directive with all subtypes
+    exec.md                # Exec directive with all subtypes
 ```
+
+> **NOTE**: We are in the process of consolidating all subtype-specific documentation into the main directive documentation files. For example, `importAll.md` and `importSelected.md` content will be combined into a comprehensive `import.md` document.
 
 This structure is mirrored in the implementation directories:
 
@@ -42,35 +29,29 @@ This structure is mirrored in the implementation directories:
 /grammar
   /directives              # Peggy grammar files
   /types                   # TypeScript type definitions
-  /fixtures                # Test fixtures and examples
   /tests                   # Test implementation
 ```
 
-Each of these implementation directories follows the same pattern of organization by directive kind and subtype.
+Each of these implementation directories follows the same pattern of organization by directive kind.
 
 ## Documentation Format
 
-### Directive Overview (e.g. `import.md`)
+### Directive Documentation (e.g. `import.md`)
 
-Each directive has an overview document that covers:
+Each directive document provides comprehensive information on:
 
 - Purpose and general usage
 - Syntax patterns and variations
-- Supported subtypes
+- Supported subtypes with detailed documentation for each:
+  - Specific syntax format for each subtype
+  - AST structure details
+  - Values object structure and content
+  - Raw object structure and capture
+  - Metadata requirements
+  - Example AST outputs
+  - Edge cases and special handling
 - Common AST structure elements
 - General handler behavior
-
-### Subtype Documentation (e.g. `import.importAll.md`)
-
-Each subtype has a dedicated document that provides:
-
-- Specific syntax format
-- AST structure details
-- Values object structure and content
-- Raw object structure and capture
-- Metadata requirements
-- Example AST outputs
-- Edge cases and special handling
 
 ## AST Structure
 
@@ -124,6 +105,5 @@ The grammar implementation follows the same structure:
 
 ## Related Documentation
 
-- [Implementation Plan](./PLAN.md) - Detailed implementation roadmap
 - Core AST Types - [TypeScript definitions](/core/syntax/types/nodes.ts)
 - Grammar Generation - [Build process](/grammar/build-grammar.mjs)
