@@ -12,13 +12,8 @@ It can be used in these forms:
 4. @add "# Header" from [path.md] as "# New" - Add a specific section from a file
 */
 
-// Import context predicates and core content handlers
-import './base/context.peggy';
-import './base/tokens.peggy';
-import './base/whitespace.peggy';
-import './patterns/variables.peggy';
-import './core/template.peggy';
-import './core/path.peggy';
+// Core content handlers (context, tokens, whitespace, variables, template, path)
+// are automatically included by the build process - no imports needed
 
 // -------------------------------------------------------------
 // TOP-LEVEL ADD DIRECTIVE

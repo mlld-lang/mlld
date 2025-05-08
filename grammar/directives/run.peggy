@@ -11,13 +11,8 @@ It can be used in three main forms:
 3. @run @commandVariable      - Execute a previously defined command/code reference
 */
 
-// Import context predicates and core content handlers
-import './base/context.peggy';
-import './base/tokens.peggy';
-import './base/whitespace.peggy';
-import './patterns/variables.peggy';
-import './core/command.peggy';
-import './core/code.peggy';
+// Core content handlers (context, tokens, whitespace, variables, command, code)
+// are automatically included by the build process - no imports needed
 
 // -------------------------------------------------------------
 // TOP-LEVEL RUN DIRECTIVE
