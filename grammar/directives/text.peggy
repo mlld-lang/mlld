@@ -59,9 +59,20 @@ AtText
       );
     }
   / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ addPath:AddDirectiveRef {
+      // Hardcoded values to start with (same as before)
+      const subtype = 'textAssignment';
+      const sourceType = 'directive';
+      
+      // Create meta object with hardcoded values for now
+      const meta = { 
+        sourceType: sourceType,
+        directive: 'add',
+        hasVariables: false
+      };
+      
       return helpers.createStructuredDirective(
         'text',
-        'textAssignment',
+        subtype,
         {
           identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
           content: addPath
@@ -70,10 +81,7 @@ AtText
           identifier: id,
           content: `@add ${addPath.raw.path || ''}`
         },
-        {
-          sourceType: 'directive',
-          directive: 'add'
-        },
+        meta,
         location(),
         'add'
       );
