@@ -42,3 +42,23 @@ AtText
         'run'
       );
     }
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ addPath:AddDirectiveRef {
+      return helpers.createStructuredDirective(
+        'text',
+        'textAssignment',
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          content: addPath
+        },
+        {
+          identifier: id,
+          content: `@add ${addPath.raw.path || ''}`
+        },
+        {
+          sourceType: 'directive',
+          directive: 'add'
+        },
+        location(),
+        'add'
+      );
+    }
