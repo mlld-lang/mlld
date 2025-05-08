@@ -34,6 +34,144 @@ export const helpers = {
             i--;
         return i < 0 || input[i] === '\n';
     },
+    // Context Detection System - Core Helper Methods
+    // ---------------------------------------------
+    /**
+     * Determines if the current position represents a directive context
+     * A directive context requires:
+     * 1. @ symbol at logical line start
+     * 2. Followed by a valid directive keyword
+     */
+    isAtDirectiveContext(input, pos) {
+        // First check if we're at an @ symbol
+        if (input[pos] !== '@')
+            return false;
+        // Determine if this @ symbol is at a logical line start
+        const isAtLineStart = this.isLogicalLineStart(input, pos);
+        if (!isAtLineStart)
+            return false;
+        // Check if it's followed by a valid directive keyword
+        const directiveKeywords = Object.keys(DirectiveKind);
+        const afterAtPos = pos + 1;
+        // Look ahead to see if a directive keyword follows
+        for (const keyword of directiveKeywords) {
+            // Check if there's enough text after @ for this keyword
+            if (afterAtPos + keyword.length > input.length)
+                continue;
+            const potentialKeyword = input.substring(afterAtPos, afterAtPos + keyword.length);
+            // Check if the text matches the keyword and is followed by whitespace or EOL
+            if (potentialKeyword === keyword) {
+                // If we're at the end of input or the next char is whitespace, it's a directive
+                if (afterAtPos + keyword.length === input.length)
+                    return true;
+                const nextChar = input[afterAtPos + keyword.length];
+                if (' \t\r\n'.includes(nextChar))
+                    return true;
+            }
+        }
+        // Not a directive context
+        return false;
+    },
+    /**
+     * Determines if the current position represents a variable reference context
+     * A variable context requires:
+     * 1. @ symbol NOT at logical line start, or
+     * 2. @ at line start but NOT followed by directive keyword
+     */
+    isAtVariableContext(input, pos) {
+        // First check if we're at an @ symbol
+        if (input[pos] !== '@')
+            return false;
+        // If we're at a directive context, this can't be a variable context
+        if (this.isAtDirectiveContext(input, pos))
+            return false;
+        // If not a directive, but we have an @ symbol, it's a variable reference
+        // This assumes that @ is either:
+        // - Not at line start, or
+        // - At line start but not followed by directive keyword
+        return true;
+    },
+    /**
+     * Determines if the current position is within a right-hand side (RHS) expression
+     * RHS contexts are after assignment operators (=, :) in directive bodies
+     */
+    isRHSContext(input, pos) {
+        // If at the start of input, can't be RHS
+        if (pos === 0)
+            return false;
+        // Search backward for assignment indicators
+        let i = pos - 1;
+        let inString = false;
+        let stringChar = null;
+        let foundEquals = false;
+        while (i >= 0) {
+            const char = input[i];
+            // Handle string context
+            if ((char === '"' || char === "'") && (i === 0 || input[i - 1] !== '\\')) {
+                if (!inString) {
+                    inString = true;
+                    stringChar = char;
+                }
+                else if (char === stringChar) {
+                    inString = false;
+                    stringChar = null;
+                }
+            }
+            // Only consider equals/colon outside of strings
+            if (!inString) {
+                // If we find an assignment operator
+                if (char === '=' || char === ':') {
+                    foundEquals = true;
+                    break;
+                }
+                // If we hit a semi-colon or line break before finding an assignment,
+                // we're likely in a new statement/line
+                if (char === ';' || char === '\n') {
+                    return false;
+                }
+            }
+            i--;
+        }
+        // If we found an equals sign, check if it's part of a directive assignment
+        if (foundEquals) {
+            // Look for directive on LHS
+            let j = i - 1;
+            // Skip whitespace
+            while (j >= 0 && ' \t\r'.includes(input[j])) {
+                j--;
+            }
+            // Collect potential directive name
+            let name = '';
+            while (j >= 0 && /[a-zA-Z0-9_]/.test(input[j])) {
+                name = input[j] + name;
+                j--;
+            }
+            // Check for @ symbol indicating directive
+            if (j >= 0 && input[j] === '@') {
+                // Valid assignment directives that can have nested directives in RHS
+                const validAssignmentDirectives = ['exec', 'text', 'data', 'run'];
+                if (validAssignmentDirectives.includes(name)) {
+                    // Check if the @ is at logical line start (to confirm it's a directive)
+                    if (this.isLogicalLineStart(input, j)) {
+                        return true;
+                    }
+                }
+            }
+            // Not a directive assignment
+            return false;
+        }
+        return false;
+    },
+    /**
+     * Determines if the current position represents plain text context
+     * Plain text is any context that isn't a directive, variable, or RHS
+     */
+    isPlainTextContext(input, pos) {
+        // If it's not any of the special contexts, it's plain text
+        return !this.isAtDirectiveContext(input, pos) &&
+            !this.isAtVariableContext(input, pos) &&
+            !this.isRHSContext(input, pos);
+    },
     createNode(type, props) {
         return Object.freeze({
             type,

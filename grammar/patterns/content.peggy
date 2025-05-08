@@ -26,7 +26,6 @@ CONTENT TYPES
     └── Literal code blocks
 */
 
-// Import base definitions
 
 // -------------------------------------------------------------
 // MID-LEVEL PATTERNS - Handle delimiters and basic structures

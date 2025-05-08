@@ -178,11 +178,6 @@ AtExec
 // HELPER RULES
 // -------------------------------------------------------------
 
-// Helper rule for code language identifier
-CodeLanguage
-  = language:BaseIdentifier {
-      return language;
-    }
 
 // Helper rule for command reference
 CommandReference

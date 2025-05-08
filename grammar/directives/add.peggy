@@ -245,6 +245,17 @@ AtAdd
 // HELPER RULES
 // -------------------------------------------------------------
 
+// Reference for other directives to use
+AddDirectiveRef
+  = RHSContext _ path:$([^\r\n]*) {
+      return {
+        subtype: 'addPath',
+        values: { path: [helpers.createNode(NodeType.Text, { content: path }, location())] },
+        raw: { path },
+        meta: {}
+      };
+    }
+
 // Helper rule for variable references in add directive
 VariableReference
   = id:BaseIdentifier {
@@ -285,8 +296,3 @@ AsNewTitle
       return title;
     }
 
-// Helper rule for text until end of line
-TextUntilNewline
-  = text:[^\r\n]+ { 
-    return text.join(''); 
-  }

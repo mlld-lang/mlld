@@ -14,7 +14,6 @@ Templates can contain:
 - Formatting patterns for variables
 */
 
-// Import base patterns
 
 // -------------------------------------------------------------
 // TEMPLATE CORE - Standard template with interpolation

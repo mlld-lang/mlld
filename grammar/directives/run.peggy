@@ -145,11 +145,6 @@ RunDirectiveRef
 // HELPER RULES
 // -------------------------------------------------------------
 
-// Language identifier for code blocks
-RunCodeLanguage
-  = language:BaseIdentifier {
-      return language;
-    }
 
 // Optional arguments for code blocks
 RunCodeArgs

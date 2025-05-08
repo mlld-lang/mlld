@@ -14,7 +14,6 @@ Code blocks can be:
 - Without variable interpolation (unlike commands)
 */
 
-// Import base patterns
 
 // -------------------------------------------------------------
 // CODE CORE - Standard code block
@@ -87,4 +86,10 @@ LanguageCodeCore
 CodeLanguage
   = lang:$(BaseIdentifier ("." BaseIdentifier)*) {
       return lang;
+    }
+    
+// Code language identifier for run directive
+RunCodeLanguage
+  = language:BaseIdentifier {
+      return language;
     }

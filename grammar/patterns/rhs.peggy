@@ -13,7 +13,6 @@ Each RHS context needs specialized handling to properly disambiguate
 nested directives from variable references within the assignment value.
 */
 
-// Import context predicates for @ disambiguation
 
 // -------------------------------------------------------------
 // RHS DETECTION - Identify and mark RHS context
@@ -105,35 +104,6 @@ DataItems
       return [first, ...rest];
     }
 
-// Values in data structures (recursive)
-DataValue
-  = "@" IsInRHS RunDirectiveRef {
-      return { type: 'directive', directive: 'run' };
-    }
-  / "{" _ properties:DataProperties? _ "}" {
-      return { 
-        type: 'object',
-        properties: properties || []
-      };
-    }
-  / "[" _ items:DataItems? _ "]" {
-      return { 
-        type: 'array',
-        items: items || []
-      };
-    }
-  / value:DataLiteral {
-      return { 
-        type: 'literal',
-        value
-      };
-    }
-  / varRef:InterpolationVar {
-      return {
-        type: 'variable',
-        reference: varRef
-      };
-    }
 
 // Primitive literal values for data
 DataLiteral
@@ -190,13 +160,3 @@ ExecRHS
 
 // These are simplified references to directives that might appear in RHS
 // They will be replaced with actual implementations from core/
-
-RunDirectiveRef
-  = "run" __ command:$[^\r\n]+ {
-      return { directive: "run", command };
-    }
-
-AddDirectiveRef
-  = "add" __ path:$[^\r\n]+ {
-      return { directive: "add", path };
-    }

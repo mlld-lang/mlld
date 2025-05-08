@@ -71,7 +71,6 @@ AtImport
 // HELPER RULES
 // -------------------------------------------------------------
 
-// Import list parsing
 ImportsList
   = "*" {
       return [{name: "*", alias: null}];

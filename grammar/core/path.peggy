@@ -14,7 +14,6 @@ Paths can contain:
 - Path separators (/)
 */
 
-// Import base patterns
 
 // -------------------------------------------------------------
 // PATH CORE - Standard path with interpolation

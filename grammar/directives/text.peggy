@@ -98,14 +98,3 @@ AtText
 // -------------------------------------------------------------
 // DIRECTIVE REFERENCES FOR RHS CONTEXTS
 // -------------------------------------------------------------
-
-// Placeholder for @add directive reference - this will be implemented in add.peggy
-AddDirectiveRef
-  = RHSContext _ path:$([^\r\n]*) {
-      return {
-        subtype: 'addPath',
-        values: { path: [helpers.createNode(NodeType.Text, { content: path }, location())] },
-        raw: { path },
-        meta: {}
-      };
-    }

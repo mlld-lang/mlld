@@ -14,7 +14,6 @@ Commands can contain:
 - Spaces and arguments
 */
 
-// Import base patterns
 
 // -------------------------------------------------------------
 // COMMAND CORE - Standard command with interpolation
