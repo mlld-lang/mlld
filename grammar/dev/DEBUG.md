@@ -216,6 +216,67 @@ When fixing complex grammar issues, follow this incremental approach that has pr
    const subtype = hasVariables ? 'textTemplate' : 'textAssignment';
    ```
 
+## Rule Ordering and the "First Match Wins" Principle
+
+One of the most common sources of issues in PEG.js grammars is related to rule ordering. Unlike some other parsing systems, **PEG.js always uses the first matching alternative and never backtracks to try others**.
+
+### The First Match Wins Principle
+
+In a choice expression with multiple alternatives (`A / B / C`):
+1. PEG.js tries each alternative **in the exact order specified**
+2. The **first** alternative that matches will be used, even if later alternatives might match "better"
+3. There is **no concept of "specificity"** or "longest match" - only order matters
+
+### Example of an Ordering Problem
+
+```peggy
+// PROBLEMATIC: More general rule comes first
+Expression
+  = CommandRule  // Matches "foo"
+  / SpecificRule // Also matches "foo" but with important extra context - NEVER REACHED!
+
+// CORRECT: More specific rule comes first
+Expression
+  = SpecificRule // Matches specific case first
+  / CommandRule  // Catches everything else
+```
+
+### Common Symptoms of Rule Ordering Issues
+
+1. **Unexpected rule matched**: A construct is parsed by the wrong rule
+2. **Missing information**: The AST is technically valid but missing expected metadata
+3. **Split nodes**: Content that should be a single node gets broken into multiple nodes
+4. **"Greedy" early rules**: An early rule consumes part of what should be matched by a later rule
+
+### How to Diagnose and Fix
+
+1. Use `helpers.debug` to confirm which rule is actually matching
+2. Examine the rule ordering in choice expressions (`/` operator)
+3. Put **more specific rules before more general rules**
+4. Consider extracting shared patterns to predicates (`&` and `!`) to guide rule selection
+
+### Real-World Example
+
+```peggy
+// BUG: This will ALWAYS match the PathCore rule, never reaching the code case
+AtRun
+  = DirectiveContext "@run" _ command:CommandCore {
+      return helpers.createDirective('runCommand', {...});
+    }
+  / DirectiveContext "@run" _ language:RunCodeLanguage _ code:CodeCore {
+      return helpers.createDirective('runCode', {...});
+    }
+
+// FIX: Put the more specific pattern first
+AtRun
+  = DirectiveContext "@run" _ language:RunCodeLanguage _ code:CodeCore {
+      return helpers.createDirective('runCode', {...});
+    }
+  / DirectiveContext "@run" _ command:CommandCore {
+      return helpers.createDirective('runCommand', {...});
+    }
+```
+
 ## Core Debugging Principles
 
 1. **Fix at the Right Abstraction Level**:

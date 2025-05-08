@@ -69,7 +69,7 @@ AtExec
         'command'  // Added source parameter
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ language:CodeLanguage _ code:CodeCore {
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ language:CodeLanguage _ code:DirectCodeContent {
       helpers.debug('AtExec matched code definition', { id, params, language, code });
       
       // Create identifier node
@@ -77,6 +77,9 @@ AtExec
       
       // Create language node
       const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      
+      // Process code content - get from bracketed content
+      const codeContent = code[0].content;
       
       // Process parameters
       const processedParams = params || [];
@@ -90,21 +93,22 @@ AtExec
         identifier: [identifierNode],
         params: processedParams,
         lang: [langNode],
-        ...code.values
+        code: code
       };
       
       const raw = {
         identifier: id,
         params: rawParams,
         lang: language,
-        ...code.raw
+        code: codeContent
       };
       
       // Create meta object
       const metaObj = {
-        ...code.meta,
+        isMultiLine: codeContent.includes('\n'),
+        language: language,
         parameterCount: processedParams.length,
-        language: language
+        isBracketed: true
       };
       
       // Add metadata if present

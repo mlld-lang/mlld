@@ -1645,6 +1645,9 @@ function peg$parse(input, options) {
       // Create language node
       const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
       
+      // Process code content - get from bracketed content
+      const codeContent = code[0].content;
+      
       // Process parameters
       const processedParams = params || [];
       const rawParams = processedParams.map(param => {
@@ -1657,21 +1660,22 @@ function peg$parse(input, options) {
         identifier: [identifierNode],
         params: processedParams,
         lang: [langNode],
-        ...code.values
+        code: code
       };
       
       const raw = {
         identifier: id,
         params: rawParams,
         lang: language,
-        ...code.raw
+        code: codeContent
       };
       
       // Create meta object
       const metaObj = {
-        ...code.meta,
+        isMultiLine: codeContent.includes('\n'),
+        language: language,
         parameterCount: processedParams.length,
-        language: language
+        isBracketed: true
       };
       
       // Add metadata if present
@@ -1876,7 +1880,48 @@ function peg$parse(input, options) {
   var peg$f185 = function() {
       return text();
     };
-  var peg$f186 = function(command) {
+  var peg$f186 = function(language, args, code) {
+      helpers.debug('AtRun matched language code block', { language, args, code });
+      
+      // Create language node
+      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      
+      // Process code content
+      // The code is in a bracketed format [...]
+      const codeContent = code[0].content;
+      
+      // Add language and args to values
+      const values = {
+        lang: [langNode],
+        args: args || [],
+        code: code
+      };
+      
+      // Add language and args to raw representation
+      const raw = {
+        lang: language,
+        args: args ? args.map(arg => arg.identifier || '') : [],
+        code: codeContent
+      };
+      
+      // Add metadata
+      const meta = {
+        isMultiLine: codeContent.includes('\n'),
+        language: language,
+        isBracketed: true
+      };
+      
+      return helpers.createStructuredDirective(
+        'run',
+        'runCode',
+        values,
+        raw,
+        meta,
+        location(),
+        'code'  // Source parameter
+      );
+    };
+  var peg$f187 = function(command) {
       helpers.debug('AtRun matched shell command', { command });
       
       return helpers.createStructuredDirective(
@@ -1890,43 +1935,6 @@ function peg$parse(input, options) {
         },
         location(),
         'command'  // Source parameter
-      );
-    };
-  var peg$f187 = function(language, args, code) {
-      helpers.debug('AtRun matched language code block', { language, args, code });
-      
-      // Create language node
-      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
-      
-      // Add language and args to values
-      const values = {
-        lang: [langNode],
-        args: args || [],
-        ...code.values
-      };
-      
-      // Add language and args to raw representation
-      const raw = {
-        lang: language,
-        args: args ? args.map(arg => arg.identifier || '') : [],
-        ...code.raw
-      };
-      
-      // Add metadata
-      const meta = {
-        ...code.meta,
-        isMultiLine: code.raw.code.includes('\n'),
-        language: language
-      };
-      
-      return helpers.createStructuredDirective(
-        'run',
-        'runCode',
-        values,
-        raw,
-        meta,
-        location(),
-        'code'  // Source parameter
       );
     };
   var peg$f188 = function(commandRef) {
@@ -1951,7 +1959,36 @@ function peg$parse(input, options) {
         'exec'  // Source parameter
       );
     };
-  var peg$f189 = function(command) {
+  var peg$f189 = function(language, code) {
+      helpers.debug('RunDirectiveRef matched code in RHS', { language, code });
+      
+      // Create language node
+      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      
+      // Process code content
+      const codeContent = code[0].content;
+      
+      return helpers.createStructuredDirective(
+        'run',
+        'runCode',
+        {
+          lang: [langNode],
+          code: code
+        },
+        {
+          lang: language,
+          code: codeContent
+        },
+        { 
+          isRHSRef: true,
+          language: language,
+          isMultiLine: codeContent.includes('\n'),
+          isBracketed: true
+        },
+        location()
+      );
+    };
+  var peg$f190 = function(command) {
       helpers.debug('RunDirectiveRef matched in RHS', { command });
       
       return helpers.createStructuredDirective(
@@ -1963,31 +2000,6 @@ function peg$parse(input, options) {
           ...command.meta, 
           isRHSRef: true,
           isMultiLine: command.raw.command.includes('\n')
-        },
-        location()
-      );
-    };
-  var peg$f190 = function(language, code) {
-      helpers.debug('RunDirectiveRef matched code in RHS', { language, code });
-      
-      // Create language node
-      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
-      
-      return helpers.createStructuredDirective(
-        'run',
-        'runCode',
-        {
-          lang: [langNode],
-          ...code.values
-        },
-        {
-          lang: language,
-          ...code.raw
-        },
-        { 
-          ...code.meta,
-          isRHSRef: true,
-          language: language
         },
         location()
       );
@@ -8340,7 +8352,7 @@ function peg$parse(input, options) {
                 s12 = peg$parseCodeLanguage();
                 if (s12 !== peg$FAILED) {
                   s13 = peg$parse_();
-                  s14 = peg$parseCodeCore();
+                  s14 = peg$parseDirectCodeContent();
                   if (s14 !== peg$FAILED) {
                     peg$savedPos = s0;
                     s0 = peg$f162(s4, s5, s6, s12, s14);
@@ -9202,10 +9214,22 @@ function peg$parse(input, options) {
       }
       if (s2 !== peg$FAILED) {
         s3 = peg$parse_();
-        s4 = peg$parseCommandCore();
+        s4 = peg$parseRunCodeLanguage();
         if (s4 !== peg$FAILED) {
-          peg$savedPos = s0;
-          s0 = peg$f186(s4);
+          s5 = peg$parse_();
+          s6 = peg$parseRunCodeArgs();
+          if (s6 === peg$FAILED) {
+            s6 = null;
+          }
+          s7 = peg$parse_();
+          s8 = peg$parseDirectCodeContent();
+          if (s8 !== peg$FAILED) {
+            peg$savedPos = s0;
+            s0 = peg$f186(s4, s6, s8);
+          } else {
+            peg$currPos = s0;
+            s0 = peg$FAILED;
+          }
         } else {
           peg$currPos = s0;
           s0 = peg$FAILED;
@@ -9231,22 +9255,10 @@ function peg$parse(input, options) {
         }
         if (s2 !== peg$FAILED) {
           s3 = peg$parse_();
-          s4 = peg$parseRunCodeLanguage();
+          s4 = peg$parseCommandCore();
           if (s4 !== peg$FAILED) {
-            s5 = peg$parse_();
-            s6 = peg$parseRunCodeArgs();
-            if (s6 === peg$FAILED) {
-              s6 = null;
-            }
-            s7 = peg$parse_();
-            s8 = peg$parseCodeCore();
-            if (s8 !== peg$FAILED) {
-              peg$savedPos = s0;
-              s0 = peg$f187(s4, s6, s8);
-            } else {
-              peg$currPos = s0;
-              s0 = peg$FAILED;
-            }
+            peg$savedPos = s0;
+            s0 = peg$f187(s4);
           } else {
             peg$currPos = s0;
             s0 = peg$FAILED;
@@ -9310,29 +9322,29 @@ function peg$parse(input, options) {
     var s0, s1, s2, s3;
 
     s0 = peg$currPos;
-    s1 = peg$parseCommandCore();
+    s1 = peg$parseRunCodeLanguage();
     if (s1 !== peg$FAILED) {
-      peg$savedPos = s0;
-      s1 = peg$f189(s1);
-    }
-    s0 = s1;
-    if (s0 === peg$FAILED) {
-      s0 = peg$currPos;
-      s1 = peg$parseRunCodeLanguage();
-      if (s1 !== peg$FAILED) {
-        s2 = peg$parse_();
-        s3 = peg$parseCodeCore();
-        if (s3 !== peg$FAILED) {
-          peg$savedPos = s0;
-          s0 = peg$f190(s1, s3);
-        } else {
-          peg$currPos = s0;
-          s0 = peg$FAILED;
-        }
+      s2 = peg$parse_();
+      s3 = peg$parseDirectCodeContent();
+      if (s3 !== peg$FAILED) {
+        peg$savedPos = s0;
+        s0 = peg$f189(s1, s3);
       } else {
         peg$currPos = s0;
         s0 = peg$FAILED;
       }
+    } else {
+      peg$currPos = s0;
+      s0 = peg$FAILED;
+    }
+    if (s0 === peg$FAILED) {
+      s0 = peg$currPos;
+      s1 = peg$parseCommandCore();
+      if (s1 !== peg$FAILED) {
+        peg$savedPos = s0;
+        s1 = peg$f190(s1);
+      }
+      s0 = s1;
     }
 
     return s0;

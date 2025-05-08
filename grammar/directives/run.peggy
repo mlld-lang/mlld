@@ -20,7 +20,48 @@ It can be used in three main forms:
 
 // Primary @run directive 
 AtRun
-  = DirectiveContext "@run" _ command:CommandCore {
+  = DirectiveContext "@run" _ language:RunCodeLanguage _ args:RunCodeArgs? _ code:DirectCodeContent {
+      helpers.debug('AtRun matched language code block', { language, args, code });
+      
+      // Create language node
+      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      
+      // Process code content
+      // The code is in a bracketed format [...]
+      const codeContent = code[0].content;
+      
+      // Add language and args to values
+      const values = {
+        lang: [langNode],
+        args: args || [],
+        code: code
+      };
+      
+      // Add language and args to raw representation
+      const raw = {
+        lang: language,
+        args: args ? args.map(arg => arg.identifier || '') : [],
+        code: codeContent
+      };
+      
+      // Add metadata
+      const meta = {
+        isMultiLine: codeContent.includes('\n'),
+        language: language,
+        isBracketed: true
+      };
+      
+      return helpers.createStructuredDirective(
+        'run',
+        'runCode',
+        values,
+        raw,
+        meta,
+        location(),
+        'code'  // Source parameter
+      );
+    }
+  / DirectiveContext "@run" _ command:CommandCore {
       helpers.debug('AtRun matched shell command', { command });
       
       return helpers.createStructuredDirective(
@@ -34,43 +75,6 @@ AtRun
         },
         location(),
         'command'  // Source parameter
-      );
-    }
-  / DirectiveContext "@run" _ language:RunCodeLanguage _ args:RunCodeArgs? _ code:CodeCore {
-      helpers.debug('AtRun matched language code block', { language, args, code });
-      
-      // Create language node
-      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
-      
-      // Add language and args to values
-      const values = {
-        lang: [langNode],
-        args: args || [],
-        ...code.values
-      };
-      
-      // Add language and args to raw representation
-      const raw = {
-        lang: language,
-        args: args ? args.map(arg => arg.identifier || '') : [],
-        ...code.raw
-      };
-      
-      // Add metadata
-      const meta = {
-        ...code.meta,
-        isMultiLine: code.raw.code.includes('\n'),
-        language: language
-      };
-      
-      return helpers.createStructuredDirective(
-        'run',
-        'runCode',
-        values,
-        raw,
-        meta,
-        location(),
-        'code'  // Source parameter
       );
     }
   / DirectiveContext "@run" _ "@" commandRef:RunCommandReference {
@@ -102,7 +106,36 @@ AtRun
 
 // Run directive reference in RHS contexts (nested in other directives)
 RunDirectiveRef
-  = command:CommandCore {
+  = language:RunCodeLanguage _ code:DirectCodeContent {
+      helpers.debug('RunDirectiveRef matched code in RHS', { language, code });
+      
+      // Create language node
+      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      
+      // Process code content
+      const codeContent = code[0].content;
+      
+      return helpers.createStructuredDirective(
+        'run',
+        'runCode',
+        {
+          lang: [langNode],
+          code: code
+        },
+        {
+          lang: language,
+          code: codeContent
+        },
+        { 
+          isRHSRef: true,
+          language: language,
+          isMultiLine: codeContent.includes('\n'),
+          isBracketed: true
+        },
+        location()
+      );
+    }
+  / command:CommandCore {
       helpers.debug('RunDirectiveRef matched in RHS', { command });
       
       return helpers.createStructuredDirective(
@@ -114,31 +147,6 @@ RunDirectiveRef
           ...command.meta, 
           isRHSRef: true,
           isMultiLine: command.raw.command.includes('\n')
-        },
-        location()
-      );
-    }
-  / language:RunCodeLanguage _ code:CodeCore {
-      helpers.debug('RunDirectiveRef matched code in RHS', { language, code });
-      
-      // Create language node
-      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
-      
-      return helpers.createStructuredDirective(
-        'run',
-        'runCode',
-        {
-          lang: [langNode],
-          ...code.values
-        },
-        {
-          lang: language,
-          ...code.raw
-        },
-        { 
-          ...code.meta,
-          isRHSRef: true,
-          language: language
         },
         location()
       );
