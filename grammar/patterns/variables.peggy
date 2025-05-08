@@ -4,10 +4,6 @@
 // - {{var}} for interpolation in templates (double brackets)
 
 /* Import context predicates for @ disambiguation */
-import './base/context.peggy';
-import './base/tokens.peggy';
-import './base/literals.peggy';
-import './patterns/fields.peggy';
 
 // Variable types - the root rule used by other directives
 Variable

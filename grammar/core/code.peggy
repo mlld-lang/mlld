@@ -15,10 +15,6 @@ Code blocks can be:
 */
 
 // Import base patterns
-import './base/context.peggy';
-import './base/tokens.peggy';
-import './base/whitespace.peggy';
-import './patterns/content.peggy';
 
 // -------------------------------------------------------------
 // CODE CORE - Standard code block

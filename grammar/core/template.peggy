@@ -15,11 +15,6 @@ Templates can contain:
 */
 
 // Import base patterns
-import './base/context.peggy';
-import './base/tokens.peggy';
-import './base/whitespace.peggy';
-import './patterns/variables.peggy';
-import './patterns/content.peggy';
 
 // -------------------------------------------------------------
 // TEMPLATE CORE - Standard template with interpolation

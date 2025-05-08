@@ -4,8 +4,6 @@
 // and array indexing across various contexts.
 
 /* Import base definitions */
-import './base/tokens.peggy';
-import './base/literals.peggy';
 
 // DOT NOTATION FIELD ACCESS
 // Example: obj.property, var.field

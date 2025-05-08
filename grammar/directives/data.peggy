@@ -13,15 +13,8 @@ It can be used in these forms:
 5. @data varName = @run command                  - Command output as data
 */
 
-// Import context predicates and base rules
-import './base/context.peggy';
-import './base/tokens.peggy';
-import './base/literals.peggy';
-import './base/whitespace.peggy';
-import './patterns/variables.peggy';
-import './patterns/fields.peggy';
-import './directives/run.peggy';
-import './directives/add.peggy';
+// Core content handlers (context, tokens, literals, whitespace, variables, fields, directives)
+// are automatically included by the build process - no imports needed
 
 // -------------------------------------------------------------
 // TOP-LEVEL DATA DIRECTIVE

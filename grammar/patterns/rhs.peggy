@@ -14,11 +14,6 @@ nested directives from variable references within the assignment value.
 */
 
 // Import context predicates for @ disambiguation
-import './base/context.peggy';
-import './base/tokens.peggy';
-import './base/literals.peggy';
-import './patterns/variables.peggy';
-import './patterns/content.peggy';
 
 // -------------------------------------------------------------
 // RHS DETECTION - Identify and mark RHS context

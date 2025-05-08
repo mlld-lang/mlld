@@ -11,13 +11,8 @@ It can be used in these forms:
 3. @text varName = @run command          - Output from command execution
 */
 
-// Import context predicates and core content handlers
-import './base/context.peggy';
-import './base/tokens.peggy';
-import './base/whitespace.peggy';
-import './patterns/variables.peggy';
-import './core/template.peggy';
-import './directives/run.peggy';
+// Core content handlers (context, tokens, whitespace, variables, template)
+// are automatically included by the build process - no imports needed
 
 // -------------------------------------------------------------
 // TOP-LEVEL TEXT DIRECTIVE

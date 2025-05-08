@@ -27,9 +27,6 @@ CONTENT TYPES
 */
 
 // Import base definitions
-import './base/tokens.peggy';
-import './base/segments.peggy';
-import './patterns/variables.peggy';
 
 // -------------------------------------------------------------
 // MID-LEVEL PATTERNS - Handle delimiters and basic structures
