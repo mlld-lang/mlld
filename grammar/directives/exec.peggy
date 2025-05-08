@@ -20,12 +20,18 @@ by the @run directive. It can be used in these forms:
 
 // Primary @exec directive - all variants
 AtExec
-  // Using ExecRunRHSContext for proper context detection
-  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ ExecRunRHSContext runCode:RunLanguageCodeCore {
-      helpers.debug('AtExec matched code definition using shared abstraction', { id, params, runCode });
+  // This pattern must be first because of "first match wins" in PEG.js
+  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ language:RunCodeLanguage _ args:RunCodeArgs? _ code:DirectCodeContent {
+      helpers.debug('AtExec matched code definition directly', { id, params, language, args, code });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id }, location());
+      
+      // Create language node
+      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      
+      // Process code content - get from bracketed content
+      const codeContent = code[0].content;
       
       // Process parameters
       const processedParams = params || [];
@@ -38,19 +44,25 @@ AtExec
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        ...runCode.values
+        lang: [langNode],
+        args: args || [],
+        code: code
       };
       
       const raw = {
         identifier: id,
         params: rawParams,
-        ...runCode.raw
+        lang: language,
+        args: args ? args.map(arg => arg.identifier || '') : [],
+        code: codeContent
       };
       
-      // Create meta object with exec-specific additions
+      // Create meta object
       const metaObj = {
-        ...runCode.meta,
-        parameterCount: processedParams.length
+        isMultiLine: codeContent.includes('\n'),
+        language: language,
+        parameterCount: processedParams.length,
+        isBracketed: true
       };
       
       // Add metadata if present
