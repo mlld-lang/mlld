@@ -74,7 +74,8 @@ AtAdd
         values, 
         raw, 
         meta, 
-        location()
+        location(),
+        'template'  // Added source parameter
       );
     }
   / DirectiveContext "@add" _ "@" varRef:VariableReference _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
@@ -130,7 +131,8 @@ AtAdd
         values, 
         raw, 
         meta, 
-        location()
+        location(),
+        'variable'  // Added source parameter
       );
     }
   / DirectiveContext "@add" _ path:PathCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
@@ -190,7 +192,8 @@ AtAdd
         values, 
         raw, 
         meta, 
-        location()
+        location(),
+        'path'  // Added source parameter
       );
     }
   / DirectiveContext "@add" _ sectionTitle:QuotedContent _ "from" _ path:PathCore _ asTitle:AsNewTitle? {
@@ -237,7 +240,8 @@ AtAdd
         values, 
         raw, 
         meta, 
-        location()
+        location(),
+        'section'  // Added source parameter
       );
     }
 

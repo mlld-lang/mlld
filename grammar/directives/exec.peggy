@@ -65,7 +65,8 @@ AtExec
         values,
         raw,
         metaObj,
-        location()
+        location(),
+        'command'  // Added source parameter
       );
     }
   / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ language:CodeLanguage _ code:CodeCore {
@@ -119,7 +120,8 @@ AtExec
         values,
         raw,
         metaObj,
-        location()
+        location(),
+        'code'  // Added source parameter
       );
     }
   / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ "@" commandRef:CommandReference {
@@ -170,7 +172,8 @@ AtExec
         values,
         raw,
         metaObj,
-        location()
+        location(),
+        'reference'  // Added source parameter
       );
     }
 

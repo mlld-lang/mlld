@@ -98,7 +98,8 @@ AtData
           value: rawValue
         },
         metaObj,
-        location()
+        location(),
+        source  // Use the determined source type
       );
     }
 

@@ -44,7 +44,8 @@ AtPath
             extension: path.meta.extension
           }
         },
-        location()
+        location(),
+        'path'  // Added source parameter
       );
     }
 

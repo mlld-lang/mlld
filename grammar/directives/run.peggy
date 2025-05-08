@@ -32,7 +32,8 @@ AtRun
           ...command.meta,
           isMultiLine: command.raw.command.includes('\n')
         },
-        location()
+        location(),
+        'command'  // Source parameter
       );
     }
   / DirectiveContext "@run" _ language:RunCodeLanguage _ args:RunCodeArgs? _ code:CodeCore {
@@ -68,7 +69,8 @@ AtRun
         values,
         raw,
         meta,
-        location()
+        location(),
+        'code'  // Source parameter
       );
     }
   / DirectiveContext "@run" _ "@" commandRef:RunCommandReference {
@@ -89,7 +91,8 @@ AtRun
         {
           argumentCount: commandRef.args ? commandRef.args.length : 0
         },
-        location()
+        location(),
+        'exec'  // Source parameter
       );
     }
 
@@ -99,7 +102,7 @@ AtRun
 
 // Run directive reference in RHS contexts (nested in other directives)
 RunDirectiveRef
-  = "@run" RHSContext _ command:CommandCore {
+  = command:CommandCore {
       helpers.debug('RunDirectiveRef matched in RHS', { command });
       
       return helpers.createStructuredDirective(
@@ -115,7 +118,7 @@ RunDirectiveRef
         location()
       );
     }
-  / "@run" RHSContext _ language:RunCodeLanguage _ code:CodeCore {
+  / language:RunCodeLanguage _ code:CodeCore {
       helpers.debug('RunDirectiveRef matched code in RHS', { language, code });
       
       // Create language node

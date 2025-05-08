@@ -132,7 +132,7 @@ TextPart
 
 Directive
   = &{ return helpers.isLogicalLineStart(input, offset()); }
-    [ \t]* "@"                       // allow leading tabs/spaces
+    [ \t]*                        // allow leading tabs/spaces
     dir:(
       AtRun          // Run directives (commands, code)
     / AtExec         // Exec directives (define commands/code)

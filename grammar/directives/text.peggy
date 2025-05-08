@@ -26,9 +26,14 @@ AtText
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
       
+      // Determine if this is a literal string (textAssignment) or a template (textTemplate)
+      const isTemplateLiteral = template.raw.content.includes('{{') || template.raw.content.includes('[[');
+      const subtype = isTemplateLiteral ? 'textTemplate' : 'textAssignment';
+      const source = isTemplateLiteral ? 'template' : 'literal';
+      
       return helpers.createStructuredDirective(
         'text',
-        'textTemplate',
+        subtype,
         {
           identifier: [idNode],
           content: template.values.content
@@ -39,12 +44,13 @@ AtText
         },
         {
           ...template.meta,
-          sourceType: 'template'
+          sourceType: isTemplateLiteral ? 'template' : 'literal'
         },
-        location()
+        location(),
+        source  // Source parameter
       );
     }
-  / "@text" DirectiveContext _ id:BaseIdentifier _ "=" _ "@run" _ runCommand:RunDirectiveRef {
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ runCommand:RunDirectiveRef {
       helpers.debug('AtText matched @run command', { id, runCommand });
       
       // Create variable reference node for identifier
@@ -66,10 +72,11 @@ AtText
           directive: 'run',
           run: { type: runCommand.subtype }
         },
-        location()
+        location(),
+        'run'  // Source parameter
       );
     }
-  / "@text" DirectiveContext _ id:BaseIdentifier _ "=" _ "@add" _ addPath:AddDirectiveRef {
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ RHSContext "@add" _ addPath:AddDirectiveRef {
       helpers.debug('AtText matched @add path', { id, addPath });
       
       // Create variable reference node for identifier
@@ -91,7 +98,8 @@ AtText
           directive: 'add',
           add: { type: addPath.subtype }
         },
-        location()
+        location(),
+        'add'  // Source parameter
       );
     }
 

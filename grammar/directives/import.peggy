@@ -63,7 +63,8 @@ AtImport
         values,
         raw,
         meta,
-        location()
+        location(),
+        'path'  // Source parameter
       );
     }
 

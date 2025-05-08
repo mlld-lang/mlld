@@ -47,9 +47,19 @@ LiteralContent "Literal content without interpolation"
 
 // Content inside single brackets with @var interpolation
 BracketContent "Content with @var interpolation"
-  = '[' parts:(AtVar / CommandTextSegment / PathSeparator)* ']' {
+  = '[' parts:(BracketVar / CommandTextSegment / PathSeparator)* ']' {
       // Return only the content within brackets, not the brackets themselves
       return parts;
+    }
+
+// Variable reference within bracketed content
+BracketVar
+  = "@" id:BaseIdentifier { 
+      const node = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id
+      }, location());
+      helpers.debug('CreateVAR in BracketContent', { id, node });
+      return node;
     }
 
 // Content inside double brackets with {{var}} interpolation
