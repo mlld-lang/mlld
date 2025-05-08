@@ -16,38 +16,35 @@ const DIST_PARSER = path.join(DIST_DIR, 'parser.js');
 fs.mkdirSync(DIST_DIR, { recursive: true });
 
 // ---------- fold all grammar sources ----------
-const sources =
-  [
-    fs.readFileSync(ROOT_GRAMMAR, 'utf8'),
-    // Include base abstractions first
-    ...fs.existsSync(path.join(__dirname, 'base')) ? 
-      fs.readdirSync(path.join(__dirname, 'base'))
-        .filter(f => f.endsWith('.peggy'))
-        .sort()
-        .map(f => fs.readFileSync(path.join(__dirname, 'base', f), 'utf8')) : [],
-    // Then include lexer abstractions
-    ...fs.readdirSync(path.join(__dirname, 'lexer'))
-        .filter(f => f.endsWith('.peggy'))
-        .sort()
-        .map(f => fs.readFileSync(path.join(__dirname, 'lexer', f), 'utf8')),
-    // Then include pattern abstractions
-    ...fs.existsSync(path.join(__dirname, 'patterns')) ? 
-      fs.readdirSync(path.join(__dirname, 'patterns'))
-        .filter(f => f.endsWith('.peggy'))
-        .sort()
-        .map(f => fs.readFileSync(path.join(__dirname, 'patterns', f), 'utf8')) : [],
-    // Then include core directive logic
-    ...fs.existsSync(path.join(__dirname, 'core')) ? 
-      fs.readdirSync(path.join(__dirname, 'core'))
-        .filter(f => f.endsWith('.peggy'))
-        .sort()
-        .map(f => fs.readFileSync(path.join(__dirname, 'core', f), 'utf8')) : [],
-    // Finally include directive implementations
-    ...fs.readdirSync(path.join(__dirname, 'directives'))
-        .filter(f => f.endsWith('.peggy'))
-        .sort()
-        .map(f => fs.readFileSync(path.join(__dirname, 'directives', f), 'utf8')),
-  ].join('\n');
+// Use the new grammar file if available
+const grammarFile = fs.existsSync(path.join(__dirname, 'meld.peggy.new')) ? 
+                   'meld.peggy.new' : 'meld.peggy';
+
+console.log(`Using grammar file: ${grammarFile}`);
+
+const sources = [
+  fs.readFileSync(path.join(__dirname, grammarFile), 'utf8'),
+  // Include base abstractions first
+  ...fs.readdirSync(path.join(__dirname, 'base'))
+      .filter(f => f.endsWith('.peggy'))
+      .sort()
+      .map(f => fs.readFileSync(path.join(__dirname, 'base', f), 'utf8')),
+  // Then include pattern abstractions
+  ...fs.readdirSync(path.join(__dirname, 'patterns'))
+      .filter(f => f.endsWith('.peggy'))
+      .sort()
+      .map(f => fs.readFileSync(path.join(__dirname, 'patterns', f), 'utf8')),
+  // Then include core content handlers
+  ...fs.readdirSync(path.join(__dirname, 'core'))
+      .filter(f => f.endsWith('.peggy'))
+      .sort()
+      .map(f => fs.readFileSync(path.join(__dirname, 'core', f), 'utf8')),
+  // Finally include directive implementations
+  ...fs.readdirSync(path.join(__dirname, 'directives'))
+      .filter(f => f.endsWith('.peggy'))
+      .sort()
+      .map(f => fs.readFileSync(path.join(__dirname, 'directives', f), 'utf8')),
+].join('\n');
 
 // ---------- peggy generate ----------
 const peggyOpts = {

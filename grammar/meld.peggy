@@ -1,5 +1,5 @@
 // meld.pegjs
-// Meld grammar implementation
+// Meld grammar implementation - Refactored Version
 
 {
   // NodeType, DirectiveKind, and helpers are injected via parser-dependencies
@@ -9,23 +9,37 @@
     options.rhsDirectiveType = '';
     options.afterDirectiveType = '';
   }
-  
-  // Function to ensure we can access the context detection rules
-  function ensureContextDetectionRules() {
-    // These function references are to ensure the rules from context-detection.peggy
-    // are accessible. This doesn't actually call them, just makes sure they're
-    // properly linked during parsing.
-    const _dummy = [
-      IsTopLevelDirective,
-      IsRhsDirective,
-      IsAfterDirectiveKeyword,
-      IsInInterpolationContext,
-      DetectAtContext
-    ];
-    
-    return true;
-  }
 }
+
+// -------------------------------------------------------------------------
+// STRUCTURE NOTE: The build process concatenates files in this order:
+// -------------------------------------------------------------------------
+// 1. This root file (meld.peggy)
+// 2. Base components (context.peggy, tokens.peggy, etc.)
+// 3. Pattern abstractions (variables.peggy, content.peggy, etc.)
+// 4. Core content handlers (template.peggy, command.peggy, etc.)
+// 5. Directive implementations (run.peggy, text.peggy, etc.)
+//
+// No explicit imports are needed as the build script handles file inclusion.
+
+// -------------------------------------------------------------------------
+// DOCUMENT STRUCTURE
+// -------------------------------------------------------------------------
+
+// Main entry point - processes a complete document
+Start
+  = nodes:(
+      LineStartComment
+    / Comment
+    / CodeFence
+    / Directive              /* <— first try to match directives */
+    / Variable               /* <— Then try to match variables (moved after directives) */
+    / InterDirectiveNewline  /* <— then capture newlines between directives */
+    / TextBlock
+    )* {
+    helpers.debug('Start: Entered');
+    return nodes;
+  }
 
 // structural newline that should become an AST node
 InterDirectiveNewline
@@ -50,19 +64,9 @@ DirectiveEOL
   = &( LineTerminator / EOF )
   / _[ \t\r]* &( LineTerminator / EOF )
 
-Start
-  = nodes:(
-      LineStartComment
-    / Comment
-    / CodeFence
-    / Directive              /* <— first try to match directives */
-    / Variable               /* <— Then try to match variables (moved after directives) */
-    / InterDirectiveNewline   /* <— then capture newlines between directives */
-    / TextBlock
-    )* {
-    helpers.debug('Start: Entered');
-    return nodes;
-  }
+// -------------------------------------------------------------------------
+// COMMENTS
+// -------------------------------------------------------------------------
 
 LineStartComment
   = &{ 
@@ -83,6 +87,10 @@ CommentContent
     return chars.join('');
   }
 
+// -------------------------------------------------------------------------
+// TEXT BLOCKS
+// -------------------------------------------------------------------------
+
 TextBlock
   = first:TextPart rest:(TextPart)* {
     return helpers.createNode(NodeType.Text, { content: first + rest.join('') }, location());
@@ -96,32 +104,8 @@ TextPart
       
       // Is this potentially a directive?
       if (isAtLineStart && isAtStartChar) {
-        // Check if we're a top-level directive using IsTopLevelDirective
-        let isTopLevel = false;
-        try {
-          isTopLevel = IsTopLevelDirective();
-        } catch (e) {
-          helpers.debug('Top level directive detection error:', e);
-        }
-        
-        if (isTopLevel) {
-          return true; // Treat as directive, don't consume as text
-        }
-      }
-      
-      // Is this potentially an @ after a directive like @run?
-      if (isAtStartChar) {
-        // Check if we're after a directive keyword using IsAfterDirectiveKeyword
-        let isAfterDirective = false;
-        try {
-          isAfterDirective = IsAfterDirectiveKeyword();
-        } catch (e) {
-          helpers.debug('After directive detection error:', e);
-        }
-        
-        if (isAfterDirective) {
-          return false; // Don't treat as directive, consume as normal text
-        }
+        // Check if we're at a directive context
+        return helpers.isAtDirectiveContext(input, pos);
       }
       
       // For regular comment handling
@@ -142,18 +126,26 @@ TextPart
       return char; 
     }
 
+// -------------------------------------------------------------------------
+// TOP-LEVEL DIRECTIVES
+// -------------------------------------------------------------------------
+
 Directive
   = &{ return helpers.isLogicalLineStart(input, offset()); }
     [ \t]* "@"                       // allow leading tabs/spaces
     dir:(
-      ImportDirective   // Standard import syntax
-    / AddDirective      // Renamed from EmbedDirective
-    / RunDirective
-    / ExecDirective     // Renamed from DefineDirective
-    / DataDirective
-    / TextDirective
-    / PathDirective
+      AtRun          // Run directives (commands, code)
+    / AtExec         // Exec directives (define commands/code)
+    / AtText         // Text directives (templates)
+    / AtImport       // Import directives (from other files)
+    / AtAdd          // Add directives (content inclusion)
+    / AtData         // Data directives (structured data)
+    / AtPath         // Path directives (path variables)
     ) { return dir; }
+
+// -------------------------------------------------------------------------
+// CODE FENCES
+// -------------------------------------------------------------------------
 
 CodeFence
   = opener:BacktickSequence lang:CodeFenceLangID? "\n"
@@ -177,3 +169,15 @@ CodeFence
 CodeFenceLangID
   = chars:[^`\r\n]+ { return chars.join(''); }
 
+// -------------------------------------------------------------------------
+// IMPORTED DIRECTIVES
+// -------------------------------------------------------------------------
+
+// All the AtDirectives are now imported from their respective files:
+// - AtRun from directives/run.peggy
+// - AtExec from directives/exec.peggy
+// - AtText from directives/text.peggy
+// - AtImport from directives/import.peggy
+// - AtAdd from directives/add.peggy
+// - AtData from directives/data.peggy
+// - AtPath from directives/path.peggy

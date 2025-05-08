@@ -1,0 +1,116 @@
+// TEXT DIRECTIVE
+// Implementation of the @text directive for variable definition through templates
+
+/* 
+# Text Directive
+
+The text directive defines text variables that can include interpolated variables.
+It can be used in these forms:
+1. @text varName = "string literal"     - Basic string assignment
+2. @text varName = template with {{var}} - Template with variable interpolation
+3. @text varName = @run command          - Output from command execution
+*/
+
+// Import context predicates and core content handlers
+import './base/context.peggy';
+import './base/tokens.peggy';
+import './base/whitespace.peggy';
+import './patterns/variables.peggy';
+import './core/template.peggy';
+import './directives/run.peggy';
+
+// -------------------------------------------------------------
+// TOP-LEVEL TEXT DIRECTIVE
+// -------------------------------------------------------------
+
+// Primary @text directive
+AtText
+  = "@text" DirectiveContext _ id:BaseIdentifier _ "=" _ template:TemplateCore {
+      helpers.debug('AtText matched template', { id, template });
+      
+      // Create variable reference node for identifier
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      
+      return helpers.createStructuredDirective(
+        'text',
+        'textTemplate',
+        {
+          identifier: [idNode],
+          content: template.values.content
+        },
+        {
+          identifier: id,
+          content: template.raw.content
+        },
+        {
+          ...template.meta,
+          sourceType: 'template'
+        },
+        location()
+      );
+    }
+  / "@text" DirectiveContext _ id:BaseIdentifier _ "=" _ "@run" _ runCommand:RunDirectiveRef {
+      helpers.debug('AtText matched @run command', { id, runCommand });
+      
+      // Create variable reference node for identifier
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      
+      return helpers.createStructuredDirective(
+        'text',
+        'textAssignment',
+        {
+          identifier: [idNode],
+          content: runCommand  // Store the complete run directive node
+        },
+        {
+          identifier: id,
+          content: `@run ${runCommand.raw.command || ''}`
+        },
+        {
+          sourceType: 'directive',
+          directive: 'run',
+          run: { type: runCommand.subtype }
+        },
+        location()
+      );
+    }
+  / "@text" DirectiveContext _ id:BaseIdentifier _ "=" _ "@add" _ addPath:AddDirectiveRef {
+      helpers.debug('AtText matched @add path', { id, addPath });
+      
+      // Create variable reference node for identifier
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      
+      return helpers.createStructuredDirective(
+        'text',
+        'textAssignment',
+        {
+          identifier: [idNode],
+          content: addPath  // Store the complete add directive node
+        },
+        {
+          identifier: id,
+          content: `@add ${addPath.raw.path || ''}`
+        },
+        {
+          sourceType: 'directive',
+          directive: 'add',
+          add: { type: addPath.subtype }
+        },
+        location()
+      );
+    }
+
+// -------------------------------------------------------------
+// DIRECTIVE REFERENCES FOR RHS CONTEXTS
+// -------------------------------------------------------------
+
+// Placeholder for @add directive reference - this will be implemented in add.peggy
+AddDirectiveRef
+  = RHSContext _ path:$([^\r\n]*) {
+      return {
+        subtype: 'addPath',
+        values: { path: [helpers.createNode(NodeType.Text, { content: path }, location())] },
+        raw: { path },
+        meta: {}
+      };
+    }

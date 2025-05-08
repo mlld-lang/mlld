@@ -25,13 +25,16 @@ grammar/
 │   ├── variables.peggy # Variable reference patterns
 │   ├── content.peggy   # Content patterns (formerly wrapped-content)
 │   └── rhs.peggy       # Right-hand side patterns
-├── core/               # Level 6: Core directive logic
-│   ├── run-core.peggy  # Core logic for run operations
-│   ├── text-core.peggy # Core logic for text operations
-│   └── ...
+├── core/               # Level 6: Core content-type logic
+│   ├── template.peggy  # Core logic for template content
+│   ├── command.peggy   # Core logic for shell commands
+│   ├── code.peggy      # Core logic for code blocks
+│   └── path.peggy      # Core logic for path handling
 └── directives/         # Level 7: Full directive implementations
-    ├── run.peggy       # Uses run-core.peggy
-    ├── text.peggy      # Uses text-core.peggy
+    ├── run.peggy       # Uses command.peggy and code.peggy
+    ├── exec.peggy      # Uses command.peggy and code.peggy with assignment
+    ├── text.peggy      # Uses template.peggy with assignment
+    ├── import.peggy    # Uses path.peggy
     └── ...
 ```
 
@@ -96,33 +99,67 @@ grammar/
 
 ### Phase 5: Core Logic Extraction
 
-1. Create `core/run-core.peggy` with extracted core Run logic
-2. Create `core/text-core.peggy` with extracted core Text logic
-3. Create core logic files for other directives
-4. Implement standardized *Core pattern
-5. Add debugging helpers to support easy tracing
-6. Ensure all core logic returns consistent structure
+1. Create content-based core files instead of directive-based cores:
+   - `core/template.peggy` - Template content (used by text, add)
+   - `core/command.peggy` - Command handling (used by run, exec)
+   - `core/code.peggy` - Code block handling (used by run, exec)
+   - `core/path.peggy` - Path handling (used by import, add)
+2. Implement standardized content value pattern with shared structure
+3. Add debugging helpers to support easy tracing
+4. Ensure all core logic returns consistent structure:
+   ```javascript
+   {
+     type: 'template|command|code|path',
+     subtype: 'specificSubtype',
+     values: { ... },       // Structured values for the AST
+     raw: { ... },          // Original text representations
+     meta: { ... }          // Metadata for processing
+   }
+   ```
 
 ### Phase 6: Directive Implementation
 
-1. Update `directives/run.peggy` to use core logic and context predicates:
+1. Update `directives/run.peggy` to use content-based core logic:
    ```peggy
    AtRun
-     = "run" DirectiveContext _ core:RunCommandCore {
+     = "run" DirectiveContext _ command:CommandCore {
          return helpers.createStructuredDirective(
            'run',
-           core.subtype,
-           core.values,
-           core.raw,
-           core.meta,
-           location(),
-           core.source
+           'runCommand',
+           command.values,
+           command.raw,
+           command.meta,
+           location()
+         );
+       }
+     / "run" DirectiveContext _ code:CodeCore {
+         return helpers.createStructuredDirective(
+           'run',
+           'runCode',
+           code.values,
+           code.raw,
+           code.meta,
+           location()
          );
        }
    ```
-2. Update `directives/text.peggy` to use core logic
-3. Update other directive implementations
-4. Standardize directive naming to use `At*` prefix:
+2. Implement `directives/exec.peggy` as an assignment variant of run:
+   ```peggy
+   AtExec
+     = "exec" DirectiveContext _ id:BaseIdentifier _ "=" _ command:CommandCore {
+         return helpers.createStructuredDirective(
+           'exec',
+           'execCommand',
+           { identifier: id, ...command.values },
+           { identifier: id, ...command.raw },
+           { ...command.meta, hasReturnValue: true },
+           location()
+         );
+       }
+   ```
+3. Update `directives/text.peggy` to use TemplateCore
+4. Update other directive implementations
+5. Standardize directive naming to use `At*` prefix:
    - `RunDirective` to `AtRun`
    - `TextDirective` to `AtText`
    - etc.
@@ -166,66 +203,92 @@ Resolution steps:
 
 3. Ensure `[[...]]` syntax is properly handled by `WrappedTemplateContent` 
 
-### Directive Core Pattern Implementation
+### Content-Based Core Pattern Implementation
 
-Example for `text.peggy`:
+Examples of content-based core implementation:
 
-1. Create `core/text-core.peggy`:
+1. Create `core/template.peggy`:
    ```peggy
-   TextValueCore
-     = "@" addDirective:AtAdd {
+   TemplateCore
+     = template:WrappedTemplateContent {
          return {
-           subtype: 'textAssignment',
-           values: { content: addDirective },
-           raw: { content: "@add " + addDirective.raw.path || "" },
-           meta: { add: { type: addDirective.subtype } },
-           source: 'add'
-         };
-       }
-     / "@" runDirective:AtRun {
-         return {
-           subtype: 'textAssignment',
-           values: { content: runDirective },
-           raw: { content: "@run " + runDirective.raw.command || "" },
-           meta: { run: { type: runDirective.subtype } },
-           source: 'run'
-         };
-       }
-     / template:WrappedTemplateContent {
-         return {
-           subtype: 'textTemplate',
-           values: { content: template.parts },
-           raw: { content: template.raw },
-           meta: {},
-           source: 'template'
+           type: 'template',
+           subtype: 'templateContent',
+           values: { 
+             content: template.parts 
+           },
+           raw: { 
+             content: template.raw 
+           },
+           meta: {
+             hasVariables: template.parts.some(part => 
+               part && part.type === NodeType.VariableReference
+             )
+           }
          };
        }
    ```
 
-2. Update `text.peggy`:
+2. Create `core/command.peggy`:
    ```peggy
-   textAssignment
-     = "text" _ id:BaseIdentifier _ "=" _ value:TextValueCore {
-         // Create values with identifier
+   CommandCore
+     = command:WrappedCommandContent {
+         return {
+           type: 'command',
+           subtype: 'shellCommand',
+           values: { 
+             command: command.parts 
+           },
+           raw: { 
+             command: command.raw 
+           },
+           meta: {
+             hasVariables: command.parts.some(part => 
+               part && part.type === NodeType.VariableReference
+             )
+           }
+         };
+       }
+   ```
+
+3. Update `directives/text.peggy` to use TemplateCore:
+   ```peggy
+   AtText
+     = "text" DirectiveContext _ id:BaseIdentifier _ "=" _ template:TemplateCore {
+         // Combine identifier with template content
          const values = {
-           identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-           ...value.values
+           identifier: id,
+           ...template.values
          };
          
-         // Create raw with identifier
+         // Include identifier in raw representation
          const raw = {
            identifier: id,
-           ...value.raw
+           ...template.raw
          };
          
          return helpers.createStructuredDirective(
            'text',
-           value.subtype,
+           'textTemplate',
            values,
            raw,
-           value.meta,
-           location(),
-           value.source
+           template.meta,
+           location()
+         );
+       }
+   ```
+
+4. Update `directives/run.peggy` to use CommandCore:
+   ```peggy
+   AtRun
+     = "run" DirectiveContext _ command:CommandCore {
+         return helpers.createStructuredDirective(
+           'run',
+           'runCommand',
+           command.values,
+           command.raw,
+           command.meta,
+           location()
          );
        }
    ```
