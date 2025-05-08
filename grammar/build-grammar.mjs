@@ -19,10 +19,30 @@ fs.mkdirSync(DIST_DIR, { recursive: true });
 const sources =
   [
     fs.readFileSync(ROOT_GRAMMAR, 'utf8'),
+    // Include base abstractions first
+    ...fs.existsSync(path.join(__dirname, 'base')) ? 
+      fs.readdirSync(path.join(__dirname, 'base'))
+        .filter(f => f.endsWith('.peggy'))
+        .sort()
+        .map(f => fs.readFileSync(path.join(__dirname, 'base', f), 'utf8')) : [],
+    // Then include lexer abstractions
     ...fs.readdirSync(path.join(__dirname, 'lexer'))
         .filter(f => f.endsWith('.peggy'))
         .sort()
         .map(f => fs.readFileSync(path.join(__dirname, 'lexer', f), 'utf8')),
+    // Then include pattern abstractions
+    ...fs.existsSync(path.join(__dirname, 'patterns')) ? 
+      fs.readdirSync(path.join(__dirname, 'patterns'))
+        .filter(f => f.endsWith('.peggy'))
+        .sort()
+        .map(f => fs.readFileSync(path.join(__dirname, 'patterns', f), 'utf8')) : [],
+    // Then include core directive logic
+    ...fs.existsSync(path.join(__dirname, 'core')) ? 
+      fs.readdirSync(path.join(__dirname, 'core'))
+        .filter(f => f.endsWith('.peggy'))
+        .sort()
+        .map(f => fs.readFileSync(path.join(__dirname, 'core', f), 'utf8')) : [],
+    // Finally include directive implementations
     ...fs.readdirSync(path.join(__dirname, 'directives'))
         .filter(f => f.endsWith('.peggy'))
         .sort()
