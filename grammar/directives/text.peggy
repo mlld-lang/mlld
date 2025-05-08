@@ -4,9 +4,13 @@
 // Primary @text directive
 AtText
   = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ template:TemplateCore {
+      // Hardcoded values to start with (same as before)
+      const subtype = 'textAssignment';
+      const sourceType = 'literal';
+      
       return helpers.createStructuredDirective(
         'text',
-        'textAssignment',
+        subtype,
         {
           identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
           content: template.values.content
@@ -16,10 +20,10 @@ AtText
           content: template.raw.content
         },
         { 
-          sourceType: 'literal'
+          sourceType: sourceType
         },
         location(),
-        'literal'
+        sourceType
       );
     }
   / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ runCommand:RunDirectiveRef {
