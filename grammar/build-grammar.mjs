@@ -68,7 +68,7 @@ console.log('✓ parser.js written with default export');
 fs.mkdirSync(path.join(DIST_DIR, 'deps'), { recursive: true });
 
 // Copy grammar-core.js first
-const coreJsPath = path.join(__dirname, 'core/grammar-core.js');
+const coreJsPath = path.join(__dirname, 'deps/grammar-core.js');
 const destCoreJsPath = path.join(DIST_DIR, 'grammar-core.js');
 fs.copyFileSync(coreJsPath, destCoreJsPath);
 console.log(`✓ Copied ${coreJsPath} to ${destCoreJsPath}`);
@@ -77,7 +77,7 @@ console.log(`✓ Copied ${coreJsPath} to ${destCoreJsPath}`);
 const depsDir = path.join(DIST_DIR, 'deps');
 fs.mkdirSync(depsDir, { recursive: true });
 
-// Copy shim files with correct imports 
+// Copy shim files 
 for (const f of [
   'node-type.js',
   'directive-kind.js',
@@ -88,7 +88,7 @@ for (const f of [
   
   // Read the file, adjust the import path if needed, and write to destination
   let content = fs.readFileSync(srcPath, 'utf8');
-  content = content.replace('../core/grammar-core.js', '../grammar-core.js');
+  content = content.replace('./grammar-core.js', '../grammar-core.js');
   
   fs.writeFileSync(destPath, content);
   console.log(`✓ Copied and fixed imports for ${f}`);

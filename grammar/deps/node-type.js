@@ -1,2 +1,2 @@
-import { NodeType } from '../core/grammar-core.js';
+import { NodeType } from './grammar-core.js';
 export default NodeType;

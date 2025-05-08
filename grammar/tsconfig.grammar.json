@@ -7,13 +7,13 @@
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "declaration": true,
-    "declarationMap": true,
-    "rootDir": ".",
-    "outDir": "."
+    "declaration": false,
+    "declarationMap": false,
+    "rootDir": "deps",
+    "outDir": "deps"
   },
   "include": [
-    "core/**/*.ts"
+    "deps/**/*.ts"
   ],
   "exclude": [
     "node_modules"

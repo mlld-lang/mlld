@@ -73,5 +73,9 @@ repomix.config.json
 /error-display-demo/
 debug-embed.txt
 
+# TypeScript
+d.ts
+d.ts.map
+
 .env
 **/.claude/settings.local.json

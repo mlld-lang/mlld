@@ -1,2 +1,2 @@
-import { helpers } from '../core/grammar-core.js';
+import { helpers } from './grammar-core.js';
 export default helpers;

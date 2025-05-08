@@ -1,2 +1,2 @@
-import { DirectiveKind } from '../core/grammar-core.js';
+import { DirectiveKind } from './grammar-core.js';
 export default DirectiveKind;
