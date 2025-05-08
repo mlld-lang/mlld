@@ -1636,17 +1636,11 @@ function peg$parse(input, options) {
         'command'  // Added source parameter
       );
     };
-  var peg$f162 = function(id, meta, params, language, code) {
-      helpers.debug('AtExec matched code definition', { id, params, language, code });
+  var peg$f162 = function(id, meta, params, codeBlock) {
+      helpers.debug('AtExec matched code definition', { id, params, codeBlock });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id }, location());
-      
-      // Create language node
-      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
-      
-      // Process code content - get from bracketed content
-      const codeContent = code[0].content;
       
       // Process parameters
       const processedParams = params || [];
@@ -1655,12 +1649,16 @@ function peg$parse(input, options) {
         return '';
       });
       
+      // Extract language and code from LanguageCodeCore result
+      const language = codeBlock.raw.language;
+      const codeContent = codeBlock.raw.code;
+      
       // Build values and raw objects
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        lang: [langNode],
-        code: code
+        lang: [helpers.createNode(NodeType.Text, { content: language }, location())],
+        code: codeBlock.values.code
       };
       
       const raw = {
@@ -1675,7 +1673,7 @@ function peg$parse(input, options) {
         isMultiLine: codeContent.includes('\n'),
         language: language,
         parameterCount: processedParams.length,
-        isBracketed: true
+        isBracketed: codeBlock.meta.isBracketed
       };
       
       // Add metadata if present
@@ -8236,7 +8234,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parseAtExec() {
-    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13;
 
     s0 = peg$currPos;
     s1 = peg$parseDirectiveContext();
@@ -8349,17 +8347,10 @@ function peg$parse(input, options) {
               }
               if (s10 !== peg$FAILED) {
                 s11 = peg$parse_();
-                s12 = peg$parseCodeLanguage();
+                s12 = peg$parseLanguageCodeCore();
                 if (s12 !== peg$FAILED) {
-                  s13 = peg$parse_();
-                  s14 = peg$parseDirectCodeContent();
-                  if (s14 !== peg$FAILED) {
-                    peg$savedPos = s0;
-                    s0 = peg$f162(s4, s5, s6, s12, s14);
-                  } else {
-                    peg$currPos = s0;
-                    s0 = peg$FAILED;
-                  }
+                  peg$savedPos = s0;
+                  s0 = peg$f162(s4, s5, s6, s12);
                 } else {
                   peg$currPos = s0;
                   s0 = peg$FAILED;
