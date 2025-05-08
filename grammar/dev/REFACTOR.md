@@ -2,6 +2,14 @@
 
 This document outlines a comprehensive plan for refactoring the Meld grammar system to improve abstraction organization, standardize naming conventions, and create a more maintainable structure.
 
+## Status
+
+We have completed this refactor and we are now engaging in cleanup work. After completing this work, the code _almost_ built, but we ran into an issue with directives/text.peggy. By reverting text.peggy to a minimal implementation, we were able to build the grammar and see that the vast majority of our tests passed (50 out of 68 at the time). This indicates our refactor is successful and simply has some minor issues.
+
+Our grammar is built by build-grammar.mjs script, and build errors generate from the built form of the file, so we enhanced our debugging capability by adding location mapping, which is visible in the output of `npm run build:grammar` _above_ the errors provided by 
+
+Unfortunately, the build errors we are seeing from text.peggy are not helpful -- they point to an outer brace rather than a specific piece of syntax, which tells us that it's inside the JS code block rather than the grammar itself.
+
 ## Goals
 
 1. Reorganize file structure to match abstraction hierarchy
