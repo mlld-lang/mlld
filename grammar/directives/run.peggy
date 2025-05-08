@@ -20,7 +20,7 @@ It can be used in three main forms:
 
 // Primary @run directive 
 AtRun
-  = "@run" DirectiveContext _ command:CommandCore {
+  = DirectiveContext "@run" _ command:CommandCore {
       helpers.debug('AtRun matched shell command', { command });
       
       return helpers.createStructuredDirective(
@@ -35,7 +35,7 @@ AtRun
         location()
       );
     }
-  / "@run" DirectiveContext _ language:RunCodeLanguage _ args:RunCodeArgs? _ code:CodeCore {
+  / DirectiveContext "@run" _ language:RunCodeLanguage _ args:RunCodeArgs? _ code:CodeCore {
       helpers.debug('AtRun matched language code block', { language, args, code });
       
       // Create language node
@@ -71,7 +71,7 @@ AtRun
         location()
       );
     }
-  / "@run" DirectiveContext _ "@" commandRef:RunCommandReference {
+  / DirectiveContext "@run" _ "@" commandRef:RunCommandReference {
       helpers.debug('AtRun matched command reference', { commandRef });
       
       // This is used to run a previously defined command (created with @exec)

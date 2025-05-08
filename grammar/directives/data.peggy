@@ -22,7 +22,7 @@ It can be used in these forms:
 
 // Primary @data directive
 AtData
-  = "@data" DirectiveContext _ id:BaseIdentifier _ "=" _ value:DataValue {
+  = DirectiveContext "@data" _ id:BaseIdentifier _ "=" _ value:DataValue {
       helpers.debug('AtData matched', { id, valueType: value.type });
       
       // Create variable reference node for identifier

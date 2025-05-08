@@ -20,7 +20,7 @@ It can be used in these forms:
 
 // Primary @import directive
 AtImport
-  = "@import" DirectiveContext _ "{" _ imports:ImportsList _ "}" _ "from" _ path:PathCore {
+  = DirectiveContext "@import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:PathCore {
       helpers.debug('AtImport matched', { imports, path });
       
       // Get the raw imports text

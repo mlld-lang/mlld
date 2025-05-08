@@ -20,7 +20,7 @@ by the @run directive. It can be used in these forms:
 
 // Primary @exec directive - all variants
 AtExec
-  = "@exec" DirectiveContext _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ command:CommandCore {
+  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ command:CommandCore {
       helpers.debug('AtExec matched command definition', { id, params, command });
       
       // Create identifier node
@@ -68,7 +68,7 @@ AtExec
         location()
       );
     }
-  / "@exec" DirectiveContext _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ language:CodeLanguage _ code:CodeCore {
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ language:CodeLanguage _ code:CodeCore {
       helpers.debug('AtExec matched code definition', { id, params, language, code });
       
       // Create identifier node
@@ -122,7 +122,7 @@ AtExec
         location()
       );
     }
-  / "@exec" DirectiveContext _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ "@" commandRef:CommandReference {
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ "@" commandRef:CommandReference {
       helpers.debug('AtExec matched command reference', { id, params, commandRef });
       
       // Create identifier node

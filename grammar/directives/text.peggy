@@ -20,7 +20,7 @@ It can be used in these forms:
 
 // Primary @text directive
 AtText
-  = "@text" DirectiveContext _ id:BaseIdentifier _ "=" _ template:TemplateCore {
+  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ template:TemplateCore {
       helpers.debug('AtText matched template', { id, template });
       
       // Create variable reference node for identifier

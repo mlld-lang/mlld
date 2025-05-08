@@ -19,7 +19,7 @@ It is used in the form:
 
 // Primary @path directive
 AtPath
-  = "@path" DirectiveContext _ id:BaseIdentifier _ "=" _ path:PathCore {
+  = DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ path:PathCore {
       helpers.debug('AtPath matched', { id, path });
       
       // Create variable reference node for identifier

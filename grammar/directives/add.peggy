@@ -21,7 +21,7 @@ It can be used in these forms:
 
 // Primary @add directive with all variants
 AtAdd
-  = "@add" DirectiveContext _ template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  = DirectiveContext "@add" _ template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched template content', { template, headerLevel, underHeader });
       
       // Extract header level and under header if provided
@@ -77,7 +77,7 @@ AtAdd
         location()
       );
     }
-  / "@add" DirectiveContext _ "@" varRef:VariableReference _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "@add" _ "@" varRef:VariableReference _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched variable reference', { varRef, headerLevel, underHeader });
       
       // Extract variable reference information
@@ -133,7 +133,7 @@ AtAdd
         location()
       );
     }
-  / "@add" DirectiveContext _ path:PathCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "@add" _ path:PathCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched path', { path, headerLevel, underHeader });
       
       // Extract header level and under header if provided
@@ -193,7 +193,7 @@ AtAdd
         location()
       );
     }
-  / "@add" DirectiveContext _ sectionTitle:QuotedContent _ "from" _ path:PathCore _ asTitle:AsNewTitle? {
+  / DirectiveContext "@add" _ sectionTitle:QuotedContent _ "from" _ path:PathCore _ asTitle:AsNewTitle? {
       helpers.debug('AtAdd matched section', { sectionTitle, path, asTitle });
       
       // Process the section title and path
