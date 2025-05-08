@@ -4,14 +4,19 @@
 // Primary @text directive
 AtText
   = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ template:TemplateCore {
-      // Hardcoded values to start with (same as before)
-      const subtype = 'textAssignment';
-      const sourceType = 'literal';
+      // Get hasVariables flag directly from the template's meta
+      const hasVariables = template.meta.hasVariables;
       
-      // Create meta object with hardcoded values for now
+      // Determine the subtype based on whether the template has variables
+      const subtype = hasVariables ? 'textTemplate' : 'textAssignment';
+      
+      // Set source type based on whether it's a template
+      const sourceType = hasVariables ? 'template' : 'literal';
+      
+      // Create meta object 
       const meta = { 
         sourceType: sourceType,
-        hasVariables: false
+        hasVariables: hasVariables
       };
       
       return helpers.createStructuredDirective(
