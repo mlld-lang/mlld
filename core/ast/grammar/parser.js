@@ -1636,11 +1636,17 @@ function peg$parse(input, options) {
         'command'  // Added source parameter
       );
     };
-  var peg$f162 = function(id, meta, params, codeBlock) {
-      helpers.debug('AtExec matched code definition', { id, params, codeBlock });
+  var peg$f162 = function(id, meta, params, language, args, code) {
+      helpers.debug('AtExec matched code definition', { id, params, language, args, code });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id }, location());
+      
+      // Create language node
+      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      
+      // Process code content - get from bracketed content
+      const codeContent = helpers.reconstructRawString(code);
       
       // Process parameters
       const processedParams = params || [];
@@ -1649,22 +1655,20 @@ function peg$parse(input, options) {
         return '';
       });
       
-      // Extract language and code from LanguageCodeCore result
-      const language = codeBlock.raw.language;
-      const codeContent = codeBlock.raw.code;
-      
       // Build values and raw objects
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        lang: [helpers.createNode(NodeType.Text, { content: language }, location())],
-        code: codeBlock.values.code
+        lang: [langNode],
+        args: args || [],
+        code: code
       };
       
       const raw = {
         identifier: id,
         params: rawParams,
         lang: language,
+        args: args ? args.map(arg => arg.identifier || '') : [],
         code: codeContent
       };
       
@@ -1673,7 +1677,7 @@ function peg$parse(input, options) {
         isMultiLine: codeContent.includes('\n'),
         language: language,
         parameterCount: processedParams.length,
-        isBracketed: codeBlock.meta.isBracketed
+        isBracketed: true
       };
       
       // Add metadata if present
@@ -8234,7 +8238,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parseAtExec() {
-    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16;
 
     s0 = peg$currPos;
     s1 = peg$parseDirectiveContext();
@@ -8347,10 +8351,22 @@ function peg$parse(input, options) {
               }
               if (s10 !== peg$FAILED) {
                 s11 = peg$parse_();
-                s12 = peg$parseLanguageCodeCore();
+                s12 = peg$parseRunCodeLanguage();
                 if (s12 !== peg$FAILED) {
-                  peg$savedPos = s0;
-                  s0 = peg$f162(s4, s5, s6, s12);
+                  s13 = peg$parse_();
+                  s14 = peg$parseRunCodeArgs();
+                  if (s14 === peg$FAILED) {
+                    s14 = null;
+                  }
+                  s15 = peg$parse_();
+                  s16 = peg$parseDirectCodeContent();
+                  if (s16 !== peg$FAILED) {
+                    peg$savedPos = s0;
+                    s0 = peg$f162(s4, s5, s6, s12, s14, s16);
+                  } else {
+                    peg$currPos = s0;
+                    s0 = peg$FAILED;
+                  }
                 } else {
                   peg$currPos = s0;
                   s0 = peg$FAILED;

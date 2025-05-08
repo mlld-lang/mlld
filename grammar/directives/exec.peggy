@@ -69,11 +69,17 @@ AtExec
         'command'  // Added source parameter
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ codeBlock:LanguageCodeCore {
-      helpers.debug('AtExec matched code definition', { id, params, codeBlock });
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ language:RunCodeLanguage _ args:RunCodeArgs? _ code:DirectCodeContent {
+      helpers.debug('AtExec matched code definition', { id, params, language, args, code });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id }, location());
+      
+      // Create language node
+      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      
+      // Process code content - get from bracketed content
+      const codeContent = helpers.reconstructRawString(code);
       
       // Process parameters
       const processedParams = params || [];
@@ -82,22 +88,20 @@ AtExec
         return '';
       });
       
-      // Extract language and code from LanguageCodeCore result
-      const language = codeBlock.raw.language;
-      const codeContent = codeBlock.raw.code;
-      
       // Build values and raw objects
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        lang: [helpers.createNode(NodeType.Text, { content: language }, location())],
-        code: codeBlock.values.code
+        lang: [langNode],
+        args: args || [],
+        code: code
       };
       
       const raw = {
         identifier: id,
         params: rawParams,
         lang: language,
+        args: args ? args.map(arg => arg.identifier || '') : [],
         code: codeContent
       };
       
@@ -106,7 +110,7 @@ AtExec
         isMultiLine: codeContent.includes('\n'),
         language: language,
         parameterCount: processedParams.length,
-        isBracketed: codeBlock.meta.isBracketed
+        isBracketed: true
       };
       
       // Add metadata if present
