@@ -1,17 +1,110 @@
-# Debugging the Meld Parser
+# Debugging the Meld Grammar
 
-This document provides guidance on how to debug the Meld parser, particularly when dealing with test failures.
+This document provides guidance on how to debug the Meld grammar system, particularly when dealing with grammar build errors and test failures.
+
+## Build Process and Error Location
+
+The Meld grammar uses a modular approach with multiple `.peggy` files that are concatenated by the `build-grammar.mjs` script. This has important implications for error reporting:
+
+1. **Component vs. Concatenated Files**: When an error occurs, PEG.js reports line numbers in the concatenated file, not the original component file.
+
+2. **Enhanced Error Reporting**: Our build script provides location mapping information _above_ the standard PEG.js errors, showing which component file contains the error.
+
+Example build error output:
+```
+Component file error: /grammar/directives/text.peggy:6:80
+PEG.js error: Expected "(", ".", "/", "/*", "//", ";", "@", "|", [!$&] ... but "{" found.
+```
+
+Always pay attention to the component file error first, as it points to the specific module causing the issue, not just a line in the concatenated file.
+
+## Grammar Architecture Overview
+
+Understanding the architecture is critical for effective debugging. Our grammar follows a layered approach:
+
+```
+grammar/
+├── base/               # Level 1: Core primitives
+│   ├── tokens.peggy    # Basic identifiers, characters
+│   ├── literals.peggy  # Literal values 
+│   ├── segments.peggy  # Basic text segments
+│   └── context.peggy   # Context detection predicates
+├── patterns/           # Levels 2-5: Reusable patterns
+│   ├── variables.peggy # Variable reference patterns
+│   ├── content.peggy   # Content patterns
+│   └── rhs.peggy       # Right-hand side patterns
+├── core/               # Level 6: Core content-type logic
+│   ├── template.peggy  # Template content (used by text, add)
+│   ├── command.peggy   # Command handling (used by run, exec)
+│   ├── code.peggy      # Code block handling (used by run, exec)
+│   └── path.peggy      # Path handling (used by import, add)
+└── directives/         # Level 7: Full directive implementations
+    ├── run.peggy       # Uses command.peggy and code.peggy
+    ├── exec.peggy      # Uses command.peggy and code.peggy with assignment
+    ├── text.peggy      # Uses template.peggy with assignment
+    ├── import.peggy    # Uses path.peggy
+    └── ...
+```
+
+When debugging, you should trace issues to the appropriate layer. Lower layers (base, patterns) affect everything above them, while higher layers (directives) are more isolated.
+
+## Debug Strategy Decision Tree
+
+Use this decision tree to determine the best approach for your specific issue:
+
+### Build Failure
+1. **Identify Component File**
+   - Read the mapped location in our component grammar module
+   
+2. **Assess Error Type**
+   - **Grammar Syntax Issue**: Error refers to PEG.js syntax (rule definitions, patterns)
+      - Start by validating the grammar rule syntax
+      - Check rule references, alternatives, sequence syntax 
+   
+   - **JavaScript Action Block Issue**: Error involves JavaScript code inside `{...}` blocks
+      - Copy current version to `file.peggy.old`
+      - Create a minimized version of the JS portion that's not working
+      - Additively reconstruct by removing functions, hardcoding values
+      - Make as small edits as possible
+      - Run `npm run build:grammar` after each change
+      - Commit working versions to allow easy rollback
+      
+### Test Failure
+1. **Verify Test Correctness**
+   - CRITICAL FIRST STEP: Ensure the test syntax and expectation is actually correct
+   - Compare with documentation to verify expected behavior
+   - If test is incorrect, update it!
+
+2. **Debug the Grammar Implementation**
+   - Add debugging using `helpers.debug`
+   - Run the script: `npm run ast -- "<meld syntax>"` 
+   - Look for debug logs and specific errors
+   - Iterate and run tests again
+
+3. **Fix at Correct Abstraction Level**
+   - Trace issues to the appropriate layer in the grammar
+   - Fix the underlying abstraction instead of replacing it in higher layers
+   - If a temporary abstraction replacement helped identify the issue, apply the fix to the abstraction itself
+
+## JavaScript Action Block Limitations
+
+PEG.js has limitations on what JavaScript syntax works reliably in action blocks `{...}`. When a build fails with cryptic errors like "Expected token but '{' found", it often indicates a JavaScript syntax issue.
+
+Problematic patterns found in our experience:
+- String methods like `.includes()` in certain contexts
+- Object spread syntax (`...template.meta`)
+- Complex variable manipulation and multi-step transformations
+- Likely other JavaScript features that confuse PEG.js's own parser
+
+When you encounter such issues, try this incremental approach:
+1. Create a minimal working version (remove complex JS)
+2. Hardcode values instead of computing them
+3. Add back functionality step by step, testing after each change
+4. Prefer using pre-calculated metadata (e.g., from core components) over calculating things in action blocks
 
 ## Using the Debug Script
 
-The repository includes a debug script at `scripts/ast-output.js` (`npm run ast`) that can help you understand what's happening with specific test cases. This script:
-
-1. Uses ESM imports with proper path resolution to load the parser and test types
-2. Displays the input, actual output, any parse errors that occur, and debug output from grammar (if enabled)
-
-### Running the Debug Script
-
-To run the debug script:
+The repository includes a debug script at `scripts/ast-output.js` that lets you directly test Meld syntax:
 
 ```bash
 # Quick parse with minimal quoting
@@ -30,68 +123,46 @@ npm run ast -- "$(cat snippet.mld)"
 node scripts/ast-output.js --debug "@import { a } from 'f.md'"
 ```
 
-### What the Debug Script Shows
-
-For each test case, the script will output:
+The script outputs:
 - The input string being parsed
-- The actual output structure (from the parser)
-- Any parse errors that occur, including error messages and locations
-- Debug traces from the grammar if you've enabled them
+- The actual output structure (AST)
+- Any parse errors, including messages and locations
+- Debug traces if enabled
 
-This makes it easy to spot differences between what you expect and what the parser is actually producing.
+This is invaluable for isolating grammar component issues and testing specific syntax patterns.
 
 ## Adding Debug Logging to the Grammar
 
-When the debug script isn't sufficient or you need finer-grained insight into the parser's internal execution path, you can add manual logging directly into the grammar file. However, Peggy's syntax is strict, and incorrect placement of logging code (especially action blocks `{...}`) can easily break the grammar build.
+When the debug script isn't sufficient, you can add manual logging directly into grammar files using `helpers.debug`.
 
 **Use the `helpers.debug` Function:**
 
-The grammar's initializer block (`{ ... }` at the top) defines a `helpers.debug` function. Use this for consistency.
-
 ```javascript
-// Inside meld.pegjs initializer block
-{
-  const DEBUG = true; // Ensure this is true
-  // ... other helpers ...
-  const helpers = {
-    debug(msg, ...args) {
-      if (DEBUG) {
-        // Use process.stdout.write to avoid suppression by test runners
-        const formattedArgs = args.map(arg => {
-          try {
-            return typeof arg === 'string' ? arg : JSON.stringify(arg);
-          } catch (e) {
-            return '[Unserializable]';
-          }
-        }).join(' ');
-        process.stdout.write(`[DEBUG GRAMMAR] ${msg} ${formattedArgs}\n`);
-      }
-    },
-    // ... other helpers ...
-  };
-}
+helpers.debug('AtText matched', { 
+  template, 
+  hasVariables: template.meta.hasVariables
+});
 ```
 
 **Safe Placement of Logging Calls:**
 
-*   **Inside Existing Action Blocks:** The safest place to add `helpers.debug(...)` calls is within the *existing* action blocks `{...}` that typically appear at the end of a rule definition, right before the `return` statement. This doesn't change the grammar structure.
+*   **Inside Existing Action Blocks:** The safest place to add logging is within *existing* action blocks `{...}` that typically appear at the end of a rule definition.
 
-    ```pegjs
+    ```peggy
     MyRule
       = part1:SubRule1 part2:SubRule2 {
           // Existing logic to process part1, part2...
-          const result = { type: 'MyType', ... };
-          helpers.debug('MyRule Matched', `part1 type=${part1.type}`, `result=`, result);
+          helpers.debug('MyRule Matched', { part1, part2 });
           return result;
         }
     ```
 
-*   **Logging Rule Entry:** To log when a rule *starts* trying to match, you can sometimes add a simple action block at the beginning if the rule structure allows it, but this is more fragile.
+*   **Logging Rule Entry:** To log when a rule *starts* trying to match, you can sometimes add a simple predicate action, but this is more fragile.
 
-    ```pegjs
+    ```peggy
     // Potentially fragile - use with caution
     MyRule
-      = { helpers.debug('MyRule: Trying to match...'); return true; } // Predicate-like action block
+      = &{ helpers.debug('MyRule: Trying to match...'); return true; }
         part1:SubRule1 part2:SubRule2 {
           // ... rest of rule ...
         }
@@ -99,28 +170,76 @@ The grammar's initializer block (`{ ... }` at the top) defines a `helpers.debug`
 
 **Unsafe Placement (Avoid):**
 
-*   **Before Alternatives in a Choice:** Do NOT place action blocks directly before alternatives separated by `/`. This is invalid syntax and will break the build.
+*   **Before Alternatives in a Choice:** Do NOT place action blocks directly before alternatives separated by `/`. This is invalid syntax.
 
-    ```pegjs
+    ```peggy
     // INVALID SYNTAX - DO NOT DO THIS
     RuleChoice
       = { helpers.debug('Trying Alt1'); return true; } Alt1
       / { helpers.debug('Trying Alt2'); return true; } Alt2
     ```
 
-*   **Modifying Fundamental Rules:** Be extremely careful when adding action blocks to very basic rules like whitespace (`_`, `__`), `Identifier`, `StringLiteral`, etc. Adding action blocks here seems more likely to cause unexpected build failures. It's generally better to log in the higher-level rules that *use* these fundamental rules.
+*   **Modifying Fundamental Rules:** Be extremely careful when adding action blocks to basic rules like whitespace (`_`), `BaseIdentifier`, etc.
 
-*   **Inside Predicates:** Adding logging inside predicate blocks (`&{...}` or `!{...}`) might be possible but can also be syntactically tricky and is best avoided unless absolutely necessary.
+*   **Inside Predicates:** Adding logging inside predicate blocks (`&{...}` or `!{...}`) can be syntactically tricky.
 
-**Workflow:**
+## Incremental Testing/Building Approach
 
-1.  Add minimal, targeted `helpers.debug` calls in safe locations (preferably existing action blocks).
-2.  Run `npm run build:grammar` immediately to check for syntax errors.
-3.  If the build fails, remove the last log statement added and try again.
-4.  Once the build succeeds, run the relevant tests (`npm test core/ast` or specific API tests) and check the console output for your `[DEBUG GRAMMAR]` messages.
-5.  Remember to remove the debug logs once troubleshooting is complete.
+When fixing complex grammar issues, follow this incremental approach that has proven effective:
 
-Remember that changes to the grammar file require rebuilding the parser before they take effect:
+1. **Create a minimal working version**:
+   - Simplify to the most basic functioning version
+   - Remove complex JavaScript from action blocks
+   - Hardcode values instead of computing them
+   - Focus on just one rule variant at a time
+
+2. **Add features incrementally**:
+   - Make small, isolated changes
+   - Run `npm run build:grammar` after each change
+   - Commit working versions to allow easy rollback
+   - Prefer using pre-calculated metadata over calculating things in action blocks
+
+3. **Example workflow** (from real-world text.peggy fix):
+   ```
+   // 1. Start with hardcoded values
+   const subtype = 'textAssignment';
+   const sourceType = 'literal';
+   
+   // 2. Create separate meta object
+   const meta = { 
+     sourceType: sourceType,
+     hasVariables: false 
+   };
+   
+   // 3. Only after these work, try actually computing values
+   const hasVariables = template.meta.hasVariables;
+   const subtype = hasVariables ? 'textTemplate' : 'textAssignment';
+   ```
+
+## Core Debugging Principles
+
+1. **Fix at the Right Abstraction Level**:
+   - It's imperative to trace issues to the abstraction level where they originate
+   - Avoid replacing abstractions in higher-level components as a "fix"
+   - If you temporarily replace an abstraction to debug, ensure you properly fix the abstraction itself
+
+2. **Test Correctness First**:
+   - The first task in fixing a test failure is verifying the test itself is correct
+   - Many apparent grammar "bugs" are actually incorrect test expectations
+   - The grammar has more rigor and strategic construction than individual tests
+
+3. **Isolate Before Fixing**:
+   - Test individual grammar components in isolation
+   - Use the debug script to directly test specific syntax patterns
+   - Create minimal reproduction cases
+
+## Additional Resources
+
+- **Peggy Documentation**: Local copy available at `grammar/dev/peggy.html` for reference
+- **Grammar REFACTOR.md**: Overview of architecture and implementation standards
+- **Build Script**: Review `grammar/build-grammar.mjs` to understand the build process
+
+Remember that changes to the grammar files require rebuilding the parser before they take effect:
 
 ```bash
 # Rebuild grammar and run tests
