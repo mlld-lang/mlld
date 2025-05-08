@@ -9,6 +9,22 @@
     options.rhsDirectiveType = '';
     options.afterDirectiveType = '';
   }
+  
+  // Function to ensure we can access the context detection rules
+  function ensureContextDetectionRules() {
+    // These function references are to ensure the rules from context-detection.peggy
+    // are accessible. This doesn't actually call them, just makes sure they're
+    // properly linked during parsing.
+    const _dummy = [
+      IsTopLevelDirective,
+      IsRhsDirective,
+      IsAfterDirectiveKeyword,
+      IsInInterpolationContext,
+      DetectAtContext
+    ];
+    
+    return true;
+  }
 }
 
 // structural newline that should become an AST node

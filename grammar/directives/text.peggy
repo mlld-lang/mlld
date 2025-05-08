@@ -1,5 +1,15 @@
 TextDirective
-  = textAssignment / textTemplate
+  = textAssignment
+
+// Content rule for templates with variable interpolation support
+TemplatePlainContent
+  = parts:(InterpolationVar / TemplateTextSegment)* {
+      helpers.debug('TemplatePlainContent matched with parts', { 
+        partsLength: parts.length, 
+        firstType: parts.length > 0 ? parts[0].type : 'none' 
+      });
+      return parts;
+    }
 
 textAssignment
   = "text" _ id:Identifier _ "=" _ value:TextValue HWS DirectiveEOL {
@@ -18,8 +28,9 @@ textAssignment
     // Create structured meta object
     const meta = {};
     
-    // Determine source for the top-level field
+    // Determine source for the top-level field and which directive type to use
     let sourceType = 'literal'; // Default source type
+    let directiveType = 'textAssignment'; // Default directive type
     
     // Check if the value is a nested directive
     if (value.type === "nestedDirective" && value.directive) {
@@ -36,6 +47,11 @@ textAssignment
       } else {
         sourceType = value.directive.kind || 'directive';
       }
+    } else if (value.type === "template") {
+      // Use the template values for content
+      values.content = value.values;
+      sourceType = 'template';
+      directiveType = 'textTemplate'; // Use textTemplate for template type values
     } else {
       // Use normal values array for non-directive content
       values.content = Array.isArray(value.values) ? value.values : [value.values];
@@ -50,7 +66,7 @@ textAssignment
     // Return using createStructuredDirective for consistency
     return helpers.createStructuredDirective(
       'text',
-      'textAssignment',
+      directiveType,
       values,
       raw,
       meta,
@@ -59,47 +75,7 @@ textAssignment
     );
   }
 
-textTemplate
-  = "text" _ id:(Identifier _ "=" _)? content:WrappedTemplateContent HWS DirectiveEOL {
-    // Parse identifier if present
-    const identifier = id ? id[0] : null;
-    helpers.debug('TEXT', { type: 'template', identifier, content });
-    
-    // Capture raw text
-    const rawIdentifier = identifier;
-    const rawContent = content.raw;
-    
-    // Create values object with optional identifier
-    const values = {
-      content: content.parts
-    };
-    
-    if (identifier) {
-      // Create variable reference node for identifier
-      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: identifier });
-      values.identifier = [idNode];
-    }
-    
-    // Create raw object
-    const raw = {
-      identifier: rawIdentifier,
-      content: rawContent
-    };
-    
-    // Create meta object
-    const meta = {};
-    
-    // Return using createStructuredDirective for consistency
-    return helpers.createStructuredDirective(
-      'text',
-      'textTemplate',
-      values,
-      raw,
-      meta,
-      location(),
-      'template'  // Using 'template' as the source for interpolatable content
-    );
-  }
+// Template handling is now done inside textAssignment
 
 TextValue
   = "@" addDirective:AddDirective {
@@ -116,6 +92,15 @@ TextValue
         directive: runDirective, // Store the complete directive node
         values: [], // Empty values since we're using the directive node directly
         rawText: "@run " + (runDirective.raw && runDirective.raw.command ? runDirective.raw.command : "")
+      };
+    }
+  / '[[' content:TemplatePlainContent ']]' {
+      helpers.debug('Found template value with double brackets');
+      // This is a template, call textTemplate rule
+      return {
+        type: "template",
+        values: content,
+        rawText: "[[" + helpers.reconstructRawString(content) + "]]"
       };
     }
   / textContent:WrappedTemplateContent {

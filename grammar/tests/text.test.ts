@@ -69,9 +69,12 @@ describe('Text Directive Tests', () => {
   });
   
   describe('Text Template', () => {
-    it('should parse a basic template text', async () => {
-      // Use correct template syntax with double brackets
-      const result = (await parse('@text [[This is some text]]')).ast[0] as TextTemplateDirectiveNode;
+    it('should parse a template text with identifier assignment', async () => {
+      console.log('About to parse template text with identifier assignment...');
+      const parseResult = await parse('@text message = [[This is some text]]');
+      console.log('Parse result:', JSON.stringify(parseResult, null, 2));
+      
+      const result = parseResult.ast[0] as TextTemplateDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
@@ -81,11 +84,55 @@ describe('Text Directive Tests', () => {
       expect(result.values.content).toBeDefined();
       expect(result.values.content.length).toBeGreaterThan(0);
       
+      // Check identifier
+      expect(result.values.identifier).toBeDefined();
+      expect(result.values.identifier.length).toBe(1);
+      expect(result.values.identifier[0].identifier).toBe('message');
+      
       // Check raw
       expect(result.raw.content).toBeDefined();
+      expect(result.raw.identifier).toBe('message');
       
       // Type guard
       expect(isTextTemplateDirective(result)).toBe(true);
+    });
+    
+    it('should parse a template text with variable interpolation', async () => {
+      console.log('About to parse template text with variable interpolation...');
+      const parseResult = await parse('@text greeting = [[Hello, {{name}}!]]');
+      console.log('Parse result with interpolation:', JSON.stringify(parseResult, null, 2));
+      
+      const result = parseResult.ast[0] as TextTemplateDirectiveNode;
+      
+      expect(result.type).toBe('Directive');
+      expect(result.kind).toBe('text');
+      expect(result.subtype).toBe('textTemplate');
+      
+      // Check values
+      expect(result.values.content).toBeDefined();
+      expect(result.values.content.length).toBe(3); // Should have 3 parts: text, variable, text
+      
+      // Check identifier
+      expect(result.values.identifier).toBeDefined();
+      expect(result.values.identifier.length).toBe(1);
+      expect(result.values.identifier[0].identifier).toBe('greeting');
+      
+      // Check that the second item is a variable reference
+      expect(result.values.content[1].type).toBe('VariableReference');
+      expect(result.values.content[1].valueType).toBe('varInterpolation');
+      expect(result.values.content[1].identifier).toBe('name');
+      
+      // Check raw
+      expect(result.raw.content).toBeDefined();
+      expect(result.raw.identifier).toBe('greeting');
+      
+      // Type guard
+      expect(isTextTemplateDirective(result)).toBe(true);
+    });
+    
+    it('should reject a template text without an identifier', async () => {
+      // A text directive without an identifier should be rejected as invalid syntax
+      await expect(parse('@text [[This is invalid syntax]]')).rejects.toThrow();
     });
   });
 });

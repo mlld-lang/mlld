@@ -101,6 +101,13 @@ CommandTextSegment "Command text segment"
       return helpers.createNode(NodeType.Text, { content: chars }, location());
     }
 
+// Special text segment for template content that allows most characters except interpolation
+TemplateTextSegment "Template text segment"
+  = chars:$(!('{{' / '}}' / '[[' / ']]') .)+ { 
+      helpers.debug('TemplateTextSegment matched', { chars });
+      return helpers.createNode(NodeType.Text, { content: chars }, location());
+    }
+
 // Content inside single brackets with @var interpolation
 BracketContent "Content with @var interpolation"
   = '[' parts:(AtVar / CommandTextSegment / PathSeparator)* ']' {
@@ -110,11 +117,13 @@ BracketContent "Content with @var interpolation"
 
 // Content inside double brackets with {{var}} interpolation
 DoubleBracketContent "Content with {{var}} interpolation"
-  = '[[' parts:(InterpolationVar / TextSegment)* ']]' {
+  = &{ helpers.debug('Trying to match DoubleBracketContent with [[...]]'); return true; }
+    '[[' parts:(InterpolationVar / TemplateTextSegment)* ']]' {
       helpers.debug('DoubleBracketContent matched [[...]]', { 
         parts: parts,
         isArray: Array.isArray(parts),
-        length: Array.isArray(parts) ? parts.length : 'not array'
+        length: Array.isArray(parts) ? parts.length : 'not array',
+        firstType: Array.isArray(parts) && parts.length > 0 ? parts[0].type : 'none'
       });
       
       // Return only the content within double brackets, not the brackets themselves
@@ -164,11 +173,22 @@ PathStyleInterpolation "Path interpolation patterns"
 
 // Template-style interpolation: quotes or double brackets
 TemplateStyleInterpolation "Template interpolation patterns"
-  = rule:LiteralContent {
+  = &{ helpers.debug('Trying to match TemplateStyleInterpolation...'); return true; }
+    // Direct handling of double bracket content as first alternative
+    '[[' content:(InterpolationVar / TemplateTextSegment)* ']]' {
+      helpers.debug('TemplateStyleInterpolation matched [[...]] directly', { 
+        content, 
+        isArray: Array.isArray(content),
+        length: Array.isArray(content) ? content.length : 'not array'
+      });
+      return content;
+    }  
+  / rule:LiteralContent {
       helpers.debug('TemplateStyleInterpolation matched LiteralContent', { rule });
       return rule;
     }
-  / rule:DoubleBracketContent {
+  / &{ helpers.debug('Trying DoubleBracketContent in TemplateStyleInterpolation...'); return true; }
+    rule:DoubleBracketContent {
       helpers.debug('TemplateStyleInterpolation matched DoubleBracketContent', { 
         rule, 
         isArray: Array.isArray(rule),
@@ -202,7 +222,8 @@ WrappedPathContent "Wrapped path content"
 
 // For templates in text, add directives
 WrappedTemplateContent "Wrapped template content"
-  = content:TemplateStyleInterpolation {
+  = &{ helpers.debug('Trying to match WrappedTemplateContent...'); return true; }
+    content:TemplateStyleInterpolation {
       helpers.debug('WrappedTemplateContent matched', { 
         contentType: typeof content,
         isArray: Array.isArray(content),
