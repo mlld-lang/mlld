@@ -21,17 +21,11 @@ by the @run directive. It can be used in these forms:
 // Primary @exec directive - all variants
 AtExec
   // This pattern must be first because of "first match wins" in PEG.js
-  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ language:RunCodeLanguage _ args:RunCodeArgs? _ code:DirectCodeContent {
-      helpers.debug('AtExec matched code definition directly', { id, params, language, args, code });
+  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ runCode:RunLanguageCodeCore {
+      helpers.debug('AtExec matched code definition using RunLanguageCodeCore abstraction', { id, params, runCode });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id }, location());
-      
-      // Create language node
-      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
-      
-      // Process code content - get from bracketed content
-      const codeContent = code[0].content;
       
       // Process parameters
       const processedParams = params || [];
@@ -40,29 +34,23 @@ AtExec
         return '';
       });
       
-      // Build values and raw objects
+      // Build values and raw objects using the RunLanguageCodeCore values
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        lang: [langNode],
-        args: args || [],
-        code: code
+        ...runCode.values // Use values from RunLanguageCodeCore abstraction
       };
       
       const raw = {
         identifier: id,
         params: rawParams,
-        lang: language,
-        args: args ? args.map(arg => arg.identifier || '') : [],
-        code: codeContent
+        ...runCode.raw // Use raw from RunLanguageCodeCore abstraction
       };
       
-      // Create meta object
+      // Create meta object using the RunLanguageCodeCore metadata
       const metaObj = {
-        isMultiLine: codeContent.includes('\n'),
-        language: language,
-        parameterCount: processedParams.length,
-        isBracketed: true
+        ...runCode.meta, // Use meta from RunLanguageCodeCore abstraction
+        parameterCount: processedParams.length
       };
       
       // Add metadata if present

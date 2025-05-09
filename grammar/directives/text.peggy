@@ -71,32 +71,113 @@ AtText
         sourceType
       );
     }
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ "[" runCommand:$(!"]" .)* "]" {
-      // Hardcoded values to start with (same as before)
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ command:CommandCore {
+      helpers.debug('AtText matched @run with CommandCore abstraction', { id, command });
+      
+      // Use the proper subtype and sourceType
       const subtype = 'textAssignment';
       const sourceType = 'directive';
       
-      // Create meta object with hardcoded values for now
+      // Create meta object with run information
       const meta = { 
         sourceType: sourceType,
         directive: 'run',
-        hasVariables: false,
-        run: {} // Add run object for test compatibility
+        hasVariables: command.meta.hasVariables || false,
+        run: {
+          isCommand: true
+        }
       };
-      
-      // Create a text node for the command
-      const commandNode = helpers.createNode(NodeType.Text, { content: runCommand }, location());
       
       return helpers.createStructuredDirective(
         'text',
         subtype,
         {
           identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          content: [commandNode]
+          content: command.values.command // Use the command array from CommandCore
         },
         {
           identifier: id,
-          content: `@run [${runCommand}]`
+          content: `@run ${command.raw.command}`
+        },
+        meta,
+        location(),
+        'run'
+      );
+    }
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ runCode:RunLanguageCodeCore {
+      helpers.debug('AtText matched @run using RunLanguageCodeCore abstraction', { id, runCode });
+      
+      // Use the proper subtype and sourceType
+      const subtype = 'textAssignment';
+      const sourceType = 'directive';
+      
+      // Create meta object with run information
+      const meta = { 
+        sourceType: sourceType,
+        directive: 'run',
+        hasVariables: false,
+        run: {
+          language: runCode.meta.language,
+          isMultiLine: runCode.meta.isMultiLine
+        }
+      };
+      
+      // Create raw content string
+      const rawContent = `@run ${runCode.meta.language}${
+        runCode.raw.args && runCode.raw.args.length > 0 ? 
+        `(${runCode.raw.args.join(', ')})` : ''
+      } [${runCode.raw.code}]`;
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          content: runCode.values.code // Use the code array from RunLanguageCodeCore
+        },
+        {
+          identifier: id,
+          content: rawContent
+        },
+        meta,
+        location(),
+        'run'
+      );
+    }
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ "@" commandRef:CommandReference {
+      helpers.debug('AtText matched @run with command reference', { id, commandRef });
+      
+      // Use the proper subtype and sourceType
+      const subtype = 'textAssignment';
+      const sourceType = 'directive';
+      
+      // Create meta object with run information
+      const meta = { 
+        sourceType: sourceType,
+        directive: 'run',
+        hasVariables: false,
+        run: {
+          isCommandRef: true,
+          commandName: commandRef.name
+        }
+      };
+      
+      // Create command reference syntax
+      const rawContent = `@run @${commandRef.name}${
+        commandRef.args && commandRef.args.length > 0 ? 
+        `(${commandRef.args.map(arg => arg.value || '').join(', ')})` : ''
+      }`;
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          content: [helpers.createNode(NodeType.Text, { content: rawContent })]
+        },
+        {
+          identifier: id,
+          content: rawContent
         },
         meta,
         location(),
