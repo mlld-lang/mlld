@@ -17,24 +17,9 @@ We've successfully implemented all core directives with the new structured AST f
 
 We will conduct comprehensive audits of the following areas:
 
-### 1. Grammar Abstractions Audit
+### 1. Grammar Abstractions Audit - DONE (fully implemented)
 
-**Goal**: Identify opportunities for consolidation and remove unused abstractions.
-
-**Process**:
-- Analyze all abstraction patterns across grammar files
-- Identify similar patterns across the codebase that could be consolidated with new abstractions
-- Review lexer/ directory for potential abstractions not being fully utilized or potentially outdated/deprecated
-- Determine if deps/ directory is still needed or has been replaced by core/
-- Document findings in `AUDIT-ABSTRACTIONS.md`
-
-**Deliverable**: A document listing:
-- Patterns that should be consolidated for better maintainability
-- Unused abstractions that could be removed
-- Recommendations for new abstractions to improve consistency
-- No actual code changes - just audit and documentation
-
-### 2. Grammar Documentation Audit
+### 2. Grammar Documentation Audit - DONE (plan doce made)
 
 **Goal**: Ensure complete and accurate documentation for all grammar components.
 
@@ -50,7 +35,7 @@ We will conduct comprehensive audits of the following areas:
 - Updated documentation that accurately reflects the current grammar implementation
 - Documentation for any missing components
 
-### 3. Code Comments Standardization
+### 3. Code Comments Standardization - DONE (plan doc made)
 
 **Goal**: Design and implement a consistent approach to code comments throughout the grammar.
 
@@ -65,7 +50,7 @@ We will conduct comprehensive audits of the following areas:
 - A standardized approach to grammar code comments
 - Improved code readability through consistent documentation
 
-### 4. Debugging Cleanup
+### 4. Debugging Cleanup - Plan complete
 
 **Goal**: Remove temporary debugging and standardize necessary debugging.
 
