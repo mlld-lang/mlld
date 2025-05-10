@@ -240,4 +240,29 @@ export class Explorer {
 
     generateDocumentation(snapshotFiles, this.options.snapshotsDir, this.options.docsDir, this.fs);
   }
+
+  /**
+   * Process all examples using convention-based directory structure
+   * This is a simplified workflow that combines multiple steps
+   */
+  processAll(): void {
+    // Step 1: Process examples from conventional directory structure
+    console.log(`Processing examples from ${this.options.examplesDir}...`);
+    this.processExampleDirs();
+
+    // Step 2: Generate consolidated types
+    console.log('Generating consolidated types...');
+    this.generateConsolidatedTypes();
+
+    // Step 3: Generate documentation
+    console.log('Generating documentation...');
+    this.generateDocs();
+
+    console.log('Process completed successfully!');
+    console.log(`- Output directory: ${this.options.outputDir}`);
+    console.log(`- Snapshots: ${this.options.snapshotsDir}`);
+    console.log(`- Types: ${this.options.typesDir}`);
+    console.log(`- Fixtures: ${this.options.fixturesDir}`);
+    console.log(`- Documentation: ${this.options.docsDir}`);
+  }
 }

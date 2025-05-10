@@ -21,6 +21,7 @@
     "generate-types": "ts-node scripts/generate-types.ts",
     "generate-fixture": "ts-node src/command.ts generate-fixture",
     "workflow": "ts-node src/command.ts workflow",
+    "process-all": "ts-node src/command.ts process-all",
     "example": "ts-node examples/usage.ts",
     "init": "ts-node src/command.ts init"
   },

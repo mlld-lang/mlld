@@ -9,7 +9,7 @@ import { parseDirective } from './parse';
 import { generateTypeInterface } from './generate/types';
 import { generateTestFixture, writeTestFixture } from './generate/fixtures';
 import { generateSnapshot, compareWithSnapshot } from './generate/snapshots';
-import { loadExamples, processBatch } from './batch';
+import { loadExamples, processBatch, processExampleDirs, generateConsolidatedTypes } from './batch';
 import { Explorer } from './explorer';
 
 // Create CLI program
@@ -179,6 +179,52 @@ program
       
       console.log(`Explorer created with output directory: ${options.output}`);
       console.log('Use the explorer object for additional operations');
+    } catch (error: any) {
+      console.error('Error:', error.message);
+    }
+  });
+
+// Command to run the simplified process-all workflow based on conventions
+program
+  .command('process-all')
+  .description('Process all examples using conventional directory structure')
+  .option('-d, --dir <dir>', 'Root directory with examples', './core/examples')
+  .option('-o, --output <dir>', 'Output directory for generated files', './core/generated')
+  .option('-f, --fixtures <dir>', 'Directory for E2E fixtures', './tests/fixtures')
+  .action((options) => {
+    try {
+      // Ensure output directories exist
+      const outputDir = options.output;
+      const fixturesDir = options.fixtures;
+
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+
+      if (!fs.existsSync(fixturesDir)) {
+        fs.mkdirSync(fixturesDir, { recursive: true });
+      }
+
+      console.log(`Processing examples from ${options.dir}...`);
+
+      // Process examples using convention-based approach
+      processExampleDirs(options.dir, outputDir);
+
+      // Generate consolidated types
+      console.log('Generating consolidated types...');
+      const snapshotsDir = path.join(outputDir, 'snapshots');
+      const typesDir = path.join(outputDir, 'types');
+
+      if (!fs.existsSync(typesDir)) {
+        fs.mkdirSync(typesDir, { recursive: true });
+      }
+
+      generateConsolidatedTypes(snapshotsDir, typesDir);
+
+      console.log('Process completed successfully!');
+      console.log(`- Snapshots: ${snapshotsDir}`);
+      console.log(`- Types: ${typesDir}`);
+      console.log(`- Fixtures: ${fixturesDir}`);
     } catch (error: any) {
       console.error('Error:', error.message);
     }

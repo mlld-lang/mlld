@@ -36,6 +36,7 @@
     "ast:types": "node ./lib/ast-explorer/bin/ast-explorer.js generate-types",
     "ast:fixture": "node ./lib/ast-explorer/bin/ast-explorer.js generate-fixture",
     "ast:workflow": "node ./lib/ast-explorer/bin/ast-explorer.js workflow",
+    "ast:process-all": "node ./lib/ast-explorer/bin/ast-explorer.js process-all",
     "ast:build": "npm run --prefix lib/ast-explorer build",
     "reinstall": "npm run build && npm uninstall meld && npm install -g .",
     "dev": "tsup --watch",

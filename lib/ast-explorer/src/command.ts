@@ -327,6 +327,58 @@ program
     }
   });
 
+// Command to run the simplified process-all workflow based on conventions
+program
+  .command('process-all')
+  .description('Process all examples using conventional directory structure')
+  .option('-d, --dir <dir>', 'Root directory with examples', './core/examples')
+  .option('-o, --output <dir>', 'Output directory for generated files', './core/generated')
+  .option('-f, --fixtures <dir>', 'Directory for E2E fixtures', './tests/fixtures')
+  .option('-m, --mock', 'Use mock AST for parsing')
+  .action((options) => {
+    try {
+      // Enable mock AST if requested
+      if (options.mock) {
+        process.env.MOCK_AST = 'true';
+      }
+
+      // Ensure output directories exist
+      const outputDir = options.output;
+      const fixturesDir = options.fixtures;
+
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+
+      if (!fs.existsSync(fixturesDir)) {
+        fs.mkdirSync(fixturesDir, { recursive: true });
+      }
+
+      console.log(`Processing examples from ${options.dir}...`);
+
+      // Process examples using convention-based approach
+      processExampleDirs(options.dir, outputDir);
+
+      // Generate consolidated types
+      console.log('Generating consolidated types...');
+      const snapshotsDir = path.join(outputDir, 'snapshots');
+      const typesDir = path.join(outputDir, 'types');
+
+      if (!fs.existsSync(typesDir)) {
+        fs.mkdirSync(typesDir, { recursive: true });
+      }
+
+      generateConsolidatedTypes(snapshotsDir, typesDir);
+
+      console.log('Process completed successfully!');
+      console.log(`- Snapshots: ${snapshotsDir}`);
+      console.log(`- Types: ${typesDir}`);
+      console.log(`- Fixtures: ${fixturesDir}`);
+    } catch (error: any) {
+      console.error('Error:', error.message);
+    }
+  });
+
 // Parse arguments
 if (require.main === module) {
   program.parse();

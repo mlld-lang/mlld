@@ -62,9 +62,45 @@ npm run cli -- generate-fixture '@text greeting = "Hello, world!"' -n text-test 
 # Process a batch of examples
 npm run cli -- batch examples/directives.json -o ./generated
 
+# Process examples using convention-based directory structure
+npm run process-all -- -d ./core/examples -o ./core/generated
+
 # Initialize an examples file
 npm run cli -- init examples/custom-directives.json
 ```
+
+### Convention-Based Directory Structure
+
+The AST Explorer now supports a convention-based approach for organizing examples. Use this structure:
+
+```
+core/examples/
+├── directivekind/             # e.g., text, run, import
+│   └── directivesubtype/      # e.g., assignment, template
+│       ├── example.md         # Base example
+│       ├── expected.md        # Expected output for base example
+│       ├── example-variant.md # Variant example (e.g., multiline)
+│       └── expected-variant.md # Expected output for variant
+```
+
+This structure allows you to:
+- Organize examples by directive kind and subtype
+- Support variant examples with the naming pattern 'example-{variant}.md'
+- Associate expected outputs with the naming pattern 'expected[-{variant}].md'
+- Generate comprehensive type definitions with discriminated unions
+
+Use the simplified `process-all` command to process this structure:
+
+```bash
+npm run process-all
+```
+
+This will:
+1. Process all examples from the conventional directory structure
+2. Generate snapshots for each directive
+3. Create consolidated type definitions with discriminated unions
+4. Generate E2E test fixtures when expected outputs are available
+5. Produce documentation based on the examples
 
 ### Programmatic Usage
 
@@ -78,6 +114,7 @@ const explorer = new Explorer();
 const explorer = new Explorer({
   configPath: './custom-ast-explorer.config.json',
   outputDir: './generated',
+  examplesDir: './core/examples',
   useMockParser: true
 });
 
@@ -88,8 +125,17 @@ console.log(JSON.stringify(ast, null, 2));
 // Generate types from a directive
 explorer.generateTypes('@text greeting = "Hello, world!"', 'text-assignment');
 
-// Process a batch of examples
+// Process a batch of examples using JSON configuration
 explorer.processBatch('./examples/directives.json');
+
+// Process examples using convention-based directory structure
+explorer.processExampleDirs('./core/examples');
+
+// Generate consolidated types with discriminated unions
+explorer.generateConsolidatedTypes();
+
+// Run the complete convention-based workflow (examples + types + docs)
+explorer.processAll();
 ```
 
 ## Example JSON Structure
@@ -168,8 +214,11 @@ const explorer = new Explorer({
 - `compareWithSnapshot(directive: string, name: string): boolean` - Compare with a snapshot
 - `processBatch(examplesPath: string): void` - Process a batch of examples
 - `processExamples(examples: Example[]): void` - Process examples directly
+- `processExampleDirs(baseDir?: string): void` - Process examples from conventional directory structure
+- `generateConsolidatedTypes(outputDir?: string): void` - Generate consolidated types with discriminated unions
 - `processSnapshots(): void` - Process existing snapshots
 - `generateDocs(): void` - Generate documentation
+- `processAll(): void` - Run the complete workflow for convention-based processing
 
 ### Core Functions
 

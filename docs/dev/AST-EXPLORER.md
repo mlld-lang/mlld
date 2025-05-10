@@ -40,6 +40,9 @@ npm run ast:compare -- '@text greeting = "Hello, world!"' text-greeting
 # Process multiple examples from a JSON file
 npm run ast:batch -- ./examples/directives.json
 
+# Process examples using a convention-based directory structure
+npm run ast:process-all -- -d ./core/examples -o ./core/generated
+
 # Run the full workflow (process examples, generate types and docs)
 npm run ast:workflow
 ```
@@ -72,6 +75,40 @@ You can provide an alternative configuration file with the `-c` option:
 npm run ast:workflow -- -c ./path/to/custom-config.json
 ```
 
+### Convention-Based Directory Structure
+
+The AST Explorer supports a convention-based approach for organizing examples, which is recommended for most use cases. This approach uses a consistent directory structure instead of a configuration file:
+
+```
+core/examples/
+├── directivekind/             # e.g., text, run, import
+│   └── directivesubtype/      # e.g., assignment, template
+│       ├── example.md         # Base example
+│       ├── expected.md        # Expected output for base example
+│       ├── example-variant.md # Variant example (e.g., multiline)
+│       └── expected-variant.md # Expected output for variant
+```
+
+This structure provides several advantages:
+- Organizes examples by directive kind and subtype
+- Supports variant examples with the naming pattern 'example-{variant}.md'
+- Associates expected outputs with the naming pattern 'expected[-{variant}].md'
+- Generates comprehensive type definitions with discriminated unions
+- Creates E2E test fixtures automatically when expected outputs are provided
+
+Use the simplified `ast:process-all` command to process this structure:
+
+```bash
+npm run ast:process-all
+```
+
+This will:
+1. Process all examples from the convention-based directory structure
+2. Generate AST snapshots for each directive
+3. Create consolidated type definitions with discriminated unions
+4. Generate E2E test fixtures when expected outputs are available
+5. Produce documentation based on the examples
+
 ### Using Generated Artifacts
 
 The AST Explorer generates various artifacts based on the configuration:
@@ -79,14 +116,19 @@ The AST Explorer generates various artifacts based on the configuration:
 1. **TypeScript Types**: Found in `./core/ast/generated/types/`
    - Use these to understand the structure of different directive types
    - Import them in test files for type checking
+   - Includes discriminated unions when using convention-based structure
 
 2. **Test Fixtures**: Found in `./core/ast/generated/fixtures/`
    - Use these as inputs for tests that need AST nodes
 
-3. **AST Snapshots**: Found in `./core/ast/generated/snapshots/`
+3. **E2E Fixtures**: Found in `./core/ast/generated/fixtures/`
+   - Full end-to-end test fixtures with input and expected output
+   - Automatically created from example/expected pairs in the convention-based structure
+
+4. **AST Snapshots**: Found in `./core/ast/generated/snapshots/`
    - Use these for regression testing (comparing current AST to previous versions)
 
-4. **Documentation**: Found in `./core/ast/generated/docs/`
+5. **Documentation**: Found in `./core/ast/generated/docs/`
    - Auto-generated documentation based on AST structure
 
 ## Development
@@ -115,11 +157,15 @@ lib/ast-explorer/
 
 ### Key Concepts
 
-1. **FileSystem Abstraction**: The explorer uses a filesystem adapter pattern to enable testing without touching the real filesystem.
+1. **Convention-Based Organization**: The explorer uses a standardized directory structure for examples, making it easy to organize examples by directive kind and subtype.
 
-2. **Configuration System**: A unified configuration approach that supports both CLI options and configuration files.
+2. **FileSystem Abstraction**: The explorer uses a filesystem adapter pattern to enable testing without touching the real filesystem.
 
-3. **AST Parser Integration**: The explorer connects with the Meld grammar parser to generate AST nodes.
+3. **Configuration System**: A unified configuration approach that supports both CLI options and configuration files.
+
+4. **AST Parser Integration**: The explorer connects with the Meld grammar parser to generate AST nodes.
+
+5. **Discriminated Union Type Generation**: When using the convention-based approach, the explorer generates comprehensive type definitions with discriminated unions based on directive kind.
 
 ### Running Tests
 
@@ -171,6 +217,39 @@ it('should generate files correctly', async () => {
 ```
 
 ## Examples
+
+### Using the Convention-Based Approach
+
+To organize examples using the recommended convention-based approach:
+
+```bash
+# Create conventional directory structure
+mkdir -p core/examples/text/assignment
+mkdir -p core/examples/text/template
+mkdir -p core/examples/run/command
+
+# Add example files
+echo '@text greeting = "Hello, world!"' > core/examples/text/assignment/example.md
+echo 'Hello, world!' > core/examples/text/assignment/expected.md
+echo '@text multiline = "Hello,\nworld!"' > core/examples/text/assignment/example-multiline.md
+echo 'Hello,\nworld!' > core/examples/text/assignment/expected-multiline.md
+echo '@text template = [[Template with {{var}}]]' > core/examples/text/template/example.md
+echo '@run echo "Testing"' > core/examples/run/command/example.md
+
+# Process all examples
+npm run ast:process-all
+
+# Check the generated files
+ls -la ./core/generated/types
+ls -la ./core/generated/snapshots
+ls -la ./core/generated/fixtures
+```
+
+This will:
+- Generate AST snapshots for all examples
+- Create consolidated type definitions with discriminated unions by directive kind
+- Generate E2E test fixtures for examples with expected outputs
+- Produce documentation for each directive subtype
 
 ### Generating TypeScript Types for a New Directive
 
