@@ -1,0 +1,15 @@
+{
+  "paths": {
+    "parserPath": "./grammar/parser.cjs",
+    "examplesDir": "./grammar/examples",
+    "outputDir": "./core/ast/generated",
+    "typesOutputDir": "./core/ast/generated/types",
+    "snapshotsDir": "./core/ast/generated/snapshots",
+    "fixturesDir": "./core/ast/generated/fixtures",
+    "docsOutputDir": "./core/ast/generated/docs"
+  },
+  "options": {
+    "useMockParser": false,
+    "verbose": false
+  }
+}

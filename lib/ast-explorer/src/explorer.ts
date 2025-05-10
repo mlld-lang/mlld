@@ -16,6 +16,7 @@ import {
   generateConsolidatedTypes,
   type Example
 } from './batch';
+import createConfig, { AstExplorerConfig } from './config';
 import type { DirectiveNode } from '@grammar/types/base';
 
 /**
@@ -60,13 +61,15 @@ class NodeFsAdapter implements IFileSystemAdapter {
 }
 
 export interface ExplorerOptions {
-  outputDir?: string;
-  snapshotsDir?: string;
-  typesDir?: string;
-  fixturesDir?: string;
-  docsDir?: string;
-  examplesDir?: string;
-  fileSystem?: IFileSystemAdapter;
+  configPath?: string;        // Path to config file
+  outputDir?: string;         // Override config output dir
+  snapshotsDir?: string;      // Override config snapshots dir
+  typesDir?: string;          // Override config types dir
+  fixturesDir?: string;       // Override config fixtures dir
+  docsDir?: string;           // Override config docs dir
+  examplesDir?: string;       // Override config examples dir
+  fileSystem?: IFileSystemAdapter; // Custom filesystem adapter (for testing)
+  useMockParser?: boolean;    // Use mock parser instead of real one
 }
 
 /**
@@ -75,26 +78,42 @@ export interface ExplorerOptions {
 export class Explorer {
   private options: Required<ExplorerOptions>;
   protected fs: IFileSystemAdapter;
+  protected config: AstExplorerConfig;
 
   constructor(options: ExplorerOptions = {}) {
     // Set filesystem adapter
     this.fs = options.fileSystem || new NodeFsAdapter();
 
-    // Set default options
+    // Load configuration
+    this.config = createConfig(options.configPath);
+
+    // Set mock parser if requested
+    if (options.useMockParser || this.config.options.useMockParser) {
+      process.env.MOCK_AST = 'true';
+    }
+
+    // Set default options, prioritizing constructor options over config
     this.options = {
-      outputDir: options.outputDir || './generated',
-      snapshotsDir: options.snapshotsDir || './generated/snapshots',
-      typesDir: options.typesDir || './generated/types',
-      fixturesDir: options.fixturesDir || './generated/fixtures',
-      docsDir: options.docsDir || './generated/docs',
-      examplesDir: options.examplesDir || './examples',
-      fileSystem: this.fs
+      configPath: options.configPath || '',
+      outputDir: options.outputDir || this.config.paths.outputDir,
+      snapshotsDir: options.snapshotsDir || this.config.paths.snapshotsDir,
+      typesDir: options.typesDir || this.config.paths.typesOutputDir,
+      fixturesDir: options.fixturesDir || this.config.paths.fixturesDir,
+      docsDir: options.docsDir || this.config.paths.docsOutputDir,
+      examplesDir: options.examplesDir || this.config.paths.examplesDir,
+      fileSystem: this.fs,
+      useMockParser: options.useMockParser || this.config.options.useMockParser
     };
 
     // Create output directories
-    Object.values(this.options).forEach(dir => {
-      // Skip the fileSystem property
-      if (typeof dir === 'string' && !this.fs.existsSync(dir)) {
+    [
+      this.options.outputDir,
+      this.options.snapshotsDir,
+      this.options.typesDir,
+      this.options.fixturesDir,
+      this.options.docsDir
+    ].forEach(dir => {
+      if (!this.fs.existsSync(dir)) {
         this.fs.mkdirSync(dir, { recursive: true });
       }
     });

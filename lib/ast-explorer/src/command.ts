@@ -288,32 +288,39 @@ program
 program
   .command('workflow')
   .description('Run the full exploration workflow')
-  .option('-e, --examples <dir>', 'Examples directory', './core/examples')
-  .option('-o, --output <dir>', 'Output directory', './core/types')
-  .option('-s, --snapshots <dir>', 'Snapshots directory', './core/examples/snapshots')
+  .option('-e, --examples <dir>', 'Examples directory')
+  .option('-o, --output <dir>', 'Output directory')
+  .option('-s, --snapshots <dir>', 'Snapshots directory')
+  .option('-t, --types <dir>', 'Types output directory')
+  .option('-f, --fixtures <dir>', 'Fixtures output directory')
+  .option('-d, --docs <dir>', 'Documentation output directory')
+  .option('-c, --config <path>', 'Path to configuration file')
   .option('-m, --mock', 'Use mock AST for parsing')
   .action((options) => {
     try {
-      // Enable mock AST if requested
-      if (options.mock) {
-        process.env.MOCK_AST = 'true';
-      }
-      
-      const explorer = new Explorer({
-        outputDir: options.output,
-        examplesDir: options.examples,
-        snapshotsDir: options.snapshots
-      });
-      
+      // Create options object with only defined values
+      const explorerOptions: Record<string, any> = {};
+
+      if (options.config) explorerOptions.configPath = options.config;
+      if (options.output) explorerOptions.outputDir = options.output;
+      if (options.examples) explorerOptions.examplesDir = options.examples;
+      if (options.snapshots) explorerOptions.snapshotsDir = options.snapshots;
+      if (options.types) explorerOptions.typesDir = options.types;
+      if (options.fixtures) explorerOptions.fixturesDir = options.fixtures;
+      if (options.docs) explorerOptions.docsDir = options.docs;
+      if (options.mock) explorerOptions.useMockParser = true;
+
+      const explorer = new Explorer(explorerOptions);
+
       console.log('1. Processing examples directories...');
       explorer.processExampleDirs();
-      
+
       console.log('2. Generating consolidated types...');
       explorer.generateConsolidatedTypes();
-      
+
       console.log('3. Generating documentation...');
       explorer.generateDocs();
-      
+
       console.log('Workflow completed successfully!');
     } catch (error: any) {
       console.error('Error:', error.message);

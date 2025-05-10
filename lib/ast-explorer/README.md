@@ -19,6 +19,32 @@ The module is part of the Meld codebase. To use it, you need to have the Meld re
 npm install
 ```
 
+## Configuration
+
+The AST Explorer can be configured using a configuration file named `ast-explorer.config.json` in your project root. This allows you to customize paths for input and output directories.
+
+Example configuration:
+
+```json
+{
+  "paths": {
+    "parserPath": "./grammar/parser.cjs",
+    "examplesDir": "./grammar/examples",
+    "outputDir": "./core/ast/generated",
+    "typesOutputDir": "./core/ast/generated/types",
+    "snapshotsDir": "./core/ast/generated/snapshots",
+    "fixturesDir": "./core/ast/generated/fixtures",
+    "docsOutputDir": "./core/ast/generated/docs"
+  },
+  "options": {
+    "useMockParser": false,
+    "verbose": false
+  }
+}
+```
+
+You can also specify a custom configuration file path using the `-c` or `--config` option in CLI commands.
+
 ## Usage
 
 ### Command Line
@@ -43,11 +69,16 @@ npm run cli -- init examples/custom-directives.json
 ### Programmatic Usage
 
 ```typescript
-import { Explorer } from '../grammar/explorer';
+import { Explorer } from 'meld-ast-explorer';
 
-// Create an explorer instance
+// Create an explorer instance with default configuration
+const explorer = new Explorer();
+
+// Or with custom configuration
 const explorer = new Explorer({
-  outputDir: './generated'
+  configPath: './custom-ast-explorer.config.json',
+  outputDir: './generated',
+  useMockParser: true
 });
 
 // Parse a directive
@@ -108,11 +139,22 @@ The main class for AST exploration and generation.
 
 ```typescript
 const explorer = new Explorer({
+  // Configuration file path
+  configPath: './path/to/ast-explorer.config.json',
+
+  // Individual path overrides
   outputDir: './generated',
   snapshotsDir: './generated/snapshots',
   typesDir: './generated/types',
   fixturesDir: './generated/fixtures',
-  docsDir: './generated/docs'
+  docsDir: './generated/docs',
+  examplesDir: './examples',
+
+  // Options
+  useMockParser: false,
+
+  // For testing
+  fileSystem: customFileSystemAdapter
 });
 ```
 
