@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 // ---------- paths ----------
 const ROOT_GRAMMAR = path.join(__dirname, 'meld.peggy');
 const DIST_DIR = path.join(__dirname, '../core/ast/grammar');
-const DIST_PARSER = path.join(DIST_DIR, 'parser.js');
+const DIST_PARSER_TS = path.join(DIST_DIR, 'parser.ts');
 
 // ensure dist dir
 fs.mkdirSync(DIST_DIR, { recursive: true });
@@ -133,9 +133,9 @@ const peggyOpts = {
   dts: true,
   returnTypes: { Start: 'import("@core/syntax").MeldNode[]' },
   dependencies: {
-    NodeType: './deps/node-type.js',
-    DirectiveKind: './deps/directive-kind.js',
-    helpers: './deps/helpers.js',
+    NodeType: './deps/node-type.ts',
+    DirectiveKind: './deps/directive-kind.ts',
+    helpers: './deps/helpers.ts',
   },
 };
 
@@ -167,7 +167,11 @@ try {
   throw error;
 }
 
-// Modify the generated parser.js to include a default export
+// Convert JavaScript to TypeScript syntax
+// Replace .js imports with .ts
+parserSource = parserSource.replace(/from ['"](.+)\.js['"]/g, 'from \'$1.ts\'');
+
+// Modify the generated parser to include a default export
 const defaultExportAddition = `
 // Add a default export for compatibility
 const parser = { 
@@ -179,39 +183,40 @@ export default parser;
 `;
 
 parserSource += defaultExportAddition;
-fs.writeFileSync(DIST_PARSER, parserSource);
-console.log('✓ parser.js written with default export');
+fs.writeFileSync(DIST_PARSER_TS, parserSource);
+console.log('✓ parser.ts written with default export');
 
 // ---------- copy runtime deps ----------
 // Create deps directory in the output directory
 fs.mkdirSync(path.join(DIST_DIR, 'deps'), { recursive: true });
 
-// Copy grammar-core.js first
-const coreJsPath = path.join(__dirname, 'deps/grammar-core.js');
-const destCoreJsPath = path.join(DIST_DIR, 'grammar-core.js');
-fs.copyFileSync(coreJsPath, destCoreJsPath);
-console.log(`✓ Copied ${coreJsPath} to ${destCoreJsPath}`);
-
-// Create deps directory in output dir
-const depsDir = path.join(DIST_DIR, 'deps');
-fs.mkdirSync(depsDir, { recursive: true });
-
-// Copy shim files 
+// Convert helper files to TypeScript
 for (const f of [
   'node-type.js',
   'directive-kind.js',
   'helpers.js',
 ]) {
   const srcPath = path.join(__dirname, 'deps', f);
-  const destPath = path.join(depsDir, f);
+  const destPath = path.join(DIST_DIR, 'deps', f.replace('.js', '.ts'));
   
-  // Read the file, adjust the import path if needed, and write to destination
+  // Read the file, adjust the import path and convert to TypeScript
   let content = fs.readFileSync(srcPath, 'utf8');
-  content = content.replace('./grammar-core.js', '../grammar-core.js');
+  
+  // Convert to TypeScript
+  content = content.replace('./grammar-core.js', '../grammar-core.ts');
+  content = content.replace(/import\s+(.+?)\s+from\s+['"](.+?)\.js['"]/g, 'import $1 from \'$2.ts\'');
   
   fs.writeFileSync(destPath, content);
-  console.log(`✓ Copied and fixed imports for ${f}`);
+  console.log(`✓ Converted ${f} to TypeScript`);
 }
 
-console.log('✓ helper modules copied');
+// Also convert grammar-core.js to TypeScript
+const coreJsPath = path.join(__dirname, 'deps/grammar-core.js');
+const destCoreJsPath = path.join(DIST_DIR, 'grammar-core.ts');
+let coreContent = fs.readFileSync(coreJsPath, 'utf8');
+// Add type annotations as needed
+fs.writeFileSync(destCoreJsPath, coreContent);
+console.log(`✓ Converted grammar-core.js to TypeScript`);
+
+console.log('✓ helper modules converted to TypeScript');
 console.log('Parser generation complete!');

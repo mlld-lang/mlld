@@ -1,0 +1,16 @@
+{
+  "type": "Directive",
+  "kind": "text",
+  "subtype": "textAssignment",
+  "values": {
+    "content": [],
+    "identifier": []
+  },
+  "raw": {
+    "content": "\"World\"",
+    "identifier": "name"
+  },
+  "meta": {
+    "sourceType": "literal"
+  }
+}

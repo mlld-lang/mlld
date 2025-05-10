@@ -24,6 +24,7 @@
   "scripts": {
     "build:grammar:core": "npx tsc -p grammar/tsconfig.grammar.json",
     "build:grammar": "npm run build:grammar:core && node grammar/build-grammar.mjs",
+    "build:explorer": "node grammar/scripts/build-explorer.mjs",
     "build": "npm run build:grammar && tsup",
     "ast": "npm run build:grammar && node ./scripts/ast-output.js",
     "ast:debug": "DEBUG_MELD_GRAMMAR=1 npm run ast --",
@@ -36,6 +37,8 @@
     "test:e2e": "node scripts/e2e-case-runner.js",
     "test:e2e:verbose": "node scripts/e2e-case-runner.js --verbose",
     "test:e2e:clean": "node scripts/e2e-case-runner.js clean",
+    "generate:fixtures": "node grammar/scripts/build-fixtures.mjs",
+    "generate:types": "node grammar/scripts/generate-types.mjs",
     "lint": "eslint .",
     "clean": "rimraf dist",
     "prepublishOnly": "npm run clean && npm run build",
