@@ -1,0 +1,37 @@
+[
+  {
+    "name": "text-assignment",
+    "directive": "@text greeting = \"Hello, world!\"",
+    "description": "Simple text assignment directive"
+  },
+  {
+    "name": "text-template",
+    "directive": "@text template = [[Template with {{var}}]]",
+    "description": "Text template directive with variable"
+  },
+  {
+    "name": "import-selected",
+    "directive": "@import { helper } from './utils'",
+    "description": "Import selected directive"
+  },
+  {
+    "name": "import-all",
+    "directive": "@import * from './utils'",
+    "description": "Import all directive"
+  },
+  {
+    "name": "run-command",
+    "directive": "@run echo \"Hello, world!\"",
+    "description": "Run command directive"
+  },
+  {
+    "name": "data-variable",
+    "directive": "@data config = { \"key\": \"value\" }",
+    "description": "Data variable directive"
+  },
+  {
+    "name": "path-variable",
+    "directive": "@path outputDir = ./dist",
+    "description": "Path variable directive"
+  }
+]
