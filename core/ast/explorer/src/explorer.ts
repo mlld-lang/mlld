@@ -12,6 +12,47 @@ import { processBatch, loadExamples, processSnapshots, processExampleDirs, gener
 import type { Example } from './batch';
 import type { DirectiveNode } from '@grammar/types/base';
 
+/**
+ * Interface for filesystem adapter (used for testing)
+ */
+export interface IFileSystemAdapter {
+  writeFileSync(path: string, content: string, encoding?: string): void;
+  readFileSync(path: string, encoding?: string): string;
+  existsSync(path: string): boolean;
+  mkdirSync(path: string, options?: { recursive?: boolean }): void;
+  readdirSync(path: string): string[];
+  rmSync(path: string, options?: { recursive?: boolean, force?: boolean }): void;
+}
+
+/**
+ * Default filesystem adapter using Node's fs module
+ */
+class NodeFsAdapter implements IFileSystemAdapter {
+  writeFileSync(path: string, content: string, encoding: string = 'utf8'): void {
+    fs.writeFileSync(path, content, { encoding });
+  }
+
+  readFileSync(path: string, encoding: string = 'utf8'): string {
+    return fs.readFileSync(path, { encoding }).toString();
+  }
+
+  existsSync(path: string): boolean {
+    return fs.existsSync(path);
+  }
+
+  mkdirSync(path: string, options?: { recursive?: boolean }): void {
+    fs.mkdirSync(path, options);
+  }
+
+  readdirSync(path: string): string[] {
+    return fs.readdirSync(path);
+  }
+
+  rmSync(path: string, options?: { recursive?: boolean, force?: boolean }): void {
+    fs.rmSync(path, options);
+  }
+}
+
 export interface ExplorerOptions {
   outputDir?: string;
   snapshotsDir?: string;
@@ -19,6 +60,7 @@ export interface ExplorerOptions {
   fixturesDir?: string;
   docsDir?: string;
   examplesDir?: string;
+  fileSystem?: IFileSystemAdapter;
 }
 
 /**
@@ -26,8 +68,12 @@ export interface ExplorerOptions {
  */
 export class Explorer {
   private options: Required<ExplorerOptions>;
-  
+  protected fs: IFileSystemAdapter;
+
   constructor(options: ExplorerOptions = {}) {
+    // Set filesystem adapter
+    this.fs = options.fileSystem || new NodeFsAdapter();
+
     // Set default options
     this.options = {
       outputDir: options.outputDir || './generated',
@@ -35,13 +81,15 @@ export class Explorer {
       typesDir: options.typesDir || './generated/types',
       fixturesDir: options.fixturesDir || './generated/fixtures',
       docsDir: options.docsDir || './generated/docs',
-      examplesDir: options.examplesDir || './examples'
+      examplesDir: options.examplesDir || './examples',
+      fileSystem: this.fs
     };
-    
+
     // Create output directories
     Object.values(this.options).forEach(dir => {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+      // Skip the fileSystem property
+      if (typeof dir === 'string' && !this.fs.existsSync(dir)) {
+        this.fs.mkdirSync(dir, { recursive: true });
       }
     });
   }
@@ -66,11 +114,18 @@ export class Explorer {
   generateTypes(directive: string, name: string, outputDir?: string): string {
     const ast = this.parseDirective(directive);
     const typeDefinition = generateTypeInterface(ast);
-    
+
     const targetDir = outputDir || this.options.typesDir;
     const outputPath = path.join(targetDir, `${name}.ts`);
-    fs.writeFileSync(outputPath, typeDefinition);
-    
+
+    // Ensure directory exists
+    if (!this.fs.existsSync(targetDir)) {
+      this.fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    // Write the type definition
+    this.fs.writeFileSync(outputPath, typeDefinition);
+
     return outputPath;
   }
   
@@ -90,15 +145,25 @@ export class Explorer {
    */
   generateSnapshot(directive: string, name: string, outputDir?: string): string {
     const ast = this.parseDirective(directive);
-    return generateSnapshot(ast, name, outputDir || this.options.snapshotsDir);
+    return generateSnapshot(
+      ast,
+      name,
+      outputDir || this.options.snapshotsDir,
+      this.fs
+    );
   }
-  
+
   /**
    * Compare a directive with an existing snapshot
    */
   compareWithSnapshot(directive: string, name: string): boolean {
     const ast = this.parseDirective(directive);
-    return compareWithSnapshot(ast, name, this.options.snapshotsDir);
+    return compareWithSnapshot(
+      ast,
+      name,
+      this.options.snapshotsDir,
+      this.fs
+    );
   }
   
   /**
@@ -136,7 +201,7 @@ export class Explorer {
    * Process existing snapshots to generate docs and types
    */
   processSnapshots(): void {
-    processSnapshots(this.options.snapshotsDir, this.options.outputDir);
+    processSnapshots(this.options.snapshotsDir, this.options.outputDir, this.fs);
   }
   
   /**

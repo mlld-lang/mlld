@@ -4,31 +4,63 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { DirectiveNode } from '@grammar/types/base';
+import type { IFileSystemAdapter } from '../explorer';
 
 /**
  * Create a snapshot file for a directive
  */
-export function generateSnapshot(node: DirectiveNode, name: string, outputDir: string): string {
-  // For tests, just log and return fake path
-  if (process.env.NODE_ENV === 'test') {
-    if (node.kind === 'text' && node.subtype === 'textAssignment') {
-      console.log(`Would generate snapshot for "${name}" at ${outputDir}/${name}.snapshot.json`);
-      return path.join(outputDir, `${name}.snapshot.json`);
+export function generateSnapshot(
+  node: DirectiveNode,
+  name: string,
+  outputDir: string,
+  fileSystem?: IFileSystemAdapter
+): string {
+  // Use provided fileSystem or fallback to fs
+  const fsAdapter = fileSystem || fs;
+
+  console.log('SNAPSHOT: Using adapter to write file');
+  console.log('SNAPSHOT: FileSystem adapter provided:', fileSystem ? 'yes' : 'no');
+  console.log('SNAPSHOT: FileSystem adapter type:', fileSystem ? typeof fileSystem : 'none');
+  console.log('SNAPSHOT: FileSystem adapter constructor:', fileSystem ? fileSystem.constructor.name : 'none');
+  console.log('SNAPSHOT: Output directory:', outputDir);
+
+  if (fileSystem) {
+    // Print adapter type and methods
+    console.log('SNAPSHOT: Adapter methods:', Object.keys(fileSystem).join(', '));
+
+    // Create a test file to verify the adapter works
+    try {
+      fileSystem.writeFileSync(
+        path.join(outputDir, '_test_write.txt'),
+        'Test write from within snapshot.ts'
+      );
+      console.log('SNAPSHOT: Test file write succeeded');
+    } catch (error) {
+      console.log('SNAPSHOT: Test file write failed:', error);
     }
   }
-  
+
   // Ensure output directory exists
-  fs.mkdirSync(outputDir, { recursive: true });
-  
+  try {
+    fsAdapter.mkdirSync(outputDir, { recursive: true });
+  } catch (error) {
+    console.log('SNAPSHOT: Error creating directory', error);
+  }
+
   // Create snapshot file path
   const snapshotPath = path.join(outputDir, `${name}.snapshot.json`);
-  
+
   // Write snapshot to file
-  fs.writeFileSync(
-    snapshotPath,
-    JSON.stringify(node, null, 2)
-  );
-  
+  try {
+    fsAdapter.writeFileSync(
+      snapshotPath,
+      JSON.stringify(node, null, 2)
+    );
+    console.log('SNAPSHOT: Wrote snapshot to', snapshotPath);
+  } catch (error) {
+    console.log('SNAPSHOT: Error writing snapshot', error);
+  }
+
   return snapshotPath;
 }
 
@@ -36,21 +68,24 @@ export function generateSnapshot(node: DirectiveNode, name: string, outputDir: s
  * Compare node with existing snapshot
  * Returns true if snapshot matches, false if different
  */
-export function compareWithSnapshot(node: DirectiveNode, name: string, snapshotDir: string): boolean {
-  // For tests, always return true
-  if (process.env.NODE_ENV === 'test') {
-    return true;
-  }
+export function compareWithSnapshot(
+  node: DirectiveNode, 
+  name: string, 
+  snapshotDir: string,
+  fileSystem?: IFileSystemAdapter
+): boolean {
+  // Use provided fileSystem or fallback to fs
+  const fsAdapter = fileSystem || fs;
   
   const snapshotPath = path.join(snapshotDir, `${name}.snapshot.json`);
   
   // Check if snapshot exists
-  if (!fs.existsSync(snapshotPath)) {
+  if (!fsAdapter.existsSync(snapshotPath)) {
     return false;
   }
   
   // Read existing snapshot
-  const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+  const snapshot = JSON.parse(fsAdapter.readFileSync(snapshotPath, 'utf8'));
   
   // Compare structures
   // Note: This is a simple string-based comparison
@@ -61,25 +96,24 @@ export function compareWithSnapshot(node: DirectiveNode, name: string, snapshotD
 /**
  * Generate a diff between a node and its snapshot
  */
-export function generateSnapshotDiff(node: DirectiveNode, name: string, snapshotDir: string): SnapshotDiff | null {
-  // For tests, return a simple diff with no differences
-  if (process.env.NODE_ENV === 'test') {
-    return {
-      name,
-      matches: true,
-      differences: []
-    };
-  }
+export function generateSnapshotDiff(
+  node: DirectiveNode, 
+  name: string, 
+  snapshotDir: string,
+  fileSystem?: IFileSystemAdapter
+): SnapshotDiff | null {
+  // Use provided fileSystem or fallback to fs
+  const fsAdapter = fileSystem || fs;
   
   const snapshotPath = path.join(snapshotDir, `${name}.snapshot.json`);
   
   // Check if snapshot exists
-  if (!fs.existsSync(snapshotPath)) {
+  if (!fsAdapter.existsSync(snapshotPath)) {
     return null;
   }
   
   // Read existing snapshot
-  const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8')) as DirectiveNode;
+  const snapshot = JSON.parse(fsAdapter.readFileSync(snapshotPath, 'utf8')) as DirectiveNode;
   
   // Compare structures
   const diff: SnapshotDiff = {
