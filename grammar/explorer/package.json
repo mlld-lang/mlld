@@ -1,0 +1,29 @@
+{
+  "name": "meld-ast-explorer",
+  "version": "0.1.0",
+  "description": "AST explorer tools for Meld grammar",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cli": "ts-node src/command.ts",
+    "explore": "ts-node src/command.ts explore",
+    "generate-types": "ts-node scripts/generate-types.ts",
+    "example": "ts-node examples/usage.ts",
+    "batch": "ts-node src/command.ts batch",
+    "init": "ts-node src/command.ts init",
+    "snapshot": "ts-node src/command.ts snapshot"
+  },
+  "dependencies": {
+    "commander": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0",
+    "vitest": "^0.30.0"
+  }
+}
