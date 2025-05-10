@@ -8,8 +8,14 @@ import { generateTypeInterface } from './generate/types';
 import { generateTestFixture, writeTestFixture } from './generate/fixtures';
 import { generateSnapshot, compareWithSnapshot } from './generate/snapshots';
 import { generateDocumentation } from './generate/docs';
-import { processBatch, loadExamples, processSnapshots, processExampleDirs, generateConsolidatedTypes } from './batch';
-import type { Example } from './batch';
+import {
+  processBatch,
+  loadExamples,
+  processSnapshots,
+  processExampleDirs,
+  generateConsolidatedTypes,
+  type Example
+} from './batch';
 import type { DirectiveNode } from '@grammar/types/base';
 
 /**
@@ -135,9 +141,9 @@ export class Explorer {
   generateFixture(directive: string, name: string, outputDir?: string): string {
     const ast = this.parseDirective(directive);
     const fixture = generateTestFixture(directive, ast, name);
-    
+
     const targetDir = outputDir || this.options.fixturesDir;
-    return writeTestFixture(fixture, name, targetDir);
+    return writeTestFixture(fixture, name, targetDir, this.fs);
   }
   
   /**
@@ -170,33 +176,33 @@ export class Explorer {
    * Process a batch of examples
    */
   processBatch(examplesPath: string): void {
-    const examples = loadExamples(examplesPath);
-    processBatch(examples, this.options.outputDir);
+    const examples = loadExamples(examplesPath, this.fs);
+    processBatch(examples, this.options.outputDir, this.fs);
   }
-  
+
   /**
    * Process examples directly
    */
   processExamples(examples: Example[]): void {
-    processBatch(examples, this.options.outputDir);
+    processBatch(examples, this.options.outputDir, this.fs);
   }
-  
+
   /**
    * Process examples from directory structure
    */
   processExampleDirs(baseDir?: string): void {
     const targetDir = baseDir || this.options.examplesDir;
-    processExampleDirs(targetDir, this.options.outputDir);
+    processExampleDirs(targetDir, this.options.outputDir, this.fs);
   }
-  
+
   /**
    * Generate consolidated type system with discriminated unions
    */
   generateConsolidatedTypes(outputDir?: string): void {
     const targetDir = outputDir || this.options.typesDir;
-    generateConsolidatedTypes(this.options.snapshotsDir, targetDir);
+    generateConsolidatedTypes(this.options.snapshotsDir, targetDir, this.fs);
   }
-  
+
   /**
    * Process existing snapshots to generate docs and types
    */
@@ -208,11 +214,11 @@ export class Explorer {
    * Generate documentation from snapshots
    */
   generateDocs(): void {
-    // Get all snapshot names
-    const snapshotFiles = fs.readdirSync(this.options.snapshotsDir)
+    // Get all snapshot names using the filesystem adapter
+    const snapshotFiles = this.fs.readdirSync(this.options.snapshotsDir)
       .filter(file => file.endsWith('.snapshot.json'))
       .map(file => file.replace('.snapshot.json', ''));
-    
-    generateDocumentation(snapshotFiles, this.options.snapshotsDir, this.options.docsDir);
+
+    generateDocumentation(snapshotFiles, this.options.snapshotsDir, this.options.docsDir, this.fs);
   }
 }

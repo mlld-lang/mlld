@@ -18,7 +18,8 @@
     "snapshot": "ts-node src/command.ts snapshot"
   },
   "dependencies": {
-    "commander": "^10.0.0"
+    "commander": "^10.0.0",
+    "memfs": "^4.17.1"
   },
   "devDependencies": {
     "@types/node": "^18.0.0",

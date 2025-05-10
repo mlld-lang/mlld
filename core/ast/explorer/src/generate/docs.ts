@@ -4,6 +4,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { DirectiveNode } from '@grammar/types/base';
+import type { IFileSystemAdapter } from '../explorer';
 
 /**
  * Generate documentation from snapshots
@@ -11,55 +12,63 @@ import type { DirectiveNode } from '@grammar/types/base';
 export function generateDocumentation(
   names: string[],
   snapshotsDir: string,
-  outputDir: string
+  outputDir: string,
+  fileSystem?: IFileSystemAdapter
 ): void {
+  // Use provided fileSystem or fallback to fs
+  const fsAdapter = fileSystem || fs;
+
   // Ensure output directory exists
-  fs.mkdirSync(outputDir, { recursive: true });
-  
+  fsAdapter.mkdirSync(outputDir, { recursive: true });
+
   // Group by directive kind
-  const directivesByKind = groupByDirectiveKind(names, snapshotsDir);
-  
+  const directivesByKind = groupByDirectiveKind(names, snapshotsDir, fsAdapter);
+
   // Generate an index file
   let indexContent = '# AST Documentation\n\n';
   indexContent += 'Generated documentation for Meld directive AST structures.\n\n';
   indexContent += '## Available Directives\n\n';
-  
+
   Object.keys(directivesByKind).sort().forEach(kind => {
     indexContent += `- [${capitalize(kind)}](${kind}.md)\n`;
-    
+
     // Generate documentation for this directive kind
-    generateDirectiveDoc(kind, directivesByKind[kind], snapshotsDir, outputDir);
+    generateDirectiveDoc(kind, directivesByKind[kind], snapshotsDir, outputDir, fsAdapter);
   });
-  
+
   // Write index file
-  fs.writeFileSync(path.join(outputDir, 'README.md'), indexContent);
+  fsAdapter.writeFileSync(path.join(outputDir, 'README.md'), indexContent);
 }
 
 /**
  * Group snapshots by directive kind
  */
-function groupByDirectiveKind(names: string[], snapshotsDir: string): Record<string, string[]> {
+function groupByDirectiveKind(
+  names: string[],
+  snapshotsDir: string,
+  fileSystem: IFileSystemAdapter
+): Record<string, string[]> {
   const result: Record<string, string[]> = {};
-  
+
   names.forEach(name => {
     const snapshotPath = path.join(snapshotsDir, `${name}.snapshot.json`);
-    
-    if (fs.existsSync(snapshotPath)) {
+
+    if (fileSystem.existsSync(snapshotPath)) {
       try {
-        const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+        const snapshot = JSON.parse(fileSystem.readFileSync(snapshotPath, 'utf8'));
         const kind = snapshot.kind;
-        
+
         if (!result[kind]) {
           result[kind] = [];
         }
-        
+
         result[kind].push(name);
       } catch (error) {
         console.warn(`Could not read snapshot for ${name}:`, error);
       }
     }
   });
-  
+
   return result;
 }
 
@@ -70,25 +79,26 @@ function generateDirectiveDoc(
   kind: string,
   examples: string[],
   snapshotsDir: string,
-  outputDir: string
+  outputDir: string,
+  fileSystem: IFileSystemAdapter
 ): void {
   let content = `# ${capitalize(kind)} Directive\n\n`;
   content += `The \`@${kind}\` directive is used in Meld grammar.\n\n`;
-  
+
   // List subtypes found in examples
   content += '## Subtypes\n\n';
-  
+
   const subtypes = new Set<string>();
   const snapshots: Record<string, any> = {};
-  
+
   // Collect subtypes and snapshots
   examples.forEach(name => {
     const snapshotPath = path.join(snapshotsDir, `${name}.snapshot.json`);
-    if (fs.existsSync(snapshotPath)) {
+    if (fileSystem.existsSync(snapshotPath)) {
       try {
-        const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+        const snapshot = JSON.parse(fileSystem.readFileSync(snapshotPath, 'utf8'));
         snapshots[name] = snapshot;
-        
+
         if (snapshot.subtype) {
           subtypes.add(snapshot.subtype);
         }
@@ -97,40 +107,40 @@ function generateDirectiveDoc(
       }
     }
   });
-  
+
   // Add subtypes to content
   Array.from(subtypes).forEach(subtype => {
     content += `- [${subtype}](#${subtype})\n`;
   });
-  
+
   content += '\n';
-  
+
   // Document each subtype with example
   Array.from(subtypes).forEach(subtype => {
     content += `## ${subtype}\n\n`;
-    
+
     // Find an example for this subtype
-    const exampleName = examples.find(name => 
+    const exampleName = examples.find(name =>
       snapshots[name] && snapshots[name].subtype === subtype
     );
-    
+
     if (exampleName && snapshots[exampleName]) {
       const snapshot = snapshots[exampleName];
-      
+
       content += '### AST Structure\n\n';
       content += '```json\n';
       content += JSON.stringify(snapshot, null, 2);
       content += '\n```\n\n';
-      
+
       content += '### Values\n\n';
       content += 'The `values` object contains:\n\n';
-      
+
       Object.keys(snapshot.values || {}).forEach(key => {
         content += `- \`${key}\`: ${describeValue(snapshot.values[key])}\n`;
       });
-      
+
       content += '\n';
-      
+
       // Add TypeScript interface
       content += '### TypeScript Interface\n\n';
       content += '```typescript\n';
@@ -140,13 +150,13 @@ function generateDirectiveDoc(
         content += `    ${key}: ${getTypeForValue(snapshot.values[key])};\n`;
       });
       content += '  };\n\n';
-      
+
       content += '  raw: {\n';
       Object.keys(snapshot.raw || {}).forEach(key => {
         content += `    ${key}: string;\n`;
       });
       content += '  };\n\n';
-      
+
       content += '  meta: {\n';
       Object.keys(snapshot.meta || {}).forEach(key => {
         content += `    ${key}: ${getMetaType(snapshot.meta[key])};\n`;
@@ -156,9 +166,9 @@ function generateDirectiveDoc(
       content += '```\n\n';
     }
   });
-  
+
   // Write directive documentation file
-  fs.writeFileSync(path.join(outputDir, `${kind}.md`), content);
+  fileSystem.writeFileSync(path.join(outputDir, `${kind}.md`), content);
 }
 
 /**

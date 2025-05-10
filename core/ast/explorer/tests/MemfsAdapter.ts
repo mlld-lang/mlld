@@ -1,51 +1,26 @@
-import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem';
+import { MemfsTestFileSystem } from './utils/MemfsTestFileSystem';
 import { IFileSystemAdapter } from '../src/explorer';
 import * as nodePath from 'path';
+import { PathResolver } from './utils/PathResolver';
 
 /**
  * Adapter that uses memfs for testing
  */
 export class MemfsAdapter implements IFileSystemAdapter {
   private memfs: MemfsTestFileSystem;
+  private pathResolver: PathResolver;
 
   constructor() {
     this.memfs = new MemfsTestFileSystem();
     this.memfs.initialize();
+    this.pathResolver = new PathResolver('project');
   }
 
   /**
    * Helper to convert a path for memfs
    */
   private getMemfsPath(filePath: string): string {
-    console.log('Converting path for memfs:', filePath);
-
-    // Check if path is already prefixed with /project
-    if (filePath.includes('/project/')) {
-      console.log('Path already has project prefix:', filePath);
-      return filePath;
-    }
-
-    // Different handling based on path type
-    let resolvedPath;
-
-    if (filePath.startsWith('/')) {
-      // Absolute path, strip leading slash for memfs
-      resolvedPath = filePath.substring(1);
-    } else if (filePath.startsWith('./')) {
-      // Relative path with explicit ./ prefix
-      resolvedPath = filePath.substring(2);
-    } else {
-      // Other paths - just use as is
-      resolvedPath = filePath;
-    }
-
-    // Add project prefix if not already there
-    const result = resolvedPath.startsWith('project/') ?
-      resolvedPath :
-      `project/${resolvedPath}`;
-
-    console.log('Converted path:', result);
-    return result;
+    return this.pathResolver.toMemfsPath(filePath);
   }
 
   writeFileSync(path: string, content: string, encoding?: string): void {

@@ -1,29 +1,27 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as path from 'path';
 import { Explorer } from '../src/explorer';
-import { MemfsAdapter } from './MemfsAdapter';
+import { setupTestFileSystem } from './utils/FsManager';
 import { TracedAdapter } from './TracedAdapter';
 
 describe('AST Explorer', () => {
   const testOutputDir = './test-output';
   const snapshotsDir = './test-output/snapshots';
   const typesDir = './test-output/types';
-  
-  let memfsAdapter: MemfsAdapter;
+
   let fsAdapter: TracedAdapter;
   let explorer: Explorer;
-  
+  let cleanup: () => Promise<void>;
+
   beforeEach(() => {
     // Set up test environment
     process.env.NODE_ENV = 'test';
     process.env.MOCK_AST = 'true';
 
-    // Create filesystem adapters
-    memfsAdapter = new MemfsAdapter();
-    fsAdapter = new TracedAdapter(memfsAdapter);
-
-    // Force intercept all fs calls (this is the key part!)
-    fsAdapter.patchFs();
+    // Create filesystem adapters using FsManager to avoid conflicts
+    const setup = setupTestFileSystem();
+    fsAdapter = setup.fsAdapter;
+    cleanup = setup.cleanup;
 
     console.log('Creating test directory structure');
 
@@ -32,7 +30,7 @@ describe('AST Explorer', () => {
     fsAdapter.mkdirSync('project/test-output/snapshots', { recursive: true });
     fsAdapter.mkdirSync('project/test-output/types', { recursive: true });
 
-    console.log('Filesystem state after setup:', memfsAdapter.dump());
+    console.log('Filesystem state after setup:', fsAdapter.dump());
 
     // Create fresh explorer instance for each test with our traced adapter
     explorer = new Explorer({
@@ -45,18 +43,18 @@ describe('AST Explorer', () => {
     // Reset call history before each test
     fsAdapter.resetCalls();
   });
-  
+
   afterEach(async () => {
     // Print call history for debugging
     fsAdapter.printCalls();
-    
-    // Clean up resources
-    await memfsAdapter.cleanup();
-    
+
+    // Clean up resources and restore fs
+    await cleanup();
+
     // Reset environment
     delete process.env.NODE_ENV;
     delete process.env.MOCK_AST;
-    
+
     vi.restoreAllMocks();
   });
   
@@ -112,7 +110,7 @@ describe('AST Explorer', () => {
     console.log('Creating test directory:');
     fsAdapter.getAdapter().getMemfs().vol.mkdirSync('project/test-output/snapshots/test-dir', { recursive: true });
     fsAdapter.writeFileSync('project/test-output/snapshots/test-dir/test.txt', 'Test', 'utf8');
-    console.log('Dumping filesystem after test setup:', memfsAdapter.dump());
+    console.log('Dumping filesystem after test setup:', fsAdapter.dump());
 
     // Reset call history to focus on the generateSnapshot call
     fsAdapter.resetCalls();
@@ -127,7 +125,7 @@ describe('AST Explorer', () => {
     console.log('Call history:');
     fsAdapter.printCalls();
 
-    console.log('Filesystem after generate call:', memfsAdapter.dump());
+    console.log('Filesystem after generate call:', fsAdapter.dump());
 
     // Check both with original path and memfs path
     console.log('Checking if exists (original path):', snapshotPath);
@@ -145,6 +143,6 @@ describe('AST Explorer', () => {
     console.log('Writing test file directly to check filesystem:');
     fsAdapter.writeFileSync('project/direct-test.txt', 'Direct test', 'utf8');
     console.log('Direct test file exists?', fsAdapter.existsSync('project/direct-test.txt'));
-    console.log('Final filesystem state:', memfsAdapter.dump());
+    console.log('Final filesystem state:', fsAdapter.dump());
   });
 });
