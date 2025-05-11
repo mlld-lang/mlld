@@ -5,12 +5,12 @@
 import { program } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseDirective } from './parse';
-import { generateTypeInterface } from './generate/types';
-import { generateTestFixture, writeTestFixture } from './generate/fixtures';
-import { generateSnapshot, compareWithSnapshot } from './generate/snapshots';
-import { loadExamples, processBatch, processExampleDirs, generateConsolidatedTypes } from './batch';
-import { Explorer } from './explorer';
+import { parseDirective } from './parse.js';
+import { generateTypeInterface } from './generate/types.js';
+import { generateTestFixture, writeTestFixture } from './generate/fixtures.js';
+import { generateSnapshot, compareWithSnapshot } from './generate/snapshots.js';
+import { loadExamples, processBatch, processExampleDirs, generateConsolidatedTypes } from './batch.js';
+import { Explorer } from './explorer.js';
 
 // Create CLI program
 program
@@ -189,13 +189,15 @@ program
   .command('process-all')
   .description('Process all examples using conventional directory structure')
   .option('-d, --dir <dir>', 'Root directory with examples', './core/examples')
-  .option('-o, --output <dir>', 'Output directory for generated files', './core/generated')
-  .option('-f, --fixtures <dir>', 'Directory for E2E fixtures', './tests/fixtures')
+  .option('-o, --output <dir>', 'Output directory for generated files', './core/ast')
+  .option('-f, --fixtures <dir>', 'Directory for E2E fixtures', './core/fixtures')
+  .option('-t, --tests <dir>', 'Directory for test fixtures', './core/ast/tests')
   .action((options) => {
     try {
       // Ensure output directories exist
       const outputDir = options.output;
       const fixturesDir = options.fixtures;
+      const testsDir = options.tests;
 
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
@@ -205,10 +207,17 @@ program
         fs.mkdirSync(fixturesDir, { recursive: true });
       }
 
+      if (!fs.existsSync(testsDir)) {
+        fs.mkdirSync(testsDir, { recursive: true });
+      }
+
       console.log(`Processing examples from ${options.dir}...`);
 
       // Process examples using convention-based approach
-      processExampleDirs(options.dir, outputDir);
+      processExampleDirs(options.dir, outputDir, undefined, {
+        testsDir: testsDir,
+        fixturesDir: fixturesDir
+      });
 
       // Generate consolidated types
       console.log('Generating consolidated types...');
@@ -224,6 +233,7 @@ program
       console.log('Process completed successfully!');
       console.log(`- Snapshots: ${snapshotsDir}`);
       console.log(`- Types: ${typesDir}`);
+      console.log(`- Tests: ${testsDir}`);
       console.log(`- Fixtures: ${fixturesDir}`);
     } catch (error: any) {
       console.error('Error:', error.message);
@@ -231,6 +241,22 @@ program
   });
 
 // Parse arguments
-if (require.main === module) {
+// ESM doesn't have require.main === module
+// Check if this file is being executed directly
+if (import.meta.url === `file://${process.argv[1]}`) {
   program.parse();
 }
+
+/**
+ * Run a specific command with arguments
+ */
+export function runCommand(commandName: string, args: string[]): void {
+  // Add the command name to the beginning of args
+  const fullArgs = [commandName, ...args];
+
+  // Parse arguments
+  program.parse(fullArgs, { from: 'user' });
+}
+
+// Export the program for testing
+export { program };

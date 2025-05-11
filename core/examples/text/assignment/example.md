@@ -1,0 +1,1 @@
+@text greeting = "Hello, world!"

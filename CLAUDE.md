@@ -37,3 +37,26 @@ Useful context can be found in these files:
 - AST: `docs/dev/AST.md`
 - Error testing patterns: `docs/dev/ERROR_TESTING_PATTERNS.md`
 - Debugging tools: `docs/dev/DEBUG-TOOLS.md`
+
+# AST Explorer
+
+The AST Explorer is used to generate types from example directives. It uses convention-based directory structure:
+
+```
+core/examples/
+├── directivekind/             # e.g., text, run, import
+│   └── directivesubtype/      # e.g., assignment, template
+│       ├── example.md         # Base example
+│       ├── expected.md        # Expected output for base example
+│       ├── example-variant.md # Variant example (e.g., multiline)
+│       └── expected-variant.md # Expected output for variant
+```
+
+After running `npm run ast:process-all`, it generates:
+- Types: `core/ast/types/*`
+- Tests: `core/ast/tests/*`
+- Fixtures: `core/fixtures/*`
+
+Known issues:
+- When generating consolidated type files, it sometimes creates imports with incorrect filenames.
+- You may need to manually update the import paths in the generated `text.ts` files.

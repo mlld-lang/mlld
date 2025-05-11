@@ -3,11 +3,11 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseDirective, parseFile } from './parse';
-import { generateTypeInterface } from './generate/types';
-import { generateTestFixture, writeTestFixture } from './generate/fixtures';
-import { generateSnapshot, compareWithSnapshot } from './generate/snapshots';
-import { generateDocumentation } from './generate/docs';
+import { parseDirective, parseFile } from './parse.js';
+import { generateTypeInterface } from './generate/types.js';
+import { generateTestFixture, writeTestFixture } from './generate/fixtures.js';
+import { generateSnapshot, compareWithSnapshot } from './generate/snapshots.js';
+import { generateDocumentation } from './generate/docs.js';
 import {
   processBatch,
   loadExamples,
@@ -15,9 +15,9 @@ import {
   processExampleDirs,
   generateConsolidatedTypes,
   type Example
-} from './batch';
-import createConfig, { AstExplorerConfig } from './config';
-import type { DirectiveNode } from '@grammar/types/base';
+} from './batch.js';
+import createConfig, { AstExplorerConfig } from './config.js';
+import type { DirectiveNode } from './parse.js';
 
 /**
  * Interface for filesystem adapter (used for testing)
@@ -35,12 +35,12 @@ export interface IFileSystemAdapter {
  * Default filesystem adapter using Node's fs module
  */
 class NodeFsAdapter implements IFileSystemAdapter {
-  writeFileSync(path: string, content: string, encoding: string = 'utf8'): void {
-    fs.writeFileSync(path, content, { encoding });
+  writeFileSync(path: string, content: string, encoding?: string): void {
+    fs.writeFileSync(path, content, encoding ? { encoding: encoding as BufferEncoding } : undefined);
   }
 
-  readFileSync(path: string, encoding: string = 'utf8'): string {
-    return fs.readFileSync(path, { encoding }).toString();
+  readFileSync(path: string, encoding?: string): string {
+    return fs.readFileSync(path, encoding ? { encoding: encoding as BufferEncoding } : undefined).toString();
   }
 
   existsSync(path: string): boolean {

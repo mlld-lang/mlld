@@ -1,0 +1,1 @@
+@run echo "Hello from command"

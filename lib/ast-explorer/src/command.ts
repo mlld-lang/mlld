@@ -5,13 +5,13 @@
 import { program } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseDirective } from './parse';
-import { generateTypeInterface } from './generate/types';
-import { generateTestFixture, writeTestFixture } from './generate/fixtures';
-import { generateSnapshot, compareWithSnapshot } from './generate/snapshots';
-import { loadExamples, processBatch, processExampleDirs, generateConsolidatedTypes } from './batch';
-import { Explorer } from './explorer';
-import { extractDirectives } from './extract-directives';
+import { parseDirective } from './parse.js';
+import { generateTypeInterface } from './generate/types.js';
+import { generateTestFixture, writeTestFixture } from './generate/fixtures.js';
+import { generateSnapshot, compareWithSnapshot } from './generate/snapshots.js';
+import { loadExamples, processBatch, processExampleDirs, generateConsolidatedTypes } from './batch.js';
+import { Explorer } from './explorer.js';
+import { extractDirectives } from './extract-directives.js';
 
 // Path resolution helper
 declare global {

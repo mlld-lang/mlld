@@ -1,15 +1,15 @@
 /**
  * Batch processing utilities
  */
-import * as fs from 'fs';
 import * as path from 'path';
-import { parseDirective, parseFile } from './parse';
-import { generateTypeInterface } from './generate/types';
-import { generateTestFixture, writeTestFixture } from './generate/fixtures';
-import { generateSnapshot } from './generate/snapshots';
-import { generateDocumentation } from './generate/docs';
-import { extractDirectives } from './extract-directives';
-import type { IFileSystemAdapter } from './explorer';
+import { parseDirective, parseFile } from './parse.js';
+import { generateTypeInterface } from './generate/types.js';
+import { generateTestFixture, writeTestFixture } from './generate/fixtures.js';
+import { generateSnapshot } from './generate/snapshots.js';
+import { generateDocumentation } from './generate/docs.js';
+import { extractDirectives } from './extract-directives.js';
+import type { IFileSystemAdapter } from './explorer.js';
+import { nodeFsAdapter } from './fs-adapter.js';
 
 /**
  * Example directive interface
@@ -44,7 +44,7 @@ export function processBatch(
   fileSystem?: IFileSystemAdapter
 ): void {
   // Use provided fileSystem or fallback to fs
-  const fsAdapter = fileSystem || fs;
+  const fsAdapter = fileSystem || nodeFsAdapter;
 
   // Create output directories
   const dirs = {
@@ -93,7 +93,7 @@ export function processBatch(
  * Load examples from a JSON file
  */
 export function loadExamples(filePath: string, fileSystem?: IFileSystemAdapter): Example[] {
-  const fsAdapter = fileSystem || fs;
+  const fsAdapter = fileSystem || nodeFsAdapter;
   return JSON.parse(fsAdapter.readFileSync(filePath, 'utf8'));
 }
 
@@ -112,17 +112,19 @@ export function loadExamples(filePath: string, fileSystem?: IFileSystemAdapter):
 export function processExampleDirs(
   baseDir: string,
   outputDir: string,
-  fileSystem?: IFileSystemAdapter
+  fileSystem?: IFileSystemAdapter,
+  options: { testsDir?: string; fixturesDir?: string } = {}
 ): void {
-  const fsAdapter = fileSystem || fs;
+  const fsAdapter = fileSystem || nodeFsAdapter;
+  const { testsDir, fixturesDir } = options;
 
   // Process valid examples
   const validDir = path.join(baseDir, 'valid');
   if (fsAdapter.existsSync(validDir)) {
-    processConventionalExamples(validDir, outputDir, fsAdapter);
+    processConventionalExamples(validDir, outputDir, fsAdapter, testsDir, fixturesDir);
   } else {
     // If no valid subdirectory, treat baseDir as the root of directive kinds
-    processConventionalExamples(baseDir, outputDir, fsAdapter);
+    processConventionalExamples(baseDir, outputDir, fsAdapter, testsDir, fixturesDir);
   }
 
   // Process invalid examples
@@ -138,7 +140,9 @@ export function processExampleDirs(
 function processConventionalExamples(
   baseDir: string,
   outputDir: string,
-  fileSystem: IFileSystemAdapter
+  fileSystem: IFileSystemAdapter,
+  testsDir?: string,
+  fixturesDir?: string
 ): void {
   // Get all directive types (e.g., text, run, import)
   const directiveTypes = fileSystem.readdirSync(baseDir);
@@ -190,7 +194,7 @@ function processConventionalExamples(
         // Process example and expected output
         try {
           processExampleFile(
-            examplePath, 
+            examplePath,
             fileSystem.existsSync(expectedPath) ? expectedPath : undefined,
             {
               kind: directiveKind,
@@ -198,7 +202,8 @@ function processConventionalExamples(
               variant: variant || undefined
             },
             outputDir,
-            fileSystem
+            fileSystem,
+            { testsDir, fixturesDir }
           );
           
           // Add to processed examples list
@@ -228,7 +233,8 @@ function processExampleFile(
   expectedPath: string | undefined,
   metadata: { kind: string; subtype: string; variant?: string },
   outputDir: string,
-  fileSystem: IFileSystemAdapter
+  fileSystem: IFileSystemAdapter,
+  options: { testsDir?: string; fixturesDir?: string } = {}
 ): void {
   // Read example content
   const content = fileSystem.readFileSync(examplePath, 'utf8');
@@ -239,9 +245,9 @@ function processExampleFile(
   // Create output directories
   const dirs = {
     types: path.join(outputDir, 'types'),
-    fixtures: path.join(outputDir, 'fixtures'),
+    fixtures: path.join(options.testsDir || path.join(outputDir, 'tests')),
     snapshots: path.join(outputDir, 'snapshots'),
-    e2e: path.join(outputDir, 'e2e')
+    e2e: path.join(options.fixturesDir || path.join(outputDir, 'e2e'))
   };
   
   Object.values(dirs).forEach(dir => {
@@ -379,7 +385,7 @@ function generateIndexFiles(
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join('') + 'DirectiveNode';
 
-      return `export { ${typeName} } from './${name}';`;
+      return `export { ${typeName} } from './${name}.js';`;
     })
     .join('\n');
 
@@ -407,7 +413,8 @@ function generateConsolidatedTypeFiles(
       .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join('') + 'DirectiveNode';
-      
+
+    // Store the file name along with the type name
     if (!kindMap[example.kind].includes(typeName)) {
       kindMap[example.kind].push(typeName);
     }
@@ -416,9 +423,19 @@ function generateConsolidatedTypeFiles(
   // Create union types for each kind
   for (const [kind, typeNames] of Object.entries(kindMap)) {
     const kindTypeName = kind.charAt(0).toUpperCase() + kind.slice(1) + 'DirectiveNode';
-    
+
     const imports = typeNames
-      .map(typeName => `import { ${typeName} } from './${typeName.replace('DirectiveNode', '').toLowerCase()}';`)
+      .map(typeName => {
+        // Get the base name without the 'DirectiveNode' suffix
+        const baseName = typeName.replace('DirectiveNode', '');
+
+        // Convert to kebab-case for file naming
+        const fileName = baseName
+          .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+          .toLowerCase();
+
+        return `import { ${typeName} } from './${fileName}';`;
+      })
       .join('\n');
     
     const unionType = `
@@ -440,7 +457,7 @@ export type ${kindTypeName} =
     const mainImports = Object.keys(kindMap)
       .map(kind => {
         const typeName = kind.charAt(0).toUpperCase() + kind.slice(1) + 'DirectiveNode';
-        return `import { ${typeName} } from './${kind}';`;
+        return `import { ${typeName} } from './${kind}.js';`;
       })
       .join('\n');
     
@@ -470,7 +487,7 @@ export function generateConsolidatedTypes(
   fileSystem?: IFileSystemAdapter
 ): void {
   // Use provided fileSystem or fallback to fs
-  const fsAdapter = fileSystem || fs;
+  const fsAdapter = fileSystem || nodeFsAdapter;
 
   // Read all snapshot files
   const files = fsAdapter.readdirSync(snapshotsDir)
@@ -510,7 +527,17 @@ export function generateConsolidatedTypes(
     const kindTypeName = kind.charAt(0).toUpperCase() + kind.slice(1) + 'DirectiveNode';
 
     const imports = typeNames
-      .map(typeName => `import { ${typeName} } from './${typeName.replace('DirectiveNode', '').toLowerCase()}';`)
+      .map(typeName => {
+        // Get the base name without the 'DirectiveNode' suffix
+        const baseName = typeName.replace('DirectiveNode', '');
+
+        // Convert to kebab-case for file naming
+        const fileName = baseName
+          .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+          .toLowerCase();
+
+        return `import { ${typeName} } from './${fileName}';`;
+      })
       .join('\n');
 
     const unionType = `
@@ -531,7 +558,7 @@ export type ${kindTypeName} =
   const mainImports = Object.keys(kindMap)
     .map(kind => {
       const typeName = kind.charAt(0).toUpperCase() + kind.slice(1) + 'DirectiveNode';
-      return `import { ${typeName} } from './${kind}';`
+      return `import { ${typeName} } from './${kind}.js';`
     })
     .join('\n');
 
@@ -560,7 +587,7 @@ export function processSnapshots(
   fileSystem?: IFileSystemAdapter
 ): void {
   // Use provided fileSystem or fallback to fs
-  const fsAdapter = fileSystem || fs;
+  const fsAdapter = fileSystem || nodeFsAdapter;
 
   // Read all snapshot files
   const files = fsAdapter.readdirSync(snapshotDir)

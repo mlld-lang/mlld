@@ -1,0 +1,26 @@
+{
+  "type": "Directive",
+  "kind": "text",
+  "subtype": "textAssignment",
+  "values": {
+    "identifier": [
+      {
+        "type": "string",
+        "value": "greeting"
+      }
+    ],
+    "content": [
+      {
+        "type": "string",
+        "value": "\"Hello, world!\""
+      }
+    ]
+  },
+  "raw": {
+    "identifier": "greeting",
+    "content": "\"Hello, world!\""
+  },
+  "meta": {
+    "sourceType": "literal"
+  }
+}

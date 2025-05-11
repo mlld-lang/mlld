@@ -1,8 +1,8 @@
 /**
  * Type generation utilities for AST nodes
  */
-import type { DirectiveNode } from '@grammar/types/base';
-import { analyzeStructure, inferType } from '../analyze';
+import type { DirectiveNode } from '../parse.js';
+import { analyzeStructure, inferType } from '../analyze.js';
 
 /**
  * Generate a TypeScript interface for a directive node

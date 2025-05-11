@@ -1,0 +1,13 @@
+{
+  "name": "text-assignment",
+  "input": "# Text Assignment Example\n\nThis document demonstrates the basic text assignment directive.\n\n@text greeting = \"Hello, world!\"\n\nThe value of greeting should be displayed below:\n\n@add [[{{greeting}}]]",
+  "expected": "# Text Assignment Example\n\nThis document demonstrates the basic text assignment directive.\n\nThe value of greeting should be displayed below:\n\nHello, world!",
+  "directives": [
+    "@text greeting = \"Hello, world!\"",
+    "@add [[{{greeting}}]]"
+  ],
+  "metadata": {
+    "kind": "text",
+    "subtype": "assignment"
+  }
+}

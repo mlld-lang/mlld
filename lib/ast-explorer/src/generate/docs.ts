@@ -1,10 +1,10 @@
 /**
  * Documentation generation utilities
  */
-import * as fs from 'fs';
 import * as path from 'path';
-import type { DirectiveNode } from '@grammar/types/base';
-import type { IFileSystemAdapter } from '../explorer';
+import type { DirectiveNode } from '../parse.js';
+import type { IFileSystemAdapter } from '../explorer.js';
+import { nodeFsAdapter } from '../fs-adapter.js';
 
 /**
  * Generate documentation from snapshots
@@ -16,7 +16,7 @@ export function generateDocumentation(
   fileSystem?: IFileSystemAdapter
 ): void {
   // Use provided fileSystem or fallback to fs
-  const fsAdapter = fileSystem || fs;
+  const fsAdapter = fileSystem || nodeFsAdapter;
 
   // Ensure output directory exists
   fsAdapter.mkdirSync(outputDir, { recursive: true });

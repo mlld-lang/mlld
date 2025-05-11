@@ -1,10 +1,10 @@
 /**
  * Snapshot generation utilities for AST nodes
  */
-import * as fs from 'fs';
 import * as path from 'path';
-import type { DirectiveNode } from '@grammar/types/base';
-import type { IFileSystemAdapter } from '../explorer';
+import type { DirectiveNode } from '../parse.js';
+import type { IFileSystemAdapter } from '../explorer.js';
+import { nodeFsAdapter } from '../fs-adapter.js';
 
 /**
  * Create a snapshot file for a directive
@@ -16,7 +16,7 @@ export function generateSnapshot(
   fileSystem?: IFileSystemAdapter
 ): string {
   // Use provided fileSystem or fallback to fs
-  const fsAdapter = fileSystem || fs;
+  const fsAdapter = fileSystem || nodeFsAdapter;
 
   console.log('SNAPSHOT: Using adapter to write file');
   console.log('SNAPSHOT: FileSystem adapter provided:', fileSystem ? 'yes' : 'no');
@@ -75,7 +75,7 @@ export function compareWithSnapshot(
   fileSystem?: IFileSystemAdapter
 ): boolean {
   // Use provided fileSystem or fallback to fs
-  const fsAdapter = fileSystem || fs;
+  const fsAdapter = fileSystem || nodeFsAdapter;
   
   const snapshotPath = path.join(snapshotDir, `${name}.snapshot.json`);
   
@@ -103,7 +103,7 @@ export function generateSnapshotDiff(
   fileSystem?: IFileSystemAdapter
 ): SnapshotDiff | null {
   // Use provided fileSystem or fallback to fs
-  const fsAdapter = fileSystem || fs;
+  const fsAdapter = fileSystem || nodeFsAdapter;
   
   const snapshotPath = path.join(snapshotDir, `${name}.snapshot.json`);
   

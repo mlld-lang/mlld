@@ -2,6 +2,7 @@
   "name": "meld-ast-explorer",
   "version": "0.1.0",
   "description": "AST explorer tools for Meld grammar",
+  "type": "module",
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

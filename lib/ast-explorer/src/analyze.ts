@@ -1,8 +1,7 @@
 /**
  * AST analysis utilities
  */
-import type { DirectiveNode } from '@grammar/types/base';
-import type { MeldNode } from '@core/syntax/types/nodes';
+import type { DirectiveNode, MeldNode } from './parse.js';
 
 /**
  * Analysis result for a node structure
