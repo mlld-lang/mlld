@@ -2,7 +2,7 @@
 
 ## Core Concept: Importing Definitions
 
-The primary purpose of the `@import` directive is to load definitions (Text, Data, Path variables, and Commands defined via `@define`) from an external Meld file (`.mld`) into the current file's execution context (State).
+The primary purpose of the `@import` directive is to load definitions (Text, Data, Path variables, and Commands defined via `@exec`) from an external Meld file (`.mld`) into the current file's execution context (State).
 
 **Crucially, `@import` does *not* embed the *content* of the imported file.** It only makes the *definitions* created within that file available to the importing file.
 

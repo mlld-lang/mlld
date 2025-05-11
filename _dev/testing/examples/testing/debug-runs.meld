@@ -1,7 +1,0 @@
->> Testing run directives separately
-
-@run [cpai api cli core services --tree --stdout]
-
-@run [cpai api cli core services --stdout]
-
-@run [npm test] 

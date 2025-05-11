@@ -1,7 +1,0 @@
-@text instructions = @embed [test-audit-plan.md]
-@text file = @embed [$./services/pipeline/DirectiveService/DirectiveService.test.ts]
-@text prompt = [[
-    See the following test file: {{file}}
-    {{instructions}}
-]]
-@run [oneshot --model claude-3-7-sonnet-latest {{prompt}} -o audit/DirectiveService-audit.md]

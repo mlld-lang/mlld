@@ -1,3 +1,0 @@
-You are working on the mlld language, specifically the ast and grammar. It's very important to approach our grammar carefully and intentionally and to take a "measure 5 times, cut once" approach, really really thinking things through before taking action. Here's our current grammar for your review @meld.pegjs and additional required reading: @ADVICE.md @DEBUG.md 
-
-Remember: measure 5 times, cut once when it comes to grammar. We need to think very strategically about any changes made. And whenever you make a change, you'll need to build the grammar and run the tests with `npm run build:grammar && npm test core/ast`

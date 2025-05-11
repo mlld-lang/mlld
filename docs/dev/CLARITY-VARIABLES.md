@@ -7,12 +7,12 @@ Meld utilizes three distinct variable types, each identified by its reference sy
 1.  **Path Variables (`$var`)**:
     *   **Definition**: `@path identifier = "$PROJECTPATH/..."` or `@path other = $anotherPath/...`
     *   **Reference**: `$variableName` (e.g., `$docs`, `$PROJECTPATH`, `$.`, `$~`)
-    *   **Purpose**: Represents filesystem paths. Used primarily within square brackets `[...]` for `@embed`, `@run`, and command arguments.
+    *   **Purpose**: Represents filesystem paths. Used primarily within square brackets `[...]` for `@add`, `@run`, and command arguments.
     *   **Resolution**: Resolved by `PathResolver` using `StateService.getPathVar()`. Values are typically absolute paths.
     *   **Constraints**: No field access. Strict path validation rules apply.
 
 2.  **Text Variables (`{{var}}`)**:
-    *   **Definition**: `@text identifier = "string"` or `@text id = @run[...]` or `@text id = @embed[...]`
+    *   **Definition**: `@text identifier = "string"` or `@text id = @run[...]` or `@text id = @add[...]`
     *   **Reference**: `{{variableName}}`
     *   **Purpose**: Stores simple, unstructured string values.
     *   **Resolution**: Resolved by `VariableReferenceResolver` using `StateService.getTextVar()`.
@@ -47,7 +47,7 @@ A crucial and complex part of variable handling is converting the resolved value
 *   **Simple Types**: Strings, numbers, booleans are converted directly. `null` and `undefined` become empty strings.
 *   **Objects/Arrays**:
     *   **Inline Context** (e.g., within a line of text `Hello {{user}}`): The object/array is converted to a **compact JSON string** (e.g., `{"name":"A","id":1}`). Arrays become comma-space separated strings (`"apple, banana"`).
-    *   **Block Context** (e.g., `@embed {{user}}` on its own line): The object/array is converted to a **pretty-printed, indented JSON string**.
+    *   **Block Context** (e.g., `@add {{user}}` on its own line): The object/array is converted to a **pretty-printed, indented JSON string**.
     *   **Field Access**: When accessing a specific field (`{{user.name}}`), the *value* of that field is converted using these rules.
 *   **Formatting Context (`formattingContext`)**: The `convertToString` method accepts an optional context (`isBlock`, `nodeType`, `linePosition`, `isTransformation` [old name]) to determine whether to use inline or block formatting. The exact propagation and determination of this context through different directives and nesting levels is an area needing verification.
 *   **Output Modes**: This formatting behavior is intrinsically linked to the concepts of "output-literal mode" vs. "output-normalized mode" discussed in Issue #19. Literal mode aims to preserve structure (potentially closer to block formatting?), while normalized mode aims for standard Markdown flow (potentially closer to inline formatting?). Ensuring consistency here is key.
@@ -55,7 +55,7 @@ A crucial and complex part of variable handling is converting the resolved value
 ## Key Challenges and Areas for Improvement
 
 1.  **Formatting Consistency**:
-    *   How reliably is the `formattingContext` determined and propagated across different directives (`@embed`, `@run`, template literals within `@text`/`@data`) and nesting levels?
+    *   How reliably is the `formattingContext` determined and propagated across different directives (`@add`, `@run`, template literals within `@text`/`@data`) and nesting levels?
     *   Does the block vs. inline formatting distinction perfectly align with the "output-literal" vs. "output-normalized" modes? (See Issue #19).
     *   Are newline and spacing rules around resolved variables handled consistently, especially at directive boundaries?
 

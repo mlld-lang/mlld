@@ -57,6 +57,17 @@ After running `npm run ast:process-all`, it generates:
 - Tests: `core/ast/tests/*`
 - Fixtures: `core/fixtures/*`
 
+To validate the generated types against the expected structure:
+```bash
+npm run ast:validate
+```
+
+This validation checks that:
+1. We have the proper consolidated types (not individual instance files)
+2. All expected union types and subtypes are present
+3. No unexpected type files were generated
+
 Known issues:
 - When generating consolidated type files, it sometimes creates imports with incorrect filenames.
 - You may need to manually update the import paths in the generated `text.ts` files.
+- The current implementation creates separate files for each directive instance (with numeric suffixes) rather than properly consolidating them.

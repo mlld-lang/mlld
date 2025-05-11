@@ -40,6 +40,7 @@
     "ast:test-examples": "node ./lib/ast-explorer/bin/ast-explorer.js process-all -d ./grammar/tests/examples -o ./grammar/tests/output",
     "ast:build": "npm run --prefix lib/ast-explorer build",
     "ast:examples-legacy": "node scripts/process-ast-examples.js",
+    "ast:validate": "node scripts/validate-ast-types.js",
     "reinstall": "npm run build && npm uninstall meld && npm install -g .",
     "dev": "tsup --watch",
     "test": "vitest run",

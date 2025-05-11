@@ -1,6 +1,0 @@
-## Documentation
-### Target UX
-@embed [$./docs/UX.md]
-
-### Architecture 
-@embed [$./docs/ARCHITECTURE.md] 

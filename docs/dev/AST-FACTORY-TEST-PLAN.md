@@ -1,3 +1,5 @@
+** NEEDS REVIEW / UPDATE FOLLOWING AST REFACTOR **
+
 # AST Factory Pattern - Test Plan
 
 This document outlines the testing strategy for the new AST factory pattern implementation.

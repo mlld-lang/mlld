@@ -1,5 +1,0 @@
-## Run Test
-@run [echo "Hello, world!"]
-
-## Embed Test
-@embed [$./docs/UX.md] 

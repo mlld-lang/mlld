@@ -19,7 +19,7 @@ The `@run` directive in Meld has three distinct syntaxes which serve different p
    - Parameters support variable references
 
 3. **DefinedCommand**: `@run $commandName({{param1}}, {{param2}})`
-   - Executes a previously defined command (from @define directive)
+   - Executes a previously defined command (from @exec directive)
    - Parameters are passed by position to the command template
    - Parameters can be literal strings or variable references
    - Command templates may contain variable placeholders that are substituted

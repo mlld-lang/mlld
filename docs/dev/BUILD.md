@@ -1,3 +1,5 @@
+** NEEDS REVIEW / UPDATE FOLLOWING AST REFACTOR **
+
 # Build Configuration Guide
 
 This document explains the build configuration for the Meld project, particularly focusing on Dependency Injection (DI) considerations.

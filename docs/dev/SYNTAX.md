@@ -6,11 +6,11 @@ Meld is a modular prompt scripting language designed for dynamic prompt creation
 
 Variables have a VariableType of `text`, `data`, `path`, and `command`.
 
-`@embed` subtypes are `embedPath`, `embedVariable`, `embedTemplate`:
+`@add` subtypes are `embedPath`, `embedVariable`, `embedTemplate`:
 ```
-@embed [path/to/file.md] <-- embedPath
-@embed {{variable}} <-- embedVariable
-@embed [[Template with {{variables}}]] <-- embedTemplate
+@add [path/to/file.md] <-- embedPath
+@add {{variable}} <-- embedVariable
+@add [[Template with {{variables}}]] <-- embedTemplate
 ```
 `@run` subtypes are `runCommand`, `runDefined`, `runCode`, `runCodeParams`:
 ```
@@ -40,16 +40,16 @@ Understanding these two points is crucial for working effectively with Meld:
         ```
         Output: `{{greeting}} World!`
 
-    *   **Correct:** Use `@embed` for templating plain text:
+    *   **Correct:** Use `@add` for templating plain text:
         ```meld
         @text greeting = "Hello"
-        @embed [[
+        @add [[
         {{greeting}} World!
         ]]
         ```
         Output: `Hello World!`
 
-2.  **Directive Syntax Variations:** The behavior of `@embed` and `@run` changes based on the syntax used (e.g., `[...]` vs `[[...]]` vs `{{...}}`).
+2.  **Directive Syntax Variations:** The behavior of `@add` and `@run` changes based on the syntax used (e.g., `[...]` vs `[[...]]` vs `{{...}}`).
 
 ## Directives Deep Dive
 
@@ -63,30 +63,30 @@ These define variables of different types.
 @data user = {"name": "Alex", "id": 123}
 
 # Usage (within another directive):
-@embed [[User name is {{user.name}}]]
+@add [[User name is {{user.name}}]]
 ```
 
-### `@embed`: Including Content
+### `@add`: Including Content
 
 Used to bring external content or template strings into your script.
 
-*   **`@embed [path/to/file]`**: Embeds the entire content of a file.
+*   **`@add [path/to/file]`**: Embeds the entire content of a file.
     ```meld
-    @embed [./README.md]
+    @add [./README.md]
     ```
-*   **`@embed [path/to/file # Section Header]`**: Embeds a specific section from a Markdown file.
+*   **`@add [path/to/file # Section Header]`**: Embeds a specific section from a Markdown file.
     ```meld
-    @embed [./docs/ARCHITECTURE.md # Overview]
+    @add [./docs/ARCHITECTURE.md # Overview]
     ```
-*   **`@embed {{variable}}`**: Embeds the content of a variable (which might hold file paths or text).
+*   **`@add {{variable}}`**: Embeds the content of a variable (which might hold file paths or text).
     ```meld
     @path doc_path = "./README.md"
-    @embed {{doc_path}}
+    @add {{doc_path}}
     ```
-*   **`@embed [[Template with {{variables}}]]`**: Embeds a literal template string, interpolating any variables within it.
+*   **`@add [[Template with {{variables}}]]`**: Embeds a literal template string, interpolating any variables within it.
     ```meld
     @text name = "Meld"
-    @embed [[Welcome to {{name}}!]]
+    @add [[Welcome to {{name}}!]]
     ```
 
 ### `@run`: Executing Commands & Code
@@ -102,9 +102,9 @@ Used to execute shell commands, predefined commands, or code blocks.
     @path target_dir = "."
     @run [ls {{target_dir}}]
     ```
-*   **`@run $definedCommand(param1, {{var2}})`**: Runs a command previously defined with `@define`.
+*   **`@run $definedCommand(param1, {{var2}})`**: Runs a command previously defined with `@exec`.
     ```meld
-    @define greet(name) = @run [echo "Hello, {{name}}!"]
+    @exec greet(name) = @run [echo "Hello, {{name}}!"]
     @run $greet(MeldUser)
     ```
 *   **`@run language [ code block ]`**: Executes a block of code in the specified language (e.g., `python`, `bash`).
@@ -124,20 +124,20 @@ Imports variables and defined commands from other Meld files.
 ```meld
 # utils.mld
 @text util_message = "Shared utility message"
-@define util_command(arg) = @run [echo "Util: {{arg}}"]
+@exec util_command(arg) = @run [echo "Util: {{arg}}"]
 
 # main.mld
 @import [./utils.mld]
-@embed [[{{util_message}}]]
+@add [[{{util_message}}]]
 @run $util_command("Test")
 ```
 
-### `@define`
+### `@exec`
 
 Creates reusable, parameterized commands.
 
 ```meld
-@define list_files(dir, pattern) = @run [find {{dir}} -name "{{pattern}}"]
+@exec list_files(dir, pattern) = @run [find {{dir}} -name "{{pattern}}"]
 
 @run $list_files(".", "*.md") 
 ```

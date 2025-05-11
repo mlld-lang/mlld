@@ -1,2 +1,0 @@
->> Testing just the cpai tree command
-@run [cpai api cli core services --tree --stdout] 

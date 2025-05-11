@@ -1,7 +1,0 @@
->> This is a test file
->> With some comments
-{{ text text = \This is some text\ }}
-{{ define person = { 
-  name: \John\, 
-  { age: 30 }
-} }}
