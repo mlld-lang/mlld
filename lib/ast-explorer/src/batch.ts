@@ -133,13 +133,31 @@ export function processExampleDirs(
   const allDirectives: DirectiveNode[] = [];
   const fixtures: E2EFixture[] = [];
 
-  // Process valid examples
+  // Ensure base output directories exist
+  const dirs = {
+    types: path.join(outputDir, 'types'),
+    snapshots: path.join(outputDir, 'snapshots'),
+    e2e: path.join(outputDir, 'e2e'),
+    tests: path.join(options.testsDir || path.join(outputDir, 'tests')),
+    fixtures: path.join(options.fixturesDir || path.join(outputDir, 'fixtures'))
+  };
+
+  Object.values(dirs).forEach(dir => {
+    if (!fsAdapter.existsSync(dir)) {
+      fsAdapter.mkdirSync(dir, { recursive: true });
+    }
+  });
+
+  // Process valid examples if directory exists
   const validDir = path.join(baseDir, 'valid');
+
   if (fsAdapter.existsSync(validDir)) {
     processConventionalExamples(validDir, outputDir, allDirectives, fixtures, fsAdapter, options);
-  } else {
+  } else if (fsAdapter.existsSync(baseDir)) {
     // If no valid subdirectory, treat baseDir as the root of directive kinds
     processConventionalExamples(baseDir, outputDir, allDirectives, fixtures, fsAdapter, options);
+  } else {
+    console.log(`No examples directory found at ${baseDir}`);
   }
 
   // Process invalid examples
@@ -148,15 +166,9 @@ export function processExampleDirs(
     processInvalidExamples(invalidDir, outputDir, fsAdapter);
   }
 
-  // Ensure output directories exist
+  // Define output directories (already created earlier)
   const typesDir = path.join(outputDir, 'types');
   const fixturesOutDir = fixturesDir || path.join(outputDir, 'e2e');
-
-  [typesDir, fixturesOutDir].forEach(dir => {
-    if (!fsAdapter.existsSync(dir)) {
-      fsAdapter.mkdirSync(dir, { recursive: true });
-    }
-  });
 
   // Generate consolidated type files based on all collected directives
   if (allDirectives.length > 0) {
@@ -420,6 +432,14 @@ function isDirectory(dirPath: string, fileSystem: IFileSystemAdapter): boolean {
   } catch (error) {
     return false;
   }
+}
+
+/**
+ * Capitalize a string (first letter uppercase, rest unchanged)
+ */
+function capitalize(str: string): string {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 /**

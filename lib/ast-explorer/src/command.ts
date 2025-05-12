@@ -2,14 +2,14 @@
 /**
  * Command-line interface for AST Explorer
  *
- * This module provides an improved CLI that uses enhanced batch processing
- * to generate more accurate and consolidated types.
+ * This module provides a CLI for AST exploration, batch processing,
+ * and type generation with discriminated unions.
  */
 import { program } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseDirective } from './parse.js';
-import { generateTypeInterface } from './generate/types.js';
+import { generateTypeInterface, generateConsolidatedTypes } from './generate/types.js';
 import { generateTestFixture, writeTestFixture } from './generate/fixtures.js';
 import { generateSnapshot, compareWithSnapshot } from './generate/snapshots.js';
 import { loadExamples, processBatch, processExampleDirs } from './batch.js';
@@ -204,7 +204,7 @@ program
 // Command to process batch
 program
   .command('batch')
-  .description('Process a batch of directive examples with enhanced type generation')
+  .description('Process a batch of directive examples with type generation')
   .argument('<examples>', 'JSON file with examples')
   .option('-o, --output <dir>', 'Output directory', './generated')
   .option('--verbose', 'Enable verbose output', false)
@@ -232,7 +232,7 @@ program
       const examples = loadExamples(examplesFile);
       processBatch(examples, options.output);
 
-      console.log(`Processed ${examples.length} examples with enhanced type generation`);
+      console.log(`Processed ${examples.length} examples with type generation`);
       console.log(`Output directory: ${options.output}`);
     } catch (error: any) {
       console.error('Error:', error.message);
@@ -275,6 +275,49 @@ program
       console.log(`Generated consolidated types in ${options.output}`);
     } catch (error: any) {
       console.error('Error:', error.message);
+    }
+  });
+
+// Command to validate AST explorer output
+program
+  .command('validate')
+  .description('Validate generated AST explorer output')
+  .option('-s, --snapshots <dir>', 'Snapshots directory', './core/ast/snapshots')
+  .option('-t, --types <dir>', 'Types directory', './core/ast/types')
+  .option('-f, --fixtures <dir>', 'Fixtures directory', './core/ast/fixtures')
+  .option('--verbose', 'Enable verbose output', false)
+  .action((options) => {
+    try {
+      // Validate snapshots
+      if (fs.existsSync(options.snapshots)) {
+        const snapshots = fs.readdirSync(options.snapshots).filter(f => f.endsWith('.json'));
+        console.log(`✅ Found ${snapshots.length} snapshots in ${options.snapshots}`);
+      } else {
+        console.error(`❌ Snapshots directory not found: ${options.snapshots}`);
+      }
+
+      // Validate types
+      if (fs.existsSync(options.types)) {
+        const typeFiles = fs.readdirSync(options.types).filter(f => f.endsWith('.ts'));
+        console.log(`✅ Found ${typeFiles.length} type files in ${options.types}`);
+      } else {
+        console.error(`❌ Types directory not found: ${options.types}`);
+      }
+
+      // Validate fixtures
+      if (fs.existsSync(options.fixtures)) {
+        const fixtures = fs.readdirSync(options.fixtures).filter(f => f.endsWith('.ts'));
+        console.log(`✅ Found ${fixtures.length} fixtures in ${options.fixtures}`);
+      } else {
+        console.error(`❌ Fixtures directory not found: ${options.fixtures}`);
+      }
+
+      console.log('Validation completed.');
+    } catch (error: any) {
+      console.error('Error:', error.message);
+      if (options.verbose) {
+        console.error('Stack trace:', error.stack);
+      }
     }
   });
 
@@ -348,10 +391,10 @@ program
     }
   });
 
-// Command to run the improved process-all workflow based on conventions
+// Command to run the process-all workflow based on conventions
 program
   .command('process-all')
-  .description('Process all examples using convention-based structure with enhanced type generation')
+  .description('Process all examples using convention-based directory structure')
   .option('-d, --dir <dir>', 'Root directory with examples', './core/examples')
   .option('-o, --output <dir>', 'Output directory for generated files', './core/ast')
   .option('-f, --fixtures <dir>', 'Directory for E2E fixtures', './core/fixtures')
@@ -387,13 +430,13 @@ program
 
       console.log(`Processing examples from ${options.dir}...`);
 
-      // Process examples using enhanced convention-based approach
+      // Process examples using convention-based approach
       processExampleDirs(options.dir, outputDir, undefined, {
         testsDir: testsDir,
         fixturesDir: fixturesDir
       });
 
-      console.log('Enhanced type generation completed successfully!');
+      console.log('Type generation completed successfully!');
       console.log(`- Types: ${path.join(outputDir, 'types')}`);
       console.log(`- Snapshots: ${path.join(outputDir, 'snapshots')}`);
       console.log(`- Tests: ${testsDir}`);

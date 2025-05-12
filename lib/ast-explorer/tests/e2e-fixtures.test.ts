@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as path from 'path';
 import { setupTestFileSystem } from './utils/FsManager';
 import { TracedAdapter } from './TracedAdapter';
-import { processEnhancedExampleDirs } from '../src/enhanced-batch';
+import { processExampleDirs } from '../src/batch.js';
 
 // Mock the directive extraction
 vi.mock('../src/extract-directives', () => ({
@@ -152,7 +152,7 @@ describe('E2E Fixture Generation', () => {
   
   it('should generate E2E fixtures from conventional directory structure', () => {
     // Process the examples
-    processEnhancedExampleDirs('./examples', './output', fsAdapter);
+    processExampleDirs('./examples', './output', fsAdapter);
     
     // Verify E2E fixtures directory was created
     expect(fsAdapter.existsSync('project/output/e2e')).toBe(true);
@@ -203,7 +203,7 @@ describe('E2E Fixture Generation', () => {
   
   it('should handle variants correctly', () => {
     // Process the examples
-    processEnhancedExampleDirs('./examples', './output', fsAdapter);
+    processExampleDirs('./examples', './output', fsAdapter);
     
     // Get list of generated fixture files
     const fixtureFiles = fsAdapter.existsSync('project/output/e2e') ?
@@ -229,7 +229,7 @@ describe('E2E Fixture Generation', () => {
   
   it('should generate snapshots for each directive', () => {
     // Process the examples
-    processEnhancedExampleDirs('./examples', './output', fsAdapter);
+    processExampleDirs('./examples', './output', fsAdapter);
     
     // Verify snapshots directory was created
     expect(fsAdapter.existsSync('project/output/snapshots')).toBe(true);
@@ -253,7 +253,7 @@ describe('E2E Fixture Generation', () => {
   
   it('should generate consolidated type files', () => {
     // Process the examples
-    processEnhancedExampleDirs('./examples', './output', fsAdapter);
+    processExampleDirs('./examples', './output', fsAdapter);
     
     // Verify types directory was created
     expect(fsAdapter.existsSync('project/output/types')).toBe(true);

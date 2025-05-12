@@ -1,11 +1,11 @@
 /**
- * Tests for the enhanced batch processing functionality
+ * Tests for the batch processing functionality
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as path from 'path';
 import { setupTestFileSystem } from './utils/FsManager';
 import { TracedAdapter } from './TracedAdapter';
-import { processEnhancedBatch, processEnhancedExampleDirs } from '../src/enhanced-batch';
+import { processBatch, processExampleDirs } from '../src/batch.js';
 
 // Mock parseDirective for consistent test results
 vi.mock('../src/parse', () => ({
@@ -91,7 +91,7 @@ vi.mock('../src/extract-directives', () => ({
   })
 }));
 
-describe('Enhanced Batch Processing', () => {
+describe('Batch Processing', () => {
   let fsAdapter: TracedAdapter;
   let cleanup: () => Promise<void>;
   
@@ -145,7 +145,7 @@ describe('Enhanced Batch Processing', () => {
     vi.restoreAllMocks();
   });
   
-  describe('processEnhancedBatch', () => {
+  describe('processBatch', () => {
     it('should process a batch of examples', () => {
       // Setup test examples
       const examples = [
@@ -154,8 +154,8 @@ describe('Enhanced Batch Processing', () => {
         { name: 'run-command', directive: '@run echo "Testing"' }
       ];
       
-      // Run enhanced batch processing with traced adapter
-      processEnhancedBatch(examples, './output', fsAdapter);
+      // Run batch processing with traced adapter
+      processBatch(examples, './output', fsAdapter);
       
       // Check if output directories were created
       expect(fsAdapter.existsSync('project/output/types')).toBe(true);
@@ -181,10 +181,10 @@ describe('Enhanced Batch Processing', () => {
     });
   });
   
-  describe('processEnhancedExampleDirs', () => {
+  describe('processExampleDirs', () => {
     it('should process examples from a convention-based directory structure', () => {
       // Process the example directories created in beforeEach
-      processEnhancedExampleDirs('./examples', './output', fsAdapter);
+      processExampleDirs('./examples', './output', fsAdapter);
       
       // Check if output directories were created
       expect(fsAdapter.existsSync('project/output/types')).toBe(true);
@@ -220,7 +220,7 @@ describe('Enhanced Batch Processing', () => {
     
     it('should gracefully handle missing directories', () => {
       // Process examples from a non-existent directory
-      processEnhancedExampleDirs('./non-existent', './output', fsAdapter);
+      processExampleDirs('./non-existent', './output', fsAdapter);
       
       // Should not throw an error and should create output directories
       expect(fsAdapter.existsSync('project/output')).toBe(true);

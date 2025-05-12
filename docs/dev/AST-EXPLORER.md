@@ -1,6 +1,6 @@
 # AST Explorer
 
-The AST Explorer is a tool for working with and analyzing Meld's Abstract Syntax Tree. It's designed to help developers understand the structure of the AST, generate TypeScript types from examples, and create test fixtures.
+The AST Explorer is a tool for working with and analyzing Meld's Abstract Syntax Tree. It's designed to help developers understand the structure of the AST, generate TypeScript types from examples, and create test fixtures. It provides a convention-based system for organizing directive examples and generating comprehensive discriminated union types.
 
 ## Overview
 
@@ -45,6 +45,12 @@ npm run ast:process-all -- -d ./core/examples -o ./core/generated
 
 # Run the full workflow (process examples, generate types and docs)
 npm run ast:workflow
+
+# Validate the generated types
+npm run ast:validate
+
+# Generate E2E fixtures for test cases
+npm run ast:generate-e2e
 ```
 
 ### Configuration
@@ -86,17 +92,24 @@ core/examples/
 │       ├── example.md         # Base example
 │       ├── expected.md        # Expected output for base example
 │       ├── example-variant.md # Variant example (e.g., multiline)
-│       └── expected-variant.md # Expected output for variant
+│       ├── expected-variant.md # Expected output for variant
+│       ├── helpers.md         # Helper files (ignored by processor)
+│       └── imports/           # Support files for examples (ignored)
 ```
 
 This structure provides several advantages:
 - Organizes examples by directive kind and subtype
 - Supports variant examples with the naming pattern 'example-{variant}.md'
 - Associates expected outputs with the naming pattern 'expected[-{variant}].md'
+- Allows inclusion of helper files that are ignored during processing
 - Generates comprehensive type definitions with discriminated unions
 - Creates E2E test fixtures automatically when expected outputs are provided
 
-Use the simplified `ast:process-all` command to process this structure:
+**Note**: The AST Explorer will only process files that start with 'example' and their corresponding 'expected' files. All other files in the directories are ignored. This allows you to include helper files that can be imported or used by examples without affecting the AST Explorer processing.
+
+#### Standard Processing
+
+Use the simplified `ast:process-all` command to process this structure with the standard approach:
 
 ```bash
 npm run ast:process-all
@@ -105,9 +118,53 @@ npm run ast:process-all
 This will:
 1. Process all examples from the convention-based directory structure
 2. Generate AST snapshots for each directive
-3. Create consolidated type definitions with discriminated unions
+3. Create type definitions for each example
 4. Generate E2E test fixtures when expected outputs are available
 5. Produce documentation based on the examples
+
+#### Type Generation with Discriminated Unions
+
+The AST Explorer now automatically generates consolidated types with discriminated unions as part of the standard process:
+
+```bash
+npm run ast:process-all
+# or to validate types after processing
+npm run ast:validate
+```
+
+This type generation provides several advantages:
+1. Groups types by directive kind and subtype
+2. Creates proper discriminated unions for each directive kind
+3. Generates comprehensive type guards
+4. Produces a consolidated index with all exported types
+5. Ensures consistent type naming and organization
+
+This creates a more structured type system:
+
+```typescript
+// Main union type
+export type DirectiveNodeUnion =
+  | TextDirectiveNode
+  | RunDirectiveNode
+  | ImportDirectiveNode
+  // ...other directive kinds
+
+// Kind-specific union
+export type TextDirectiveNode =
+  | TextAssignmentDirectiveNode
+  | TextTemplateDirectiveNode
+  // ...other text subtypes
+
+// Specific implementation with typed values
+export interface TextTemplateDirectiveNode extends TypedDirectiveNode<'text', 'template'> {
+  values: {
+    template: string;
+    variables: VariableNodeArray;
+    // ...specific values
+  };
+  // ...other properties
+}
+```
 
 ### Using Generated Artifacts
 
@@ -193,6 +250,33 @@ The AST Explorer is particularly useful in these scenarios:
 4. **Generating Types**: To automatically create TypeScript types from example directives
 
 5. **Creating Test Fixtures**: To generate test fixtures for parser and transformation tests
+
+## Helper Files in Example Directories
+
+The convention-based directory structure supports having additional helper files that won't be processed by the AST Explorer. This is particularly useful for:
+
+- **Import Examples**: Helper files that are imported by examples
+- **Shared Content**: Files containing common content that multiple examples need
+- **Test Data**: Additional test data that examples can reference
+- **Documentation**: Additional documentation related to specific examples
+
+These files can be placed in the same directory as the examples, or in subdirectories. The AST Explorer will only process files that start with 'example' or 'expected' - all other files will be ignored.
+
+Example structure with helper files:
+
+```
+core/examples/
+├── text/
+│   └── assignment/
+│       ├── example.md         # Will be processed
+│       ├── expected.md        # Will be processed
+│       ├── helper.md          # Ignored by the processor
+│       ├── data.json          # Ignored by the processor
+│       └── imports/           # Directory with support files
+│           └── utils.md       # Ignored by the processor
+```
+
+This allows for organizing related files together while keeping the AST processing focused only on the example files.
 
 ## Test Strategy with Memfs
 
@@ -294,6 +378,25 @@ For more details on the AST structure, refer to these resources:
 - [MELD-AST.md](./MELD-AST.md) - Overview of the AST structure
 - [AST.md](./AST.md) - Additional details on AST implementation
 - [AST-EXPLORER-USAGE.md](/AST-EXPLORER-USAGE.md) - Detailed usage guide
+- [EXAMPLES.md](/lib/ast-explorer/EXAMPLES.md) - Example directory structure and type generation output
+
+## Integrated Type Generation
+
+The AST Explorer's integrated type generation system provides improved organization and structure for AST types:
+
+- **Type Consolidation**: Groups types by directive kind and subtype
+- **Proper Discriminated Unions**: Creates union types based on kind and subtype
+- **Type Guards**: Generates automatic type guards for each directive type
+- **Consistent Naming**: Ensures consistent type naming conventions
+- **Indexed Exports**: Provides a unified export point for all types
+
+After processing all examples, you can validate the type structure:
+
+```bash
+npm run ast:validate
+```
+
+This will check that all types were correctly generated and follow the expected structure.
 
 ## Contributing to the AST Explorer
 

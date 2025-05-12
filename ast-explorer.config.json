@@ -6,10 +6,15 @@
     "typesOutputDir": "./core/ast/generated/types",
     "snapshotsDir": "./core/ast/generated/snapshots",
     "fixturesDir": "./core/ast/generated/fixtures",
-    "docsOutputDir": "./core/ast/generated/docs"
+    "docsOutputDir": "./core/ast/generated/docs",
+    "enhancedDir": "./core/ast/consolidated",
+    "testsDir": "./tests/e2e/fixtures",
+    "conventionalDir": "./core/examples"
   },
   "options": {
     "useMockParser": false,
-    "verbose": false
+    "verbose": false,
+    "useEnhancedTypeGeneration": true,
+    "generateTypeGuards": true
   }
 }
