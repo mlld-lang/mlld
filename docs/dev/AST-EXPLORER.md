@@ -375,9 +375,7 @@ npm run ast:compare -- '@text greeting = "Hello, world!"' text-greeting-before
 
 For more details on the AST structure, refer to these resources:
 
-- [MELD-AST.md](./MELD-AST.md) - Overview of the AST structure
-- [AST.md](./AST.md) - Additional details on AST implementation
-- [AST-EXPLORER-USAGE.md](/AST-EXPLORER-USAGE.md) - Detailed usage guide
+- [AST.md](./AST.md) - Details on AST implementation
 - [EXAMPLES.md](/lib/ast-explorer/EXAMPLES.md) - Example directory structure and type generation output
 
 ## Integrated Type Generation
@@ -397,6 +395,59 @@ npm run ast:validate
 ```
 
 This will check that all types were correctly generated and follow the expected structure.
+
+## Programmatic Usage
+
+You can also use the AST Explorer programmatically in your tests or scripts:
+
+```typescript
+import { Explorer } from 'meld-ast-explorer';
+
+// Create explorer with default config
+const explorer = new Explorer();
+
+// Or with custom options
+const explorer = new Explorer({
+  outputDir: './generated',
+  useMockParser: true
+});
+
+// Parse a directive
+const ast = explorer.parseDirective('@text greeting = "Hello, world!"');
+console.log(JSON.stringify(ast, null, 2));
+
+// Generate types
+explorer.generateTypes('@text greeting = "Hello, world!"', 'TextGreeting');
+
+// Process a batch of examples
+explorer.processBatch('./examples/directives.json');
+
+// Process all examples from the convention-based structure
+explorer.processExampleDirs();
+```
+
+### Filesystem Adapters for Testing
+
+The AST Explorer comes with a filesystem adapter pattern to support testing. This is particularly useful for unit and integration tests where you don't want to touch the real filesystem:
+
+```typescript
+import { Explorer } from '../src/explorer';
+import { setupTestFileSystem } from './utils/FsManager';
+
+// Create a memory filesystem adapter for testing
+const { fsAdapter, cleanup } = setupTestFileSystem();
+
+// Create explorer with memory filesystem adapter
+const explorer = new Explorer({
+  fileSystem: fsAdapter
+});
+
+// Now all file operations will be performed in memory
+explorer.generateTypes('@text greeting = "Hello, world!"', 'TextGreeting');
+
+// Always clean up when done
+await cleanup();
+```
 
 ## Contributing to the AST Explorer
 
