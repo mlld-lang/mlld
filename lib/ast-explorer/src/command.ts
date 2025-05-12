@@ -9,10 +9,16 @@ import { program } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseDirective } from './parse.js';
-import { generateTypeInterface, generateConsolidatedTypes } from './generate/types.js';
+import { generateTypeInterface } from './generate/types.js';
 import { generateTestFixture, writeTestFixture } from './generate/fixtures.js';
 import { generateSnapshot, compareWithSnapshot } from './generate/snapshots.js';
-import { loadExamples, processBatch, processExampleDirs } from './batch.js';
+import { generateDocumentation, generateExamplesDoc } from './generate/docs.js';
+import {
+  loadExamples,
+  processBatch,
+  processExampleDirs,
+  generateConsolidatedTypes
+} from './batch.js';
 import { Explorer } from './explorer.js';
 import { extractDirectives } from './extract-directives.js';
 
@@ -313,6 +319,105 @@ program
       }
 
       console.log('Validation completed.');
+    } catch (error: any) {
+      console.error('Error:', error.message);
+      if (options.verbose) {
+        console.error('Stack trace:', error.stack);
+      }
+    }
+  });
+
+// Command to generate EXAMPLES.md document
+program
+  .command('generate-examples-doc')
+  .description('Generate EXAMPLES.md with directive types and examples')
+  .option('-e, --examples <dir>', 'Examples directory', './core/examples')
+  .option('-s, --snapshots <dir>', 'Snapshots directory', './core/ast/snapshots')
+  .option('-o, --output <file>', 'Output file path', './core/examples/EXAMPLES.md')
+  .option('--verbose', 'Enable verbose output', false)
+  .action((options) => {
+    try {
+      if (options.verbose) {
+        console.log('Configuration:');
+        console.log(`- Examples directory: ${options.examples}`);
+        console.log(`- Snapshots directory: ${options.snapshots}`);
+        console.log(`- Output file: ${options.output}`);
+      }
+
+      // Check if examples directory exists
+      if (!fs.existsSync(options.examples)) {
+        console.error(`Examples directory not found: ${options.examples}`);
+        return;
+      }
+
+      // Check if snapshots directory exists
+      if (!fs.existsSync(options.snapshots)) {
+        console.error(`Snapshots directory not found: ${options.snapshots}`);
+        return;
+      }
+
+      // Generate the EXAMPLES.md document
+      generateExamplesDoc(
+        options.examples,
+        options.snapshots,
+        options.output
+      );
+
+      console.log(`Generated EXAMPLES.md at ${options.output}`);
+    } catch (error: any) {
+      console.error('Error:', error.message);
+      if (options.verbose) {
+        console.error('Stack trace:', error.stack);
+      }
+    }
+  });
+
+// Command to clean generated files
+program
+  .command('clean')
+  .description('Clean generated AST explorer files')
+  .option('-o, --output <dir>', 'Base output directory', './core/ast')
+  .option('-f, --fixtures <dir>', 'Fixtures directory', './core/fixtures')
+  .option('--verbose', 'Enable verbose output', false)
+  .option('--force', 'Force cleanup even if directories are missing', false)
+  .action((options) => {
+    try {
+      const dirsToClean = [
+        path.join(options.output, 'snapshots'),
+        path.join(options.output, 'types'),
+        path.join(options.output, 'docs'),
+        path.join(options.output, 'tests'),
+        options.fixtures
+      ];
+
+      console.log('Cleaning generated AST explorer files...');
+
+      for (const dir of dirsToClean) {
+        try {
+          if (fs.existsSync(dir)) {
+            // Delete contents but keep directory
+            const files = fs.readdirSync(dir);
+            for (const file of files) {
+              const filePath = path.join(dir, file);
+              fs.rmSync(filePath, { recursive: true, force: true });
+            }
+            console.log(`✅ Cleaned ${dir}`);
+          } else {
+            if (options.verbose || options.force) {
+              console.log(`⚠️ Directory not found: ${dir}`);
+            }
+
+            if (options.force) {
+              fs.mkdirSync(dir, { recursive: true });
+              console.log(`✅ Created empty directory: ${dir}`);
+            }
+          }
+        } catch (error: any) {
+          console.error(`❌ Error cleaning ${dir}:`, error.message);
+        }
+      }
+
+      console.log('Cleanup completed!');
     } catch (error: any) {
       console.error('Error:', error.message);
       if (options.verbose) {

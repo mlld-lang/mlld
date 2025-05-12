@@ -31,6 +31,10 @@ export class NodeFsAdapter implements IFileSystemAdapter {
   rmSync(path: string, options?: { recursive?: boolean, force?: boolean }): void {
     fs.rmSync(path, options);
   }
+
+  lstatSync(path: string): { isDirectory(): boolean } {
+    return fs.lstatSync(path);
+  }
 }
 
 // Singleton instance

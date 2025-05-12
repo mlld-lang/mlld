@@ -7,7 +7,7 @@ import { parseDirective, parseFile } from './parse.js';
 import { generateTypeInterface } from './generate/types.js';
 import { generateTestFixture, writeTestFixture } from './generate/fixtures.js';
 import { generateSnapshot, compareWithSnapshot } from './generate/snapshots.js';
-import { generateDocumentation } from './generate/docs.js';
+import { generateDocumentation, generateExamplesDoc } from './generate/docs.js';
 import {
   processBatch,
   loadExamples,
@@ -29,6 +29,7 @@ export interface IFileSystemAdapter {
   mkdirSync(path: string, options?: { recursive?: boolean }): void;
   readdirSync(path: string): string[];
   rmSync(path: string, options?: { recursive?: boolean, force?: boolean }): void;
+  lstatSync(path: string): { isDirectory(): boolean };
 }
 
 /**
@@ -57,6 +58,10 @@ class NodeFsAdapter implements IFileSystemAdapter {
 
   rmSync(path: string, options?: { recursive?: boolean, force?: boolean }): void {
     fs.rmSync(path, options);
+  }
+
+  lstatSync(path: string): { isDirectory(): boolean } {
+    return fs.lstatSync(path);
   }
 }
 
@@ -264,5 +269,81 @@ export class Explorer {
     console.log(`- Types: ${this.options.typesDir}`);
     console.log(`- Fixtures: ${this.options.fixturesDir}`);
     console.log(`- Documentation: ${this.options.docsDir}`);
+  }
+
+  /**
+   * Clean generated files
+   *
+   * Removes all generated files from the output directories while preserving the directories themselves.
+   */
+  clean(): void {
+    const dirsToClean = [
+      path.join(this.options.outputDir, 'snapshots'),
+      path.join(this.options.outputDir, 'types'),
+      path.join(this.options.outputDir, 'docs'),
+      path.join(this.options.outputDir, 'tests'),
+      this.options.fixturesDir
+    ];
+
+    console.log('Cleaning generated AST explorer files...');
+
+    for (const dir of dirsToClean) {
+      try {
+        if (this.fs.existsSync(dir)) {
+          // Delete contents but keep directory
+          const files = this.fs.readdirSync(dir);
+          for (const file of files) {
+            const filePath = path.join(dir, file);
+            this.fs.rmSync(filePath, { recursive: true, force: true });
+          }
+          console.log(`✅ Cleaned ${dir}`);
+        } else {
+          console.log(`⚠️ Directory not found: ${dir}`);
+        }
+      } catch (error: any) {
+        console.error(`❌ Error cleaning ${dir}:`, error.message);
+      }
+    }
+
+    console.log('Cleanup completed!');
+  }
+
+  /**
+   * Generate EXAMPLES.md with directive types and examples
+   *
+   * Creates a comprehensive reference document with all directive types,
+   * their formal type names, and example syntax.
+   *
+   * @param outputPath Optional custom path for the EXAMPLES.md file
+   */
+  generateExamplesDoc(outputPath?: string): void {
+    try {
+      // Default output path is in the examples directory
+      const defaultOutputPath = path.join(this.options.examplesDir, 'EXAMPLES.md');
+      const finalOutputPath = outputPath || defaultOutputPath;
+
+      // Make sure examples directory exists
+      if (!this.fs.existsSync(this.options.examplesDir)) {
+        console.error(`Examples directory not found: ${this.options.examplesDir}`);
+        return;
+      }
+
+      // Make sure snapshots directory exists
+      if (!this.fs.existsSync(this.options.snapshotsDir)) {
+        console.error(`Snapshots directory not found: ${this.options.snapshotsDir}`);
+        return;
+      }
+
+      generateExamplesDoc(
+        this.options.examplesDir,
+        this.options.snapshotsDir,
+        finalOutputPath,
+        this.fs
+      );
+
+      console.log(`Generated EXAMPLES.md at ${finalOutputPath}`);
+    } catch (error: any) {
+      console.error('Error generating EXAMPLES.md:', error.message);
+    }
   }
 }
