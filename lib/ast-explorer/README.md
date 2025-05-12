@@ -80,16 +80,25 @@ core/examples/
 │       ├── example.md         # Base example
 │       ├── expected.md        # Expected output for base example
 │       ├── example-variant.md # Variant example (e.g., multiline)
-│       └── expected-variant.md # Expected output for variant
+│       ├── expected-variant.md # Expected output for variant
+│       ├── helpers.md         # Helper files (ignored by processor)
+│       └── imports/           # Support files for examples (ignored)
 ```
 
 This structure allows you to:
 - Organize examples by directive kind and subtype
 - Support variant examples with the naming pattern 'example-{variant}.md'
 - Associate expected outputs with the naming pattern 'expected[-{variant}].md'
+- Include helper files that can be imported or used by examples
 - Generate comprehensive type definitions with discriminated unions
 
-Use the simplified `process-all` command to process this structure:
+The AST Explorer will only process files that start with 'example' and their corresponding 'expected' files.
+All other files in the directories are ignored. This allows you to include helper files that can be
+used for imports, includes, or other supporting content in your examples.
+
+#### Standard Processing
+
+Use the simplified `process-all` command to process this structure with the standard approach:
 
 ```bash
 npm run process-all
@@ -98,9 +107,55 @@ npm run process-all
 This will:
 1. Process all examples from the conventional directory structure
 2. Generate snapshots for each directive
-3. Create consolidated type definitions with discriminated unions
+3. Create type definitions for each example
 4. Generate E2E test fixtures when expected outputs are available
 5. Produce documentation based on the examples
+
+#### Enhanced Type Generation
+
+For improved type handling with proper discriminated unions, use the enhanced processing:
+
+```bash
+# Process examples with enhanced type generation
+node ./lib/ast-explorer/bin/enhanced-ast-explorer.js process-all -d ./core/examples -o ./core/ast
+
+# Generate types with improved structure
+node ./lib/ast-explorer/bin/enhanced-ast-explorer.js process-all -d ./core/examples -o ./core/ast/consolidated --verbose
+```
+
+The enhanced processing provides several advantages:
+1. Groups types by directive kind and subtype
+2. Creates proper discriminated unions for each directive kind
+3. Generates comprehensive type guards
+4. Produces a consolidated index with all exported types
+5. Ensures consistent type naming and organization
+
+This creates a more structured type system:
+
+```typescript
+// Main union type
+export type DirectiveNodeUnion =
+  | TextDirectiveNode
+  | RunDirectiveNode
+  | ImportDirectiveNode
+  // ...other directive kinds
+
+// Kind-specific union
+export type TextDirectiveNode =
+  | TextAssignmentDirectiveNode
+  | TextTemplateDirectiveNode
+  // ...other text subtypes
+
+// Specific implementation with typed values
+export interface TextTemplateDirectiveNode extends TypedDirectiveNode<'text', 'template'> {
+  values: {
+    template: string;
+    variables: VariableNodeArray;
+    // ...specific values
+  };
+  // ...other properties
+}
+```
 
 ### Programmatic Usage
 
@@ -227,6 +282,18 @@ const explorer = new Explorer({
 - `generateTestFixture(directive: string, node: DirectiveNode, name: string): string` - Generate a test fixture
 - `generateSnapshot(node: DirectiveNode, name: string, outputDir: string): string` - Generate a snapshot
 - `processBatch(examples: Example[], outputDir: string): void` - Process a batch of examples
+
+## Enhanced Type Generation
+
+The enhanced type generation system provides improved organization and structure for AST types:
+
+- **Type Consolidation**: Groups types by directive kind and subtype
+- **Proper Discriminated Unions**: Creates union types based on kind and subtype
+- **Type Guards**: Generates automatic type guards for each directive type
+- **Consistent Naming**: Ensures consistent type naming conventions
+- **Indexed Exports**: Provides a unified export point for all types
+
+For a detailed example of how to use the convention-based approach and the enhanced type generation system, see [EXAMPLES.md](./EXAMPLES.md).
 
 ## Future Extensions
 

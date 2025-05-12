@@ -23,6 +23,7 @@
     "generate-fixture": "ts-node src/command.ts generate-fixture",
     "workflow": "ts-node src/command.ts workflow",
     "process-all": "ts-node src/command.ts process-all",
+    "validate": "ts-node src/command.ts validate",
     "example": "ts-node examples/usage.ts",
     "init": "ts-node src/command.ts init"
   },

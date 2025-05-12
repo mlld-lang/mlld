@@ -1,96 +1,71 @@
 # AST Explorer Testing
 
-This directory contains tests for the AST Explorer functionality.
+This directory contains tests for the AST Explorer functionality. The tests use a memory-based file system (memfs) to isolate tests from the real file system.
 
-## Using memfs for Testing
+## Test Files
 
-The tests in this directory use `memfs` to create an in-memory filesystem for testing. This avoids the need to create and delete real files during tests.
+### New Test Files
 
-### Key Components
+- **enhanced-batch.test.ts**: Tests for the enhanced batch processing functionality that handles convention-based directory structures.
+- **enhanced-types.test.ts**: Tests for the enhanced type generation that creates discriminated union types.
+- **e2e-fixtures.test.ts**: Tests for the E2E fixture generation from example files.
+- **explorer.integration.test.ts**: Integration tests that verify the complete workflow from parsing to type generation.
 
-1. **MemfsAdapter**: A class that implements the IFileSystemAdapter interface using memfs.
-2. **TracedAdapter**: A wrapper around another adapter that logs all file operations.
-3. **FsManager**: A singleton manager for fs monkey patching to prevent conflicts between tests.
-4. **PathResolver**: A utility for consistent path resolution between real fs and memfs.
+### Updated Test Files
 
-### How it Works
+- **MemfsExplorer.ts**: Updated to support the enhanced functionality and provide a filesystem adapter.
+- **MemfsTestFileSystem.ts**: Enhanced with additional methods needed for comprehensive testing.
 
-1. Tests use the `setupTestFileSystem()` helper from FsManager to get a TracedAdapter.
-2. The FsManager ensures only one fs patch is active at a time and handles cleanup.
-3. The MemfsAdapter uses PathResolver for consistent path handling.
-4. The Explorer class is instantiated with the adapter.
-5. All file operations, whether through the adapter or direct fs calls, are captured.
+## Testing Infrastructure
 
-### Running the Tests
+The testing infrastructure uses several key components:
 
-To run all tests:
+### MemfsTestFileSystem
 
-```sh
-npm test core/ast/explorer
+A memory-based file system implementation that allows tests to run without affecting the real filesystem. This implementation provides:
+
+- File and directory operations (read, write, create, delete)
+- Path resolution
+- Debugging utilities
+
+### MemfsExplorer
+
+A wrapper around the Explorer class that uses the memory-based filesystem. This allows tests to:
+
+- Create isolated test environments
+- Verify file operations without touching the disk
+- Test the complete explorer functionality in isolation
+
+### TracedAdapter
+
+A filesystem adapter that traces all calls, allowing tests to verify which operations were performed.
+
+## Test Categories
+
+1. **Basic Tests**: Verify basic functionality like parsing directives and generating individual files.
+2. **Batch Processing Tests**: Verify the batch processing of multiple directives.
+3. **Convention-Based Directory Tests**: Verify the processing of examples organized by kind/subtype.
+4. **Type Generation Tests**: Verify the generation of TypeScript interfaces and discriminated unions.
+5. **E2E Fixture Tests**: Verify the generation of end-to-end test fixtures from examples.
+6. **Integration Tests**: Verify the complete workflow from parsing to type generation.
+
+## Running Tests
+
+Tests can be run using Vitest:
+
+```bash
+npm test
 ```
 
-To run a specific test file:
+Or run specific test files:
 
-```sh
-npm test core/ast/explorer/tests/explorer.test.ts
+```bash
+npm test tests/enhanced-batch.test.ts
 ```
 
-### Key Improvements
+## Test Conventions
 
-1. **Centralized FS Patching**: The FsManager singleton ensures only one patch is active at a time, preventing conflicts between test files.
-2. **Consistent Path Resolution**: The PathResolver provides standardized path conversion between real fs and memfs.
-3. **Tracing and Debugging**: All filesystem operations are logged for easy debugging.
-4. **Cleanup**: Proper restoration of fs module after tests complete.
-
-### Adding New Tests
-
-1. Import the setupTestFileSystem helper from FsManager.
-2. Use the helper to get an adapter and cleanup function.
-3. Create the Explorer instance with the adapter.
-4. Call the cleanup function in afterEach.
-
-Example:
-
-```typescript
-import { describe, it, beforeEach, afterEach } from 'vitest';
-import { Explorer } from '../src/explorer';
-import { setupTestFileSystem } from './utils/FsManager';
-import { TracedAdapter } from './TracedAdapter';
-
-describe('AST Explorer Test', () => {
-  let fsAdapter: TracedAdapter;
-  let explorer: Explorer;
-  let cleanup: () => Promise<void>;
-
-  beforeEach(() => {
-    // Use centralized FsManager to handle fs patching
-    const setup = setupTestFileSystem();
-    fsAdapter = setup.fsAdapter;
-    cleanup = setup.cleanup;
-
-    // Create test directories
-    fsAdapter.mkdirSync('project/test-output', { recursive: true });
-
-    // Create Explorer instance
-    explorer = new Explorer({
-      fileSystem: fsAdapter
-    });
-  });
-
-  afterEach(async () => {
-    // Clean up and restore fs
-    await cleanup();
-  });
-
-  it('should create files', () => {
-    // Test logic here...
-    // Verify files using fsAdapter.existsSync() etc.
-  });
-});
-```
-
-### Troubleshooting
-
-- If tests fail with filesystem errors, check the TracedAdapter logs for operation details.
-- For path resolution issues, confirm that paths are being properly converted by the PathResolver.
-- If testing batch operations, ensure you create any necessary files before running the operation.
+1. Each test should clean up after itself to avoid interference between tests.
+2. Use the MemfsExplorer for filesystem operations to ensure isolation.
+3. Mock or stub external dependencies when needed.
+4. For comprehensive tests, verify both the existence of files and their content.

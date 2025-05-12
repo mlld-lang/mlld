@@ -1,15 +1,19 @@
 /**
  * Batch processing utilities
+ *
+ * This module provides batch processing that properly consolidates
+ * AST nodes by directive kind and subtype, creating appropriate discriminated unions.
  */
 import * as path from 'path';
 import { parseDirective, parseFile } from './parse.js';
-import { generateTypeInterface } from './generate/types.js';
+import { generateTypeInterface, generateTypeFile } from './generate/types.js';
 import { generateTestFixture, writeTestFixture } from './generate/fixtures.js';
 import { generateSnapshot } from './generate/snapshots.js';
 import { generateDocumentation } from './generate/docs.js';
 import { extractDirectives } from './extract-directives.js';
 import type { IFileSystemAdapter } from './explorer.js';
 import { nodeFsAdapter } from './fs-adapter.js';
+import type { DirectiveNode } from './parse.js';
 
 /**
  * Example directive interface
@@ -49,7 +53,7 @@ export function processBatch(
   // Create output directories
   const dirs = {
     types: path.join(outputDir, 'types'),
-    fixtures: path.join(outputDir, 'fixtures'),
+    fixtures: path.join(outputDir, 'tests'),
     snapshots: path.join(outputDir, 'snapshots'),
     docs: path.join(outputDir, 'docs')
   };
@@ -59,22 +63,24 @@ export function processBatch(
     fsAdapter.mkdirSync(dir, { recursive: true });
   });
 
+  // Storage for all parsed directives
+  const parsedDirectives: DirectiveNode[] = [];
+
   // Process each example
   examples.forEach(({ name, directive }) => {
     try {
       // Parse directive
       const ast = parseDirective(directive);
 
-      // Generate types
-      const typeDefinition = generateTypeInterface(ast);
-      fsAdapter.writeFileSync(path.join(dirs.types, `${name}.ts`), typeDefinition);
+      // Store for consolidated type generation
+      parsedDirectives.push(ast);
+
+      // Generate snapshot
+      generateSnapshot(ast, name, dirs.snapshots, fsAdapter);
 
       // Generate test fixture
       const fixture = generateTestFixture(directive, ast, name);
       writeTestFixture(fixture, name, dirs.fixtures, fsAdapter);
-
-      // Generate snapshot
-      generateSnapshot(ast, name, dirs.snapshots, fsAdapter);
 
       console.log(`Processed example: ${name}`);
     } catch (error: any) {
@@ -85,8 +91,8 @@ export function processBatch(
   // Generate documentation from all examples
   generateDocumentation(examples.map(e => e.name), dirs.snapshots, dirs.docs, fsAdapter);
 
-  // Generate index files
-  generateIndexFiles(examples.map(e => e.name), dirs.types, fsAdapter);
+  // Generate consolidated type files based on collected directives
+  generateConsolidatedTypeFiles(parsedDirectives, dirs.types, fsAdapter);
 }
 
 /**
@@ -99,7 +105,7 @@ export function loadExamples(filePath: string, fileSystem?: IFileSystemAdapter):
 
 /**
  * Process examples from the convention-based directory structure
- * 
+ *
  * Supports structure like:
  * core/examples/
  * ├── directivekind/             # e.g., text, run, import
@@ -107,7 +113,12 @@ export function loadExamples(filePath: string, fileSystem?: IFileSystemAdapter):
  * │       ├── example.md         # Base example
  * │       ├── expected.md        # Expected output for base example
  * │       ├── example-variant.md # Variant example (e.g., multiline)
- * │       └── expected-variant.md # Expected output for variant
+ * │       ├── expected-variant.md # Expected output for variant
+ * │       └── helpers.md         # Additional files (ignored by processor)
+ *
+ * Only files that start with 'example' and their corresponding 'expected' files are processed.
+ * All other files in the directory structure are ignored, which allows you to include helper
+ * files that can be used for imports, includes, or other related purposes in the examples.
  */
 export function processExampleDirs(
   baseDir: string,
@@ -118,13 +129,17 @@ export function processExampleDirs(
   const fsAdapter = fileSystem || nodeFsAdapter;
   const { testsDir, fixturesDir } = options;
 
+  // Storage for all parsed directives
+  const allDirectives: DirectiveNode[] = [];
+  const fixtures: E2EFixture[] = [];
+
   // Process valid examples
   const validDir = path.join(baseDir, 'valid');
   if (fsAdapter.existsSync(validDir)) {
-    processConventionalExamples(validDir, outputDir, fsAdapter, testsDir, fixturesDir);
+    processConventionalExamples(validDir, outputDir, allDirectives, fixtures, fsAdapter, options);
   } else {
     // If no valid subdirectory, treat baseDir as the root of directive kinds
-    processConventionalExamples(baseDir, outputDir, fsAdapter, testsDir, fixturesDir);
+    processConventionalExamples(baseDir, outputDir, allDirectives, fixtures, fsAdapter, options);
   }
 
   // Process invalid examples
@@ -132,6 +147,29 @@ export function processExampleDirs(
   if (fsAdapter.existsSync(invalidDir)) {
     processInvalidExamples(invalidDir, outputDir, fsAdapter);
   }
+
+  // Ensure output directories exist
+  const typesDir = path.join(outputDir, 'types');
+  const fixturesOutDir = fixturesDir || path.join(outputDir, 'e2e');
+
+  [typesDir, fixturesOutDir].forEach(dir => {
+    if (!fsAdapter.existsSync(dir)) {
+      fsAdapter.mkdirSync(dir, { recursive: true });
+    }
+  });
+
+  // Generate consolidated type files based on all collected directives
+  if (allDirectives.length > 0) {
+    generateConsolidatedTypeFiles(allDirectives, typesDir, fsAdapter);
+  }
+
+  // Generate E2E fixtures
+  fixtures.forEach(fixture => {
+    fsAdapter.writeFileSync(
+      path.join(fixturesOutDir, `${fixture.name}.fixture.json`),
+      JSON.stringify(fixture, null, 2)
+    );
+  });
 }
 
 /**
@@ -140,25 +178,20 @@ export function processExampleDirs(
 function processConventionalExamples(
   baseDir: string,
   outputDir: string,
+  allDirectives: DirectiveNode[],
+  fixtures: E2EFixture[],
   fileSystem: IFileSystemAdapter,
-  testsDir?: string,
-  fixturesDir?: string
+  options: { testsDir?: string; fixturesDir?: string } = {}
 ): void {
+  const { testsDir, fixturesDir } = options;
+
   // Get all directive types (e.g., text, run, import)
   const directiveTypes = fileSystem.readdirSync(baseDir);
-  
-  // Track all processed examples for consolidated type generation
-  const processedExamples: {
-    kind: string;
-    subtype: string;
-    variant?: string;
-    name: string;
-  }[] = [];
 
   for (const directiveKind of directiveTypes) {
     const kindDir = path.join(baseDir, directiveKind);
-    
-    // Skip if not a directory 
+
+    // Skip if not a directory
     if (!isDirectory(kindDir, fileSystem)) continue;
 
     // Get all subtypes (e.g., assignment, template)
@@ -166,31 +199,36 @@ function processConventionalExamples(
 
     for (const subtype of subtypes) {
       const subtypeDir = path.join(kindDir, subtype);
-      
+
       // Skip if not a directory
       if (!isDirectory(subtypeDir, fileSystem)) continue;
 
       // Get all files in the subtype directory
       const files = fileSystem.readdirSync(subtypeDir);
-      
+
+      // Filter for only valid files that start with 'example' or 'expected'
+      // This allows other files to exist in the directory for imports etc.
+      const validFiles = files.filter(file =>
+        (file.startsWith('example') || file.startsWith('expected')) && file.endsWith('.md'));
+
       // Find all example files (base and variants)
-      const exampleFiles = files.filter(file => 
-        file.startsWith('example') && file.endsWith('.md'));
-      
+      const exampleFiles = validFiles.filter(file =>
+        file.startsWith('example'));
+
       for (const exampleFile of exampleFiles) {
         // Determine if this is a variant example
-        const variant = exampleFile === 'example.md' 
-          ? '' 
+        const variant = exampleFile === 'example.md'
+          ? ''
           : exampleFile.replace('example-', '').replace('.md', '');
-        
+
         // Find corresponding expected output
-        const expectedFile = variant 
-          ? `expected-${variant}.md` 
+        const expectedFile = variant
+          ? `expected-${variant}.md`
           : 'expected.md';
-        
+
         const examplePath = path.join(subtypeDir, exampleFile);
         const expectedPath = path.join(subtypeDir, expectedFile);
-        
+
         // Process example and expected output
         try {
           processExampleFile(
@@ -202,95 +240,110 @@ function processConventionalExamples(
               variant: variant || undefined
             },
             outputDir,
+            allDirectives,
+            fixtures,
             fileSystem,
-            { testsDir, fixturesDir }
+            options
           );
-          
-          // Add to processed examples list
-          processedExamples.push({
-            kind: directiveKind,
-            subtype: subtype,
-            variant: variant || undefined,
-            name: getExampleName(directiveKind, subtype, variant)
-          });
-          
         } catch (error: any) {
           console.error(`Error processing example ${examplePath}:`, error.message);
         }
       }
     }
   }
-
-  // Generate consolidated type files based on processed examples
-  generateConsolidatedTypeFiles(processedExamples, path.join(outputDir, 'types'), fileSystem);
 }
 
 /**
- * Process a single example file and its expected output
+ * Process a single example file and its expected output, collecting directives
+ *
+ * Only processes files that start with 'example' and their corresponding 'expected' files.
+ * Other files in the same directory are ignored, allowing them to be used for imports
+ * or other related purposes in the examples.
+ *
+ * @param examplePath Path to the example file
+ * @param expectedPath Optional path to expected output file
+ * @param metadata Metadata about the example (kind, subtype, variant)
+ * @param outputDir Output directory for generated files
+ * @param allDirectives Array to collect all directives (for type generation)
+ * @param fixtures Array to collect all E2E fixtures
+ * @param fileSystem File system adapter
+ * @param options Additional options including testsDir and fixturesDir
  */
 function processExampleFile(
   examplePath: string,
   expectedPath: string | undefined,
   metadata: { kind: string; subtype: string; variant?: string },
   outputDir: string,
+  allDirectives: DirectiveNode[],
+  fixtures: E2EFixture[],
   fileSystem: IFileSystemAdapter,
   options: { testsDir?: string; fixturesDir?: string } = {}
 ): void {
   // Read example content
   const content = fileSystem.readFileSync(examplePath, 'utf8');
-  
+
   // Extract directives
   const directives = extractDirectives(content);
-  
-  // Create output directories
+
+  // Define output directories
   const dirs = {
     types: path.join(outputDir, 'types'),
     fixtures: path.join(options.testsDir || path.join(outputDir, 'tests')),
     snapshots: path.join(outputDir, 'snapshots'),
     e2e: path.join(options.fixturesDir || path.join(outputDir, 'e2e'))
   };
-  
+
+  // Create output directories if they don't exist
   Object.values(dirs).forEach(dir => {
-    fileSystem.mkdirSync(dir, { recursive: true });
+    if (!fileSystem.existsSync(dir)) {
+      fileSystem.mkdirSync(dir, { recursive: true });
+    }
   });
-  
-  // For each directive in the example
+
+  // Process each directive in the example
   directives.forEach((directive, index) => {
     try {
       // Generate a unique name for this example
       const name = getExampleName(metadata.kind, metadata.subtype, metadata.variant, directives.length > 1 ? index + 1 : undefined);
-      
+
       // Parse directive
       const ast = parseDirective(directive);
-      
-      // Generate types
-      const typeDefinition = generateTypeInterface(ast);
-      fileSystem.writeFileSync(path.join(dirs.types, `${name}.ts`), typeDefinition);
-      
+
+      // Add to collection for type generation
+      allDirectives.push(ast);
+
+      // Generate snapshot
+      generateSnapshot(ast, name, dirs.snapshots, fileSystem);
+
       // Generate fixture
       const fixture = generateTestFixture(directive, ast, name);
       writeTestFixture(fixture, name, dirs.fixtures, fileSystem);
-      
-      // Generate snapshot
-      generateSnapshot(ast, name, dirs.snapshots, fileSystem);
-      
+
       console.log(`Processed example: ${name}`);
     } catch (error: any) {
       console.error(`Error processing directive in ${examplePath}:`, error.message);
     }
   });
-  
+
   // If expected output is available, create E2E fixture
   if (expectedPath) {
     try {
       const expectedContent = fileSystem.readFileSync(expectedPath, 'utf8');
-      createE2EFixture(
-        content,
-        expectedContent,
-        metadata,
-        dirs.e2e,
-        fileSystem
-      );
+      const fixtureName = getExampleName(metadata.kind, metadata.subtype, metadata.variant);
+
+      // Create fixture
+      const fixture: E2EFixture = {
+        name: fixtureName,
+        input: content,
+        expected: expectedContent,
+        directives,
+        metadata
+      };
+
+      // Add to fixtures collection
+      fixtures.push(fixture);
+
+      console.log(`Created E2E fixture: ${fixtureName}`);
     } catch (error: any) {
       console.error(`Error creating E2E fixture for ${examplePath}:`, error.message);
     }
@@ -393,89 +446,181 @@ function generateIndexFiles(
 }
 
 /**
- * Generate consolidated type files based on examples
+ * Generate consolidated type files based on collected directives
  */
 function generateConsolidatedTypeFiles(
-  examples: Array<{ kind: string; subtype: string; variant?: string; name: string }>,
+  directives: DirectiveNode[],
   typesDir: string,
   fileSystem: IFileSystemAdapter
 ): void {
-  // Group examples by kind
-  const kindMap: Record<string, string[]> = {};
-  
-  for (const example of examples) {
-    if (!kindMap[example.kind]) {
-      kindMap[example.kind] = [];
-    }
-    
-    // Add type name
-    const typeName = example.name
-      .split('-')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join('') + 'DirectiveNode';
+  // Storage for directive type organization
+  interface DirectiveTypeStorage {
+    // Stores all unique nodes by kind and subtype
+    nodesByKindAndSubtype: Record<string, Record<string, DirectiveNode>>;
 
-    // Store the file name along with the type name
-    if (!kindMap[example.kind].includes(typeName)) {
-      kindMap[example.kind].push(typeName);
+    // Maps kind to its subtypes
+    kindToSubtypes: Record<string, Set<string>>;
+
+    // Tracks which base types we need to generate
+    baseTypes: Set<string>;
+  }
+
+  // Initialize storage
+  const typeStorage: DirectiveTypeStorage = {
+    nodesByKindAndSubtype: {},
+    kindToSubtypes: {},
+    baseTypes: new Set(['BaseNode', 'BaseDirectiveNode', 'BaseVariableNode'])
+  };
+
+  // Process each directive to organize by kind and subtype
+  for (const node of directives) {
+    const { kind, subtype } = node;
+
+    // Skip if node is missing kind or subtype
+    if (!kind || !subtype) continue;
+
+    // Initialize structures if needed
+    if (!typeStorage.nodesByKindAndSubtype[kind]) {
+      typeStorage.nodesByKindAndSubtype[kind] = {};
+      typeStorage.kindToSubtypes[kind] = new Set();
+    }
+
+    // Store the node by kind and subtype (only keep one per subtype)
+    // We only need one example per subtype for the interface
+    typeStorage.nodesByKindAndSubtype[kind][subtype] = node;
+    typeStorage.kindToSubtypes[kind].add(subtype);
+
+    // Track the base types used by analyzing node structure
+    if (node.values) {
+      Object.values(node.values).forEach(value => {
+        if (Array.isArray(value)) {
+          value.forEach(item => {
+            if (item && typeof item === 'object' && item.type) {
+              if (item.type === 'VariableReference') {
+                typeStorage.baseTypes.add('VariableReferenceNode');
+              } else if (item.type === 'Text') {
+                typeStorage.baseTypes.add('TextNode');
+              }
+            }
+          });
+        }
+      });
     }
   }
-  
-  // Create union types for each kind
-  for (const [kind, typeNames] of Object.entries(kindMap)) {
-    const kindTypeName = kind.charAt(0).toUpperCase() + kind.slice(1) + 'DirectiveNode';
 
-    const imports = typeNames
-      .map(typeName => {
-        // Get the base name without the 'DirectiveNode' suffix
-        const baseName = typeName.replace('DirectiveNode', '');
+  // Generate individual type interfaces for each directive subtype
+  for (const [kind, subtypes] of Object.entries(typeStorage.kindToSubtypes)) {
+    // Process each subtype
+    for (const subtype of subtypes) {
+      const node = typeStorage.nodesByKindAndSubtype[kind][subtype];
 
-        // Convert to kebab-case for file naming
-        const fileName = baseName
-          .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-          .toLowerCase();
+      // Skip if no node found for this subtype
+      if (!node) continue;
 
-        return `import { ${typeName} } from './${fileName}';`;
-      })
-      .join('\n');
-    
+      // Generate a proper type name
+      const capitalizedKind = capitalize(kind);
+      const capitalizedSubtype = capitalize(subtype);
+      const typeName = `${capitalizedKind}${capitalizedSubtype}DirectiveNode`;
+
+      // Create file name using kebab-case
+      const fileName = `${kind}-${subtype.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}.ts`;
+
+      // Generate the content
+      const typeContent = generateTypeInterface(node);
+
+      // Write the file
+      fileSystem.writeFileSync(path.join(typesDir, fileName), typeContent);
+    }
+  }
+
+  // Generate union types for each directive kind
+  for (const [kind, subtypes] of Object.entries(typeStorage.kindToSubtypes)) {
+    const capitalizedKind = capitalize(kind);
+    const unionTypeName = `${capitalizedKind}DirectiveNode`;
+
+    // Generate imports for all subtypes
+    const imports = Array.from(subtypes).map(subtype => {
+      const capitalizedSubtype = capitalize(subtype);
+      const typeName = `${capitalizedKind}${capitalizedSubtype}DirectiveNode`;
+      const fileName = `${kind}-${subtype.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}`;
+
+      return `import { ${typeName} } from './${fileName}.js';`;
+    }).join('\n');
+
+    // Generate the union type
     const unionType = `
 /**
  * Union type for all ${kind} directive nodes
  */
-export type ${kindTypeName} = 
-  ${typeNames.map(name => `| ${name}`).join('\n  ')}
+export type ${unionTypeName} =
+  ${Array.from(subtypes).map(subtype => {
+    const capitalizedSubtype = capitalize(subtype);
+    return `| ${capitalizedKind}${capitalizedSubtype}DirectiveNode`;
+  }).join('\n  ')}
 `;
-    
+
+    // Create the file content
     const content = `${imports}\n\n${unionType}`;
+
+    // Write the file
     fileSystem.writeFileSync(path.join(typesDir, `${kind}.ts`), content);
-    
-    console.log(`Generated consolidated type for ${kind}`);
+
+    console.log(`Generated union type for ${kind}`);
   }
-  
-  // Generate main union type for all directives
-  if (Object.keys(kindMap).length > 0) {
-    const mainImports = Object.keys(kindMap)
-      .map(kind => {
-        const typeName = kind.charAt(0).toUpperCase() + kind.slice(1) + 'DirectiveNode';
-        return `import { ${typeName} } from './${kind}.js';`;
-      })
-      .join('\n');
-    
-    const mainUnion = `
+
+  // Generate the main DirectiveNodeUnion
+  const mainImports = Object.keys(typeStorage.kindToSubtypes).map(kind => {
+    const capitalizedKind = capitalize(kind);
+    return `import { ${capitalizedKind}DirectiveNode } from './${kind}.js';`;
+  }).join('\n');
+
+  const mainUnion = `
 /**
  * Union type for all directive nodes
  */
-export type DirectiveNodeUnion = 
-  ${Object.keys(kindMap)
-    .map(kind => `| ${kind.charAt(0).toUpperCase() + kind.slice(1)}DirectiveNode`)
-    .join('\n  ')}
+export type DirectiveNodeUnion =
+  ${Object.keys(typeStorage.kindToSubtypes).map(kind => {
+    const capitalizedKind = capitalize(kind);
+    return `| ${capitalizedKind}DirectiveNode`;
+  }).join('\n  ')}
 `;
-    
-    const mainContent = `${mainImports}\n\n${mainUnion}`;
-    fileSystem.writeFileSync(path.join(typesDir, 'directives.ts'), mainContent);
-    
-    console.log('Generated main directive union type');
-  }
+
+  // Create the file content
+  const mainContent = `${mainImports}\n\n${mainUnion}`;
+
+  // Write the file
+  fileSystem.writeFileSync(path.join(typesDir, 'directives.ts'), mainContent);
+
+  console.log('Generated main DirectiveNodeUnion');
+
+  // Create an index.ts file to export all types
+  const indexContent = `// Directive union
+export * from './directives.js';
+
+// Directive kind unions
+${Object.keys(typeStorage.kindToSubtypes).map(kind =>
+  `export * from './${kind}.js';`
+).join('\n')}
+
+// Individual directive types
+${Object.entries(typeStorage.kindToSubtypes).flatMap(([kind, subtypes]) =>
+  Array.from(subtypes).map(subtype =>
+    `export * from './${kind}-${subtype.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}.js';`
+  )
+).join('\n')}
+`;
+
+  fileSystem.writeFileSync(path.join(typesDir, 'index.ts'), indexContent);
+
+  console.log('Generated index.ts');
+
+  console.log(`Enhanced type generation complete - generated ${
+    Object.keys(typeStorage.kindToSubtypes).length
+  } directive kinds and ${
+    Object.values(typeStorage.kindToSubtypes).reduce(
+      (total, subtypes) => total + subtypes.size, 0
+    )
+  } directive subtypes`);
 }
 
 /**
