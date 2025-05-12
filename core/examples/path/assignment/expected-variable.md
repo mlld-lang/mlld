@@ -1,0 +1,1 @@
+The user config is at config/john/settings.json

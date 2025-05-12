@@ -1,0 +1,1 @@
+@exec greet (name) = @run [echo "Hello, @name!"]

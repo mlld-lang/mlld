@@ -1,1 +1,1 @@
-This is a template with {{variable}}
+This is a template with value

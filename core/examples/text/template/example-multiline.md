@@ -1,5 +1,6 @@
 @text multiline = [[
-This is a 
+This is a
 multi-line template
 with {{variable}}
 ]]
+@add @multiline

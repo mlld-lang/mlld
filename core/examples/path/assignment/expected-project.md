@@ -1,0 +1,1 @@
+The project source is /Users/adam/dev/meld/src

@@ -1,2 +1,2 @@
 @text greeting = "Hello, world!"
-@add @greeting
+@data count = 42

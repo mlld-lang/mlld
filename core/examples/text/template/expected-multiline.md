@@ -1,3 +1,3 @@
-This is a 
+This is a
 multi-line template
-with {{variable}}
+with value
