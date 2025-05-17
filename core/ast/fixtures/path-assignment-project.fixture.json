@@ -1,0 +1,14 @@
+{
+  "name": "path-assignment-project",
+  "input": "@path projectSrc = [@./src]\n@add [[The project source is {{projectSrc}}]]",
+  "expected": "The project source is /Users/adam/dev/meld/src",
+  "directives": [
+    "@path projectSrc = [@./src]",
+    "@add [[The project source is {{projectSrc}}]]"
+  ],
+  "metadata": {
+    "kind": "path",
+    "subtype": "assignment",
+    "variant": "project"
+  }
+}

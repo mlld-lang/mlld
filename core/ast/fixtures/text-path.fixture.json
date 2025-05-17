@@ -1,0 +1,13 @@
+{
+  "name": "text-path",
+  "input": "@text content = \"file.md\"\n@add @content",
+  "expected": "Content from file",
+  "directives": [
+    "@text content = \"file.md\"",
+    "@add @content"
+  ],
+  "metadata": {
+    "kind": "text",
+    "subtype": "path"
+  }
+}

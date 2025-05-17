@@ -1,0 +1,14 @@
+{
+  "name": "add-template-multiline",
+  "input": "@text variable = \"value\"\n@add [[\nContent with {{variable}}\n\nAnd some more content\n\nHey, here's the same variable again: {{variable}}\n]]",
+  "expected": "Content with value\n\nAnd some more content\n\nHey, here's the same variable again: value",
+  "directives": [
+    "@text variable = \"value\"",
+    "@add [[\nContent with {{variable}}\n\nAnd some more content\n\nHey, here's the same variable again: {{variable}}\n]]"
+  ],
+  "metadata": {
+    "kind": "add",
+    "subtype": "template",
+    "variant": "multiline"
+  }
+}

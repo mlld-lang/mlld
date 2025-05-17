@@ -1,0 +1,14 @@
+{
+  "name": "text-template-multiline",
+  "input": "@text multiline = [[\nThis is a\nmulti-line template\nwith {{variable}}\n]]\n@add @multiline",
+  "expected": "This is a\nmulti-line template\nwith value",
+  "directives": [
+    "@text multiline = [[\nThis is a\nmulti-line template\nwith {{variable}}\n]]",
+    "@add @multiline"
+  ],
+  "metadata": {
+    "kind": "text",
+    "subtype": "template",
+    "variant": "multiline"
+  }
+}

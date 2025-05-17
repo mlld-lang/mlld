@@ -1,0 +1,14 @@
+{
+  "name": "run-exec-parameters",
+  "input": "@exec greetCommand(param) = @run [echo \"Hello, {{param}}\"]\n@run @greetCommand(\"World\")",
+  "expected": "Hello, World!",
+  "directives": [
+    "@exec greetCommand(param) = @run [echo \"Hello, {{param}}\"]",
+    "@run @greetCommand(\"World\")"
+  ],
+  "metadata": {
+    "kind": "run",
+    "subtype": "exec",
+    "variant": "parameters"
+  }
+}

@@ -1,0 +1,72 @@
+[
+  {
+    "type": "Directive",
+    "nodeId": "placeholder-id",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 24,
+        "line": 1,
+        "column": 25
+      }
+    },
+    "kind": "text",
+    "subtype": "textAssignment",
+    "source": "literal",
+    "values": {
+      "identifier": [
+        {
+          "type": "VariableReference",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "valueType": "identifier",
+          "isVariableReference": true,
+          "identifier": "name"
+        }
+      ],
+      "content": [
+        {
+          "type": "Text",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "content": "bob smith"
+        }
+      ]
+    },
+    "raw": {
+      "identifier": "name",
+      "content": "bob smith"
+    },
+    "meta": {
+      "sourceType": "literal",
+      "hasVariables": false,
+      "isTemplateContent": false
+    }
+  }
+]

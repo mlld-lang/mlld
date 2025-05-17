@@ -1,0 +1,14 @@
+{
+  "name": "add-template-variables",
+  "input": "@text variable = \"value\"\n@add [[Content with {{variable}}]]",
+  "expected": "Content with value",
+  "directives": [
+    "@text variable = \"value\"",
+    "@add [[Content with {{variable}}]]"
+  ],
+  "metadata": {
+    "kind": "add",
+    "subtype": "template",
+    "variant": "variables"
+  }
+}

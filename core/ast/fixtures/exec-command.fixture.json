@@ -1,0 +1,138 @@
+{
+  "name": "exec-command",
+  "input": "@exec greet (name) = @run [echo \"Hello, @name!\"]",
+  "expected": "@exec greet (name) = @run [echo \"Hello, @name!\"]",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 48,
+          "line": 1,
+          "column": 49
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "greet"
+          }
+        ],
+        "params": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "variable",
+            "isVariableReference": true,
+            "identifier": "name"
+          }
+        ],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "echo \"Hello, "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "name"
+          },
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "!\""
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greet",
+        "params": [
+          "name"
+        ],
+        "command": "echo \"Hello, @name!\""
+      },
+      "meta": {
+        "hasVariables": true,
+        "parameterCount": 1
+      }
+    }
+  ],
+  "metadata": {
+    "kind": "exec",
+    "subtype": "execCommand"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "data-object-nested",
+  "input": "@data config = {\n  server: {\n    port: 8080,\n    host: \"localhost\"\n  },\n  debug: true\n}\n@add @config.server.port",
+  "expected": "8080",
+  "directives": [
+    "@data config = {\n  server: {\n    port: 8080,\n    host: \"localhost\"\n  },\n  debug: true\n}",
+    "@add @config.server.port"
+  ],
+  "metadata": {
+    "kind": "data",
+    "subtype": "object",
+    "variant": "nested"
+  }
+}

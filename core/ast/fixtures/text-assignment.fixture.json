@@ -1,0 +1,13 @@
+{
+  "name": "text-assignment",
+  "input": "@text greeting = \"Hello, world!\"\n@add @greeting",
+  "expected": "Hello, world!",
+  "directives": [
+    "@text greeting = \"Hello, world!\"",
+    "@add @greeting"
+  ],
+  "metadata": {
+    "kind": "text",
+    "subtype": "assignment"
+  }
+}

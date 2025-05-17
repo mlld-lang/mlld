@@ -1,0 +1,58 @@
+{
+  "name": "run-command-multiline",
+  "input": "@run [bash -c \"echo Line 1 && \\\necho Line 2\"]",
+  "expected": "Line 1\nLine 2",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 45,
+          "line": 2,
+          "column": 14
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "bash -c \"echo Line 1 && \\\necho Line 2\""
+          }
+        ]
+      },
+      "raw": {
+        "command": "bash -c \"echo Line 1 && \\\necho Line 2\""
+      },
+      "meta": {
+        "hasVariables": false,
+        "isMultiLine": true
+      }
+    }
+  ],
+  "metadata": {
+    "kind": "run",
+    "subtype": "runCommand"
+  }
+}

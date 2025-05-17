@@ -1,0 +1,14 @@
+{
+  "name": "import-selected",
+  "input": "@import {greeting, count} from [utils.mld]\n@add @greeting\n@add @count",
+  "expected": "Hello, world!\n42",
+  "directives": [
+    "@import {greeting, count} from [utils.mld]",
+    "@add @greeting",
+    "@add @count"
+  ],
+  "metadata": {
+    "kind": "import",
+    "subtype": "selected"
+  }
+}

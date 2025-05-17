@@ -7,12 +7,12 @@ import {
   isDataWithNestedRunDirective,
   hasDirectiveProperty,
   hasNestedDirectiveOfKind
-} from '@grammar/types/guards';
+} from '@core/ast/types/guards';
 import {
   isDataObjectValue,
   isDataArrayValue,
   isDirectiveValue
-} from '@grammar/types/data';
+} from '@core/ast/types/data';
 
 describe('Data directive with nested directives', () => {
   test('Data directive with direct nested embed directive', async () => {

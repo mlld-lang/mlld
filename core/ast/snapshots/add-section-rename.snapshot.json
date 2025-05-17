@@ -1,0 +1,93 @@
+[
+  {
+    "type": "Directive",
+    "nodeId": "placeholder-id",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 55,
+        "line": 1,
+        "column": 56
+      }
+    },
+    "kind": "add",
+    "subtype": "addSection",
+    "source": "section",
+    "values": {
+      "sectionTitle": [
+        {
+          "type": "Text",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "content": "# Original Title"
+        }
+      ],
+      "path": [
+        {
+          "type": "Text",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "content": "file.md"
+        }
+      ],
+      "newTitle": [
+        {
+          "type": "Text",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "content": "# New Title"
+        }
+      ]
+    },
+    "raw": {
+      "sectionTitle": "# Original Title",
+      "path": "file.md",
+      "newTitle": "# New Title"
+    },
+    "meta": {
+      "path": {
+        "hasVariables": false,
+        "isAbsolute": false,
+        "hasExtension": true,
+        "extension": "md"
+      }
+    }
+  }
+]

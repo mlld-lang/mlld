@@ -1,0 +1,78 @@
+[
+  {
+    "type": "Directive",
+    "nodeId": "placeholder-id",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 30,
+        "line": 1,
+        "column": 31
+      }
+    },
+    "kind": "import",
+    "subtype": "importAll",
+    "source": "path",
+    "values": {
+      "imports": [
+        {
+          "type": "VariableReference",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "valueType": "import",
+          "isVariableReference": true,
+          "identifier": "*",
+          "alias": null
+        }
+      ],
+      "path": [
+        {
+          "type": "VariableReference",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "valueType": "varIdentifier",
+          "isVariableReference": true,
+          "identifier": "configPath"
+        }
+      ]
+    },
+    "raw": {
+      "imports": "*",
+      "path": "@configPath"
+    },
+    "meta": {
+      "path": {
+        "hasVariables": true,
+        "isAbsolute": false,
+        "hasExtension": false,
+        "extension": null
+      }
+    }
+  }
+]

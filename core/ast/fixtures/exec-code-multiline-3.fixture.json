@@ -1,0 +1,79 @@
+{
+  "name": "exec-code-multiline-3",
+  "input": "@run @format(\"bob smith\")",
+  "expected": "Bob Smith",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 25,
+          "line": 1,
+          "column": 26
+        }
+      },
+      "kind": "run",
+      "subtype": "runExec",
+      "source": "exec",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "format"
+          }
+        ],
+        "args": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "bob smith"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "format",
+        "args": [
+          "bob smith"
+        ]
+      },
+      "meta": {
+        "argumentCount": 1
+      }
+    }
+  ],
+  "metadata": {
+    "kind": "run",
+    "subtype": "runExec"
+  }
+}

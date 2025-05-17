@@ -1,0 +1,13 @@
+{
+  "name": "text-assignment-run",
+  "input": "@text result = @run [echo \"Command output\"]\n@add @result",
+  "expected": "Command output",
+  "directives": [
+    "@text result = @run [echo \"Command output\"]",
+    "@add @result"
+  ],
+  "metadata": {
+    "kind": "text",
+    "subtype": "assignment-run"
+  }
+}

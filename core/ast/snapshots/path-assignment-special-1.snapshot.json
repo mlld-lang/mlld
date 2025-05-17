@@ -1,0 +1,94 @@
+[
+  {
+    "type": "Directive",
+    "nodeId": "placeholder-id",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 30,
+        "line": 1,
+        "column": 31
+      }
+    },
+    "kind": "path",
+    "subtype": "pathAssignment",
+    "source": "path",
+    "values": {
+      "identifier": [
+        {
+          "type": "VariableReference",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "valueType": "identifier",
+          "isVariableReference": true,
+          "identifier": "homeConfig"
+        }
+      ],
+      "path": [
+        {
+          "type": "VariableReference",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "valueType": "varIdentifier",
+          "isVariableReference": true,
+          "identifier": "HOMEPATH"
+        },
+        {
+          "type": "Text",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "content": "/config"
+        }
+      ]
+    },
+    "raw": {
+      "identifier": "homeConfig",
+      "path": "@HOMEPATH/config"
+    },
+    "meta": {
+      "path": {
+        "hasVariables": true,
+        "isAbsolute": false,
+        "hasExtension": false,
+        "extension": null
+      }
+    }
+  }
+]

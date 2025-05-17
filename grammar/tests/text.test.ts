@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '@core/ast/parser';
-import { TextAssignmentDirectiveNode, TextTemplateDirectiveNode } from '../types/text';
-import { isTextAssignmentDirective, isTextTemplateDirective } from '../types/guards';
+import { TextAssignmentDirectiveNode, TextTemplateDirectiveNode } from '../../core/ast/types/text';
+import { isTextAssignmentDirective, isTextTemplateDirective } from '../../core/ast/types/guards';
 
 describe('Text Directive Tests', () => {
   describe('Text Assignment', () => {

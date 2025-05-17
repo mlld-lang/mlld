@@ -1,0 +1,13 @@
+{
+  "name": "data-primitive",
+  "input": "@data greeting.text = \"Hello, world!\"\n@add @greeting.text",
+  "expected": "Hello, world!",
+  "directives": [
+    "@data greeting.text = \"Hello, world!\"",
+    "@add @greeting.text"
+  ],
+  "metadata": {
+    "kind": "data",
+    "subtype": "primitive"
+  }
+}

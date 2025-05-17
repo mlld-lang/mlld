@@ -1,0 +1,14 @@
+{
+  "name": "import-all",
+  "input": "@import {*} from [config.mld]\n@add @greeting\n@add @count",
+  "expected": "Hello, world!\n42",
+  "directives": [
+    "@import {*} from [config.mld]",
+    "@add @greeting",
+    "@add @count"
+  ],
+  "metadata": {
+    "kind": "import",
+    "subtype": "all"
+  }
+}

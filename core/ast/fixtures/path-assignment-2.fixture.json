@@ -1,0 +1,57 @@
+{
+  "name": "path-assignment-2",
+  "input": "@add @docsDir",
+  "expected": "Contents of file.md",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 13,
+          "line": 1,
+          "column": 14
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "docsDir"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@docsDir"
+      },
+      "meta": {}
+    }
+  ],
+  "metadata": {
+    "kind": "add",
+    "subtype": "addVariable"
+  }
+}

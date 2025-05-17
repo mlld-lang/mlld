@@ -1,0 +1,82 @@
+{
+  "name": "add-section",
+  "input": "@add \"# Section Title\" from [file.md]",
+  "expected": "# Section Title\nContent under this section",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 37,
+          "line": 1,
+          "column": 38
+        }
+      },
+      "kind": "add",
+      "subtype": "addSection",
+      "source": "section",
+      "values": {
+        "sectionTitle": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "# Section Title"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "file.md"
+          }
+        ]
+      },
+      "raw": {
+        "sectionTitle": "# Section Title",
+        "path": "file.md"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "md"
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "kind": "add",
+    "subtype": "addSection"
+  }
+}

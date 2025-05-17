@@ -1,0 +1,21 @@
+{
+  "type": "Directive",
+  "kind": "data",
+  "subtype": "dataAssignment",
+  "values": {
+    "identifier": [],
+    "content": [
+      {
+        "type": "string",
+        "value": "\"Hello, world!\""
+      }
+    ]
+  },
+  "raw": {
+    "identifier": "",
+    "content": "\"Hello, world!\""
+  },
+  "meta": {
+    "sourceType": "literal"
+  }
+}

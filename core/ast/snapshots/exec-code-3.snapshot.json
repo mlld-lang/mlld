@@ -1,0 +1,21 @@
+{
+  "type": "Directive",
+  "kind": "exec",
+  "subtype": "unknown",
+  "values": {
+    "identifier": [],
+    "content": [
+      {
+        "type": "string",
+        "value": "javascript [console.log(Number(a) + Number(b));]"
+      }
+    ]
+  },
+  "raw": {
+    "identifier": "",
+    "content": "javascript [console.log(Number(a) + Number(b));]"
+  },
+  "meta": {
+    "sourceType": "literal"
+  }
+}

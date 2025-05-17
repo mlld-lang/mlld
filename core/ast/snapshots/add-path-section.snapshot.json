@@ -1,0 +1,53 @@
+[
+  {
+    "type": "Directive",
+    "nodeId": "placeholder-id",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 26,
+        "line": 1,
+        "column": 27
+      }
+    },
+    "kind": "add",
+    "subtype": "addPath",
+    "source": "path",
+    "values": {
+      "path": [
+        {
+          "type": "Text",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "content": "file.md # Section 1"
+        }
+      ]
+    },
+    "raw": {
+      "path": "file.md # Section 1"
+    },
+    "meta": {
+      "path": {
+        "hasVariables": false,
+        "isAbsolute": false,
+        "hasExtension": false,
+        "extension": null
+      }
+    }
+  }
+]

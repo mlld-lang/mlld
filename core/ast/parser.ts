@@ -1,8 +1,12 @@
+// TODO: Revisit all of this! 
+// It's very outdated after updating grammar 
+// and adding new node types
+
 import { parse as grammarParse } from '@core/ast/grammar/index';
 import type { MeldNode } from '@core/syntax/types';
 import type { NodeType } from '@core/syntax/types/shared-types';
 import { MeldAstError, ParseErrorCode, ParseResult, ParserOptions, PeggyError } from '@core/ast/types';
-import { VALID_VARIABLE_TYPES } from '@grammar/types/variables';
+import { VALID_VARIABLE_TYPES } from '@core/ast/types/variables';
 
 const defaultOptions: Required<Omit<ParserOptions, 'onError'>> & Pick<ParserOptions, 'onError'> = {
   failFast: true,

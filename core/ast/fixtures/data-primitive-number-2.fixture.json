@@ -1,0 +1,74 @@
+{
+  "name": "data-primitive-number-2",
+  "input": "@add @number.count",
+  "expected": "42",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 12,
+          "line": 1,
+          "column": 13
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "number"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@number"
+      },
+      "meta": {}
+    },
+    {
+      "type": "Text",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "content": ".count"
+    }
+  ],
+  "metadata": {
+    "kind": "add",
+    "subtype": "addVariable"
+  }
+}

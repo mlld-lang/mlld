@@ -1,0 +1,70 @@
+[
+  {
+    "type": "Directive",
+    "nodeId": "placeholder-id",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 27,
+        "line": 1,
+        "column": 28
+      }
+    },
+    "kind": "run",
+    "subtype": "runExec",
+    "source": "exec",
+    "values": {
+      "identifier": [
+        {
+          "type": "Text",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "content": "greetCommand"
+        }
+      ],
+      "args": [
+        {
+          "type": "Text",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "content": "World"
+        }
+      ]
+    },
+    "raw": {
+      "identifier": "greetCommand",
+      "args": [
+        "World"
+      ]
+    },
+    "meta": {
+      "argumentCount": 1
+    }
+  }
+]

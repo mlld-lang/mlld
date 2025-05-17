@@ -1,0 +1,13 @@
+{
+  "name": "run-exec",
+  "input": "@exec greetCommand = echo \"Hello from predefined command\"\n@run @greetCommand",
+  "expected": "Hello from predefined command",
+  "directives": [
+    "@exec greetCommand = echo \"Hello from predefined command\"",
+    "@run @greetCommand"
+  ],
+  "metadata": {
+    "kind": "run",
+    "subtype": "exec"
+  }
+}

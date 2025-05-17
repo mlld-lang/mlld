@@ -1,0 +1,21 @@
+{
+  "type": "Directive",
+  "kind": "data",
+  "subtype": "dataAssignment",
+  "values": {
+    "identifier": [],
+    "content": [
+      {
+        "type": "string",
+        "value": "true"
+      }
+    ]
+  },
+  "raw": {
+    "identifier": "",
+    "content": "true"
+  },
+  "meta": {
+    "sourceType": "literal"
+  }
+}

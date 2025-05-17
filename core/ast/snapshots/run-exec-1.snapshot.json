@@ -1,0 +1,26 @@
+{
+  "type": "Directive",
+  "kind": "exec",
+  "subtype": "unknown",
+  "values": {
+    "identifier": [
+      {
+        "type": "string",
+        "value": "greetCommand"
+      }
+    ],
+    "content": [
+      {
+        "type": "string",
+        "value": "echo \"Hello from predefined command\""
+      }
+    ]
+  },
+  "raw": {
+    "identifier": "greetCommand",
+    "content": "echo \"Hello from predefined command\""
+  },
+  "meta": {
+    "sourceType": "literal"
+  }
+}

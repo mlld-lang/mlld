@@ -1,0 +1,69 @@
+{
+  "name": "data-object-1",
+  "input": "@data user = { \"name\": \"John\", \"age\": 30 }",
+  "expected": "John is 30.",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 42,
+          "line": 1,
+          "column": 43
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "user"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "name": "John",
+            "age": 30
+          }
+        }
+      },
+      "raw": {
+        "identifier": "user",
+        "value": "{\n  \"name\": \"John\",\n  \"age\": 30\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 2
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "kind": "data",
+    "subtype": "dataAssignment"
+  }
+}

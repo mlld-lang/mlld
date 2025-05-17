@@ -1,0 +1,14 @@
+{
+  "name": "data-primitive-number",
+  "input": "@data number.count = 42\n@add @number.count",
+  "expected": "42",
+  "directives": [
+    "@data number.count = 42",
+    "@add @number.count"
+  ],
+  "metadata": {
+    "kind": "data",
+    "subtype": "primitive",
+    "variant": "number"
+  }
+}

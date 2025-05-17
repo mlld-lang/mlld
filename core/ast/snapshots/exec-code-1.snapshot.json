@@ -1,0 +1,72 @@
+[
+  {
+    "type": "Directive",
+    "nodeId": "placeholder-id",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 13,
+        "line": 1,
+        "column": 14
+      }
+    },
+    "kind": "text",
+    "subtype": "textAssignment",
+    "source": "literal",
+    "values": {
+      "identifier": [
+        {
+          "type": "VariableReference",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "valueType": "identifier",
+          "isVariableReference": true,
+          "identifier": "a"
+        }
+      ],
+      "content": [
+        {
+          "type": "Text",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "content": "1"
+        }
+      ]
+    },
+    "raw": {
+      "identifier": "a",
+      "content": "1"
+    },
+    "meta": {
+      "sourceType": "literal",
+      "hasVariables": false,
+      "isTemplateContent": false
+    }
+  }
+]

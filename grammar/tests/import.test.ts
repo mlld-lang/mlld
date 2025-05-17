@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isImportAllDirective, isImportSelectedDirective } from '../types/guards';
+import { isImportAllDirective, isImportSelectedDirective } from '../../core/ast/types/guards';
 import { parse } from '../../core/ast';
 import { importFixtures } from './fixtures/import';
 import { parseDirective } from './utils/test-helpers';

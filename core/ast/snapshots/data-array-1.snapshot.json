@@ -1,0 +1,61 @@
+[
+  {
+    "type": "Directive",
+    "nodeId": "placeholder-id",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 39,
+        "line": 1,
+        "column": 40
+      }
+    },
+    "kind": "data",
+    "subtype": "dataAssignment",
+    "source": "array",
+    "values": {
+      "identifier": [
+        {
+          "type": "VariableReference",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "valueType": "identifier",
+          "isVariableReference": true,
+          "identifier": "colors"
+        }
+      ],
+      "value": {
+        "type": "array",
+        "items": [
+          "red",
+          "green",
+          "blue"
+        ]
+      }
+    },
+    "raw": {
+      "identifier": "colors",
+      "value": "[\n  \"red\",\n  \"green\",\n  \"blue\"\n]"
+    },
+    "meta": {
+      "arrayData": {
+        "itemCount": 3
+      }
+    }
+  }
+]

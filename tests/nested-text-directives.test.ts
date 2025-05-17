@@ -4,7 +4,7 @@ import {
   isTextAssignmentDirective,
   isTextWithEmbedSource,
   isTextWithRunSource
-} from '@grammar/types/guards';
+} from '@core/ast/types/guards';
 
 describe('Text directive with nested directives', () => {
   test('Text directive with nested embed directive', async () => {

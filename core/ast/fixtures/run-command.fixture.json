@@ -1,0 +1,81 @@
+{
+  "name": "run-command",
+  "input": "@run echo \"Hello from command\"",
+  "expected": "Hello from command",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 5,
+          "line": 1,
+          "column": 6
+        },
+        "end": {
+          "offset": 30,
+          "line": 1,
+          "column": 31
+        }
+      },
+      "kind": "run",
+      "subtype": "runCode",
+      "source": "code",
+      "values": {
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "echo"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "\"Hello from command\""
+          }
+        ]
+      },
+      "raw": {
+        "lang": "echo",
+        "args": [],
+        "code": "\"Hello from command\""
+      },
+      "meta": {
+        "isMultiLine": false,
+        "language": "echo",
+        "isBracketed": true
+      }
+    }
+  ],
+  "metadata": {
+    "kind": "run",
+    "subtype": "runCode"
+  }
+}

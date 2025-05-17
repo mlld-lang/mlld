@@ -1,0 +1,57 @@
+{
+  "name": "add-variable-2",
+  "input": "@add @variableName",
+  "expected": "hello world",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 18,
+          "line": 1,
+          "column": 19
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "variableName"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@variableName"
+      },
+      "meta": {}
+    }
+  ],
+  "metadata": {
+    "kind": "add",
+    "subtype": "addVariable"
+  }
+}

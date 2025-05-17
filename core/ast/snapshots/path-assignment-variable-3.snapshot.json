@@ -1,0 +1,69 @@
+[
+  {
+    "type": "Directive",
+    "nodeId": "placeholder-id",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 45,
+        "line": 1,
+        "column": 46
+      }
+    },
+    "kind": "add",
+    "subtype": "addTemplate",
+    "source": "template",
+    "values": {
+      "content": [
+        {
+          "type": "Text",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "content": "The user config is at "
+        },
+        {
+          "type": "VariableReference",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "valueType": "varInterpolation",
+          "isVariableReference": true,
+          "identifier": "userConfig"
+        }
+      ]
+    },
+    "raw": {
+      "content": "The user config is at {{userConfig}}"
+    },
+    "meta": {
+      "isTemplateContent": true,
+      "hasVariables": true,
+      "wrapperType": "doubleBracket"
+    }
+  }
+]

@@ -1,0 +1,89 @@
+[
+  {
+    "type": "Directive",
+    "nodeId": "placeholder-id",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 8,
+        "line": 2,
+        "column": 1
+      }
+    },
+    "kind": "add",
+    "subtype": "addPath",
+    "source": "path",
+    "values": {
+      "path": [
+        {
+          "type": "Text",
+          "nodeId": "placeholder-id",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "content": "[["
+        }
+      ]
+    },
+    "raw": {
+      "path": "[["
+    },
+    "meta": {
+      "path": {
+        "hasVariables": false,
+        "isAbsolute": false,
+        "hasExtension": false,
+        "extension": null
+      }
+    }
+  },
+  {
+    "type": "Text",
+    "nodeId": "placeholder-id",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      }
+    },
+    "content": "Content with "
+  },
+  {
+    "type": "VariableReference",
+    "nodeId": "placeholder-id",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      }
+    },
+    "valueType": "varInterpolation",
+    "isVariableReference": true,
+    "identifier": "variable"
+  }
+]

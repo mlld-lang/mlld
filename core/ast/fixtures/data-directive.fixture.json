@@ -1,0 +1,13 @@
+{
+  "name": "data-directive",
+  "input": "@data result = @run echo \"Command output\"\n@add @result",
+  "expected": "Command output",
+  "directives": [
+    "@data result = @run echo \"Command output\"",
+    "@add @result"
+  ],
+  "metadata": {
+    "kind": "data",
+    "subtype": "directive"
+  }
+}

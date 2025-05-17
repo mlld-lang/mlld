@@ -1,0 +1,15 @@
+{
+  "name": "path-assignment-variable",
+  "input": "@text username = \"john\"\n@path userConfig = [config/@username/settings.json]\n@add [[The user config is at {{userConfig}}]]",
+  "expected": "The user config is at config/john/settings.json",
+  "directives": [
+    "@text username = \"john\"",
+    "@path userConfig = [config/@username/settings.json]",
+    "@add [[The user config is at {{userConfig}}]]"
+  ],
+  "metadata": {
+    "kind": "path",
+    "subtype": "assignment",
+    "variant": "variable"
+  }
+}

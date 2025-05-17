@@ -1,0 +1,14 @@
+{
+  "name": "data-array-mixed",
+  "input": "@data items = [1, \"two\", { name: \"three\" }, [4, 5]]\n@add @items[2].name",
+  "expected": "three",
+  "directives": [
+    "@data items = [1, \"two\", { name: \"three\" }, [4, 5]]",
+    "@add @items[2].name"
+  ],
+  "metadata": {
+    "kind": "data",
+    "subtype": "array",
+    "variant": "mixed"
+  }
+}
