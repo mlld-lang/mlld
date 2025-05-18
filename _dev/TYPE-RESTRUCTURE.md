@@ -71,8 +71,6 @@ This plan references several supporting documents:
 
 ## Implementation Approach
 
-**Confidence: 95/100**
-
 With our unified type architecture decision, we're restructuring to eliminate artificial AST/runtime separation and create a cohesive type system.
 
 ### ParserService Transformation Strategy
@@ -246,8 +244,6 @@ This step involves updating multiple services to use the new `MeldNode` union ty
 
 ### Unified Type Architecture
 
-**Confidence: 95/100**
-
 Based on our analysis of the state service and runtime types, we're moving to a unified type architecture where types evolve through the pipeline rather than having separate AST and runtime types:
 
 1. **Single Type Definition** - Each concept (Variable, Text, etc.) has one type definition
@@ -278,8 +274,6 @@ interface Variable {
 This eliminates the artificial separation between AST and runtime types, reducing confusion and duplication.
 
 ### Discriminated Unions for State Management
-
-**Confidence: 95/100**
 
 Based on our analysis of the state service, we've decided to use discriminated unions for node types:
 
@@ -388,8 +382,6 @@ Phase 3 will be considered successful when:
 
 ## Timeline and Staging
 
-**Confidence: 85/100**
-
 ### Week 1: Foundation (Steps 1-3)
 - **Day 1**: Analyze current type duplication (Step 1)
   - Reference: `AST-BASE-INTERFACES.md` for canonical interfaces
@@ -427,10 +419,10 @@ Phase 3 will be considered successful when:
 | Step | Description | Confidence | Notes |
 |-----|-------------|-----------|-------|
 | 1 | Analyze current type duplication | 92 | Existing types are well organized but mapping may reveal gaps |
-| 2 | Create unified type definitions | 88 | Need final list of base interfaces and field mapping to avoid gaps; see `AST-BASE-INTERFACES.md` |
+| 2 | Create unified type definitions | 93 | Need final list of base interfaces and field mapping to avoid gaps; see `AST-BASE-INTERFACES.md` |
 | 3 | Define unified AST node union | 93 | Discriminated union pattern is clear; see `AST-NODE-DESIGN.md` |
 | 4 | Implement ParserService transformation | 92 | Parsing flow understood but mapping from parser output to typed union needs explicit helpers |
-| 5 | Update service interfaces | 88 | Many service files must change; inventory in `STATE-AFFECTED-METHODS.md` lists impacted methods |
+| 5 | Update service interfaces | 90 | Many service files must change; inventory in `STATE-AFFECTED-METHODS.md` lists impacted methods |
 | 6 | Remove legacy types | 95 | Clean cutover, no compatibility needed |
 | 7 | Update all imports | 80 | Over 300 references to old paths; a scripted replacement plan would help |
 | 8 | Validation and documentation | 90 | Straightforward once types settle |
