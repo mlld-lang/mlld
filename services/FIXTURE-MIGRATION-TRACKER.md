@@ -20,7 +20,7 @@ Tracking the migration of service tests from manual node creation to fixture-bas
 | TextDirectiveHandler | ✅ Complete | `TextDirectiveHandler.fixture.test.ts` | Handler updated, tests deduplicated, fully migrated |
 | DataDirectiveHandler | ✅ Complete | `DataDirectiveHandler.fixture.test.ts` | Handler updated, adapter layer removed, all tests migrated |
 | PathDirectiveHandler | ✅ Complete | `PathDirectiveHandler.fixture.test.ts` | Handler updated, adapter layer removed, all tests migrated |
-| ImportDirectiveHandler | 🔄 In Progress | `ImportDirectiveHandler.fixture.test.ts` | Handler updated, fixture test updated, regular tests partially updated |
+| ImportDirectiveHandler | ✅ Complete | `ImportDirectiveHandler.fixture.test.ts` | Handler updated, all tests migrated, removed deprecated importNamed |
 | AddDirectiveHandler | 🟡 Not Started | - | Template/variable/section fixtures |
 | RunDirectiveHandler | 🟡 Not Started | - | Code/command/exec fixtures |
 | ExecDirectiveHandler | 🟡 Not Started | - | Complex handler, may need custom fixtures |
