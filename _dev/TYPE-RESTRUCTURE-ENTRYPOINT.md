@@ -36,9 +36,9 @@ Tests are creating incorrect node structures, causing handlers to be modified ba
 - [ ] Update handlers and tests together:
   - [x] TextDirectiveHandler (example complete)
   - [x] DataDirectiveHandler (complete - handler and tests updated)
-  - [x] PathDirectiveHandler (tests only - handler needs update)
-  - [x] ImportDirectiveHandler (tests only - handler needs update)
-  - [ ] AddDirectiveHandler (update both)
+  - [x] PathDirectiveHandler (complete - handler and tests updated)
+  - [x] ImportDirectiveHandler (complete - handler and tests updated)
+  - [x] AddDirectiveHandler (complete - handler and tests updated)
   - [ ] RunDirectiveHandler (update both)
   - [ ] ExecDirectiveHandler (update both)
 

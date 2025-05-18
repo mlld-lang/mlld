@@ -356,22 +356,23 @@ export class AddDirectiveHandler implements IDirectiveHandler {
       }
 
       // Handle heading level adjustment if specified
-      const options = node.values.options || {};
-      const headingLevel = options.headingLevel;
-      if (headingLevel) {
+      const headerLevel = node.values.headerLevel;
+      if (headerLevel && headerLevel.length > 0) {
+        const levelValue = headerLevel[0].value;
         // TODO: Find appropriate service/utility for heading adjustment
-        this.logger.warn(`Heading level adjustment specified (+${headingLevel}) but not currently supported by ResolutionService. Content unchanged.`, standardErrorDetails);
+        this.logger.warn(`Heading level adjustment specified (+${levelValue}) but not currently supported by ResolutionService. Content unchanged.`, standardErrorDetails);
         // Validate the option format here if needed
-        if (typeof headingLevel !== 'number' || !Number.isInteger(headingLevel) || headingLevel < 1) {
-          this.logger.warn(`Invalid headingLevel option: ${headingLevel}. Must be a positive integer.`, standardErrorDetails);
+        if (typeof levelValue !== 'number' || !Number.isInteger(levelValue) || levelValue < 1) {
+          this.logger.warn(`Invalid headerLevel option: ${levelValue}. Must be a positive integer.`, standardErrorDetails);
         }
       }
 
       // Handle under-header wrapping if specified
-      const underHeader = options.underHeader;
-      if (underHeader) {
+      const underHeader = node.values.underHeader;
+      if (underHeader && underHeader.length > 0) {
+        const headerText = underHeader[0].content;
         // TODO: Find appropriate service/utility for header wrapping
-        this.logger.warn(`Under-header wrapping specified ("${underHeader}") but not currently supported by ResolutionService. Content unchanged.`, standardErrorDetails);
+        this.logger.warn(`Under-header wrapping specified ("${headerText}") but not currently supported by ResolutionService. Content unchanged.`, standardErrorDetails);
       }
 
       // Create the replacement node - This should ALWAYS happen for @add

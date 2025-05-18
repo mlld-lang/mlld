@@ -700,8 +700,14 @@ export function createAddDirective(
     raw.section = section;
   }
   
-  if (options?.headingLevel) {
-    values.headerLevel = options.headingLevel;
+  if (options?.headingLevel !== undefined) {
+    values.headerLevel = [{
+      type: 'Number' as const,
+      nodeId: `test-number-${testNodeIdCounter++}`,
+      value: options.headingLevel,
+      raw: options.headingLevel.toString(),
+      location: location || DEFAULT_LOCATION
+    }];
     raw.headerLevel = options.headingLevel.toString();
   }
   

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { mock, mockDeep } from 'vitest-mock-extended';
-import type { DirectiveNode, DirectiveData, MeldNode, VariableReferenceNode, TextNode } from '@core/syntax/types/index';
-import type { StructuredPath } from '@core/syntax/types/nodes';
+import type { DirectiveNode, MeldNode, VariableReferenceNode, TextNode } from '@core/ast/types';
+// Path imports moved to new structure
 import type { MeldPath, PathValidationContext } from '@core/types/paths';
 import { createMeldPath, unsafeCreateValidatedResourcePath } from '@core/types/paths';
 import { AddDirectiveHandler, type ILogger } from '@services/pipeline/DirectiveService/handlers/execution/AddDirectiveHandler';
@@ -17,9 +17,7 @@ import type { ICircularityService } from '@services/resolution/CircularityServic
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient';
 import { createLocation, createAddDirective } from '@tests/utils/testFactories';
-import { 
-  embedDirectiveExamples
-} from '@core/syntax/index';
+// Import removed - not needed
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
@@ -245,7 +243,7 @@ describe('AddDirectiveHandler Transformation', () => {
         undefined,
         createLocation(1,1),
         'addPath',
-        { headingLevel: 2 }
+        { headingLevel: 0 }  // Invalid: must be positive integer
       );
       const originalContent = 'Content for H2';
       fileSystemServiceMock.readFile.mockResolvedValueOnce(originalContent);
@@ -280,7 +278,8 @@ describe('AddDirectiveHandler Transformation', () => {
         createLocation(1,1),
         'addPath'
       );
-      node.directive.path = { raw: '{{filePath}}' }; 
+      node.values.path = [{ type: 'Text', content: '{{filePath}}' }];
+      node.raw.path = '{{filePath}}'; 
       
       const mockProcessingContext = createMockProcessingContext(node);
       
@@ -308,7 +307,8 @@ describe('AddDirectiveHandler Transformation', () => {
         createLocation(1, 1),
         'addVariable'
       );
-      node.directive.path = { raw: '{{userData.user.profile.bio}}' };
+      node.values.variable = [{ type: 'VariableReference', identifier: 'userData', fields: [{ type: 'field', name: 'user' }, { type: 'field', name: 'profile' }, { type: 'field', name: 'bio' }] }];
+      node.raw.variable = '{{userData.user.profile.bio}}';
       const mockProcessingContext = createMockProcessingContext(node);
       const resolvedContent = 'This is a test bio.';
       resolutionServiceMock.resolveInContext.mockResolvedValueOnce(resolvedContent);
@@ -328,7 +328,8 @@ describe('AddDirectiveHandler Transformation', () => {
         createLocation(1, 1),
         'addVariable'
       );
-      node.directive.path = { raw: '{{role.architect}}' }; 
+      node.values.variable = [{ type: 'VariableReference', identifier: 'role', fields: [{ type: 'field', name: 'architect' }] }];
+      node.raw.variable = '{{role.architect}}'; 
       const mockProcessingContext = createMockProcessingContext(node);
       const resolvedContent = 'You are a senior architect skilled in TypeScript.';
       resolutionServiceMock.resolveInContext.mockResolvedValueOnce(resolvedContent);
@@ -348,7 +349,8 @@ describe('AddDirectiveHandler Transformation', () => {
         createLocation(1,1),
         'addPath'
       );
-      node.directive.path = { raw: 'nonexistent.md' };
+      node.values.path = [{ type: 'Text', content: 'nonexistent.md' }];
+      node.raw.path = 'nonexistent.md';
       const mockProcessingContext = createMockProcessingContext(node);
       
       const resolvedPath = createMeldPath('nonexistent.md', unsafeCreateValidatedResourcePath('/project/root/nonexistent.md'));
@@ -370,7 +372,8 @@ describe('AddDirectiveHandler Transformation', () => {
         createLocation(1,1),
         'addVariable'
       );
-      node.directive.path = { raw: '{{vars.myPath.nested}}' }; 
+      node.values.variable = [{ type: 'VariableReference', identifier: 'vars', fields: [{ type: 'field', name: 'myPath' }, { type: 'field', name: 'nested' }] }];
+      node.raw.variable = '{{vars.myPath.nested}}'; 
       const mockProcessingContext = createMockProcessingContext(node);
       const resolvedPathString = 'actual/file.md';
 
@@ -396,7 +399,8 @@ describe('AddDirectiveHandler Transformation', () => {
         createLocation(1,1),
         'addVariable'
       );
-      node.directive.path = { raw: '{{contact.email}}' };
+      node.values.variable = [{ type: 'VariableReference', identifier: 'contact', fields: [{ type: 'field', name: 'email' }] }];
+      node.raw.variable = '{{contact.email}}';
       const mockProcessingContext = createMockProcessingContext(node);
       const resolvedEmail = 'user@example.com';
 

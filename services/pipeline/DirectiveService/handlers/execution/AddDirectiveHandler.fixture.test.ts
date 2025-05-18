@@ -318,8 +318,14 @@ describe('AddDirectiveHandler - Fixture Tests', () => {
       const fixture = fixtureLoader.getFixture('add-path');
       if (!fixture) throw new Error('Fixture not found');
       const addNode = fixture.ast[0] as AddDirectiveNode;
-      // Add headingLevel option
-      (addNode.values as any).options = { headingLevel: 2 };
+      // Add headingLevel option according to grammar structure
+      (addNode.values as any).headerLevel = [{
+        type: 'Number',
+        nodeId: 'test-num-1',
+        value: 2,
+        raw: '2',
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      }];
       
       // Set up mocks
       vi.mocked(resolutionServiceMock.resolveInContext).mockResolvedValue('file.md');
@@ -354,8 +360,13 @@ describe('AddDirectiveHandler - Fixture Tests', () => {
       const fixture = fixtureLoader.getFixture('add-path');
       if (!fixture) throw new Error('Fixture not found');
       const addNode = fixture.ast[0] as AddDirectiveNode;
-      // Add underHeader option
-      (addNode.values as any).options = { underHeader: 'My Header' };
+      // Add underHeader option according to grammar structure
+      (addNode.values as any).underHeader = [{
+        type: 'Text',
+        nodeId: 'test-text-1',
+        content: 'My Header',
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      }];
       
       // Set up mocks
       vi.mocked(resolutionServiceMock.resolveInContext).mockResolvedValue('file.md');
