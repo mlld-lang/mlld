@@ -44,8 +44,8 @@ Tracking the migration of service tests from manual node creation to fixture-bas
 
 ## Progress Metrics
 
-- **Tests Migrated**: 5.5/7 (79%)
-- **Handlers Updated**: 4/7 (57%) - TextDirectiveHandler, DataDirectiveHandler, PathDirectiveHandler complete, ImportDirectiveHandler in progress
+- **Tests Migrated**: 6/7 (86%)
+- **Handlers Updated**: 4/7 (57%) - TextDirectiveHandler, DataDirectiveHandler, PathDirectiveHandler, ImportDirectiveHandler complete
 - **Fixtures Utilized**: ~35/60 (58%)
 - **Tests Converted**: 50/~150 (33%)
 - **Adapter Layers**: 0 (All removed)
