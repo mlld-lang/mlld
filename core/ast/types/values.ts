@@ -35,7 +35,7 @@ export interface ImportValues {
   path: PathNodeArray;
 }
 
-export type ImportNodeArray = VariableReferenceNode[];
+export type ImportNodeArray = Array<ImportReferenceNode | ImportWildcardNode>;
 
 // Type for wildcard imports
 export interface ImportWildcardNode extends VariableReferenceNode {

@@ -2,7 +2,11 @@
  * Base type definitions for Meld AST nodes with structured directive objects
  */
 // TODO: Move these referenced nodes to core/syntax/types
-import { SourceLocation, MeldNode } from '@core/syntax/types/nodes';
+import {
+  SourceLocation,
+  MeldNode,
+  DirectiveSource,
+} from '@core/syntax/types/nodes';
 import { DirectiveKind, DirectiveSubtype } from '@core/syntax/types/directives';
 
 /**
@@ -12,6 +16,10 @@ export interface DirectiveNode extends MeldNode {
   type: 'Directive';
   kind: DirectiveKind;
   subtype: DirectiveSubtype;
+  /**
+   * Source of content for this directive
+   */
+  source?: DirectiveSource;
   values: { [key: string]: MeldNode[] };
   raw: { [key: string]: string };
   meta: { [key: string]: unknown };

@@ -21,6 +21,8 @@ export interface RunRaw {
 export interface RunMeta {
   isMultiLine?: boolean;
   argumentCount?: number;
+  language?: string;
+  hasVariables?: boolean;
 }
 
 /**
@@ -43,7 +45,7 @@ export type RunSubtype = 'runCommand' | 'runCode' | 'runExec';
 export interface RunValues {
   command?: ContentNodeArray;
   lang?: TextNodeArray;
-  args?: VariableNodeArray[];
+  args?: VariableNodeArray;
   code?: ContentNodeArray;
   identifier?: TextNodeArray;
 }
@@ -61,6 +63,7 @@ export interface RunCommandDirectiveNode extends RunDirectiveNode {
   };
   meta: {
     isMultiLine: boolean;
+    hasVariables: boolean;
   };
 }
 
@@ -71,7 +74,7 @@ export interface RunCodeDirectiveNode extends RunDirectiveNode {
   subtype: 'runCode';
   values: {
     lang: TextNodeArray;
-    args: VariableNodeArray[];
+    args: VariableNodeArray;
     code: ContentNodeArray;
   };
   raw: {
@@ -81,6 +84,7 @@ export interface RunCodeDirectiveNode extends RunDirectiveNode {
   };
   meta: {
     isMultiLine: boolean;
+    language: string;
   };
 }
 
@@ -91,7 +95,7 @@ export interface RunExecDirectiveNode extends RunDirectiveNode {
   subtype: 'runExec';
   values: {
     identifier: TextNodeArray;
-    args: VariableNodeArray[];
+    args: VariableNodeArray;
   };
   raw: {
     identifier: string;

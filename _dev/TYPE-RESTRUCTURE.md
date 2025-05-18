@@ -71,7 +71,7 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 **Key Insight**: The AST grammar remains unchanged. The ParserService creates the discriminated union from existing AST nodes.
 
 1. **Grammar Stability** - Peggy grammar files continue producing existing AST structures with `nodeId` and `location`
-2. **Union Creation** - ParserService validates and types AST nodes as `ASTNode` union
+2. **Union Creation** - ParserService validates and types AST nodes as `MeldNode` union
 3. **State Storage** - StateService stores nodes generically using the union type
 4. **No Migration Bridge** - Clean cutover without legacy compatibility layers
 
@@ -79,10 +79,10 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 
 1. **Parser Phase**: 
    - Grammar produces AST nodes with `type`, `nodeId`, `location`
-   - ParserService creates `ASTNode[]` union type from raw AST
+   - ParserService creates `MeldNode[]` union type from raw AST
    
 2. **Interpreter Phase**:
-   - Processes `ASTNode[]` using discriminated unions
+   - Processes `MeldNode[]` using discriminated unions
    - Calls appropriate handlers based on node type
    
 3. **Handler Phase**:
@@ -91,7 +91,7 @@ With our unified type architecture decision, we're restructuring to eliminate ar
    - Do not mutate nodes directly
    
 4. **State Phase**:
-   - StateService stores nodes generically as `ASTNode[]`
+   - StateService stores nodes generically as `MeldNode[]`
    - Tracks node transformations when enabled
    - Manages variables, imports, and other state
 
@@ -106,10 +106,14 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 
 1. Define base interfaces with progressive enhancement:
    ```typescript
-   interface BaseNode {
+   interface BaseMeldNode {
      type: string;
      nodeId: string;
      location?: SourceLocation;
+   }
+   
+   // Extended fields added during processing
+   interface ProcessedNode extends BaseMeldNode {
      raw?: string;
      metadata?: NodeMetadata;
      resolvedValue?: any;
@@ -123,8 +127,8 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 
 1. Create the discriminated union type for all AST nodes:
    ```typescript
-   // Define union of all AST node types
-   type ASTNode =
+   // Define union of all node types
+   type MeldNode =
      | TextNode 
      | DirectiveNode 
      | CodeFenceNode
@@ -134,10 +138,10 @@ With our unified type architecture decision, we're restructuring to eliminate ar
      | DotSeparatorNode
      | PathSeparatorNode;
 
-// Include every interface exported from `core/ast/types` so future nodes are
-// automatically part of the union.
+   // Include every interface exported from `core/ast/types` so future nodes are
+   // automatically part of the union.
    
-   // All nodes already have from AST:
+   // All nodes must extend BaseMeldNode and have:
    // - type: string (discriminator)
    // - nodeId: string
    // - location?: SourceLocation
@@ -145,19 +149,19 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 2. Implement ParserService transformation:
    ```typescript
    // In ParserService
-   function transformParsedNodes(rawAst: any[]): ASTNode[] {
+   function transformParsedNodes(rawAst: any[]): MeldNode[] {
      return rawAst.map(node => {
        // Validate node has required fields from AST
        if (!node.type || !node.nodeId) {
          throw new Error('Invalid AST node');
        }
-       return node as ASTNode;
+       return node as MeldNode;
      });
    }
    ```
 3. Define minimal type guards using discriminated unions:
    ```typescript
-   function isTextNode(node: ASTNode): node is TextNode {
+   function isTextNode(node: MeldNode): node is TextNode {
      return node.type === 'Text';
    }
    ```
@@ -242,7 +246,7 @@ This eliminates the artificial separation between AST and runtime types, reducin
 
 Based on our analysis of the state service, we've decided to use discriminated unions for node types:
 
-1. **Create a union type** for all AST nodes (e.g., `ASTNode`)
+1. **Create a union type** for all nodes (`MeldNode`)
 2. **Leverage TypeScript's type narrowing** based on the `type` field
 3. **Maintain generic operations** while enabling type-specific handling
 4. **No runtime changes** - purely type-level improvements
@@ -257,7 +261,7 @@ This approach maintains simplicity in the state service while providing type saf
 export interface VariableDeclarationNode {
   type: 'VariableDeclaration';
   name: string;
-  value: ASTNode;
+  value: MeldNode;
   location: SourceLocation;
 }
 
@@ -322,7 +326,7 @@ import type {
 } from '@core/ast/types';
 
 // Define union type for state management
-type ASTNode = TextNode | DirectiveNode | CodeFenceNode | /* ... */;
+type MeldNode = TextNode | DirectiveNode | CodeFenceNode | /* ... */;
 ```
 
 ## Risks and Mitigations
@@ -362,10 +366,14 @@ Note: ParserService transformation approach significantly reduces complexity and
 | Step | Description | Confidence | Notes |
 |-----|-------------|-----------|-------|
 | 1 | Analyze current type duplication | 92 | Existing types are well organized but mapping may reveal gaps |
-| 2 | Create unified type definitions | 88 | Need final list of base interfaces and field mapping to avoid gaps |
+| 2 | Create unified type definitions | 88 | Need final list of base interfaces and field mapping to avoid gaps; see `AST-BASE-INTERFACES.md` |
+<<<<<<< ours
 | 3 | Define unified AST node union | 93 | Discriminated union pattern is clear |
-| 4 | Implement ParserService transformation | 92 | Parsing flow understood but transformation details may need refinement |
-| 5 | Update service interfaces | 88 | Many service files must change; detailed inventory of interfaces would help |
+=======
+| 3 | Define unified AST node union | 93 | Discriminated union pattern is clear; see `AST-NODE-DESIGN.md` |
+>>>>>>> theirs
+| 4 | Implement ParserService transformation | 92 | Parsing flow understood but mapping from parser output to typed union needs explicit helpers |
+| 5 | Update service interfaces | 88 | Many service files must change; inventory in `STATE-AFFECTED-METHODS.md` lists impacted methods |
 | 6 | Remove legacy types | 95 | Clean cutover, no compatibility needed |
 | 7 | Update all imports | 80 | Over 300 references to old paths; a scripted replacement plan would help |
 | 8 | Validation and documentation | 90 | Straightforward once types settle |
@@ -378,6 +386,13 @@ Note: ParserService transformation approach significantly reduces complexity and
 4. Consider future extensibility in the structure
 5. Document the AST/runtime distinction prominently
 6. Implement discriminated unions for state management as outlined in STATE-UPDATES.md
-7. Export a unified `ASTNode` union type from the AST package for reuse
+7. Export a unified `MeldNode` union type from the AST package for reuse
 8. Ensure the union includes every interface from `core/ast/types` and add new ones as they are created
 
+9. Reference `AST-BASE-INTERFACES.md` for the canonical list of base interfaces.
+10. Use `STATE-AFFECTED-METHODS.md` when updating service signatures.
+<<<<<<< ours
+=======
+
+11. See `AST-NODE-DESIGN.md` for the proposed union structure and parser transformation helpers.
+>>>>>>> theirs

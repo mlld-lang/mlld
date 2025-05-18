@@ -28,26 +28,26 @@ These map to:
 
 The state service should use a discriminated union of all node types:
 ```typescript
-// Define our own union type that includes all possible nodes
-type ASTNode = 
-  | TextNode 
-  | DirectiveNode 
-  | CodeFenceNode
-  | CommentNode
-  | VariableReferenceNode
-  | LiteralNode
-  | DotSeparatorNode
-  | PathSeparatorNode;
+// Import the unified type from the refactored types
+import type { MeldNode } from '@core/ast/types';
 
-// Import from wherever these types are defined
-import type { TextNode, DirectiveNode, /* ... */ } from '@core/ast/types';
+// The MeldNode type is now a discriminated union of all possible nodes:
+// type MeldNode = 
+//   | TextNode 
+//   | DirectiveNode 
+//   | CodeFenceNode
+//   | CommentNode
+//   | VariableReferenceNode
+//   | LiteralNode
+//   | DotSeparatorNode
+//   | PathSeparatorNode;
 ```
 
-Note: While the new AST doesn't currently export a single union type, we can create one for the state service. All these types share:
+Note: The refactored types will export `MeldNode` as a discriminated union type in `core/ast/types/index.ts`. All these types share:
 - A discriminating `type` field (allows TypeScript to narrow types)
 - A `nodeId` field (required for state tracking)
 - An optional `location` field
-- They all extend the base `MeldNode` interface
+- They all extend the base `BaseMeldNode` interface
 
 ## Why Use Discriminated Unions?
 
@@ -59,7 +59,7 @@ Note: While the new AST doesn't currently export a single union type, we can cre
 
 Example:
 ```typescript
-function processNode(node: ASTNode) {
+function processNode(node: MeldNode) {
   // Generic operations work on all nodes
   console.log(node.nodeId);
   
@@ -75,7 +75,7 @@ function processNode(node: ASTNode) {
 }
 ```
 
-This gives us the benefits of discriminated unions while maintaining compatibility.
+This provides the benefits of discriminated unions and lets us remove the legacy `core/syntax/types` package entirely.
 
 ## Required Changes
 
@@ -88,23 +88,9 @@ This gives us the benefits of discriminated unions while maintaining compatibili
 import type { MeldNode, TextNode } from '@core/syntax/types/index';
 
 // NEW
-import type { 
-  TextNode, 
-  DirectiveNode, 
-  CodeFenceNode,
-  CommentNode,
-  VariableReferenceNode,
-  // ... other node types
-} from '@core/ast/types';
+import type { MeldNode } from '@core/ast/types';
 
-// Define the union type
-type ASTNode = 
-  | TextNode 
-  | DirectiveNode 
-  | CodeFenceNode
-  | CommentNode
-  | VariableReferenceNode
-  // ... include all node types
+// MeldNode is now the discriminated union of all node types
 ```
 
 ### 2. Update Interface Definitions
@@ -121,8 +107,8 @@ interface StateNode {
 
 // NEW
 interface StateNode {
-  nodes: ASTNode[];
-  transformedNodes?: ASTNode[];
+  nodes: MeldNode[];
+  transformedNodes?: MeldNode[];
   // ... other properties
 }
 ```
@@ -141,8 +127,8 @@ interface IStateService {
 
 // NEW
 interface IStateService {
-  addNode(node: ASTNode): Promise<void>;
-  transformNode(index: number, replacement: ASTNode | ASTNode[] | undefined): Promise<void>;
+  addNode(node: MeldNode): Promise<void>;
+  transformNode(index: number, replacement: MeldNode | MeldNode[] | undefined): Promise<void>;
   // ... other methods
 }
 ```
@@ -181,7 +167,7 @@ The state service likely doesn't need many type guards since it treats nodes gen
 
 ```typescript
 // If needed, use discriminated union pattern
-function isTextNode(node: ASTNode): node is TextNode {
+function isTextNode(node: MeldNode): node is TextNode {
   return node.type === 'Text';
 }
 
@@ -258,7 +244,50 @@ Total: 4-6 days (reduced from 1-2 weeks)
 |-----|-------------|-----------|-------|
 | 1 | Update type imports | 95 | Straightforward path updates |
 | 2 | Update interface definitions | 95 | Interfaces are small and easy to modify |
-| 3 | Update method signatures | 88 | Many services depend on these signatures; a full list of affected methods would help |
-| 4 | Update appendContent method | 85 | Text node shape in new AST not fully defined; finalized TextNode interface needed |
+| 3 | Update method signatures | 88 | Many services depend on these signatures; see `STATE-AFFECTED-METHODS.md` for a complete inventory |
+| 4 | Update appendContent method | 85 | Text node shape in new AST not fully defined; proposed `TextNode` interface added below |
 | 5 | Review type guards | 95 | Likely minimal changes |
 | 6 | Verify node cloning | 95 | Existing logic should remain valid |
+
+### Proposed TextNode Interface
+
+```typescript
+export interface TextNode extends MeldNode {
+  type: 'Text';
+  content: string;
+  formattingMetadata?: {
+    isFromDirective?: boolean;
+    originalNodeType?: string;
+    preserveFormatting?: boolean;
+    isOutputLiteral?: boolean;
+    contextType?: 'inline' | 'block';
+  };
+}
+```
+<<<<<<< ours
+=======
+
+### Clarifying the Purpose of `TextNode`
+
+`TextNode` represents literal text content within a Meld document. It is used for
+plain text that appears between directives and for text segments inside
+interpolatable values (for example the pieces of a `@path` or `@data` directive).
+It is **not** the same as the value stored by the `@text` directive. The `@text`
+directive creates a variable whose content is tracked separately in state, while
+`TextNode` instances simply carry raw text through the pipeline.
+
+### Possible Renaming to `ContentNode`
+
+Renaming `TextNode` to `ContentNode` is technically feasible but would require:
+
+- Updating the Peggy grammar outputs and all type definitions in
+  `core/syntax/types` and `core/ast/types`.
+- Adjusting imports and switch statements in services such as the parser,
+  interpreter and state service (see `STATE-AFFECTED-METHODS.md` for the full
+  list of impacted signatures).
+- Updating tests and any code that inspects `node.type === 'Text'`.
+
+The change would be mechanical, but it touches hundreds of references across the
+repo. Functionally nothing else would change—the node still represents plain
+text—but the naming could better convey that it holds generic content.
+>>>>>>> theirs

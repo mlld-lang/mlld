@@ -6,6 +6,8 @@ import { VariableType } from '@core/types/variables';
 export interface SourceLocation {
   start: { line: number; column: number };
   end: { line: number; column: number };
+  /** Optional identifier for the source of this location */
+  source?: string;
 }
 
 // Note: NodeType might need updating later if new node types are introduced in 'values'

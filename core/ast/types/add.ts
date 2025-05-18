@@ -113,6 +113,8 @@ export interface AddPathMeta extends AddMeta {
 
 export interface AddTemplateMeta extends AddMeta {
   isTemplateContent: boolean;
+  hasVariables: boolean;
+  wrapperType: string;
 }
 
 export interface AddSectionMeta extends AddMeta {

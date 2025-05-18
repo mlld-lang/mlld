@@ -21,6 +21,10 @@ export interface ExecRaw {
  */
 export interface ExecMeta {
   parameterCount: number;
+  argumentCount?: number;
+  hasVariables?: boolean;
+  language?: string;
+  isMultiLine?: boolean;
   metadata?: {
     type?: string;
     [key: string]: unknown;
@@ -70,13 +74,7 @@ export interface ExecCommandDirectiveNode extends ExecDirectiveNode {
     metadata?: string;
     command: string;
   };
-  meta: {
-    parameterCount: number;
-    metadata?: {
-      type?: string;
-      [key: string]: unknown;
-    };
-  };
+  meta: ExecMeta;
 }
 
 /**
@@ -98,13 +96,7 @@ export interface ExecCodeDirectiveNode extends ExecDirectiveNode {
     lang: string;
     code: string;
   };
-  meta: {
-    parameterCount: number;
-    metadata?: {
-      type?: string;
-      [key: string]: unknown;
-    };
-  };
+  meta: ExecMeta;
 }
 
 /**

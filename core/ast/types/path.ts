@@ -4,7 +4,7 @@
 import { DirectiveNode, TypedDirectiveNode } from './base';
 import { VariableNodeArray, PathNodeArray } from './values';
 import { PathRaw } from './raw';
-import { PathMeta } from './meta';
+import { PathDirectiveMeta } from './meta';
 
 /**
  * Path directive values structure
@@ -21,7 +21,7 @@ export interface PathValues {
 export interface PathDirectiveNode extends TypedDirectiveNode<'path', 'pathAssignment'> {
   values: PathValues;
   raw: PathRaw;
-  meta: PathMeta;
+  meta: PathDirectiveMeta;
 }
 
 /**

@@ -14,7 +14,10 @@ export interface DirectiveMeta {
  * Path-specific metadata used by multiple directives
  */
 export interface PathMeta {
-  hasVariables: boolean;    // Contains any variables (text or path)
+  hasVariables: boolean;
+  isAbsolute: boolean;
+  hasExtension: boolean;
+  extension: string | null;
 }
 
 /**
@@ -28,7 +31,16 @@ export interface ImportMeta extends DirectiveMeta {
  * Text directive metadata
  */
 export interface TextMeta extends DirectiveMeta {
-  // Currently just the base metadata
+  sourceType?: 'literal' | 'embed' | 'run' | 'directive';
+  directive?: 'run' | 'add';
+  hasVariables?: boolean;
+  run?: {
+    language?: string;
+    isMultiLine?: boolean;
+    isCommandRef?: boolean;
+    commandName?: string;
+  };
+  add?: Record<string, unknown>;
 }
 
 /**
@@ -45,7 +57,7 @@ export interface EmbedMeta extends DirectiveMeta {
 /**
  * Path directive metadata
  */
-export interface PathMeta extends DirectiveMeta {
+export interface PathDirectiveMeta extends DirectiveMeta {
   path: PathMeta; // Path metadata is required for path directives
 }
 
