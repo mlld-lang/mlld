@@ -77,7 +77,7 @@ export function validateTextDirective(node: DirectiveNode): void {
     // No need to validate the value property
   }
   
-  if (directive.source === 'embed' && directive.embed) {
+  if (directive.source === 'add' && directive.embed) {
     // This is a text directive with @add value
     // No need to validate the value property
   }
@@ -99,10 +99,10 @@ export function validateTextDirective(node: DirectiveNode): void {
   // Check if the source is specified
   if (directive.source) {
     // If source is specified, validate it
-    if (directive.source !== 'literal' && directive.source !== 'embed' && 
+    if (directive.source !== 'literal' && directive.source !== 'add' &&
         directive.source !== 'run' && directive.source !== 'call') {
       throw new MeldDirectiveError(
-        'Text directive source must be one of: literal, embed, run, call',
+        'Text directive source must be one of: literal, add, run, call',
         'text',
         {
           location: convertLocation(node.location?.start),
@@ -142,14 +142,14 @@ export function validateTextDirective(node: DirectiveNode): void {
       }
     }
     // Validate @add source value format
-    else if (directive.source === 'embed') {
+    else if (directive.source === 'add') {
         // Value might not be present if source is correctly parsed into directive.embed
         // If value *is* present, validate it. If not, assume parser handled it (or handler will error).
         if (directive.value && typeof directive.value === 'string') {
             const valueAfterEmbed = directive.value.substring('@add'.length).trim();
             if (!(valueAfterEmbed.startsWith('[') && valueAfterEmbed.endsWith(']'))) {
                 throw new MeldDirectiveError(
-                  'Invalid @add format in text directive value when source=\"embed\". Must be "@add [path]"', // Adjusted message
+                  'Invalid @add format in text directive value when source=\"add\". Must be "@add [path]"', // Adjusted message
                   'text',
                   {
                     location: convertLocation(node.location?.start),
@@ -160,7 +160,7 @@ export function validateTextDirective(node: DirectiveNode): void {
             }
         } else if (!directive.embed) { // If value is missing, ensure embed structure exists
              throw new MeldDirectiveError(
-                'Text directive with source=\"embed\" requires either a value starting with @add or an embed property',
+                'Text directive with source=\"add\" requires either a value starting with @add or an embed property',
                 'text',
                 {
                   location: convertLocation(node.location?.start),

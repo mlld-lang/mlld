@@ -30,7 +30,7 @@ import {
   createPathVariable,
   createCommandVariable
 } from '@core/types/variables';
-import { type ICommandDefinition } from '@core/types/define';
+import { type ICommandDefinition } from '@core/types/exec';
 import type { IPathService } from '@services/fs/PathService/IPathService';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient';
 import { directiveLogger as logger } from '@core/utils/logger';

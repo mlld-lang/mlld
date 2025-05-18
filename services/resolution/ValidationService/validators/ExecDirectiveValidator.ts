@@ -20,21 +20,21 @@ export async function validateExecDirective(node: DirectiveNode, context: Valida
     throw new MeldDirectiveError('Exec directive requires a non-empty "name" property', 'exec', { location: node.location?.start });
   }
 
-  // 2. Validate 'field' property (Optional, specific values enforced by grammar: DefineField rule)
-  // No explicit validation needed here; trust the grammar's DefineField rule.
+  // 2. Validate 'field' property (Optional, specific values enforced by grammar: ExecField rule)
+  // No explicit validation needed here; trust the grammar's ExecField rule.
 
-  // 3. Validate 'parameters' property (Optional, enforced by grammar: DefineParams rule)
-  // No explicit validation needed here; trust the grammar's DefineParams rule.
+  // 3. Validate 'parameters' property (Optional, enforced by grammar: ExecParams rule)
+  // No explicit validation needed here; trust the grammar's ExecParams rule.
 
   // 4. Validate presence of EITHER 'command' (from @run) OR 'value' (from literal string)
-  // The grammar's DefineValue rule ensures one or the other is present.
+  // The grammar's ExecValue rule ensures one or the other is present.
   if (directive.command === undefined && directive.value === undefined) {
     // This case should ideally not happen if the grammar is correct.
-    throw new MeldDirectiveError('Internal Grammar Error: Define directive lacks required "command" or "value" property after parsing.', 'define', { location: node.location?.start });
+    throw new MeldDirectiveError('Internal Grammar Error: Exec directive lacks required "command" or "value" property after parsing.', 'exec', { location: node.location?.start });
   }
   if (directive.command !== undefined && directive.value !== undefined) {
     // This case should also ideally not happen if the grammar is correct.
-     throw new MeldDirectiveError('Internal Grammar Error: Define directive has both "command" and "value" properties after parsing.', 'define', { location: node.location?.start });
+     throw new MeldDirectiveError('Internal Grammar Error: Exec directive has both "command" and "value" properties after parsing.', 'exec', { location: node.location?.start });
   }
 
   // 5. Validate structure of 'command' or 'value' (Optional, mostly handled by grammar)

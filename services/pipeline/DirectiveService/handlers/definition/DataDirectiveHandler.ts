@@ -41,7 +41,7 @@ import { MeldResolutionError, FieldAccessError, PathValidationError, MeldError }
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
 import type { DirectiveProcessingContext } from '@core/types/index';
 // Import command definition types and type guard
-import { ICommandDefinition, isBasicCommand } from '@core/types/define'; 
+import { ICommandDefinition, isBasicCommand } from '@core/types/exec';
 // <<< Restore missing imports for path types >>>
 import { MeldPath, PathContentType, IFilesystemPathState, IUrlPathState } from '@core/types'; 
 import type { VariableDefinition } from '@core/types/variables'; // Use relative path
@@ -64,7 +64,7 @@ import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/hand
 // Based on docs/dev/AST.md
 /* // <<< REMOVE LOCAL INTERFACES >>>
 interface EmbedRHSStructure {
-    subtype: 'embedPath' | 'embedVariable' | 'embedTemplate';
+    subtype: 'addPath' | 'addVariable' | 'addTemplate';
     path?: AstStructuredPath;
     content?: InterpolatableValue;
     section?: string;
@@ -72,7 +72,7 @@ interface EmbedRHSStructure {
 }
 
 interface RunRHSStructure {
-    subtype: 'runCommand' | 'runCode' | 'runCodeParams' | 'runDefined';
+    subtype: 'runCommand' | 'runCode' | 'runCodeParams' | 'runExec';
     command?: InterpolatableValue | { name: string, args: any[], raw: string };
     language?: string;
     isMultiLine?: boolean;
@@ -179,10 +179,10 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           
           let resolvedCommandString: string;
 
-          if (runSubtype === 'runDefined') {
+          if (runSubtype === 'runExec') {
              const definedCommand = commandInput as { name: string };
              if (typeof definedCommand !== 'object' || !definedCommand.name) {
-                 throw new DirectiveError('Invalid command input structure for runDefined subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+                 throw new DirectiveError('Invalid command input structure for runExec subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
              }
              const cmdVar = state.getVariable(definedCommand.name, VariableType.COMMAND);
              if (cmdVar && isCommandVariable(cmdVar) && isBasicCommand(cmdVar.value)) { 
@@ -220,12 +220,12 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           const message = code === DirectiveErrorCode.RESOLUTION_FAILED ? 'Failed to resolve command for @data directive' : `Failed to execute command for @data directive: ${error instanceof Error ? error.message : 'Unknown'}`;
           throw new DirectiveError(message, this.kind, code, { ...baseErrorDetails, cause: error instanceof Error ? error : undefined });
         }
-      } else if (source === 'embed' && embed) { 
+      } else if (source === 'add' && embed) {
          try {
           const embedSubtype = embed.subtype;
           let fileContent: string;
 
-          if (embedSubtype === 'embedPath') {
+          if (embedSubtype === 'addPath') {
             const pathService = this.pathService;
             if (!pathService) {
               throw new DirectiveError('Path service is unavailable for @add processing', this.kind, DirectiveErrorCode.EXECUTION_FAILED, baseErrorDetails);
@@ -242,7 +242,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
             }
 
             fileContent = await fsService.readFile(resolvedPath);
-          } else if (embedSubtype === 'embedVariable') {
+          } else if (embedSubtype === 'addVariable') {
             const varName = embed.variable?.name;
             if (!varName) {
               throw new DirectiveError('Missing variable name in @add source', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
@@ -284,7 +284,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           throw new DirectiveError(message, this.kind, code, { ...baseErrorDetails, cause: error instanceof Error ? error : undefined });
         }
       } else {
-         const missingStructure = source === 'embed' ? 'embed' : source === 'run' ? 'run' : 'value';
+         const missingStructure = source === 'add' ? 'add' : source === 'run' ? 'run' : 'value';
          throw new DirectiveError(
               `Invalid @data directive: source is '${source}' but corresponding '${missingStructure}' property is missing or invalid.`,
               this.kind, 

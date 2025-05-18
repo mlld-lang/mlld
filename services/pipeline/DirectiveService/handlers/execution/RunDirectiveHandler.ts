@@ -26,8 +26,8 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 import type { DirectiveProcessingContext, ResolutionContext } from '@core/types';
-import type { ICommandDefinition, IBasicCommandDefinition } from '@core/types/define';
-import { isBasicCommand } from '@core/types/define';
+import type { ICommandDefinition, IBasicCommandDefinition } from '@core/types/exec';
+import { isBasicCommand } from '@core/types/exec';
 import type { SourceLocation } from '@core/types/common';
 import { 
   type VariableMetadata, 
@@ -109,9 +109,9 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           if (subtype === 'runCommand') {
             // Validator ensures commandInput is InterpolatableValue[] for runCommand
             commandToExecute = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
-          } else if (subtype === 'runDefined') {
+          } else if (subtype === 'runExec') {
              const definedCommand = commandInput as { name: string; args?: InterpolatableValue[] };
-             // Validator ensures structure { name: string, args?: ... } for runDefined
+             // Validator ensures structure { name: string, args?: ... } for runExec
              const cmdVar = state.getVariable(definedCommand.name, VariableType.COMMAND) as CommandVariable | undefined;
              if (!cmdVar?.value || !isBasicCommand(cmdVar.value)) {
                  const errorMsg = cmdVar ? `Cannot run non-basic command '${definedCommand.name}'` : `Command definition '${definedCommand.name}' not found`;

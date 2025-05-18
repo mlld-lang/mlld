@@ -7,7 +7,7 @@ import { ErrorSeverity } from '@core/errors/MeldError';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService';
 import { VariableResolutionError } from '@core/errors/VariableResolutionError';
 import { isBasicCommand } from '@core/types/index';
-import type { IBasicCommandDefinition, ICommandDefinition, ICommandParameterMetadata } from '@core/types/define';
+import type { IBasicCommandDefinition, ICommandDefinition, ICommandParameterMetadata } from '@core/types/exec';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { logger } from '@core/utils/logger';
 

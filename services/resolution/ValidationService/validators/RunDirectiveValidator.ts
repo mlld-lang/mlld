@@ -3,7 +3,7 @@ import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 
 // Define valid subtypes for @run directive
-const VALID_RUN_SUBTYPES = ['runDefined', 'runCommand', 'runCode', 'runCodeParams'] as const;
+const VALID_RUN_SUBTYPES = ['runExec', 'runCommand', 'runCode', 'runCodeParams'] as const;
 type RunDirectiveSubtype = typeof VALID_RUN_SUBTYPES[number];
 
 /**
@@ -38,6 +38,6 @@ export async function validateRunDirective(node: DirectiveNode): Promise<void> {
   }
 
   // Note: We trust the grammar to set the correct structure for 'directive.command' 
-  // based on the 'subtype'. e.g., object for 'runDefined', array for others.
+  // based on the 'subtype'. e.g., object for 'runExec', array for others.
   // Further structural validation here would be redundant with grammar rules.
 }

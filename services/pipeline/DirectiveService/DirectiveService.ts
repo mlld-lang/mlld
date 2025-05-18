@@ -40,8 +40,8 @@ import {
     createCommandVariable 
 } from '@core/types/variables';
 import { MeldVariable } from '@core/types/variables';
-import type { ICommandDefinition } from '@core/types/define';
-import { isBasicCommand } from '@core/types/define';
+import type { ICommandDefinition } from '@core/types/exec';
+import { isBasicCommand } from '@core/types/exec';
 
 // Import all handlers
 // import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler';

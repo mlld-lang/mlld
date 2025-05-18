@@ -10,7 +10,7 @@ import type { IStateService } from './IStateService';
 
 /**
  * Command definition with optional configuration
- * @deprecated This will be replaced by ICommandDefinition from @core/types/define.js
+ * @deprecated This will be replaced by ICommandDefinition from @core/types/exec.js
  */
 export interface CommandDefinition {
   readonly command: string;

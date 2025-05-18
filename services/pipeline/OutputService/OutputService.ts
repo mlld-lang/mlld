@@ -1163,7 +1163,7 @@ export class OutputService implements IOutputService {
           directiveOptions: directive.directive
         });
 
-        if (['text', 'data', 'path', 'import', 'define'].includes(kind)) {
+        if (['text', 'data', 'path', 'import', 'exec'].includes(kind)) {
           return '';
         }
 

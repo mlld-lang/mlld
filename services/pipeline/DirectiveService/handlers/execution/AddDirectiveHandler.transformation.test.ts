@@ -208,7 +208,7 @@ describe('AddDirectiveHandler Transformation', () => {
         'test.md',
         undefined,
         createLocation(1,1),
-        'embedPath'
+        'addPath'
       );
       const mockProcessingContext = createMockProcessingContext(node);
       const result = await handler.handle(mockProcessingContext as DirectiveProcessingContext);
@@ -223,7 +223,7 @@ describe('AddDirectiveHandler Transformation', () => {
         'sections.md',
         'Section 1',
         createLocation(1,1),
-        'embedPath'
+        'addPath'
       );
       resolutionServiceMock.extractSection.mockResolvedValueOnce('Content 1');
       const mockProcessingContext = createMockProcessingContext(node);
@@ -244,7 +244,7 @@ describe('AddDirectiveHandler Transformation', () => {
         'heading.md',
         undefined,
         createLocation(1,1),
-        'embedPath',
+        'addPath',
         { headingLevel: 2 }
       );
       const originalContent = 'Content for H2';
@@ -262,7 +262,7 @@ describe('AddDirectiveHandler Transformation', () => {
         'underheader.md',
         undefined,
         createLocation(1,1),
-        'embedPath',
+        'addPath',
         { underHeader: 'Target Header' }
       );
       const originalContent = 'Content under header';
@@ -278,7 +278,7 @@ describe('AddDirectiveHandler Transformation', () => {
         '{{filePath}}',
         undefined,
         createLocation(1,1),
-        'embedPath'
+        'addPath'
       );
       node.directive.path = { raw: '{{filePath}}' }; 
       
@@ -306,7 +306,7 @@ describe('AddDirectiveHandler Transformation', () => {
         '{{userData.user.profile.bio}}',
         undefined,
         createLocation(1, 1),
-        'embedVariable'
+        'addVariable'
       );
       node.directive.path = { raw: '{{userData.user.profile.bio}}' };
       const mockProcessingContext = createMockProcessingContext(node);
@@ -326,7 +326,7 @@ describe('AddDirectiveHandler Transformation', () => {
         '{{role.architect}}',
         undefined,
         createLocation(1, 1),
-        'embedVariable'
+        'addVariable'
       );
       node.directive.path = { raw: '{{role.architect}}' }; 
       const mockProcessingContext = createMockProcessingContext(node);
@@ -346,7 +346,7 @@ describe('AddDirectiveHandler Transformation', () => {
         'nonexistent.md',
         undefined,
         createLocation(1,1),
-        'embedPath'
+        'addPath'
       );
       node.directive.path = { raw: 'nonexistent.md' };
       const mockProcessingContext = createMockProcessingContext(node);
@@ -368,7 +368,7 @@ describe('AddDirectiveHandler Transformation', () => {
         '{{vars.myPath.nested}}',
         undefined,
         createLocation(1,1),
-        'embedVariable'
+        'addVariable'
       );
       node.directive.path = { raw: '{{vars.myPath.nested}}' }; 
       const mockProcessingContext = createMockProcessingContext(node);
@@ -394,7 +394,7 @@ describe('AddDirectiveHandler Transformation', () => {
         '{{contact.email}}',
         undefined,
         createLocation(1,1),
-        'embedVariable'
+        'addVariable'
       );
       node.directive.path = { raw: '{{contact.email}}' };
       const mockProcessingContext = createMockProcessingContext(node);

@@ -237,7 +237,7 @@ describe('RunDirectiveHandler', () => {
 
     it('should properly expand command references with $', async () => {
        const commandRefObject = { name: 'greet', args: [], raw: '$greet' };
-       const node = createRunDirective(commandRefObject, createLocation(), 'runDefined');
+      const node = createRunDirective(commandRefObject, createLocation(), 'runExec');
        const processingContext = createMockProcessingContext(node);
        
        mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'Hello there!', stderr: '' });
@@ -430,9 +430,9 @@ describe('RunDirectiveHandler', () => {
       });
     });
 
-    it('should handle undefined command references for runDefined', async () => {
+    it('should handle undefined command references for runExec', async () => {
       const commandRefObject = { name: 'undefinedCommand', args: [], raw: '$undefinedCommand' };
-      const node = createRunDirective(commandRefObject, createLocation(), 'runDefined');
+      const node = createRunDirective(commandRefObject, createLocation(), 'runExec');
       const processingContext = createMockProcessingContext(node);
 
       mockStateService.getVariable.mockImplementation((name: string, type?: VariableType) => {

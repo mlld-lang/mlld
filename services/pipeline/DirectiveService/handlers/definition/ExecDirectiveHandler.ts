@@ -138,7 +138,7 @@ export class ExecDirectiveHandler implements IDirectiveHandler {
 
         // Resolve the command content string first
         try {
-            if (runSubtype === 'runDefined') {
+            if (runSubtype === 'runExec') {
                  const definedCommand = commandInput as { name: string }; // Assume structure is valid
                  const cmdVar = state.getVariable(definedCommand.name);
                  // Ensure it's a COMMAND type and then check if it's a basic command
@@ -149,7 +149,7 @@ export class ExecDirectiveHandler implements IDirectiveHandler {
                     throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { ...baseErrorDetails });
                  }
             } else {
-                // If not 'runDefined', grammar guarantees it's an InterpolatableValueArray for other run subtypes
+                // If not 'runExec', grammar guarantees it's an InterpolatableValueArray for other run subtypes
                 resolvedCommandContent = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
             }
         } catch (error) {
@@ -160,7 +160,7 @@ export class ExecDirectiveHandler implements IDirectiveHandler {
         }
 
         // Now create the definition based on the @run subtype
-        if (runSubtype === 'runCommand' || runSubtype === 'runDefined') {
+        if (runSubtype === 'runCommand' || runSubtype === 'runExec') {
           const commandDefinition: IBasicCommandDefinition = {
             type: 'basic',
             name: nameMetadata.name,
@@ -191,7 +191,7 @@ export class ExecDirectiveHandler implements IDirectiveHandler {
           };
 
         } else {
-            // If it's not a basic command or runDefined, it must be a language command
+            // If it's not a basic command or runExec, it must be a language command
             // Grammar guarantees runSubtype is valid ('runCode' or 'runCodeParams')
             const commandDefinition: ILanguageCommandDefinition = {
               type: 'language',

@@ -20,21 +20,21 @@ import type { VariableMetadata, VariableDefinition } from '@core/types/variables
 import { VariableType, VariableOrigin, createTextVariable } from '@core/types/variables';
 import type { SourceLocation } from '@core/types/common';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards'; 
-import { ICommandDefinition, isBasicCommand } from '@core/types/define'; 
+import { ICommandDefinition, isBasicCommand } from '@core/types/exec';
 import type { DirectiveProcessingContext } from '@core/types/index';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler'; 
 import { DirectiveKind } from '@core/syntax/types/directives'; 
 import { isCommandVariable } from '@core/types/guards';
 
 interface EmbedRHSStructure {
-    subtype: 'embedPath' | 'embedVariable' | 'embedTemplate';
+    subtype: 'addPath' | 'addVariable' | 'addTemplate';
     path?: StructuredPath; 
     content?: InterpolatableValue;
     section?: string;
 }
 
 interface RunRHSStructure {
-    subtype: 'runCommand' | 'runCode' | 'runCodeParams' | 'runDefined';
+    subtype: 'runCommand' | 'runCode' | 'runCodeParams' | 'runExec';
     command?: InterpolatableValue | { name: string, args: any[], raw: string };
     language?: string;
     isMultiLine?: boolean;
@@ -166,9 +166,9 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           
           let resolvedCommandString: string;
 
-          if (runSubtype === 'runDefined') {
+          if (runSubtype === 'runExec') {
              if (typeof commandInput !== 'object' || !('name' in commandInput)) {
-                 throw new DirectiveError('Invalid command input structure for runDefined subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
+                 throw new DirectiveError('Invalid command input structure for runExec subtype', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
              }
              const cmdVar = await state.getVariable(commandInput.name, VariableType.COMMAND);
              if (cmdVar && isCommandVariable(cmdVar) && cmdVar.value && isBasicCommand(cmdVar.value)) {
@@ -203,16 +203,16 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           }
           throw new DirectiveError('Unknown error during @run execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { ...errorDetailsContext, cause: error instanceof Error ? error : undefined });
         }
-      } else if (source === 'embed' && embed) {
+      } else if (source === 'add' && embed) {
         const embedDetails = embed as EmbedRHSStructure;
         try {
           const embedSubtype = embedDetails.subtype;
           let fileContent: string;
 
-          if (embedSubtype === 'embedPath') {
+          if (embedSubtype === 'addPath') {
               const embedPathObject = embedDetails.path;
               if (!embedPathObject) {
-                 throw new DirectiveError('Missing path for @add source (subtype: embedPath)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
+                 throw new DirectiveError('Missing path for @add source (subtype: addPath)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
               }
               const valueToResolve = embedPathObject.interpolatedValue ?? embedPathObject.raw;
               const resolvedEmbedPathString = await this.resolutionService.resolveInContext(valueToResolve, resolutionContext);
@@ -226,21 +226,21 @@ export class TextDirectiveHandler implements IDirectiveHandler {
               }
               fileContent = await this.fileSystemService.readFile(validatedMeldPath.validatedPath);
 
-          } else if (embedSubtype === 'embedVariable') {
+          } else if (embedSubtype === 'addVariable') {
               const embedPathObject = embedDetails.path; 
               if (!embedPathObject) {
-                 throw new DirectiveError('Missing variable reference for @add source (subtype: embedVariable)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
+                 throw new DirectiveError('Missing variable reference for @add source (subtype: addVariable)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
               }
               fileContent = await this.resolutionService.resolveInContext(embedPathObject.raw, resolutionContext);
 
-          } else if (embedSubtype === 'embedTemplate') {
+          } else if (embedSubtype === 'addTemplate') {
               const templateContent = embedDetails.content;
               if (!templateContent || !isInterpolatableValueArray(templateContent)) { 
-                  throw new DirectiveError('Missing or invalid content for @add source (subtype: embedTemplate)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
+                  throw new DirectiveError('Missing or invalid content for @add source (subtype: addTemplate)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
               }
               fileContent = await this.resolutionService.resolveNodes(templateContent, resolutionContext);
           } else {
-             throw new DirectiveError(`Unsupported embed subtype: ${embedSubtype}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
+             throw new DirectiveError(`Unsupported add subtype: ${embedSubtype}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
           }
           
           if (embedDetails.section) {
