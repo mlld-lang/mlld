@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import type { DirectiveNode, DirectiveContext, TextNode, InterpolatableValue } from '@core/syntax/types';
+import type { DirectiveNode, TextNode, InterpolatableValue, RunDirectiveNode } from '@core/ast/types';
 import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IStateService } from '@services/state/StateService/IStateService';
@@ -8,8 +8,8 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import { createRunDirective, createLocation, createTextNode, createVariableReferenceNode } from '@tests/utils/testFactories';
 import { mock, mockDeep } from 'vitest-mock-extended';
 import type { DirectiveProcessingContext, FormattingContext, ResolutionContext } from '@core/types/index';
-import { TextVariable, VariableType, MeldVariable } from '@core/types/variables';
-import { DirectiveResult } from '@services/pipeline/DirectiveService/types';
+import { TextVariable, VariableType, MeldVariable, VariableDefinition } from '@core/types/variables';
+import { DirectiveResult } from '@core/directives/DirectiveHandler';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { container, DependencyContainer } from 'tsyringe';

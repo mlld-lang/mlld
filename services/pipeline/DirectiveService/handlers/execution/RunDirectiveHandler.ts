@@ -3,11 +3,10 @@ import type {
   MeldNode, 
   TextNode, 
   VariableReferenceNode,
-  IDirectiveData,
-  DirectiveData
-} from '@core/syntax/types';
-import type { InterpolatableValue } from '@core/syntax/types/nodes';
-import { NodeType } from '@core/syntax/types/nodes';
+  RunDirectiveNode
+} from '@core/ast/types';
+import type { InterpolatableValue } from '@core/ast/types/nodes';
+import { NodeType } from '@core/ast/types/nodes';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
@@ -50,33 +49,33 @@ import type { JsonValue } from '@core/types/common';
   description: 'Handler for @run directives'
 })
 export class RunDirectiveHandler implements IDirectiveHandler {
-  readonly kind = 'run';
+  kind = 'run' as const;
 
-  constructor(
-    @inject('IResolutionService') private resolutionService: IResolutionService,
-    @inject('IFileSystemService') private fileSystemService: IFileSystemService
-  ) {}
+  protected logger = logger;
+  protected validationService!: IValidationService;
+  protected resolutionService!: IResolutionService;
+  protected stateService!: IStateService;
+  protected fileSystemService!: IFileSystemService;
 
-  private async createTempScriptFile(content: string, language: string): Promise<string> {
-    const filePath = this.getTempFilePath(language);
-    try {
-      await this.fileSystemService.writeFile(filePath as any, content);
-      logger.debug('Created temporary script file', { path: filePath, language });
-      return filePath;
-    } catch (error) {
-      logger.error('Failed to create temporary script file', { path: filePath, error });
-      throw new DirectiveError(
-        `Failed to create temporary script file: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        this.kind,
-        DirectiveErrorCode.EXECUTION_FAILED,
-        { cause: error instanceof Error ? error : undefined }
-      );
+  initialize(dependencies: {
+    validationService: IValidationService;
+    resolutionService: IResolutionService;
+    stateService: IStateService;
+    fileSystemService: IFileSystemService;
+    logger?: typeof logger;
+  }): void {
+    this.validationService = dependencies.validationService;
+    this.resolutionService = dependencies.resolutionService;
+    this.stateService = dependencies.stateService;
+    this.fileSystemService = dependencies.fileSystemService;
+    if (dependencies.logger) {
+      this.logger = dependencies.logger;
     }
   }
 
   async handle(context: DirectiveProcessingContext): Promise<DirectiveResult> {
     const state: IStateService = context.state;
-    const node = context.directiveNode as DirectiveNode;
+    const node = context.directiveNode as RunDirectiveNode;
     const resolutionContext = context.resolutionContext;
     const currentFilePath = state.getCurrentFilePath();
     const baseErrorDetails = { 
@@ -87,75 +86,116 @@ export class RunDirectiveHandler implements IDirectiveHandler {
     let tempFilePath: string | undefined;
 
     try {
-      if (!node.directive || node.directive.kind !== 'run') {
+      if (!node || node.kind !== 'run') {
           throw new DirectiveError('Invalid node type provided to RunDirectiveHandler', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
       }
-      const directive = node.directive as IDirectiveData;
-      const { 
-          subtype, 
-          command: commandInput, 
-          language, 
-          parameters: languageParams, 
-          outputVariable = 'stdout', 
-          errorVariable = 'stderr' 
-      } = directive;
-
+      
+      const { subtype, values, raw } = node;
       let commandToExecute: string = ''; // Initialize to satisfy compiler
       let commandArgs: string[] = [];
-      const execOptions = { cwd: context.executionContext?.cwd || this.fileSystemService.getCwd() };
+      const execOptions = { cwd: context.executionContext?.cwd || await this.fileSystemService.getCwd() };
+      
+      // Extract output variables from values  
+      let outputVariable = 'stdout';
+      let errorVariable = 'stderr';
+      
+      if (values.outputVariable && values.outputVariable.length > 0) {
+        const outputVarNode = values.outputVariable[0];
+        outputVariable = outputVarNode.type === 'Text' ? outputVarNode.content : outputVarNode.identifier;
+      }
+      
+      if (values.errorVariable && values.errorVariable.length > 0) {
+        const errorVarNode = values.errorVariable[0];
+        errorVariable = errorVarNode.type === 'Text' ? errorVarNode.content : errorVarNode.identifier;
+      }
 
       // --- Resolution Block --- 
       try {
           if (subtype === 'runCommand') {
-            // Validator ensures commandInput is InterpolatableValue[] for runCommand
-            commandToExecute = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
+            // For runCommand, get command from values
+            if (values.command) {
+              commandToExecute = await this.resolutionService.resolveNodes(values.command, resolutionContext);
+            } else if (raw.command) {
+              commandToExecute = raw.command;
+            }
           } else if (subtype === 'runExec') {
-             const definedCommand = commandInput as { name: string; args?: InterpolatableValue[] };
-             // Validator ensures structure { name: string, args?: ... } for runExec
-             const cmdVar = state.getVariable(definedCommand.name, VariableType.COMMAND) as CommandVariable | undefined;
-             if (!cmdVar?.value || !isBasicCommand(cmdVar.value)) {
-                 const errorMsg = cmdVar ? `Cannot run non-basic command '${definedCommand.name}'` : `Command definition '${definedCommand.name}' not found`;
-                 throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.VARIABLE_NOT_FOUND, baseErrorDetails);
+             // For runExec, resolve the command identifier
+             const identifier = values.identifier?.[0]?.content || raw.identifier;
+             if (!identifier) {
+               throw new DirectiveError('No command identifier provided for runExec', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
              }
-             commandToExecute = cmdVar.value.commandTemplate;
-             if (definedCommand.args) {
-                 // Resolve each argument node individually within the context
-                 const resolvedArgsPromises = definedCommand.args.map(argNode => this.resolutionService.resolveNodes([argNode], resolutionContext)); 
-                 commandArgs = await Promise.all(resolvedArgsPromises);
+             
+             const commandDef = await this.resolutionService.resolveVariableInContext(identifier, resolutionContext);
+             
+             if (!commandDef) {
+               throw new DirectiveError(`Undefined command reference: ${identifier}`, this.kind, DirectiveErrorCode.VARIABLE_NOT_FOUND, baseErrorDetails);
+             }
+             
+             if (typeof commandDef === 'object' && 'command' in commandDef) {
+               commandToExecute = commandDef.command;
+               
+               // Handle parameters if provided
+               if (values.args && values.args.length > 0) {
+                 const resolvedArgs = await Promise.all(
+                   values.args.map(arg => {
+                     if (arg.type === 'Text') {
+                       return this.resolutionService.resolveInContext(arg.content, resolutionContext);
+                     } else if (arg.type === 'VariableReference') {
+                       return this.resolutionService.resolveVariableInContext(arg.identifier, resolutionContext);
+                     }
+                     return '';
+                   })
+                 );
+                 
+                 // Replace parameters in the command
+                 commandDef.parameters?.forEach((param: string, index: number) => {
+                   if (resolvedArgs[index] !== undefined) {
+                     // Replace $1, $2 etc with resolved values
+                     commandToExecute = commandToExecute.replace(new RegExp(`\\$${index + 1}`, 'g'), resolvedArgs[index]);
+                     // Also replace named parameters if they exist
+                     commandToExecute = commandToExecute.replace(new RegExp(`\\$${param}`, 'g'), resolvedArgs[index]);
+                   }
+                 });
+               }
+             } else {
+               throw new DirectiveError(`Invalid command definition for '${identifier}'`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
              }
           } else if (subtype === 'runCode' || subtype === 'runCodeParams') {
-            // Validator ensures commandInput is InterpolatableValue[] for runCode/runCodeParams
-            const scriptContent = await this.resolutionService.resolveNodes(commandInput, resolutionContext);
-            if (language) {
-              tempFilePath = await this.createTempScriptFile(scriptContent, language);
-              commandToExecute = `${language} ${this.escapePath(tempFilePath)}`;
+            // For runCode/runCodeParams, extract language and code
+            const language = values.lang?.[0]?.content || raw.lang || 'bash';
+            const codeContent = values.code?.[0]?.content || raw.code || '';
+            
+            if (!codeContent) {
+              throw new DirectiveError('No code content provided for runCode', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+            }
+            
+            // For some languages like 'echo', 'ls', etc, run directly as commands
+            if (this.isSimpleCommand(language)) {
+              commandToExecute = `${language} ${codeContent}`;
             } else {
-              commandToExecute = scriptContent;
+              // Create temporary file with appropriate extension
+              const extension = this.getLanguageExtension(language);
+              const tempDir = context.executionContext?.tempDir || os.tmpdir();
+              const randomId = randomBytes(8).toString('hex');
+              tempFilePath = path.join(tempDir, `meld_${randomId}${extension}`);
+              
+              // Write code to temp file
+              await this.fileSystemService.writeFile(tempFilePath, codeContent);
+              
+              // Determine command based on language
+              const interpreter = this.getLanguageInterpreter(language);
+              commandToExecute = `${interpreter} ${tempFilePath}`;
             }
-            if (subtype === 'runCodeParams' && languageParams) {
-              try { 
-                  const resolvedParamsPromises = languageParams.map((param: InterpolatableValue) => this.resolutionService.resolveInContext(param, resolutionContext));
-                  const resolvedParams = await Promise.all(resolvedParamsPromises);
-                  commandArgs = resolvedParams.map(p => this.escapeArgument(p, language));
-              } catch (paramError) {
-                   const cause = paramError instanceof Error ? paramError : undefined;
-                   throw new DirectiveError(
-                     `Failed to resolve parameter variable${paramError instanceof Error ? ': ' + paramError.message : ''}`,
-                     this.kind,
-                     DirectiveErrorCode.RESOLUTION_FAILED,
-                     { ...baseErrorDetails, cause }
-                   );
-              }
-            }
-            if (commandArgs.length > 0 && (subtype === 'runCodeParams')) {
-              commandToExecute = `${commandToExecute} ${commandArgs.join(' ')}`;
+            
+            // Handle code parameters if provided
+            if (subtype === 'runCodeParams' && values.args && values.args.length > 0) {
+              const resolvedArgs = await Promise.all(
+                values.args.map(arg => this.resolutionService.resolveNodes([arg], resolutionContext))
+              );
+              commandToExecute += ` ${resolvedArgs.join(' ')}`;
             }
           }
           
-          if (commandArgs.length > 0 && !(subtype === 'runCodeParams')) {
-            // Ensure commandToExecute is assigned before appending
-            commandToExecute += ` ${commandArgs.join(' ')}`;
-          }
       } catch (resolutionError) {
           if (resolutionError instanceof DirectiveError) throw resolutionError;
           const cause = resolutionError instanceof Error ? resolutionError : undefined;
@@ -198,112 +238,122 @@ export class RunDirectiveHandler implements IDirectiveHandler {
 
       // Add stdout variable if we have output
       if (stdout !== undefined) {
-        const metadata: VariableMetadata = {
-          origin: VariableOrigin.DIRECT_DEFINITION,
-          definedAt: sourceLocation,
-          createdAt: Date.now(),
-          modifiedAt: Date.now(),
-          context: {
-            command: commandToExecute,
-            subtype,
-            language
+        variables[outputVariable] = {
+          type: VariableType.TEXT,
+          value: stdout,
+          metadata: {
+            origin: VariableOrigin.DIRECTIVE,
+            directiveKind: 'run',
+            directiveId: node.nodeId,
+            sourceLocation,
+            timestamp: Date.now()
           }
         };
-
-        variables[outputVariable] = createTextVariable(outputVariable, stdout, metadata);
       }
 
       // Add stderr variable if we have error output
       if (stderr !== undefined) {
-        const metadata: VariableMetadata = {
-          origin: VariableOrigin.DIRECT_DEFINITION,
-          definedAt: sourceLocation,
-          createdAt: Date.now(),
-          modifiedAt: Date.now(),
-          context: {
-            command: commandToExecute,
-            subtype,
-            language
+        variables[errorVariable] = {
+          type: VariableType.TEXT,
+          value: stderr,
+          metadata: {
+            origin: VariableOrigin.DIRECTIVE,
+            directiveKind: 'run',
+            directiveId: node.nodeId,
+            sourceLocation,
+            timestamp: Date.now()
           }
         };
-
-        variables[errorVariable] = createTextVariable(errorVariable, stderr, metadata);
       }
 
-      // Handle transformation mode
-      const replacement: MeldNode[] = [];
-      if (context.formattingContext?.isOutputLiteral || state.isTransformationEnabled()) {
-        const content = stderr ? (stdout ? `${stdout}\n${stderr}` : stderr) : stdout;
-        if (content !== undefined) {
-          replacement.push({
-            type: 'Text',
-            content: content,
-            nodeId: randomBytes(16).toString('hex')
-          } as TextNode);
-        }
+      // In transformation mode, return stdout as replacement
+      let replacement = undefined;
+      if (state.isTransformationEnabled() && stdout !== undefined) {
+        replacement = [{
+          type: 'Text' as const,
+          nodeId: `${node.nodeId}-stdout`,
+          content: stdout,
+          location: node.location
+        }];
       }
 
       return {
-        stateChanges: { variables },
+        stateChanges: variables,
         replacement
       };
 
-    } catch (error) {
-      let errorToThrow: DirectiveError;
-
-      if (error instanceof DirectiveError) {
-        errorToThrow = error;
-      } else if (error instanceof Error) {
-        let code = DirectiveErrorCode.EXECUTION_FAILED;
-        if (error instanceof MeldResolutionError) {
-          code = DirectiveErrorCode.RESOLUTION_FAILED;
-        }
-
-        errorToThrow = new DirectiveError(
-          `Run directive error: ${error.message}`,
-          this.kind,
-          code,
-          { ...baseErrorDetails, cause: error }
-        );
-      } else {
-        errorToThrow = new DirectiveError(
-          `Run directive error: ${String(error)}`,
-          this.kind,
-          DirectiveErrorCode.EXECUTION_FAILED,
-          { ...baseErrorDetails, cause: new Error(String(error)) }
-        );
-      }
-
-      throw errorToThrow;
     } finally {
-      // Clean up temp file if one was created
+      // Clean up temp file if created
       if (tempFilePath) {
         try {
-          await this.fileSystemService.deleteFile(tempFilePath);
+          await fs.unlink(tempFilePath);
         } catch (error) {
-          logger.warn('Failed to clean up temporary script file', { path: tempFilePath, error });
+          // Log but don't throw - cleanup errors shouldn't fail the directive
+          this.logger.warn(`Failed to clean up temp file: ${tempFilePath}`, { error });
         }
       }
     }
   }
 
-  private getTempFilePath(language: string): string {
-    const ext = language === 'python' ? '.py' : 
-                language === 'node' ? '.js' :
-                language === 'bash' ? '.sh' : '.tmp';
-    return path.join(os.tmpdir(), `meld-script-${randomBytes(8).toString('hex')}${ext}`);
+  private getLanguageExtension(language: string): string {
+    const extensions: Record<string, string> = {
+      'python': '.py',
+      'javascript': '.js', 
+      'js': '.js',
+      'typescript': '.ts',
+      'ts': '.ts',
+      'bash': '.sh',
+      'sh': '.sh',
+      'ruby': '.rb',
+      'perl': '.pl',
+      'php': '.php',
+      'java': '.java',
+      'c': '.c',
+      'cpp': '.cpp',
+      'csharp': '.cs',
+      'cs': '.cs',
+      'go': '.go',
+      'rust': '.rs',
+      'swift': '.swift',
+      'kotlin': '.kt'
+    };
+    return extensions[language.toLowerCase()] || '.txt';
   }
 
-  private escapePath(filePath: string): string {
-    return filePath.includes(' ') ? `"${filePath}"` : filePath;
+  private getLanguageInterpreter(language: string): string {
+    const interpreters: Record<string, string> = {
+      'python': 'python3',
+      'javascript': 'node',
+      'js': 'node',
+      'typescript': 'ts-node',
+      'ts': 'ts-node',
+      'bash': 'bash',
+      'sh': 'sh',
+      'ruby': 'ruby',
+      'perl': 'perl',
+      'php': 'php',
+      'java': 'java',
+      'c': 'gcc -o /tmp/a.out && /tmp/a.out',
+      'cpp': 'g++ -o /tmp/a.out && /tmp/a.out',
+      'csharp': 'csc',
+      'cs': 'csc',
+      'go': 'go run',
+      'rust': 'rustc',
+      'swift': 'swift',
+      'kotlin': 'kotlinc'
+    };
+    return interpreters[language.toLowerCase()] || language;
   }
 
-  private escapeArgument(arg: JsonValue, language?: string): string {
-    const str = String(arg);
-    // Always quote Python script parameters to ensure proper argument passing
-    if (language === 'python' || str.includes(' ') || str.includes('"')) {
-      return `"${str.replace(/"/g, '\\"')}"`;
-    }
-    return str;
+  private isSimpleCommand(language: string): boolean {
+    // These are common shell commands that should be run directly
+    const simpleCommands = [
+      'echo', 'ls', 'cp', 'mv', 'rm', 'cd', 'pwd', 'mkdir', 'rmdir',
+      'cat', 'grep', 'sed', 'awk', 'find', 'which', 'curl', 'wget',
+      'tar', 'gzip', 'gunzip', 'zip', 'unzip', 'chmod', 'chown',
+      'ps', 'kill', 'df', 'du', 'top', 'date', 'cal', 'whoami',
+      'git', 'npm', 'yarn', 'pip', 'brew', 'apt', 'yum', 'dnf'
+    ];
+    return simpleCommands.includes(language.toLowerCase());
   }
 }
