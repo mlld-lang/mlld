@@ -2,6 +2,10 @@
 
 This file summarizes the structure of the current code relevant to the `TYPE-RESTRUCTURE.md` and `STATE-UPDATES.md` plans.  The information here should help codex locate the files referenced in those plans and understand how the existing types and services are arranged.
 
+## Codebase Docs
+
+Key docs for understanding the codebase are in `dev/docs/ARCHITECTURE.md` and `dev/docs/PIPELINE.md`
+
 ## AST Type Locations
 
 - **`core/ast/types/`** – New grammar based node definitions.  Files include:
