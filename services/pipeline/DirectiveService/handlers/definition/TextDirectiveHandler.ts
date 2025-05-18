@@ -114,44 +114,43 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       });
 
       const source = node.source || 'literal';
-      const values = textValues.values ? textValues.values[0] : undefined;
-      const value = node.raw.value || node.raw.values;
+      const contentNodes = node.values.content;
       const add = node.values.add ? node.values.add[0] : undefined;
       const run = node.values.run ? node.values.run[0] : undefined;
       
-      if (source === 'literal') {
-        logger.debug('TextDirectiveHandler: value/values structure', {
-          value,
-          values,
-          valueType: typeof value,
-          valuesType: typeof values,
-          isArray: Array.isArray(values),
-          valueToString: String(value),
-          valuesToString: String(values)
+      if (source === 'literal' || source === 'template') {
+        logger.debug('TextDirectiveHandler: content structure', {
+          contentNodes,
+          contentNodesType: typeof contentNodes,
+          isArray: Array.isArray(contentNodes),
+          contentNodesLength: Array.isArray(contentNodes) ? contentNodes.length : undefined,
+          raw: node.raw.content
         });
 
-        if (values && isInterpolatableValueArray(values)) {
-          resolvedValue = await this.resolutionService.resolveNodes(values, resolutionContext);
-        } else if (value) {
-          if (typeof value === 'string') {
+        if (contentNodes && isInterpolatableValueArray(contentNodes)) {
+          resolvedValue = await this.resolutionService.resolveNodes(contentNodes, resolutionContext);
+        } else if (node.raw.content) {
+          // Fallback to raw content if needed
+          const rawContent = node.raw.content;
+          if (typeof rawContent === 'string') {
             const textNode: TextNode = {
               type: 'Text',
               nodeId: 'placeholder-id',
-              content: value,
-              location: {
-                start: { line: 1, column: 1 },
-                end: { line: 1, column: value.length + 1 }
-              }
+              content: rawContent,
+              location: node.location
             };
             resolvedValue = await this.resolutionService.resolveNodes([textNode], resolutionContext);
-          } else if (isInterpolatableValueArray(value)) {
-            resolvedValue = await this.resolutionService.resolveNodes(value, resolutionContext);
           } else {
-            resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
+            throw new DirectiveError(
+              'Invalid content structure for @text directive',
+              this.kind,
+              DirectiveErrorCode.VALIDATION_FAILED,
+              errorDetailsContext
+            );
           }
         } else {
           throw new DirectiveError(
-            'Invalid value type for @text source \'literal\'. Expected string or InterpolatableValue array.',
+            'Invalid content type for @text directive. Expected content nodes array.',
             this.kind,
             DirectiveErrorCode.VALIDATION_FAILED,
             errorDetailsContext

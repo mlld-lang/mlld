@@ -1,0 +1,250 @@
+import { readFileSync, readdirSync } from 'fs';
+import { join } from 'path';
+import { parseDocument } from '@core/ast/parser';
+import { ASTNode } from '@core/types/ast-nodes';
+
+interface ASTFixture {
+  name: string;
+  directiveKind: string;
+  directiveSubtype: string;
+  input: string;
+  expected: any;
+  metadata?: {
+    description?: string;
+    expectError?: boolean;
+    skipValidation?: boolean;
+  };
+}
+
+interface ParsedFixture {
+  fixture: ASTFixture;
+  ast: ASTNode;
+}
+
+export class ASTFixtureLoader {
+  private fixturesPath: string;
+  private fixtures: Map<string, ASTFixture> = new Map();
+  private parsedCache: Map<string, ParsedFixture> = new Map();
+
+  constructor(fixturesPath?: string) {
+    this.fixturesPath = fixturesPath || join(process.cwd(), 'core', 'ast', 'fixtures');
+    this.loadFixtures();
+  }
+
+  private loadFixtures(): void {
+    const files = readdirSync(this.fixturesPath).filter(f => f.endsWith('.fixture.json'));
+    
+    for (const file of files) {
+      const fullPath = join(this.fixturesPath, file);
+      const content = readFileSync(fullPath, 'utf-8');
+      const fixture = JSON.parse(content) as ASTFixture;
+      
+      // Store by filename without extension
+      const name = file.replace('.fixture.json', '');
+      this.fixtures.set(name, fixture);
+    }
+  }
+
+  /**
+   * Get a fixture by name (without extension)
+   */
+  getFixture(name: string): ASTFixture | undefined {
+    return this.fixtures.get(name);
+  }
+
+  /**
+   * Get all fixtures of a specific directive kind
+   */
+  getFixturesByKind(directiveKind: string): ASTFixture[] {
+    return Array.from(this.fixtures.values()).filter(
+      fixture => fixture.directiveKind === directiveKind
+    );
+  }
+
+  /**
+   * Get all fixtures of a specific directive kind and subtype
+   */
+  getFixturesByKindAndSubtype(directiveKind: string, directiveSubtype: string): ASTFixture[] {
+    return Array.from(this.fixtures.values()).filter(
+      fixture => 
+        fixture.directiveKind === directiveKind && 
+        fixture.directiveSubtype === directiveSubtype
+    );
+  }
+
+  /**
+   * Get all fixture names
+   */
+  getAllFixtureNames(): string[] {
+    return Array.from(this.fixtures.keys());
+  }
+
+  /**
+   * Parse a fixture and return the AST
+   */
+  async parseFixture(name: string): Promise<ParsedFixture> {
+    // Check cache first
+    if (this.parsedCache.has(name)) {
+      return this.parsedCache.get(name)!;
+    }
+
+    const fixture = this.fixtures.get(name);
+    if (!fixture) {
+      throw new Error(`Fixture not found: ${name}`);
+    }
+
+    try {
+      const ast = await parseDocument(fixture.input);
+      const parsed: ParsedFixture = { fixture, ast };
+      this.parsedCache.set(name, parsed);
+      return parsed;
+    } catch (error) {
+      throw new Error(`Failed to parse fixture ${name}: ${error}`);
+    }
+  }
+
+  /**
+   * Parse multiple fixtures at once
+   */
+  async parseFixtures(names: string[]): Promise<Map<string, ParsedFixture>> {
+    const results = new Map<string, ParsedFixture>();
+    
+    for (const name of names) {
+      const parsed = await this.parseFixture(name);
+      results.set(name, parsed);
+    }
+    
+    return results;
+  }
+
+  /**
+   * Parse all fixtures of a specific kind
+   */
+  async parseFixturesByKind(directiveKind: string): Promise<ParsedFixture[]> {
+    const fixtures = this.getFixturesByKind(directiveKind);
+    const results: ParsedFixture[] = [];
+    
+    for (const fixture of fixtures) {
+      const name = this.getFixtureName(fixture);
+      if (name) {
+        const parsed = await this.parseFixture(name);
+        results.push(parsed);
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Parse all fixtures of a specific kind and subtype
+   */
+  async parseFixturesByKindAndSubtype(
+    directiveKind: string, 
+    directiveSubtype: string
+  ): Promise<ParsedFixture[]> {
+    const fixtures = this.getFixturesByKindAndSubtype(directiveKind, directiveSubtype);
+    const results: ParsedFixture[] = [];
+    
+    for (const fixture of fixtures) {
+      const name = this.getFixtureName(fixture);
+      if (name) {
+        const parsed = await this.parseFixture(name);
+        results.push(parsed);
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Helper to get fixture name from fixture object
+   */
+  private getFixtureName(fixture: ASTFixture): string | undefined {
+    for (const [name, f] of this.fixtures.entries()) {
+      if (f === fixture) {
+        return name;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Clear the parsed cache
+   */
+  clearCache(): void {
+    this.parsedCache.clear();
+  }
+
+  /**
+   * Reload fixtures from disk
+   */
+  reload(): void {
+    this.fixtures.clear();
+    this.parsedCache.clear();
+    this.loadFixtures();
+  }
+
+  /**
+   * Get fixtures that expect errors
+   */
+  getErrorFixtures(): ASTFixture[] {
+    return Array.from(this.fixtures.values()).filter(
+      fixture => fixture.metadata?.expectError === true
+    );
+  }
+
+  /**
+   * Get fixtures that should skip validation
+   */
+  getSkipValidationFixtures(): ASTFixture[] {
+    return Array.from(this.fixtures.values()).filter(
+      fixture => fixture.metadata?.skipValidation === true
+    );
+  }
+
+  /**
+   * Compare parsed AST with expected output
+   */
+  compareWithExpected(parsed: ParsedFixture): boolean {
+    // This is a simplified comparison - you may want to implement
+    // a more sophisticated comparison based on your needs
+    return JSON.stringify(parsed.ast) === JSON.stringify(parsed.fixture.expected);
+  }
+
+  /**
+   * Get fixture stats
+   */
+  getStats(): {
+    total: number;
+    byKind: Record<string, number>;
+    bySubtype: Record<string, number>;
+    errorFixtures: number;
+    skipValidation: number;
+  } {
+    const stats = {
+      total: this.fixtures.size,
+      byKind: {} as Record<string, number>,
+      bySubtype: {} as Record<string, number>,
+      errorFixtures: 0,
+      skipValidation: 0
+    };
+
+    for (const fixture of this.fixtures.values()) {
+      // Count by kind
+      stats.byKind[fixture.directiveKind] = (stats.byKind[fixture.directiveKind] || 0) + 1;
+      
+      // Count by subtype
+      const key = `${fixture.directiveKind}-${fixture.directiveSubtype}`;
+      stats.bySubtype[key] = (stats.bySubtype[key] || 0) + 1;
+      
+      // Count special cases
+      if (fixture.metadata?.expectError) stats.errorFixtures++;
+      if (fixture.metadata?.skipValidation) stats.skipValidation++;
+    }
+
+    return stats;
+  }
+}
+
+// Export singleton instance for convenience
+export const astFixtureLoader = new ASTFixtureLoader();

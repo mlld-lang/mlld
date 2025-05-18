@@ -7,4 +7,5 @@ export * from './FixtureManager';
 export * from './testFactories';
 export * from './ErrorTestUtils';
 export * from './cli/mockArgv';
-export * from './cli/mockConsole'; 
+export * from './cli/mockConsole';
+export * from './ASTFixtureLoader'; 

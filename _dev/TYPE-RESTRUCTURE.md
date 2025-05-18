@@ -221,6 +221,37 @@ This step involves updating multiple services to use the new `MeldNode` union ty
 - Remove redundant type conversions
 - Update return types to match new structure
 
+**IMPORTANT: Test Infrastructure Update Required**
+
+Before continuing with directive handler updates, we need to fix the test infrastructure to ensure our handlers remain correct. Tests are currently creating incorrect node structures, leading to backward handler modifications.
+
+**New Approach: Fixture-Based Testing**
+- See `UPDATE-TESTS-FIXTURES.md` for the comprehensive plan
+- See `MIGRATION-TO-FIXTURES.md` for migration guide
+- Track progress in `services/FIXTURE-MIGRATION-TRACKER.md`
+
+1. **Problem**: Test factories create incorrect AST structures, causing handlers to be modified to accommodate tests (backwards!)
+2. **Solution**: Use AST fixtures from `core/ast/fixtures/` as authoritative source
+3. **Implementation**: 
+   - Created `ASTFixtureLoader` utility
+   - Example migration: `TextDirectiveHandler.fixture-test.ts`
+   - Gradual migration approach
+
+**Migration Order**:
+1. TextDirectiveHandler (example complete)
+2. DataDirectiveHandler
+3. PathDirectiveHandler
+4. ImportDirectiveHandler
+5. AddDirectiveHandler
+6. RunDirectiveHandler
+7. ExecDirectiveHandler
+
+**Benefits**:
+- Ensures handlers work with correct AST structure
+- Tests use real-world examples from fixtures
+- Automatically stays in sync with grammar changes
+- Reduces test maintenance burden
+
 **Comprehensive Issues List (from test analysis):**
 
 1. **AddDirectiveHandler (previously EmbedDirectiveHandler) - 14 failed tests**
@@ -462,7 +493,14 @@ Phase 3 will be considered successful when:
 ### Week 3: Service Updates (Step 5 continued)
 - **Days 1-2**: Complete StateService migration *(Completed)*
 - **Days 2-3**: Update InterpreterService (Step 5b) *(Completed)*
-- **Days 4-5**: Update directive handlers (Step 5c) *(In Progress)*
+- **Days 4-5**: Update directive handlers (Step 5c) *(Paused - Test Infrastructure Update Required)*
+  - Must complete fixture-based testing migration first
+  - See `UPDATE-TESTS-FIXTURES.md` for plan
+
+### Week 3.5: Test Infrastructure Update (New - High Priority)
+- **Days 1-2**: Implement fixture-based testing infrastructure *(Complete)*
+- **Days 3-4**: Migrate handler tests to use fixtures
+- **Days 5**: Resume directive handler updates with correct tests
 
 ### Week 4: Cleanup (Steps 6-8)
 - **Day 1**: Remove legacy types (Step 6)
