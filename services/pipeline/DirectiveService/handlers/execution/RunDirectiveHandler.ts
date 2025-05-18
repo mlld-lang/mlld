@@ -266,15 +266,24 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         };
       }
 
-      // In transformation mode, return stdout as replacement
+      // In transformation mode, return stdout and stderr as replacement
       let replacement = undefined;
-      if (state.isTransformationEnabled() && stdout !== undefined) {
-        replacement = [{
-          type: 'Text' as const,
-          nodeId: `${node.nodeId}-stdout`,
-          content: stdout,
-          location: node.location
-        }];
+      if (state.isTransformationEnabled()) {
+        let content = '';
+        if (stdout !== undefined) {
+          content = stdout;
+        }
+        if (stderr !== undefined && stderr !== '') {
+          content = content ? `${content}\n${stderr}` : stderr;
+        }
+        if (content) {
+          replacement = [{
+            type: 'Text' as const,
+            nodeId: `${node.nodeId}-output`,
+            content,
+            location: node.location
+          }];
+        }
       }
 
       return {

@@ -538,12 +538,18 @@ export function createRunDirective(
 
   // Build values based on subtype
   if (resolvedSubtype === 'runCommand') {
-    // Simple command
-    const commandText = typeof commandInput === 'string' ? commandInput : '';
-    values.command = createTextNodeArray(commandText, location);
-    raw.command = commandText;
-    meta.hasVariables = false;
-    meta.isMultiLine = commandText.includes('\n');
+    // Handle command input
+    if (typeof commandInput === 'string') {
+      values.command = createTextNodeArray(commandInput, location);
+      raw.command = commandInput;
+    } else if (Array.isArray(commandInput)) {
+      values.command = commandInput;
+      raw.command = commandInput.map(node => 
+        node.type === 'Text' ? node.content : `{{${node.identifier}}}`
+      ).join('');
+    }
+    meta.hasVariables = Array.isArray(commandInput) && commandInput.some(node => node.type === 'VariableReference');
+    meta.isMultiLine = raw.command.includes('\n');
   } else if (resolvedSubtype === 'runCode' || resolvedSubtype === 'runCodeParams') {
     // Code with language
     const codeText = typeof commandInput === 'string' ? commandInput : '';

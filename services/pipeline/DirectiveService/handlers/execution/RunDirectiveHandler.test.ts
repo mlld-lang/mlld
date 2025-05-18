@@ -14,12 +14,12 @@ vi.mock('../../../../core/utils/logger', () => ({
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError';
-import type { DirectiveNode, InterpolatableValue, TextNode, VariableReferenceNode } from '@core/syntax/types/nodes';
+import type { DirectiveNode, InterpolatableValue, TextNode, VariableReferenceNode, RunDirectiveNode } from '@core/ast/types';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { runDirectiveExamples } from '@core/syntax';
-import { parse, ParseResult } from '@core/ast';
+import { parse } from '@core/ast';
 import { ErrorSeverity, MeldError } from '@core/errors/MeldError';
 import {
   createStateServiceMock,
@@ -99,7 +99,14 @@ describe('RunDirectiveHandler', () => {
     
     testContainer.register(RunDirectiveHandler, { useClass: RunDirectiveHandler });
     
-    handler = testContainer.resolve(RunDirectiveHandler); 
+    handler = testContainer.resolve(RunDirectiveHandler);
+    handler.initialize({
+      stateService: mockStateService,
+      resolutionService: mockResolutionService,
+      fileSystemService: mockFileSystemService,
+      validationService: mockDeep(),
+      logger: mockDeep()
+    });
 
     mockStateService.getCurrentFilePath.mockReturnValue('/workspace/test.meld');
     mockStateService.setVariable.mockResolvedValue({} as TextVariable);
@@ -168,12 +175,12 @@ describe('RunDirectiveHandler', () => {
         cwd: '/workspace'
       });
       expect(result.stateChanges).toBeDefined();
-      expect(result.stateChanges?.variables).toHaveProperty('stdout');
-      const stdoutDef = result.stateChanges?.variables?.stdout;
+      expect(result.stateChanges).toHaveProperty('stdout');
+      const stdoutDef = result.stateChanges?.stdout;
       expect(stdoutDef?.type).toBe(VariableType.TEXT);
       expect(stdoutDef?.value).toBe('command output');
-      expect(result.stateChanges?.variables).toHaveProperty('stderr');
-      const stderrDef = result.stateChanges?.variables?.stderr;
+      expect(result.stateChanges).toHaveProperty('stderr');
+      const stderrDef = result.stateChanges?.stderr;
       expect(stderrDef?.value).toBe('');
     });
 
