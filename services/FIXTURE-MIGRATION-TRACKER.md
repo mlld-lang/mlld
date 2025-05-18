@@ -20,7 +20,7 @@ Tracking the migration of service tests from manual node creation to fixture-bas
 | TextDirectiveHandler | ✅ Complete | `TextDirectiveHandler.fixture.test.ts` | Handler updated, tests deduplicated, fully migrated |
 | DataDirectiveHandler | ✅ Complete | `DataDirectiveHandler.fixture.test.ts` | Handler updated, adapter layer removed, all tests migrated |
 | PathDirectiveHandler | ✅ Complete | `PathDirectiveHandler.fixture.test.ts` | Handler updated, adapter layer removed, all tests migrated |
-| ImportDirectiveHandler | 🔄 Test-Only | `ImportDirectiveHandler.fixture.test.ts` | Tests use adapter layer - handler needs update |
+| ImportDirectiveHandler | 🔄 In Progress | `ImportDirectiveHandler.fixture.test.ts` | Handler updated, fixture test updated, regular tests partially updated |
 | AddDirectiveHandler | 🟡 Not Started | - | Template/variable/section fixtures |
 | RunDirectiveHandler | 🟡 Not Started | - | Code/command/exec fixtures |
 | ExecDirectiveHandler | 🟡 Not Started | - | Complex handler, may need custom fixtures |
@@ -44,11 +44,11 @@ Tracking the migration of service tests from manual node creation to fixture-bas
 
 ## Progress Metrics
 
-- **Tests Migrated**: 5/7 (71%)
-- **Handlers Updated**: 3/7 (43%) - TextDirectiveHandler, DataDirectiveHandler & PathDirectiveHandler complete
-- **Fixtures Utilized**: ~30/60 (50%)
-- **Tests Converted**: 42/~150 (28%)
-- **Adapter Layers**: 1 (ImportDirectiveHandler needs removal)
+- **Tests Migrated**: 5.5/7 (79%)
+- **Handlers Updated**: 4/7 (57%) - TextDirectiveHandler, DataDirectiveHandler, PathDirectiveHandler complete, ImportDirectiveHandler in progress
+- **Fixtures Utilized**: ~35/60 (58%)
+- **Tests Converted**: 50/~150 (33%)
+- **Adapter Layers**: 0 (All removed)
 
 ## Next Steps
 

@@ -3,14 +3,15 @@ import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import type { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
 import { DirectiveProcessingContext } from '@core/types';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
-import { DirectiveNode, ImportDirectiveData } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/ast/types/base';
+import type { ImportDirectiveNode, ImportAllDirectiveNode, ImportSelectedDirectiveNode } from '@core/ast/types/import';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService';
-import type { MeldNode } from '@core/syntax/types';
-import { NodeType, StructuredPath } from '@core/syntax/types/nodes';
+import type { MeldNode } from '@core/ast/types';
+import { NodeType } from '@core/ast/types';
 import { SourceLocation } from '@core/types/common';
 import { JsonValue } from '@core/types/common';
 import { 
@@ -139,19 +140,51 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // 1. Validate directive structure (delegated to ValidationService)
       await this.validationService.validate(node);
 
-      // The ValidationService ensures the node is a valid import directive and has a path.
-      const directiveData = node.directive as ImportDirectiveData;
-      const pathObject = directiveData.path as StructuredPath; // Cast is safe after validation
-      const rawImports = directiveData.imports;
-      const importsList = this.processImportsList(rawImports);
+      // Type guard to ensure we have an import directive
+      if (node.kind !== 'import') {
+        throw new DirectiveError('Invalid node type provided to ImportDirectiveHandler', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+      }
+      
+      const importNode = node as ImportDirectiveNode;
+      
+      // Get path nodes - the values.path is an array of nodes
+      const pathNodes = importNode.values.path;
+      
+      // Extract raw path string from path nodes
+      let rawPath = '';
+      pathNodes.forEach(pathNode => {
+        if (pathNode.type === 'Text') {
+          rawPath += pathNode.content;
+        } else if (pathNode.type === 'VariableReference') {
+          rawPath += `$${pathNode.identifier}`;
+        } else if (pathNode.type === 'PathSeparator') {
+          rawPath += pathNode.separator || '/';
+        } else if (pathNode.type === 'DotSeparator') {
+          rawPath += pathNode.separator || '.';
+        }
+      });
+      
+      // Process imports based on node subtype
+      let importsList: ImportsList;
+      if (importNode.subtype === 'importAll') {
+        importsList = '*';
+      } else if (importNode.subtype === 'importSelected') {
+        const selectedNode = importNode as ImportSelectedDirectiveNode;
+        importsList = selectedNode.values.imports.map(imp => ({
+          name: imp.identifier,
+          alias: imp.alias
+        }));
+      } else {
+        importsList = undefined;
+      }
 
       // 2. Resolve the path
       try {
-        const resolvedPathString = await this.resolutionService.resolveInContext(pathObject, resolutionContext);
+        const resolvedPathString = await this.resolutionService.resolveNodes(pathNodes, resolutionContext);
         if (!resolvedPathString) {
-          throw new MeldResolutionError(`Path resolved to an empty string for input: ${pathObject.raw}`, { 
+          throw new MeldResolutionError(`Path resolved to an empty string for input: ${rawPath}`, { 
             code: 'E_RESOLVE_EMPTY_PATH', 
-            details: { originalPath: pathObject.raw }
+            details: { originalPath: rawPath }
           });
         }
         resolvedPath = await this.resolutionService.resolvePath(resolvedPathString, resolutionContext);
