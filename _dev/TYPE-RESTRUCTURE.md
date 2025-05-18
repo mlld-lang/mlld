@@ -4,7 +4,16 @@
 
 1. **AST types** properly organized in `core/ast/types/` - These are the grammar-generated node types
 2. **General types** in `core/types/` - These are the broader system types
-3. Additional notes on current file locations are collected in `PLAN-CONTEXT.md`.
+3. Additional notes on current file locations are collected in `PLAN-CONTEXT.md`
+
+## Related Documentation
+
+This plan references several supporting documents:
+- **`PLAN-CONTEXT.md`** - Current code structure and service dependencies
+- **`AST-NODE-DESIGN.md`** - Detailed design for the `BaseMeldNode` interface and `MeldNode` union
+- **`AST-BASE-INTERFACES.md`** - Canonical list of base interfaces and field mappings
+- **`STATE-AFFECTED-METHODS.md`** - Inventory of StateService methods requiring updates
+- **`STATE-UPDATES.md`** - Detailed execution plan for StateService migration (part of Step 5)
 
 ## Updated Goals
 
@@ -97,10 +106,13 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 
 ### Step 1: Analyze Current Type Duplication (1 day)
 
+**Reference:** Use `AST-BASE-INTERFACES.md` for canonical interface list
+
 1. Map all AST types in `core/ast/types/` to their runtime equivalents
-2. Identify overlapping fields and concepts
+2. Identify overlapping fields and concepts  
 3. Document transformation patterns (how AST becomes runtime)
 4. Create unified type specifications
+5. Review `PLAN-CONTEXT.md` for current import patterns
 
 ### Step 2: Create Unified Type Definitions (2-3 days)
 
@@ -124,6 +136,8 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 4. Set up discriminated unions
 
 ### Step 3: Define Unified AST Node Union (1-2 days)
+
+**Reference:** See `AST-NODE-DESIGN.md` for complete design details
 
 1. Create the discriminated union type for all AST nodes:
    ```typescript
@@ -168,20 +182,43 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 
 ### Step 4: Implement ParserService Transformation (2-3 days)
 
+**Reference:** Use helpers from `AST-NODE-DESIGN.md`
+
 1. Create transformation functions in ParserService:
-   - Transform raw AST nodes → unified types
-   - Add initial fields (nodeId, location, raw)
+   - Transform raw AST nodes → `MeldNode[]` union
+   - Validate required fields (type, nodeId, location)
    - Preserve all AST information
-2. Update ParserService interface to return unified types
-3. Update state service to use unified types
-4. Remove old MeldNode imports from services
+2. Update ParserService interface to return `MeldNode[]`
+3. Test with downstream services
+4. Remove old interface imports
 
-### Step 5: Update Service Interfaces (1-2 days)
+### Step 5: Update Service Interfaces (5-7 days)
 
-1. Update service interfaces to use unified types
-2. Remove redundant type conversions
-3. Simplify handler interfaces
-4. Update dependency injection types
+This step involves updating multiple services to use the new `MeldNode` union type. Each service requires careful attention:
+
+#### 5a. StateService Migration (4-6 days)
+**Reference:** See `STATE-UPDATES.md` for detailed execution plan
+
+- Update type imports from `@core/syntax/types` to `@core/ast/types`
+- Replace old `MeldNode` interface with new `MeldNode` union
+- Update interface methods per `STATE-AFFECTED-METHODS.md`
+- Validate discriminated union usage
+- Run comprehensive tests
+
+#### 5b. InterpreterService Update (2-3 days)
+- Update node processing to use discriminated unions
+- Simplify type checking with union discrimination
+- Update handler dispatch logic
+
+#### 5c. Directive Handlers (2-3 days)
+- Update all directive handlers to accept new types
+- Remove redundant type conversions
+- Update return types to match new structure
+
+#### 5d. Other Services (1-2 days)
+- Update remaining services
+- Fix dependency injection types
+- Ensure consistent type usage across services
 
 ### Step 6: Remove Legacy Types (1 day)
 
@@ -349,17 +386,41 @@ Phase 3 will be considered successful when:
 5. Comprehensive documentation explains the structure
 6. Type discovery is intuitive
 
-## Timeline
+## Timeline and Staging
 
 **Confidence: 85/100**
 
-- **Week 1:** Steps 1-3 (Analysis, create union types, ParserService transformation)
-- **Week 2:** Steps 4-5 (Update StateService, update all service interfaces)
-- **Week 3:** Steps 6-8 (Remove legacy types, fix imports, validation)
+### Week 1: Foundation (Steps 1-3)
+- **Day 1**: Analyze current type duplication (Step 1)
+  - Reference: `AST-BASE-INTERFACES.md` for canonical interfaces
+- **Days 2-4**: Create unified type definitions (Step 2)
+  - Define `BaseMeldNode` interface
+  - Create specific node types per `AST-NODE-DESIGN.md`
+- **Days 4-5**: Define `MeldNode` union (Step 3)
+  - Export from `core/ast/types/index.ts`
 
-Total: 2-3 weeks for complete implementation
+### Week 2: Core Implementation (Steps 4-5)
+- **Days 1-3**: Implement ParserService transformation (Step 4)
+  - Transform raw AST → `MeldNode[]`
+- **Days 4-5**: Begin StateService migration (Step 5a)
+  - Execute plan from `STATE-UPDATES.md`
+  - This serves as proof-of-concept for other services
 
-Note: ParserService transformation approach significantly reduces complexity and risk compared to grammar modifications.
+### Week 3: Service Updates (Step 5 continued)
+- **Days 1-2**: Complete StateService migration
+- **Days 2-3**: Update InterpreterService (Step 5b)
+- **Days 4-5**: Update directive handlers (Step 5c)
+
+### Week 4: Cleanup (Steps 6-8)
+- **Day 1**: Remove legacy types (Step 6)
+- **Days 2-4**: Update all imports (Step 7)
+  - ~330 import statements need updating
+  - Consider automation script
+- **Days 4-5**: Documentation and validation (Step 8)
+
+**Total:** 3-4 weeks for complete implementation
+
+**Key Insight:** StateService update (documented in `STATE-UPDATES.md`) serves as the detailed prototype for updating other services. Success here validates the approach for remaining services.
 
 ## Confidence Assessment
 
@@ -380,19 +441,24 @@ Note: ParserService transformation approach significantly reduces complexity and
 
 ## Notes for Implementation
 
+### Key Reference Documents
+1. **`PLAN-CONTEXT.md`** - Use this to understand current code structure and dependencies
+2. **`AST-NODE-DESIGN.md`** - Reference for `BaseMeldNode` interface and `MeldNode` union design
+3. **`AST-BASE-INTERFACES.md`** - Canonical list of all base interfaces and field mappings
+4. **`STATE-AFFECTED-METHODS.md`** - Inventory of StateService methods needing updates
+5. **`STATE-UPDATES.md`** - Detailed plan for StateService migration (prototype for other services)
+
+### Implementation Guidelines
 1. The AST restructuring provides a template for clean organization
 2. Focus on runtime type organization without disturbing AST
-3. Remove the legacy `core/syntax/types` package rather than maintaining backward compatibility
-4. Consider future extensibility in the structure
-5. Document the AST/runtime distinction prominently
-6. Implement discriminated unions for state management as outlined in STATE-UPDATES.md
-7. Export a unified `MeldNode` union type from the AST package for reuse
-8. Ensure the union includes every interface from `core/ast/types` and add new ones as they are created
+3. Remove the legacy `core/syntax/types` package - no backward compatibility
+4. StateService serves as the proof-of-concept for the approach
+5. Use discriminated unions for all node type handling
+6. Export unified `MeldNode` union from `core/ast/types/index.ts`
+7. Ensure the union automatically includes all interfaces from `core/ast/types`
 
-9. Reference `AST-BASE-INTERFACES.md` for the canonical list of base interfaces.
-10. Use `STATE-AFFECTED-METHODS.md` when updating service signatures.
-<<<<<<< ours
-=======
-
-11. See `AST-NODE-DESIGN.md` for the proposed union structure and parser transformation helpers.
->>>>>>> theirs
+### Service Update Order
+1. **StateService first** - Simplest service, validates approach
+2. **InterpreterService second** - Core pipeline service
+3. **Directive handlers** - Update as a group for consistency
+4. **Remaining services** - Update based on dependency order
