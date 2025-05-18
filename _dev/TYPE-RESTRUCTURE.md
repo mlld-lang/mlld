@@ -1,8 +1,6 @@
-# Type Restructuring Phase 3: Updated Plan Post-AST Reorganization
+# Type Restructuring Post-AST Reorganization
 
 ## Context
-
-This document updates the Phase 3 plan following the successful completion of the AST type restructuring. We now have:
 
 1. **AST types** properly organized in `core/ast/types/` - These are the grammar-generated node types
 2. **General types** in `core/types/` - These are the broader system types
@@ -15,6 +13,7 @@ This document updates the Phase 3 plan following the successful completion of th
 - Establish standard patterns for type extensions and lifecycle stages
 - Improve type safety while reducing complexity
 - Create comprehensive documentation for the unified type system
+- Remove outdated types; no backward compatibility or shims
 
 ## Target Directory Structure
 
