@@ -460,9 +460,9 @@ Phase 3 will be considered successful when:
   - This serves as proof-of-concept for other services
 
 ### Week 3: Service Updates (Step 5 continued)
-- **Days 1-2**: Complete StateService migration
-- **Days 2-3**: Update InterpreterService (Step 5b)
-- **Days 4-5**: Update directive handlers (Step 5c)
+- **Days 1-2**: Complete StateService migration *(Completed)*
+- **Days 2-3**: Update InterpreterService (Step 5b) *(Completed)*
+- **Days 4-5**: Update directive handlers (Step 5c) *(In Progress)*
 
 ### Week 4: Cleanup (Steps 6-8)
 - **Day 1**: Remove legacy types (Step 6)
