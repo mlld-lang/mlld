@@ -9,7 +9,7 @@ Tracking the migration of service tests from manual node creation to fixture-bas
 | Handler | Status | Fixture Test File | Notes |
 |---------|--------|------------------|-------|
 | TextDirectiveHandler | ✅ Example Created | `TextDirectiveHandler.fixture-test.ts` | Example migration complete |
-| DataDirectiveHandler | 🟡 Not Started | - | Multiple fixture types available |
+| DataDirectiveHandler | ✅ Complete | `DataDirectiveHandler.fixture.test.ts` | All 11 tests passing with fixtures |
 | PathDirectiveHandler | 🟡 Not Started | - | Path fixtures ready |
 | ImportDirectiveHandler | 🟡 Not Started | - | Import all/selected fixtures |
 | AddDirectiveHandler | 🟡 Not Started | - | Template/variable/section fixtures |
@@ -30,17 +30,19 @@ Tracking the migration of service tests from manual node creation to fixture-bas
 
 ## Progress Metrics
 
-- **Handlers Migrated**: 0/7 (0%)
-- **Fixtures Utilized**: 0/60 (0%)
-- **Tests Converted**: 0/~150 (0%)
+- **Handlers Migrated**: 1/7 (14%)
+- **Fixtures Utilized**: ~8/60 (13%)
+- **Tests Converted**: 11/~150 (7%)
 
 ## Next Steps
 
-1. [ ] Migrate DataDirectiveHandler (simplest after Text)
-2. [ ] Create fixture test alongside existing tests
-3. [ ] Verify all data fixtures are covered
+1. [x] Migrate DataDirectiveHandler (simplest after Text)
+2. [x] Create fixture test alongside existing tests
+3. [x] Verify all data fixtures are covered
 4. [ ] Deprecate old test approach for this handler
-5. [ ] Update progress metrics
+5. [x] Update progress metrics
+
+Next handler to migrate: PathDirectiveHandler
 
 ## Migration Guidelines
 
