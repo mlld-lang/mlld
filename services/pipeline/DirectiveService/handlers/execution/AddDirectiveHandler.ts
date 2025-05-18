@@ -1,4 +1,5 @@
-import type { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types/index';
+import type { DirectiveNode, MeldNode } from '@core/ast/types';  
+import type { TextNode } from '@core/syntax/types/nodes';
 import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
@@ -24,7 +25,6 @@ import { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes';
 import type { VariableReferenceNode } from '@core/ast/ast/astTypes';
 import type { InterpolatableValue } from '@core/syntax/types/nodes';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards';
-import type { AddDirectiveData } from '@core/syntax/types/directives';
 import type { DirectiveProcessingContext } from '@core/types/index';
 import type { SourceLocation } from '@core/types/common';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
@@ -185,11 +185,10 @@ export class AddDirectiveHandler implements IDirectiveHandler {
       context: errorDetailsContext 
     };
 
-    // Assert directive node structure
-    if (!node.directive || node.directive.kind !== 'add') {
+    // Assert directive node structure - using new flattened structure
+    if (!node || node.kind !== 'add') {
         throw new DirectiveError('Invalid node type provided to AddDirectiveHandler', this.kind, DirectiveErrorCode.VALIDATION_FAILED, standardErrorDetails);
     }
-    const directiveData = node.directive as AddDirectiveData;
     this.logger.debug(`Processing add directive`, { location: node.location });
 
     // Validate the directive structure (basic validation)
@@ -201,27 +200,33 @@ export class AddDirectiveHandler implements IDirectiveHandler {
       // <<< Add Logging >>>
       this.logger.debug('>>> ADD HANDLER - Checking Node Structure Before Switch <<<', {
         nodeExists: !!node,
-        directiveExists: !!node?.directive,
-        subtype: node?.directive?.subtype,
+        kind: node?.kind,
+        subtype: node?.subtype,
         locationExists: !!node?.location,
         locationValue: node?.location, 
-        directiveObject: node?.directive 
+        values: node?.values 
       });
 
       // Determine content based on directive subtype
-      switch (directiveData.subtype) {
+      switch (node.subtype) {
         case 'addPath':
-          // process.stdout.write('>>> ADD HANDLER - Handling addPath subtype <<<\n');
-          const addPathObject = directiveData.path as AstStructuredPath;
+          const pathNodes = node.values.path as TextNode[];
+          if (!pathNodes || pathNodes.length === 0) {
+            throw new DirectiveError(
+              'Missing path value for addPath directive',
+              this.kind,
+              DirectiveErrorCode.VALIDATION_FAILED,
+              standardErrorDetails
+            );
+          }
+          const pathContent = pathNodes[0].content;
 
           // ValidationService.validate() already confirmed addPathObject exists for this subtype.
           // No need for the redundant check here.
 
           let resolvedPath: MeldPath;
           try {
-            // process.stdout.write(`Resolving add path\n`);
-            const valueToResolve: string | InterpolatableValue = addPathObject.interpolatedValue ?? addPathObject.raw;
-            const resolvedPathString = await this.resolutionService.resolveInContext(valueToResolve, resolutionContext);
+            const resolvedPathString = await this.resolutionService.resolveInContext(pathContent, resolutionContext);
             resolvedPath = await this.resolutionService.resolvePath(resolvedPathString, resolutionContext);
             
             // process.stdout.write(`Resolved add path to: ${resolvedPath.validatedPath}\n`);
@@ -267,18 +272,21 @@ export class AddDirectiveHandler implements IDirectiveHandler {
           break;
 
         case 'addVariable':
-          // process.stdout.write('>>> ADD HANDLER - Handling addVariable subtype <<<\n');
-          const variablePathObject = directiveData.path as AstStructuredPath;
+          const variableNodes = node.values.variable as VariableReferenceNode[];
+          if (!variableNodes || variableNodes.length === 0) {
+            throw new DirectiveError(
+              'Missing variable value for addVariable directive',
+              this.kind,
+              DirectiveErrorCode.VALIDATION_FAILED,
+              standardErrorDetails
+            );
+          }
 
-          // ValidationService.validate() already confirmed variablePathObject and its necessary
-          // internal structure (like variable reference) exist for this subtype.
-          // The redundant 'if' block below is removed.
-
-          // The code below relies on the validator having passed.
+          // Resolve the variable value
           try {
-            // process.stdout.write(`Resolving add variable/path\n`);
-            const valueToResolveVar = variablePathObject.interpolatedValue ?? variablePathObject.raw;
-            content = await this.resolutionService.resolveInContext(valueToResolveVar, resolutionContext);
+            // Use the raw variable value for resolution
+            const rawVariable = node.raw.variable;
+            content = await this.resolutionService.resolveInContext(rawVariable, resolutionContext);
             // process.stdout.write(`Resolved add variable to content of length: ${content?.length ?? 0}\n`);
           } catch (error) {
             throw new DirectiveError(
@@ -291,15 +299,9 @@ export class AddDirectiveHandler implements IDirectiveHandler {
           break;
 
         case 'addTemplate':
-          // process.stdout.write('>>> ADD HANDLER - Handling addTemplate subtype <<<\n');
-          // process.stdout.write(`Inspecting directive: ${JSON.stringify(directiveData)}\n`);
+          const templateContent = node.values.content as TextNode[];
           
-          const templateContent = directiveData.content;
-
-          // process.stdout.write(`Extracted templateContent type: ${typeof templateContent}, isArray: ${Array.isArray(templateContent)}\n`);
-          // process.stdout.write(`Value of templateContent before check: ${JSON.stringify(templateContent)}\n`);
-          
-          if (!templateContent || !isInterpolatableValueArray(templateContent)) {
+          if (!templateContent || templateContent.length === 0) {
             throw new DirectiveError(
               `Missing or invalid content array for addTemplate subtype.`,
               this.kind,
@@ -324,7 +326,7 @@ export class AddDirectiveHandler implements IDirectiveHandler {
 
         default:
           throw new DirectiveError(
-            `Unsupported add subtype: ${directiveData.subtype}`,
+            `Unsupported add subtype: ${node.subtype}`,
             this.kind,
             DirectiveErrorCode.VALIDATION_FAILED,
             standardErrorDetails
@@ -332,25 +334,20 @@ export class AddDirectiveHandler implements IDirectiveHandler {
       }
 
       // Handle section extraction if specified
-      const section = directiveData.section;
+      const sectionNodes = node.values.section as TextNode[] | undefined;
 
-      // <<< Add Logging >>>
-      // process.stdout.write(`>>> ADD HANDLER - Before Section Check <<<\n`);
-      // process.stdout.write(`Section value: ${section}\n`);
-      // process.stdout.write(`Content length after read: ${content?.length ?? 'undefined'}\n`);
-
-      if (section) { 
-        // process.stdout.write(`Extracting section: ${section}\n`);
+      if (sectionNodes && sectionNodes.length > 0) { 
+        const sectionName = sectionNodes[0].content;
         try {
           content = await this.resolutionService.extractSection(
             content,
-            section,
-            directiveData.options?.fuzzy === 'true' ? 0.8 : undefined
+            sectionName,
+            node.values.options?.fuzzy === 'true' ? 0.8 : undefined
           );
           // process.stdout.write(`Section extracted successfully\n`);
         } catch (error) {
           throw new DirectiveError(
-            `Error extracting section "${section}": ${error instanceof Error ? error.message : String(error)}`,
+            `Error extracting section "${sectionName}": ${error instanceof Error ? error.message : String(error)}`,
             this.kind,
             DirectiveErrorCode.EXECUTION_FAILED,
             { ...standardErrorDetails, cause: error instanceof Error ? error : undefined }
@@ -359,7 +356,7 @@ export class AddDirectiveHandler implements IDirectiveHandler {
       }
 
       // Handle heading level adjustment if specified
-      const options = directiveData.options || {};
+      const options = node.values.options || {};
       const headingLevel = options.headingLevel;
       if (headingLevel) {
         // TODO: Find appropriate service/utility for heading adjustment

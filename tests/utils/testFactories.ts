@@ -28,6 +28,66 @@ import type { ICommandDefinition } from '@core/types/exec';
 // Counter for generating unique node IDs in tests
 let testNodeIdCounter = 0;
 
+// ====================
+// Helper Functions for Creating AST Nodes
+// ====================
+
+/**
+ * Creates an array containing a single TextNode
+ */
+export function createTextNodeArray(content: string, location?: Location): TextNode[] {
+  return [{
+    type: 'Text',
+    nodeId: `test-text-${testNodeIdCounter++}`,
+    content,
+    location: location || DEFAULT_LOCATION
+  }];
+}
+
+/**
+ * Creates an array containing a single VariableReferenceNode
+ */
+export function createVariableReferenceArray(
+  identifier: string, 
+  valueType: string = 'identifier',
+  location?: Location
+): VariableReferenceNode[] {
+  return [{
+    type: 'VariableReference',
+    nodeId: `test-vref-${testNodeIdCounter++}`,
+    identifier,
+    valueType,
+    isVariableReference: true,
+    location: location || DEFAULT_LOCATION
+  }];
+}
+
+/**
+ * Creates a PathNode array from a path string
+ * For now, this creates a simple TextNode array, but can be enhanced
+ * to handle more complex path structures
+ */
+export function createPathNodeArray(path: string, location?: Location): TextNode[] {
+  return createTextNodeArray(path, location);
+}
+
+/**
+ * Creates proper meta object for path-based directives
+ */
+export function createPathMeta(path: string): Record<string, any> {
+  const hasExtension = path.includes('.');
+  const extension = hasExtension ? path.split('.').pop() || '' : '';
+  
+  return {
+    path: {
+      hasVariables: path.includes('{{') || path.includes('$'),
+      isAbsolute: path.startsWith('/'),
+      hasExtension,
+      extension
+    }
+  };
+}
+
 const DEFAULT_POSITION: Position = { line: 1, column: 1 };
 const DEFAULT_LOCATION: Location = {
   start: DEFAULT_POSITION,
@@ -172,46 +232,69 @@ export function createTextDirective(
   value: string | InterpolatableValue,
   location?: Location
 ): DirectiveNode {
-  // Convert to the new structure
-  const variableRef: VariableReferenceNode = {
-    type: 'VariableReference',
-    nodeId: `test-vref-${testNodeIdCounter++}`,
-    identifier,
-    valueType: 'identifier',
-    isVariableReference: true,
-    location: location || DEFAULT_LOCATION
-  };
+  // Determine subtype and source based on value type
+  let subtype: string;
+  let source: string;
+  let contentNodes: MeldNode[];
+  let rawContent: string;
+  let meta: Record<string, any> = {};
   
-  let valueNodes: MeldNode[];
   if (typeof value === 'string') {
-    valueNodes = [{
-      type: 'Text',
-      nodeId: `test-text-${testNodeIdCounter++}`,
-      content: value,
-      location: location || DEFAULT_LOCATION
-    }];
+    // Simple string - textAssignment with literal source
+    subtype = 'textAssignment';
+    source = 'literal';
+    contentNodes = createTextNodeArray(value, location);
+    rawContent = value;
+    meta = {
+      sourceType: 'literal',
+      hasVariables: false,
+      isTemplateContent: false
+    };
   } else if (Array.isArray(value)) {
-    valueNodes = value;
+    // Interpolatable array - check if it contains variables
+    const hasVariables = value.some(node => node.type === 'VariableReference');
+    subtype = hasVariables ? 'textTemplate' : 'textAssignment';
+    source = hasVariables ? 'template' : 'literal';
+    contentNodes = value;
+    
+    // Build raw content from nodes
+    rawContent = value.map(node => {
+      if (node.type === 'Text') {
+        return node.content;
+      } else if (node.type === 'VariableReference') {
+        return `{{${node.identifier}}}`;
+      }
+      return '';
+    }).join('');
+    
+    meta = {
+      sourceType: source,
+      hasVariables,
+      isTemplateContent: hasVariables
+    };
   } else {
-    valueNodes = [];
+    throw new Error('Invalid value type for createTextDirective');
   }
+  
+  // Create identifier as VariableReference array
+  const identifierNodes = createVariableReferenceArray(identifier, 'identifier', location);
   
   return {
     type: 'Directive',
     nodeId: `test-directive-${testNodeIdCounter++}`,
+    location: location || DEFAULT_LOCATION,
     kind: 'text',
-    subtype: 'textVariable',
-    source: 'literal',
+    subtype,
+    source,
     values: {
-      identifier: [variableRef],
-      value: valueNodes
+      identifier: identifierNodes,
+      content: contentNodes
     },
     raw: {
       identifier,
-      value: typeof value === 'string' ? value : '' 
+      content: rawContent
     },
-    meta: {},
-    location: location || DEFAULT_LOCATION
+    meta
   };
 }
 
@@ -221,36 +304,66 @@ export function createDataDirective(
   value: any,
   location?: Location
 ): DirectiveNode {
-  const variableRef: VariableReferenceNode = {
-    type: 'VariableReference',
-    nodeId: `test-vref-${testNodeIdCounter++}`,
-    identifier,
-    valueType: 'identifier',
-    isVariableReference: true,
-    location: location || DEFAULT_LOCATION
-  };
+  // Create identifier as VariableReference array
+  const identifierNodes = createVariableReferenceArray(identifier, 'identifier', location);
+  
+  // Determine source based on value type
+  let source: string;
+  let valueContent: any;
+  
+  if (typeof value === 'string') {
+    source = 'string';
+    valueContent = {
+      type: 'string',
+      value: JSON.stringify(value)
+    };
+  } else if (typeof value === 'number') {
+    source = 'number';
+    valueContent = {
+      type: 'number',
+      value: value
+    };
+  } else if (typeof value === 'boolean') {
+    source = 'boolean';
+    valueContent = {
+      type: 'boolean',
+      value: value
+    };
+  } else if (Array.isArray(value)) {
+    source = 'array';
+    valueContent = {
+      type: 'array',
+      items: value
+    };
+  } else if (typeof value === 'object' && value !== null) {
+    source = 'object';
+    valueContent = {
+      type: 'object',
+      properties: value
+    };
+  } else {
+    source = 'literal';
+    valueContent = value;
+  }
   
   return {
     type: 'Directive',
     nodeId: `test-directive-${testNodeIdCounter++}`,
+    location: location || DEFAULT_LOCATION,
     kind: 'data',
-    subtype: 'dataVariable',
-    source: 'literal',
+    subtype: 'dataAssignment',
+    source,
     values: {
-      identifier: [variableRef],
-      value: [{
-        type: 'Text',
-        nodeId: `test-text-${testNodeIdCounter++}`,
-        content: JSON.stringify(value),
-        location: location || DEFAULT_LOCATION
-      }]
+      identifier: identifierNodes,
+      value: valueContent
     },
     raw: {
       identifier,
-      value: JSON.stringify(value)
+      value: typeof value === 'string' ? value : JSON.stringify(value)
     },
-    meta: {},
-    location: location || DEFAULT_LOCATION
+    meta: {
+      sourceType: source
+    }
   };
 }
 
@@ -260,39 +373,28 @@ export function createPathDirective(
   pathString: string,
   location?: Location
 ): DirectiveNode {
-  const variableRef: VariableReferenceNode = {
-    type: 'VariableReference',
-    nodeId: `test-vref-${testNodeIdCounter++}`,
-    identifier,
-    valueType: 'identifier',
-    isVariableReference: true,
-    location: location || DEFAULT_LOCATION
-  };
+  // Create identifier as VariableReference array
+  const identifierNodes = createVariableReferenceArray(identifier, 'identifier', location);
   
-  const pathObject: AstStructuredPath = {
-      raw: pathString,
-      structured: {
-          segments: pathString.split('/').filter(Boolean),
-          base: pathString.startsWith('$') ? pathString.split('/')[0] : '.'
-      }
-  };
+  // Create path as TextNode array
+  const pathNodes = createTextNodeArray(pathString, location);
   
   return {
     type: 'Directive',
     nodeId: `test-directive-${testNodeIdCounter++}`,
+    location: location || DEFAULT_LOCATION,
     kind: 'path',
-    subtype: 'pathVariable',
+    subtype: 'pathAssignment',
     source: 'path',
     values: {
-      identifier: [variableRef],
-      path: [pathObject]
+      identifier: identifierNodes,
+      path: pathNodes
     },
     raw: {
       identifier,
       path: pathString
     },
-    meta: {},
-    location: location || DEFAULT_LOCATION
+    meta: createPathMeta(pathString)
   };
 }
 
@@ -307,8 +409,10 @@ export function createRunDirective(
   errorVar?: string
 ): DirectiveNode {
   let resolvedSubtype = subtype;
-  let commandValue: MeldNode[] = [];
-  let resolvedParameters: MeldNode[] | undefined = undefined;
+  let source: string;
+  const values: Record<string, any> = {};
+  const raw: Record<string, any> = {};
+  const meta: Record<string, any> = {};
   
   // Determine subtype if not provided
   if (!resolvedSubtype) {
@@ -320,90 +424,92 @@ export function createRunDirective(
       resolvedSubtype = 'runCommand';
     }
   }
+  
+  // Set source based on subtype
+  switch (resolvedSubtype) {
+    case 'runCommand':
+      source = 'command';
+      break;
+    case 'runCode':
+    case 'runCodeParams':
+      source = 'code';
+      break;
+    case 'runDefined':
+      source = 'defined';
+      break;
+    default:
+      source = 'command';
+  }
 
-  // Normalize commandInput based on subtype
-  if (resolvedSubtype === 'runCommand' || resolvedSubtype === 'runCode' || resolvedSubtype === 'runCodeParams') {
-    if (typeof commandInput === 'string') {
-      commandValue = [{ 
-        type: 'Text', 
-        nodeId: `test-text-${testNodeIdCounter++}`,
-        content: commandInput,
-        location: location || DEFAULT_LOCATION 
-      }];
-    } else if (isInterpolatableValueArray(commandInput)) {
-      commandValue = commandInput;
+  // Build values based on subtype
+  if (resolvedSubtype === 'runCommand') {
+    // Simple command
+    const commandText = typeof commandInput === 'string' ? commandInput : '';
+    values.command = createTextNodeArray(commandText, location);
+    raw.command = commandText;
+    meta.hasVariables = false;
+    meta.isMultiLine = commandText.includes('\n');
+  } else if (resolvedSubtype === 'runCode' || resolvedSubtype === 'runCodeParams') {
+    // Code with language
+    const codeText = typeof commandInput === 'string' ? commandInput : '';
+    values.code = createTextNodeArray(codeText, location);
+    raw.code = codeText;
+    
+    if (language) {
+      values.lang = createTextNodeArray(language, location);
+      raw.lang = language;
+      meta.language = language;
     }
-  } else if (resolvedSubtype === 'runDefined') {
-    // Handle defined command differently
-    const definedCmd = commandInput as { name: string, args: any[], raw: string };
-    commandValue = [{
-      type: 'VariableReference',
-      nodeId: `test-vref-${testNodeIdCounter++}`,
-      identifier: definedCmd.name,
-      valueType: 'command',
-      isVariableReference: true,
-      location: location || DEFAULT_LOCATION
-    }];
-  }
-
-  // Normalize parameters if they are strings
-  if (parameters) {
-      resolvedParameters = parameters.map(p => {
-          if (typeof p === 'string') {
-              return {
-                  type: 'Text',
-                  nodeId: `test-text-${testNodeIdCounter++}`,
-                  content: p,
-                  location: location || DEFAULT_LOCATION
-              };
-          }
-          return p;
+    
+    if (parameters && resolvedSubtype === 'runCodeParams') {
+      values.args = parameters.map(p => {
+        if (typeof p === 'string') {
+          return createTextNodeArray(p, location)[0];
+        }
+        return p;
       });
+      raw.args = parameters.map(p => typeof p === 'string' ? p : (p as VariableReferenceNode).identifier);
+    }
+    
+    meta.isMultiLine = codeText.includes('\n');
+    meta.isBracketed = true;
+  } else if (resolvedSubtype === 'runDefined') {
+    // Reference to defined command
+    const definedCmd = commandInput as { name: string, args: any[], raw: string };
+    values.command = createVariableReferenceArray(definedCmd.name, 'command', location);
+    raw.command = definedCmd.raw;
+    
+    if (definedCmd.args && definedCmd.args.length > 0) {
+      values.args = definedCmd.args.map(arg => createTextNodeArray(String(arg), location)[0]);
+      raw.args = definedCmd.args;
+    }
   }
-
+  
+  // Add output/error variables if specified
+  if (outputVar) {
+    values.outputVariable = createVariableReferenceArray(outputVar, 'identifier', location);
+    raw.outputVariable = outputVar;
+  }
+  
+  if (errorVar) {
+    values.errorVariable = createVariableReferenceArray(errorVar, 'identifier', location);
+    raw.errorVariable = errorVar;
+  }
+  
   return {
     type: 'Directive',
     nodeId: `test-directive-${testNodeIdCounter++}`,
+    location: location || DEFAULT_LOCATION,
     kind: 'run',
     subtype: resolvedSubtype,
-    source: 'literal',
-    values: {
-      command: commandValue,
-      ...(language && { language: [{
-        type: 'Text',
-        nodeId: `test-text-${testNodeIdCounter++}`,
-        content: language,
-        location: location || DEFAULT_LOCATION
-      }] }),
-      ...(resolvedParameters && { parameters: resolvedParameters }),
-      ...(outputVar && { outputVariable: [{
-        type: 'VariableReference',
-        nodeId: `test-vref-${testNodeIdCounter++}`,
-        identifier: outputVar,
-        valueType: 'identifier',
-        isVariableReference: true,
-        location: location || DEFAULT_LOCATION
-      }] }),
-      ...(errorVar && { errorVariable: [{
-        type: 'VariableReference',
-        nodeId: `test-vref-${testNodeIdCounter++}`,
-        identifier: errorVar,
-        valueType: 'identifier',
-        isVariableReference: true,
-        location: location || DEFAULT_LOCATION
-      }] })
-    },
-    raw: {
-      command: typeof commandInput === 'string' ? commandInput : '',
-      outputVariable: outputVar,
-      errorVariable: errorVar
-    },
-    meta: {},
-    location: location || DEFAULT_LOCATION
+    source,
+    values,
+    raw,
+    meta
   };
 }
 
-// Create an add directive node for testing (formerly add)
+// Create an add directive node for testing (formerly embed)
 export function createAddDirective(
   pathOrContent: string | InterpolatableValue | AstStructuredPath, 
   section?: string,
@@ -416,63 +522,116 @@ export function createAddDirective(
   }
 ): DirectiveNode {
   let determinedSubtype: 'addPath' | 'addVariable' | 'addTemplate';
-  let pathValue: MeldNode[] | undefined = undefined;
-  let contentValue: MeldNode[] | undefined = undefined;
+  let source: string;
+  const values: Record<string, any> = {};
+  const raw: Record<string, any> = {};
+  let meta: Record<string, any> = {};
   
-  // Replace old add subtypes with add subtypes
+  // Determine subtype and set up values based on input
   if (subtype) {
     determinedSubtype = subtype;
   } else {
-    // Auto-determine subtype
+    // Auto-determine subtype based on input type
     if (isInterpolatableValueArray(pathOrContent)) {
       determinedSubtype = 'addTemplate';
-      contentValue = pathOrContent;
-    } else if (typeof pathOrContent === 'object' && 'raw' in pathOrContent) {
-      determinedSubtype = 'addPath';
-      pathValue = [pathOrContent];
     } else if (typeof pathOrContent === 'string') {
-      determinedSubtype = 'addPath';
-      pathValue = [{
-        raw: pathOrContent,
-        structured: {
-          segments: pathOrContent.split('/').filter(Boolean),
-          base: pathOrContent.startsWith('$') ? pathOrContent.split('/')[0] : '.'
-        }
-      }];
+      // Check if it's a variable reference
+      if (pathOrContent.startsWith('@') || pathOrContent.includes('{{') && pathOrContent.includes('}}')) {
+        determinedSubtype = 'addVariable';
+      } else {
+        determinedSubtype = 'addPath';
+      }
     } else {
-      throw new Error('Invalid input type for createAddDirective pathOrContent');
+      determinedSubtype = 'addPath';
     }
+  }
+
+  // Set source based on subtype
+  switch (determinedSubtype) {
+    case 'addPath':
+      source = 'path';
+      break;
+    case 'addVariable':
+      source = 'variable';
+      break;
+    case 'addTemplate':
+      source = 'template';
+      break;
+  }
+
+  // Build values based on subtype
+  switch (determinedSubtype) {
+    case 'addPath':
+      if (typeof pathOrContent === 'string') {
+        values.path = createTextNodeArray(pathOrContent, location);
+        raw.path = pathOrContent;
+        meta = createPathMeta(pathOrContent);
+      } else if (typeof pathOrContent === 'object' && 'raw' in pathOrContent) {
+        values.path = [pathOrContent];
+        raw.path = pathOrContent.raw;
+      }
+      break;
+      
+    case 'addVariable':
+      if (typeof pathOrContent === 'string') {
+        // Extract the variable name from formats like '@varName' or '{{varName}}'
+        let varName = pathOrContent;
+        if (varName.startsWith('@')) {
+          varName = varName.substring(1);
+        } else if (varName.startsWith('{{') && varName.endsWith('}}')) {
+          varName = varName.substring(2, varName.length - 2);
+        }
+        values.variable = createVariableReferenceArray(varName, 'varIdentifier', location);
+        raw.variable = pathOrContent;
+      }
+      break;
+      
+    case 'addTemplate':
+      if (isInterpolatableValueArray(pathOrContent)) {
+        values.content = pathOrContent;
+        raw.content = pathOrContent.map(node => 
+          node.type === 'Text' ? node.content : `{{${(node as VariableReferenceNode).identifier}}}`
+        ).join('');
+      } else if (typeof pathOrContent === 'string') {
+        values.content = createTextNodeArray(pathOrContent, location);
+        raw.content = pathOrContent;
+      }
+      break;
+  }
+
+  // Add common optional values
+  if (section) {
+    values.section = createTextNodeArray(section, location);
+    raw.section = section;
+  }
+  
+  if (options?.headingLevel) {
+    values.headerLevel = options.headingLevel;
+    raw.headerLevel = options.headingLevel.toString();
+  }
+  
+  if (options?.underHeader) {
+    values.underHeader = createTextNodeArray(options.underHeader, location);
+    raw.underHeader = options.underHeader;
+  }
+  
+  if (options?.names) {
+    values.names = options.names.map(name => 
+      createVariableReferenceArray(name, 'identifier', location)[0]
+    );
+    raw.names = options.names;
   }
 
   return {
     type: 'Directive',
     nodeId: `test-directive-${testNodeIdCounter++}`,
-    kind: 'add', // Changed from 'add' to 'add'
+    location: location || DEFAULT_LOCATION,
+    kind: 'add',
     subtype: determinedSubtype,
-    source: 'literal',
-    values: {
-      ...(pathValue && { path: pathValue }),
-      ...(contentValue && { content: contentValue }),
-      ...(section && { section: [{
-        type: 'Text',
-        nodeId: `test-text-${testNodeIdCounter++}`,
-        content: section,
-        location: location || DEFAULT_LOCATION
-      }] }),
-      ...(options?.names && { names: options.names.map(name => ({
-        type: 'Text',
-        nodeId: `test-text-${testNodeIdCounter++}`,
-        content: name,
-        location: location || DEFAULT_LOCATION
-      })) })
-    },
-    raw: {
-      path: typeof pathOrContent === 'string' ? pathOrContent : undefined,
-      section,
-      names: options?.names
-    },
-    meta: {},
-    location: location || DEFAULT_LOCATION
+    source,
+    values,
+    raw,
+    meta
   };
 }
 
@@ -482,88 +641,104 @@ export function createImportDirective(
   location?: Location,
   from?: string
 ): DirectiveNode {
+  // Determine subtype based on imports
+  const subtype = imports === '*' ? 'importAll' : 'importSelected';
+  
+  // Parse imports
+  const importNodes: MeldNode[] = [];
+  
+  if (imports === '*') {
+    // Import all
+    importNodes.push({
+      type: 'VariableReference',
+      nodeId: `test-vref-${testNodeIdCounter++}`,
+      identifier: '*',
+      valueType: 'import',
+      isVariableReference: true,
+      alias: null,
+      location: location || DEFAULT_LOCATION
+    } as any);
+  } else {
+    // Selected imports - for now just create as text
+    importNodes.push(...createTextNodeArray(imports, location));
+  }
+  
+  // Create path nodes
+  const pathNodes = from ? createTextNodeArray(from, location) : [];
+  
   return {
     type: 'Directive',
     nodeId: `test-directive-${testNodeIdCounter++}`,
+    location: location || DEFAULT_LOCATION,
     kind: 'import',
-    subtype: 'importAll', // or determine based on imports content
-    source: 'import',
+    subtype,
+    source: 'path',
     values: {
-      imports: [{
-        type: 'Text',
-        nodeId: `test-text-${testNodeIdCounter++}`,
-        content: imports,
-        location: location || DEFAULT_LOCATION
-      }],
-      path: from ? [{
-        raw: from,
-        structured: {
-          segments: from.split('/').filter(Boolean),
-          base: from.startsWith('$') ? from.split('/')[0] : '.'
-        }
-      }] : undefined
+      imports: importNodes,
+      ...(from && { path: pathNodes })
     },
     raw: {
       imports,
-      path: from
+      ...(from && { path: from })
     },
-    meta: {},
-    location: location || DEFAULT_LOCATION
+    meta: from ? createPathMeta(from) : {}
   };
 }
 
 // Create a exec directive node for testing
 export function createExecDirective(
   identifier: string,
-  command: string | any,
+  command: string | InterpolatableValue,
   parameters: string[] = [],
   location?: Location
 ): DirectiveNode {
-  const identifierRef: VariableReferenceNode = {
-    type: 'VariableReference',
-    nodeId: `test-vref-${testNodeIdCounter++}`,
-    identifier,
-    valueType: 'identifier',
-    isVariableReference: true,
-    location: location || DEFAULT_LOCATION
-  };
-
-  let commandValue: MeldNode[];
+  // Create identifier nodes - using TextNode for exec directive identifiers
+  const identifierNodes = createTextNodeArray(identifier, location);
+  
+  // Create command nodes
+  let commandNodes: MeldNode[];
   if (typeof command === 'string') {
-    commandValue = [{
-      type: 'Text',
-      nodeId: `test-text-${testNodeIdCounter++}`,
-      content: command,
-      location: location || DEFAULT_LOCATION
-    }];
+    commandNodes = createTextNodeArray(command, location);
+  } else if (Array.isArray(command)) {
+    commandNodes = command;
   } else {
-    // Handle other command types if needed
-    commandValue = [];
+    commandNodes = createTextNodeArray(String(command), location);
   }
+  
+  // Create parameter nodes as VariableReferences
+  const paramNodes = parameters.map(param => 
+    createVariableReferenceArray(param, 'varIdentifier', location)[0]
+  );
+  
+  // Check if command has variables
+  const hasVariables = commandNodes.some(node => 
+    node.type === 'VariableReference' || 
+    (node.type === 'Text' && (node.content.includes('@') || node.content.includes('{{')))
+  );
 
   return {
     type: 'Directive',
     nodeId: `test-directive-${testNodeIdCounter++}`,
-    kind: 'exec', // Changed from 'exec' to 'exec'
+    location: location || DEFAULT_LOCATION,
+    kind: 'exec',
     subtype: 'execCommand',
-    source: 'literal',
+    source: 'command',
     values: {
-      identifier: [identifierRef],
-      command: commandValue,
-      parameters: parameters.map(p => ({
-        type: 'Text',
-        nodeId: `test-text-${testNodeIdCounter++}`,
-        content: p,
-        location: location || DEFAULT_LOCATION
-      }))
+      identifier: identifierNodes,
+      command: commandNodes,
+      ...(parameters.length > 0 && { params: paramNodes })
     },
     raw: {
       identifier,
-      command: typeof command === 'string' ? command : JSON.stringify(command),
-      parameters
+      ...(parameters.length > 0 && { params: parameters }),
+      command: typeof command === 'string' ? command : commandNodes.map(node =>
+        node.type === 'Text' ? node.content : `@${(node as VariableReferenceNode).identifier}`
+      ).join('')
     },
-    meta: {},
-    location: location || DEFAULT_LOCATION
+    meta: {
+      hasVariables,
+      parameterCount: parameters.length
+    }
   };
 }
 
