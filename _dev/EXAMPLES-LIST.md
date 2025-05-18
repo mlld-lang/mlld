@@ -1,16 +1,4 @@
-# Examples List for AST Explorer
-
-This document outlines the specific examples needed for each directive type, following the convention-based directory structure:
-
-```
-core/examples/
-├── directivekind/             # e.g., text, run, import
-│   └── directivesubtype/      # e.g., assignment, template
-│       ├── example.md         # Base example
-│       ├── expected.md        # Expected output for base example
-│       ├── example-variant.md # Variant example (e.g., multiline)
-│       └── expected-variant.md # Expected output for variant
-```
+# Meld Syntax Examples 
 
 ## Text Directive
 

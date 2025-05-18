@@ -4,6 +4,7 @@
 
 1. **AST types** properly organized in `core/ast/types/` - These are the grammar-generated node types
 2. **General types** in `core/types/` - These are the broader system types
+3. Additional notes on current file locations are collected in `PLAN-CONTEXT.md`.
 
 ## Updated Goals
 
@@ -123,7 +124,7 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 1. Create the discriminated union type for all AST nodes:
    ```typescript
    // Define union of all AST node types
-   type ASTNode = 
+   type ASTNode =
      | TextNode 
      | DirectiveNode 
      | CodeFenceNode
@@ -132,6 +133,9 @@ With our unified type architecture decision, we're restructuring to eliminate ar
      | LiteralNode
      | DotSeparatorNode
      | PathSeparatorNode;
+
+// Include every interface exported from `core/ast/types` so future nodes are
+// automatically part of the union.
    
    // All nodes already have from AST:
    // - type: string (discriminator)
@@ -370,9 +374,10 @@ Note: ParserService transformation approach significantly reduces complexity and
 
 1. The AST restructuring provides a template for clean organization
 2. Focus on runtime type organization without disturbing AST
-3. Maintain backward compatibility throughout
+3. Remove the legacy `core/syntax/types` package rather than maintaining backward compatibility
 4. Consider future extensibility in the structure
 5. Document the AST/runtime distinction prominently
 6. Implement discriminated unions for state management as outlined in STATE-UPDATES.md
-7. Consider exporting a unified `ASTNode` union type from the AST package for reuse
+7. Export a unified `ASTNode` union type from the AST package for reuse
+8. Ensure the union includes every interface from `core/ast/types` and add new ones as they are created
 
