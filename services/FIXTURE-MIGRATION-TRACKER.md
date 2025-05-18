@@ -22,7 +22,7 @@ Tracking the migration of service tests from manual node creation to fixture-bas
 | PathDirectiveHandler | ✅ Complete | `PathDirectiveHandler.fixture.test.ts` | Handler updated, adapter layer removed, all tests migrated |
 | ImportDirectiveHandler | ✅ Complete | `ImportDirectiveHandler.fixture.test.ts` | Handler updated, all tests migrated, removed deprecated importNamed |
 | AddDirectiveHandler | ✅ Complete | `AddDirectiveHandler.fixture.test.ts` | Handler updated, tests migrated, header/underHeader aligned with AST |
-| RunDirectiveHandler | 🟡 Not Started | - | Code/command/exec fixtures |
+| RunDirectiveHandler | ✅ Complete | `RunDirectiveHandler.fixture.test.ts` | Handler updated, all tests migrated |
 | ExecDirectiveHandler | 🟡 Not Started | - | Complex handler, may need custom fixtures |
 
 ### Status Legend
@@ -44,8 +44,8 @@ Tracking the migration of service tests from manual node creation to fixture-bas
 
 ## Progress Metrics
 
-- **Tests Migrated**: 6/7 (86%)
-- **Handlers Updated**: 5/7 (71%) - TextDirectiveHandler, DataDirectiveHandler, PathDirectiveHandler, ImportDirectiveHandler, AddDirectiveHandler complete
+- **Tests Migrated**: 7/7 (100%)
+- **Handlers Updated**: 6/7 (86%) - TextDirectiveHandler, DataDirectiveHandler, PathDirectiveHandler, ImportDirectiveHandler, AddDirectiveHandler, RunDirectiveHandler complete
 - **Fixtures Utilized**: ~41/60 (68%)
 - **Tests Converted**: 65/~150 (43%)
 - **Adapter Layers**: 0 (All removed)
@@ -76,11 +76,11 @@ For each handler, perform complete migration:
    - [x] Update handler to use actual AST structure
    - [x] Evaluate and update non-fixture tests
    - [x] Delete redundant tests, keep complementary ones
-6. [ ] RunDirectiveHandler
-   - [ ] Create fixture-based tests
-   - [ ] Update handler to use actual AST structure
-   - [ ] Evaluate and update non-fixture tests
-   - [ ] Delete redundant tests, keep complementary ones
+6. [x] RunDirectiveHandler
+   - [x] Create fixture-based tests
+   - [x] Update handler to use actual AST structure
+   - [x] Evaluate and update non-fixture tests
+   - [x] Delete redundant tests, keep complementary ones
 7. [ ] ExecDirectiveHandler
    - [ ] Create fixture-based tests
    - [ ] Update handler to use actual AST structure

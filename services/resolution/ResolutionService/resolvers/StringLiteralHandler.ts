@@ -35,15 +35,26 @@ export class StringLiteralHandler {
       // Parse with AST
       const nodes = await this.parserService.parse(wrappedValue);
       
-      // Look for directive nodes
+      // Look for directive nodes - using new AST structure
       const directiveNode = nodes.find(node => 
         node.type === 'Directive' && 
-        (node as any).directive?.kind === 'text'
+        (node as any).kind === 'text'
       );
       
       if (directiveNode) {
-        // In the test environment, the mock parser doesn't create a StringLiteral type
-        // but just passes the value through, so we need to check both formats
+        // Check new AST structure first
+        if ((directiveNode as any).values?.content) {
+          const content = (directiveNode as any).values.content;
+          if (Array.isArray(content) && content.length > 0) {
+            // Check if the first node is a text node with string literal content
+            const firstNode = content[0];
+            if (firstNode.type === 'Text' && firstNode.content) {
+              return this.isStringLiteral(firstNode.content);
+            }
+          }
+        }
+        
+        // Fallback to check old structure for backward compatibility
         const directiveValue = (directiveNode as any).directive?.value;
         
         // Check if it's a StringLiteral node in the AST
