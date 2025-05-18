@@ -12,7 +12,7 @@ describe('FuzzyMatchingValidator', () => {
       
       for (const threshold of validThresholds) {
         const node = createAddDirective('test.md', 'section', createLocation(1, 1));
-        node.directive.fuzzy = threshold;
+        (node as any).meta = { fuzzy: threshold };
         expect(() => validateFuzzyThreshold(node)).not.toThrow();
       }
     });
