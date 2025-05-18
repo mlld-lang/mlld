@@ -175,11 +175,11 @@ describe('RunDirectiveHandler', () => {
         cwd: '/workspace'
       });
       expect(result.stateChanges).toBeDefined();
-      expect(result.stateChanges).toHaveProperty('stdout');
+      expect(result.stateChanges?.stdout).toBeDefined();
       const stdoutDef = result.stateChanges?.stdout;
       expect(stdoutDef?.type).toBe(VariableType.TEXT);
       expect(stdoutDef?.value).toBe('command output');
-      expect(result.stateChanges).toHaveProperty('stderr');
+      expect(result.stateChanges?.stderr).toBeDefined();
       const stderrDef = result.stateChanges?.stderr;
       expect(stderrDef?.value).toBe('');
     });
@@ -218,8 +218,8 @@ describe('RunDirectiveHandler', () => {
         cwd: '/workspace'
       });
       expect(result.stateChanges).toBeDefined();
-      expect(result.stateChanges?.variables).toHaveProperty('stdout');
-      const stdoutDef = result.stateChanges?.variables?.stdout;
+      expect(result.stateChanges?.stdout).toBeDefined();
+      const stdoutDef = result.stateChanges?.stdout;
       expect(stdoutDef?.type).toBe(VariableType.TEXT);
       expect(stdoutDef?.value).toBe('Hello World');
     });
