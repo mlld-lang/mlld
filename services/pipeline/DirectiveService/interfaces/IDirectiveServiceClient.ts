@@ -1,4 +1,4 @@
-import type { DirectiveNode } from '@core/syntax/types/index';
+import type { DirectiveNode } from '@core/ast/types/index';
 import type { StateServiceLike } from '@core/shared-service-types';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import type { DirectiveProcessingContext } from '@core/types/index';

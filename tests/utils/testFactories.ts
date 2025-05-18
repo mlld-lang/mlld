@@ -438,46 +438,87 @@ export function createImportDirective(
   location?: Location,
   from?: string
 ): DirectiveNode {
-  const value = from ? `[${imports}] from [${from}]` : `[${imports}]`;
-  const path = from || imports;
   return {
     type: 'Directive',
-    directive: {
-      kind: 'import',
-      identifier: 'import',
-      value,
-      path
+    nodeId: `test-directive-${testNodeIdCounter++}`,
+    kind: 'import',
+    subtype: 'importAll', // or determine based on imports content
+    source: 'import',
+    values: {
+      imports: [{
+        type: 'Text',
+        nodeId: `test-text-${testNodeIdCounter++}`,
+        content: imports,
+        location: location || DEFAULT_LOCATION
+      }],
+      path: from ? [{
+        raw: from,
+        structured: {
+          segments: from.split('/').filter(Boolean),
+          base: from.startsWith('$') ? from.split('/')[0] : '.'
+        }
+      }] : undefined
     },
+    raw: {
+      imports,
+      path: from
+    },
+    meta: {},
     location: location || DEFAULT_LOCATION
   };
 }
 
 // Create a define directive node for testing
-export function createDefineDirective(
+export function createExecDirective(
   identifier: string,
   command: string | any,
   parameters: string[] = [],
   location?: Location
 ): DirectiveNode {
-  let valueProp: InterpolatableValue | undefined = undefined;
-  let commandProp: any | undefined = undefined;
+  const identifierRef: VariableReferenceNode = {
+    type: 'VariableReference',
+    nodeId: `test-vref-${testNodeIdCounter++}`,
+    identifier,
+    valueType: 'identifier',
+    isVariableReference: true,
+    location: location || DEFAULT_LOCATION
+  };
 
+  let commandValue: MeldNode[];
   if (typeof command === 'string') {
-    valueProp = [{ type: 'Text', content: command }];
+    commandValue = [{
+      type: 'Text',
+      nodeId: `test-text-${testNodeIdCounter++}`,
+      content: command,
+      location: location || DEFAULT_LOCATION
+    }];
   } else {
-    commandProp = command;
+    // Handle other command types if needed
+    commandValue = [];
   }
 
-  const directiveData: DirectiveData = {
-      kind: 'define',
-      name: identifier,
-      parameters: parameters?.map(p => ({ name: p, position: parameters.indexOf(p) + 1 })),
-      ...(valueProp && { value: valueProp }),
-      ...(commandProp && { command: commandProp })
-  };
   return {
     type: 'Directive',
-    directive: directiveData,
+    nodeId: `test-directive-${testNodeIdCounter++}`,
+    kind: 'exec', // Changed from 'define' to 'exec'
+    subtype: 'execCommand',
+    source: 'literal',
+    values: {
+      identifier: [identifierRef],
+      command: commandValue,
+      parameters: parameters.map(p => ({
+        type: 'Text',
+        nodeId: `test-text-${testNodeIdCounter++}`,
+        content: p,
+        location: location || DEFAULT_LOCATION
+      }))
+    },
+    raw: {
+      identifier,
+      command: typeof command === 'string' ? command : JSON.stringify(command),
+      parameters
+    },
+    meta: {},
     location: location || DEFAULT_LOCATION
   };
 }

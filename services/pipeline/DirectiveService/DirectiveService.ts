@@ -1,4 +1,4 @@
-import type { DirectiveNode, DirectiveKind, DirectiveData } from '@core/syntax/types/index';
+import type { DirectiveNode, DirectiveKind, DirectiveData } from '@core/ast/types/index';
 import { directiveLogger } from '@core/utils/logger';
 import { IDirectiveService, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
 import type { 
@@ -10,7 +10,7 @@ import type {
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
-import type { ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+import type { ILogger } from '@services/pipeline/DirectiveService/handlers/execution/AddDirectiveHandler';
 import { Service } from '@core/ServiceProvider';
 import { inject, injectable, delay, injectAll } from 'tsyringe';
 import { container } from 'tsyringe';
@@ -26,7 +26,7 @@ import type { IResolutionService } from '@services/resolution/ResolutionService/
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import type { RawPath, Location as CoreLocation } from '@core/types';
-import type { SourceLocation as SyntaxSourceLocation } from '@core/syntax/types';
+import type { SourceLocation as SyntaxSourceLocation } from '@core/ast/types';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
 import type { DirectiveLocation } from '@core/errors/MeldDirectiveError';

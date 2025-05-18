@@ -257,7 +257,7 @@ describe('DirectiveService', () => {
       const mockEmptyDirectiveService = {
         getSupportedDirectives: () => [],
         handleDirective: vi.fn().mockImplementation(async (node, ctx) => {
-           throw new DirectiveError('Simulated: No handler registered', node.directive!.kind, DirectiveErrorCode.HANDLER_NOT_FOUND);
+           throw new DirectiveError('Simulated: No handler registered', node.kind, DirectiveErrorCode.HANDLER_NOT_FOUND);
         }),
         // Add other IDirectiveService methods if needed by the test
         initialize: vi.fn(),

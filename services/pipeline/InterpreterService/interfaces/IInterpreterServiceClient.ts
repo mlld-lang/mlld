@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types/index';
+import type { MeldNode } from '@core/ast/types/index';
 import type { InterpreterOptionsBase } from '@core/shared-service-types';
 import type { InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService';
 import type { IStateService } from '@services/state/StateService/IStateService';

@@ -1,4 +1,4 @@
-import { DirectiveNode, SourceLocation } from '@core/syntax/types/index';
+import { DirectiveNode, SourceLocation } from '@core/ast/types/index';
 import type { 
   ParserServiceLike,
   CircularityServiceLike,

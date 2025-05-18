@@ -5,7 +5,7 @@ import type {
     InterpolatableValue, 
     TextNode, 
     VariableReferenceNode 
-} from '@core/syntax/types/nodes';
+} from '@core/ast/types/index';
 import type { MeldResolutionError } from '@core/errors'; // For JSDoc
 
 /**

@@ -38,9 +38,9 @@ import {
 } from '@core/utils/logger';
 
 // Import AST factory classes
-import { NodeFactory } from '@core/syntax/types/factories/NodeFactory';
-import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory';
-import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNodeFactory';
+import { NodeFactory } from '@core/ast/types/factories/NodeFactory';
+import { VariableNodeFactory } from '@core/ast/types/factories/VariableNodeFactory';
+import { DirectiveNodeFactory } from '@core/ast/types/factories/DirectiveNodeFactory';
 // ... other AST factories ...
 
 // Import Directive Handlers
