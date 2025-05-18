@@ -40,6 +40,20 @@ import {
 } from './data';
 import { ImportWildcardNode } from './values';
 
+// Import InterpolatableValue for the guard function
+import type { InterpolatableValue } from './nodes';
+
+/**
+ * Type guard to check if a value is an InterpolatableValue array.
+ * Checks if it's an array and if the first element (if any) looks like a TextNode or VariableReferenceNode.
+ */
+export function isInterpolatableValueArray(value: unknown): value is InterpolatableValue {
+  return Array.isArray(value) && 
+         (value.length === 0 || 
+          (value[0] && typeof value[0] === 'object' && ('type' in value[0]) && 
+           (value[0].type === 'Text' || value[0].type === 'VariableReference')));
+}
+
 /**
  * Base node type guards using discriminated unions
  */
