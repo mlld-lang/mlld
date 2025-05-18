@@ -1,4 +1,3 @@
-export * from './TestContext';
 export * from './MemfsTestFileSystem';
 export * from './MemfsTestFileSystemAdapter';
 export * from './ProjectBuilder';
