@@ -30,7 +30,7 @@ import type { IStateTrackingServiceClient } from '@services/state/StateTrackingS
 import type { IStateTrackingService, StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
 
 // Other necessary types
-import type { MeldNode, TextNode } from '@core/syntax/types/index';
+import type { MeldNode, TextNode } from '@core/ast/types/index';
 import {
   VariableType, 
   PathContentType, 

@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types/index';
+import type { MeldNode } from '@core/ast/types/index';
 import type { IStateEventService } from '@services/state/StateEventService/IStateEventService';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService';
 import type { StateNode } from './types';

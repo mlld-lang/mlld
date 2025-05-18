@@ -1,4 +1,4 @@
-import type { MeldNode, TextNode } from '@core/syntax/types/index';
+import type { MeldNode, TextNode } from '@core/ast/types/index';
 import { stateLogger as logger } from '@core/utils/logger';
 import type { IStateService, TransformationOptions } from '@services/state/StateService/IStateService';
 import type { StateNode } from '@services/state/StateService/types';
@@ -635,9 +635,9 @@ export class StateService implements IStateService {
     this.checkMutable();
     const textNode: TextNode = {
       type: 'Text',
-      content,
+      nodeId: crypto.randomUUID(),
       location: { start: { line: -1, column: -1 }, end: { line: -1, column: -1 } },
-      nodeId: crypto.randomUUID()
+      content
     };
     await this.addNode(textNode);
   }

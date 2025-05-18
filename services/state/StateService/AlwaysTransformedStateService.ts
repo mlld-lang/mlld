@@ -11,7 +11,7 @@
  */
 
 import type { IStateService } from './IStateService';
-import type { MeldNode } from '@core/syntax/types/index';
+import type { MeldNode } from '@core/ast/types/index';
 import type { TransformationOptions } from './IStateService';
 
 /**
