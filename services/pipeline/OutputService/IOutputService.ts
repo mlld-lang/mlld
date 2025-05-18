@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types/index';
+import type { MeldNode } from '@core/ast/types/index';
 import type { IStateService } from '@services/state/StateService/IStateService';
 
 /**

@@ -32,7 +32,7 @@ import {
   isBasicCommand,
   ResolutionErrorCode
 } from '@core/types';
-import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/syntax/types/index';
+import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/ast/types/index';
 import { ResolutionContextFactory } from './ResolutionContextFactory';
 import { CommandResolver } from './resolvers/CommandResolver';
 import { ContentResolver } from './resolvers/ContentResolver';
@@ -54,8 +54,8 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import { VariableResolutionErrorFactory } from './resolvers/error-factory';
 import { isTextVariable, isPathVariable, isCommandVariable, isDataVariable, isFilesystemPath } from '@core/types/guards';
 // Import and alias the AST Field type
-import { Field as AstField } from '@core/syntax/types/shared-types';
-import { InterpolatableValue } from '@core/syntax/types/nodes';
+import { Field as AstField } from '@core/ast/types/index';
+import { InterpolatableValue } from '@core/ast/types/index';
 import type {
   AbsolutePath,
   RelativePath,

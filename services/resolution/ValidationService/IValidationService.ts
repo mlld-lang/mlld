@@ -1,4 +1,4 @@
-import type { DirectiveNode } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/ast/types';
 
 /**
  * Service responsible for validating directive nodes against schemas and constraints.

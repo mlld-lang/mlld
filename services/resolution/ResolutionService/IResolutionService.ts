@@ -4,7 +4,7 @@ import type {
     StructuredPath, 
     Field, 
     VariableReferenceNode 
-} from '@core/syntax/types/nodes';
+} from '@core/ast/types/index';
 import type { MeldVariable, VariableType } from '@core/types/variables';
 import type { ResolutionContext, FormattingContext } from '@core/types/resolution';
 import type { IStateService } from '@services/state/StateService/IStateService';
@@ -12,7 +12,7 @@ import type { MeldPath, PathValidationContext } from '@core/types/paths';
 import type { Result } from '@core/types';
 import type { MeldResolutionError, PathValidationError, FieldAccessError } from '@core/errors';
 import type { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker';
-import { Field as AstField } from '@core/syntax/types/shared-types';
+import { Field as AstField } from '@core/ast/types/index';
 import type { JsonValue } from '@core/types/common';
 import type { Location } from '@core/types';
 
