@@ -882,7 +882,7 @@ describe('ImportDirectiveHandler', () => {
       const resolvedPathString = '/project/interpret_error.meld';
       const interpretError = new Error('Simulated Client Interpretation failed');
       
-      mockResolutionService.resolveInContext.mockResolvedValueOnce('interpret_error.meld');
+      mockResolutionService.resolveNodes.mockResolvedValueOnce('interpret_error.meld');
       mockResolutionService.resolvePath.mockResolvedValueOnce(createMeldPath('interpret_error.meld', unsafeCreateValidatedResourcePath(resolvedPathString), true));
       vi.spyOn(mockFileSystemService, 'exists').mockResolvedValue(true);
       vi.spyOn(mockFileSystemService, 'readFile').mockResolvedValue('content');
@@ -905,12 +905,25 @@ describe('ImportDirectiveHandler', () => {
 
   describe('cleanup', () => {
       it('should always call endImport on CircularityService even if read fails', async () => {
-          const node = createDirectiveNode('import', { path: { raw: 'read_fail.meld', structured: { base: '.', segments: ['read_fail'], url: false }, isPathVariable: true }, imports: [{ name: '*' }], subtype: 'importAll' }) as DirectiveNode<ImportDirectiveData>;
+          const node = createDirectiveNode('import', {
+            kind: 'import',
+            subtype: 'importAll',
+            values: {
+              imports: [{ type: 'VariableReference', identifier: '*', valueType: 'import' }],
+              path: [
+                { type: 'Text', content: 'read_fail.meld' }
+              ]
+            },
+            raw: {
+              imports: '*',
+              path: 'read_fail.meld'
+            }
+          }) as ImportDirectiveNode;
           mockProcessingContext = createMockProcessingContext(node);
           const resolvedPathString = '/project/read_fail.meld';
           const readError = new MeldError('Disk read failed', { code: 'FS_READ_ERROR', severity: ErrorSeverity.Recoverable });
           
-          mockResolutionService.resolveInContext.mockResolvedValueOnce('read_fail.meld');
+          mockResolutionService.resolveNodes.mockResolvedValueOnce('read_fail.meld');
           mockResolutionService.resolvePath.mockResolvedValueOnce(createMeldPath('read_fail.meld', unsafeCreateValidatedResourcePath(resolvedPathString), true));
           vi.spyOn(mockFileSystemService, 'exists').mockResolvedValue(true);
           

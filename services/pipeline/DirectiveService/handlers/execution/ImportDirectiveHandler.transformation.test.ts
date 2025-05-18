@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mockDeep, DeepMockProxy } from 'vitest-mock-extended';
-import type { DirectiveNode, TextNode, StructuredPath as PathValueObject, MeldNode, SourceLocation, InterpolatableValue, VariableReferenceNode } from '@core/syntax/types/nodes';
+import type { DirectiveNode } from '@core/ast/types/base';
+import type { ImportDirectiveNode } from '@core/ast/types/import';
+import type { TextNode, MeldNode, SourceLocation, VariableReferenceNode } from '@core/ast/types';
 import type { MeldPath, ValidatedResourcePath } from '@core/types/paths';
 import { VariableOrigin, type TextVariable, VariableType, type VariableDefinition, type DataVariable, type IPathVariable, type CommandVariable, createTextVariable, VariableMetadata } from '@core/types/variables';
 import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler';
@@ -179,20 +181,51 @@ function createTestImportNode(options: {
   imports?: Array<{ name: string; alias?: string | null }>;
   subtype?: 'importAll' | 'importStandard' | 'importNamed';
   location?: SourceLocation;
-}): DirectiveNode {
+}): ImportDirectiveNode {
   const { pathObject, imports = [{ name: '*' }], subtype = 'importAll', location = createTestLocation(1, 1) } = options;
   const nodeId = crypto.randomUUID();
+  
+  // Transform imports to node structure
+  const importNodes = imports.map(imp => ({
+    type: 'VariableReference' as const,
+    identifier: imp.name,
+    valueType: 'import' as const,
+    alias: imp.alias || undefined,
+    nodeId: crypto.randomUUID()
+  }));
+  
+  // Transform path to node structure
+  const pathNodes = [
+    {
+      type: 'Text' as const,
+      content: pathObject.raw,
+      nodeId: crypto.randomUUID()
+    }
+  ];
+  
   return {
     type: 'Directive',
-    directive: {
-      kind: 'import',
-      subtype,
-      path: pathObject,
-      imports,
+    kind: 'import',
+    subtype,
+    values: {
+      imports: importNodes,
+      path: pathNodes
+    },
+    raw: {
+      imports: imports.map(imp => imp.name).join(', '),
+      path: pathObject.raw
+    },
+    meta: {
+      path: {
+        hasVariables: false,
+        isAbsolute: pathObject.raw.startsWith('/'),
+        hasExtension: pathObject.raw.includes('.'),
+        extension: pathObject.raw.split('.').pop() || ''
+      }
     },
     location,
     nodeId,
-  };
+  } as ImportDirectiveNode;
 }
 
 // >>> REFACTOR HELPER HERE <<<
@@ -282,12 +315,25 @@ describe('ImportDirectiveHandler Transformation', () => {
     mockFileSystemService.exists.mockResolvedValue(true);
     mockFileSystemService.readFile.mockResolvedValue('@text var1="value1"');
     mockParserService.parse.mockResolvedValue([] as MeldNode[]);
-    mockResolutionService.resolveInContext.mockImplementation(async (value) => typeof value === 'string' ? value : (value as PathValueObject).raw ?? '');
+    mockResolutionService.resolveNodes = vi.fn().mockImplementation(async (nodes) => {
+      // Extract raw text from the nodes
+      let raw = '';
+      nodes.forEach((node: any) => {
+        if (node.type === 'Text') {
+          raw += node.content;
+        } else if (node.type === 'VariableReference') {
+          raw += `$${node.identifier}`;
+        } else if (node.type === 'PathSeparator') {
+          raw += node.separator || '/';
+        }
+      });
+      return raw;
+    });
     mockResolutionService.resolvePath.mockImplementation(async (pathInput, ctx) => {
         let raw = '';
         if (typeof pathInput === 'string') raw = pathInput;
         else if (Array.isArray(pathInput)) raw = reconstructRawString(pathInput);
-        else raw = (pathInput as PathValueObject)?.raw ?? '';
+        else raw = (pathInput as any)?.raw ?? '';
         const currentPath = ctx?.currentFilePath ?? '/project/main.meld';
         const baseDir = currentPath.substring(0, currentPath.lastIndexOf('/'));
         const isUrl = raw.startsWith('http');
