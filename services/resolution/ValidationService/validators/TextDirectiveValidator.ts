@@ -70,7 +70,7 @@ export function validateTextDirective(node: DirectiveNode): void {
     }
   }
   
-  // Check if this is a text directive with @run or @embed source
+  // Check if this is a text directive with @run or @add source
   // In this case, the value property might not be set, but source and run/embed properties are
   if (directive.source === 'run' && directive.run) {
     // This is a text directive with @run value
@@ -78,7 +78,7 @@ export function validateTextDirective(node: DirectiveNode): void {
   }
   
   if (directive.source === 'embed' && directive.embed) {
-    // This is a text directive with @embed value
+    // This is a text directive with @add value
     // No need to validate the value property
   }
   
@@ -141,15 +141,15 @@ export function validateTextDirective(node: DirectiveNode): void {
         );
       }
     }
-    // Validate @embed source value format
+    // Validate @add source value format
     else if (directive.source === 'embed') {
         // Value might not be present if source is correctly parsed into directive.embed
         // If value *is* present, validate it. If not, assume parser handled it (or handler will error).
         if (directive.value && typeof directive.value === 'string') {
-            const valueAfterEmbed = directive.value.substring('@embed'.length).trim();
+            const valueAfterEmbed = directive.value.substring('@add'.length).trim();
             if (!(valueAfterEmbed.startsWith('[') && valueAfterEmbed.endsWith(']'))) {
                 throw new MeldDirectiveError(
-                  'Invalid @embed format in text directive value when source=\"embed\". Must be "@embed [path]"', // Adjusted message
+                  'Invalid @add format in text directive value when source=\"embed\". Must be "@add [path]"', // Adjusted message
                   'text',
                   {
                     location: convertLocation(node.location?.start),
@@ -160,7 +160,7 @@ export function validateTextDirective(node: DirectiveNode): void {
             }
         } else if (!directive.embed) { // If value is missing, ensure embed structure exists
              throw new MeldDirectiveError(
-                'Text directive with source=\"embed\" requires either a value starting with @embed or an embed property',
+                'Text directive with source=\"embed\" requires either a value starting with @add or an embed property',
                 'text',
                 {
                   location: convertLocation(node.location?.start),
@@ -200,13 +200,13 @@ export function validateTextDirective(node: DirectiveNode): void {
         }
         // We could add basic validation for directive.run structure here if needed
     }
-    // >>> NEW: Check literal source for value that looks like @embed/@run <<<
+    // >>> NEW: Check literal source for value that looks like @add/@run <<<
     else if (directive.source === 'literal' && directive.value && typeof directive.value === 'string') {
-        if (directive.value.startsWith('@embed')) {
-            const valueAfterEmbed = directive.value.substring('@embed'.length).trim();
+        if (directive.value.startsWith('@add')) {
+            const valueAfterEmbed = directive.value.substring('@add'.length).trim();
             if (!(valueAfterEmbed.startsWith('[') && valueAfterEmbed.endsWith(']'))) {
                 throw new MeldDirectiveError(
-                  'Invalid @embed format in text directive value (source=literal). Must be "@embed [path]"', // Adjusted message
+                  'Invalid @add format in text directive value (source=literal). Must be "@add [path]"', // Adjusted message
                   'text',
                   {
                     location: convertLocation(node.location?.start),
@@ -232,17 +232,17 @@ export function validateTextDirective(node: DirectiveNode): void {
              // We can potentially add validation for literal @call here too if needed
              // Currently handled by the fallback block below
         }
-        // If it's literal and doesn't start with @embed/@run/@call, it falls through to general literal checks later
+        // If it's literal and doesn't start with @add/@run/@call, it falls through to general literal checks later
     }
 
   } else if (directive.value && typeof directive.value === 'string' && directive.value.startsWith('@')) {
     // For backward compatibility, check if value starts with @
-    const validPrefixes = ['@embed', '@run', '@call'];
+    const validPrefixes = ['@add', '@run', '@call'];
     const prefix = validPrefixes.find(p => directive.value.startsWith(p));
     
     if (!prefix) {
       throw new MeldDirectiveError(
-        'Text directive value starting with @ must be an @embed, @run, or @call directive',
+        'Text directive value starting with @ must be an @add, @run, or @call directive',
         'text',
         {
           location: convertLocation(node.location?.start),
@@ -297,15 +297,15 @@ export function validateTextDirective(node: DirectiveNode): void {
         );
       }
     }
-    // For @embed directive, basic validation
-    else if (directive.value.startsWith('@embed')) {
-      // Extract the part after @embed and check it has a path in [] brackets
-      const valueAfterEmbed = directive.value.substring('@embed'.length).trim();
+    // For @add directive, basic validation
+    else if (directive.value.startsWith('@add')) {
+      // Extract the part after @add and check it has a path in [] brackets
+      const valueAfterEmbed = directive.value.substring('@add'.length).trim();
       
       // >>> Refined Check: Ensure content is wrapped in [...] <<<
       if (!(valueAfterEmbed.startsWith('[') && valueAfterEmbed.endsWith(']'))) {
         throw new MeldDirectiveError(
-          'Invalid @embed format in text directive. Must be "@embed [path]"',
+          'Invalid @add format in text directive. Must be "@add [path]"',
           'text',
           {
             location: convertLocation(node.location?.start),
@@ -316,7 +316,7 @@ export function validateTextDirective(node: DirectiveNode): void {
       }
       
       // No need to validate the content inside the brackets in detail here
-      // The EmbedDirectiveHandler will do that when processing
+      // The AddDirectiveHandler will do that when processing
     }
     // For @run directive, basic validation
     else if (directive.value.startsWith('@run')) {

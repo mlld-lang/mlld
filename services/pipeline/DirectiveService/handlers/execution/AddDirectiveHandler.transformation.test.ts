@@ -4,7 +4,7 @@ import type { DirectiveNode, DirectiveData, MeldNode, VariableReferenceNode, Tex
 import type { StructuredPath } from '@core/syntax/types/nodes';
 import type { MeldPath, PathValidationContext } from '@core/types/paths';
 import { createMeldPath, unsafeCreateValidatedResourcePath } from '@core/types/paths';
-import { EmbedDirectiveHandler, type ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+import { AddDirectiveHandler, type ILogger } from '@services/pipeline/DirectiveService/handlers/execution/AddDirectiveHandler';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import type { ResolutionContext } from '@core/types/resolution';
@@ -16,7 +16,7 @@ import type { FieldAccessError } from '@core/errors/FieldAccessError';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient';
-import { createLocation, createEmbedDirective } from '@tests/utils/testFactories';
+import { createLocation, createAddDirective } from '@tests/utils/testFactories';
 import { 
   embedDirectiveExamples
 } from '@core/syntax/index';
@@ -42,9 +42,9 @@ import {
 } from '@tests/utils/mocks/serviceMocks.ts';
 import { CircularityServiceMock } from '@tests/utils/mocks/serviceMocks.ts';
 
-describe('EmbedDirectiveHandler Transformation', () => {
+describe('AddDirectiveHandler Transformation', () => {
   let testContainer: DependencyContainer;
-  let handler: EmbedDirectiveHandler;
+  let handler: AddDirectiveHandler;
   let stateServiceMock: ReturnType<typeof createStateServiceMock>;
   let resolutionServiceMock: ReturnType<typeof createResolutionServiceMock>;
   let fileSystemServiceMock: ReturnType<typeof createFileSystemServiceMock>;
@@ -150,9 +150,9 @@ describe('EmbedDirectiveHandler Transformation', () => {
     testContainer.registerInstance<InterpreterServiceClientFactory>('InterpreterServiceClientFactory', interpreterServiceClientFactoryMock);
     testContainer.registerInstance<DependencyContainer>('DependencyContainer', testContainer);
 
-    testContainer.register(EmbedDirectiveHandler, { useClass: EmbedDirectiveHandler });
+    testContainer.register(AddDirectiveHandler, { useClass: AddDirectiveHandler });
 
-    handler = testContainer.resolve(EmbedDirectiveHandler);
+    handler = testContainer.resolve(AddDirectiveHandler);
   });
 
   afterEach(() => {
@@ -204,7 +204,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
   describe('transformation behavior', () => {
     it('should return replacement node with file contents when transformation enabled', async () => {
-      const node = createEmbedDirective(
+      const node = createAddDirective(
         'test.md',
         undefined,
         createLocation(1,1),
@@ -219,7 +219,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle section extraction in transformation', async () => {
-      const node = createEmbedDirective(
+      const node = createAddDirective(
         'sections.md',
         'Section 1',
         createLocation(1,1),
@@ -240,7 +240,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle heading level in transformation', async () => {
-      const node = createEmbedDirective(
+      const node = createAddDirective(
         'heading.md',
         undefined,
         createLocation(1,1),
@@ -258,7 +258,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle under header in transformation', async () => {
-      const node = createEmbedDirective(
+      const node = createAddDirective(
         'underheader.md',
         undefined,
         createLocation(1,1),
@@ -274,7 +274,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle variable interpolation in path during transformation', async () => {
-      const node = createEmbedDirective(
+      const node = createAddDirective(
         '{{filePath}}',
         undefined,
         createLocation(1,1),
@@ -302,7 +302,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
     
     it('should handle variable reference embeds in transformation mode', async () => {
-      const node = createEmbedDirective(
+      const node = createAddDirective(
         '{{userData.user.profile.bio}}',
         undefined,
         createLocation(1, 1),
@@ -322,7 +322,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
     
     it('should handle data variable field embeds in transformation mode', async () => {
-      const node = createEmbedDirective(
+      const node = createAddDirective(
         '{{role.architect}}',
         undefined,
         createLocation(1, 1),
@@ -342,7 +342,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should preserve error handling during transformation', async () => {
-      const node = createEmbedDirective(
+      const node = createAddDirective(
         'nonexistent.md',
         undefined,
         createLocation(1,1),
@@ -364,7 +364,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should properly transform variable-based embed directive with field access', async () => {
-      const node = createEmbedDirective(
+      const node = createAddDirective(
         '{{vars.myPath.nested}}',
         undefined,
         createLocation(1,1),
@@ -390,7 +390,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should properly transform variable-based embed directive with object field access', async () => {
-      const node = createEmbedDirective(
+      const node = createAddDirective(
         '{{contact.email}}',
         undefined,
         createLocation(1,1),

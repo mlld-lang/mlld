@@ -53,10 +53,10 @@ import type { IStateService } from '@services/state/StateService/IStateService';
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler';
 import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler';
 import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler';
-import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler';
+import { ExecDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/ExecDirectiveHandler';
 import { VarDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/VarDirectiveHandler'; // Assuming it exists
 import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler';
-import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+import { AddDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/AddDirectiveHandler';
 import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler';
 // +++ End Handler Imports +++
 
@@ -228,12 +228,12 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           if (embedSubtype === 'embedPath') {
             const pathService = this.pathService;
             if (!pathService) {
-              throw new DirectiveError('Path service is unavailable for @embed processing', this.kind, DirectiveErrorCode.EXECUTION_FAILED, baseErrorDetails);
+              throw new DirectiveError('Path service is unavailable for @add processing', this.kind, DirectiveErrorCode.EXECUTION_FAILED, baseErrorDetails);
             }
 
             const fsService = this.fileSystemService;
             if (!fsService) {
-              throw new DirectiveError('File system service is unavailable for @embed processing', this.kind, DirectiveErrorCode.EXECUTION_FAILED, baseErrorDetails);
+              throw new DirectiveError('File system service is unavailable for @add processing', this.kind, DirectiveErrorCode.EXECUTION_FAILED, baseErrorDetails);
             }
 
             const resolvedPath = await pathService.resolvePath(embed.path, currentFilePath);
@@ -245,17 +245,17 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           } else if (embedSubtype === 'embedVariable') {
             const varName = embed.variable?.name;
             if (!varName) {
-              throw new DirectiveError('Missing variable name in @embed source', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+              throw new DirectiveError('Missing variable name in @add source', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
             }
 
             const embedVar = state.getVariable(varName);
             if (!embedVar) {
-              throw new DirectiveError(`Variable '${varName}' not found for @embed source`, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, baseErrorDetails);
+              throw new DirectiveError(`Variable '${varName}' not found for @add source`, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, baseErrorDetails);
             }
 
             if (embedVar.type !== VariableType.TEXT && embedVar.type !== VariableType.DATA) {
               throw new DirectiveError(
-                `Variable '${varName}' must be of type TEXT or DATA for @embed source in @data directive`,
+                `Variable '${varName}' must be of type TEXT or DATA for @add source in @data directive`,
                 this.kind,
                 DirectiveErrorCode.VALIDATION_FAILED,
                 baseErrorDetails
@@ -264,7 +264,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
 
             fileContent = String(embedVar.value);
           } else {
-            throw new DirectiveError(`Unsupported @embed subtype '${embedSubtype}' in @data directive`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
+            throw new DirectiveError(`Unsupported @add subtype '${embedSubtype}' in @data directive`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
           }
 
           try {
@@ -280,7 +280,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
         } catch (error) {
           if (error instanceof DirectiveError) throw error;
           const code = (error instanceof MeldResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) ? DirectiveErrorCode.RESOLUTION_FAILED : DirectiveErrorCode.EXECUTION_FAILED;
-          const message = code === DirectiveErrorCode.RESOLUTION_FAILED ? 'Failed to resolve @embed source for @data directive' : `Failed to read/process embed source for @data directive: ${error instanceof Error ? error.message : 'Unknown'}`;
+          const message = code === DirectiveErrorCode.RESOLUTION_FAILED ? 'Failed to resolve @add source for @data directive' : `Failed to read/process embed source for @data directive: ${error instanceof Error ? error.message : 'Unknown'}`;
           throw new DirectiveError(message, this.kind, code, { ...baseErrorDetails, cause: error instanceof Error ? error : undefined });
         }
       } else {

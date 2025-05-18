@@ -7,7 +7,7 @@ import {
   createTextDirective,
   createDataDirective,
   createImportDirective,
-  createEmbedDirective,
+  createAddDirective,
   createPathDirective,
   createLocation
 } from '@tests/utils/testFactories';
@@ -137,13 +137,13 @@ describe('ValidationService', () => {
       });
     });
 
-    it('should validate a text directive with @embed value', async () => {
-      const node = createTextDirective('instructions', '@embed [$./path.md]');
+    it('should validate a text directive with @add value', async () => {
+      const node = createTextDirective('instructions', '@add [$./path.md]');
       await expect(service.validate(node)).resolves.not.toThrow();
     });
 
-    it('should validate a text directive with @embed value with section', async () => {
-      const node = createTextDirective('instructions', '@embed [$./path.md#Section]');
+    it('should validate a text directive with @add value with section', async () => {
+      const node = createTextDirective('instructions', '@add [$./path.md#Section]');
       await expect(service.validate(node)).resolves.not.toThrow();
     });
 
@@ -157,11 +157,11 @@ describe('ValidationService', () => {
       await expect(service.validate(node)).resolves.not.toThrow();
     });
 
-    it('should throw on invalid @embed format (missing brackets)', async () => {
-      const node = createTextDirective('instructions', '@embed path.md');
+    it('should throw on invalid @add format (missing brackets)', async () => {
+      const node = createTextDirective('instructions', '@add path.md');
       await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal, directiveKind: 'text', messageContains: 'embed format'
+          severity: ErrorSeverity.Fatal, directiveKind: 'text', messageContains: 'add format'
       });
     });
 
@@ -325,17 +325,17 @@ describe('ValidationService', () => {
   
   describe('Embed directive validation', () => {
     it('should validate a valid embed directive with section', async () => {
-      const node = createEmbedDirective('test.md', 'section');
+      const node = createAddDirective('test.md', 'section');
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
     it('should validate embed directive without section', async () => {
-      const node = createEmbedDirective('test.md', undefined);
+      const node = createAddDirective('test.md', undefined);
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
     it('should throw on missing path with Fatal severity', async () => {
-      const node = createEmbedDirective('', undefined);
+      const node = createAddDirective('', undefined);
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
           severity: ErrorSeverity.Fatal, directiveKind: 'embed', messageContains: 'requires a valid path'
@@ -343,13 +343,13 @@ describe('ValidationService', () => {
     });
     
     it('should validate fuzzy matching threshold', async () => {
-      const node = createEmbedDirective('test.md', 'section');
+      const node = createAddDirective('test.md', 'section');
       if (node.directive) node.directive.fuzzy = 0.8; 
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
     it.skip('should throw on invalid fuzzy threshold (below 0) with Fatal severity', async () => {
-      const node = createEmbedDirective('test.md', 'section');
+      const node = createAddDirective('test.md', 'section');
       if (node.directive) node.directive.fuzzy = -0.1;
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
@@ -358,7 +358,7 @@ describe('ValidationService', () => {
     });
     
     it.skip('should throw on invalid fuzzy threshold (above 1) with Fatal severity', async () => {
-      const node = createEmbedDirective('test.md', 'section');
+      const node = createAddDirective('test.md', 'section');
        if (node.directive) node.directive.fuzzy = 1.1;
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,

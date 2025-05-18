@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, vi, afterEach, type Mock } from 'vite
 import type { DirectiveNode, DirectiveData, MeldNode, VariableReferenceNode, TextNode, IDirectiveData } from '@core/syntax/types/index';
 import type { StructuredPath } from '@core/syntax/types/nodes';
 import { createMeldPath, unsafeCreateValidatedResourcePath, PathContentType, unsafeCreateAbsolutePath, MeldPath } from '@core/types/paths';
-import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+import { AddDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/AddDirectiveHandler';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import type { ResolutionContext } from '@core/types/resolution';
 import type { IStateService } from '@services/state/StateService/IStateService';
@@ -19,7 +19,7 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
-import { createLocation, createEmbedDirective, createTextNode, createVariableReferenceNode } from '@tests/utils/testFactories';
+import { createLocation, createAddDirective, createTextNode, createVariableReferenceNode } from '@tests/utils/testFactories';
 import { embedDirectiveExamples } from '@core/syntax/index';
 import { expectToThrowWithConfig, ErrorTestOptions } from '@tests/utils/ErrorTestUtils';
 import { VariableType, TextVariable, DataVariable, VariableOrigin, type IPathVariable, MeldVariable } from '@core/types/variables';
@@ -31,7 +31,7 @@ import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHa
 import * as path from 'path';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
-import type { EmbedDirectiveData } from '@core/syntax/types/directives';
+import type { AddDirectiveData } from '@core/syntax/types/directives';
 import { DirectiveResult } from '@core/directives/DirectiveHandler';
 import { container, DependencyContainer } from 'tsyringe';
 import { 
@@ -49,7 +49,7 @@ import { CircularityService } from '@services/resolution/CircularityService/Circ
 import { CircularityServiceMock } from '@tests/utils/mocks/serviceMocks.ts';
 
 /**
- * EmbedDirectiveHandler Test Status
+ * AddDirectiveHandler Test Status
  * --------------------------------
  * 
  * MIGRATION STATUS: Refactored to Manual Child Container
@@ -60,9 +60,9 @@ import { CircularityServiceMock } from '@tests/utils/mocks/serviceMocks.ts';
  * - Explicit registration of mocks and the real handler
  */
 
-describe('EmbedDirectiveHandler', () => {
+describe('AddDirectiveHandler', () => {
   let testContainer: DependencyContainer;
-  let handler: EmbedDirectiveHandler;
+  let handler: AddDirectiveHandler;
   let resolutionServiceMock: ReturnType<typeof createResolutionServiceMock>;
   let stateServiceMock: ReturnType<typeof createStateServiceMock>;
   let fileSystemServiceMock: ReturnType<typeof createFileSystemServiceMock>;
@@ -170,9 +170,9 @@ describe('EmbedDirectiveHandler', () => {
     testContainer.registerInstance<InterpreterServiceClientFactory>('InterpreterServiceClientFactory', interpreterServiceClientFactoryMock);
     testContainer.registerInstance<DependencyContainer>('DependencyContainer', testContainer);
 
-    testContainer.register(EmbedDirectiveHandler, { useClass: EmbedDirectiveHandler });
+    testContainer.register(AddDirectiveHandler, { useClass: AddDirectiveHandler });
 
-    handler = testContainer.resolve(EmbedDirectiveHandler);
+    handler = testContainer.resolve(AddDirectiveHandler);
   });
 
   afterEach(() => {
@@ -194,7 +194,7 @@ describe('EmbedDirectiveHandler', () => {
 
   describe('basic embed functionality', () => {
     it('should handle basic embed without modifiers (subtype: embedPath)', async () => {
-      const node = createEmbedDirective('./some/file.txt', undefined, createLocation(1, 1), 'embedPath');
+      const node = createAddDirective('./some/file.txt', undefined, createLocation(1, 1), 'embedPath');
       const processingContext = createMockProcessingContext(node);
       const resolvedPathString = '/path/to/some/file.txt'; 
       const resolvedPath: MeldPath = createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath(resolvedPathString));
@@ -217,7 +217,7 @@ describe('EmbedDirectiveHandler', () => {
     });
 
     it('should handle embed with section (subtype: embedPath)', async () => {
-      const node = createEmbedDirective('./section.md', 'Section 1', createLocation(1, 1), 'embedPath');
+      const node = createAddDirective('./section.md', 'Section 1', createLocation(1, 1), 'embedPath');
       const processingContext = createMockProcessingContext(node);
       const resolvedPathString = '/path/to/section.md';
       const resolvedPath: MeldPath = createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath(resolvedPathString));
@@ -246,7 +246,7 @@ describe('EmbedDirectiveHandler', () => {
 
   describe('error handling', () => {
     it('should throw error if file not found', async () => {
-      const node = createEmbedDirective('non-existent-file.txt', undefined, createLocation(1, 1), 'embedPath');
+      const node = createAddDirective('non-existent-file.txt', undefined, createLocation(1, 1), 'embedPath');
       const processingContext = createMockProcessingContext(node);
       const resolvedPathString = '/path/to/non-existent-file.txt';
       const resolvedPath: MeldPath = createMeldPath('non-existent-file.txt', unsafeCreateValidatedResourcePath(resolvedPathString));
@@ -266,7 +266,7 @@ describe('EmbedDirectiveHandler', () => {
     });
     
     it('should handle section extraction failure gracefully', async () => {
-      const node = createEmbedDirective('doc.md', 'MissingSection', createLocation(1, 1), 'embedPath');
+      const node = createAddDirective('doc.md', 'MissingSection', createLocation(1, 1), 'embedPath');
       const processingContext = createMockProcessingContext(node);
       const resolvedPath = createMeldPath('doc.md', unsafeCreateValidatedResourcePath('/path/to/doc.md'));
       const extractionError = new Error('Section not found');
@@ -284,7 +284,7 @@ describe('EmbedDirectiveHandler', () => {
     });
 
     it('should handle error during path resolution', async () => {
-      const node = createEmbedDirective('{{errorPath}}', undefined, createLocation(1, 1), 'embedVariable');
+      const node = createAddDirective('{{errorPath}}', undefined, createLocation(1, 1), 'embedVariable');
       const processingContext = createMockProcessingContext(node);
       const resolutionError = new Error('Cannot resolve path var');
       resolutionServiceMock.resolveInContext.mockRejectedValueOnce(resolutionError);
@@ -297,7 +297,7 @@ describe('EmbedDirectiveHandler', () => {
     });
 
     it('should handle error during file reading', async () => {
-      const node = createEmbedDirective('read_error.txt', undefined, createLocation(1, 1), 'embedPath');
+      const node = createAddDirective('read_error.txt', undefined, createLocation(1, 1), 'embedPath');
       const processingContext = createMockProcessingContext(node);
       const resolvedPath = createMeldPath('read_error.txt', unsafeCreateValidatedResourcePath('/path/to/read_error.txt'));
       const readError = new Error('Disk read failed');
@@ -314,7 +314,7 @@ describe('EmbedDirectiveHandler', () => {
     });
 
     it('should handle variable resolution failure in path', async () => {
-      const node = createEmbedDirective('{{undefinedVar}}/file.txt', undefined, createLocation(1, 1), 'embedVariable');
+      const node = createAddDirective('{{undefinedVar}}/file.txt', undefined, createLocation(1, 1), 'embedVariable');
       const processingContext = createMockProcessingContext(node);
       const resolutionError = new Error('Var not found');
       resolutionServiceMock.resolveInContext.mockRejectedValueOnce(resolutionError);
@@ -329,7 +329,7 @@ describe('EmbedDirectiveHandler', () => {
     it('should handle variable resolution failure in template', async () => {
         const nonExistentVarNode: VariableReferenceNode = { type: 'VariableReference', nodeId: 'vr-nonexist', identifier: 'nonExistent', valueType: VariableType.TEXT, isVariableReference: true, location: createLocation(1, 20) };
         const templateNodes: InterpolatableValue = [ createTextNode('Value is: '), nonExistentVarNode ];
-        const node = createEmbedDirective( templateNodes, undefined, createLocation(1, 1), 'embedTemplate' );
+        const node = createAddDirective( templateNodes, undefined, createLocation(1, 1), 'embedTemplate' );
         const processingContext = createMockProcessingContext(node);
         const resolutionError = new Error('Var not found in template');
         resolutionServiceMock.resolveNodes.mockRejectedValueOnce(resolutionError);
@@ -344,7 +344,7 @@ describe('EmbedDirectiveHandler', () => {
 
   describe('Path variables', () => {
     it('should handle user-defined path variables with $', async () => {
-      const node = createEmbedDirective('$docsPath/file.txt', undefined, createLocation(1, 1), 'embedVariable');
+      const node = createAddDirective('$docsPath/file.txt', undefined, createLocation(1, 1), 'embedVariable');
       const processingContext = createMockProcessingContext(node);
       const resolvedPathString = '/path/to/docs/file.txt';
       const resolvedPath: MeldPath = createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath(resolvedPathString));
@@ -367,7 +367,7 @@ describe('EmbedDirectiveHandler', () => {
   
   describe('Variable reference embeds', () => {
     it('should handle simple variable reference embeds', async () => {
-      const node = createEmbedDirective('{{textVar}}', undefined, createLocation(1, 1), 'embedVariable');
+      const node = createAddDirective('{{textVar}}', undefined, createLocation(1, 1), 'embedVariable');
       const processingContext = createMockProcessingContext(node);
       const resolvedValue = 'Resolved Text';
       resolutionServiceMock.resolveInContext.mockResolvedValueOnce(resolvedValue);
@@ -382,7 +382,7 @@ describe('EmbedDirectiveHandler', () => {
     });
 
     it('should handle data variable reference embeds (using dot notation)', async () => {
-      const node = createEmbedDirective('{{dataVar.user.name}}', undefined, createLocation(1, 1), 'embedVariable');
+      const node = createAddDirective('{{dataVar.user.name}}', undefined, createLocation(1, 1), 'embedVariable');
       const processingContext = createMockProcessingContext(node);
       const resolvedValue = 'Alice';
       resolutionServiceMock.resolveInContext.mockResolvedValueOnce(resolvedValue);
@@ -411,7 +411,7 @@ describe('EmbedDirectiveHandler', () => {
             createTextNode('User: '),
             nameVarNode
         ];
-        const node = createEmbedDirective(templateNodes, undefined, createLocation(1, 1), 'embedTemplate');
+        const node = createAddDirective(templateNodes, undefined, createLocation(1, 1), 'embedTemplate');
         const processingContext = createMockProcessingContext(node);
         const resolvedValue = 'User: Alice'; 
         resolutionServiceMock.resolveNodes.mockResolvedValueOnce(resolvedValue);
@@ -428,7 +428,7 @@ describe('EmbedDirectiveHandler', () => {
 
   describe('Transformation mode', () => {
       it('should return replacement node when transformation is enabled', async () => {
-        const node = createEmbedDirective('./content.md', undefined, createLocation(), 'embedPath');
+        const node = createAddDirective('./content.md', undefined, createLocation(), 'embedPath');
         const processingContext = createMockProcessingContext(node);
         const resolvedPath = createMeldPath('./content.md', unsafeCreateValidatedResourcePath('/path/to/content.md'));
         const fileContent = 'File content for transform';
@@ -449,7 +449,7 @@ describe('EmbedDirectiveHandler', () => {
     });
 
      it('should still return replacement node even when transformation is disabled', async () => {
-        const node = createEmbedDirective('./content.md', undefined, createLocation(), 'embedPath');
+        const node = createAddDirective('./content.md', undefined, createLocation(), 'embedPath');
         const processingContext = createMockProcessingContext(node);
         const resolvedPath = createMeldPath('./content.md', unsafeCreateValidatedResourcePath('/path/to/content.md'));
         const fileContent = 'File content no transform';

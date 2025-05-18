@@ -212,7 +212,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           if (embedSubtype === 'embedPath') {
               const embedPathObject = embedDetails.path;
               if (!embedPathObject) {
-                 throw new DirectiveError('Missing path for @embed source (subtype: embedPath)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
+                 throw new DirectiveError('Missing path for @add source (subtype: embedPath)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
               }
               const valueToResolve = embedPathObject.interpolatedValue ?? embedPathObject.raw;
               const resolvedEmbedPathString = await this.resolutionService.resolveInContext(valueToResolve, resolutionContext);
@@ -222,21 +222,21 @@ export class TextDirectiveHandler implements IDirectiveHandler {
                   throw new DirectiveError(`Cannot embed non-filesystem path: ${resolvedEmbedPathString}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
               }
               if (!this.fileSystemService) { 
-                throw new DirectiveError('File system service is unavailable for @embed execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, errorDetailsContext);
+                throw new DirectiveError('File system service is unavailable for @add execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, errorDetailsContext);
               }
               fileContent = await this.fileSystemService.readFile(validatedMeldPath.validatedPath);
 
           } else if (embedSubtype === 'embedVariable') {
               const embedPathObject = embedDetails.path; 
               if (!embedPathObject) {
-                 throw new DirectiveError('Missing variable reference for @embed source (subtype: embedVariable)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
+                 throw new DirectiveError('Missing variable reference for @add source (subtype: embedVariable)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
               }
               fileContent = await this.resolutionService.resolveInContext(embedPathObject.raw, resolutionContext);
 
           } else if (embedSubtype === 'embedTemplate') {
               const templateContent = embedDetails.content;
               if (!templateContent || !isInterpolatableValueArray(templateContent)) { 
-                  throw new DirectiveError('Missing or invalid content for @embed source (subtype: embedTemplate)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
+                  throw new DirectiveError('Missing or invalid content for @add source (subtype: embedTemplate)', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
               }
               fileContent = await this.resolutionService.resolveNodes(templateContent, resolutionContext);
           } else {
@@ -252,11 +252,11 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         } catch (error) {
           if (error instanceof DirectiveError) throw error;
           if (error instanceof MeldResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) {
-            throw new DirectiveError('Failed to resolve @embed source for @text directive', this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { ...errorDetailsContext, cause: error instanceof Error ? error : undefined });
+            throw new DirectiveError('Failed to resolve @add source for @text directive', this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { ...errorDetailsContext, cause: error instanceof Error ? error : undefined });
           } else if (error instanceof Error) {
             throw new DirectiveError(`Failed to read/process embed source for @text directive: ${error.message}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { ...errorDetailsContext, cause: error });
           }
-          throw new DirectiveError('Unknown error during @embed execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { ...errorDetailsContext, cause: error instanceof Error ? error : undefined });
+          throw new DirectiveError('Unknown error during @add execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { ...errorDetailsContext, cause: error instanceof Error ? error : undefined });
         }
       } else {
         throw new DirectiveError(

@@ -55,7 +55,7 @@ export class ExecDirectiveHandler implements IDirectiveHandler {
      
       // Validator should ensure this, but check for compiler satisfaction
       if (value === undefined && command === undefined) {
-        throw new DirectiveError('Internal Error: Define directive lacks required "command" or "value" property after validation.', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { ...baseErrorDetails });
+        throw new DirectiveError('Internal Error: Exec directive lacks required "command" or "value" property after validation.', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { ...baseErrorDetails });
       }
       
       // Parse name for potential embedded metadata
@@ -84,7 +84,7 @@ export class ExecDirectiveHandler implements IDirectiveHandler {
       };
       
       if (value !== undefined) {
-        // Defined using literal value (e.g., @define cmd = "echo {{var}}")
+        // Defined using literal value (e.g., @exec cmd = "echo {{var}}")
          // Resolve the InterpolatableValue to get the final command string
          let resolvedCommandTemplate: string;
          try {
@@ -226,11 +226,11 @@ export class ExecDirectiveHandler implements IDirectiveHandler {
       } else {
         // This block should be unreachable due to the initial check L58
         // Throw an internal error just in case.
-        throw new DirectiveError('Internal Error: Reached unreachable code in @define handler.', this.kind, DirectiveErrorCode.STATE_ERROR, { ...baseErrorDetails });
+        throw new DirectiveError('Internal Error: Reached unreachable code in @exec handler.', this.kind, DirectiveErrorCode.STATE_ERROR, { ...baseErrorDetails });
       }
 
     } catch (error) {
-      logger.error(`Error handling @define directive: ${error instanceof Error ? error.message : String(error)}`, { error, node: node });
+      logger.error(`Error handling @exec directive: ${error instanceof Error ? error.message : String(error)}`, { error, node: node });
       
       // Wrap in DirectiveError if needed
       if (error instanceof DirectiveError) {
@@ -259,7 +259,7 @@ export class ExecDirectiveHandler implements IDirectiveHandler {
       const details = { ...baseErrorDetails, cause };
       
       const resolutionError = new DirectiveError(
-        error instanceof Error ? error.message : 'Unknown error in define directive',
+        error instanceof Error ? error.message : 'Unknown error in exec directive',
         this.kind,
         errorCode,
         details
@@ -281,7 +281,7 @@ export class ExecDirectiveHandler implements IDirectiveHandler {
 
     if (!name) {
       throw new DirectiveError(
-        'Define directive requires a valid base identifier name',
+        'Exec directive requires a valid base identifier name',
         this.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
         {} // Cannot provide node details here easily
