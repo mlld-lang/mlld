@@ -56,8 +56,6 @@
       /lifecycle.ts # Lifecycle stage extensions
       /validation.ts # Validation extensions
       /execution.ts # Execution extensions
-    /legacy         # Deprecated types (temporary)
-      /index.ts     # Re-exports for backward compatibility
     /index.ts       # Main re-export point
 ```
 
@@ -66,6 +64,35 @@
 **Confidence: 95/100**
 
 With our unified type architecture decision, we're restructuring to eliminate artificial AST/runtime separation and create a cohesive type system.
+
+### ParserService Transformation Strategy
+
+**Key Insight**: The AST grammar remains unchanged. The ParserService creates the discriminated union from existing AST nodes.
+
+1. **Grammar Stability** - Peggy grammar files continue producing existing AST structures with `nodeId` and `location`
+2. **Union Creation** - ParserService validates and types AST nodes as `ASTNode` union
+3. **State Storage** - StateService stores nodes generically using the union type
+4. **No Migration Bridge** - Clean cutover without legacy compatibility layers
+
+### Processing Pipeline Flow
+
+1. **Parser Phase**: 
+   - Grammar produces AST nodes with `type`, `nodeId`, `location`
+   - ParserService creates `ASTNode[]` union type from raw AST
+   
+2. **Interpreter Phase**:
+   - Processes `ASTNode[]` using discriminated unions
+   - Calls appropriate handlers based on node type
+   
+3. **Handler Phase**:
+   - Handlers process specific node types
+   - Return `StateChanges` (variables, commands, etc.)
+   - Do not mutate nodes directly
+   
+4. **State Phase**:
+   - StateService stores nodes generically as `ASTNode[]`
+   - Tracks node transformations when enabled
+   - Manages variables, imports, and other state
 
 ### Step 1: Analyze Current Type Duplication (1 day)
 
@@ -91,24 +118,55 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 3. Define standard extension patterns
 4. Set up discriminated unions
 
-### Step 3: Implement Lifecycle Extensions (1-2 days)
+### Step 3: Define Unified AST Node Union (1-2 days)
 
-1. Create extension interfaces for each pipeline stage:
-   - Parsing extensions
-   - Validation extensions
-   - Resolution extensions
-   - Execution extensions
-2. Define type guards for each stage
-3. Create utility functions for type narrowing
+1. Create the discriminated union type for all AST nodes:
+   ```typescript
+   // Define union of all AST node types
+   type ASTNode = 
+     | TextNode 
+     | DirectiveNode 
+     | CodeFenceNode
+     | CommentNode
+     | VariableReferenceNode
+     | LiteralNode
+     | DotSeparatorNode
+     | PathSeparatorNode;
+   
+   // All nodes already have from AST:
+   // - type: string (discriminator)
+   // - nodeId: string
+   // - location?: SourceLocation
+   ```
+2. Implement ParserService transformation:
+   ```typescript
+   // In ParserService
+   function transformParsedNodes(rawAst: any[]): ASTNode[] {
+     return rawAst.map(node => {
+       // Validate node has required fields from AST
+       if (!node.type || !node.nodeId) {
+         throw new Error('Invalid AST node');
+       }
+       return node as ASTNode;
+     });
+   }
+   ```
+3. Define minimal type guards using discriminated unions:
+   ```typescript
+   function isTextNode(node: ASTNode): node is TextNode {
+     return node.type === 'Text';
+   }
+   ```
 
-### Step 4: Merge AST and Runtime Types (2-3 days)
+### Step 4: Implement ParserService Transformation (2-3 days)
 
-1. For each type (Variable, Text, etc.):
-   - Unify AST definition with runtime type
-   - Add optional fields for runtime data
-   - Preserve all necessary information
-2. Update grammar to produce unified types
+1. Create transformation functions in ParserService:
+   - Transform raw AST nodes → unified types
+   - Add initial fields (nodeId, location, raw)
+   - Preserve all AST information
+2. Update ParserService interface to return unified types
 3. Update state service to use unified types
+4. Remove old MeldNode imports from services
 
 ### Step 5: Update Service Interfaces (1-2 days)
 
@@ -117,16 +175,16 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 3. Simplify handler interfaces
 4. Update dependency injection types
 
-### Step 6: Create Migration Bridge (1 day)
+### Step 6: Remove Legacy Types (1 day)
 
-1. Create compatibility layer for old imports
-2. Add deprecation warnings
-3. Provide automated migration scripts
-4. Document breaking changes
+1. Remove old syntax types from `core/syntax/types`
+2. Update all remaining imports
+3. Clean up unused type definitions
+4. Verify no circular dependencies
 
 ### Step 7: Update All Imports (2-3 days)
 
-1. Update parser to generate unified types
+1. Update ParserService transformation to produce unified types
 2. Update interpreter to handle unified types
 3. Update state service completely
 4. Update all directive handlers
@@ -287,13 +345,13 @@ Phase 3 will be considered successful when:
 
 **Confidence: 85/100**
 
-- **Week 1:** Steps 1-3 (Analysis, unified type creation, lifecycle extensions)
-- **Week 2:** Steps 4-5 (Merge types, update services)
-- **Week 3:** Steps 6-8 (Migration bridge, imports, validation)
+- **Week 1:** Steps 1-3 (Analysis, create union types, ParserService transformation)
+- **Week 2:** Steps 4-5 (Update StateService, update all service interfaces)
+- **Week 3:** Steps 6-8 (Remove legacy types, fix imports, validation)
 
-Total: 3 weeks for complete implementation
+Total: 2-3 weeks for complete implementation
 
-Note: This is more ambitious than the original plan due to unifying types, but eliminates future confusion and maintenance burden.
+Note: ParserService transformation approach significantly reduces complexity and risk compared to grammar modifications.
 
 ## Confidence Assessment
 
@@ -301,10 +359,10 @@ Note: This is more ambitious than the original plan due to unifying types, but e
 |-----|-------------|-----------|-------|
 | 1 | Analyze current type duplication | 92 | Existing types are well organized but mapping may reveal gaps |
 | 2 | Create unified type definitions | 90 | Need to confirm final base interfaces |
-| 3 | Implement lifecycle extensions | 85 | Unsure of expected extension pattern |
-| 4 | Merge AST and runtime types | 80 | Requires grammar updates and broad refactor |
+| 3 | Define unified AST node union | 95 | Clear discriminated union approach per STATE-UPDATES.md |
+| 4 | Implement ParserService transformation | 95 | Clear approach: transform AST → unified types |
 | 5 | Update service interfaces | 90 | Service files are clear but numerous |
-| 6 | Create migration bridge | 80 | Clarify scope of legacy aliases |
+| 6 | Remove legacy types | 95 | Clean cutover, no compatibility needed |
 | 7 | Update all imports | 85 | Many packages rely on old paths |
 | 8 | Validation and documentation | 90 | Straightforward once types settle |
 
