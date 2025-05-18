@@ -63,7 +63,8 @@ describe('PathDirectiveHandler - Fixture Tests', () => {
     });
     mockResolutionService = mockDeep<IResolutionService>({ 
         resolveInContext: vi.fn(), 
-        resolvePath: vi.fn() 
+        resolvePath: vi.fn(),
+        resolveNodes: vi.fn() 
     });
     mockPathService = mockDeep<IPathService>();
 
@@ -87,7 +88,7 @@ describe('PathDirectiveHandler - Fixture Tests', () => {
     vi.clearAllMocks();
   });
 
-  // Helper to get directive from fixture with adapter for old AST structure
+  // Helper to get directive from fixture using the correct AST structure
   const getDirectiveFromFixture = async (fixtureName: string): Promise<DirectiveNode> => {
     const fixture = fixtureLoader.getFixture(fixtureName);
     if (!fixture) {
@@ -107,24 +108,8 @@ describe('PathDirectiveHandler - Fixture Tests', () => {
       throw new Error(`First AST node in fixture ${fixtureName} is not a Directive`);
     }
     
-    // Adapt the new AST structure to what the handler expects
-    // The handler expects a PathDirectiveData structure with pathObject
-    const adaptedNode = {
-      ...directiveNode,
-      directive: {
-        kind: directiveNode.kind || fixture.metadata?.kind || 'path',
-        type: 'directive',
-        identifier: directiveNode.values?.identifier?.[0]?.identifier || 'unknown',
-        path: {
-          raw: directiveNode.values?.path?.[0]?.content || directiveNode.raw?.path || '',
-          structured: {}, // Basic structured object
-          interpolatedValue: undefined // Will be set if there are variables
-        },
-        location: directiveNode.location
-      }
-    };
-    
-    return adaptedNode as DirectiveNode;
+    // Return the node directly - no adaptation needed
+    return directiveNode as DirectiveNode;
   };
 
   // Helper to create processing context
@@ -165,7 +150,7 @@ describe('PathDirectiveHandler - Fixture Tests', () => {
       const mockValidatedPath = createMockMeldPathForTest(expectedResolvedString);
       
       // Mock service methods
-      const resolveInContextSpy = vi.spyOn(mockResolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedString);
+      const resolveNodesSpy = vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue(expectedResolvedString);
       const resolvePathSpy = vi.spyOn(mockResolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
       const validateSpy = vi.spyOn(mockValidationService, 'validate').mockResolvedValue(undefined);
 
@@ -190,7 +175,7 @@ describe('PathDirectiveHandler - Fixture Tests', () => {
       const expectedResolvedString = '/home/user/projects/meld/README.md';
       const mockValidatedPath = createMockMeldPathForTest(expectedResolvedString);
       
-      const resolveInContextSpy = vi.spyOn(mockResolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedString);
+      const resolveNodesSpy = vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue(expectedResolvedString);
       const resolvePathSpy = vi.spyOn(mockResolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
       const validateSpy = vi.spyOn(mockValidationService, 'validate').mockResolvedValue(undefined);
       const processingContext = createMockProcessingContext(node);
@@ -199,7 +184,7 @@ describe('PathDirectiveHandler - Fixture Tests', () => {
 
       expect(validateSpy).toHaveBeenCalledWith(node);
       expect(result.stateChanges).toBeDefined();
-      const identifier = node.directive.identifier;
+      const identifier = node.values?.identifier?.[0]?.identifier;
       expect(result.stateChanges?.variables).toHaveProperty(identifier);
       const pathDef = result.stateChanges?.variables?.[identifier];
       expect(pathDef?.type).toBe(VariableType.PATH);
@@ -215,7 +200,7 @@ describe('PathDirectiveHandler - Fixture Tests', () => {
       const expectedResolvedString = '/project/src/index.ts';
       const mockValidatedPath = createMockMeldPathForTest(expectedResolvedString);
       
-      const resolveInContextSpy = vi.spyOn(mockResolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedString);
+      const resolveNodesSpy = vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue(expectedResolvedString);
       const resolvePathSpy = vi.spyOn(mockResolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
       const validateSpy = vi.spyOn(mockValidationService, 'validate').mockResolvedValue(undefined);
       const processingContext = createMockProcessingContext(node);
@@ -224,7 +209,7 @@ describe('PathDirectiveHandler - Fixture Tests', () => {
 
       expect(validateSpy).toHaveBeenCalledWith(node);
       expect(result.stateChanges).toBeDefined();
-      const identifier = node.directive.identifier;
+      const identifier = node.values?.identifier?.[0]?.identifier;
       expect(result.stateChanges?.variables).toHaveProperty(identifier);
       const pathDef = result.stateChanges?.variables?.[identifier];
       expect(pathDef?.type).toBe(VariableType.PATH);
@@ -240,7 +225,7 @@ describe('PathDirectiveHandler - Fixture Tests', () => {
       const expectedResolvedString = '/home/user/test.meld';
       const mockValidatedPath = createMockMeldPathForTest(expectedResolvedString);
       
-      const resolveInContextSpy = vi.spyOn(mockResolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedString);
+      const resolveNodesSpy = vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue(expectedResolvedString);
       const resolvePathSpy = vi.spyOn(mockResolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
       const validateSpy = vi.spyOn(mockValidationService, 'validate').mockResolvedValue(undefined);
       const processingContext = createMockProcessingContext(node);
@@ -249,7 +234,7 @@ describe('PathDirectiveHandler - Fixture Tests', () => {
 
       expect(validateSpy).toHaveBeenCalledWith(node);
       expect(result.stateChanges).toBeDefined();
-      const identifier = node.directive.identifier;
+      const identifier = node.values?.identifier?.[0]?.identifier;
       expect(result.stateChanges?.variables).toHaveProperty(identifier);
       const pathDef = result.stateChanges?.variables?.[identifier];
       expect(pathDef?.type).toBe(VariableType.PATH);
@@ -277,18 +262,18 @@ describe('PathDirectiveHandler - Fixture Tests', () => {
       const expectedResolvedString = '/project/subdir/file.ts';
       const mockValidatedPath = createMockMeldPathForTest(expectedResolvedString);
       
-      const resolveInContextSpy = vi.spyOn(mockResolutionService, 'resolveInContext').mockResolvedValue(expectedResolvedString);
+      const resolveNodesSpy = vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue(expectedResolvedString);
       const resolvePathSpy = vi.spyOn(mockResolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
       const validateSpy = vi.spyOn(mockValidationService, 'validate').mockResolvedValue(undefined);
       const processingContext = createMockProcessingContext(node);
 
       // Only run the test if we have a valid path node
-      if (node.directive.kind === 'path') {
+      if (node.kind === 'path') {
         const result = await handler.handle(processingContext) as DirectiveResult;
 
         expect(validateSpy).toHaveBeenCalledWith(node);
         expect(result.stateChanges).toBeDefined();
-        const identifier = node.directive.identifier;
+        const identifier = node.values?.identifier?.[0]?.identifier;
         expect(result.stateChanges?.variables).toHaveProperty(identifier);
         const pathDef = result.stateChanges?.variables?.[identifier];
         expect(pathDef?.type).toBe(VariableType.PATH);
@@ -323,7 +308,7 @@ describe('PathDirectiveHandler - Fixture Tests', () => {
       const processingContext = createMockProcessingContext(node);
       
       vi.spyOn(mockValidationService, 'validate').mockResolvedValue(undefined);
-      vi.spyOn(mockResolutionService, 'resolveInContext').mockRejectedValueOnce(originalError);
+      vi.spyOn(mockResolutionService, 'resolveNodes').mockRejectedValueOnce(originalError);
 
       const executionPromise = handler.handle(processingContext);
 

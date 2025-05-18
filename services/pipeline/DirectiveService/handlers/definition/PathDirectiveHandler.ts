@@ -61,20 +61,30 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       await this.validationService.validate(node);
 
       // Assert directive node structure
-      if (!node.directive || node.directive.kind !== 'path') {
+      if (node.kind !== 'path') {
           throw new DirectiveError('Invalid node type provided to PathDirectiveHandler', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
       }
-      const directive = node.directive as PathDirectiveData; 
-      const identifier = directive.identifier;
-      const pathObject = directive.path;
+      
+      // Access properties directly from node values
+      const values = node.values;
+      const identifier = values?.identifier?.[0]?.identifier;
+      const pathObject = values?.path;
+
+      // Validate required fields
+      if (!identifier) {
+        throw new DirectiveError('Path directive requires an identifier', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
+      }
+      
+      if (!pathObject || !Array.isArray(pathObject)) {
+        throw new DirectiveError('Path directive requires a path value', this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetails);
+      }
 
       // Resolve the path object using the provided resolution context
       let resolvedPathString: string;
       try {
-          // Resolve path value which might contain interpolation
-          const valueToResolve = pathObject.interpolatedValue ?? pathObject.raw;
-          resolvedPathString = await this.resolutionService.resolveInContext(
-              valueToResolve, 
+          // Resolve path nodes which might contain interpolation
+          resolvedPathString = await this.resolutionService.resolveNodes(
+              pathObject, 
               resolutionContext
           );
       } catch (error: unknown) {

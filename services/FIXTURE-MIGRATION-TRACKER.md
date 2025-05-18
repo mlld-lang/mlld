@@ -19,7 +19,7 @@ Tracking the migration of service tests from manual node creation to fixture-bas
 |---------|--------|------------------|-------|
 | TextDirectiveHandler | ✅ Complete | `TextDirectiveHandler.fixture.test.ts` | Handler updated, tests deduplicated, fully migrated |
 | DataDirectiveHandler | ✅ Complete | `DataDirectiveHandler.fixture.test.ts` | Handler updated, adapter layer removed, all tests migrated |
-| PathDirectiveHandler | 🔄 Test-Only | `PathDirectiveHandler.fixture.test.ts` | Tests use adapter layer - handler needs update |
+| PathDirectiveHandler | ✅ Complete | `PathDirectiveHandler.fixture.test.ts` | Handler updated, adapter layer removed, all tests migrated |
 | ImportDirectiveHandler | 🔄 Test-Only | `ImportDirectiveHandler.fixture.test.ts` | Tests use adapter layer - handler needs update |
 | AddDirectiveHandler | 🟡 Not Started | - | Template/variable/section fixtures |
 | RunDirectiveHandler | 🟡 Not Started | - | Code/command/exec fixtures |
@@ -44,11 +44,11 @@ Tracking the migration of service tests from manual node creation to fixture-bas
 
 ## Progress Metrics
 
-- **Tests Migrated**: 4/7 (57%)
-- **Handlers Updated**: 2/7 (29%) - TextDirectiveHandler & DataDirectiveHandler complete
-- **Fixtures Utilized**: ~25/60 (42%)
-- **Tests Converted**: 35/~150 (23%)
-- **Adapter Layers**: 2 (PathDirectiveHandler, ImportDirectiveHandler need removal)
+- **Tests Migrated**: 5/7 (71%)
+- **Handlers Updated**: 3/7 (43%) - TextDirectiveHandler, DataDirectiveHandler & PathDirectiveHandler complete
+- **Fixtures Utilized**: ~30/60 (50%)
+- **Tests Converted**: 42/~150 (28%)
+- **Adapter Layers**: 1 (ImportDirectiveHandler needs removal)
 
 ## Next Steps
 
@@ -61,11 +61,11 @@ For each handler, perform complete migration:
    - [x] Remove adapter layer from fixture tests
    - [x] Evaluate and update non-fixture tests
    - [x] Delete redundant tests, keep complementary ones
-3. [ ] PathDirectiveHandler
-   - [ ] Update handler to use actual AST structure
-   - [ ] Remove adapter layer from fixture tests
-   - [ ] Evaluate and update non-fixture tests
-   - [ ] Delete redundant tests, keep complementary ones
+3. [x] PathDirectiveHandler
+   - [x] Update handler to use actual AST structure
+   - [x] Remove adapter layer from fixture tests
+   - [x] Evaluate and update non-fixture tests
+   - [x] Delete redundant tests, keep complementary ones
 4. [ ] ImportDirectiveHandler
    - [ ] Update handler to use actual AST structure
    - [ ] Remove adapter layer from fixture tests
@@ -92,7 +92,7 @@ For each handler, perform complete migration:
 2. [ ] Remove any remaining legacy test patterns
 3. [ ] Update documentation
 
-Next handler to migrate: PathDirectiveHandler (complete migration)
+Next handler to migrate: ImportDirectiveHandler (complete migration)
 
 ## Migration Guidelines (Updated)
 
