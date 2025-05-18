@@ -242,47 +242,75 @@ async function processExampleFile(examplePath, snapshotsDir, fixturesDir) {
     fixtures: []
   };
   
-  // Process each directive
-  for (const [index, directive] of directives.entries()) {
-    try {
-      // Create a base name for this snapshot/fixture
-      const baseName = `${pathInfo.kind}-${pathInfo.subtype}${pathInfo.variant ? `-${pathInfo.variant}` : ''}${directives.length > 1 ? `-${index + 1}` : ''}`;
-      
-      // First generate a snapshot
-      const { ast, snapshotPath } = await generateSnapshot(
-        directive,
-        snapshotsDir,
-        baseName
-      );
-      
-      results.snapshots.push({ ast, path: snapshotPath });
-      
-      // Then for expected output, generate a fixture without duplicating snapshot
-      if (hasExpectedOutput) {
-        // Create fixture content
-        const fixture = {
-          name: baseName,
-          input: directive,
-          expected: expectedContent,
-          ast,
-          metadata: {
-            kind: Array.isArray(ast) ? ast[0].kind : ast.kind,
-            subtype: Array.isArray(ast) ? ast[0].subtype : ast.subtype,
-          }
-        };
+  // Process directives - for fixtures with expected output, include all directive ASTs
+  if (hasExpectedOutput && directives.length > 0) {
+    // Parse all directives to collect their ASTs
+    const allAsts = [];
+    const allInputs = [];
+    const allMetadata = [];
+    
+    for (const directive of directives) {
+      try {
+        const ast = parse(directive);
+        allAsts.push(...ast); // parser returns array, so spread it
+        allInputs.push(directive);
         
-        // Write the fixture
-        const fixturePath = path.join(fixturesDir, `${baseName}.fixture.json`);
-        await fs.writeFile(
-          fixturePath,
-          JSON.stringify(fixture, null, 2)
+        // Collect metadata for each directive
+        const node = Array.isArray(ast) ? ast[0] : ast;
+        if (node) {
+          allMetadata.push({
+            kind: node.kind,
+            subtype: node.subtype
+          });
+        }
+      } catch (error) {
+        console.error(`Error parsing directive: ${directive}`, error.message);
+      }
+    }
+    
+    // Create a single fixture with all ASTs
+    const baseName = `${pathInfo.kind}-${pathInfo.subtype}${pathInfo.variant ? `-${pathInfo.variant}` : ''}`;
+    
+    const fixture = {
+      name: baseName,
+      input: allInputs.join('\n'),
+      expected: expectedContent,
+      directives: allInputs,
+      ast: allAsts,
+      metadata: {
+        kind: pathInfo.kind,
+        subtype: pathInfo.subtype,
+        ...(pathInfo.variant && { variant: pathInfo.variant })
+      }
+    };
+    
+    // Write the fixture
+    const fixturePath = path.join(fixturesDir, `${baseName}.fixture.json`);
+    await fs.writeFile(
+      fixturePath,
+      JSON.stringify(fixture, null, 2)
+    );
+    
+    console.log(`Fixture written to: ${fixturePath}`);
+    results.fixtures.push({ fixture, path: fixturePath });
+  } else {
+    // Process each directive separately for snapshots only
+    for (const [index, directive] of directives.entries()) {
+      try {
+        // Create a base name for this snapshot
+        const baseName = `${pathInfo.kind}-${pathInfo.subtype}${pathInfo.variant ? `-${pathInfo.variant}` : ''}${directives.length > 1 ? `-${index + 1}` : ''}`;
+        
+        // Generate a snapshot
+        const { ast, snapshotPath } = await generateSnapshot(
+          directive,
+          snapshotsDir,
+          baseName
         );
         
-        console.log(`Fixture written to: ${fixturePath}`);
-        results.fixtures.push({ fixture, path: fixturePath });
+        results.snapshots.push({ ast, path: snapshotPath });
+      } catch (error) {
+        console.error(`Error processing directive in ${examplePath}:`, error.message);
       }
-    } catch (error) {
-      console.error(`Error processing directive in ${examplePath}:`, error.message);
     }
   }
   

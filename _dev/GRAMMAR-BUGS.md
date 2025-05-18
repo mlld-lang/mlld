@@ -71,6 +71,63 @@ These errors occur when trying to parse directives contained within markdown cod
 **Files affected:**
 - `/core/examples/EXAMPLES.md`
 
+## Multiline Template Parsing in Add Directives
+
+**Error:** Parser incorrectly interprets multiline templates as paths
+
+**Examples:**
+```
+@add [[
+Content with {{variable}}
+
+And some more content
+
+Hey, here's the same variable again: {{variable}}
+]]
+```
+
+**Description:**
+The parser is incorrectly parsing `@add [[` as the start of a path directive (addPath) instead of recognizing it as the beginning of a multiline template (addTemplate). The fixture shows the AST has `subtype: "addPath"` with `content: "[["` when it should be `subtype: "addTemplate"`.
+
+**Files affected:**
+- `/core/examples/add/template/example-multiline.md`
+- `/core/ast/fixtures/add-template-multiline.fixture.json`
+
+**Current behavior:**
+- The parser creates an `addPath` node with `path` value of `"[["`
+- Subsequent template content is parsed as separate Text and VariableReference nodes
+- The directive is not properly recognized as a template
+
+**Expected behavior:**
+- Should create an `addTemplate` node
+- The template content should be parsed as part of the directive's `content` value
+- Variables within the template should be properly recognized
+
+## Section Extraction Syntax Not Parsed
+
+**Error:** Section extraction using `#` syntax is not properly parsed
+
+**Examples:**
+```
+@add [file.md # Section 1]
+```
+
+**Description:**
+The parser is not correctly parsing the section extraction syntax. When using the `#` symbol to specify a section, the parser includes it as part of the path string instead of creating a separate `section` property in the values. The handler expects `values.section` to contain the section name, but the AST shows it's all in `values.path` as "file.md # Section 1".
+
+**Files affected:**
+- `/core/examples/add/path/example-section.md`
+- `/core/ast/fixtures/add-path-section.fixture.json`
+
+**Current behavior:**
+- The parser creates `values.path` containing "file.md # Section 1"
+- No `values.section` property is created
+
+**Expected behavior:**
+- Should create `values.path` containing "file.md"
+- Should create `values.section` containing "Section 1"
+- The handler can then use both properties to properly extract the section
+
 ## Suggested Fixes
 
 1. **Nested Property Notation:**
@@ -88,3 +145,8 @@ These errors occur when trying to parse directives contained within markdown cod
 4. **Markdown Code Blocks:**
    - Enhance the directive extractor to ignore content within markdown code blocks
    - Consider adding a flag to control whether to parse examples in documentation
+
+5. **Multiline Template Parsing:**
+   - Fix the grammar rule for `@add` directives to prioritize template detection over path detection
+   - Ensure the parser correctly identifies `[[` as the start of a template rather than a path
+   - Update the lookahead logic to properly distinguish between templates and paths
