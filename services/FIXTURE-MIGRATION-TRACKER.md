@@ -66,11 +66,11 @@ For each handler, perform complete migration:
    - [x] Remove adapter layer from fixture tests
    - [x] Evaluate and update non-fixture tests
    - [x] Delete redundant tests, keep complementary ones
-4. [ ] ImportDirectiveHandler
-   - [ ] Update handler to use actual AST structure
-   - [ ] Remove adapter layer from fixture tests
-   - [ ] Evaluate and update non-fixture tests
-   - [ ] Delete redundant tests, keep complementary ones
+4. [x] ImportDirectiveHandler
+   - [x] Update handler to use actual AST structure
+   - [x] Remove adapter layer from fixture tests
+   - [x] Evaluate and update non-fixture tests
+   - [x] Delete redundant tests, keep complementary ones (removed deprecated importNamed test)
 5. [ ] AddDirectiveHandler
    - [ ] Create fixture-based tests
    - [ ] Update handler to use actual AST structure
@@ -92,7 +92,7 @@ For each handler, perform complete migration:
 2. [ ] Remove any remaining legacy test patterns
 3. [ ] Update documentation
 
-Next handler to migrate: ImportDirectiveHandler (complete migration)
+Next handler to migrate: AddDirectiveHandler
 
 ## Migration Guidelines (Updated)
 
