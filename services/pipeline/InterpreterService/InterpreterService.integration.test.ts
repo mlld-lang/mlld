@@ -3,7 +3,7 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { MeldImportError } from '@core/errors/MeldImportError';
-import type { TextNode, MeldNode, DirectiveNode } from '@core/syntax/types/nodes';
+import type { TextNode, MeldNode, DirectiveNode } from '@core/ast/types';
 import type { DirectiveProcessingContext } from '@core/types/index';
 // Import centralized syntax helpers
 import { createNodeFromExample } from '@core/syntax/helpers/index';

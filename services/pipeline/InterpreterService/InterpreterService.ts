@@ -1,5 +1,5 @@
-import type { MeldNode, SourceLocation, DirectiveNode, TextNode, VariableReferenceNode } from '@core/syntax/types/index';
-import type { InterpolatableValue } from '@core/syntax/types/nodes';
+import type { MeldNode, DirectiveNode, TextNode, VariableReferenceNode } from '@core/ast/types/index';
+import type { SourceLocation, InterpolatableValue } from '@core/syntax/types/nodes';
 import { interpreterLogger as logger } from '@core/utils/logger';
 import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService';
 import type { IStateService } from '@services/state/StateService/IStateService';
@@ -616,9 +616,9 @@ export class InterpreterService implements IInterpreterService {
              const resolvedStringValue = await this.resolutionService.resolveNodes([varNode], varRefContext);
              const resolvedTextNode: TextNode = {
                  type: 'Text',
-                 content: resolvedStringValue,
+                 nodeId: crypto.randomUUID(),
                  location: varNode.location,
-                 nodeId: crypto.randomUUID()
+                 content: resolvedStringValue
              };
              currentState.addNode(resolvedTextNode);
          } catch (error) {
