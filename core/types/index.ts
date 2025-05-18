@@ -115,6 +115,14 @@ export interface ProcessOptions {
  * Centralized export point for core Meld types.
  */
 
+// New unified type structure exports
+export * from './base';
+export * from './nodes';
+export * from './directives';
+export * from './services';
+export * from './system';
+export * from './extensions';
+
 // Export types from common.js, including SourceLocation
 export {
   type JsonValue,
@@ -135,7 +143,6 @@ export * from './state';
 export * from '../errors/index';
 export * from './dependencies';
 export * from './guards';
-export * from './base';
 
 // Explicitly export types from resolution and embed using aliases where needed
 export type { 
@@ -239,4 +246,4 @@ export type {
   ExecutionContext,
   DirectiveProcessingContext,
 }
-*/ 
+*/

@@ -1,7 +1,23 @@
 /**
- * Type guards for Meld directive nodes
+ * Type guards for Meld AST nodes using discriminated unions
  */
-import { DirectiveNode } from './base';
+
+// Import node types for type guards
+import type {
+  TextNode,
+  DirectiveNode,
+  CodeFenceNode,
+  CommentNode,
+  VariableReferenceNode,
+  LiteralNode,
+  DotSeparatorNode,
+  PathSeparatorNode
+} from './nodes';
+
+// Import the union type
+import type { MeldNode } from './index';
+
+// Import existing directive types
 import { ImportDirectiveNode, ImportAllDirectiveNode, ImportSelectedDirectiveNode } from './import';
 import { 
   TextDirectiveNode, 
@@ -22,8 +38,43 @@ import {
   isEmbedDirectiveValue,
   isRunDirectiveValue
 } from './data';
-import { VariableReferenceNode } from '@core/syntax/types/nodes';
 import { ImportWildcardNode } from './values';
+
+/**
+ * Base node type guards using discriminated unions
+ */
+
+export function isTextNode(node: MeldNode): node is TextNode {
+  return node.type === 'Text';
+}
+
+export function isDirectiveNode(node: MeldNode): node is DirectiveNode {
+  return node.type === 'Directive';
+}
+
+export function isCodeFenceNode(node: MeldNode): node is CodeFenceNode {
+  return node.type === 'CodeFence';
+}
+
+export function isCommentNode(node: MeldNode): node is CommentNode {
+  return node.type === 'Comment';
+}
+
+export function isVariableReferenceNode(node: MeldNode): node is VariableReferenceNode {
+  return node.type === 'VariableReference';
+}
+
+export function isLiteralNode(node: MeldNode): node is LiteralNode {
+  return node.type === 'Literal';
+}
+
+export function isDotSeparatorNode(node: MeldNode): node is DotSeparatorNode {
+  return node.type === 'DotSeparator';
+}
+
+export function isPathSeparatorNode(node: MeldNode): node is PathSeparatorNode {
+  return node.type === 'PathSeparator';
+}
 
 /**
  * Import directive type guards

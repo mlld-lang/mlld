@@ -1,5 +1,6 @@
 export * from './positions';
 export * from './common';
+export * from './metadata';
 
 export interface BaseMeldNode {
   type: string;
