@@ -112,7 +112,7 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 4. Create unified type specifications
 5. Review `PLAN-CONTEXT.md` for current import patterns
 
-### Step 2: Create Unified Type Definitions (2-3 days) *(In Progress)*
+### Step 2: Create Unified Type Definitions (2-3 days) *(Completed)*
 
 1. Define base interfaces with progressive enhancement:
    ```typescript
@@ -133,7 +133,7 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 3. Define standard extension patterns
 4. Set up discriminated unions
 
-### Step 3: Define Unified AST Node Union (1-2 days)
+### Step 3: Define Unified AST Node Union (1-2 days) *(Completed)*
 
 **Reference:** See `AST-NODE-DESIGN.md` for complete design details
 
@@ -178,7 +178,7 @@ With our unified type architecture decision, we're restructuring to eliminate ar
    }
    ```
 
-### Step 4: Implement ParserService Transformation (2-3 days)
+### Step 4: Implement ParserService Transformation (2-3 days) *(Completed)*
 
 **Reference:** Use helpers from `AST-NODE-DESIGN.md`
 
@@ -194,7 +194,7 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 
 This step involves updating multiple services to use the new `MeldNode` union type. Each service requires careful attention:
 
-#### 5a. StateService Migration (4-6 days)
+#### 5a. StateService Migration (4-6 days) *(Completed)*
 **Reference:** See `STATE-UPDATES.md` for detailed execution plan
 
 - Update type imports from `@core/syntax/types` to `@core/ast/types`
