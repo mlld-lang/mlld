@@ -191,6 +191,13 @@ With our unified type architecture decision, we're restructuring to eliminate ar
 3. Test with downstream services
 4. Remove old interface imports
 
+### Step 4b: Replace "define"/"embed" with "exec"/"add" *(Completed)*
+
+The new grammar has replaced "define" with "exec" and replaced "embed" with "add".
+
+1. Replace all instances of the terms
+2. Update file names.
+
 ### Step 5: Update Service Interfaces (5-7 days)
 
 This step involves updating multiple services to use the new `MeldNode` union type. Each service requires careful attention:
@@ -209,19 +216,63 @@ This step involves updating multiple services to use the new `MeldNode` union ty
 - Simplify type checking with union discrimination
 - Update handler dispatch logic
 
-#### 5c. Directive Handlers (2-3 days)
+#### 5c. Directive Handlers (2-3 days) *(In Progress)*
 - Update all directive handlers to accept new types
 - Remove redundant type conversions
 - Update return types to match new structure
 
-**Specific Issues to Address:**
-1. **Test Failures**: 8 InterpreterService integration tests failing with "Cannot read properties of undefined (reading 'identifier')"
-   - Occurs in directive processing (text directives, data directives)
-   - Suggests directive handlers may be expecting old node structure
-   - May be related to how `values.identifier` is accessed in directive handlers
-2. **Node Structure Changes**: Directive handlers need to use the new node structure where properties are ordered differently
-3. **Type Imports**: All directive handlers need to update their imports from `@core/syntax/types` to `@core/ast/types`
-4. **Value Access Patterns**: Review how directive handlers access nested properties (e.g., `directive.values.identifier`) to match new structure
+**Comprehensive Issues List (from test analysis):**
+
+1. **AddDirectiveHandler (previously EmbedDirectiveHandler) - 14 failed tests**
+   - Error: "Invalid node type provided to AddDirectiveHandler"
+   - Handler expecting old structure with `node.directive` property
+   - Needs update from `node.directive.kind` to `node.kind`
+   - All internal property access needs updating
+
+2. **TextDirectiveHandler - 7 failed tests**
+   - Error: "Invalid value type for @text source 'literal'. Expected string or InterpolatableValue array"
+   - Value access patterns need updating
+   - Identifier extraction broken: old `node.directive.identifier` → new `node.raw.identifier`
+   - Resolution integration failing
+
+3. **DirectiveService Tests - 3 failed tests**
+   - Mock resolution service returning 'ResolvedNodesValue' instead of actual values
+   - Tests expecting actual directive values but getting placeholder strings
+   - Mock handlers need updates to match new node structure
+
+4. **Node Structure Migration Patterns:**
+   - Old: `node.directive.kind` → New: `node.kind`
+   - Old: `node.directive.identifier` → New: `node.raw.identifier`
+   - Old: `node.directive.values` → New: `node.values`
+   - Old: `node.directive.subtype` → New: `node.subtype`
+
+5. **Handlers Requiring Updates:**
+   - **AddDirectiveHandler**: Remove nested directive property checks
+   - **TextDirectiveHandler**: Fix value type validation and access patterns
+   - **DataDirectiveHandler**: Similar issues to TextDirectiveHandler
+   - **ExecDirectiveHandler** (previously DefineDirectiveHandler): Node structure updates
+   - **RunDirectiveHandler**: Structure updates needed
+   - **ImportDirectiveHandler**: Structure updates needed
+   - **PathDirectiveHandler**: Structure updates needed
+
+6. **Import Path Updates:**
+   - All handlers: `@core/syntax/types` → `@core/ast/types`
+   - Test files: Fix mock implementations
+
+7. **Resolution Service Integration:**
+   - Mock resolution in tests not configured correctly
+   - Returning placeholder 'ResolvedNodesValue' instead of actual resolved content
+   - Need to update resolution mocks to work with new node structure
+
+8. **Additional Issues from Directive Renaming:**
+   - Old syntax: `@embed` → New: `@add`
+   - Old syntax: `@define` → New: `@exec`
+   - Handler class names already updated, but tests and internal references need fixes
+
+**Test Failure Summary:**
+- 15 failed test files out of 41 service test files
+- 127 failed tests total
+- Primary issue: Node structure access patterns throughout directive handlers
 
 #### 5d. Other Services (1-2 days)
 - Update remaining services
