@@ -6,7 +6,7 @@ import type { DirectiveNode, InterpolatableValue, VariableReferenceNode, TextNod
 import type { IStateService } from '@services/state/StateService/IStateService';
 import { ErrorCollector } from '@tests/utils/ErrorTestUtils';
 import { ErrorSeverity, MeldError } from '@core/errors/MeldError';
-import { createLocation, createDirectiveNode as coreCreateDirectiveNode } from '@tests/utils/testFactories';
+import { createLocation, createDirectiveNode } from '@tests/utils/testFactories';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
 import { mock, mockDeep, DeepMockProxy } from 'vitest-mock-extended';
 import type { DirectiveProcessingContext, FormattingContext } from '@core/types/index';
@@ -39,6 +39,7 @@ describe('TextDirectiveHandler Integration', () => {
   let mockResolutionService: DeepMockProxy<IResolutionService>;
   let mockFileSystemService: DeepMockProxy<IFileSystemService>;
   let mockPathService: DeepMockProxy<IPathService>;
+
 
   beforeEach(async () => {
     testContainer = container.createChildContainer();
@@ -134,7 +135,7 @@ describe('TextDirectiveHandler Integration', () => {
 
   describe('complex scenarios', () => {
     it('should handle nested variable references', async () => {
-      const node: DirectiveNode = coreCreateDirectiveNode('text', {
+      const node: DirectiveNode = createDirectiveNode('text', {
         identifier: 'greeting',
         source: 'literal',
         value: [
@@ -144,7 +145,7 @@ describe('TextDirectiveHandler Integration', () => {
           ], location: createLocation(1, 7), valueType: 'text', nodeId: 'vr1' },
           { type: 'Text', content: '!', location: createLocation(1, 20), nodeId: 't2' }
         ]
-      }, createLocation(1,1));
+      }, createLocation(1, 1));
       
       const processingContext = createMockProcessingContext(node);
 
@@ -158,7 +159,7 @@ describe('TextDirectiveHandler Integration', () => {
     });
 
     it('should handle mixed string literals and variables', async () => {
-      const node: DirectiveNode = coreCreateDirectiveNode('text', {
+      const node: DirectiveNode = createDirectiveNode('text', {
         identifier: 'message',
         source: 'literal',
         value: [
@@ -168,7 +169,7 @@ describe('TextDirectiveHandler Integration', () => {
           { type: 'Text', content: '" ', location: createLocation(2, 25), nodeId: 't4' }, 
           { type: 'VariableReference', identifier: 'suffix', location: createLocation(2, 28), valueType: 'text', nodeId: 'vr4' }
         ]
-      }, createLocation(2,1));
+      }, createLocation(2, 1));
       
       const processingContext = createMockProcessingContext(node);
 
@@ -181,7 +182,7 @@ describe('TextDirectiveHandler Integration', () => {
     });
 
     it('should handle complex data structure access', async () => {
-      const node: DirectiveNode = coreCreateDirectiveNode('text', {
+      const node: DirectiveNode = createDirectiveNode('text', {
         identifier: 'userInfo',
         source: 'literal',
         value: [
@@ -206,7 +207,7 @@ describe('TextDirectiveHandler Integration', () => {
     });
 
     it('should handle environment variables with fallbacks', async () => {
-      const node: DirectiveNode = coreCreateDirectiveNode('text', {
+      const node: DirectiveNode = createDirectiveNode('text', {
         identifier: 'config',
         source: 'literal',
         value: [
@@ -236,7 +237,7 @@ describe('TextDirectiveHandler Integration', () => {
     it.todo('should handle error propagation through the stack - Complex error propagation deferred for V1');
 
     it('should handle validation errors with proper context', async () => {
-      const node: DirectiveNode = coreCreateDirectiveNode('text', {
+      const node: DirectiveNode = createDirectiveNode('text', {
         identifier: 'invalid',
         source: 'literal',
         value: null as any

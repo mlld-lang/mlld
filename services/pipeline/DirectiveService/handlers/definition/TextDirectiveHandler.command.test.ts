@@ -18,7 +18,7 @@ import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import { container, type DependencyContainer } from 'tsyringe';
 import { mockDeep, DeepMockProxy } from 'vitest-mock-extended';
-import { createDirectiveNode as coreCreateDirectiveNode, createLocation } from '@tests/utils/testFactories';
+import { createDirectiveNode, createLocation } from '@tests/utils/testFactories';
 import type { IPathService } from '@services/fs/PathService/IPathService';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import path from 'path';
@@ -43,6 +43,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
   let mockResolutionService: DeepMockProxy<IResolutionService>;
   let mockFileSystemService: DeepMockProxy<IFileSystemService>;
   let mockPathService: DeepMockProxy<IPathService>;
+
 
   beforeEach(async () => {
     testContainer = container.createChildContainer();
@@ -123,12 +124,14 @@ describe('TextDirectiveHandler - Command Execution', () => {
     const identifier = 'cmdOutput';
     const command = 'echo "Hello Command"';
 
-    const node = coreCreateDirectiveNode('text', { 
+    const node = createDirectiveNode('text', { 
       identifier: identifier,
       source: 'run',
-      run: { 
-        subtype: 'runCommand',
-        command: [{ type: 'Text', content: command, location: createLocation(), nodeId: 'text-node-1' }]
+      value: { 
+        run: [{ 
+          subtype: 'runCommand',
+          command: [{ type: 'Text', content: command, location: createLocation(), nodeId: 'text-node-1' }]
+        }]
       }
     }, createLocation());
 
@@ -157,12 +160,14 @@ describe('TextDirectiveHandler - Command Execution', () => {
     ];
     const resolvedCommand = 'echo "Input: test value"';
 
-    const node = coreCreateDirectiveNode('text', {
+    const node = createDirectiveNode('text', {
       identifier: identifier,
       source: 'run',
-      run: { 
-        subtype: 'runCommand', 
-        command: commandTemplateNodes
+      value: { 
+        run: [{ 
+          subtype: 'runCommand', 
+          command: commandTemplateNodes
+        }]
       }
     }, createLocation());
 
@@ -188,12 +193,14 @@ describe('TextDirectiveHandler - Command Execution', () => {
     const command = 'echo "special chars: \'\"\\`$"';
     const expectedOutput = 'special chars: \'\"\\`$';
 
-    const node = coreCreateDirectiveNode('text', {
+    const node = createDirectiveNode('text', {
       identifier: identifier,
       source: 'run',
-      run: { 
-        subtype: 'runCommand', 
-        command: [{ type: 'Text', content: command, location: createLocation(), nodeId: 'text-node-4' }]
+      value: { 
+        run: [{ 
+          subtype: 'runCommand', 
+          command: [{ type: 'Text', content: command, location: createLocation(), nodeId: 'text-node-4' }]
+        }]
       }
     }, createLocation());
 
@@ -218,12 +225,14 @@ describe('TextDirectiveHandler - Command Execution', () => {
     const command = 'echo "line1\nline2"';
     const expectedOutput = 'line1\nline2';
 
-    const node = coreCreateDirectiveNode('text', {
+    const node = createDirectiveNode('text', {
       identifier: identifier,
       source: 'run',
-      run: { 
-        subtype: 'runCommand', 
-        command: [{ type: 'Text', content: command, location: createLocation(), nodeId: 'text-node-5' }]
+      value: { 
+        run: [{ 
+          subtype: 'runCommand', 
+          command: [{ type: 'Text', content: command, location: createLocation(), nodeId: 'text-node-5' }]
+        }]
       }
     }, createLocation());
 
@@ -253,12 +262,14 @@ describe('TextDirectiveHandler - Command Execution', () => {
     const resolvedCommand = 'echo "Final: Level 2 references Level 1 output"';
     const finalOutput = 'Final: Level 2 references Level 1 output';
 
-    const node = coreCreateDirectiveNode('text', {
+    const node = createDirectiveNode('text', {
       identifier: identifier,
       source: 'run',
-      run: { 
-        subtype: 'runCommand', 
-        command: commandTemplateNodes
+      value: { 
+        run: [{ 
+          subtype: 'runCommand', 
+          command: commandTemplateNodes
+        }]
       }
     }, createLocation());
 

@@ -111,21 +111,23 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       context: { currentFilePath: currentFilePath ?? undefined } 
     };
 
-    // Assert directive exists before accessing properties
-    if (!node.directive) {
+    // Validate node structure
+    if (node.kind !== 'data') {
        throw new DirectiveError(
-          'Directive node is missing the directive property',
+          'Invalid node kind for DataDirectiveHandler',
           this.kind, 
           DirectiveErrorCode.VALIDATION_FAILED, 
           baseErrorDetails
       );
     }
 
-    const identifier = node.directive.identifier;
-    const source = node.directive.source ?? 'literal';
-    const value = node.directive.value;
-    const add = node.directive.add;
-    const run = node.directive.run;
+    // Access properties directly from node values
+    const values = node.values;
+    const identifier = values?.identifier?.[0]?.identifier;
+    const source = values?.source || 'literal';
+    const value = values?.value;
+    const add = values?.add;
+    const run = values?.run;
 
     if (!identifier) {
       throw new DirectiveError(

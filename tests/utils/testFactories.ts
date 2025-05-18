@@ -186,14 +186,109 @@ export function createDirectiveNode(
   properties: Record<string, any> = {},
   location: Location = DEFAULT_LOCATION
 ): DirectiveNode {
-  return {
+  // Extract common directive properties
+  const { identifier, value, values, source = 'literal', subtype, raw, meta, ...rest } = properties;
+  
+  // Create the node with correct AST structure
+  const node: DirectiveNode = {
     type: 'Directive',
-    directive: {
-      kind,
-      ...properties
-    } as DirectiveData,
-    location
-  };
+    kind,
+    nodeId: `test-directive-${testNodeIdCounter++}`,
+    location,
+    ...rest
+  } as DirectiveNode;
+  
+  // Add source if provided
+  if (source) {
+    node.source = source;
+  }
+  
+  // Add subtype based on kind
+  if (subtype) {
+    node.subtype = subtype;
+  } else {
+    // Set default subtypes based on kind
+    switch (kind) {
+      case 'text':
+        node.subtype = source === 'run' ? 'textRun' : 'textAssignment';
+        break;
+      case 'data':
+        node.subtype = 'dataAssignment';
+        break;
+      case 'path':
+        node.subtype = 'pathAssignment';
+        break;
+      case 'import':
+        node.subtype = 'importAll';
+        break;
+      case 'add':
+        node.subtype = 'addTemplate';
+        break;
+      case 'exec':
+        node.subtype = 'execCode';
+        break;
+      case 'run':
+        node.subtype = 'runCommand';
+        break;
+      default:
+        node.subtype = `${kind}Assignment` as DirectiveSubtype;
+    }
+  }
+  
+  // Set up raw values
+  node.raw = raw || {};
+  if (identifier) {
+    node.raw.identifier = identifier;
+  }
+  
+  // Set up values object
+  node.values = values || {};
+  
+  // If identifier is provided, create the identifier array
+  if (identifier && !node.values.identifier) {
+    node.values.identifier = [{
+      type: 'VariableReference',
+      identifier,
+      nodeId: `test-vref-${testNodeIdCounter++}`,
+      location
+    }];
+  }
+  
+  // Handle different value types
+  if (value !== undefined) {
+    if (kind === 'text' && (source === 'literal' || source === 'template')) {
+      node.raw.content = typeof value === 'string' ? value : '';
+      // Create content array for text directives
+      if (typeof value === 'string') {
+        node.values.content = [{
+          type: 'Text',
+          content: value,
+          nodeId: `test-text-${testNodeIdCounter++}`,
+          location
+        }];
+      } else if (Array.isArray(value)) {
+        node.values.content = value;
+      }
+    } else if (kind === 'text' && source === 'run') {
+      // Handle run directives
+      if (!node.values.run) {
+        node.values.run = value.run || [value];
+      }
+    } else if (kind === 'data') {
+      node.values.value = value;
+      node.raw.value = value;
+    } else if (kind === 'path') {
+      node.values.path = value;
+      node.raw.path = typeof value === 'string' ? value : '';
+    }
+  }
+  
+  // Add meta if provided
+  if (meta) {
+    node.meta = meta;
+  }
+  
+  return node;
 }
 
 /**

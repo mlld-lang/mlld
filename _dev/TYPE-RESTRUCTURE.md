@@ -221,36 +221,43 @@ This step involves updating multiple services to use the new `MeldNode` union ty
 - Remove redundant type conversions
 - Update return types to match new structure
 
-**IMPORTANT: Test Infrastructure Update Required**
+**CRITICAL DISCOVERY: Handlers Using Outdated AST Structure**
 
-Before continuing with directive handler updates, we need to fix the test infrastructure to ensure our handlers remain correct. Tests are currently creating incorrect node structures, leading to backward handler modifications.
+During test migrations, we discovered that the handlers themselves are using the outdated AST structure with `node.directive` property. The actual AST puts all properties directly on the node.
 
-**New Approach: Fixture-Based Testing**
+**Root Cause**:
+- Handlers expect: `node.directive.kind`, `node.directive.values`, etc.
+- Actual AST has: `node.kind`, `node.values`, etc.
+- Test adapter layers were masking this issue by converting new → old structure
+- This prevented us from seeing that handlers needed updates
+
+**New Approach: Update Handlers AND Tests Together**
 - See `UPDATE-TESTS-FIXTURES.md` for the comprehensive plan
 - See `MIGRATION-TO-FIXTURES.md` for migration guide
 - Track progress in `services/FIXTURE-MIGRATION-TRACKER.md`
 
-1. **Problem**: Test factories create incorrect AST structures, causing handlers to be modified to accommodate tests (backwards!)
-2. **Solution**: Use AST fixtures from `core/ast/fixtures/` as authoritative source
+1. **Problem**: Handlers using outdated AST structure, test adapters masking the issue
+2. **Solution**: Update handlers to use actual AST structure while creating fixture-based tests
 3. **Implementation**: 
-   - Created `ASTFixtureLoader` utility
-   - Example migration: `TextDirectiveHandler.fixture-test.ts`
-   - Gradual migration approach
+   - Update handler code to remove `node.directive` references
+   - Create tests without adapter layers
+   - Ensure handlers work with real AST structure
 
-**Migration Order**:
+**Migration Order (Updated)**:
 1. TextDirectiveHandler (example complete)
-2. DataDirectiveHandler
-3. PathDirectiveHandler
-4. ImportDirectiveHandler
-5. AddDirectiveHandler
-6. RunDirectiveHandler
-7. ExecDirectiveHandler
+2. DataDirectiveHandler (tests migrated, handler needs update)
+3. PathDirectiveHandler (tests migrated, handler needs update)
+4. ImportDirectiveHandler (tests migrated, handler needs update)
+5. AddDirectiveHandler (update handler + tests together)
+6. RunDirectiveHandler (update handler + tests together)
+7. ExecDirectiveHandler (update handler + tests together)
 
 **Benefits**:
 - Ensures handlers work with correct AST structure
 - Tests use real-world examples from fixtures
 - Automatically stays in sync with grammar changes
 - Reduces test maintenance burden
+- Eliminates artificial adapter layers
 
 **Comprehensive Issues List (from test analysis):**
 

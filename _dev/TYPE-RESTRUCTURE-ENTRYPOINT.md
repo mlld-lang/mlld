@@ -25,25 +25,29 @@ Unify AST and runtime types into a single coherent type system, eliminating arti
 ## 🚧 Current Issue
 Tests are creating incorrect node structures, causing handlers to be modified backward to accommodate tests instead of real AST structure.
 
+**CRITICAL DISCOVERY**: The handlers themselves are using outdated AST structure with `node.directive` property. The actual AST has structure directly on the node (`node.kind`, `node.values`, etc.)
+
 ## 🔧 Immediate Next Steps
 
-### 1. Complete Test Infrastructure Update (Week 3.5)
+### 1. Update Handlers AND Tests Together (Week 3.5 - Revised Approach)
 - [x] Create `ASTFixtureLoader` utility
 - [x] Create migration guide and example
-- [ ] Migrate handler tests to use fixtures:
+- [x] Discover handler issues via test migration
+- [ ] Update handlers and tests together:
   - [x] TextDirectiveHandler (example complete)
-  - [ ] DataDirectiveHandler
-  - [ ] PathDirectiveHandler
-  - [ ] ImportDirectiveHandler
-  - [ ] AddDirectiveHandler
-  - [ ] RunDirectiveHandler
-  - [ ] ExecDirectiveHandler
+  - [x] DataDirectiveHandler (complete - handler and tests updated)
+  - [x] PathDirectiveHandler (tests only - handler needs update)
+  - [x] ImportDirectiveHandler (tests only - handler needs update)
+  - [ ] AddDirectiveHandler (update both)
+  - [ ] RunDirectiveHandler (update both)
+  - [ ] ExecDirectiveHandler (update both)
 
-### 2. Resume Directive Handler Updates (Step 5c)
-Once tests are using correct AST structures:
-- Fix handlers to work with new unified types
-- Remove backward compatibility code
-- Ensure proper use of `MeldNode` union type
+### 2. Critical Handler Updates Required
+All handlers need to be updated to use the actual AST structure:
+- Remove all `node.directive` references
+- Use `node.kind` instead of `node.directive.kind`
+- Use `node.values` instead of `node.directive.values`
+- Remove adapter layers from tests once handlers are fixed
 
 ## 📐 Technical Context
 
@@ -103,33 +107,41 @@ npm run ast:process-all     # Generate fixtures/snapshots
 npm run ast:validate        # Validate generated types
 ```
 
-## 🔄 Project Workflow
+## 🔄 Project Workflow (Comprehensive Migration)
 
 1. **Check Current Status**
    - Review `TYPE-RESTRUCTURE.md` Step 5c
    - Check `FIXTURE-MIGRATION-TRACKER.md`
 
-2. **Work on Test Migration**
-   - Follow `MIGRATION-TO-FIXTURES.md` guide
-   - Use `TextDirectiveHandler.fixture-test.ts` as example
-   - Update tracker after each migration
+2. **Complete Handler Migration**
+   For each handler:
+   - Create/update fixture-based tests
+   - Update handler to use actual AST structure
+   - Evaluate existing non-fixture tests
+   - Delete redundant tests, update complementary ones
+   - Remove all adapter layers
+   - Ensure comprehensive test coverage
 
-3. **Update Handlers**
-   - Once tests are migrated, fix handler code
-   - Remove old structure support
-   - Use new `MeldNode` union properly
+3. **Test Evaluation Process**
+   - Compare old tests vs fixture tests
+   - Identify which tests are redundant
+   - Keep tests that provide additional coverage
+   - Update kept tests to use correct AST structure
+   - Remove all `node.directive` references
 
 4. **Validate Progress**
-   - Run tests to ensure correctness
+   - Run all tests together
+   - Ensure no adapter layers remain
    - Update progress in tracker
    - Move to next handler
 
 ## ⚠️ Critical Notes
 
-1. **DO NOT** modify handlers to accommodate incorrect test structures
-2. **DO** use fixtures as source of truth for AST structure
-3. **Tests drive handler implementation is BACKWARD** - handlers should drive tests
-4. **Fixture-based testing** ensures correctness and maintainability
+1. **DO NOT** rely on test adapter layers - they mask the real problem
+2. **DO** update handlers to use actual AST structure (no `node.directive`)
+3. **Tests AND handlers must be updated together** for correctness
+4. **Fixture-based testing** ensures we're testing against real AST
+5. **Adapter layers = code smell** - indicates handler using wrong structure
 
 ## 📊 Progress Summary
 

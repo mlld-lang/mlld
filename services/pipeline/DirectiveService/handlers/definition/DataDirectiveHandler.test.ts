@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler';
-import { createDataDirective, createLocation, createDirectiveNode } from '@tests/utils/testFactories';
+import { createDirectiveNode } from '@tests/utils/testFactories';
 // import { TestContextDI } from '@tests/utils/di/TestContextDI'; // Removed
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IStateService } from '@services/state/StateService/IStateService';
@@ -152,7 +152,13 @@ describe('DataDirectiveHandler', () => {
 
   describe('basic data handling', () => {
     it('should process simple JSON data', async () => {
-      const node = createDataDirective('user', { 'name': 'Alice', 'id': 123 }, createLocation());
+      const node = createDirectiveNode('data', { 
+        values: {
+          identifier: [{ type: 'VariableReference', identifier: 'user' }],
+          source: 'literal',
+          value: { 'name': 'Alice', 'id': 123 }
+        }
+      });
       const processingContext = createMockProcessingContext(node);
       vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue({ name: 'Alice', id: 123 });
       const result = await handler.handle(processingContext) as DirectiveResult;
@@ -163,9 +169,16 @@ describe('DataDirectiveHandler', () => {
     });
 
     it('should handle nested JSON objects', async () => {
-      const node = createDataDirective('person', { name: 'John Doe', age: 30, address: { street: '123 Main St', city: 'Anytown' } });
+      const jsonData = { name: 'John Doe', age: 30, address: { street: '123 Main St', city: 'Anytown' } };
+      const node = createDirectiveNode('data', { 
+        values: {
+          identifier: [{ type: 'VariableReference', identifier: 'person' }],
+          source: 'literal',
+          value: jsonData
+        }
+      });
       const processingContext = createMockProcessingContext(node);
-      const expectedData = { name: 'John Doe', age: 30, address: { street: '123 Main St', city: 'Anytown' } };
+      const expectedData = jsonData;
       vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedData);
       const result = await handler.handle(processingContext) as DirectiveResult;
       expect(result.stateChanges?.variables).toHaveProperty('person');
@@ -175,9 +188,16 @@ describe('DataDirectiveHandler', () => {
     });
 
     it('should handle JSON arrays', async () => {
-      const node = createDataDirective('fruits', ['apple', 'banana', 'cherry']);
+      const arrayData = ['apple', 'banana', 'cherry'];
+      const node = createDirectiveNode('data', { 
+        values: {
+          identifier: [{ type: 'VariableReference', identifier: 'fruits' }],
+          source: 'literal',
+          value: arrayData
+        }
+      });
       const processingContext = createMockProcessingContext(node);
-      const expectedData = ['apple', 'banana', 'cherry'];
+      const expectedData = arrayData;
       vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedData);
       const result = await handler.handle(processingContext) as DirectiveResult;
       expect(result.stateChanges?.variables).toHaveProperty('fruits');
@@ -187,7 +207,16 @@ describe('DataDirectiveHandler', () => {
     });
 
     it('should handle invalid JSON from run/add', async () => {
-      const node = createDirectiveNode('data', { identifier: 'invalidData', source: 'run', run: { subtype: 'runCommand', command: [{ type: 'Text', content: 'echo { invalid JSON' }] } });
+      const node = createDirectiveNode('data', { 
+        values: {
+          identifier: [{ type: 'VariableReference', identifier: 'invalidData' }],
+          source: 'run',
+          run: { 
+            subtype: 'runCommand', 
+            command: [{ type: 'Text', content: 'echo { invalid JSON' }] 
+          }
+        }
+      });
       const processingContext = createMockProcessingContext(node);
       vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue('echo { invalid JSON');
       vi.spyOn(mockFileSystemService, 'executeCommand').mockResolvedValue({ stdout: '{ invalid JSON', stderr: '' });
@@ -195,7 +224,13 @@ describe('DataDirectiveHandler', () => {
     });
 
     it('should handle resolution errors', async () => {
-      const node = createDataDirective('user', { name: '{{missing}}' });
+      const node = createDirectiveNode('data', { 
+        values: {
+          identifier: [{ type: 'VariableReference', identifier: 'user' }],
+          source: 'literal',
+          value: { name: '{{missing}}' }
+        }
+      });
       const processingContext = createMockProcessingContext(node);
       const resolutionError = new MeldResolutionError('Var missing', { code: 'VAR_NOT_FOUND' });
       vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockRejectedValue(resolutionError);
@@ -207,7 +242,13 @@ describe('DataDirectiveHandler', () => {
 
   describe('variable resolution', () => {
     it('should resolve variables in nested JSON structures', async () => {
-      const node = createDataDirective('config', { app: { version: '{{v}}'} });
+      const node = createDirectiveNode('data', { 
+        values: {
+          identifier: [{ type: 'VariableReference', identifier: 'config' }],
+          source: 'literal',
+          value: { app: { version: '{{v}}'} }
+        }
+      });
       const processingContext = createMockProcessingContext(node);
       const expectedResolvedData = { app: { version: '1.0' } };
       vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedResolvedData);
@@ -217,7 +258,13 @@ describe('DataDirectiveHandler', () => {
     });
 
     it('should handle JSON strings containing variable references', async () => {
-      const node = createDataDirective('message', 'Hello, {{name}}!', createLocation());
+      const node = createDirectiveNode('data', { 
+        values: {
+          identifier: [{ type: 'VariableReference', identifier: 'message' }],
+          source: 'literal',
+          value: 'Hello, {{name}}!'
+        }
+      });
       const processingContext = createMockProcessingContext(node);
       vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue('Hello, Alice!');
       const result = await handler.handle(processingContext) as DirectiveResult;
@@ -228,7 +275,13 @@ describe('DataDirectiveHandler', () => {
     });
 
     it('should preserve JSON structure when resolving variables', async () => {
-      const node = createDataDirective('data', { app: { version: '{{v}}'} });
+      const node = createDirectiveNode('data', { 
+        values: {
+          identifier: [{ type: 'VariableReference', identifier: 'data' }],
+          source: 'literal',
+          value: { app: { version: '{{v}}'} }
+        }
+      });
       const processingContext = createMockProcessingContext(node);
       const expectedResolvedData = { app: { version: '1.0' } };
       vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedResolvedData);

@@ -151,8 +151,7 @@ describe('DataDirectiveHandler with Fixtures', () => {
   };
 
   /**
-   * Get the directive node from a parsed fixture and adapt it to the old AST structure
-   * that the handler expects.
+   * Get the directive node from a parsed fixture using the correct AST structure.
    */
   const getDirectiveFromFixture = async (fixtureName: string): Promise<DirectiveNode> => {
     const fixture = fixtureLoader.getFixture(fixtureName);
@@ -173,21 +172,7 @@ describe('DataDirectiveHandler with Fixtures', () => {
       throw new Error(`First AST node in fixture ${fixtureName} is not a Directive`);
     }
     
-    // The new AST structure doesn't have a directive property, so we need to adapt
-    // Create a node structure that the handler expects, based on the old AST structure
-    const adaptedNode = {
-      ...directiveNode,
-      directive: {
-        kind: directiveNode.kind || fixture.metadata?.kind || 'data',
-        type: 'directive',
-        identifier: directiveNode.values?.identifier?.[0]?.identifier || 'unknown',
-        value: directiveNode.values?.value || directiveNode.values,
-        location: directiveNode.location,
-        dataSource: directiveNode.source || 'object'
-      }
-    };
-    
-    return adaptedNode as DirectiveNode;
+    return directiveNode as DirectiveNode;
   };
 
   describe('execute with fixtures', () => {
@@ -253,6 +238,9 @@ describe('DataDirectiveHandler with Fixtures', () => {
         const node = await getDirectiveFromFixture(fixtureName);
         if (!node) continue; // Skip fixtures without AST
         
+        // Skip non-data directives
+        if (node.kind !== 'data') continue;
+        
         const processingContext = createMockProcessingContext(node);
         
         // Extract the expected data from the fixture
@@ -278,6 +266,9 @@ describe('DataDirectiveHandler with Fixtures', () => {
       for (const fixtureName of dataArrayFixtures) {
         const node = await getDirectiveFromFixture(fixtureName);
         if (!node) continue; // Skip fixtures without AST
+        
+        // Skip non-data directives
+        if (node.kind !== 'data') continue;
         
         const processingContext = createMockProcessingContext(node);
         
@@ -308,6 +299,9 @@ describe('DataDirectiveHandler with Fixtures', () => {
         const node = await getDirectiveFromFixture(fixtureName);
         if (!node) continue; // Skip if no AST
         
+        // Skip non-data directives
+        if (node.kind !== 'data') continue;
+        
         const processingContext = createMockProcessingContext(node);
         
         // Extract the expected data value
@@ -337,27 +331,24 @@ describe('DataDirectiveHandler with Fixtures', () => {
     });
 
     it('should handle error case with invalid JSON', async () => {
-      // For error cases, we create a custom node structure that exactly matches
-      // what the handler expects for command execution
+      // For error cases, we create a custom node structure using the correct AST structure
       const errorFixture = {
         type: 'Directive',
         kind: 'data',
-        directive: {
-          kind: 'data',
-          type: 'directive',
-          identifier: 'invalidData',
-          source: 'run',  // The handler checks 'source' not 'dataSource'
-          // Add the run property that the handler looks for
+        values: {
+          identifier: [{ 
+            type: 'VariableReference', 
+            identifier: 'invalidData' 
+          }],
+          source: 'run',
           run: {
             subtype: 'runCommand',
             command: [{ type: 'Text', content: 'echo { invalid JSON' }]
           }
         },
-        values: {
-          identifier: [{ 
-            type: 'VariableReference', 
-            identifier: 'invalidData' 
-          }]
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 1 }
         }
       } as DirectiveNode;
       
