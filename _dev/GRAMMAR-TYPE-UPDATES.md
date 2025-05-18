@@ -26,3 +26,11 @@ export interface PathMeta {
 }
 ```
 Also fix the naming conflict where PathMeta is used both as a type name and a property name.  
+
+11. The TextMeta type is empty, but the grammar adds several properties such as `sourceType`, `directive`, `hasVariables`, and nested objects like `run` or `add`. Update TextMeta to include these.
+
+12. AddTemplate directives include meta properties `hasVariables` and `wrapperType`, which are missing from the AddTemplateMeta interface.
+
+13. The grammar outputs `headerLevel` as an array of Number nodes with `value` and `raw`, but the AddValues interfaces use a plain `number`.
+
+14. RunCommand and Exec directive metadata include a `hasVariables` flag (and Exec directives also inherit `language`, `isMultiLine`, and `isBracketed` from RunCode), none of which exist in RunMeta or ExecMeta. (remove isBracketed, add the others)
