@@ -1,10 +1,169 @@
 {
   "name": "add-template-multiline",
-  "input": "@text variable = \"value\"\n@add [[\nContent with {{variable}}\n\nAnd some more content\n\nHey, here's the same variable again: {{variable}}\n]]",
+  "input": "@text variable = \"value\"\n@add [[\nContent with {{variable}}",
   "expected": "Content with value\n\nAnd some more content\n\nHey, here's the same variable again: value",
   "directives": [
     "@text variable = \"value\"",
-    "@add [[\nContent with {{variable}}\n\nAnd some more content\n\nHey, here's the same variable again: {{variable}}\n]]"
+    "@add [[\nContent with {{variable}}"
+  ],
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 24,
+          "line": 1,
+          "column": 25
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "variable"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "value"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "variable",
+        "content": "value"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 8,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addPath",
+      "source": "path",
+      "values": {
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "[["
+          }
+        ]
+      },
+      "raw": {
+        "path": "[["
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": false,
+          "extension": null
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "content": "Content with "
+    },
+    {
+      "type": "VariableReference",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "valueType": "varInterpolation",
+      "isVariableReference": true,
+      "identifier": "variable"
+    }
   ],
   "metadata": {
     "kind": "add",

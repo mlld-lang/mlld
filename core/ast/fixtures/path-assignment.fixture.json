@@ -6,6 +6,127 @@
     "@path docsDir = [file.md]",
     "@add @docsDir"
   ],
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 25,
+          "line": 1,
+          "column": 26
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "docsDir"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "file.md"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "docsDir",
+        "path": "file.md"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "md"
+        }
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 13,
+          "line": 1,
+          "column": 14
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "docsDir"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@docsDir"
+      },
+      "meta": {}
+    }
+  ],
   "metadata": {
     "kind": "path",
     "subtype": "assignment"

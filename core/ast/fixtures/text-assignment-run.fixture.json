@@ -6,6 +6,127 @@
     "@text result = @run [echo \"Command output\"]",
     "@add @result"
   ],
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 43,
+          "line": 1,
+          "column": 44
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "run",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "result"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "echo \"Command output\""
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "result",
+        "content": "@run echo \"Command output\""
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "run",
+        "hasVariables": false,
+        "run": {
+          "isCommand": true
+        }
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 12,
+          "line": 1,
+          "column": 13
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "result"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@result"
+      },
+      "meta": {}
+    }
+  ],
   "metadata": {
     "kind": "text",
     "subtype": "assignment-run"

@@ -6,6 +6,130 @@
     "@data colors = [\"red\", \"green\", \"blue\"]",
     "@add @colors[0]"
   ],
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 39,
+          "line": 1,
+          "column": 40
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "array",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "colors"
+          }
+        ],
+        "value": {
+          "type": "array",
+          "items": [
+            "red",
+            "green",
+            "blue"
+          ]
+        }
+      },
+      "raw": {
+        "identifier": "colors",
+        "value": "[\n  \"red\",\n  \"green\",\n  \"blue\"\n]"
+      },
+      "meta": {
+        "arrayData": {
+          "itemCount": 3
+        }
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 12,
+          "line": 1,
+          "column": 13
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "colors"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@colors"
+      },
+      "meta": {}
+    },
+    {
+      "type": "Text",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "content": "[0]"
+    }
+  ],
   "metadata": {
     "kind": "data",
     "subtype": "array"

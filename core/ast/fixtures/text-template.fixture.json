@@ -6,6 +6,143 @@
     "@text template = [[This is a template with {{variable}}]]",
     "@add @template"
   ],
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 57,
+          "line": 1,
+          "column": 58
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplate",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "template"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "This is a template with "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "variable"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "template",
+        "content": "This is a template with {{variable}}"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 14,
+          "line": 1,
+          "column": 15
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "template"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@template"
+      },
+      "meta": {}
+    }
+  ],
   "metadata": {
     "kind": "text",
     "subtype": "template"

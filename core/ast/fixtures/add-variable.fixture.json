@@ -6,6 +6,124 @@
     "@text variableName = \"hello world\"",
     "@add @variableName"
   ],
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 34,
+          "line": 1,
+          "column": 35
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "variableName"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "hello world"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "variableName",
+        "content": "hello world"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 18,
+          "line": 1,
+          "column": 19
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "variableName"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@variableName"
+      },
+      "meta": {}
+    }
+  ],
   "metadata": {
     "kind": "add",
     "subtype": "variable"

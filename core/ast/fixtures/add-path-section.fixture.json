@@ -2,6 +2,9 @@
   "name": "add-path-section",
   "input": "@add [file.md # Section 1]",
   "expected": "## Section 1\n### Subsection 1.1\nContent from file",
+  "directives": [
+    "@add [file.md # Section 1]"
+  ],
   "ast": [
     {
       "type": "Directive",
@@ -57,6 +60,7 @@
   ],
   "metadata": {
     "kind": "add",
-    "subtype": "addPath"
+    "subtype": "path",
+    "variant": "section"
   }
 }

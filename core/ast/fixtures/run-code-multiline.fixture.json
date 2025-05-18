@@ -2,6 +2,9 @@
   "name": "run-code-multiline",
   "input": "@run javascript [\nfunction greet() {\n  return \"Hello from multiline code\";\n}\nconsole.log(greet());\n]",
   "expected": "Hello from multiline code",
+  "directives": [
+    "@run javascript [\nfunction greet() {\n  return \"Hello from multiline code\";\n}\nconsole.log(greet());\n]"
+  ],
   "ast": [
     {
       "type": "Directive",
@@ -76,6 +79,7 @@
   ],
   "metadata": {
     "kind": "run",
-    "subtype": "runCode"
+    "subtype": "code",
+    "variant": "multiline"
   }
 }

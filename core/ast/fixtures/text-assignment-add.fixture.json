@@ -2,6 +2,9 @@
   "name": "text-assignment-add",
   "input": "@text content = @add [path/to/file.md]",
   "expected": "Content from file",
+  "directives": [
+    "@text content = @add [path/to/file.md]"
+  ],
   "ast": [
     {
       "type": "Directive",
@@ -77,6 +80,6 @@
   ],
   "metadata": {
     "kind": "text",
-    "subtype": "textAssignment"
+    "subtype": "assignment-add"
   }
 }

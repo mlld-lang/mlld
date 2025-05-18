@@ -2,6 +2,9 @@
   "name": "exec-command",
   "input": "@exec greet (name) = @run [echo \"Hello, @name!\"]",
   "expected": "@exec greet (name) = @run [echo \"Hello, @name!\"]",
+  "directives": [
+    "@exec greet (name) = @run [echo \"Hello, @name!\"]"
+  ],
   "ast": [
     {
       "type": "Directive",
@@ -133,6 +136,6 @@
   ],
   "metadata": {
     "kind": "exec",
-    "subtype": "execCommand"
+    "subtype": "command"
   }
 }

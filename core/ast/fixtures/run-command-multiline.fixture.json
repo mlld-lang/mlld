@@ -2,6 +2,9 @@
   "name": "run-command-multiline",
   "input": "@run [bash -c \"echo Line 1 && \\\necho Line 2\"]",
   "expected": "Line 1\nLine 2",
+  "directives": [
+    "@run [bash -c \"echo Line 1 && \\\necho Line 2\"]"
+  ],
   "ast": [
     {
       "type": "Directive",
@@ -53,6 +56,7 @@
   ],
   "metadata": {
     "kind": "run",
-    "subtype": "runCommand"
+    "subtype": "command",
+    "variant": "multiline"
   }
 }

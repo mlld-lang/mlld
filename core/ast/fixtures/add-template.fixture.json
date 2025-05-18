@@ -2,6 +2,9 @@
   "name": "add-template",
   "input": "@add [[This is template content]]",
   "expected": "This is template content",
+  "directives": [
+    "@add [[This is template content]]"
+  ],
   "ast": [
     {
       "type": "Directive",
@@ -54,6 +57,6 @@
   ],
   "metadata": {
     "kind": "add",
-    "subtype": "addTemplate"
+    "subtype": "template"
   }
 }

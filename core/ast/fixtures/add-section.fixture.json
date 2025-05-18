@@ -2,6 +2,9 @@
   "name": "add-section",
   "input": "@add \"# Section Title\" from [file.md]",
   "expected": "# Section Title\nContent under this section",
+  "directives": [
+    "@add \"# Section Title\" from [file.md]"
+  ],
   "ast": [
     {
       "type": "Directive",
@@ -77,6 +80,6 @@
   ],
   "metadata": {
     "kind": "add",
-    "subtype": "addSection"
+    "subtype": "section"
   }
 }

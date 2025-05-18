@@ -2,6 +2,9 @@
   "name": "run-code",
   "input": "@run javascript [console.log(\"Hello from code\")]",
   "expected": "Hello from code",
+  "directives": [
+    "@run javascript [console.log(\"Hello from code\")]"
+  ],
   "ast": [
     {
       "type": "Directive",
@@ -76,6 +79,6 @@
   ],
   "metadata": {
     "kind": "run",
-    "subtype": "runCode"
+    "subtype": "code"
   }
 }

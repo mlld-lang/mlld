@@ -6,6 +6,124 @@
     "@text greeting = \"Hello, world!\"",
     "@add @greeting"
   ],
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 32,
+          "line": 1,
+          "column": 33
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "greeting"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "Hello, world!"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greeting",
+        "content": "Hello, world!"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 14,
+          "line": 1,
+          "column": 15
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "greeting"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@greeting"
+      },
+      "meta": {}
+    }
+  ],
   "metadata": {
     "kind": "text",
     "subtype": "assignment"

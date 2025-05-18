@@ -2,6 +2,9 @@
   "name": "run-command",
   "input": "@run echo \"Hello from command\"",
   "expected": "Hello from command",
+  "directives": [
+    "@run echo \"Hello from command\""
+  ],
   "ast": [
     {
       "type": "Directive",
@@ -76,6 +79,6 @@
   ],
   "metadata": {
     "kind": "run",
-    "subtype": "runCode"
+    "subtype": "command"
   }
 }

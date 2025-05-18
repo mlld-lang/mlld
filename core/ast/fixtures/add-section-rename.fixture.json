@@ -2,6 +2,9 @@
   "name": "add-section-rename",
   "input": "@add \"# Original Title\" from [file.md] as \"# New Title\"",
   "expected": "# New Title\nContent under this section",
+  "directives": [
+    "@add \"# Original Title\" from [file.md] as \"# New Title\""
+  ],
   "ast": [
     {
       "type": "Directive",
@@ -97,6 +100,7 @@
   ],
   "metadata": {
     "kind": "add",
-    "subtype": "addSection"
+    "subtype": "section",
+    "variant": "rename"
   }
 }

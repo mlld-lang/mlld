@@ -6,6 +6,220 @@
     "@exec greetCommand(param) = @run [echo \"Hello, {{param}}\"]",
     "@run @greetCommand(\"World\")"
   ],
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 38,
+          "line": 1,
+          "column": 39
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "greetCommand"
+          }
+        ],
+        "params": [
+          {
+            "type": "VariableReference",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "variable",
+            "isVariableReference": true,
+            "identifier": "param"
+          }
+        ],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "[echo"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greetCommand",
+        "params": [
+          "param"
+        ],
+        "command": "[echo"
+      },
+      "meta": {
+        "hasVariables": false,
+        "parameterCount": 1
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "content": " \"Hello, "
+    },
+    {
+      "type": "VariableReference",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "valueType": "varInterpolation",
+      "isVariableReference": true,
+      "identifier": "param"
+    },
+    {
+      "type": "Text",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "content": "\"]"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "placeholder-id",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 27,
+          "line": 1,
+          "column": 28
+        }
+      },
+      "kind": "run",
+      "subtype": "runExec",
+      "source": "exec",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "greetCommand"
+          }
+        ],
+        "args": [
+          {
+            "type": "Text",
+            "nodeId": "placeholder-id",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "content": "World"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greetCommand",
+        "args": [
+          "World"
+        ]
+      },
+      "meta": {
+        "argumentCount": 1
+      }
+    }
+  ],
   "metadata": {
     "kind": "run",
     "subtype": "exec",
