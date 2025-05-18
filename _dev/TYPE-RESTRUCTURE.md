@@ -414,18 +414,18 @@ Phase 3 will be considered successful when:
 
 **Key Insight:** StateService update (documented in `STATE-UPDATES.md`) serves as the detailed prototype for updating other services. Success here validates the approach for remaining services.
 
-## Confidence Assessment
+## Plan Gap Assessment and Remediation
 
-| Step | Description | Confidence | Notes |
-|-----|-------------|-----------|-------|
-| 1 | Analyze current type duplication | 92 | Existing types are well organized but mapping may reveal gaps |
-| 2 | Create unified type definitions | 93 | Need final list of base interfaces and field mapping to avoid gaps; see `AST-BASE-INTERFACES.md` |
-| 3 | Define unified AST node union | 93 | Discriminated union pattern is clear; see `AST-NODE-DESIGN.md` |
-| 4 | Implement ParserService transformation | 92 | Parsing flow understood but mapping from parser output to typed union needs explicit helpers |
-| 5 | Update service interfaces | 90 | Many service files must change; inventory in `STATE-AFFECTED-METHODS.md` lists impacted methods |
-| 6 | Remove legacy types | 95 | Clean cutover, no compatibility needed |
-| 7 | Update all imports | 80 | Over 300 references to old paths; a scripted replacement plan would help |
-| 8 | Validation and documentation | 90 | Straightforward once types settle |
+| Step | Description | Notes |
+|-----|-------------|-------|
+| 1 | Analyze current type duplication | Existing types are well organized but mapping may reveal gaps |
+| 2 | Create unified type definitions | Need final list of base interfaces and field mapping to avoid gaps; see `AST-BASE-INTERFACES.md` |
+| 3 | Define unified AST node union | Discriminated union pattern is clear; see `AST-NODE-DESIGN.md` |
+| 4 | Implement ParserService transformation | Parsing flow understood but mapping from parser output to typed union needs explicit helpers |
+| 5 | Update service interfaces | Many service files must change; inventory in `STATE-AFFECTED-METHODS.md` lists impacted methods |
+| 6 | Remove legacy types | Clean cutover, no compatibility needed |
+| 7 | Update all imports | Over 300 references to old paths; a scripted replacement plan would help |
+| 8 | Validation and documentation | Straightforward once types settle |
 
 ## Notes for Implementation
 
