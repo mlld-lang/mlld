@@ -135,6 +135,7 @@ export * from './state';
 export * from '../errors/index';
 export * from './dependencies';
 export * from './guards';
+export * from './base';
 
 // Explicitly export types from resolution and embed using aliases where needed
 export type { 
