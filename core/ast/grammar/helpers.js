@@ -1,5 +1,6 @@
 import NodeType      from './node-type.js';
 import DirectiveKind from './directive-kind.js';
+import { randomUUID } from 'crypto';
 
 export default {
   debug(msg, ...args) {
@@ -18,7 +19,7 @@ export default {
   createNode(type, props = {}) {
     const base = {
       type,
-      nodeId: 'placeholder-id',
+      nodeId: randomUUID(),
       location: {
         start: props.location?.start || { offset: 0, line: 1, column: 1 },
         end: props.location?.end || { offset: 0, line: 1, column: 1 }

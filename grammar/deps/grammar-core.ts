@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+
 export const NodeType = {
   Text: 'Text',
   Comment: 'Comment',
@@ -196,7 +198,7 @@ export const helpers = {
   createNode<T extends object>(type: NodeTypeKey, props: T & { location?: any }) {
     return Object.freeze({
       type,
-      nodeId: 'placeholder-id',
+      nodeId: randomUUID(),
       location: props.location ?? { start: { offset: 0, line: 1, column: 1 },
                                   end:   { offset: 0, line: 1, column: 1 } },
       ...props,
