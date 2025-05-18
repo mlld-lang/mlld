@@ -72,7 +72,7 @@ export function registerFactories(container: any, fs: any) {
         }),
         getSupportedDirectives: vi.fn().mockImplementation(() => {
           // Return common directive kinds
-          return ['text', 'data', 'path', 'define', 'run', 'embed', 'import'];
+          return ['text', 'data', 'path', 'exec', 'run', 'add', 'import'];
         })
       };
       return mockDirectiveServiceClient;

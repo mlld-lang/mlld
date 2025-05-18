@@ -7,9 +7,9 @@ import {
 } from '@core/ast/types/guards';
 
 describe('Text directive with nested directives', () => {
-  test('Text directive with nested embed directive', async () => {
-    // Test a text directive with a nested embed directive
-    const content = `@text content = @embed "path/to/file.txt"`;
+  test('Text directive with nested add directive', async () => {
+    // Test a text directive with a nested add directive
+    const content = `@text content = @add "path/to/file.txt"`;
     
     const result = await parse(content);
     expect(result.ast).toHaveLength(1);
@@ -22,7 +22,7 @@ describe('Text directive with nested directives', () => {
     // Check that it's a text assignment directive
     expect(isTextAssignmentDirective(directive)).toBe(true);
     
-    // Check that the embed directive is nested in the content field
+    // Check that the add directive is nested in the content field
     expect(isTextWithEmbedSource(directive)).toBe(true);
     
     // Check structure
@@ -37,12 +37,12 @@ describe('Text directive with nested directives', () => {
       // Check nested directive
       const nestedDirective = directive.values.content as any;
       expect(nestedDirective.type).toBe('Directive');
-      expect(nestedDirective.kind).toBe('embed');
+      expect(nestedDirective.kind).toBe('add');
       expect(nestedDirective.values.path).toBeDefined();
       
       // Verify raw values
       expect(directive.raw.identifier).toBe('content');
-      expect(directive.raw.content).toContain('@embed');
+      expect(directive.raw.content).toContain('@add');
     }
   });
   

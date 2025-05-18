@@ -52,7 +52,7 @@ function createEmbedDirectiveNode(path?: string): DirectiveNode {
   return {
     type: 'Directive',
     directive: {
-      kind: 'embed',
+      kind: 'add',
       path: path
     },
     location: {
@@ -177,7 +177,7 @@ describe('EmbedDirectiveHandler Fixes', () => {
       const variableNode = {
         type: 'Directive',
         directive: {
-          kind: 'embed',
+          kind: 'add',
           path: {
             raw: '{{role.architect}}',
             isVariableReference: true,
@@ -246,7 +246,7 @@ describe('EmbedDirectiveHandler Fixes', () => {
       const variableNode = {
         type: 'Directive',
         directive: {
-          kind: 'embed',
+          kind: 'add',
           path: {
             raw: '{{content}}',
             isVariableReference: true,

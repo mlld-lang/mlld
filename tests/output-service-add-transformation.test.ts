@@ -28,7 +28,7 @@ const createMockResolutionService = () => {
   };
 };
 
-describe('OutputService Embed Transformation Bug Fix', () => {
+describe('OutputService Add Transformation Bug Fix', () => {
   let outputService: OutputService;
   let mockState: any;
   let mockResolutionService: any;
@@ -45,9 +45,9 @@ describe('OutputService Embed Transformation Bug Fix', () => {
     vi.resetAllMocks();
   });
 
-  describe('Embed Directive Processing', () => {
+  describe('Add Directive Processing', () => {
     // Test case 1: Basic transformation should work
-    it('should replace embed directive with transformed content when exact line match exists', async () => {
+    it('should replace add directive with transformed content when exact line match exists', async () => {
       // Setup mock state with transformation enabled
       const transformedState = createMockState(true, [
         {
@@ -66,7 +66,7 @@ describe('OutputService Embed Transformation Bug Fix', () => {
       const embedDirective: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'embed',
+          kind: 'add',
           path: 'file.md'
         },
         location: {
@@ -84,7 +84,7 @@ describe('OutputService Embed Transformation Bug Fix', () => {
     });
     
     // Test case 2: The bug scenario - line numbers don't match exactly
-    it('should replace embed directive with transformed content even when line numbers differ slightly', async () => {
+    it('should replace add directive with transformed content even when line numbers differ slightly', async () => {
       // Setup transformed node with a DIFFERENT line number than the original directive
       const transformedState = createMockState(true, [
         {
@@ -103,7 +103,7 @@ describe('OutputService Embed Transformation Bug Fix', () => {
       const embedDirective: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'embed',
+          kind: 'add',
           path: 'file.md'
         },
         location: {
@@ -157,7 +157,7 @@ describe('OutputService Embed Transformation Bug Fix', () => {
       const embedDirective: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'embed',
+          kind: 'add',
           path: 'file.md'
         },
         location: {
@@ -179,7 +179,7 @@ describe('OutputService Embed Transformation Bug Fix', () => {
     });
 
     // Test case 4: Run directive for comparison (currently works correctly)
-    it('should properly transform run directives (for comparison with embed)', async () => {
+    it('should properly transform run directives (for comparison with add)', async () => {
       // Setup mock state with transformation enabled and a transformed run directive
       const transformedState = createMockState(true, [
         {
@@ -225,7 +225,7 @@ describe('OutputService Embed Transformation Bug Fix', () => {
       const embedDirective: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'embed',
+          kind: 'add',
           path: 'file.md'
         },
         location: {

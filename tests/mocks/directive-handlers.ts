@@ -7,7 +7,7 @@ import { vi } from 'vitest';
 import type { MeldNode } from '@core/syntax/types';
 
 /**
- * Mock handler for embed directives
+ * Mock handler for add directives
  */
 @injectable()
 @Service('MockEmbedDirectiveHandler for testing')
@@ -17,10 +17,10 @@ export class EmbedDirectiveHandler {
   }
   
   kind = 'execution';
-  directiveName = 'embed';
+  directiveName = 'add';
 
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === 'embed';
+    return kind === 'add';
   }
 
   async transform(node: DirectiveNode, state: any): Promise<any> {
@@ -32,19 +32,19 @@ export class EmbedDirectiveHandler {
     const data = node.directive;
     if (!data.path) {
       throw new MeldDirectiveError(
-        'Embed path is required',
-        'embed',
+        'Add path is required',
+        'add',
         node.location?.start
       );
     }
     // Mock implementation
-    state.setTextVar(`embed:${data.path}`, 'Mock embedded content');
+    state.setTextVar(`add:${data.path}`, 'Mock embedded content');
   }
 
   async validate(node: DirectiveNode): Promise<boolean | { valid: boolean; errors?: string[] }> {
     // Mock validation
     if (!node.directive.path) {
-      return { valid: false, errors: ['Embed path is required'] };
+      return { valid: false, errors: ['Add path is required'] };
     }
     return true;
   }

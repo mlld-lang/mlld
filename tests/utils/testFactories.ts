@@ -23,7 +23,7 @@ import type { InterpolatableValue, StructuredPath as AstStructuredPath, Variable
 import { VariableOrigin, VariableType } from '@core/types/variables';
 import type { TextVariable, DataVariable, IPathVariable, CommandVariable, VariableMetadata } from '@core/types/variables';
 import type { JsonValue } from '@core/types';
-import type { ICommandDefinition } from '@core/types/define';
+import type { ICommandDefinition } from '@core/types/exec';
 
 // Counter for generating unique node IDs in tests
 let testNodeIdCounter = 0;
@@ -403,7 +403,7 @@ export function createRunDirective(
   };
 }
 
-// Create an add directive node for testing (formerly embed)
+// Create an add directive node for testing (formerly add)
 export function createAddDirective(
   pathOrContent: string | InterpolatableValue | AstStructuredPath, 
   section?: string,
@@ -419,7 +419,7 @@ export function createAddDirective(
   let pathValue: MeldNode[] | undefined = undefined;
   let contentValue: MeldNode[] | undefined = undefined;
   
-  // Replace old embed subtypes with add subtypes
+  // Replace old add subtypes with add subtypes
   if (subtype) {
     determinedSubtype = subtype;
   } else {
@@ -447,7 +447,7 @@ export function createAddDirective(
   return {
     type: 'Directive',
     nodeId: `test-directive-${testNodeIdCounter++}`,
-    kind: 'add', // Changed from 'embed' to 'add'
+    kind: 'add', // Changed from 'add' to 'add'
     subtype: determinedSubtype,
     source: 'literal',
     values: {
@@ -512,7 +512,7 @@ export function createImportDirective(
   };
 }
 
-// Create a define directive node for testing
+// Create a exec directive node for testing
 export function createExecDirective(
   identifier: string,
   command: string | any,
@@ -544,7 +544,7 @@ export function createExecDirective(
   return {
     type: 'Directive',
     nodeId: `test-directive-${testNodeIdCounter++}`,
-    kind: 'exec', // Changed from 'define' to 'exec'
+    kind: 'exec', // Changed from 'exec' to 'exec'
     subtype: 'execCommand',
     source: 'literal',
     values: {

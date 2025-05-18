@@ -186,7 +186,7 @@ describe('DataDirectiveHandler', () => {
       expect(varDef?.value).toEqual(expectedData);
     });
 
-    it('should handle invalid JSON from run/embed', async () => {
+    it('should handle invalid JSON from run/add', async () => {
       const node = createDirectiveNode('data', { identifier: 'invalidData', source: 'run', run: { subtype: 'runCommand', command: [{ type: 'Text', content: 'echo { invalid JSON' }] } });
       const processingContext = createMockProcessingContext(node);
       vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue('echo { invalid JSON');

@@ -116,7 +116,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       const source = node.source || 'literal';
       const values = textValues.values ? textValues.values[0] : undefined;
       const value = node.raw.value || node.raw.values;
-      const embed = node.values.embed ? node.values.embed[0] : undefined;
+      const add = node.values.add ? node.values.add[0] : undefined;
       const run = node.values.run ? node.values.run[0] : undefined;
       
       if (source === 'literal') {
@@ -203,8 +203,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           }
           throw new DirectiveError('Unknown error during @run execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { ...errorDetailsContext, cause: error instanceof Error ? error : undefined });
         }
-      } else if (source === 'add' && embed) {
-        const embedDetails = embed as EmbedRHSStructure;
+      } else if (source === 'add' && add) {
+        const embedDetails = add as EmbedRHSStructure;
         try {
           const embedSubtype = embedDetails.subtype;
           let fileContent: string;
@@ -219,7 +219,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
               const validatedMeldPath = await this.resolutionService.resolvePath(resolvedEmbedPathString, resolutionContext);
               
               if (validatedMeldPath.contentType !== 'filesystem') {
-                  throw new DirectiveError(`Cannot embed non-filesystem path: ${resolvedEmbedPathString}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
+                  throw new DirectiveError(`Cannot add non-filesystem path: ${resolvedEmbedPathString}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, errorDetailsContext);
               }
               if (!this.fileSystemService) { 
                 throw new DirectiveError('File system service is unavailable for @add execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, errorDetailsContext);
@@ -254,7 +254,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           if (error instanceof MeldResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) {
             throw new DirectiveError('Failed to resolve @add source for @text directive', this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { ...errorDetailsContext, cause: error instanceof Error ? error : undefined });
           } else if (error instanceof Error) {
-            throw new DirectiveError(`Failed to read/process embed source for @text directive: ${error.message}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { ...errorDetailsContext, cause: error });
+            throw new DirectiveError(`Failed to read/process add source for @text directive: ${error.message}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { ...errorDetailsContext, cause: error });
           }
           throw new DirectiveError('Unknown error during @add execution', this.kind, DirectiveErrorCode.EXECUTION_FAILED, { ...errorDetailsContext, cause: error instanceof Error ? error : undefined });
         }

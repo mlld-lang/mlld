@@ -297,7 +297,7 @@ export function createTestUnknownNode(
 }
 
 /**
- * Create a simple embed directive
+ * Create a simple add directive
  */
 export function createSimpleEmbedDirective(
   path: string,
@@ -305,7 +305,7 @@ export function createSimpleEmbedDirective(
 ): DirectiveNode {
   return {
     type: 'Directive',
-    kind: 'embed',
+    kind: 'add',
     subtype: 'embedPath',
     values: {
       path: [

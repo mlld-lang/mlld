@@ -56,7 +56,7 @@ describe('URL Functionality', () => {
             'content-type': 'text/plain',
             'content-length': '200'
           }),
-          text: async () => '@define(text: greeting="Hello from URL!")\n@define(data: config={ version: "1.0.0" })'
+          text: async () => '@exec(text: greeting="Hello from URL!")\n@exec(data: config={ version: "1.0.0" })'
         };
       }
       

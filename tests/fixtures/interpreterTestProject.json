@@ -8,7 +8,7 @@
     "project/src/main.meld": "@text root = \"Root\"\n@import [../nested/child.meld]",
     "project/nested/child.meld": "@text child = \"Child\"\n@data nums = [1, 2, 3]\n@import [../shared/common.meld]",
     "project/shared/common.meld": "@text common = \"Shared\"\n@data shared = { \"type\": \"common\" }",
-    "project/src/complex.meld": "@text base = \"Base\"\n@embed path = \"../nested/section.meld\" section = \"Main Section\"",
+    "project/src/complex.meld": "@text base = \"Base\"\n@add path = \"../nested/section.meld\" section = \"Main Section\"",
     "project/nested/section.meld": "# Main Section\nThis is the main section\n@text inSection = \"Inside\"\n\n# Other Section\nThis should be skipped\n@text skipped = \"Skip me\"",
     "project/src/variables.meld": "@text greeting = \"Hello ${name}!\"\n@data user = { \"name\": \"World\" }",
     "project/nested/circular1.meld": "@text one = \"First\"\n@import [circular2.meld]",

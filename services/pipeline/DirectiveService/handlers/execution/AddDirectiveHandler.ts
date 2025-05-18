@@ -199,7 +199,7 @@ export class AddDirectiveHandler implements IDirectiveHandler {
       let content: string = ''; 
 
       // <<< Add Logging >>>
-      this.logger.debug('>>> EMBED HANDLER - Checking Node Structure Before Switch <<<', {
+      this.logger.debug('>>> ADD HANDLER - Checking Node Structure Before Switch <<<', {
         nodeExists: !!node,
         directiveExists: !!node?.directive,
         subtype: node?.directive?.subtype,
@@ -211,7 +211,7 @@ export class AddDirectiveHandler implements IDirectiveHandler {
       // Determine content based on directive subtype
       switch (directiveData.subtype) {
         case 'addPath':
-          // process.stdout.write('>>> EMBED HANDLER - Handling addPath subtype <<<\n');
+          // process.stdout.write('>>> ADD HANDLER - Handling addPath subtype <<<\n');
           const addPathObject = directiveData.path as AstStructuredPath;
 
           // ValidationService.validate() already confirmed addPathObject exists for this subtype.
@@ -267,7 +267,7 @@ export class AddDirectiveHandler implements IDirectiveHandler {
           break;
 
         case 'addVariable':
-          // process.stdout.write('>>> EMBED HANDLER - Handling addVariable subtype <<<\n');
+          // process.stdout.write('>>> ADD HANDLER - Handling addVariable subtype <<<\n');
           const variablePathObject = directiveData.path as AstStructuredPath;
 
           // ValidationService.validate() already confirmed variablePathObject and its necessary
@@ -291,7 +291,7 @@ export class AddDirectiveHandler implements IDirectiveHandler {
           break;
 
         case 'addTemplate':
-          // process.stdout.write('>>> EMBED HANDLER - Handling addTemplate subtype <<<\n');
+          // process.stdout.write('>>> ADD HANDLER - Handling addTemplate subtype <<<\n');
           // process.stdout.write(`Inspecting directive: ${JSON.stringify(directiveData)}\n`);
           
           const templateContent = directiveData.content;
@@ -335,7 +335,7 @@ export class AddDirectiveHandler implements IDirectiveHandler {
       const section = directiveData.section;
 
       // <<< Add Logging >>>
-      // process.stdout.write(`>>> EMBED HANDLER - Before Section Check <<<\n`);
+      // process.stdout.write(`>>> ADD HANDLER - Before Section Check <<<\n`);
       // process.stdout.write(`Section value: ${section}\n`);
       // process.stdout.write(`Content length after read: ${content?.length ?? 'undefined'}\n`);
 

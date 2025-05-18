@@ -36,7 +36,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
   let pathService: MockPathService;
   let resolutionContext: ResolutionContext;
 
-  // --- Define mock variables used in edge tests --- 
+  // --- Exec mock variables used in edge tests --- 
   const mockGreetingVar: TextVariable = { name: 'greeting', type: VariableType.TEXT, value: 'Hello' };
   const mockDataVarBase: DataVariable = { name: 'data', type: VariableType.DATA, value: { user: { name: 'John' } } };
   const mockDataVarItems: DataVariable = { name: 'data', type: VariableType.DATA, value: { items: [{ name: 'item1' }, { name: 'item2' }] } };

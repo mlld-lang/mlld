@@ -52,7 +52,7 @@ function createEmbedDirectiveNode(path?: string): DirectiveNode {
   return {
     type: 'Directive',
     directive: {
-      kind: 'embed',
+      kind: 'add',
       path: path
     },
     location: {

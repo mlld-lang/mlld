@@ -34,7 +34,7 @@ import { NodeType } from '@core/syntax/types/nodes';
 
 // Mock the logger using vi.mock
 vi.mock('@core/utils/logger', () => {
-  // DEFINE the mock object INSIDE the factory function
+  // EXEC the mock object INSIDE the factory function
   const mockLoggerObject = {
     debug: vi.fn(),
     info: vi.fn(),

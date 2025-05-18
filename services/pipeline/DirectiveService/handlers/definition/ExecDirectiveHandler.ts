@@ -145,7 +145,7 @@ export class ExecDirectiveHandler implements IDirectiveHandler {
                  if (cmdVar?.type === VariableType.COMMAND && cmdVar.value && cmdVar.value.type === 'basic') { 
                     resolvedCommandContent = (cmdVar.value as IBasicCommandDefinition).commandTemplate; 
                  } else {
-                    const errorMsg = cmdVar ? `Cannot define command '${nameMetadata.name}' using non-basic command '${definedCommand.name}'` : `Command definition '${definedCommand.name}' not found`;
+                    const errorMsg = cmdVar ? `Cannot exec command '${nameMetadata.name}' using non-basic command '${definedCommand.name}'` : `Command definition '${definedCommand.name}' not found`;
                     throw new DirectiveError(errorMsg, this.kind, DirectiveErrorCode.RESOLUTION_FAILED, { ...baseErrorDetails });
                  }
             } else {

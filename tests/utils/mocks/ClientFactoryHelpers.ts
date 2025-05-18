@@ -60,7 +60,7 @@ export class ClientFactoryHelpers {
     // Directive service client
     const dsClient: IDirectiveServiceClient = {
       supportsDirective: vi.fn().mockReturnValue(true),
-      getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data', 'path', 'define', 'run', 'embed', 'import']),
+      getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data', 'path', 'exec', 'run', 'add', 'import']),
       handleDirective: vi.fn().mockResolvedValue({}), // Return minimal valid DirectiveResult
       validateDirective: vi.fn().mockResolvedValue(undefined)
     };

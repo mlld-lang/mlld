@@ -264,13 +264,13 @@ export class MockDirectiveHandlerFactory {
           }
         }
       },
-      define: {
+      exec: {
         kind: 'definition',
-        directiveName: 'define',
-        canHandle: (k: string) => k === 'define',
+        directiveName: 'exec',
+        canHandle: (k: string) => k === 'exec',
         validate: (node: DirectiveNode) => {
           if (!node.directive.identifier) {
-            return { valid: false, errors: ['Define directive requires an identifier'] };
+            return { valid: false, errors: ['Exec directive requires an identifier'] };
           }
           return true;
         },
@@ -278,8 +278,8 @@ export class MockDirectiveHandlerFactory {
           const data = node.directive;
           if (!data.identifier) {
             throw new MeldDirectiveError(
-              'Define directive requires an identifier',
-              'define',
+              'Exec directive requires an identifier',
+              'exec',
               node.location?.start
             );
           }

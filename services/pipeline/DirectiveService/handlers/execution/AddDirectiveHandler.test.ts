@@ -308,7 +308,7 @@ describe('AddDirectiveHandler', () => {
       
       await expectToThrowWithConfig(async () => { await handler.handle(processingContext); }, {
           code: DirectiveErrorCode.FILESYSTEM_ERROR,
-          messageContains: "reading embed source file: /path/to/read_error.txt: Disk read failed",
+          messageContains: "reading add source file: /path/to/read_error.txt: Disk read failed",
           cause: readError
       });
     });
@@ -398,7 +398,7 @@ describe('AddDirectiveHandler', () => {
   });
 
   describe('Template literal embeds', () => {
-      it('should embed resolved template literal content', async () => {
+      it('should add resolved template literal content', async () => {
         const nameVarNode: VariableReferenceNode = {
             type: 'VariableReference',
             nodeId: 'vrn-data',

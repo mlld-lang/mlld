@@ -1,4 +1,4 @@
-# Path embed example
+# Path add example
 
 # Simple test file
 

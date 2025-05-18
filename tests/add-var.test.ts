@@ -3,7 +3,7 @@ import { main } from '@api/index';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import type { Services } from '@core/types/index';
 
-describe('Embed Var Test', () => {
+describe('Add Var Test', () => {
   let context: TestContextDI;
 
   beforeEach(async () => {
@@ -16,15 +16,15 @@ describe('Embed Var Test', () => {
   });
 
   it('should handle simple text variable embedding', async () => {
-    // Create file with text variable and embed
-    await context.services.filesystem.writeFile('test.meld', '@text greeting = "Hello World"\n@embed {{greeting}}');
+    // Create file with text variable and add
+    await context.services.filesystem.writeFile('test.meld', '@text greeting = "Hello World"\n@add {{greeting}}');
 
     // Initialize state
     const state = context.services.state;
     state.setTextVar('greeting', 'Hello World');
     console.log('Initial state greeting:', state.getTextVar('greeting'));
 
-    // Test embed replacement with transformation enabled
+    // Test add replacement with transformation enabled
     const result = await main('test.meld', {
       fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
@@ -35,7 +35,7 @@ describe('Embed Var Test', () => {
     console.log('Result:', result);
     console.log('Result length:', result.length);
     
-    // Expected behavior: embed directive should be replaced with variable content
+    // Expected behavior: add directive should be replaced with variable content
     expect(result.trim()).toBe('Hello World');
   });
 });

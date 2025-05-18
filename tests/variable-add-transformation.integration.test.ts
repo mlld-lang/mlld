@@ -10,7 +10,7 @@ import {
 import { main } from '@api/index';
 import type { Services } from '@core/types/services';
 
-describe('Variable-Based Embed Transformation Integration Tests', () => {
+describe('Variable-Based Add Transformation Integration Tests', () => {
   let context: TestContextDI;
 
   beforeEach(async () => {
@@ -30,23 +30,23 @@ describe('Variable-Based Embed Transformation Integration Tests', () => {
     await context?.cleanup();
   });
 
-  describe('Basic variable embed transformation', () => {
-    it('should correctly transform a variable-based embed directive with a text variable', async () => {
+  describe('Basic variable add transformation', () => {
+    it('should correctly transform a variable-based add directive with a text variable', async () => {
       // Using the withVariableContent example from embedDirectiveExamples
       const textVarExample = textDirectiveExamples.atomic.simpleString;
       const embedExample = embedDirectiveExamples.atomic.withVariableContent;
       
       // Combine examples with additional content
       const content = combineExamples(
-        'Text variable with embed',
+        'Text variable with add',
         textVarExample,
-        { code: '\n# Document with Variable Embed\n', description: 'Heading' },
+        { code: '\n# Document with Variable Add\n', description: 'Heading' },
         embedExample,
         { code: '\nAdditional content', description: 'Footer' }
       ).code;
 
       // Write content to a file
-      const testFilePath = 'variable-embed-test-1.meld';
+      const testFilePath = 'variable-add-test-1.meld';
       await context.services.filesystem.writeFile(testFilePath, content);
       
       // Process the file with transformation enabled and specify markdown format
@@ -58,14 +58,14 @@ describe('Variable-Based Embed Transformation Integration Tests', () => {
       });
       
       // Verify the output contains the embedded content
-      expect(result).toContain('# Document with Variable Embed');
+      expect(result).toContain('# Document with Variable Add');
       expect(result).toContain('Additional content');
       
       // Make sure the directive itself is not visible in the output
-      expect(result).not.toContain('@embed');
+      expect(result).not.toContain('@add');
     });
 
-    it('should correctly transform a variable-based embed directive with a data variable', async () => {
+    it('should correctly transform a variable-based add directive with a data variable', async () => {
       // Using the withDataVariableContent example from embedDirectiveExamples
       const dataExample = dataDirectiveExamples.atomic.simpleObject;
       const dataReferenceExample = dataDirectiveExamples.atomic.fieldReference;
@@ -82,15 +82,15 @@ describe('Variable-Based Embed Transformation Integration Tests', () => {
       
       // Combine examples
       const content = combineExamples(
-        'Data variable with embed',
+        'Data variable with add',
         customDataExample,
         { code: '\n# {{config.title}}\n', description: 'Heading with data reference' },
-        { code: '@embed {{config.author}}\n', description: 'Embed with data reference' },
+        { code: '@add {{config.author}}\n', description: 'Add with data reference' },
         { code: '\nCreated by the author above.', description: 'Footer' }
       ).code;
 
       // Write content to a file
-      const testFilePath = 'variable-embed-test-2.meld';
+      const testFilePath = 'variable-add-test-2.meld';
       await context.services.filesystem.writeFile(testFilePath, content);
       
       // Process the file with transformation enabled and specify markdown format
@@ -107,12 +107,12 @@ describe('Variable-Based Embed Transformation Integration Tests', () => {
       expect(result).toContain('Created by the author above.');
       
       // Make sure the directive itself is not visible in the output
-      expect(result).not.toContain('@embed');
+      expect(result).not.toContain('@add');
     });
   });
 
-  describe('Field access in variable embed transformation', () => {
-    it('should correctly transform an embed directive with complex object field access', async () => {
+  describe('Field access in variable add transformation', () => {
+    it('should correctly transform an add directive with complex object field access', async () => {
       // Create a custom data example with nested objects for field access testing
       const customDataExample = {
         code: `@data userData = {
@@ -131,20 +131,20 @@ describe('Variable-Based Embed Transformation Integration Tests', () => {
         description: 'Complex nested data object'
       };
       
-      // Combine with embed directives
+      // Combine with add directives
       const content = combineExamples(
         'Complex field access',
         customDataExample,
         { code: '\n# User Profile\n', description: 'Main heading' },
-        { code: '@embed {{userData.user.profile.bio}}\n', description: 'Bio embed' },
+        { code: '@add {{userData.user.profile.bio}}\n', description: 'Bio add' },
         { code: '\n## Contact Information\n', description: 'Contact heading' },
-        { code: '@embed {{userData.user.profile.contact.email}}\n', description: 'Email embed' },
+        { code: '@add {{userData.user.profile.contact.email}}\n', description: 'Email add' },
         { code: '\n## Skills\n', description: 'Skills heading' },
-        { code: '@embed {{userData.user.profile.skills}}', description: 'Skills embed' }
+        { code: '@add {{userData.user.profile.skills}}', description: 'Skills add' }
       ).code;
 
       // Write content to a file
-      const testFilePath = 'variable-embed-test-3.meld';
+      const testFilePath = 'variable-add-test-3.meld';
       await context.services.filesystem.writeFile(testFilePath, content);
       
       // Process the file with transformation enabled and specify markdown format
@@ -168,7 +168,7 @@ describe('Variable-Based Embed Transformation Integration Tests', () => {
       expect(result).toContain('Node.js');
       
       // Make sure the directives are not visible in the output
-      expect(result).not.toContain('@embed');
+      expect(result).not.toContain('@add');
     });
 
     it('should correctly format arrays and objects in variable embeds', async () => {
@@ -195,22 +195,22 @@ describe('Variable-Based Embed Transformation Integration Tests', () => {
         description: 'Complex data with arrays and nested objects'
       };
       
-      // Combine with embed directives
+      // Combine with add directives
       const content = combineExamples(
         'Array and object formatting',
         customDataExample,
         { code: '\n## Array Embedding\n', description: 'Array heading' },
-        { code: '@embed {{complexData.nestedObject.array}}\n', description: 'Array embed' },
+        { code: '@add {{complexData.nestedObject.array}}\n', description: 'Array add' },
         { code: '\n## Mixed Array\n', description: 'Mixed array heading' },
-        { code: '@embed {{complexData.mixedArray}}\n', description: 'Mixed array embed' },
+        { code: '@add {{complexData.mixedArray}}\n', description: 'Mixed array add' },
         { code: '\n## Deep Nesting\n', description: 'Deep nesting heading' },
-        { code: '@embed {{complexData.nestedObject.deepNested.moreNested.evenMore.finalLevel}}\n', description: 'Deep nested field' },
+        { code: '@add {{complexData.nestedObject.deepNested.moreNested.evenMore.finalLevel}}\n', description: 'Deep nested field' },
         { code: '\n## Full Object\n', description: 'Full object heading' },
-        { code: '@embed {{complexData}}', description: 'Full object embed' }
+        { code: '@add {{complexData}}', description: 'Full object add' }
       ).code;
 
       // Write content to a file
-      const testFilePath = 'variable-embed-test-4.meld';
+      const testFilePath = 'variable-add-test-4.meld';
       await context.services.filesystem.writeFile(testFilePath, content);
       
       // Process the file with transformation enabled and specify markdown format
@@ -246,7 +246,7 @@ describe('Variable-Based Embed Transformation Integration Tests', () => {
       expect(result).toContain('mixedArray');
       
       // Make sure the directives are not visible in the output
-      expect(result).not.toContain('@embed');
+      expect(result).not.toContain('@add');
     });
   });
 }); 

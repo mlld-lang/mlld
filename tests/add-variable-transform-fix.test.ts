@@ -8,7 +8,7 @@ import { outputLogger } from '@core/utils/logger';
 import type { IStateService } from '@services/state/StateService/IStateService';
 
 /**
- * Implementation of variable resolution for embed directives
+ * Implementation of variable resolution for add directives
  * This function contains the core logic for the Phase 4B fix
  */
 async function resolveVariableBasedEmbed(
@@ -39,7 +39,7 @@ async function resolveVariableBasedEmbed(
         .join('.');
     }
     
-    outputLogger.debug('Resolving variable reference for embed directive', {
+    outputLogger.debug('Resolving variable reference for add directive', {
       varName,
       fieldPath
     });
@@ -133,14 +133,14 @@ async function resolveVariableBasedEmbed(
       return String(value);
     }
   } catch (error) {
-    outputLogger.error('Error resolving variable-based embed', { 
+    outputLogger.error('Error resolving variable-based add', { 
       error: error instanceof Error ? error.message : String(error) 
     });
     return '';
   }
 }
 
-describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
+describe('Phase 4B: Variable-based Add Transformation Fix', () => {
   let context: TestContextDI;
 
   beforeEach(async () => {
@@ -152,11 +152,11 @@ describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
     await context?.cleanup();
   });
 
-  it('should properly resolve variable field access in embed directives with transformation', async () => {
-    // Create a test file with a simple data variable and embed directive
-    const testFilePath = 'field-access-embed.meld';
+  it('should properly resolve variable field access in add directives with transformation', async () => {
+    // Create a test file with a simple data variable and add directive
+    const testFilePath = 'field-access-add.meld';
     await context.services.filesystem.writeFile(testFilePath, 
-      '@data role = { "architect": "Senior architect" }\n@embed {{role.architect}}'
+      '@data role = { "architect": "Senior architect" }\n@add {{role.architect}}'
     );
     
     // Process the file with transformation enabled
@@ -197,11 +197,11 @@ describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
 }
 
 # User Data
-Name: @embed {{user.info.name}}
-Primary Role: @embed {{user.info.roles.0}}
-Email: @embed {{user.info.contact.email}}
-First Project: @embed {{user.projects.0.name}}
-Project Role: @embed {{user.projects.0.role}}
+Name: @add {{user.info.name}}
+Primary Role: @add {{user.info.roles.0}}
+Email: @add {{user.info.contact.email}}
+First Project: @add {{user.projects.0.name}}
+Project Role: @add {{user.projects.0.role}}
 `);
     
     // Process the file with transformation disabled first to verify original formatting
@@ -210,8 +210,8 @@ Project Role: @embed {{user.projects.0.role}}
       format: 'md' // Transformation disabled
     });
     
-    // Verify original format has embed directives
-    expect(standardResult).toContain('@embed');
+    // Verify original format has add directives
+    expect(standardResult).toContain('@add');
     
     // Process with transformation enabled 
     const transformedResult = await main(testFilePath, {

@@ -14,7 +14,7 @@ import type { IStateService } from '@services/state/StateService/IStateService';
 export interface IInterpreterServiceClient {
   /**
    * Create a new interpreter context with a child state.
-   * Useful for nested interpretation (import/embed).
+   * Useful for nested interpretation (import/add).
    * 
    * @param parentState - The parent state to inherit from
    * @param filePath - Optional file path for the child context

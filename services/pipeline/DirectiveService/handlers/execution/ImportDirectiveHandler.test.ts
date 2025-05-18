@@ -51,7 +51,7 @@ import { MockFactory } from '@tests/utils/mocks/MockFactory';
  */
 
 vi.mock('@core/utils/logger', () => {
-  // DEFINE the mock object INSIDE the factory function
+  // EXEC the mock object INSIDE the factory function
   const mockLoggerObject = {
     debug: vi.fn(),
     info: vi.fn(),
@@ -71,8 +71,8 @@ vi.mock('@core/utils/logger', () => {
 // Define a simple mock OutputFormattingContext
 // ...
 
-// >>> DEFINE HELPER HERE <<<
-// --- Define a helper to create a more complete mock state for interpret results ---
+// >>> EXEC HELPER HERE <<<
+// --- Exec a helper to create a more complete mock state for interpret results ---
 const createMockInterpretedState = (vars: { 
     text?: Map<string, TextVariable>,
     data?: Map<string, DataVariable>,

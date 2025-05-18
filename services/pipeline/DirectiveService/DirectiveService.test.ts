@@ -153,7 +153,7 @@ describe('DirectiveService', () => {
 
     testContainer.registerInstance('DependencyContainer', testContainer);
 
-    // --- Define Mock Handlers ---
+    // --- Exec Mock Handlers ---
     mockTextHandler = {
         kind: 'text',
         handle: vi.fn(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult> => {

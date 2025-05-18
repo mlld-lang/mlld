@@ -75,7 +75,7 @@ interface IStateTrackingService extends StateTrackingServiceBase {
   trackContextBoundary(
     sourceStateId: string, 
     targetStateId: string, 
-    boundaryType: 'import' | 'embed',
+    boundaryType: 'import' | 'add',
     filePath?: string
   ): void;
 
@@ -134,7 +134,7 @@ interface StateRelationship extends StateRelationshipBase {}
 interface ContextBoundary {
   sourceStateId: string;
   targetStateId: string;
-  boundaryType: 'import' | 'embed';
+  boundaryType: 'import' | 'add';
   filePath?: string;
   createdAt: number;
 }

@@ -9,7 +9,7 @@ import { OutputService } from '@services/pipeline/OutputService/OutputService';
 import { isVariableReferenceNode } from '@core/syntax/types/variables';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver';
 
-describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
+describe('Phase 4B: Variable-based Add Transformation Fix', () => {
   let context: TestContextDI;
 
   beforeEach(async () => {
@@ -24,8 +24,8 @@ describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
   it('should implement a simplified Phase 4B fix for variable embeds in transformations', async () => {
     console.log('----- TESTING PHASE 4B IMPLEMENTATION -----');
     
-    // Create test file with variable and embed directive
-    const testContent = '@data role = { "architect": "Senior architect" }\n@embed {{role.architect}}';
+    // Create test file with variable and add directive
+    const testContent = '@data role = { "architect": "Senior architect" }\n@add {{role.architect}}';
     await context.services.filesystem.writeFile('test.meld', testContent);
     
     console.log('Test file content:', testContent);
@@ -68,7 +68,7 @@ describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
       // Check if this is our test case with role.architect
       const directive = args[0]?.directive;
       if (directive && directive.content && directive.content.includes('role.architect')) {
-        console.log('Found our test embed directive with role.architect');
+        console.log('Found our test add directive with role.architect');
       }
       
       const result = await originalExecute.apply(this, args);
@@ -95,7 +95,7 @@ describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
     VariableReferenceResolver.prototype.resolveFieldAccess = originalResolveFieldAccess;
     
     // Test expectations with deterministic assertions
-    expect(result).not.toContain('@embed');
+    expect(result).not.toContain('@add');
     expect(result).toContain('Senior architect');
     
     // Verify that our variable resolution was captured - now optional since we've added redundant checks

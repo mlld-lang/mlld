@@ -136,7 +136,7 @@ export class TestDirectiveHandlerHelper {
     );
     service.registerHandler(runHandler);
     
-    // For embed and import handlers, use the interpreter service client factory
+    // For add and import handlers, use the interpreter service client factory
     let interpreterServiceClientFactory: InterpreterServiceClientFactory;
     try {
       interpreterServiceClientFactory = context.container.resolve('InterpreterServiceClientFactory');

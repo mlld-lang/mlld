@@ -74,9 +74,9 @@ describe('ValidationService', () => {
       expect(kinds).toContain('text');
       expect(kinds).toContain('data');
       expect(kinds).toContain('import');
-      expect(kinds).toContain('embed');
+      expect(kinds).toContain('add');
       expect(kinds).toContain('path');
-      expect(kinds).toContain('define');
+      expect(kinds).toContain('exec');
       expect(kinds).toContain('run');
     });
   });
@@ -323,13 +323,13 @@ describe('ValidationService', () => {
     });
   });
   
-  describe('Embed directive validation', () => {
-    it('should validate a valid embed directive with section', async () => {
+  describe('Add directive validation', () => {
+    it('should validate a valid add directive with section', async () => {
       const node = createAddDirective('test.md', 'section');
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
-    it('should validate embed directive without section', async () => {
+    it('should validate add directive without section', async () => {
       const node = createAddDirective('test.md', undefined);
       await expect(service.validate(node)).resolves.not.toThrow();
     });
@@ -338,7 +338,7 @@ describe('ValidationService', () => {
       const node = createAddDirective('', undefined);
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal, directiveKind: 'embed', messageContains: 'requires a valid path'
+          severity: ErrorSeverity.Fatal, directiveKind: 'add', messageContains: 'requires a valid path'
       });
     });
     
@@ -353,7 +353,7 @@ describe('ValidationService', () => {
       if (node.directive) node.directive.fuzzy = -0.1;
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal, directiveKind: 'embed', messageContains: 'must be a number between 0 and 1'
+          severity: ErrorSeverity.Fatal, directiveKind: 'add', messageContains: 'must be a number between 0 and 1'
       });
     });
     
@@ -362,7 +362,7 @@ describe('ValidationService', () => {
        if (node.directive) node.directive.fuzzy = 1.1;
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal, directiveKind: 'embed', messageContains: 'must be a number between 0 and 1'
+          severity: ErrorSeverity.Fatal, directiveKind: 'add', messageContains: 'must be a number between 0 and 1'
       });
     });
   });

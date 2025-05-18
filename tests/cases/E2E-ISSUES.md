@@ -22,12 +22,12 @@ Many examples using inline {{variables}} are invalid and work! `This is a {{vari
 - However, the fact that there are tests and expected output files that rely on this behavior suggests it may be intentional design, not a bug
 
 ## 3. @text variable interpolation 
-Weirdly adding `/path/to/` before variable interpolation (see tests/cases/valid/import-utils.o.md where for `@text imported_variable = "This is from the imported file"` followed by `@embed {{imported_variable}}` it's resulting in `tests/cases/valid/This is from the imported file`)
+Weirdly adding `/path/to/` before variable interpolation (see tests/cases/valid/import-utils.o.md where for `@text imported_variable = "This is from the imported file"` followed by `@add {{imported_variable}}` it's resulting in `tests/cases/valid/This is from the imported file`)
 
 **Investigation Notes:**
 - The issue is in the `EmbedDirectiveHandler` implementation in the `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.ts` file
 - When processing variable reference embeds, the code is concatenating the directory path to the variable content
-- The problematic behavior happens in the execution of the `@embed` directive when the content is a variable reference
+- The problematic behavior happens in the execution of the `@add` directive when the content is a variable reference
 - In the `import-utils.o.md` output, we can see the directory path `tests/cases/valid/` is being prepended to the text variable content
 - This appears to be happening because the handler is treating the variable content as if it were a file path even though it's just regular text
 - The issue may be in the way `resolvedPath` is handled in the variable reference path logic (see around line 470-648)
@@ -40,17 +40,17 @@ Weirdly adding `/path/to/` before variable interpolation (see tests/cases/valid/
 - Update the tests to correctly expect either a path-prepended output or a clean variable output based on the desired behavior
 
 ## 4. Path resolution issues with embeds
-In `path-embed.mld`, the embed directive should be embedding a file, but in the output, it shows `@embed` as raw text without the content.
+In `path-add.mld`, the add directive should be embedding a file, but in the output, it shows `@add` as raw text without the content.
 
 **Investigation Notes:**
-- The issue occurs in `path-embed.mld` where `@embed [$valid/text.mld]` is not fully processing the embedded file
-- The `path-embed.o.md` output shows that the content of `text.mld` is being included, but the nested `@embed {{greet}}` directive is not being processed
-- The expected output (`path-embed.expected.md`) shows that the nested `@embed {{greet}}` directive should be processed and replaced with its content
+- The issue occurs in `path-add.mld` where `@add [$valid/text.mld]` is not fully processing the embedded file
+- The `path-add.o.md` output shows that the content of `text.mld` is being included, but the nested `@add {{greet}}` directive is not being processed
+- The expected output (`path-add.expected.md`) shows that the nested `@add {{greet}}` directive should be processed and replaced with its content
 - This appears to be an issue with directive processing within embedded files
 - The current implementation is treating embedded content as literal text without processing directives within it
 - This behavior is explicitly mentioned in the `EmbedDirectiveHandler.ts` code around line 845-850:
   ```typescript
-  /** IMPORTANT: Content handling in @embed
+  /** IMPORTANT: Content handling in @add
    * 
    * For BOTH fileEmbed and variableEmbed:
    * - Content is ALWAYS treated as literal text in the final output
@@ -67,13 +67,13 @@ In `path-embed.mld`, the embed directive should be embedding a file, but in the 
 - If recursive directive processing is desired, this would require modifying the embedding logic to parse and process directives in embedded content
 
 ## 5. @run directive execution failing
-In `directives.mld`, there's an error trying to execute `$greet` command, showing "spawn $greet ENOENT". Defined commands with `@define` aren't being properly executed. Related: we get a similar err when running `meld examples/example.mld --stdout` 
+In `directives.mld`, there's an error trying to execute `$greet` command, showing "spawn $greet ENOENT". Defined commands with `@exec` aren't being properly executed. Related: we get a similar err when running `meld examples/example.mld --stdout` 
 
 **Investigation Notes:**
 - The issue is with how defined commands are being executed in the `RunDirectiveHandler`
 - In `directives.mld`, line 33-34 defines a command and tries to execute it:
   ```
-  @define greet(person) = @run [echo "Hello, {{person}}!"]
+  @exec greet(person) = @run [echo "Hello, {{person}}!"]
   @run $greet({{user.name}})
   ```
 - The error occurs because the system is trying to execute `$greet` literally as a command in the shell, rather than resolving it to the defined command `echo "Hello, Test User!"`
@@ -110,13 +110,13 @@ In `directives.mld`, path variables like `$temp` aren't being replaced in the ou
 - This would be related to the fix for issue #2, as both involve variable resolution in plain text
 
 ## 7. Array access in data variables
-In `data-variables.mld` test, array access with dot notation (students.0, students.1) appears to be working correctly now, in contrast to the `embed-example.o.md` where it's failing.
+In `data-variables.mld` test, array access with dot notation (students.0, students.1) appears to be working correctly now, in contrast to the `add-example.o.md` where it's failing.
 
 **Investigation Notes:**
 - There's an inconsistency in how array access works between direct file processing and embedded file processing
 - In `data-variables.mld`, array access with dot notation (students.0.name) works correctly when processed directly
-- However, in `embed-example.mld`, which embeds `data-variables.mld`, the array access fails to resolve
-- In the `embed-example.o.md` output, we see that variables aren't being resolved at all, showing empty values (`-:  ()`)
+- However, in `add-example.mld`, which embeds `data-variables.mld`, the array access fails to resolve
+- In the `add-example.o.md` output, we see that variables aren't being resolved at all, showing empty values (`-:  ()`)
 - This is related to issue #4 (Path resolution with embeds) and #13 (Embedded file directives not processed)
 - The root cause is that the `EmbedDirectiveHandler` is treating embedded content as literal text
 - This means that variables in embedded files are not being processed as expected
@@ -133,14 +133,14 @@ In `data-variables.mld` test, array access with dot notation (students.0, studen
 ## 8. Inconsistent file path resolution
 Some file paths are being resolved relative to the project root, while others are being resolved relative to the file's location.
 
-## 9. Empty embed directive output
-In some cases, `@embed` directives are processed but leave empty output or incomplete content.
+## 9. Empty add directive output
+In some cases, `@add` directives are processed but leave empty output or incomplete content.
 
 **Investigation Notes:**
-- In `embed-example.mld`, the `@embed` directive is embedding `data-variables.mld` but in the output file, variable references like `{{grade}}` and `{{students.0.name}}` are not being resolved
-- Looking at the `embed-example.o.md`, we see empty values (`-:  ()`) where there should be student data
+- In `add-example.mld`, the `@add` directive is embedding `data-variables.mld` but in the output file, variable references like `{{grade}}` and `{{students.0.name}}` are not being resolved
+- Looking at the `add-example.o.md`, we see empty values (`-:  ()`) where there should be student data
 - The EmbedDirectiveHandler.ts code explicitly mentions in a comment on lines 845-850 that embedded content is ALWAYS treated as literal text and is NOT parsed for directives or other Meld syntax
-- This policy is implemented intentionally, but conflicts with the expected output in `embed-example.expected.md`
+- This policy is implemented intentionally, but conflicts with the expected output in `add-example.expected.md`
 - The core issue is that variables in embedded content are not being resolved during embedding
 - Even when variable references are correctly embedded, they appear as literal text `{{variable}}` instead of being resolved to their values
 - This is a fundamental design decision regarding how embedded content should be treated
@@ -203,15 +203,15 @@ In some outputs, the directives (`@text`, `@data`, etc.) are completely removed 
 **Investigation Notes:**
 - Comparing `directive-example.mld` and `directive-example.expected.md`, we can see that the `@data` directive is completely removed from the output
 - This behavior is inconsistent across different directive types
-- Some directives (like `@text`, `@data`, `@define`) are meant to be removed from the output as they only define variables
-- Other directives (like `@embed`, `@run`) may be visible in the output depending on their purpose
+- Some directives (like `@text`, `@data`, `@exec`) are meant to be removed from the output as they only exec variables
+- Other directives (like `@add`, `@run`) may be visible in the output depending on their purpose
 - The output handling is determined by each directive's handler class (`TextDirectiveHandler`, `DataDirectiveHandler`, etc.)
 - Each handler decides whether to return a replacement node or remove itself from the output
 - The inconsistency appears when different handlers implement different logic for directive visibility
 
 **Potential Fix:**
 - Standardize the directive visibility behavior across all handlers:
-  - Define a clear policy for which directives should be visible/invisible in output
+  - Exec a clear policy for which directives should be visible/invisible in output
   - Document the policy in code comments and user documentation
   - Implement consistent logic in all directive handlers
   - Add a configuration option to control directive visibility globally
@@ -222,9 +222,9 @@ In some outputs, the directives (`@text`, `@data`, etc.) are completely removed 
 When a file is embedded, the directives within that file are sometimes displayed as raw text instead of being processed.
 
 **Investigation Notes:**
-- This issue is closely related to issue #4 (Path resolution with embeds) and #9 (Empty embed directive output)
-- In `path-embed.mld`, there's an embed directive `@embed [$valid/text.mld]` which embeds a file containing a variable reference `@embed {{greet}}`
-- In the output, the nested `@embed {{greet}}` directive is not processed and appears as literal text
+- This issue is closely related to issue #4 (Path resolution with embeds) and #9 (Empty add directive output)
+- In `path-add.mld`, there's an add directive `@add [$valid/text.mld]` which embeds a file containing a variable reference `@add {{greet}}`
+- In the output, the nested `@add {{greet}}` directive is not processed and appears as literal text
 - The EmbedDirectiveHandler.ts clearly states in comments (lines 845-850) that embedded content is treated as literal text and not parsed for directives
 - This design decision ensures "embedded content appears exactly as written" but doesn't allow for recursive directive processing
 - The expected output in some tests assumes that nested directives would be processed, contradicting this design decision
@@ -249,7 +249,7 @@ When a file is embedded, the directives within that file are sometimes displayed
 
 2. **Path variable edge cases** - Testing relative paths, absolute paths, and path variables with special characters.
 
-3. **Recursive embed/import depth** - Testing the maximum depth of nested imports/embeds and proper error handling.
+3. **Recursive add/import depth** - Testing the maximum depth of nested imports/embeds and proper error handling.
 
 4. **Code fence interactions** - Testing how code fences interact with directives and variables, especially when embedded.
 

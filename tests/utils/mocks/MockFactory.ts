@@ -241,7 +241,7 @@ export class MockFactory {
       processDirective: vi.fn().mockResolvedValue({}),
       processDirectives: vi.fn().mockResolvedValue({}),
       supportsDirective: vi.fn().mockReturnValue(true),
-      getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data', 'path', 'define', 'run', 'embed', 'import'])
+      getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data', 'path', 'exec', 'run', 'add', 'import'])
     };
     
     return { ...baseMock, ...overrides };
@@ -301,7 +301,7 @@ export class MockFactory {
       validate: vi.fn().mockResolvedValue(undefined),
       registerValidator: vi.fn(),
       removeValidator: vi.fn(),
-      getRegisteredDirectiveKinds: vi.fn().mockReturnValue(['text', 'data', 'path', 'define', 'run', 'embed', 'import'])
+      getRegisteredDirectiveKinds: vi.fn().mockReturnValue(['text', 'data', 'path', 'exec', 'run', 'add', 'import'])
     };
     
     return { ...baseMock, ...overrides };

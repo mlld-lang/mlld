@@ -410,16 +410,16 @@ export class StateTrackingService implements IStateTrackingService {
   }
 
   /**
-   * Track context boundary creation during import or embed operations.
+   * Track context boundary creation during import or add operations.
    * @param sourceStateId - The parent/source state ID
    * @param targetStateId - The child/target state ID
-   * @param boundaryType - The type of boundary (import or embed)
+   * @param boundaryType - The type of boundary (import or add)
    * @param filePath - The file path associated with the boundary
    */
   trackContextBoundary(
     sourceStateId: string, 
     targetStateId: string, 
-    boundaryType: 'import' | 'embed',
+    boundaryType: 'import' | 'add',
     filePath?: string
   ): void {
     if (!this.hasState(sourceStateId) || !this.hasState(targetStateId)) {

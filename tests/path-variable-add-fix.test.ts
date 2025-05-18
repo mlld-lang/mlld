@@ -3,7 +3,7 @@ import { main } from '@api/index';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import type { Services } from '@core/types/index';
 
-describe('Path Variable Embed Fix', () => {
+describe('Path Variable Add Fix', () => {
   let context: TestContextDI;
 
   beforeEach(async () => {
@@ -15,17 +15,17 @@ describe('Path Variable Embed Fix', () => {
     await context?.cleanup();
   });
 
-  it('should properly resolve custom path variables in embed directives', async () => {
+  it('should properly resolve custom path variables in add directives', async () => {
     // Create a directory structure and files for testing
     await context.services.filesystem.mkdir('docs/directives', { recursive: true });
     await context.services.filesystem.writeFile('docs/directives/README.md', 
       '# Directives documentation\n\nThis is the documentation for directives.');
     
-    // Create a test file that uses path variables in embed directive
+    // Create a test file that uses path variables in add directive
     await context.services.filesystem.writeFile('test.mld',
       '@path d = "$./docs/directives"\n\n' +
-      '## Embed with path variable\n\n' +
-      '@embed [$d/README.md]'
+      '## Add with path variable\n\n' +
+      '@add [$d/README.md]'
     );
 
     // Test with transformation
@@ -40,8 +40,8 @@ describe('Path Variable Embed Fix', () => {
     expect(result).toContain('# Directives documentation');
     expect(result).toContain('This is the documentation for directives.');
     
-    // Make sure the @embed directive was replaced
-    expect(result).not.toContain('@embed');
+    // Make sure the @add directive was replaced
+    expect(result).not.toContain('@add');
     expect(result).not.toContain('$d');
   });
 }); 

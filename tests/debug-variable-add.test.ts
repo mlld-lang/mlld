@@ -7,13 +7,13 @@ import * as fs from 'fs';
 // Utility function to write debug info
 function debugWrite(message: string) {
   try {
-    fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', message + '\n');
+    fs.appendFileSync('/Users/adam/dev/claude-meld/debug-add.txt', message + '\n');
   } catch (error) {
     console.error('Failed to write debug info:', error);
   }
 }
 
-describe('Debug Variable-based Embed Transformation', () => {
+describe('Debug Variable-based Add Transformation', () => {
   let context: TestContextDI;
 
   beforeEach(async () => {
@@ -21,7 +21,7 @@ describe('Debug Variable-based Embed Transformation', () => {
     await context.initialize();
     
     // Clear debug file
-    fs.writeFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', '');
+    fs.writeFileSync('/Users/adam/dev/claude-meld/debug-add.txt', '');
     
     debugWrite('========= TEST RUN STARTED =========');
   });
@@ -31,11 +31,11 @@ describe('Debug Variable-based Embed Transformation', () => {
     await context?.cleanup();
   });
 
-  it('should debug the issue with variable embed transformation', async () => {
-    debugWrite('Creating test file with variable embed');
+  it('should debug the issue with variable add transformation', async () => {
+    debugWrite('Creating test file with variable add');
     
-    // Create a simple test file with a variable embed
-    const testContent = '@data role = { "architect": "Senior architect" }\n@embed {{role.architect}}';
+    // Create a simple test file with a variable add
+    const testContent = '@data role = { "architect": "Senior architect" }\n@add {{role.architect}}';
     await context.services.filesystem.writeFile('debug-test.meld', testContent);
     
     debugWrite('Test file created. Content: ' + testContent);
@@ -80,14 +80,14 @@ describe('Debug Variable-based Embed Transformation', () => {
       debugWrite('❌ FAIL: result does not match expected value');
     }
     
-    if (result.includes('@embed')) {
-      debugWrite('❌ FAIL: result still contains @embed directive');
+    if (result.includes('@add')) {
+      debugWrite('❌ FAIL: result still contains @add directive');
     } else {
-      debugWrite('✅ PASS: result does not contain @embed directive');
+      debugWrite('✅ PASS: result does not contain @add directive');
     }
     
     // For a successful test run, use expect assertions
     expect(result.trim()).toBe('Senior architect');
-    expect(result).not.toContain('@embed');
+    expect(result).not.toContain('@add');
   });
 });

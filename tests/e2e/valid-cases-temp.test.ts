@@ -71,9 +71,9 @@ describe.skip('Command References in Run directives', async () => {
   // Test with a custom command reference test
   it.skip('creates and executes command references with proper parameter substitution', async () => {
     const testContent = `
-@define echotext(text) = @run [echo {{text}}]
+@exec echotext(text) = @run [echo {{text}}]
 @run $echotext(Hello World)
-@define echoname(name) = @run [echo {{name}}]
+@exec echoname(name) = @run [echo {{name}}]
 @run $echoname(John)
 `;
 
@@ -103,7 +103,7 @@ describe.skip('Command References in Run directives', async () => {
   it('handles nested variable references in command parameters', async () => {
     const testContent = `
 @text user = "Alice"
-@define echoname(name) = @run [echo {{name}}]
+@exec echoname(name) = @run [echo {{name}}]
 @run $echoname({{user}})
 // This comment will be displayed to confirm test works
 `;
@@ -133,7 +133,7 @@ describe.skip('Command References in Run directives', async () => {
   // Test with parameters containing commas
   it('handles parameters with commas inside quotes', async () => {
     const testContent = `
-@define echotexts(text1, text2) = @run [echo {{text1}} {{text2}}]
+@exec echotexts(text1, text2) = @run [echo {{text1}} {{text2}}]
 @run $echotexts("hello, world", "nice, day")
 `;
 

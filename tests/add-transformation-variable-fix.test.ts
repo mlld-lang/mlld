@@ -3,7 +3,7 @@ import { main } from '@api/index';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import type { Services } from '@core/types/index';
 
-describe('Embed Directive Variable Path Prefix Fix', () => {
+describe('Add Directive Variable Path Prefix Fix', () => {
   let context: TestContextDI;
 
   beforeEach(async () => {
@@ -26,9 +26,9 @@ describe('Embed Directive Variable Path Prefix Fix', () => {
       '  "ux_review": "Review the user experience and suggest improvements."\n' +
       '}\n\n' +
       '## Role\n' +
-      '@embed {{role.architect}}\n\n' +
+      '@add {{role.architect}}\n\n' +
       '## Task\n' +
-      '@embed {{task.code_review}}';
+      '@add {{task.code_review}}';
       
     // Write test file using proper filesystem service
     const testFilePath = 'variable-output.meld';
@@ -51,8 +51,8 @@ describe('Embed Directive Variable Path Prefix Fix', () => {
     expect(result).not.toContain('examples/');
     expect(result).not.toContain('/');
     
-    // Verify the @embed directive is properly replaced in the output
-    expect(result).not.toContain('@embed');
+    // Verify the @add directive is properly replaced in the output
+    expect(result).not.toContain('@add');
     expect(result).not.toContain('{{role.architect}}');
     expect(result).not.toContain('{{task.code_review}}');
   });

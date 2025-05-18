@@ -60,7 +60,7 @@ describe('VariableReferenceResolver', () => {
   // Remove fileSystemService if not directly needed by this resolver/tests
   // let fileSystemService: DeepMockProxy<IFileSystemService>; 
 
-  // --- Define ALL mock variables/defs used in tests --- 
+  // --- Exec ALL mock variables/defs used in tests --- 
   const mockGreetingVar: TextVariable = { name: 'greeting', type: VariableType.TEXT, value: 'Hello World' };
   const mockDataVarVar: DataVariable = { name: 'dataVar', type: VariableType.DATA, value: { key: 'value' } };
   const mockDataObjVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: { user: { name: 'Alice' } } }; // Default

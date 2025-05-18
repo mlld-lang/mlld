@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import type { DirectiveNode } from '@core/syntax/types';
 import { outputLogger as logger } from '@core/utils/logger';
 
-describe('Phase 4B: Variable-based Embed Transform Fix', () => {
+describe('Phase 4B: Variable-based Add Transform Fix', () => {
   let context: TestContextDI;
 
   beforeEach(async () => {
@@ -18,12 +18,12 @@ describe('Phase 4B: Variable-based Embed Transform Fix', () => {
     await context?.cleanup();
   });
 
-  it('should correctly handle variable-based embed directives in transformation mode', async () => {
-    const content = `@data role = { "architect": "Senior architect" }\n@embed {{role.architect}}`;
-    await context.services.filesystem.writeFile('simple-embed-test.meld', content);
+  it('should correctly handle variable-based add directives in transformation mode', async () => {
+    const content = `@data role = { "architect": "Senior architect" }\n@add {{role.architect}}`;
+    await context.services.filesystem.writeFile('simple-add-test.meld', content);
     
     // Create an entirely new test file for this specific issue
-    const result = await main('simple-embed-test.meld', {
+    const result = await main('simple-add-test.meld', {
       fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true,

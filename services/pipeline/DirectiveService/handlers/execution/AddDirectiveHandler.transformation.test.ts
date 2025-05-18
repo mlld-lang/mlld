@@ -363,7 +363,7 @@ describe('AddDirectiveHandler Transformation', () => {
       }
     });
 
-    it('should properly transform variable-based embed directive with field access', async () => {
+    it('should properly transform variable-based add directive with field access', async () => {
       const node = createAddDirective(
         '{{vars.myPath.nested}}',
         undefined,
@@ -389,7 +389,7 @@ describe('AddDirectiveHandler Transformation', () => {
       expect(result.replacement?.[0]).toMatchObject({ type: 'Text', content: resolvedPathString });
     });
 
-    it('should properly transform variable-based embed directive with object field access', async () => {
+    it('should properly transform variable-based add directive with object field access', async () => {
       const node = createAddDirective(
         '{{contact.email}}',
         undefined,

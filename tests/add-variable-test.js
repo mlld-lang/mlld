@@ -1,21 +1,21 @@
-// Simple, focused test script for debugging the variable-based embed transformation issue
+// Simple, focused test script for debugging the variable-based add transformation issue
 
 // Import basic required modules
 const fs = require('fs');
 const path = require('path');
 const { main } = require('../api/index.js');
 
-// Sample content with variable-based embed
+// Sample content with variable-based add
 const testContent = `
 @data role = {
   "architect": "Senior architect skilled in TypeScript"
 }
 
-@embed {{role.architect}}
+@add {{role.architect}}
 `;
 
 // File path for test
-const testFilePath = path.join(__dirname, 'embed-var-test.meld');
+const testFilePath = path.join(__dirname, 'add-var-test.meld');
 
 async function runTest() {
   console.log('STARTING TEST SCRIPT');
@@ -36,7 +36,7 @@ async function runTest() {
     console.log('Result:', result);
     console.log('Result type:', typeof result);
     console.log('Result length:', result.length);
-    console.log('Contains embed directive?', result.includes('@embed'));
+    console.log('Contains add directive?', result.includes('@add'));
     console.log('Contains variable reference?', result.includes('{{role.architect}}'));
     console.log('Contains expected value?', result.includes('Senior architect'));
     

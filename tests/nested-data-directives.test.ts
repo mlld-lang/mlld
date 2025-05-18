@@ -15,9 +15,9 @@ import {
 } from '@core/ast/types/data';
 
 describe('Data directive with nested directives', () => {
-  test('Data directive with direct nested embed directive', async () => {
-    // Test a data directive with a direct nested embed directive
-    const content = `@data config = @embed "path/to/config.json"`;
+  test('Data directive with direct nested add directive', async () => {
+    // Test a data directive with a direct nested add directive
+    const content = `@data config = @add "path/to/config.json"`;
     
     const result = await parse(content);
     expect(result.ast).toHaveLength(1);
@@ -30,7 +30,7 @@ describe('Data directive with nested directives', () => {
     // Check that it's a data assignment directive
     expect(isDataAssignmentDirective(directive)).toBe(true);
     
-    // Check that the embed directive is nested directly in the value field
+    // Check that the add directive is nested directly in the value field
     expect(isDataWithNestedDirective(directive)).toBe(true);
     expect(isDataWithNestedEmbedDirective(directive)).toBe(true);
     
@@ -47,13 +47,13 @@ describe('Data directive with nested directives', () => {
         // Check nested directive
         const nestedDirective = directive.values.value;
         expect(nestedDirective.type).toBe('Directive');
-        expect(nestedDirective.kind).toBe('embed');
+        expect(nestedDirective.kind).toBe('add');
         expect(nestedDirective.values.path).toBeDefined();
       }
       
       // Verify raw values
       expect(directive.raw.identifier).toBe('config');
-      expect(directive.raw.value).toContain('@embed');
+      expect(directive.raw.value).toContain('@add');
     }
   });
   
@@ -102,7 +102,7 @@ describe('Data directive with nested directives', () => {
   test('Data object with nested directive in property', async () => {
     // Test a data directive with an object that has a nested directive in a property
     const content = `@data config = {
-      "content": @embed "path/to/file.md",
+      "content": @add "path/to/file.md",
       "name": "Test Config"
     }`;
     
@@ -128,14 +128,14 @@ describe('Data directive with nested directives', () => {
         // Check that the content property has a directive
         expect(hasDirectiveProperty(directive, 'content')).toBe(true);
         
-        // Check the content property is an embed directive
+        // Check the content property is an add directive
         const contentProp = directive.values.value.properties['content'];
         expect(isDirectiveValue(contentProp)).toBe(true);
         
         if (isDirectiveValue(contentProp)) {
           // Check nested directive
           expect(contentProp.type).toBe('Directive');
-          expect(contentProp.kind).toBe('embed');
+          expect(contentProp.kind).toBe('add');
           expect(contentProp.values.path).toBeDefined();
         }
         
@@ -145,14 +145,14 @@ describe('Data directive with nested directives', () => {
       }
       
       // General check for nested directives of a specific kind
-      expect(hasNestedDirectiveOfKind(directive, 'embed')).toBe(true);
+      expect(hasNestedDirectiveOfKind(directive, 'add')).toBe(true);
     }
   });
   
   test('Data array with nested directives as items', async () => {
     // Test a data directive with an array that has nested directives as items
     const content = `@data results = [
-      @embed "report1.json",
+      @add "report1.json",
       @run [echo "Report 2"],
       "Static Item"
     ]`;
@@ -177,14 +177,14 @@ describe('Data directive with nested directives', () => {
         expect(directive.values.value.items).toBeDefined();
         expect(directive.values.value.items.length).toBe(3);
         
-        // Check first item is an embed directive
+        // Check first item is an add directive
         const item0 = directive.values.value.items[0];
         expect(isDirectiveValue(item0)).toBe(true);
         
         if (isDirectiveValue(item0)) {
           // Check nested directive
           expect(item0.type).toBe('Directive');
-          expect(item0.kind).toBe('embed');
+          expect(item0.kind).toBe('add');
           expect(item0.values.path).toBeDefined();
         }
         
@@ -205,7 +205,7 @@ describe('Data directive with nested directives', () => {
       }
       
       // General check for nested directives of specific kinds
-      expect(hasNestedDirectiveOfKind(directive, 'embed')).toBe(true);
+      expect(hasNestedDirectiveOfKind(directive, 'add')).toBe(true);
       expect(hasNestedDirectiveOfKind(directive, 'run')).toBe(true);
     }
   });
@@ -214,7 +214,7 @@ describe('Data directive with nested directives', () => {
     // Test a complex data structure with directives at different levels
     const content = `@data dashboard = {
       "header": "System Dashboard",
-      "content": @embed "dashboard.md",
+      "content": @add "dashboard.md",
       "sections": [
         {
           "title": "System Info",
@@ -276,7 +276,7 @@ describe('Data directive with nested directives', () => {
       }
       
       // General check for nested directives of specific kinds
-      expect(hasNestedDirectiveOfKind(directive, 'embed')).toBe(true);
+      expect(hasNestedDirectiveOfKind(directive, 'add')).toBe(true);
       expect(hasNestedDirectiveOfKind(directive, 'run')).toBe(true);
     }
   });

@@ -9,13 +9,13 @@ import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolution
 class StateVisualizationService {}
 
 /**
- * Comprehensive test suite for variable-based embed directive transformation
+ * Comprehensive test suite for variable-based add directive transformation
  * Phase 1 of the p0-fixing-plan.md implementation
  * 
- * This test focuses on the variable-based embed directive transformation issues,
+ * This test focuses on the variable-based add directive transformation issues,
  * documenting the current behavior to identify the exact failure points in the pipeline.
  */
-describe('Variable-based Embed Transformation Comprehensive', () => {
+describe('Variable-based Add Transformation Comprehensive', () => {
   let context: TestContextDI;
   let stateService: IStateService;
   let outputService: IOutputService;
@@ -35,7 +35,7 @@ describe('Variable-based Embed Transformation Comprehensive', () => {
     filePath: 'example.md',
     complexPath: 'nested/path/to/file.txt',
     
-    // Embed content variables
+    // Add content variables
     embedContent: 'This content should be embedded',
     multilineEmbedContent: 'Line 1\nLine 2\nLine 3',
     complexEmbedContent: '# Heading\n\n- List item 1\n- List item 2\n\n```code\ncode block\n```',
@@ -75,7 +75,7 @@ describe('Variable-based Embed Transformation Comprehensive', () => {
     
     // Handle specific test cases based on the content pattern
     
-    // Case 1: Basic embed transformation tests
+    // Case 1: Basic add transformation tests
     if (content.includes('Before') && content.includes('After')) {
       let result = 'Before\n';
       
@@ -216,17 +216,17 @@ describe('Variable-based Embed Transformation Comprehensive', () => {
     await context.cleanup();
   });
 
-  describe('Basic Embed Transformation', () => {
-    it('should transform a simple embed directive with text variable', async () => {
+  describe('Basic Add Transformation', () => {
+    it('should transform a simple add directive with text variable', async () => {
       const template = `Before
-@embed [text={{simpleText}}]
+@add [text={{simpleText}}]
 After`;
       
       // Process with transformation enabled
       const result = await processMeld(template);
       
       // Document current behavior
-      console.log('Simple embed with text variable (transformation):', JSON.stringify(result));
+      console.log('Simple add with text variable (transformation):', JSON.stringify(result));
       
       // Check that the content was embedded properly
       expect(result).toContain('Before');
@@ -234,17 +234,17 @@ After`;
       expect(result).toContain('After');
     });
 
-    it('should transform an embed directive with multiline text variable', async () => {
+    it('should transform an add directive with multiline text variable', async () => {
       const template = `Before
-@embed [text={{multilineEmbedContent}}]
+@add [text={{multilineEmbedContent}}]
 After`;
       
       // Process with transformation enabled
       const result = await processMeld(template);
       
       // Document current behavior
-      console.log('Multiline embed (transformation):', JSON.stringify(result));
-      writeDebugFile('debug-embed.txt', result);
+      console.log('Multiline add (transformation):', JSON.stringify(result));
+      writeDebugFile('debug-add.txt', result);
       
       // Check that the content was embedded properly
       expect(result).toContain('Before');
@@ -254,16 +254,16 @@ After`;
       expect(result).toContain('After');
     });
 
-    it('should transform an embed directive with markdown text variable', async () => {
+    it('should transform an add directive with markdown text variable', async () => {
       const template = `Before
-@embed [text={{markdownText}}]
+@add [text={{markdownText}}]
 After`;
       
       // Process with transformation enabled
       const result = await processMeld(template);
       
       // Document current behavior
-      console.log('Markdown embed (transformation):', JSON.stringify(result));
+      console.log('Markdown add (transformation):', JSON.stringify(result));
       
       // Check that the content was embedded properly
       expect(result).toContain('Before');
@@ -272,16 +272,16 @@ After`;
       expect(result).toContain('After');
     });
 
-    it('should transform an embed directive with code text variable', async () => {
+    it('should transform an add directive with code text variable', async () => {
       const template = `Before
-@embed [text={{codeText}}]
+@add [text={{codeText}}]
 After`;
       
       // Process with transformation enabled
       const result = await processMeld(template);
       
       // Document current behavior
-      console.log('Code embed (transformation):', JSON.stringify(result));
+      console.log('Code add (transformation):', JSON.stringify(result));
       
       // Check that the content was embedded properly
       expect(result).toContain('Before');
@@ -292,17 +292,17 @@ After`;
     });
   });
 
-  describe('Complex Embed Transformations', () => {
-    it('should transform an embed directive with object property variable', async () => {
+  describe('Complex Add Transformations', () => {
+    it('should transform an add directive with object property variable', async () => {
       const template = `Before
-@embed [text={{embedObject.content}}]
+@add [text={{embedObject.content}}]
 After`;
       
       // Process with transformation enabled
       const result = await processMeld(template);
       
       // Document current behavior
-      console.log('Object property embed (transformation):', JSON.stringify(result));
+      console.log('Object property add (transformation):', JSON.stringify(result));
       
       // Check that the content was embedded properly
       expect(result).toContain('Before');
@@ -310,16 +310,16 @@ After`;
       expect(result).toContain('After');
     });
 
-    it('should transform an embed directive with array item variable', async () => {
+    it('should transform an add directive with array item variable', async () => {
       const template = `Before
-@embed [text={{embedItems.0}}]
+@add [text={{embedItems.0}}]
 After`;
       
       // Process with transformation enabled
       const result = await processMeld(template);
       
       // Document current behavior
-      console.log('Array item embed (transformation):', JSON.stringify(result));
+      console.log('Array item add (transformation):', JSON.stringify(result));
       
       // Check that the content was embedded properly
       expect(result).toContain('Before');
@@ -327,9 +327,9 @@ After`;
       expect(result).toContain('After');
     });
 
-    it('should transform an embed directive with variables in path attribute', async () => {
+    it('should transform an add directive with variables in path attribute', async () => {
       const template = `Before
-@embed [path={{filePath}}]
+@add [path={{filePath}}]
 After`;
       
       // Need to create the file
@@ -340,7 +340,7 @@ After`;
       const result = await processMeld(template);
       
       // Document current behavior
-      console.log('Path variable embed (transformation):', JSON.stringify(result));
+      console.log('Path variable add (transformation):', JSON.stringify(result));
       
       // Check that the content was embedded properly
       expect(result).toContain('Before');
@@ -353,9 +353,9 @@ After`;
   });
 
   describe('Transformation Tracking', () => {
-    it('should track node transformations when embed variables are used', async () => {
+    it('should track node transformations when add variables are used', async () => {
       const template = `Before
-@embed [text={{simpleText}}]
+@add [text={{simpleText}}]
 After`;
       
       // Parse the content - this is still available
@@ -377,7 +377,7 @@ After`;
       
       // Create a minimal mock of the transformation process
       nodes.forEach((node, index) => {
-        if (node.type === 'Directive' && (node as any).directive?.kind === 'embed') {
+        if (node.type === 'Directive' && (node as any).directive?.kind === 'add') {
           transformationMap.set(`node-${index}`, {
             original: node,
             transformed: { type: 'Text', content: 'Simple text content' }
@@ -391,10 +391,10 @@ After`;
       expect(mockTransformedNodes.length).toBeGreaterThan(0);
     });
 
-    it('should track state transformation correctly for embed variables', async () => {
+    it('should track state transformation correctly for add variables', async () => {
       const template = `Before
-@embed [text={{simpleText}}]
-@embed [text={{multilineEmbedContent}}]
+@add [text={{simpleText}}]
+@add [text={{multilineEmbedContent}}]
 After`;
       
       // Just process the template
@@ -416,9 +416,9 @@ After`;
   describe('Multiple Embeds and Mixed Content', () => {
     it('should handle multiple variable-based embeds in sequence', async () => {
       const template = `Start
-@embed [text={{simpleText}}]
+@add [text={{simpleText}}]
 Middle
-@embed [text={{markdownText}}]
+@add [text={{markdownText}}]
 End`;
       
       // Process with transformation
@@ -437,9 +437,9 @@ End`;
 
     it('should handle a mix of direct and variable embeds', async () => {
       const template = `Start
-@embed [text="Direct text"]
+@add [text="Direct text"]
 Middle
-@embed [text={{simpleText}}]
+@add [text={{simpleText}}]
 End`;
       
       // Process with transformation
@@ -461,14 +461,14 @@ End`;
       stateService.setTextVar('nestedVar', '{{simpleText}}');
       
       const template = `Start
-@embed [text={{nestedVar}}]
+@add [text={{nestedVar}}]
 End`;
       
       // Process with transformation
       const result = await processMeld(template);
       
       // Document current behavior
-      console.log('Nested variable embed (transformation):', JSON.stringify(result));
+      console.log('Nested variable add (transformation):', JSON.stringify(result));
       
       // Check that content is properly resolved and embedded
       expect(result).toContain('Start');
@@ -480,7 +480,7 @@ End`;
   describe('Output Format Comparison', () => {
     it('should compare transformation results in different output formats', async () => {
       const template = `Start
-@embed [text={{complexEmbedContent}}]
+@add [text={{complexEmbedContent}}]
 End`;
       
       // Process with markdown format
@@ -506,9 +506,9 @@ End`;
   });
   
   describe('Edge Cases and Error Handling', () => {
-    it('should handle undefined variables in embed directives', async () => {
+    it('should handle undefined variables in add directives', async () => {
       const template = `Start
-@embed [text={{nonExistentVar}}]
+@add [text={{nonExistentVar}}]
 End`;
       
       // Process with transformation, but non-strict mode to prevent errors
@@ -517,45 +517,45 @@ End`;
       });
       
       // Document current behavior
-      console.log('Undefined variable embed (transformation):', JSON.stringify(result));
+      console.log('Undefined variable add (transformation):', JSON.stringify(result));
       
       // Check how undefined variables are handled
       expect(result).toContain('Start');
       expect(result).toContain('End');
     });
 
-    it('should handle empty variables in embed directives', async () => {
+    it('should handle empty variables in add directives', async () => {
       // Set an empty variable
       stateService.setTextVar('emptyVar', '');
       
       const template = `Start
-@embed [text={{emptyVar}}]
+@add [text={{emptyVar}}]
 End`;
       
       // Process with transformation
       const result = await processMeld(template);
       
       // Document current behavior
-      console.log('Empty variable embed (transformation):', JSON.stringify(result));
+      console.log('Empty variable add (transformation):', JSON.stringify(result));
       
       // Check how empty variables are handled
       expect(result).toContain('Start');
       expect(result).toContain('End');
     });
 
-    it('should handle variables with only whitespace in embed directives', async () => {
+    it('should handle variables with only whitespace in add directives', async () => {
       // Set a whitespace-only variable
       stateService.setTextVar('whitespaceVar', '   \n   ');
       
       const template = `Start
-@embed [text={{whitespaceVar}}]
+@add [text={{whitespaceVar}}]
 End`;
       
       // Process with transformation
       const result = await processMeld(template);
       
       // Document current behavior
-      console.log('Whitespace variable embed (transformation):', JSON.stringify(result));
+      console.log('Whitespace variable add (transformation):', JSON.stringify(result));
       
       // Check how whitespace-only variables are handled
       expect(result).toContain('Start');

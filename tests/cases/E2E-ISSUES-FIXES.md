@@ -308,7 +308,7 @@ The fix successfully detects circular imports in all test cases with clear error
 **Root Cause:** Each directive handler implements its own logic for visibility without a consistent policy.
 
 **Implementation Plan:**
-1. Define a standard visibility policy in a shared configuration:
+1. Exec a standard visibility policy in a shared configuration:
    ```typescript
    // In core/config/directiveConfig.ts
    export const directiveVisibilityConfig = {
@@ -317,12 +317,12 @@ The fix successfully detects circular imports in all test cases with clear error
        'text',
        'data',
        'path',
-       'define'
+       'exec'
      ],
      
      // Directives that should be visible (output-affecting directives)
      visible: [
-       'embed',
+       'add',
        'run'
      ],
      
@@ -373,8 +373,8 @@ The fix successfully detects circular imports in all test cases with clear error
      ['text', false],
      ['data', false],
      ['path', false],
-     ['define', false],
-     ['embed', true],
+     ['exec', false],
+     ['add', true],
      ['run', true]
    ])('should apply correct visibility for %s directive', async (kind, shouldBeVisible) => {
      // Create a directive node

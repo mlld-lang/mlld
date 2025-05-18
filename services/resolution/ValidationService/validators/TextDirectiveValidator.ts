@@ -71,13 +71,13 @@ export function validateTextDirective(node: DirectiveNode): void {
   }
   
   // Check if this is a text directive with @run or @add source
-  // In this case, the value property might not be set, but source and run/embed properties are
+  // In this case, the value property might not be set, but source and run/add properties are
   if (directive.source === 'run' && directive.run) {
     // This is a text directive with @run value
     // No need to validate the value property
   }
   
-  if (directive.source === 'add' && directive.embed) {
+  if (directive.source === 'add' && directive.add) {
     // This is a text directive with @add value
     // No need to validate the value property
   }
@@ -143,7 +143,7 @@ export function validateTextDirective(node: DirectiveNode): void {
     }
     // Validate @add source value format
     else if (directive.source === 'add') {
-        // Value might not be present if source is correctly parsed into directive.embed
+        // Value might not be present if source is correctly parsed into directive.add
         // If value *is* present, validate it. If not, assume parser handled it (or handler will error).
         if (directive.value && typeof directive.value === 'string') {
             const valueAfterEmbed = directive.value.substring('@add'.length).trim();
@@ -158,9 +158,9 @@ export function validateTextDirective(node: DirectiveNode): void {
                   }
                 );
             }
-        } else if (!directive.embed) { // If value is missing, ensure embed structure exists
+        } else if (!directive.add) { // If value is missing, ensure add structure exists
              throw new MeldDirectiveError(
-                'Text directive with source=\"add\" requires either a value starting with @add or an embed property',
+                'Text directive with source=\"add\" requires either a value starting with @add or an add property',
                 'text',
                 {
                   location: convertLocation(node.location?.start),
@@ -169,7 +169,7 @@ export function validateTextDirective(node: DirectiveNode): void {
                 }
             );
         }
-        // We could add basic validation for directive.embed structure here if needed
+        // We could add basic validation for directive.add structure here if needed
     }
     // Validate @run source value format
     else if (directive.source === 'run') {

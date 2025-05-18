@@ -124,7 +124,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
     const identifier = node.directive.identifier;
     const source = node.directive.source ?? 'literal';
     const value = node.directive.value;
-    const embed = node.directive.embed;
+    const add = node.directive.add;
     const run = node.directive.run;
 
     if (!identifier) {
@@ -141,7 +141,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       identifier,
       source,
       hasValue: value !== undefined,
-      hasEmbed: embed !== undefined,
+      hasEmbed: add !== undefined,
       hasRun: run !== undefined
     });
 
@@ -220,9 +220,9 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           const message = code === DirectiveErrorCode.RESOLUTION_FAILED ? 'Failed to resolve command for @data directive' : `Failed to execute command for @data directive: ${error instanceof Error ? error.message : 'Unknown'}`;
           throw new DirectiveError(message, this.kind, code, { ...baseErrorDetails, cause: error instanceof Error ? error : undefined });
         }
-      } else if (source === 'add' && embed) {
+      } else if (source === 'add' && add) {
          try {
-          const embedSubtype = embed.subtype;
+          const embedSubtype = add.subtype;
           let fileContent: string;
 
           if (embedSubtype === 'addPath') {
@@ -236,14 +236,14 @@ export class DataDirectiveHandler implements IDirectiveHandler {
               throw new DirectiveError('File system service is unavailable for @add processing', this.kind, DirectiveErrorCode.EXECUTION_FAILED, baseErrorDetails);
             }
 
-            const resolvedPath = await pathService.resolvePath(embed.path, currentFilePath);
+            const resolvedPath = await pathService.resolvePath(add.path, currentFilePath);
             if (!resolvedPath) {
-              throw new DirectiveError('Failed to resolve embed path', this.kind, DirectiveErrorCode.RESOLUTION_FAILED, baseErrorDetails);
+              throw new DirectiveError('Failed to resolve add path', this.kind, DirectiveErrorCode.RESOLUTION_FAILED, baseErrorDetails);
             }
 
             fileContent = await fsService.readFile(resolvedPath);
           } else if (embedSubtype === 'addVariable') {
-            const varName = embed.variable?.name;
+            const varName = add.variable?.name;
             if (!varName) {
               throw new DirectiveError('Missing variable name in @add source', this.kind, DirectiveErrorCode.VALIDATION_FAILED, baseErrorDetails);
             }
@@ -280,7 +280,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
         } catch (error) {
           if (error instanceof DirectiveError) throw error;
           const code = (error instanceof MeldResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) ? DirectiveErrorCode.RESOLUTION_FAILED : DirectiveErrorCode.EXECUTION_FAILED;
-          const message = code === DirectiveErrorCode.RESOLUTION_FAILED ? 'Failed to resolve @add source for @data directive' : `Failed to read/process embed source for @data directive: ${error instanceof Error ? error.message : 'Unknown'}`;
+          const message = code === DirectiveErrorCode.RESOLUTION_FAILED ? 'Failed to resolve @add source for @data directive' : `Failed to read/process add source for @data directive: ${error instanceof Error ? error.message : 'Unknown'}`;
           throw new DirectiveError(message, this.kind, code, { ...baseErrorDetails, cause: error instanceof Error ? error : undefined });
         }
       } else {
