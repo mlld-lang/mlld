@@ -3,7 +3,7 @@ import { validateFuzzyThreshold } from '@services/resolution/ValidationService/v
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { createAddDirective, createLocation } from '@tests/utils/testFactories';
 import { ErrorCollector, expectThrowsInStrictButWarnsInPermissive } from '@tests/utils/ErrorTestUtils';
-import { ErrorSeverity } from '@core/errors/MeldError';
+import { ErrorSeverity, MeldError } from '@core/errors/MeldError';
 
 describe('FuzzyMatchingValidator', () => {
   describe('Fuzzy threshold validation', () => {
@@ -60,7 +60,7 @@ describe('FuzzyMatchingValidator', () => {
     it('should provide helpful error messages - Detailed error messaging deferred for V1', async () => {
       // Test for below 0
       const nodeBelowZero = createAddDirective('test.md', 'section', createLocation(1, 1));
-      nodeBelowZero.directive.fuzzy = -0.5;
+      (nodeBelowZero as any).meta = { fuzzy: -0.5 };
       
       const collectorBelowZero = new ErrorCollector();
       try {
@@ -74,7 +74,7 @@ describe('FuzzyMatchingValidator', () => {
       
       // Test for above 1
       const nodeAboveOne = createAddDirective('test.md', 'section', createLocation(1, 1));
-      nodeAboveOne.directive.fuzzy = 1.5;
+      (nodeAboveOne as any).meta = { fuzzy: 1.5 };
       
       const collectorAboveOne = new ErrorCollector();
       try {
@@ -89,7 +89,7 @@ describe('FuzzyMatchingValidator', () => {
       // Test for non-numeric
       const nodeNonNumeric = createAddDirective('test.md', 'section', createLocation(1, 1));
       // @ts-ignore - Intentionally setting an invalid type for testing
-      nodeNonNumeric.directive.fuzzy = 'not-a-number';
+      (nodeNonNumeric as any).meta = { fuzzy: 'not-a-number' };
       
       const collectorNonNumeric = new ErrorCollector();
       try {
