@@ -251,3 +251,14 @@ Total: 4-6 days (reduced from 1-2 weeks)
 3. Integration with interpreter unchanged
 4. Type safety improved
 5. No additional complexity in state service
+
+## Confidence Assessment
+
+| Step | Description | Confidence | Notes |
+|-----|-------------|-----------|-------|
+| 1 | Update type imports | 95 | Straightforward path updates |
+| 2 | Update interface definitions | 95 | Interfaces are small and easy to modify |
+| 3 | Update method signatures | 90 | Ensure all services use new types |
+| 4 | Update appendContent method | 90 | Need correct TextNode interface from new AST |
+| 5 | Review type guards | 95 | Likely minimal changes |
+| 6 | Verify node cloning | 95 | Existing logic should remain valid |

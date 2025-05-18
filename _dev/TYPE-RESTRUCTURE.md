@@ -295,6 +295,19 @@ Total: 3 weeks for complete implementation
 
 Note: This is more ambitious than the original plan due to unifying types, but eliminates future confusion and maintenance burden.
 
+## Confidence Assessment
+
+| Step | Description | Confidence | Notes |
+|-----|-------------|-----------|-------|
+| 1 | Analyze current type duplication | 92 | Existing types are well organized but mapping may reveal gaps |
+| 2 | Create unified type definitions | 90 | Need to confirm final base interfaces |
+| 3 | Implement lifecycle extensions | 85 | Unsure of expected extension pattern |
+| 4 | Merge AST and runtime types | 80 | Requires grammar updates and broad refactor |
+| 5 | Update service interfaces | 90 | Service files are clear but numerous |
+| 6 | Create migration bridge | 80 | Clarify scope of legacy aliases |
+| 7 | Update all imports | 85 | Many packages rely on old paths |
+| 8 | Validation and documentation | 90 | Straightforward once types settle |
+
 ## Notes for Implementation
 
 1. The AST restructuring provides a template for clean organization
@@ -304,3 +317,4 @@ Note: This is more ambitious than the original plan due to unifying types, but e
 5. Document the AST/runtime distinction prominently
 6. Implement discriminated unions for state management as outlined in STATE-UPDATES.md
 7. Consider exporting a unified `ASTNode` union type from the AST package for reuse
+
