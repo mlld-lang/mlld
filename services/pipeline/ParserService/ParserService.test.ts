@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ParserService } from '@services/pipeline/ParserService/ParserService';
 import { MeldParseError } from '@core/errors/MeldParseError';
-import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode, VariableReferenceNode } from '@core/syntax/types';
+import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode, VariableReferenceNode } from '@core/ast/types';
 import type { Location, Position } from '@core/types/index';
 // Import the centralized syntax examples and helpers
 import { 

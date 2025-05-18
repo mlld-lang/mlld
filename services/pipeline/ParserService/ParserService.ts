@@ -5,8 +5,10 @@ import { MeldParseError } from '@core/errors/MeldParseError';
 import { ErrorSeverity } from '@core/errors/MeldError';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
 import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
-import type { MeldNode } from '@core/syntax/types/index';
+import type { MeldNode as OldMeldNode } from '@core/syntax/types/index';
+import type { MeldNode } from '@core/ast/types/index';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import { transformParsedNodes, createParserOptions } from './transformations';
 import type { 
   CodeFenceNode, 
   TextNode,
@@ -114,19 +116,7 @@ export class ParserService implements IParserService {
 
   private async parseContent(content: string, filePath?: string): Promise<MeldNode[]> {
     try {
-      const options = {
-        failFast: true,
-        trackLocations: true,
-        validateNodes: true,
-        preserveCodeFences: true,
-        validateCodeFences: true,
-        structuredPaths: true,
-        onError: (error: unknown) => {
-          if (isMeldAstError(error)) {
-            logger.warn('Parse warning', { error: error.toString() });
-          }
-        }
-      };
+      const options = createParserOptions(filePath);
 
       if (filePath) {
         try {
@@ -140,9 +130,9 @@ export class ParserService implements IParserService {
 
       const result = await parse(content, options);
 
-      const ast = result.ast || [];
+      const rawAst = result.ast || [];
 
-      this.validateCodeFences(ast);
+      this.validateCodeFences(rawAst);
 
       if (result.errors && result.errors.length > 0) {
         result.errors.forEach((error: unknown) => {
@@ -152,7 +142,8 @@ export class ParserService implements IParserService {
         });
       }
 
-      return ast;
+      // Transform the raw AST nodes to our typed MeldNode union
+      return transformParsedNodes(rawAst as OldMeldNode[]);
     } catch (error) {
       if (isMeldAstError(error)) {
         const errorLocation = error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } };
@@ -345,7 +336,7 @@ export class ParserService implements IParserService {
     );
   }
 
-  private validateCodeFences(nodes: MeldNode[]): void {
+  private validateCodeFences(nodes: OldMeldNode[]): void {
     // Since we're using the meld-ast parser with validateNodes=true and preserveCodeFences=true,
     // we can trust that the code fences are already valid.
     // This is just an extra validation layer to ensure code fence integrity
