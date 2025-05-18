@@ -428,11 +428,7 @@ Phase 3 will be considered successful when:
 |-----|-------------|-----------|-------|
 | 1 | Analyze current type duplication | 92 | Existing types are well organized but mapping may reveal gaps |
 | 2 | Create unified type definitions | 88 | Need final list of base interfaces and field mapping to avoid gaps; see `AST-BASE-INTERFACES.md` |
-<<<<<<< ours
-| 3 | Define unified AST node union | 93 | Discriminated union pattern is clear |
-=======
 | 3 | Define unified AST node union | 93 | Discriminated union pattern is clear; see `AST-NODE-DESIGN.md` |
->>>>>>> theirs
 | 4 | Implement ParserService transformation | 92 | Parsing flow understood but mapping from parser output to typed union needs explicit helpers |
 | 5 | Update service interfaces | 88 | Many service files must change; inventory in `STATE-AFFECTED-METHODS.md` lists impacted methods |
 | 6 | Remove legacy types | 95 | Clean cutover, no compatibility needed |

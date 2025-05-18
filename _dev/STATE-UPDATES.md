@@ -264,9 +264,6 @@ export interface TextNode extends MeldNode {
   };
 }
 ```
-<<<<<<< ours
-=======
-
 ### Clarifying the Purpose of `TextNode`
 
 `TextNode` represents literal text content within a Meld document. It is used for
@@ -289,5 +286,4 @@ Renaming `TextNode` to `ContentNode` is technically feasible but would require:
 
 The change would be mechanical, but it touches hundreds of references across the
 repo. Functionally nothing else would change—the node still represents plain
-text—but the naming could better convey that it holds generic content.
->>>>>>> theirs
+ text—but the naming could better convey that it holds generic content.

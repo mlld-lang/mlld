@@ -9,12 +9,8 @@ interfaces should be considered the minimal base set.
 - `MeldNode` (old) – `{ type: NodeType; location?: SourceLocation; nodeId: string }` - will become `BaseMeldNode`
 - `DirectiveNode` – `MeldNode` plus `kind`, `subtype`, `source?`, `values`, `raw`, `meta`
 - `TextNode` – `MeldNode` plus `content` and optional `formattingMetadata`
-<<<<<<< ours
-=======
   (plain text between directives or inside interpolatable values; distinct from `@text` directive variables)
   Renaming this interface to `ContentNode` would require updating the grammar output and all service imports.
-  
->>>>>>> theirs
 - `LiteralNode` – `MeldNode` plus `value`, optional `valueType`
 - `DotSeparatorNode` – `MeldNode` with fixed `value: '.'`
 - `PathSeparatorNode` – `MeldNode` with fixed `value: '/'`
