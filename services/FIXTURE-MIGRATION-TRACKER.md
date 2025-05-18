@@ -8,9 +8,9 @@ Tracking the migration of service tests from manual node creation to fixture-bas
 
 | Handler | Status | Fixture Test File | Notes |
 |---------|--------|------------------|-------|
-| TextDirectiveHandler | ✅ Example Created | `TextDirectiveHandler.fixture-test.ts` | Example migration complete |
+| TextDirectiveHandler | ✅ Example Created | `TextDirectiveHandler.fixture.test.ts` | Example migration complete |
 | DataDirectiveHandler | ✅ Complete | `DataDirectiveHandler.fixture.test.ts` | All 11 tests passing with fixtures |
-| PathDirectiveHandler | 🟡 Not Started | - | Path fixtures ready |
+| PathDirectiveHandler | ✅ Complete | `PathDirectiveHandler.fixture.test.ts` | All 8 tests passing with fixtures |
 | ImportDirectiveHandler | 🟡 Not Started | - | Import all/selected fixtures |
 | AddDirectiveHandler | 🟡 Not Started | - | Template/variable/section fixtures |
 | RunDirectiveHandler | 🟡 Not Started | - | Code/command/exec fixtures |
@@ -30,25 +30,25 @@ Tracking the migration of service tests from manual node creation to fixture-bas
 
 ## Progress Metrics
 
-- **Handlers Migrated**: 1/7 (14%)
-- **Fixtures Utilized**: ~8/60 (13%)
-- **Tests Converted**: 11/~150 (7%)
+- **Handlers Migrated**: 2/7 (29%)
+- **Fixtures Utilized**: ~14/60 (23%)
+- **Tests Converted**: 19/~150 (13%)
 
 ## Next Steps
 
 1. [x] Migrate DataDirectiveHandler (simplest after Text)
-2. [x] Create fixture test alongside existing tests
-3. [x] Verify all data fixtures are covered
-4. [ ] Deprecate old test approach for this handler
-5. [x] Update progress metrics
+2. [x] Migrate PathDirectiveHandler
+3. [ ] Migrate ImportDirectiveHandler (next in complexity)
+4. [ ] Continue with AddDirectiveHandler
+5. [ ] Complete RunDirectiveHandler and ExecDirectiveHandler
 
-Next handler to migrate: PathDirectiveHandler
+Next handler to migrate: ImportDirectiveHandler
 
 ## Migration Guidelines
 
 For each handler migration:
 
-1. **Create companion test file**: `[Handler].fixture-test.ts`
+1. **Create companion test file**: `[Handler].fixture.test.ts`
 2. **Use ASTFixtureLoader**: Load appropriate fixtures
 3. **Map fixtures to test cases**: Ensure coverage
 4. **Keep both versions temporarily**: Run in parallel
@@ -65,7 +65,7 @@ For each handler migration:
 
 ## Notes
 
-- Example migration in `TextDirectiveHandler.fixture-test.ts`
+- Example migration in `TextDirectiveHandler.fixture.test.ts`
 - Migration guide in `MIGRATION-TO-FIXTURES.md`
 - ASTFixtureLoader utility available in `@tests/utils`
 - Fixtures located in `core/ast/fixtures/`

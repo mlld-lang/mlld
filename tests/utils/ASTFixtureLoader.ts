@@ -57,7 +57,7 @@ export class ASTFixtureLoader {
    */
   getFixturesByKind(directiveKind: string): ASTFixture[] {
     return Array.from(this.fixtures.values()).filter(
-      fixture => fixture.directiveKind === directiveKind
+      fixture => (fixture.directiveKind === directiveKind) || (fixture.metadata?.kind === directiveKind)
     );
   }
 
@@ -67,8 +67,8 @@ export class ASTFixtureLoader {
   getFixturesByKindAndSubtype(directiveKind: string, directiveSubtype: string): ASTFixture[] {
     return Array.from(this.fixtures.values()).filter(
       fixture => 
-        fixture.directiveKind === directiveKind && 
-        fixture.directiveSubtype === directiveSubtype
+        ((fixture.directiveKind === directiveKind) || (fixture.metadata?.kind === directiveKind)) && 
+        ((fixture.directiveSubtype === directiveSubtype) || (fixture.metadata?.subtype === directiveSubtype))
     );
   }
 
@@ -230,11 +230,15 @@ export class ASTFixtureLoader {
     };
 
     for (const fixture of this.fixtures.values()) {
-      // Count by kind
-      stats.byKind[fixture.directiveKind] = (stats.byKind[fixture.directiveKind] || 0) + 1;
+      // Count by kind - check both directiveKind and metadata.kind
+      const kind = fixture.directiveKind || fixture.metadata?.kind;
+      if (kind) {
+        stats.byKind[kind] = (stats.byKind[kind] || 0) + 1;
+      }
       
-      // Count by subtype
-      const key = `${fixture.directiveKind}-${fixture.directiveSubtype}`;
+      // Count by subtype - check both directiveSubtype and metadata.subtype
+      const subtype = fixture.directiveSubtype || fixture.metadata?.subtype;
+      const key = `${kind || 'unknown'}-${subtype || 'unknown'}`;
       stats.bySubtype[key] = (stats.bySubtype[key] || 0) + 1;
       
       // Count special cases
