@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
-import type { DirectiveNode } from '@core/syntax/types/index';
+import type { DirectiveNode } from '@core/ast/types/index';
 import { IDirectiveService, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
@@ -23,8 +23,8 @@ import { container, DependencyContainer } from 'tsyringe';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
 import type { OutputFormattingContext } from '@core/types/index';
-import { isInterpolatableValueArray } from '@core/syntax/types/guards';
-import type { InterpolatableValue, VariableReferenceNode, StructuredPath } from '@core/syntax/types/nodes';
+import { isInterpolatableValueArray } from '@core/ast/types/guards';
+import type { InterpolatableValue, VariableReferenceNode, StructuredPath } from '@core/ast/types/index';
 import type { JsonValue, VariableMetadata } from '@core/types/index';
 import { createRawPath, unsafeCreateAbsolutePath, RawPath, AbsolutePath, RelativePath } from '@core/types/paths';
 import crypto from 'crypto';
@@ -158,10 +158,12 @@ describe('DirectiveService', () => {
         kind: 'text',
         handle: vi.fn(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult> => {
             let resolvedValue = 'DefaultResolvedText';
-            if (ctx.directiveNode.directive) {
-              const directiveValue = ctx.directiveNode.directive.value;
-              if (isInterpolatableValueArray(directiveValue)) {
-                resolvedValue = await mockResolutionService.resolveNodes(directiveValue, ctx.resolutionContext);
+            if (ctx.directiveNode.kind === 'text' && ctx.directiveNode.raw) {
+              const directiveValue = ctx.directiveNode.raw.value;
+              const identifier = ctx.directiveNode.raw.identifier;
+              
+              if (ctx.directiveNode.values?.value) {
+                resolvedValue = await mockResolutionService.resolveNodes(ctx.directiveNode.values.value, ctx.resolutionContext);
               } else if (typeof directiveValue === 'string') {
                 resolvedValue = await mockResolutionService.resolveInContext(directiveValue, ctx.resolutionContext);
               } else {
@@ -170,7 +172,7 @@ describe('DirectiveService', () => {
               return {
                 stateChanges: {
                   variables: {
-                    [ctx.directiveNode.directive.identifier]: { type: VariableType.TEXT, value: resolvedValue }
+                    [identifier]: { type: VariableType.TEXT, value: resolvedValue }
                   }
                 }
               };
@@ -182,17 +184,19 @@ describe('DirectiveService', () => {
         kind: 'data',
         handle: vi.fn(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult> => {
            let resolvedValue: unknown = 'DefaultResolvedData';
-           if (ctx.directiveNode.directive) {
-               const directiveValue = ctx.directiveNode.directive.value;
-               if (isInterpolatableValueArray(directiveValue)) {
-                  resolvedValue = await mockResolutionService.resolveNodes(directiveValue, ctx.resolutionContext);
-               } else {
-                  resolvedValue = directiveValue;
+           if (ctx.directiveNode.kind === 'data' && ctx.directiveNode.raw) {
+               const identifier = ctx.directiveNode.raw.identifier;
+               const directiveValue = ctx.directiveNode.raw.value;
+               
+               if (ctx.directiveNode.values?.value && isInterpolatableValueArray(ctx.directiveNode.values.value)) {
+                  resolvedValue = await mockResolutionService.resolveNodes(ctx.directiveNode.values.value, ctx.resolutionContext);
+               } else if (directiveValue) {
+                  resolvedValue = JSON.parse(directiveValue);
                }
                return {
                  stateChanges: {
                    variables: {
-                     [ctx.directiveNode.directive.identifier]: { type: VariableType.DATA, value: resolvedValue as JsonValue }
+                     [identifier]: { type: VariableType.DATA, value: resolvedValue as JsonValue }
                    }
                  }
                };

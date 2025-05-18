@@ -307,8 +307,8 @@ export function createRunDirective(
   errorVar?: string
 ): DirectiveNode {
   let resolvedSubtype = subtype;
-  let commandValue: InterpolatableValue | { name: string, args: any[], raw: string } | undefined = undefined;
-  let resolvedParameters: InterpolatableValue | undefined = undefined;
+  let commandValue: MeldNode[] = [];
+  let resolvedParameters: MeldNode[] | undefined = undefined;
   
   // Determine subtype if not provided
   if (!resolvedSubtype) {
@@ -324,110 +324,154 @@ export function createRunDirective(
   // Normalize commandInput based on subtype
   if (resolvedSubtype === 'runCommand' || resolvedSubtype === 'runCode' || resolvedSubtype === 'runCodeParams') {
     if (typeof commandInput === 'string') {
-      commandValue = [{ type: 'Text', content: commandInput }];
+      commandValue = [{ 
+        type: 'Text', 
+        nodeId: `test-text-${testNodeIdCounter++}`,
+        content: commandInput,
+        location: location || DEFAULT_LOCATION 
+      }];
     } else if (isInterpolatableValueArray(commandInput)) {
       commandValue = commandInput;
     }
   } else if (resolvedSubtype === 'runDefined') {
-    commandValue = commandInput as { name: string, args: any[], raw: string };
+    // Handle defined command differently
+    const definedCmd = commandInput as { name: string, args: any[], raw: string };
+    commandValue = [{
+      type: 'VariableReference',
+      nodeId: `test-vref-${testNodeIdCounter++}`,
+      identifier: definedCmd.name,
+      valueType: 'command',
+      isVariableReference: true,
+      location: location || DEFAULT_LOCATION
+    }];
   }
 
   // Normalize parameters if they are strings
   if (parameters) {
-      resolvedParameters = parameters.map(p => 
-          typeof p === 'string' ? { type: 'Text', content: p } : p
-      );
+      resolvedParameters = parameters.map(p => {
+          if (typeof p === 'string') {
+              return {
+                  type: 'Text',
+                  nodeId: `test-text-${testNodeIdCounter++}`,
+                  content: p,
+                  location: location || DEFAULT_LOCATION
+              };
+          }
+          return p;
+      });
   }
-
-  const directiveData: DirectiveData = {
-      kind: 'run',
-      subtype: resolvedSubtype,
-      ...(commandValue && { command: commandValue }),
-      ...(language && { language }),
-      ...(resolvedParameters && { parameters: resolvedParameters }),
-      // Use the passed parameters correctly
-      outputVariable: outputVar || 'stdout', 
-      errorVariable: errorVar || 'stderr' 
-  };
 
   return {
     type: 'Directive',
-    location: location || DEFAULT_LOCATION,
-    directive: directiveData 
+    nodeId: `test-directive-${testNodeIdCounter++}`,
+    kind: 'run',
+    subtype: resolvedSubtype,
+    source: 'literal',
+    values: {
+      command: commandValue,
+      ...(language && { language: [{
+        type: 'Text',
+        nodeId: `test-text-${testNodeIdCounter++}`,
+        content: language,
+        location: location || DEFAULT_LOCATION
+      }] }),
+      ...(resolvedParameters && { parameters: resolvedParameters }),
+      ...(outputVar && { outputVariable: [{
+        type: 'VariableReference',
+        nodeId: `test-vref-${testNodeIdCounter++}`,
+        identifier: outputVar,
+        valueType: 'identifier',
+        isVariableReference: true,
+        location: location || DEFAULT_LOCATION
+      }] }),
+      ...(errorVar && { errorVariable: [{
+        type: 'VariableReference',
+        nodeId: `test-vref-${testNodeIdCounter++}`,
+        identifier: errorVar,
+        valueType: 'identifier',
+        isVariableReference: true,
+        location: location || DEFAULT_LOCATION
+      }] })
+    },
+    raw: {
+      command: typeof commandInput === 'string' ? commandInput : '',
+      outputVariable: outputVar,
+      errorVariable: errorVar
+    },
+    meta: {},
+    location: location || DEFAULT_LOCATION
   };
 }
 
-// Create an embed directive node for testing
-export function createEmbedDirective(
+// Create an add directive node for testing (formerly embed)
+export function createAddDirective(
   pathOrContent: string | InterpolatableValue | AstStructuredPath, 
   section?: string,
   location?: Location,
-  subtype?: 'embedPath' | 'embedVariable' | 'embedTemplate',
+  subtype?: 'addPath' | 'addVariable' | 'addTemplate',
   options?: { 
     names?: string[];
     headingLevel?: number;
     underHeader?: string;
   }
 ): DirectiveNode {
-  let determinedSubtype: 'embedPath' | 'embedVariable' | 'embedTemplate';
-  let pathProperty: AstStructuredPath | undefined = undefined;
-  let contentProperty: InterpolatableValue | undefined = undefined;
-  let namesProperty = options?.names;
-
+  let determinedSubtype: 'addPath' | 'addVariable' | 'addTemplate';
+  let pathValue: MeldNode[] | undefined = undefined;
+  let contentValue: MeldNode[] | undefined = undefined;
+  
+  // Replace old embed subtypes with add subtypes
   if (subtype) {
     determinedSubtype = subtype;
-    if (subtype === 'embedTemplate') {
-      if (!isInterpolatableValueArray(pathOrContent)) {
-        throw new Error(`Explicit subtype 'embedTemplate' requires InterpolatableValue array for pathOrContent`);
-      }
-      contentProperty = pathOrContent;
-    } else {
-      if (typeof pathOrContent === 'object' && 'raw' in pathOrContent) {
-        pathProperty = pathOrContent;
-      } else if (typeof pathOrContent === 'string') {
-        pathProperty = { 
-          raw: pathOrContent, 
-          structured: { segments: pathOrContent.split('/').filter(Boolean), base: '.'} 
-        };
-      } else {
-         throw new Error(`Explicit subtype '${subtype}' requires string or AstStructuredPath for pathOrContent`);
-      }
-    }
   } else {
+    // Auto-determine subtype
     if (isInterpolatableValueArray(pathOrContent)) {
-      determinedSubtype = 'embedTemplate';
-      contentProperty = pathOrContent;
+      determinedSubtype = 'addTemplate';
+      contentValue = pathOrContent;
     } else if (typeof pathOrContent === 'object' && 'raw' in pathOrContent) {
-      determinedSubtype = 'embedPath';
-      pathProperty = pathOrContent;
+      determinedSubtype = 'addPath';
+      pathValue = [pathOrContent];
     } else if (typeof pathOrContent === 'string') {
-      if (pathOrContent.startsWith('{{') || pathOrContent.startsWith('$')) {
-         determinedSubtype = 'embedVariable';
-         pathProperty = { raw: pathOrContent, structured: { segments: [], base: '.' } };
-      } else {
-         determinedSubtype = 'embedPath';
-         pathProperty = { raw: pathOrContent, structured: { segments: pathOrContent.split('/').filter(Boolean), base: '.'} };
-      }
+      determinedSubtype = 'addPath';
+      pathValue = [{
+        raw: pathOrContent,
+        structured: {
+          segments: pathOrContent.split('/').filter(Boolean),
+          base: pathOrContent.startsWith('$') ? pathOrContent.split('/')[0] : '.'
+        }
+      }];
     } else {
-       throw new Error('Invalid input type for createEmbedDirective pathOrContent');
+      throw new Error('Invalid input type for createAddDirective pathOrContent');
     }
   }
 
-  const directiveData: DirectiveData = {
-    kind: 'embed',
-    subtype: determinedSubtype,
-    ...(determinedSubtype === 'embedTemplate' ? { content: contentProperty } : { path: pathProperty }),
-    ...(section && { section }),
-    ...(namesProperty && { names: namesProperty }),
-    options: {
-       ...(options?.headingLevel && { headingLevel: String(options.headingLevel) }),
-       ...(options?.underHeader && { underHeader: options.underHeader })
-    }
-  };
-  
   return {
     type: 'Directive',
-    directive: directiveData,
+    nodeId: `test-directive-${testNodeIdCounter++}`,
+    kind: 'add', // Changed from 'embed' to 'add'
+    subtype: determinedSubtype,
+    source: 'literal',
+    values: {
+      ...(pathValue && { path: pathValue }),
+      ...(contentValue && { content: contentValue }),
+      ...(section && { section: [{
+        type: 'Text',
+        nodeId: `test-text-${testNodeIdCounter++}`,
+        content: section,
+        location: location || DEFAULT_LOCATION
+      }] }),
+      ...(options?.names && { names: options.names.map(name => ({
+        type: 'Text',
+        nodeId: `test-text-${testNodeIdCounter++}`,
+        content: name,
+        location: location || DEFAULT_LOCATION
+      })) })
+    },
+    raw: {
+      path: typeof pathOrContent === 'string' ? pathOrContent : undefined,
+      section,
+      names: options?.names
+    },
+    meta: {},
     location: location || DEFAULT_LOCATION
   };
 }
