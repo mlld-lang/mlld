@@ -3,9 +3,10 @@ import type {
   DirectiveNode, 
   TextNode, 
   CodeFenceNode,
-  DirectiveKind,
-  DirectiveData
-} from '@core/syntax/types';
+  VariableReferenceNode
+} from '@core/ast/types/index';
+import type { DirectiveKind, DirectiveSubtype } from '@core/syntax/types/directives';
+import type { DirectiveData } from '@core/syntax/types';
 import type { Location, Position } from '@core/types';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
@@ -171,14 +172,45 @@ export function createTextDirective(
   value: string | InterpolatableValue,
   location?: Location
 ): DirectiveNode {
+  // Convert to the new structure
+  const variableRef: VariableReferenceNode = {
+    type: 'VariableReference',
+    nodeId: `test-vref-${testNodeIdCounter++}`,
+    identifier,
+    valueType: 'identifier',
+    isVariableReference: true,
+    location: location || DEFAULT_LOCATION
+  };
+  
+  let valueNodes: MeldNode[];
+  if (typeof value === 'string') {
+    valueNodes = [{
+      type: 'Text',
+      nodeId: `test-text-${testNodeIdCounter++}`,
+      content: value,
+      location: location || DEFAULT_LOCATION
+    }];
+  } else if (Array.isArray(value)) {
+    valueNodes = value;
+  } else {
+    valueNodes = [];
+  }
+  
   return {
     type: 'Directive',
-    directive: {
-      kind: 'text',
+    nodeId: `test-directive-${testNodeIdCounter++}`,
+    kind: 'text',
+    subtype: 'textVariable',
+    source: 'literal',
+    values: {
+      identifier: [variableRef],
+      value: valueNodes
+    },
+    raw: {
       identifier,
-      source: 'literal',
-      value
-    } as DirectiveData,
+      value: typeof value === 'string' ? value : '' 
+    },
+    meta: {},
     location: location || DEFAULT_LOCATION
   };
 }
@@ -189,14 +221,35 @@ export function createDataDirective(
   value: any,
   location?: Location
 ): DirectiveNode {
+  const variableRef: VariableReferenceNode = {
+    type: 'VariableReference',
+    nodeId: `test-vref-${testNodeIdCounter++}`,
+    identifier,
+    valueType: 'identifier',
+    isVariableReference: true,
+    location: location || DEFAULT_LOCATION
+  };
+  
   return {
     type: 'Directive',
-    directive: {
-      kind: 'data',
+    nodeId: `test-directive-${testNodeIdCounter++}`,
+    kind: 'data',
+    subtype: 'dataVariable',
+    source: 'literal',
+    values: {
+      identifier: [variableRef],
+      value: [{
+        type: 'Text',
+        nodeId: `test-text-${testNodeIdCounter++}`,
+        content: JSON.stringify(value),
+        location: location || DEFAULT_LOCATION
+      }]
+    },
+    raw: {
       identifier,
-      source: 'literal',
-      value
-    } as DirectiveData,
+      value: JSON.stringify(value)
+    },
+    meta: {},
     location: location || DEFAULT_LOCATION
   };
 }
@@ -207,6 +260,15 @@ export function createPathDirective(
   pathString: string,
   location?: Location
 ): DirectiveNode {
+  const variableRef: VariableReferenceNode = {
+    type: 'VariableReference',
+    nodeId: `test-vref-${testNodeIdCounter++}`,
+    identifier,
+    valueType: 'identifier',
+    isVariableReference: true,
+    location: location || DEFAULT_LOCATION
+  };
+  
   const pathObject: AstStructuredPath = {
       raw: pathString,
       structured: {
@@ -214,13 +276,22 @@ export function createPathDirective(
           base: pathString.startsWith('$') ? pathString.split('/')[0] : '.'
       }
   };
+  
   return {
     type: 'Directive',
-    directive: {
-      kind: 'path',
+    nodeId: `test-directive-${testNodeIdCounter++}`,
+    kind: 'path',
+    subtype: 'pathVariable',
+    source: 'path',
+    values: {
+      identifier: [variableRef],
+      path: [pathObject]
+    },
+    raw: {
       identifier,
-      path: pathObject
-    } as DirectiveData,
+      path: pathString
+    },
+    meta: {},
     location: location || DEFAULT_LOCATION
   };
 }

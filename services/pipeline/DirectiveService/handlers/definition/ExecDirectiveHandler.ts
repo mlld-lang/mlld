@@ -13,8 +13,8 @@ import type {
     IBasicCommandDefinition, 
     ILanguageCommandDefinition, 
     ICommandParameterMetadata
-} from '@core/types/define';
-import { isBasicCommand } from '@core/types/define';
+} from '@core/types/exec';
+import { isBasicCommand } from '@core/types/exec';
 import type { SourceLocation } from '@core/types/common';
 import type { InterpolatableValue } from '@core/syntax/types/nodes';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
@@ -27,10 +27,10 @@ import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHa
 
 @injectable()
 @Service({
-  description: 'Handler for @define directives'
+  description: 'Handler for @exec directives'
 })
-export class DefineDirectiveHandler implements IDirectiveHandler {
-  public readonly kind = 'define';
+export class ExecDirectiveHandler implements IDirectiveHandler {
+  public readonly kind = 'exec';
 
   constructor(
     @inject('IValidationService') private validationService: IValidationService,
@@ -47,8 +47,8 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
 
     try {
       // Assert directive node structure
-      if (!node.directive || node.directive.kind !== 'define') {
-        throw new DirectiveError('Invalid node type provided to DefineDirectiveHandler', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { ...baseErrorDetails });
+      if (!node.directive || node.directive.kind !== 'exec') {
+        throw new DirectiveError('Invalid node type provided to ExecDirectiveHandler', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { ...baseErrorDetails });
       }
       const directive = node.directive as IDirectiveData;
       const { name, parameters: paramNames, command, value } = directive;

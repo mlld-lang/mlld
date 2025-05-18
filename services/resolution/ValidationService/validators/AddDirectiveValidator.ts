@@ -1,21 +1,21 @@
-import type { DirectiveNode, EmbedDirectiveData } from '@core/syntax/types';
+import type { DirectiveNode, AddDirectiveData } from '@core/syntax/types';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { ErrorSeverity } from '@core/errors/MeldError';
 
-export function validateEmbedDirective(node: DirectiveNode): void {
-  const directive = node.directive as EmbedDirectiveData;
+export function validateAddDirective(node: DirectiveNode): void {
+  const directive = node.directive as AddDirectiveData;
   
   // Grammar has already validated basic syntax and structure
   // We need to validate AST nodes based on subtype
   
   switch (directive.subtype) {
-    case 'embedPath':
+    case 'addPath':
       // Grammar validates path format, but we need to check the AST nodes
       if (!directive.path || (!directive.path.raw && !directive.path.interpolatedValue)) {
         throw new MeldDirectiveError(
-          'Embed path directive requires a valid path',
-          'embed',
+          'Add path directive requires a valid path',
+          'add',
           { 
             location: node.location?.start,
             code: DirectiveErrorCode.VALIDATION_FAILED,
@@ -25,12 +25,12 @@ export function validateEmbedDirective(node: DirectiveNode): void {
       }
       break;
       
-    case 'embedVariable':
+    case 'addVariable':
       // Grammar validates variable format, but we need to check the AST nodes
       if (!directive.path || !directive.path.variable) {
         throw new MeldDirectiveError(
-          'Embed variable directive requires a valid variable reference',
-          'embed',
+          'Add variable directive requires a valid variable reference',
+          'add',
           {
             location: node.location?.start,
             code: DirectiveErrorCode.VALIDATION_FAILED,
@@ -40,13 +40,13 @@ export function validateEmbedDirective(node: DirectiveNode): void {
       }
       break;
       
-    case 'embedTemplate':
+    case 'addTemplate':
       // Grammar validates template format and variable nodes
       // We just need to check that content exists
       if (!directive.content) {
         throw new MeldDirectiveError(
-          'Embed template directive requires content',
-          'embed',
+          'Add template directive requires content',
+          'add',
           {
             location: node.location?.start,
             code: DirectiveErrorCode.VALIDATION_FAILED,
@@ -58,8 +58,8 @@ export function validateEmbedDirective(node: DirectiveNode): void {
       
     default:
       throw new MeldDirectiveError(
-        `Unknown embed subtype: ${directive.subtype}`,
-        'embed',
+        `Unknown add subtype: ${directive.subtype}`,
+        'add',
         {
           location: node.location?.start,
           code: DirectiveErrorCode.VALIDATION_FAILED,

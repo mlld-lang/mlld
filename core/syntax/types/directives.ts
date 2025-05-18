@@ -5,8 +5,8 @@ import type { StructuredPath } from '@core/syntax/types/nodes';
 export type DirectiveKind = 
   | 'run'
   | 'import'
-  | 'embed'
-  | 'define'
+  | 'add'
+  | 'exec'
   | 'text'
   | 'path'
   | 'data';
@@ -16,12 +16,12 @@ export type DirectiveKind =
  */
 export type DirectiveSubtype = 
   | 'importAll' | 'importSelected'
-  | 'embedPath' | 'embedVariable' | 'embedTemplate'
+  | 'addPath' | 'addVariable' | 'addTemplate'
   | 'textVariable' | 'textTemplate'
   | 'dataVariable'
   | 'pathVariable'
   | 'runCommand' | 'runDefined' | 'runCode' | 'runCodeParams'
-  | 'defineCommand';
+  | 'execCommand';
 
 /**
  * Risk level for commands

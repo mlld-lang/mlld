@@ -47,9 +47,9 @@ import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNode
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler';
 import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler';
 import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler';
-import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler';
+import { ExecDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/ExecDirectiveHandler';
 import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler';
-import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler';
+import { AddDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/AddDirectiveHandler';
 import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler';
 
 // Import IFileSystem type
@@ -148,7 +148,7 @@ container.register('IPromptService', { useToken: DefaultPromptService }); // Use
 container.register('IDirectiveHandler', { useClass: TextDirectiveHandler });
 container.register('IDirectiveHandler', { useClass: DataDirectiveHandler });
 container.register('IDirectiveHandler', { useClass: PathDirectiveHandler });
-container.register('IDirectiveHandler', { useClass: DefineDirectiveHandler });
+container.register('IDirectiveHandler', { useClass: ExecDirectiveHandler });
 container.register('IDirectiveHandler', { useClass: RunDirectiveHandler });
-container.register('IDirectiveHandler', { useClass: EmbedDirectiveHandler });
+container.register('IDirectiveHandler', { useClass: AddDirectiveHandler });
 container.register('IDirectiveHandler', { useClass: ImportDirectiveHandler });

@@ -1,4 +1,4 @@
-import type { DirectiveNode } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/ast/types/index';
 import { validationLogger as logger } from '@core/utils/logger';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
@@ -11,9 +11,9 @@ import { injectable } from 'tsyringe';
 import { validateTextDirective } from '@services/resolution/ValidationService/validators/TextDirectiveValidator';
 import { validateDataDirective } from '@services/resolution/ValidationService/validators/DataDirectiveValidator';
 import { validateImportDirective } from '@services/resolution/ValidationService/validators/ImportDirectiveValidator';
-import { validateEmbedDirective } from '@services/resolution/ValidationService/validators/EmbedDirectiveValidator';
+import { validateAddDirective } from '@services/resolution/ValidationService/validators/AddDirectiveValidator';
 import { validatePathDirective } from '@services/resolution/ValidationService/validators/PathDirectiveValidator';
-import { validateDefineDirective } from '@services/resolution/ValidationService/validators/DefineDirectiveValidator';
+import { validateExecDirective } from '@services/resolution/ValidationService/validators/ExecDirectiveValidator';
 import { validateRunDirective } from '@services/resolution/ValidationService/validators/RunDirectiveValidator';
 
 /**
@@ -44,9 +44,9 @@ export class ValidationService implements IValidationService {
     this.registerValidator('text', async (node) => validateTextDirective(node));
     this.registerValidator('data', async (node) => validateDataDirective(node));
     this.registerValidator('import', async (node) => validateImportDirective(node));
-    this.registerValidator('embed', async (node) => validateEmbedDirective(node));
+    this.registerValidator('add', async (node) => validateAddDirective(node));
     this.registerValidator('path', async (node) => validatePathDirective(node));
-    this.registerValidator('define', async (node) => validateDefineDirective(node));
+    this.registerValidator('exec', async (node) => validateExecDirective(node));
     this.registerValidator('run', async (node) => validateRunDirective(node));
     
     logger.debug('ValidationService initialized with default validators', {
@@ -60,15 +60,15 @@ export class ValidationService implements IValidationService {
    */
   async validate(node: DirectiveNode): Promise<void> {
     logger.debug('Validating directive', {
-      kind: node.directive.kind,
+      kind: node.kind,
       location: node.location
     });
     
-    const validator = this.validators.get(node.directive.kind);
+    const validator = this.validators.get(node.kind);
     if (!validator) {
       throw new MeldDirectiveError(
-        `Unknown directive kind: ${node.directive.kind}`,
-        node.directive.kind,
+        `Unknown directive kind: ${node.kind}`,
+        node.kind,
         {
           location: node.location?.start,
           code: DirectiveErrorCode.HANDLER_NOT_FOUND,
@@ -113,7 +113,7 @@ export class ValidationService implements IValidationService {
       // Otherwise, wrap it in a MeldDirectiveError
       throw new MeldDirectiveError(
         errorMessage,
-        node.directive.kind,
+        node.kind,
         {
           location: node.location?.start,
           code,
@@ -124,7 +124,7 @@ export class ValidationService implements IValidationService {
     }
     
     logger.debug('Directive validation successful', {
-      kind: node.directive.kind
+      kind: node.kind
     });
   }
   

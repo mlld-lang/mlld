@@ -459,9 +459,9 @@ export class InterpreterService implements IInterpreterService {
               (typeof nodeResult !== 'object' || 
                (nodeResult.stateChanges === undefined && nodeResult.replacement === undefined))) // Removed transformedContent check
           {
-            logger.error('Invalid result type returned from directive handler client after interpretNode', { nodeResult, nodeId: node.nodeId, kind: (node as DirectiveNode).directive.kind });
+            logger.error('Invalid result type returned from directive handler client after interpretNode', { nodeResult, nodeId: node.nodeId, kind: (node as DirectiveNode).kind });
             throw new MeldInterpreterError(
-              `Invalid result type returned from directive handler client for directive '${(node as DirectiveNode).directive.kind}'`, 
+              `Invalid result type returned from directive handler client for directive '${(node as DirectiveNode).kind}'`, 
               'directive_client_error', 
               convertLocation(node.location),
               { severity: ErrorSeverity.Fatal }
@@ -638,7 +638,7 @@ export class InterpreterService implements IInterpreterService {
       case 'Directive':
         currentState.addNode(node);
 
-        if (node.type !== 'Directive' || !('directive' in node) || !node.directive) {
+        if (node.type !== 'Directive' || !('kind' in node) || !node.kind) {
           throw new MeldInterpreterError(
             'Invalid directive node',
             'invalid_directive',
@@ -646,7 +646,7 @@ export class InterpreterService implements IInterpreterService {
           );
         }
         const directiveNode = node as DirectiveNode;
-        const isImportDirective = directiveNode.directive.kind === 'import';
+        const isImportDirective = directiveNode.kind === 'import';
         
         const baseResolutionContext = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
         const formattingContext: OutputFormattingContext = {
@@ -657,7 +657,7 @@ export class InterpreterService implements IInterpreterService {
           atLineEnd: false
         };
         let executionContext: ExecutionContext | undefined = undefined;
-        if (directiveNode.directive.kind === 'run') {
+        if (directiveNode.kind === 'run') {
           executionContext = {
              cwd: currentState.getCurrentFilePath() ? this.pathService.dirname(currentState.getCurrentFilePath()!) : process.cwd(),
           };

@@ -346,7 +346,7 @@ export class DirectiveService implements IDirectiveService {
     this.ensureInitialized();
     this.ensureFactoryInitialized(); // Ensure Resolution Client Factory is ready
     
-    const kind = node.directive?.kind;
+    const kind = node.kind;
     if (!kind) {
       throw new DirectiveError('Directive node is missing kind', 'unknown', DirectiveErrorCode.VALIDATION_FAILED, { node });
     }
@@ -384,8 +384,8 @@ export class DirectiveService implements IDirectiveService {
       await this.validationService!.validate(node); 
       
       // Check for circular imports *after* basic validation but *before* execution
-      if (node.directive.kind === 'import') {
-         const importPath = this.pathService!.resolvePath(node.directive.path, currentFilePath as RawPath | undefined);
+      if (node.kind === 'import') {
+         const importPath = this.pathService!.resolvePath(node.raw.path || node.values.path?.[0]?.raw, currentFilePath as RawPath | undefined);
          
          if (this.circularityService!.isInStack(importPath as RawPath)) {
             // --- DEBUG LOG --- Log if circular import detected
@@ -714,7 +714,7 @@ export class DirectiveService implements IDirectiveService {
           atLineEnd: false 
       };
       let executionContext: ExecutionContext | undefined = undefined;
-      if (node.directive.kind === 'run') {
+      if (node.kind === 'run') {
         executionContext = {
           cwd: workingDirectory,
         };
@@ -762,7 +762,7 @@ export class DirectiveService implements IDirectiveService {
         };
         throw new DirectiveError(
           message,
-          node.directive.kind,
+          node.kind,
           code,
           errorDetails
         );
@@ -790,14 +790,14 @@ export class DirectiveService implements IDirectiveService {
       const errorForLog = error instanceof Error ? error : new Error(String(error));
       
       this.logger.error('Failed to validate directive', {
-        kind: node.directive.kind,
+        kind: node.kind,
         location: node.location,
         error: errorForLog
       });
       
       throw new DirectiveError(
         errorMessage,
-        node.directive.kind,
+        node.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
         {
           node

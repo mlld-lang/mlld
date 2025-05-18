@@ -35,7 +35,7 @@ import type {
   EmbedResolutionContext,
   SourceLocation as EmbedSourceLocation,
   EmbedResult
-} from './embed';
+} from './add';
 import type { MeldNode } from '@core/syntax/types/index';
 import type { DirectiveNode } from '@core/syntax/types/index';
 import type { IStateService } from '@services/state/StateService/IStateService';
@@ -138,7 +138,7 @@ export {
 
 export * from './variables';
 export * from './paths';
-export * from './define';
+export * from './exec';
 export * from './state';
 export * from '../errors/index';
 export * from './dependencies';

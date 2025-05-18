@@ -250,7 +250,7 @@ describe('InterpreterService Integration', () => {
     it('interprets directive nodes', async () => {
       const example = textDirectiveExamples.atomic.simpleString;
       const node = await createNodeFromExample(example.code) as DirectiveNode;
-      const varName = node.directive.identifier;
+      const varName = node.raw.identifier;
       const expectedValue = "Hello";
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
@@ -277,7 +277,7 @@ describe('InterpreterService Integration', () => {
     it('interprets data directives', async () => {
       const example = dataDirectiveExamples.atomic.simpleObject;
       const node = await createNodeFromExample(example.code) as DirectiveNode;
-      const varName = node.directive.identifier;
+      const varName = node.raw.identifier;
       const expectedData = { name: 'test', value: 123 };
 
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
@@ -302,20 +302,7 @@ describe('InterpreterService Integration', () => {
 
     it('interprets path directives', async () => {
       const varName = 'testPath';
-      const node: DirectiveNode = {
-        type: 'Directive',
-        nodeId: crypto.randomUUID(),
-        location: context.factory.createLocation(1, 1),
-        directive: {
-          kind: 'path',
-          identifier: varName,
-          path: {
-            raw: 'docs',
-            structured: { base: '.', segments: ['docs'], cwd: true },
-            isPathVariable: false
-          }
-        }
-      };
+      const node = context.factory.createPathDirective(varName, 'docs', context.factory.createLocation(1, 1));
       const expectedPathValue: IFilesystemPathState = {
         contentType: PathContentType.FILESYSTEM,
         originalValue: 'resolved/docs', // The resolved value the mock sets
@@ -356,7 +343,7 @@ describe('InterpreterService Integration', () => {
       const parentState = state;
 
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementation(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
-          const varName = node.directive.identifier;
+          const varName = node.raw.identifier;
           const value = `val_${varName}`;
           const variable = createTextVariable(varName, value);
           const stateChanges: StateChanges = {
@@ -560,8 +547,8 @@ describe('InterpreterService Integration', () => {
       const validNode = await createNodeFromExample(validExample.code) as DirectiveNode;
       const invalidNode = context.factory.createTextDirective('error', '{{nonexistent}}', context.factory.createLocation(2, 1));
       const testState = state.createChildState();
-      const validVarName = validNode.directive.identifier;
-      const invalidVarName = invalidNode.directive.identifier;
+      const validVarName = validNode.raw.identifier;
+      const invalidVarName = invalidNode.raw.identifier;
       const validValue = 'valid_value';
       const errorValue = 'error_value';
       
@@ -643,9 +630,9 @@ describe('InterpreterService Integration', () => {
       const afterExample = textDirectiveExamples.atomic.subject;
       const afterNode = await createNodeFromExample(afterExample.code) as DirectiveNode;
       const testState = state.createChildState();
-      const beforeVarName = beforeNode.directive.identifier;
-      const errorVarName = errorNode.directive.identifier;
-      const afterVarName = afterNode.directive.identifier;
+      const beforeVarName = beforeNode.raw.identifier;
+      const errorVarName = errorNode.raw.identifier;
+      const afterVarName = afterNode.raw.identifier;
       
       vi.spyOn(mockDirectiveClient, 'handleDirective')
          .mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
@@ -667,7 +654,7 @@ describe('InterpreterService Integration', () => {
             // await context.state.setVariable(variable); // Don't actually set state before throwing in this mock
             throw new DirectiveError(
               'Directive handler failed',
-              errorNode.directive.kind || 'unknown',
+              errorNode.kind || 'unknown',
               DirectiveErrorCode.EXECUTION_FAILED,
               { node: errorNode }
             );
@@ -754,7 +741,7 @@ describe('InterpreterService Integration', () => {
     it('handles text directives with correct format', async () => {
       const example = textDirectiveExamples.atomic.simpleString;
       const node = await createNodeFromExample(example.code) as DirectiveNode;
-      const varName = node.directive.identifier;
+      const varName = node.raw.identifier;
       const expectedValue = 'test value';
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
@@ -781,7 +768,7 @@ describe('InterpreterService Integration', () => {
     it('handles data directives with correct format', async () => {
       const example = dataDirectiveExamples.atomic.simpleObject;
       const node = await createNodeFromExample(example.code) as DirectiveNode;
-      const varName = node.directive.identifier;
+      const varName = node.raw.identifier;
       const expectedData = { key: 'data value' };
       
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
@@ -807,12 +794,7 @@ describe('InterpreterService Integration', () => {
 
     it('handles path directives with correct format', async () => {
       const varName = 'test';
-      const node: DirectiveNode = {
-        type: 'Directive',
-        nodeId: crypto.randomUUID(),
-        location: context.factory.createLocation(1, 1),
-        directive: { kind: 'path', identifier: varName, path: { raw: 'filename.meld', structured: { base: '.', segments: ['filename.meld'], cwd: true }, isPathVariable: false } }
-      };
+      const node = context.factory.createPathDirective(varName, 'filename.meld', context.factory.createLocation(1, 1));
       const expectedPathValue: IFilesystemPathState = {
         contentType: PathContentType.FILESYSTEM,
         originalValue: 'resolved/filename.meld',
@@ -846,7 +828,7 @@ describe('InterpreterService Integration', () => {
     it('handles complex directives with schema validation', async () => {
       const example = dataDirectiveExamples.atomic.person;
       const node = await createNodeFromExample(example.code) as DirectiveNode;
-      const varName = node.directive.identifier;
+      const varName = node.raw.identifier;
       const complexData = { name: 'Alice', age: 30 };
 
       vi.spyOn(mockDirectiveClient, 'handleDirective').mockImplementationOnce(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
@@ -876,13 +858,13 @@ describe('InterpreterService Integration', () => {
       const node1 = await createNodeFromExample(example1.code) as DirectiveNode;
       const node2 = await createNodeFromExample(example2.code) as DirectiveNode;
       const node3 = await createNodeFromExample(example3.code) as DirectiveNode;
-      const id1 = node1.directive.identifier;
-      const id2 = node2.directive.identifier;
-      const id3 = node3.directive.identifier;
+      const id1 = node1.raw.identifier;
+      const id2 = node2.raw.identifier;
+      const id3 = node3.raw.identifier;
 
       vi.spyOn(mockDirectiveClient, 'handleDirective')
          .mockImplementation(async (node: DirectiveNode, context: DirectiveProcessingContext) => {
-            const varName = node.directive.identifier;
+            const varName = node.raw.identifier;
             const value = `val_${varName}`;
             const variable = createTextVariable(varName, value);
             const stateChanges: StateChanges = {

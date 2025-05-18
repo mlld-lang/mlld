@@ -3,21 +3,21 @@ import { ValidationContext } from '@core/syntax/types/index';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 
 /**
- * Validates the structure of a `@define` directive node based on grammar expectations.
+ * Validates the structure of a `@exec` directive node based on grammar expectations.
  * Assumes the grammar correctly parses the directive into:
  * - `name`: string (required, non-empty)
  * - `field`?: string (optional, specific allowed values like 'risk.high')
- * - `parameters`?: string[] (optional, for runnable defines)
+ * - `parameters`?: string[] (optional, for runnable exec directives)
  * - EITHER `command`: object (if defined using =@run ...)
  * - OR `value`: object[] (if defined using ="...")
  */
-export async function validateDefineDirective(node: DirectiveNode, context: ValidationContext): Promise<void> {
+export async function validateExecDirective(node: DirectiveNode, context: ValidationContext): Promise<void> {
   const directive = node.directive;
 
   // 1. Validate 'name' property (Required by grammar as Identifier)
   if (!directive.name || typeof directive.name !== 'string' || directive.name.trim() === '') {
     // This check ensures the identifier wasn't empty, though grammar likely prevents this. Safety check.
-    throw new MeldDirectiveError('Define directive requires a non-empty "name" property', 'define', { location: node.location?.start });
+    throw new MeldDirectiveError('Exec directive requires a non-empty "name" property', 'exec', { location: node.location?.start });
   }
 
   // 2. Validate 'field' property (Optional, specific values enforced by grammar: DefineField rule)

@@ -1,10 +1,10 @@
 import type { 
     DirectiveNode, 
-    InterpolatableValue, 
-    VariableReferenceNode, 
     TextNode, 
-    StructuredPath 
-} from '@core/syntax/types/nodes'; 
+    VariableReferenceNode,
+    MeldNode 
+} from '@core/ast/types/index';
+import type { InterpolatableValue, StructuredPath } from '@core/syntax/types/nodes'; 
 import type { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IStateService } from '@services/state/StateService/IStateService';
@@ -70,7 +70,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         currentFilePath: currentFilePath ?? 'unknown',
         stateExists: !!state,
       },
-      directive: node.directive
+      raw: node.raw,
+      values: node.values
     });
     
     let identifier: string | undefined; 
@@ -83,9 +84,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         column: node.location.start.column
       } : undefined;
 
-      const directiveData = node.directive as any;
-      identifier = directiveData.identifier;
-      const textValues = directiveData.values;
+      identifier = node.raw.identifier;
+      const textValues = node.values;
       
       if (!textValues) {
         throw new DirectiveError(
@@ -106,14 +106,18 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         );
       }
       
-      logger.debug('TextDirectiveHandler: directiveData structure', {
-        directiveData,
-        directiveDataType: typeof directiveData,
-        directiveDataKeys: Object.keys(directiveData),
-        directiveDataToString: String(directiveData)
+      logger.debug('TextDirectiveHandler: node structure', {
+        values: node.values,
+        raw: node.raw,
+        meta: node.meta,
+        source: node.source
       });
 
-      const { value, values, source = 'literal', embed, run } = directiveData;
+      const source = node.source || 'literal';
+      const values = textValues.values ? textValues.values[0] : undefined;
+      const value = node.raw.value || node.raw.values;
+      const embed = node.values.embed ? node.values.embed[0] : undefined;
+      const run = node.values.run ? node.values.run[0] : undefined;
       
       if (source === 'literal') {
         logger.debug('TextDirectiveHandler: value/values structure', {

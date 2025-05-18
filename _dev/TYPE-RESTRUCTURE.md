@@ -14,6 +14,7 @@ This plan references several supporting documents:
 - **`AST-BASE-INTERFACES.md`** - Canonical list of base interfaces and field mappings
 - **`STATE-AFFECTED-METHODS.md`** - Inventory of StateService methods requiring updates
 - **`STATE-UPDATES.md`** - Detailed execution plan for StateService migration (part of Step 5)
+- **`TYPE-RESTRUCTURE-CONTEXT.md`** - Implementation context and decisions from completed phases
 
 ## Updated Goals
 
