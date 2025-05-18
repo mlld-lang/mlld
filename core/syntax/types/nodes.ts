@@ -187,4 +187,4 @@ export interface VariableReferenceNode extends MeldNode {
 
 /**
  * AST node for variable definitions
- *
+ */

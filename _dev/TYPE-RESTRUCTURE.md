@@ -203,7 +203,7 @@ This step involves updating multiple services to use the new `MeldNode` union ty
 - Validate discriminated union usage
 - Run comprehensive tests
 
-#### 5b. InterpreterService Update (2-3 days)
+#### 5b. InterpreterService Update (2-3 days) *(Completed)*
 - Update node processing to use discriminated unions
 - Simplify type checking with union discrimination
 - Update handler dispatch logic
@@ -212,6 +212,15 @@ This step involves updating multiple services to use the new `MeldNode` union ty
 - Update all directive handlers to accept new types
 - Remove redundant type conversions
 - Update return types to match new structure
+
+**Specific Issues to Address:**
+1. **Test Failures**: 8 InterpreterService integration tests failing with "Cannot read properties of undefined (reading 'identifier')"
+   - Occurs in directive processing (text directives, data directives)
+   - Suggests directive handlers may be expecting old node structure
+   - May be related to how `values.identifier` is accessed in directive handlers
+2. **Node Structure Changes**: Directive handlers need to use the new node structure where properties are ordered differently
+3. **Type Imports**: All directive handlers need to update their imports from `@core/syntax/types` to `@core/ast/types`
+4. **Value Access Patterns**: Review how directive handlers access nested properties (e.g., `directive.values.identifier`) to match new structure
 
 #### 5d. Other Services (1-2 days)
 - Update remaining services
