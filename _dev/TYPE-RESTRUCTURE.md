@@ -362,12 +362,12 @@ Note: ParserService transformation approach significantly reduces complexity and
 | Step | Description | Confidence | Notes |
 |-----|-------------|-----------|-------|
 | 1 | Analyze current type duplication | 92 | Existing types are well organized but mapping may reveal gaps |
-| 2 | Create unified type definitions | 90 | Need to confirm final base interfaces |
-| 3 | Define unified AST node union | 95 | Clear discriminated union approach per STATE-UPDATES.md |
-| 4 | Implement ParserService transformation | 95 | Clear approach: transform AST → unified types |
-| 5 | Update service interfaces | 90 | Service files are clear but numerous |
+| 2 | Create unified type definitions | 88 | Need final list of base interfaces and field mapping to avoid gaps |
+| 3 | Define unified AST node union | 93 | Discriminated union pattern is clear |
+| 4 | Implement ParserService transformation | 92 | Parsing flow understood but transformation details may need refinement |
+| 5 | Update service interfaces | 88 | Many service files must change; detailed inventory of interfaces would help |
 | 6 | Remove legacy types | 95 | Clean cutover, no compatibility needed |
-| 7 | Update all imports | 85 | Many packages rely on old paths |
+| 7 | Update all imports | 80 | Over 300 references to old paths; a scripted replacement plan would help |
 | 8 | Validation and documentation | 90 | Straightforward once types settle |
 
 ## Notes for Implementation

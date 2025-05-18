@@ -36,3 +36,11 @@ At present most services still import from `@core/syntax/types`.  A repo‑wide 
 ## Planned Direction
 
 Both `TYPE-RESTRUCTURE.md` and `STATE-UPDATES.md` propose moving to discriminated unions defined from the new files in `core/ast/types`.  The goal is to expose a unified `ASTNode` union covering every interface in that directory so that all services can import from `@core/ast/types` and eventually remove the old `core/syntax/types` package.
+
+## Additional Observations
+
+- A placeholder `ASTNode` interface exists in `core/types/ast-nodes.ts` (and a duplicate in `core/types-old/ast-nodes.ts`). These files currently define only minimal structures and are not widely used.
+- `core/ast/index.ts` re-exports many types from `@core/syntax/types`, so services indirectly depend on the legacy package through this module.
+- Tests under `tests/` also import `MeldNode`, `TextNode` and other legacy types; these will need updates when imports change.
+- The new directive-specific type files in `core/ast/types` still import foundational nodes from `core/syntax/types/nodes`, meaning the unification will require moving those definitions or rewriting the imports.
+- About 330 imports from `@core/syntax/types` appear across services and tests. Automating this replacement will save significant effort.

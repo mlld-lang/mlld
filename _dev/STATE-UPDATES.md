@@ -258,7 +258,7 @@ Total: 4-6 days (reduced from 1-2 weeks)
 |-----|-------------|-----------|-------|
 | 1 | Update type imports | 95 | Straightforward path updates |
 | 2 | Update interface definitions | 95 | Interfaces are small and easy to modify |
-| 3 | Update method signatures | 90 | Ensure all services use new types |
-| 4 | Update appendContent method | 90 | Need correct TextNode interface from new AST |
+| 3 | Update method signatures | 88 | Many services depend on these signatures; a full list of affected methods would help |
+| 4 | Update appendContent method | 85 | Text node shape in new AST not fully defined; finalized TextNode interface needed |
 | 5 | Review type guards | 95 | Likely minimal changes |
 | 6 | Verify node cloning | 95 | Existing logic should remain valid |
