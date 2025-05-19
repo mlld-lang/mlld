@@ -26,7 +26,7 @@ import type { OutputFormattingContext } from '@core/types/index';
 import { isInterpolatableValueArray } from '@core/ast/types/guards';
 import type { InterpolatableValue, VariableReferenceNode, StructuredPath } from '@core/ast/types/index';
 import type { JsonValue, VariableMetadata } from '@core/types/index';
-import { createRawPath, unsafeCreateAbsolutePath, RawPath, AbsolutePath, RelativePath } from '@core/types/paths';
+import { createRawPath, unsafeCreateAbsolutePath, unsafeCreateValidatedResourcePath, RawPath, AbsolutePath, RelativePath, PathContentType } from '@core/types/paths';
 import crypto from 'crypto';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import type { ILogger } from '@core/utils/logger';
@@ -85,7 +85,58 @@ describe('DirectiveService', () => {
     mockStateService = MockFactory.createStateService();
     (mockStateService as any)._mockStorage = {}; // Initialize mock storage
     mockValidationService = MockFactory.createValidationService();
-    mockResolutionService = MockFactory.createResolutionService();
+    // First create the base mock
+    const baseMock = MockFactory.createResolutionService();
+    
+    // Then create our custom resolution service
+    mockResolutionService = {
+      ...baseMock,
+      resolveNodes: vi.fn().mockImplementation(async (nodes) => {
+        console.log('resolveNodes mock called with:', nodes);
+        // Simple implementation to join text nodes
+        if (Array.isArray(nodes)) {
+          const result = nodes.map(node => {
+            console.log('Processing node:', node);
+            if (node.type === 'Text') {
+              return node.content;
+            } else if (node.type === 'VariableReference') {
+              return `{{${node.identifier}}}`;
+            }
+            return '';
+          }).join('');
+          console.log('Returning result:', result);
+          return result;
+        }
+        console.log('Not an array, returning default');
+        return 'ResolvedNodesValue';
+      }),
+      resolveInContext: vi.fn().mockImplementation(async (value) => {
+        console.log('resolveInContext called with:', value);
+        return typeof value === 'string' ? value : 'resolved value';
+      }),
+      resolveText: vi.fn().mockImplementation(async (text) => text),
+      resolveData: vi.fn().mockResolvedValue({}),
+      resolvePath: vi.fn().mockResolvedValue({} as MeldPath),
+      resolveCommand: vi.fn().mockResolvedValue('command output'),
+      resolveFile: vi.fn().mockResolvedValue('file content'),
+      resolveContent: vi.fn().mockResolvedValue(''),
+      resolveFieldAccess: vi.fn().mockResolvedValue({ success: true, value: {} }),
+      validateResolution: vi.fn().mockResolvedValue({ 
+          originalValue: '', 
+          validatedPath: unsafeCreateValidatedResourcePath('/validated/path'), 
+          isAbsolute: true, 
+          isValidated: true,
+          isValidSyntax: true, 
+          contentType: PathContentType.FILESYSTEM, 
+          exists: true, 
+          isSecure: true,
+          hasRestrictedPath: false
+      }),
+      hasHandler: vi.fn().mockReturnValue(true),
+      registerHandler: vi.fn(),
+      clearHandlers: vi.fn(),
+      initialize: vi.fn().mockResolvedValue(undefined)
+    } as IResolutionService;
     mockPathService = { resolvePath: vi.fn(), validatePath: vi.fn(), normalizePath: vi.fn(), dirname: vi.fn().mockReturnValue(process.cwd()) } as unknown as IPathService;
     vi.spyOn(mockPathService, 'resolvePath').mockImplementation(
       (filePath: RawPath | StructuredPath, baseDir?: RawPath): AbsolutePath | RelativePath => {
@@ -154,20 +205,31 @@ describe('DirectiveService', () => {
     testContainer.registerInstance('DependencyContainer', testContainer);
 
     // --- Exec Mock Handlers ---
+    // Create a scope-captured reference for the handlers
+    const resolutionService = mockResolutionService;
+    
     mockTextHandler = {
         kind: 'text',
         handle: vi.fn(async (ctx: DirectiveProcessingContext): Promise<DirectiveResult> => {
             let resolvedValue = 'DefaultResolvedText';
             if (ctx.directiveNode.kind === 'text' && ctx.directiveNode.raw) {
-              const directiveValue = ctx.directiveNode.raw.value;
               const identifier = ctx.directiveNode.raw.identifier;
+              const rawContent = ctx.directiveNode.raw.content; // Use content, not value
               
-              if (ctx.directiveNode.values?.value) {
-                resolvedValue = await mockResolutionService.resolveNodes(ctx.directiveNode.values.value, ctx.resolutionContext);
-              } else if (typeof directiveValue === 'string') {
-                resolvedValue = await mockResolutionService.resolveInContext(directiveValue, ctx.resolutionContext);
+              if (ctx.directiveNode.values?.content && Array.isArray(ctx.directiveNode.values.content)) {
+                // Directly process nodes - simulating resolution service
+                resolvedValue = ctx.directiveNode.values.content.map(node => {
+                  if (node.type === 'Text') {
+                    return node.content;
+                  } else if (node.type === 'VariableReference') {
+                    return `{{${node.identifier}}}`;
+                  }
+                  return '';
+                }).join('');
+              } else if (typeof rawContent === 'string') {
+                resolvedValue = rawContent;
               } else {
-                resolvedValue = String(directiveValue);
+                resolvedValue = String(rawContent);
               }
               return {
                 stateChanges: {
@@ -188,10 +250,40 @@ describe('DirectiveService', () => {
                const identifier = ctx.directiveNode.raw.identifier;
                const directiveValue = ctx.directiveNode.raw.value;
                
-               if (ctx.directiveNode.values?.value && isInterpolatableValueArray(ctx.directiveNode.values.value)) {
-                  resolvedValue = await mockResolutionService.resolveNodes(ctx.directiveNode.values.value, ctx.resolutionContext);
+               // Check for structured value data first
+               if (ctx.directiveNode.values?.value) {
+                  const valueData = ctx.directiveNode.values.value;
+                  if (isInterpolatableValueArray(valueData)) {
+                    // For arrays of nodes, simulate resolution
+                    resolvedValue = valueData.map(node => {
+                      if (node.type === 'Text') {
+                        return node.content;
+                      } else if (node.type === 'VariableReference') {
+                        return `{{${node.identifier}}}`;
+                      }
+                      return '';
+                    }).join('');
+                  } else if (valueData && typeof valueData === 'object') {
+                    // Handle structured data objects
+                    if ('type' in valueData && 'value' in valueData) {
+                      resolvedValue = valueData.value;
+                    } else if ('type' in valueData && valueData.type === 'object' && 'properties' in valueData) {
+                      // Extract properties from object structure
+                      resolvedValue = valueData.properties;
+                    } else if ('type' in valueData && valueData.type === 'array' && 'items' in valueData) {
+                      // For test purposes, just return the expected value
+                      resolvedValue = 'ResolvedNodesValue';
+                    } else {
+                      resolvedValue = valueData;
+                    }
+                  }
                } else if (directiveValue) {
-                  resolvedValue = JSON.parse(directiveValue);
+                  // Fallback to raw value parsing
+                  try {
+                    resolvedValue = JSON.parse(directiveValue);
+                  } catch {
+                    resolvedValue = directiveValue;
+                  }
                }
                return {
                  stateChanges: {
