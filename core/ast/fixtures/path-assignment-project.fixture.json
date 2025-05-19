@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "3d58f072-858d-4392-ac7f-747f2aa779df",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "dc77ecdf-fa3d-432c-a7ee-ea311c1d6614",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +50,7 @@
         "path": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "c573fbc5-3a50-4557-85c4-39082e15c110",
             "location": {
               "start": {
                 "offset": 0,
@@ -69,7 +69,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "ec5ec610-2495-4f70-a156-a50c1034d9fe",
             "location": {
               "start": {
                 "offset": 0,
@@ -77,9 +77,9 @@
                 "column": 1
               },
               "end": {
-                "offset": 0,
+                "offset": 27,
                 "line": 1,
-                "column": 1
+                "column": 28
               }
             },
             "content": "/src"
@@ -101,7 +101,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "2ec73622-f259-442c-be4a-8e05ef1101c4",
       "location": {
         "start": {
           "offset": 0,
@@ -121,24 +121,24 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "35845100-5804-4bf2-91c0-bf49db60f56a",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 7,
                 "line": 1,
-                "column": 1
+                "column": 8
               },
               "end": {
-                "offset": 0,
+                "offset": 29,
                 "line": 1,
-                "column": 1
+                "column": 30
               }
             },
             "content": "The project source is "
           },
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "5bdfd87c-81e4-4ea9-8853-c7c3cb0b2b4a",
             "location": {
               "start": {
                 "offset": 0,

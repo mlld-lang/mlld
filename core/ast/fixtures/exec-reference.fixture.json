@@ -10,7 +10,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "9821290b-db0e-4d5e-86a4-2106e842597d",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +30,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "f3c5b9c2-2a71-4bda-bd0c-62f9b41c51ff",
             "location": {
               "start": {
                 "offset": 0,
@@ -38,9 +38,9 @@
                 "column": 1
               },
               "end": {
-                "offset": 0,
+                "offset": 39,
                 "line": 1,
-                "column": 1
+                "column": 40
               }
             },
             "content": "echo"
@@ -49,7 +49,7 @@
         "params": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "a48b68b4-a0c6-48bd-aa9a-8ea16f29f571",
             "location": {
               "start": {
                 "offset": 0,
@@ -70,24 +70,24 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "112b2728-2709-4a09-88ae-2d20d5263da0",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 26,
                 "line": 1,
-                "column": 1
+                "column": 27
               },
               "end": {
-                "offset": 0,
+                "offset": 32,
                 "line": 1,
-                "column": 1
+                "column": 33
               }
             },
             "content": "echo \""
           },
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "9e192c82-ffcb-4b08-8be7-1f0c956200af",
             "location": {
               "start": {
                 "offset": 0,
@@ -106,17 +106,17 @@
           },
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "433e8a1c-4e30-47f2-be2f-470ac7fc8ca2",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 37,
                 "line": 1,
-                "column": 1
+                "column": 38
               },
               "end": {
-                "offset": 0,
+                "offset": 38,
                 "line": 1,
-                "column": 1
+                "column": 39
               }
             },
             "content": "\""
@@ -137,7 +137,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "6ab1debd-d470-4d25-ae16-ceb76db4a20c",
       "location": {
         "start": {
           "offset": 0,
@@ -157,7 +157,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "508545e3-3cb4-4377-af23-dcc00c2a5e50",
             "location": {
               "start": {
                 "offset": 0,
@@ -165,9 +165,9 @@
                 "column": 1
               },
               "end": {
-                "offset": 0,
+                "offset": 31,
                 "line": 1,
-                "column": 1
+                "column": 32
               }
             },
             "content": "greet"
@@ -176,7 +176,7 @@
         "params": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "eed22501-0312-476f-8f93-4b54d989510d",
             "location": {
               "start": {
                 "offset": 0,
@@ -197,17 +197,17 @@
         "commandRef": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "0a34afd0-29a4-4ac6-a6bb-e6b6fa560e5c",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 27,
                 "line": 1,
-                "column": 1
+                "column": 28
               },
               "end": {
-                "offset": 0,
+                "offset": 31,
                 "line": 1,
-                "column": 1
+                "column": 32
               }
             },
             "content": "echo"
@@ -231,24 +231,24 @@
     },
     {
       "type": "Text",
-      "nodeId": "placeholder-id",
+      "nodeId": "c89d8bca-84e6-47cf-8592-ab3b05c79c08",
       "location": {
         "start": {
-          "offset": 0,
+          "offset": 31,
           "line": 1,
-          "column": 1
+          "column": 32
         },
         "end": {
-          "offset": 0,
+          "offset": 48,
           "line": 1,
-          "column": 1
+          "column": 49
         }
       },
       "content": "[\"Hello, @name!\"]"
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "630a4e75-e19c-49be-85f3-580bc2c75917",
       "location": {
         "start": {
           "offset": 0,
@@ -268,17 +268,17 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "1b51805b-e008-44bf-abd7-a94b0bcce6d2",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 6,
                 "line": 1,
-                "column": 1
+                "column": 7
               },
               "end": {
-                "offset": 0,
+                "offset": 20,
                 "line": 1,
-                "column": 1
+                "column": 21
               }
             },
             "content": "greet"
@@ -287,17 +287,17 @@
         "args": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "1cec3d3c-01bc-43c6-9f33-dddad490d91e",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 12,
                 "line": 1,
-                "column": 1
+                "column": 13
               },
               "end": {
-                "offset": 0,
+                "offset": 19,
                 "line": 1,
-                "column": 1
+                "column": 20
               }
             },
             "content": "World"

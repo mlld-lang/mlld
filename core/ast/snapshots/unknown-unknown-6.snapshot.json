@@ -1,7 +1,7 @@
 [
   {
     "type": "Directive",
-    "nodeId": "placeholder-id",
+    "nodeId": "3cc364f3-15d0-4187-ba24-7dbc321cb134",
     "location": {
       "start": {
         "offset": 0,
@@ -21,17 +21,17 @@
       "path": [
         {
           "type": "Text",
-          "nodeId": "placeholder-id",
+          "nodeId": "e697059b-ca77-4ae6-b412-b92abb483e8b",
           "location": {
             "start": {
-              "offset": 0,
+              "offset": 5,
               "line": 1,
-              "column": 1
+              "column": 6
             },
             "end": {
-              "offset": 0,
+              "offset": 7,
               "line": 1,
-              "column": 1
+              "column": 8
             }
           },
           "content": "[["
@@ -52,24 +52,24 @@
   },
   {
     "type": "Text",
-    "nodeId": "placeholder-id",
+    "nodeId": "38673a58-a4a6-4ddf-ae09-d108cff2f905",
     "location": {
       "start": {
-        "offset": 0,
-        "line": 1,
+        "offset": 8,
+        "line": 2,
         "column": 1
       },
       "end": {
-        "offset": 0,
-        "line": 1,
-        "column": 1
+        "offset": 21,
+        "line": 2,
+        "column": 14
       }
     },
     "content": "Content with "
   },
   {
     "type": "VariableReference",
-    "nodeId": "placeholder-id",
+    "nodeId": "c850e718-1f6d-42b2-b567-7bf527bffde4",
     "location": {
       "start": {
         "offset": 0,

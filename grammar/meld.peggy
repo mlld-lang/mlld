@@ -52,7 +52,7 @@ InterDirectiveNewline
       /* success only if the next real char starts a directive line */
       return i < input.length && input[i] === '@' && helpers.isLogicalLineStart(input, i);
     } {
-      return helpers.createNode(NodeType.Newline, { content: term }, location());
+      return helpers.createNode(NodeType.Newline, { content: term, location: location() });
     }
 
 // plain newline that should stay a raw string
@@ -74,12 +74,12 @@ LineStartComment
       const isAtLineStart = helpers.isLogicalLineStart(input, pos);
       return isAtLineStart;
     } ">>" [ ] content:CommentContent {
-    return helpers.createNode(NodeType.Comment, { content: content.trim() }, location());
+    return helpers.createNode(NodeType.Comment, { content: content.trim(), location: location() });
   }
 
 Comment
   = ">>" [ ] content:CommentContent {
-    return helpers.createNode(NodeType.Comment, { content: content.trim() }, location());
+    return helpers.createNode(NodeType.Comment, { content: content.trim(), location: location() });
   }
 
 CommentContent
@@ -91,9 +91,9 @@ CommentContent
 // TEXT BLOCKS
 // -------------------------------------------------------------------------
 
-TextBlock
-  = first:TextPart rest:(TextPart)* {
-    return helpers.createNode(NodeType.Text, { content: first + rest.join('') }, location());
+  TextBlock
+    = first:TextPart rest:(TextPart)* {
+    return helpers.createNode(NodeType.Text, { content: first + rest.join(''), location: location() });
   }
 
 TextPart
@@ -162,8 +162,9 @@ CodeFence
         : rawContent.trimEnd();
       return helpers.createNode(NodeType.CodeFence, {
         language: lang || undefined,
-        content: finalContent
-      }, location());
+        content: finalContent,
+        location: location()
+      });
     }
 
 CodeFenceLangID

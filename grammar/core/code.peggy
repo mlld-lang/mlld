@@ -97,7 +97,7 @@ RunLanguageCodeCore
       helpers.debug('RunLanguageCodeCore matched', { language, args, code });
       
       // Create language node
-      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      const langNode = helpers.createNode(NodeType.Text, { content: language, location: location() });
       
       // Process code content - get from bracketed content
       const codeContent = code[0].content;

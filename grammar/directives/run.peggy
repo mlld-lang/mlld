@@ -128,7 +128,7 @@ RunCommandReference
       });
       
       return {
-        identifier: [helpers.createNode(NodeType.Text, { content: identifier }, location())],
+        identifier: [helpers.createNode(NodeType.Text, { content: identifier, location: location() })],
         rawIdentifier: identifier,
         args: processedArgs,
         rawArgs: rawArgs
@@ -148,12 +148,12 @@ RunCommandArgsList
 
 RunCommandArg
   = str:StringLiteral {
-      return helpers.createNode(NodeType.Text, { content: str }, location());
+      return helpers.createNode(NodeType.Text, { content: str, location: location() });
     }
   / varRef:Variable {
       return varRef;
     }
   / val:$([^,)]+) {
       // Plain value (raw argument)
-      return helpers.createNode(NodeType.Text, { content: val.trim() }, location());
+      return helpers.createNode(NodeType.Text, { content: val.trim(), location: location() });
     }

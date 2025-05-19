@@ -10,7 +10,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "63fcfffd-f677-4b28-8c73-84f6de388975",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +30,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "d894794e-a528-4c68-b6ff-65be5eb0b42c",
             "location": {
               "start": {
                 "offset": 0,
@@ -51,17 +51,17 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "acf6e3f9-ec22-471d-8de6-8a88cf92a754",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 17,
                 "line": 1,
-                "column": 1
+                "column": 18
               },
               "end": {
-                "offset": 0,
+                "offset": 24,
                 "line": 1,
-                "column": 1
+                "column": 25
               }
             },
             "content": "value"
@@ -80,7 +80,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "e4fc212b-fb62-423c-a898-abeb3a97f2ca",
       "location": {
         "start": {
           "offset": 0,
@@ -100,7 +100,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "8eb61d1c-7136-4f17-8d68-ab2c6a68e28a",
             "location": {
               "start": {
                 "offset": 0,
@@ -121,24 +121,24 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "8fcb6ea2-9515-4e0e-a860-4955b29c0676",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 20,
                 "line": 1,
-                "column": 1
+                "column": 21
               },
               "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
+                "offset": 56,
+                "line": 4,
+                "column": 6
               }
             },
             "content": "\nThis is a\nmulti-line template\nwith "
           },
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "e8f9507c-6d90-43c8-a94a-7c1e2e929125",
             "location": {
               "start": {
                 "offset": 0,
@@ -157,16 +157,16 @@
           },
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "1d909936-1cac-4ae5-beec-291db03bc08f",
             "location": {
               "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
+                "offset": 68,
+                "line": 4,
+                "column": 18
               },
               "end": {
-                "offset": 0,
-                "line": 1,
+                "offset": 69,
+                "line": 5,
                 "column": 1
               }
             },
@@ -186,7 +186,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "af40b04e-7762-4bae-b5a8-ac03b3b70a02",
       "location": {
         "start": {
           "offset": 0,
@@ -206,7 +206,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "cfc3e342-f593-46da-99e9-fb5ae8c5f9ec",
             "location": {
               "start": {
                 "offset": 0,

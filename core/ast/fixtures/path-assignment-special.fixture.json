@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "ba23e3e7-c879-484b-be03-0fe16a281635",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "dc549ee9-54dd-4eca-851c-be94c9395b8b",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +50,7 @@
         "path": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "25b5885a-d545-406f-ad0b-21c7f0d04249",
             "location": {
               "start": {
                 "offset": 0,
@@ -69,7 +69,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "46c205d1-f254-414e-8d27-6d5e48d4dcb0",
             "location": {
               "start": {
                 "offset": 0,
@@ -77,9 +77,9 @@
                 "column": 1
               },
               "end": {
-                "offset": 0,
+                "offset": 30,
                 "line": 1,
-                "column": 1
+                "column": 31
               }
             },
             "content": "/config"
@@ -101,7 +101,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "6d24b2ff-aea0-4951-90e4-4dcd3d0705bb",
       "location": {
         "start": {
           "offset": 0,
@@ -121,24 +121,24 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "5658277f-2c57-4678-b42f-e9857a2a9f92",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 7,
                 "line": 1,
-                "column": 1
+                "column": 8
               },
               "end": {
-                "offset": 0,
+                "offset": 21,
                 "line": 1,
-                "column": 1
+                "column": 22
               }
             },
             "content": "The config is "
           },
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "1d2bade7-f3b6-43c5-ad59-d31d17967aad",
             "location": {
               "start": {
                 "offset": 0,

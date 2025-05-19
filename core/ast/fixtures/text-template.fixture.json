@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "d272c204-2bf0-4e0e-9800-87dd222338e5",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "0680e6b7-1d94-4cd1-9669-8999747d720f",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,24 +50,24 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "5b8dd6ce-957b-4623-9b2c-4bb2a0293405",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 19,
                 "line": 1,
-                "column": 1
+                "column": 20
               },
               "end": {
-                "offset": 0,
+                "offset": 43,
                 "line": 1,
-                "column": 1
+                "column": 44
               }
             },
             "content": "This is a template with "
           },
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "aaa5c31d-c166-4fad-824a-4de640489c13",
             "location": {
               "start": {
                 "offset": 0,
@@ -98,7 +98,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "6d15ca15-efda-4002-a2cc-6d46962221fd",
       "location": {
         "start": {
           "offset": 0,
@@ -118,7 +118,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "4d92daab-ffb2-427a-b4f3-47ce03df6600",
             "location": {
               "start": {
                 "offset": 0,

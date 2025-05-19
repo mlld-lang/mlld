@@ -146,8 +146,8 @@ describe('ParserService', () => {
           language: 'js',
           content: '```js\nconst greeting = \'Hello, world!\';\nconsole.log(greeting);\n```',
           location: {
-            start: { line: 1, column: 1 },
-            end: { line: 4, column: 4 },
+            start: { line: 1, column: 1, offset: 0 },
+            end: { line: 4, column: 4, offset: expect.any(Number) },
           },
           nodeId: expect.any(String)
         },

@@ -54,15 +54,15 @@ EndOfLine
       const isBeforeDirective = input.substr(pos).match(/^\s*@[a-z]/i);
       return isBeforeDirective;
     } { 
-      return helpers.createNode(NodeType.Newline, { content: term }, location());
+      return helpers.createNode(NodeType.Newline, { content: term, location: location() });
     }
   / ws:[ \t\r]* term:LineTerminator { 
-      return helpers.createNode(NodeType.Newline, { content: term }, location());
+      return helpers.createNode(NodeType.Newline, { content: term, location: location() });
     }
   / ws:[ \t\r]* &{ 
       const atEof = offset() === input.length;
       const nextChar = input[offset()];
       return atEof || (nextChar === '@' && helpers.isLogicalLineStart(input, offset())); 
     } { 
-      return helpers.createNode(NodeType.Newline, { content: '\n' }, location());
+      return helpers.createNode(NodeType.Newline, { content: '\n', location: location() });
     }

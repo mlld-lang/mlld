@@ -84,16 +84,18 @@ AtAdd
       
       // Add headerLevel and underHeader if present
       if (headerLevelValue) {
-        values.headerLevel = [helpers.createNode(NodeType.Number, { 
+        values.headerLevel = [helpers.createNode(NodeType.Number, {
           value: headerLevelValue.value,
-          raw: headerLevelValue.raw
+          raw: headerLevelValue.raw,
+          location: location()
         })];
       }
       
       if (underHeaderValue) {
-        values.underHeader = [helpers.createNode(NodeType.Text, { 
-          content: underHeaderValue, 
-          raw: underHeaderValue 
+        values.underHeader = [helpers.createNode(NodeType.Text, {
+          content: underHeaderValue,
+          raw: underHeaderValue,
+          location: location()
         })];
       }
       
@@ -144,16 +146,18 @@ AtAdd
       
       // Add headerLevel and underHeader if present
       if (headerLevelValue) {
-        values.headerLevel = [helpers.createNode(NodeType.Number, { 
+        values.headerLevel = [helpers.createNode(NodeType.Number, {
           value: headerLevelValue.value,
-          raw: headerLevelValue.raw
+          raw: headerLevelValue.raw,
+          location: location()
         })];
       }
       
       if (underHeaderValue) {
-        values.underHeader = [helpers.createNode(NodeType.Text, { 
-          content: underHeaderValue, 
-          raw: underHeaderValue 
+        values.underHeader = [helpers.createNode(NodeType.Text, {
+          content: underHeaderValue,
+          raw: underHeaderValue,
+          location: location()
         })];
       }
       
@@ -198,16 +202,18 @@ AtAdd
       
       // Add headerLevel and underHeader if present
       if (headerLevelValue) {
-        values.headerLevel = [helpers.createNode(NodeType.Number, { 
+        values.headerLevel = [helpers.createNode(NodeType.Number, {
           value: headerLevelValue.value,
-          raw: headerLevelValue.raw
+          raw: headerLevelValue.raw,
+          location: location()
         })];
       }
       
       if (underHeaderValue) {
-        values.underHeader = [helpers.createNode(NodeType.Text, { 
-          content: underHeaderValue, 
-          raw: underHeaderValue 
+        values.underHeader = [helpers.createNode(NodeType.Text, {
+          content: underHeaderValue,
+          raw: underHeaderValue,
+          location: location()
         })];
       }
       
@@ -268,7 +274,7 @@ AddDirectiveRef
       // Fallback for simple path text
       return {
         subtype: 'addPath',
-        values: { path: [helpers.createNode(NodeType.Text, { content: path }, location())] },
+        values: { path: [helpers.createNode(NodeType.Text, { content: path, location: location() })] },
         raw: { path },
         meta: {}
       };
@@ -284,12 +290,12 @@ VariableReference
 
 // Helper rule for quoted content
 QuotedContent
-  = '"' content:$(!'"' .)* '"' { 
-      return [helpers.createNode(NodeType.Text, { content }, location())];
-    }
-  / "'" content:$(!"'" .)* "'" { 
-      return [helpers.createNode(NodeType.Text, { content }, location())];
-    }
+    = '"' content:$(!'"' .)* '"' {
+        return [helpers.createNode(NodeType.Text, { content, location: location() })];
+      }
+  / "'" content:$(!"'" .)* "'" {
+        return [helpers.createNode(NodeType.Text, { content, location: location() })];
+      }
 
 // Helper rule for header level specification
 HeaderLevel

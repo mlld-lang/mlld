@@ -1,16 +1,17 @@
 {
   "name": "exec-code",
-  "input": "@text a = \"1\"\n@text b = \"2\"\n@run @sum (1, 2)",
+  "input": "@text a = \"1\"\n@text b = \"2\"\n@exec sum (a, b) = @run javascript [console.log(Number(a) + Number(b));]\n@run @sum (1, 2)",
   "expected": "3",
   "directives": [
     "@text a = \"1\"",
     "@text b = \"2\"",
+    "@exec sum (a, b) = @run javascript [console.log(Number(a) + Number(b));]",
     "@run @sum (1, 2)"
   ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "7f895725-d4d7-4877-8562-69683f8fb26f",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "ede9af8b-d247-4c4b-a416-214d145da358",
             "location": {
               "start": {
                 "offset": 0,
@@ -51,17 +52,17 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "19e858e4-f0d0-4ebe-85a5-f66e8b01f894",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 10,
                 "line": 1,
-                "column": 1
+                "column": 11
               },
               "end": {
-                "offset": 0,
+                "offset": 13,
                 "line": 1,
-                "column": 1
+                "column": 14
               }
             },
             "content": "1"
@@ -80,7 +81,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "f33e075d-0097-4f28-b6ce-2b4b7a284de8",
       "location": {
         "start": {
           "offset": 0,
@@ -100,7 +101,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "af178469-3c67-4428-9367-dab6cf0110a9",
             "location": {
               "start": {
                 "offset": 0,
@@ -121,17 +122,17 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "7c84275d-bdd9-4f83-9035-2f10968df599",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 10,
                 "line": 1,
-                "column": 1
+                "column": 11
               },
               "end": {
-                "offset": 0,
+                "offset": 13,
                 "line": 1,
-                "column": 1
+                "column": 14
               }
             },
             "content": "2"
@@ -150,7 +151,142 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "f6d828bd-7c46-4f12-8598-d873d06b3e3c",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 72,
+          "line": 1,
+          "column": 73
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCode",
+      "source": "code",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "e7352dda-9da2-4e1a-a86e-a6bb5ea0ea1e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 72,
+                "line": 1,
+                "column": 73
+              }
+            },
+            "content": "sum"
+          }
+        ],
+        "params": [
+          {
+            "type": "VariableReference",
+            "nodeId": "dd7a0a5d-9bd7-4c24-839e-4ad15c5bbfa9",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "variable",
+            "isVariableReference": true,
+            "identifier": "a"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "1716b0ee-9498-4c6f-921b-3bd71fad6db2",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "variable",
+            "isVariableReference": true,
+            "identifier": "b"
+          }
+        ],
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "cab62088-1e66-4231-bf5f-b88eed50bd8a",
+            "location": {
+              "start": {
+                "offset": 24,
+                "line": 1,
+                "column": 25
+              },
+              "end": {
+                "offset": 72,
+                "line": 1,
+                "column": 73
+              }
+            },
+            "content": "javascript"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "b3d4b4ca-660f-4dcf-955a-7d8a986624b7",
+            "location": {
+              "start": {
+                "offset": 35,
+                "line": 1,
+                "column": 36
+              },
+              "end": {
+                "offset": 72,
+                "line": 1,
+                "column": 73
+              }
+            },
+            "content": "console.log(Number(a) + Number(b));"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "sum",
+        "params": [
+          "a",
+          "b"
+        ],
+        "lang": "javascript",
+        "args": [],
+        "code": "console.log(Number(a) + Number(b));"
+      },
+      "meta": {
+        "isMultiLine": false,
+        "language": "javascript",
+        "isBracketed": true,
+        "parameterCount": 2
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "53aa1c9d-b43f-45fd-9440-565c736cab24",
       "location": {
         "start": {
           "offset": 0,
@@ -170,17 +306,17 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "ca40dc7d-2075-463b-a02e-c957ef6f3a5b",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 6,
                 "line": 1,
-                "column": 1
+                "column": 7
               },
               "end": {
-                "offset": 0,
+                "offset": 16,
                 "line": 1,
-                "column": 1
+                "column": 17
               }
             },
             "content": "sum"
@@ -189,34 +325,34 @@
         "args": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "be41c61f-66f3-4695-9208-576241216421",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 11,
                 "line": 1,
-                "column": 1
+                "column": 12
               },
               "end": {
-                "offset": 0,
+                "offset": 12,
                 "line": 1,
-                "column": 1
+                "column": 13
               }
             },
             "content": "1"
           },
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "ad1d9bbe-997e-4ead-9a0c-225a9ffe895b",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 14,
                 "line": 1,
-                "column": 1
+                "column": 15
               },
               "end": {
-                "offset": 0,
+                "offset": 15,
                 "line": 1,
-                "column": 1
+                "column": 16
               }
             },
             "content": "2"

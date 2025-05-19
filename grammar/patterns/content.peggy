@@ -36,13 +36,13 @@ CONTENT TYPES
 LiteralContent "Literal content without interpolation"
   = '"' content:$(!'"' .)* '"' { 
       // Return only the content within quotes as a Text node (no variable processing)
-      return [helpers.createNode(NodeType.Text, { content }, location())];
+      return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
   / "'" content:$(!"'" .)* "'" { 
-      return [helpers.createNode(NodeType.Text, { content }, location())];
+      return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
   / "`" content:$(!'`' .)* "`" { 
-      return [helpers.createNode(NodeType.Text, { content }, location())];
+      return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
 
 // Content inside single brackets with @var interpolation
@@ -100,11 +100,11 @@ UnquotedCommand "Unquoted command with @var interpolation"
 // Direct code content without interpolation
 DirectCodeContent "Code content without interpolation"
   = '[' content:$(!']' .)* ']' { 
-      return [helpers.createNode(NodeType.Text, { content }, location())];
+      return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
   / content:$([^[\n]+) { 
       // Fallback for unbracketed code - must consume at least one character
-      return [helpers.createNode(NodeType.Text, { content }, location())];
+      return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
 
 // -------------------------------------------------------------

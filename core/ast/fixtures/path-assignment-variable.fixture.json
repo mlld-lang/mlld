@@ -10,7 +10,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "3ddbf45b-48e2-4846-bcee-d43c5beef73f",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +30,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "e0e73d11-a0b9-4945-969a-3b6af532deef",
             "location": {
               "start": {
                 "offset": 0,
@@ -51,17 +51,17 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "83b50a09-81b0-49d9-9709-c262f35fc880",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 17,
                 "line": 1,
-                "column": 1
+                "column": 18
               },
               "end": {
-                "offset": 0,
+                "offset": 23,
                 "line": 1,
-                "column": 1
+                "column": 24
               }
             },
             "content": "john"
@@ -80,7 +80,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "e5972482-2471-4a55-bd50-c97bc1a67a09",
       "location": {
         "start": {
           "offset": 0,
@@ -100,7 +100,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "62278583-a3d1-48e7-8010-c0502f36048c",
             "location": {
               "start": {
                 "offset": 0,
@@ -121,7 +121,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "ca11e833-ee17-4c54-b97b-804c736c6e50",
             "location": {
               "start": {
                 "offset": 0,
@@ -129,16 +129,16 @@
                 "column": 1
               },
               "end": {
-                "offset": 0,
+                "offset": 51,
                 "line": 1,
-                "column": 1
+                "column": 52
               }
             },
             "content": "config/"
           },
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "1bfe7ef8-231c-451b-ae60-9540727e8fdc",
             "location": {
               "start": {
                 "offset": 0,
@@ -157,7 +157,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "3d4727b2-b994-4ddd-bbaa-6eb96e49a3eb",
             "location": {
               "start": {
                 "offset": 0,
@@ -165,9 +165,9 @@
                 "column": 1
               },
               "end": {
-                "offset": 0,
+                "offset": 51,
                 "line": 1,
-                "column": 1
+                "column": 52
               }
             },
             "content": "/settings.json"
@@ -189,7 +189,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "750ef7ca-4a0d-43e3-b1be-63e6511165f8",
       "location": {
         "start": {
           "offset": 0,
@@ -209,24 +209,24 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "da55fb4c-376e-4f9d-864c-e826d8ba195c",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 7,
                 "line": 1,
-                "column": 1
+                "column": 8
               },
               "end": {
-                "offset": 0,
+                "offset": 29,
                 "line": 1,
-                "column": 1
+                "column": 30
               }
             },
             "content": "The user config is at "
           },
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "4d5fd187-174e-402b-ad68-2c70d1a432d4",
             "location": {
               "start": {
                 "offset": 0,

@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "743d1b4b-64c5-47ae-913e-4a96ae317a00",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "b89992bd-72ff-471b-b142-457cc169a9ef",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,17 +50,17 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "68df5695-c9e0-4cf1-903e-e6035595075e",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 17,
                 "line": 1,
-                "column": 1
+                "column": 18
               },
               "end": {
-                "offset": 0,
+                "offset": 24,
                 "line": 1,
-                "column": 1
+                "column": 25
               }
             },
             "content": "value"
@@ -79,7 +79,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "0ff8b7c2-8f54-45b7-952b-545e4f97ec56",
       "location": {
         "start": {
           "offset": 0,
@@ -99,17 +99,17 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "d3f971fb-3bda-4a35-92a4-a12f00ebc96d",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 5,
                 "line": 1,
-                "column": 1
+                "column": 6
               },
               "end": {
-                "offset": 0,
+                "offset": 7,
                 "line": 1,
-                "column": 1
+                "column": 8
               }
             },
             "content": "[["
@@ -130,24 +130,24 @@
     },
     {
       "type": "Text",
-      "nodeId": "placeholder-id",
+      "nodeId": "612b7b2f-f668-4b48-9c6e-c2a206c2cead",
       "location": {
         "start": {
-          "offset": 0,
-          "line": 1,
+          "offset": 8,
+          "line": 2,
           "column": 1
         },
         "end": {
-          "offset": 0,
-          "line": 1,
-          "column": 1
+          "offset": 21,
+          "line": 2,
+          "column": 14
         }
       },
       "content": "Content with "
     },
     {
       "type": "VariableReference",
-      "nodeId": "placeholder-id",
+      "nodeId": "d6e26b82-4756-4eaf-a2c1-e87fe4eee445",
       "location": {
         "start": {
           "offset": 0,

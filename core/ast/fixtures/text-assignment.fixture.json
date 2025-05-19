@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "6dce474d-4a13-4bba-8381-2871af7785f9",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "2cf22a73-fee8-439d-852a-28755ce70f70",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,17 +50,17 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "009f6790-993d-4fda-9116-58dea2d63cdf",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 17,
                 "line": 1,
-                "column": 1
+                "column": 18
               },
               "end": {
-                "offset": 0,
+                "offset": 32,
                 "line": 1,
-                "column": 1
+                "column": 33
               }
             },
             "content": "Hello, world!"
@@ -79,7 +79,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "9bffeff5-bea5-4691-9bfc-1a33898d9875",
       "location": {
         "start": {
           "offset": 0,
@@ -99,7 +99,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "13fc8987-6775-454c-ba8a-0ebcdd0b4cd9",
             "location": {
               "start": {
                 "offset": 0,

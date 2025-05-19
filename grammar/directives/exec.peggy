@@ -25,7 +25,7 @@ AtExec
       helpers.debug('AtExec matched code definition using RunLanguageCodeCore abstraction', { id, params, runCode });
       
       // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id }, location());
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
       
       // Process parameters
       const processedParams = params || [];
@@ -55,7 +55,7 @@ AtExec
       
       // Add metadata if present
       if (meta) {
-        values.metadata = [helpers.createNode(NodeType.Text, { content: meta }, location())];
+          values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
         raw.metadata = meta;
         metaObj.metadata = { type: meta };
       }
@@ -74,7 +74,7 @@ AtExec
       helpers.debug('AtExec matched command definition', { id, params, command });
       
       // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id }, location());
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
       
       // Process parameters
       const processedParams = params || [];
@@ -104,7 +104,7 @@ AtExec
       
       // Add metadata if present
       if (meta) {
-        values.metadata = [helpers.createNode(NodeType.Text, { content: meta }, location())];
+        values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
         raw.metadata = meta;
         metaObj.metadata = { type: meta };
       }
@@ -123,7 +123,7 @@ AtExec
       helpers.debug('AtExec matched command reference', { id, params, commandRef });
       
       // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id }, location());
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
       
       // Process parameters
       const processedParams = params || [];
@@ -156,7 +156,7 @@ AtExec
       
       // Add metadata if present
       if (meta) {
-        values.metadata = [helpers.createNode(NodeType.Text, { content: meta }, location())];
+        values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
         raw.metadata = meta;
         metaObj.metadata = { type: meta };
       }
@@ -182,7 +182,7 @@ CommandReference
   = name:BaseIdentifier _ args:CommandArgs? {
       return {
         name,
-        identifier: [helpers.createNode(NodeType.Text, { content: name }, location())],
+        identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
         args: args || [],
         isCommandReference: true
       };

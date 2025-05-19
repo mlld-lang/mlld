@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "204cd4d9-73d5-4f7f-aef8-8b9a622c49ab",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "4f37071a-ef56-41ce-811b-e990683deea5",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +50,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "c00fc793-c819-4131-a8cc-7e4c56df9254",
             "location": {
               "start": {
                 "offset": 0,
@@ -58,9 +58,9 @@
                 "column": 1
               },
               "end": {
-                "offset": 0,
+                "offset": 44,
                 "line": 1,
-                "column": 1
+                "column": 45
               }
             },
             "content": "/absolute/path/to/file.ext"
@@ -82,7 +82,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "89e1d9df-6217-4ad4-a380-8b208f4da768",
       "location": {
         "start": {
           "offset": 0,
@@ -102,24 +102,24 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "3fb5c7b3-e984-4310-ad75-41f9d93b45b6",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 7,
                 "line": 1,
-                "column": 1
+                "column": 8
               },
               "end": {
-                "offset": 0,
+                "offset": 28,
                 "line": 1,
-                "column": 1
+                "column": 29
               }
             },
             "content": "The absolute path is "
           },
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "abef3a4e-9c0a-41c9-86a3-bcc84fa09e4e",
             "location": {
               "start": {
                 "offset": 0,

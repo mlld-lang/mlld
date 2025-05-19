@@ -30,19 +30,19 @@ SpecialPathChar "Special Path Character"
 // Path separator as a distinct node
 PathSeparatorToken "Path Separator"
   = "/" { 
-      return helpers.createNode(NodeType.PathSeparator, { value: "/" }, location()); 
+      return helpers.createNode(NodeType.PathSeparator, { value: "/", location: location() });
     }
 
 // Dot separator for field access
 DotSeparatorToken "Dot Separator"
   = "." { 
-      return helpers.createNode(NodeType.DotSeparator, { value: "." }, location()); 
+      return helpers.createNode(NodeType.DotSeparator, { value: ".", location: location() });
     }
 
 // Section marker for content sections
 SectionMarkerToken "Section Marker"
   = [ \t]* "#" { 
-      return helpers.createNode(NodeType.SectionMarker, { value: "#" }, location()); 
+      return helpers.createNode(NodeType.SectionMarker, { value: "#", location: location() });
     }
 
 // -------------------------------------------------------------

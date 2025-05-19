@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "44f3d250-6007-43af-9b56-4d34efbef7bb",
       "location": {
         "start": {
           "offset": 0,
@@ -28,17 +28,17 @@
         "sectionTitle": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "20fb46c3-1d90-44c8-b824-ddab7f3b8e01",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 5,
                 "line": 1,
-                "column": 1
+                "column": 6
               },
               "end": {
-                "offset": 0,
+                "offset": 23,
                 "line": 1,
-                "column": 1
+                "column": 24
               }
             },
             "content": "# Original Title"
@@ -47,17 +47,17 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "f4a63f68-eb54-4338-8d23-8b493f0a0abe",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 30,
                 "line": 1,
-                "column": 1
+                "column": 31
               },
               "end": {
-                "offset": 0,
+                "offset": 37,
                 "line": 1,
-                "column": 1
+                "column": 38
               }
             },
             "content": "file.md"
@@ -66,17 +66,17 @@
         "newTitle": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "df7d2c94-dc6d-4d66-a382-4dd720125372",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 42,
                 "line": 1,
-                "column": 1
+                "column": 43
               },
               "end": {
-                "offset": 0,
+                "offset": 55,
                 "line": 1,
-                "column": 1
+                "column": 56
               }
             },
             "content": "# New Title"

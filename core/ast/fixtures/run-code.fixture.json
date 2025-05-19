@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "fe2ae9a2-8194-4c95-bc47-04c62cb52c8e",
       "location": {
         "start": {
           "offset": 5,
@@ -28,17 +28,17 @@
         "lang": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "5a528bd4-6d95-4925-b359-1bfc2c37b728",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 5,
                 "line": 1,
-                "column": 1
+                "column": 6
               },
               "end": {
-                "offset": 0,
+                "offset": 48,
                 "line": 1,
-                "column": 1
+                "column": 49
               }
             },
             "content": "javascript"
@@ -48,17 +48,17 @@
         "code": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "4098541b-6cc4-478e-b673-c745c1d04f28",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 16,
                 "line": 1,
-                "column": 1
+                "column": 17
               },
               "end": {
-                "offset": 0,
+                "offset": 48,
                 "line": 1,
-                "column": 1
+                "column": 49
               }
             },
             "content": "console.log(\"Hello from code\")"

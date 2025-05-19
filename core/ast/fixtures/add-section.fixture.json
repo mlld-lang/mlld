@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "45bc8bae-7080-4c0d-82e8-773a510429d5",
       "location": {
         "start": {
           "offset": 0,
@@ -28,17 +28,17 @@
         "sectionTitle": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "b4ced95a-640a-4fa0-a117-a5682fdc0342",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 5,
                 "line": 1,
-                "column": 1
+                "column": 6
               },
               "end": {
-                "offset": 0,
+                "offset": 22,
                 "line": 1,
-                "column": 1
+                "column": 23
               }
             },
             "content": "# Section Title"
@@ -47,17 +47,17 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "65e8cd3d-8674-4c41-b0d6-5e34299c0bcb",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 29,
                 "line": 1,
-                "column": 1
+                "column": 30
               },
               "end": {
-                "offset": 0,
+                "offset": 36,
                 "line": 1,
-                "column": 1
+                "column": 37
               }
             },
             "content": "file.md"

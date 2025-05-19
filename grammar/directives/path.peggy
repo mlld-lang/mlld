@@ -47,7 +47,7 @@ AtPath
         if (match.index > lastIndex) {
           const textContent = processedContent.substring(lastIndex, match.index);
           if (textContent) {
-            pathParts.push(helpers.createNode(NodeType.Text, { content: textContent }, location()));
+            pathParts.push(helpers.createNode(NodeType.Text, { content: textContent, location: location() }));
           }
         }
         
@@ -63,7 +63,7 @@ AtPath
       if (lastIndex < processedContent.length) {
         const textContent = processedContent.substring(lastIndex);
         if (textContent) {
-          pathParts.push(helpers.createNode(NodeType.Text, { content: textContent }, location()));
+          pathParts.push(helpers.createNode(NodeType.Text, { content: textContent, location: location() }));
         }
       }
       

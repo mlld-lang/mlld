@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "e9b96f4e-29b6-467d-ab99-024e583d5ba1",
       "location": {
         "start": {
           "offset": 5,
@@ -28,17 +28,17 @@
         "lang": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "2d0df55f-f49c-4746-a8b6-dd333dfc5ab2",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 5,
                 "line": 1,
-                "column": 1
+                "column": 6
               },
               "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
+                "offset": 100,
+                "line": 6,
+                "column": 2
               }
             },
             "content": "javascript"
@@ -48,17 +48,17 @@
         "code": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "9f942517-c334-4a72-966c-08398bd28808",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 16,
                 "line": 1,
-                "column": 1
+                "column": 17
               },
               "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
+                "offset": 100,
+                "line": 6,
+                "column": 2
               }
             },
             "content": "\nfunction greet() {\n  return \"Hello from multiline code\";\n}\nconsole.log(greet());\n"

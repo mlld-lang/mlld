@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "dedb8e3c-6e56-465b-b0c2-6c0397080e33",
       "location": {
         "start": {
           "offset": 0,
@@ -28,17 +28,17 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "115d448f-401a-4d28-94ae-d0ad0007f5b8",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 6,
                 "line": 1,
-                "column": 1
+                "column": 7
               },
               "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
+                "offset": 44,
+                "line": 2,
+                "column": 13
               }
             },
             "content": "bash -c \"echo Line 1 && \\\necho Line 2\""

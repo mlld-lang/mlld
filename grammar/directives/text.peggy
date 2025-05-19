@@ -21,10 +21,10 @@ AtText
       return helpers.createStructuredDirective(
         'text',
         subtype,
-        {
-          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          content: [helpers.createNode(NodeType.Text, { content: pathValue })]
-        },
+          {
+            identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+            content: [helpers.createNode(NodeType.Text, { content: pathValue, location: location() })]
+          },
         {
           identifier: id,
           content: `@add [${pathValue}]`
@@ -171,10 +171,10 @@ AtText
       return helpers.createStructuredDirective(
         'text',
         subtype,
-        {
-          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          content: [helpers.createNode(NodeType.Text, { content: rawContent })]
-        },
+          {
+            identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+            content: [helpers.createNode(NodeType.Text, { content: rawContent, location: location() })]
+          },
         {
           identifier: id,
           content: rawContent

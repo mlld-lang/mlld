@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import { OutputService } from '@services/pipeline/OutputService/OutputService';
 import { MeldOutputError } from '@core/errors/MeldOutputError';
-import type { MeldNode } from '@core/syntax/types/index';
+import type { MeldNode, TextNode, CodeFenceNode } from '@core/ast/types';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
 import type { OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService';
@@ -30,7 +30,7 @@ import { createResolutionServiceMock, createStateServiceMock } from '@tests/util
 import { VariableResolutionError } from '@core/errors/VariableResolutionError';
 import { VariableType } from '@core/types/variables';
 import { createLLMXML } from 'llmxml';
-import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference';
+// VariableReference is now part of the MeldNode union type imported above
 import { outputLogger as logger } from '@core/utils/logger';
 import { container, type DependencyContainer } from 'tsyringe';
 import type { ILogger } from '@core/utils/logger';

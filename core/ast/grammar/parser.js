@@ -2,9 +2,9 @@
 //
 // https://peggyjs.org/
 
-import NodeType from "./deps/node-type.ts";
-import DirectiveKind from "./deps/directive-kind.ts";
-import helpers from "./deps/helpers.ts";
+import NodeType from "./deps/node-type.js";
+import DirectiveKind from "./deps/directive-kind.js";
+import helpers from "./deps/helpers.js";
 
 
 function peg$subclass(child, parent) {

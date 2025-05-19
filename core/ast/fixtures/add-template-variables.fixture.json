@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "64b4bef7-55d3-4f05-a392-964b0a6f6d5e",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "cde6264c-e2d9-4523-b179-9c501bc29339",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,17 +50,17 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "3d92a144-0814-402c-8461-e0a8a364f629",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 17,
                 "line": 1,
-                "column": 1
+                "column": 18
               },
               "end": {
-                "offset": 0,
+                "offset": 24,
                 "line": 1,
-                "column": 1
+                "column": 25
               }
             },
             "content": "value"
@@ -79,7 +79,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "8326406f-b958-4e5a-874f-054c1bc2163c",
       "location": {
         "start": {
           "offset": 0,
@@ -99,24 +99,24 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "9bf50c20-450a-4bb6-9cfe-5440cb6a7d5c",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 7,
                 "line": 1,
-                "column": 1
+                "column": 8
               },
               "end": {
-                "offset": 0,
+                "offset": 20,
                 "line": 1,
-                "column": 1
+                "column": 21
               }
             },
             "content": "Content with "
           },
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "6dfb93b8-3a62-40d0-94eb-37c6ce2e321b",
             "location": {
               "start": {
                 "offset": 0,

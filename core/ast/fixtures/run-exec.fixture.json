@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "66059624-c18c-4e60-ab60-769acf413993",
       "location": {
         "start": {
           "offset": 0,
@@ -28,17 +28,17 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "867e2927-1e72-42bc-b3ba-17bb37ca5180",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 6,
                 "line": 1,
-                "column": 1
+                "column": 7
               },
               "end": {
-                "offset": 0,
+                "offset": 18,
                 "line": 1,
-                "column": 1
+                "column": 19
               }
             },
             "content": "greetCommand"

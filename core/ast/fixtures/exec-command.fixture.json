@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "placeholder-id",
+      "nodeId": "a69ecdd2-2d2c-47a6-a675-a1fc044e2ffb",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "3b6f129b-c301-4494-a55f-423ac4ce60b3",
             "location": {
               "start": {
                 "offset": 0,
@@ -36,9 +36,9 @@
                 "column": 1
               },
               "end": {
-                "offset": 0,
+                "offset": 48,
                 "line": 1,
-                "column": 1
+                "column": 49
               }
             },
             "content": "greet"
@@ -47,7 +47,7 @@
         "params": [
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "e03c51f8-f487-4335-85cb-187f3f82121b",
             "location": {
               "start": {
                 "offset": 0,
@@ -68,24 +68,24 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "c961aa59-048d-4677-87c2-0f5f889750e4",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 27,
                 "line": 1,
-                "column": 1
+                "column": 28
               },
               "end": {
-                "offset": 0,
+                "offset": 40,
                 "line": 1,
-                "column": 1
+                "column": 41
               }
             },
             "content": "echo \"Hello, "
           },
           {
             "type": "VariableReference",
-            "nodeId": "placeholder-id",
+            "nodeId": "90a761fa-4050-4b98-b7dc-a5e4c9ae8cf0",
             "location": {
               "start": {
                 "offset": 0,
@@ -104,17 +104,17 @@
           },
           {
             "type": "Text",
-            "nodeId": "placeholder-id",
+            "nodeId": "bfea6ed6-ca2d-4251-8f26-9605dc139c2f",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 45,
                 "line": 1,
-                "column": 1
+                "column": 46
               },
               "end": {
-                "offset": 0,
+                "offset": 47,
                 "line": 1,
-                "column": 1
+                "column": 48
               }
             },
             "content": "!\""
