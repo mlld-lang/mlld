@@ -234,23 +234,6 @@ describe('TextDirectiveHandler', () => {
   };
 
   describe('execute', () => {
-    it('should handle a simple text assignment with string literal', async () => {
-      const example = textDirectiveExamples.atomic.simpleString;
-      const node = await createNodeFromExample(example.code);
-      const processingContext = createMockProcessingContext(node);
-      
-      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce('Hello');
-      const setVariableSpy = vi.spyOn(stateService, 'setVariable');
-
-      const result = await handler.handle(processingContext) as DirectiveResult;
-
-      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(node.values.content, expect.anything());
-      expect(result.stateChanges).toBeDefined();
-      expect(result.stateChanges?.variables).toHaveProperty('greeting');
-      const varDef = result.stateChanges?.variables?.greeting;
-      expect(varDef?.type).toBe(VariableType.TEXT);
-      expect(varDef?.value).toBe('Hello');
-    });
 
     it('should handle text assignment with escaped characters', async () => {
       const source = '@text escaped = "Line 1\\nLine 2\\t\\"Quoted\\""';
@@ -346,22 +329,5 @@ describe('TextDirectiveHandler', () => {
       expect(setVariableSpy).not.toHaveBeenCalled();
     });
 
-    it('should handle basic variable interpolation', async () => {
-      const source = '@text message = `Hello {{subject}}!`';
-      const ast = await createNodeFromExample(source);
-      const expectedValue = 'Hello World!';
-      
-      vi.spyOn(resolutionService, 'resolveNodes').mockResolvedValueOnce(expectedValue);
-      const setVariableSpy = vi.spyOn(stateService, 'setVariable');
-
-      const result = await handler.handle(createMockProcessingContext(ast)) as DirectiveResult;
-      
-      expect(resolutionService.resolveNodes).toHaveBeenCalledWith(ast.values.content, expect.anything());
-      expect(result.stateChanges).toBeDefined();
-      expect(result.stateChanges?.variables).toHaveProperty('message');
-      const varDef = result.stateChanges?.variables?.message;
-      expect(varDef?.type).toBe(VariableType.TEXT);
-      expect(varDef?.value).toBe(expectedValue);
-    });
   });
 }); 

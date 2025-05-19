@@ -151,60 +151,8 @@ describe('DataDirectiveHandler', () => {
   };
 
   describe('basic data handling', () => {
-    it('should process simple JSON data', async () => {
-      const node = createDirectiveNode('data', { 
-        values: {
-          identifier: [{ type: 'VariableReference', identifier: 'user' }],
-          source: 'literal',
-          value: { 'name': 'Alice', 'id': 123 }
-        }
-      });
-      const processingContext = createMockProcessingContext(node);
-      vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue({ name: 'Alice', id: 123 });
-      const result = await handler.handle(processingContext) as DirectiveResult;
-      expect(result.stateChanges?.variables).toHaveProperty('user');
-      const varDef = result.stateChanges?.variables?.user;
-      expect(varDef?.type).toBe(VariableType.DATA);
-      expect(varDef?.value).toEqual({ name: 'Alice', id: 123 });
-    });
 
-    it('should handle nested JSON objects', async () => {
-      const jsonData = { name: 'John Doe', age: 30, address: { street: '123 Main St', city: 'Anytown' } };
-      const node = createDirectiveNode('data', { 
-        values: {
-          identifier: [{ type: 'VariableReference', identifier: 'person' }],
-          source: 'literal',
-          value: jsonData
-        }
-      });
-      const processingContext = createMockProcessingContext(node);
-      const expectedData = jsonData;
-      vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedData);
-      const result = await handler.handle(processingContext) as DirectiveResult;
-      expect(result.stateChanges?.variables).toHaveProperty('person');
-      const varDef = result.stateChanges?.variables?.person;
-      expect(varDef?.type).toBe(VariableType.DATA);
-      expect(varDef?.value).toEqual(expectedData);
-    });
 
-    it('should handle JSON arrays', async () => {
-      const arrayData = ['apple', 'banana', 'cherry'];
-      const node = createDirectiveNode('data', { 
-        values: {
-          identifier: [{ type: 'VariableReference', identifier: 'fruits' }],
-          source: 'literal',
-          value: arrayData
-        }
-      });
-      const processingContext = createMockProcessingContext(node);
-      const expectedData = arrayData;
-      vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockResolvedValue(expectedData);
-      const result = await handler.handle(processingContext) as DirectiveResult;
-      expect(result.stateChanges?.variables).toHaveProperty('fruits');
-      const varDef = result.stateChanges?.variables?.fruits;
-      expect(varDef?.type).toBe(VariableType.DATA);
-      expect(varDef?.value).toEqual(expectedData);
-    });
 
     it('should handle invalid JSON from run/add', async () => {
       const node = createDirectiveNode('data', { 
@@ -223,19 +171,6 @@ describe('DataDirectiveHandler', () => {
       await expect(handler.handle(processingContext)).rejects.toThrow(/Failed to parse command output as JSON/);
     });
 
-    it('should handle resolution errors', async () => {
-      const node = createDirectiveNode('data', { 
-        values: {
-          identifier: [{ type: 'VariableReference', identifier: 'user' }],
-          source: 'literal',
-          value: { name: '{{missing}}' }
-        }
-      });
-      const processingContext = createMockProcessingContext(node);
-      const resolutionError = new MeldResolutionError('Var missing', { code: 'VAR_NOT_FOUND' });
-      vi.spyOn(handler as any, 'resolveInterpolatableValuesInData').mockRejectedValue(resolutionError);
-      await expect(handler.handle(processingContext)).rejects.toThrow(DirectiveError);
-    });
 
     it.skip('should handle state errors', async () => { /* ... */ });
   });

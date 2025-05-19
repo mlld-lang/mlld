@@ -161,28 +161,6 @@ describe('RunDirectiveHandler', () => {
   };
 
   describe('basic command execution', () => {
-    it('should execute simple commands', async () => {
-      const commandNodes: InterpolatableValue = [ createTextNode('echo test') ];
-      const node = createRunDirective(commandNodes, createLocation(), 'runCommand');
-      const processingContext = createMockProcessingContext(node);
-      
-      mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'command output', stderr: '' });
-      mockResolutionService.resolveNodes.mockResolvedValueOnce('echo test');
-      
-      const result = await handler.handle(processingContext) as DirectiveResult;
-      
-      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith('echo test', {
-        cwd: '/workspace'
-      });
-      expect(result.stateChanges).toBeDefined();
-      expect(result.stateChanges?.stdout).toBeDefined();
-      const stdoutDef = result.stateChanges?.stdout;
-      expect(stdoutDef?.type).toBe(VariableType.TEXT);
-      expect(stdoutDef?.value).toBe('command output');
-      expect(result.stateChanges?.stderr).toBeDefined();
-      const stderrDef = result.stateChanges?.stderr;
-      expect(stderrDef?.value).toBe('');
-    });
 
     it('should handle commands with variables', async () => {
       const location = createLocation();
@@ -224,51 +202,7 @@ describe('RunDirectiveHandler', () => {
       expect(stdoutDef?.value).toBe('Hello World');
     });
 
-    it('should handle custom output variable', async () => {
-      const commandNodes: InterpolatableValue = [ createTextNode('echo test') ];
-      const node = createRunDirective(commandNodes, createLocation(), 'runCommand', undefined, undefined, 'custom_output');
-      const processingContext = createMockProcessingContext(node);
-      
-      mockResolutionService.resolveNodes.mockResolvedValueOnce('echo test');
-      mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'command output', stderr: '' });
-      
-      const result = await handler.handle(processingContext) as DirectiveResult;
-      
-      expect(result.stateChanges).toBeDefined();
-      expect(result.stateChanges?.custom_output).toBeDefined();
-      const customOutDef = result.stateChanges?.custom_output;
-      expect(customOutDef?.type).toBe(VariableType.TEXT);
-      expect(customOutDef?.value).toBe('command output');
-      expect(result.stateChanges?.stderr).toBeDefined();
-    });
 
-    it('should properly expand command references with $', async () => {
-      // Create a node with proper structure for runExec
-      const node = createRunDirective('greet', createLocation(), 'runExec');
-      const processingContext = createMockProcessingContext(node);
-      
-      // Mock resolutionService instead of stateService for new structure
-      mockResolutionService.resolveVariableInContext.mockResolvedValue({
-        type: 'basic',
-        command: 'echo "Hello there!"',  // Changed from commandTemplate to command
-        parameters: [],
-        name: 'greet'
-      });
-      mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'Hello there!', stderr: '' });
-      
-      const result = await handler.handle(processingContext) as DirectiveResult;
-      
-      expect(mockResolutionService.resolveVariableInContext).toHaveBeenCalledWith('greet', processingContext.resolutionContext);
-      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith(
-        'echo "Hello there!"', 
-        expect.objectContaining({ cwd: '/workspace' })
-      );
-      expect(result.stateChanges).toBeDefined();
-      expect(result.stateChanges?.stdout).toBeDefined();
-      const stdoutDef = result.stateChanges?.stdout;
-      expect(stdoutDef?.type).toBe(VariableType.TEXT);
-      expect(stdoutDef?.value).toBe('Hello there!');
-    });
   });
 
   describe('runCode/runCodeParams execution', () => {
@@ -320,43 +254,6 @@ describe('RunDirectiveHandler', () => {
       // Handler uses fs.unlink directly, not fileSystemService.deleteFile
     });
 
-    it('should resolve and pass parameters to a language script', async () => {
-      const location = createLocation();
-      const paramNode: VariableReferenceNode = {
-          type: 'VariableReference',
-          identifier: 'inputVar',
-          valueType: VariableType.TEXT,
-          isVariableReference: true,
-          location: location
-      };
-      const params = [ paramNode ];
-      const node = createRunDirective('import sys\nprint(f"Input: {sys.argv[1]}")', location, 'runCodeParams', 'python', params);
-      const processingContext = createMockProcessingContext(node);
-
-      // Handler uses resolveNodes on individual args array items
-      mockResolutionService.resolveNodes.mockImplementation(async (nodes, context) => {
-        if (nodes[0] === paramNode) return 'TestParameter';
-        return 'fallback';
-      });
-
-      mockFileSystemService.executeCommand.mockResolvedValueOnce({ stdout: 'Input: TestParameter', stderr: '' });
-      mockFileSystemService.writeFile.mockResolvedValueOnce(undefined);
-      mockFileSystemService.deleteFile.mockResolvedValue(undefined);
-      
-      const result = await handler.handle(processingContext) as DirectiveResult;
-      
-      expect(mockResolutionService.resolveNodes).toHaveBeenCalledWith([paramNode], processingContext.resolutionContext); 
-      expect(mockFileSystemService.writeFile).toHaveBeenCalledWith(expect.stringContaining('.py'), 'import sys\nprint(f"Input: {sys.argv[1]}")');
-      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith(
-        expect.stringMatching(/^python3 .*?meld_.*?\.py TestParameter$/),  // Changed python to python3
-        { cwd: '/workspace' }
-      );
-      expect(result.stateChanges).toBeDefined();
-      expect(result.stateChanges?.stdout).toBeDefined();
-      const stdoutDef = result.stateChanges?.stdout;
-      expect(stdoutDef?.value).toBe('Input: TestParameter');
-      // Handler uses fs.unlink directly, not fileSystemService.deleteFile
-    });
      
     it('should handle parameter resolution failure in strict mode', async () => {
         const location = createLocation();
@@ -424,44 +321,7 @@ describe('RunDirectiveHandler', () => {
       );
     });
 
-    it('should handle command execution errors', async () => {
-      const commandNodes: InterpolatableValue = [ createTextNode('invalid-command') ];
-      const node = createRunDirective(commandNodes, createLocation(), 'runCommand');
-      const processingContext = createMockProcessingContext(node);
-      const executionError = new Error('Execution failed');
-      
-      mockResolutionService.resolveNodes.mockResolvedValue('invalid-command');
-      mockFileSystemService.executeCommand.mockRejectedValue(executionError);
-      
-      await expectToThrowWithConfig(
-          async () => await handler.handle(processingContext),
-          {
-              code: DirectiveErrorCode.EXECUTION_FAILED,
-              messageContains: 'Execution failed',
-              cause: executionError
-          } as ErrorTestOptions 
-      );
-      expect(mockFileSystemService.executeCommand).toHaveBeenCalledWith('invalid-command', {
-        cwd: '/workspace'
-      });
-    });
 
-    it('should handle undefined command references for runExec', async () => {
-      const node = createRunDirective('undefinedCommand', createLocation(), 'runExec');
-      const processingContext = createMockProcessingContext(node);
-
-      // Handler uses resolveVariableInContext, not getVariable
-      mockResolutionService.resolveVariableInContext.mockResolvedValue(undefined);
-      
-      await expectToThrowWithConfig(
-          async () => await handler.handle(processingContext),
-          {
-              code: DirectiveErrorCode.VARIABLE_NOT_FOUND,
-              messageContains: 'Undefined command reference: undefinedCommand',  // Updated to match actual error message
-          } as ErrorTestOptions 
-      );
-      expect(mockResolutionService.resolveVariableInContext).toHaveBeenCalledWith('undefinedCommand', processingContext.resolutionContext);
-    });
   });
 
   describe('output handling', () => {

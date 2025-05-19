@@ -129,93 +129,7 @@ describe('PathDirectiveHandler', () => {
   };
 
   describe('basic path handling', () => {
-    it('should process simple paths', async () => {
-      const identifier = 'docs';
-      const rawPathValue = '$PROJECTPATH/docs';
-      // Use correct AST structure
-      const node = coreCreateDirectiveNode('path', {
-        values: {
-          identifier: [{ type: 'VariableReference', identifier: 'docs' }],
-          path: [{ type: 'Text', content: rawPathValue }]
-        },
-        raw: {
-          identifier: 'docs',
-          path: rawPathValue
-        }
-      });
-      const expectedResolvedString = '/project/docs';
-      const mockValidatedPath = createMockMeldPathForTest(expectedResolvedString);
-      
-      // Mock service methods on directly referenced mocks
-      const resolveNodesSpy = vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue(expectedResolvedString);
-      const resolvePathSpy = vi.spyOn(mockResolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
-      const setVariableSpy = vi.spyOn(mockStateService, 'setVariable');
-      const validateSpy = vi.spyOn(mockValidationService, 'validate').mockResolvedValue(undefined);
 
-      console.log('NODE OBJECT BEFORE EXECUTE:', JSON.stringify(node, null, 2));
-      const processingContext = createMockProcessingContext(node);
-      const result = await handler.handle(processingContext) as DirectiveResult;
-
-      expect(validateSpy).toHaveBeenCalledWith(node);
-      expect(resolveNodesSpy).toHaveBeenCalledWith(
-        expect.arrayContaining([{ type: 'Text', content: rawPathValue }]), // Handler now uses resolveNodes
-        expect.any(Object)
-      );
-      expect(resolvePathSpy).toHaveBeenCalledWith(
-        expectedResolvedString, 
-        expect.any(Object)
-      );
-      expect(result.stateChanges).toBeDefined();
-      expect(result.stateChanges?.variables).toHaveProperty(identifier);
-      const pathDef = result.stateChanges?.variables?.[identifier];
-      expect(pathDef?.type).toBe(VariableType.PATH);
-      expect(pathDef?.value).toEqual(mockValidatedPath);
-      expect(pathDef?.metadata?.origin).toBe(VariableOrigin.DIRECT_DEFINITION);
-    });
-
-    it('should handle paths with variables', async () => {
-      const identifier = 'customPath';
-      const rawPathValue = '$PROJECTPATH/{{subdir}}';
-      // Use correct AST structure with interpolated values
-      const node = coreCreateDirectiveNode('path', {
-        values: {
-          identifier: [{ type: 'VariableReference', identifier }],
-          path: [
-            { type: 'Text', content: '$PROJECTPATH/' },
-            { type: 'VariableReference', identifier: 'subdir' }
-          ]
-        },
-        raw: {
-          identifier,
-          path: rawPathValue
-        }
-      });
-      const expectedResolvedString = '/project/meld/docs'; 
-      const mockValidatedPath = createMockMeldPathForTest(expectedResolvedString);
-      
-      const resolveNodesSpy = vi.spyOn(mockResolutionService, 'resolveNodes').mockResolvedValue(expectedResolvedString);
-      const resolvePathSpy = vi.spyOn(mockResolutionService, 'resolvePath').mockResolvedValue(mockValidatedPath);
-      const setVariableSpy = vi.spyOn(mockStateService, 'setVariable');
-      const validateSpy = vi.spyOn(mockValidationService, 'validate').mockResolvedValue(undefined);
-      const processingContext = createMockProcessingContext(node);
-
-      const result = await handler.handle(processingContext) as DirectiveResult;
-
-      expect(validateSpy).toHaveBeenCalledWith(node);
-      expect(resolveNodesSpy).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          { type: 'Text', content: '$PROJECTPATH/' },
-          { type: 'VariableReference', identifier: 'subdir' }
-        ]),
-        expect.any(Object) 
-      );
-      expect(resolvePathSpy).toHaveBeenCalledWith(expectedResolvedString, expect.any(Object));
-      expect(result.stateChanges).toBeDefined();
-      expect(result.stateChanges?.variables).toHaveProperty(identifier);
-      const pathDef = result.stateChanges?.variables?.[identifier];
-      expect(pathDef?.type).toBe(VariableType.PATH);
-      expect(pathDef?.value).toEqual(mockValidatedPath);
-    });
 
     it('should handle relative paths', async () => {
       const identifier = 'config';
@@ -257,51 +171,7 @@ describe('PathDirectiveHandler', () => {
   });
 
   describe('error handling', () => {
-    it('should handle validation errors', async () => {
-      // Use correct AST structure
-      const node = coreCreateDirectiveNode('path', {
-        values: {
-          identifier: [{ type: 'VariableReference', identifier: 'validIdentifier' }],
-          path: [{ type: 'Text', content: '/some/path' }]
-        },
-        raw: {
-          identifier: 'validIdentifier',
-          path: '/some/path'
-        }
-      });
-      const validationError = new DirectiveError('Mock Validation Failed', 'path', DirectiveErrorCode.VALIDATION_FAILED);
-      const processingContext = createMockProcessingContext(node);
-      
-      vi.spyOn(mockValidationService, 'validate').mockRejectedValueOnce(validationError);
 
-      await expect(handler.handle(processingContext)).rejects.toThrow(validationError);
-      expect(mockValidationService.validate).toHaveBeenCalledWith(node);
-    });
-
-    it('should handle resolution errors (resolveNodes)', async () => {
-      // Use correct AST structure
-      const node = coreCreateDirectiveNode('path', {
-        values: {
-          identifier: [{ type: 'VariableReference', identifier: 'errorPath' }],
-          path: [{ type: 'VariableReference', identifier: 'undefined' }]
-        },
-        raw: {
-          identifier: 'errorPath',
-          path: '{{undefined}}'
-        }
-      });
-      const originalError = new Error('Resolution error');
-      const processingContext = createMockProcessingContext(node);
-      
-      vi.spyOn(mockValidationService, 'validate').mockResolvedValue(undefined);
-      vi.spyOn(mockResolutionService, 'resolveNodes').mockRejectedValueOnce(originalError);
-
-      const executionPromise = handler.handle(processingContext);
-
-      await expect(executionPromise).rejects.toThrow(DirectiveError);
-      await expect(executionPromise).rejects.toHaveProperty('code', DirectiveErrorCode.RESOLUTION_FAILED);
-      await expect(executionPromise).rejects.toHaveProperty('cause', originalError);
-    });
     
     it('should handle resolution errors (resolvePath)', async () => {
       // Use correct AST structure

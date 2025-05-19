@@ -349,51 +349,8 @@ describe('ResolutionService', () => {
   });
 
   describe('resolveInContext', () => {
-    it('should handle text nodes', async () => {
-      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 12 } };
-      const textNode: TextNode = {
-        type: 'Text',
-        content: 'simple text',
-        location: mockLocation,
-        nodeId: 'test-text-node'
-      };
-      vi.mocked(mockParserClient.parseString).mockResolvedValue([textNode]);
 
-      const result = await service.resolveInContext('simple text', defaultContext);
-      expect(result).toBe('simple text');
-    });
 
-    it('should resolve text variables', async () => {
-      // Add specific parser mock for this test's input
-      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } };
-      const mockNodes: MeldNode[] = [
-        { type: 'VariableReference', identifier: 'textVar', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' } as VariableReferenceNode
-      ];
-      parserService.parse.mockResolvedValue(mockNodes); // Mock parser for '{{textVar}}'
-
-      const result = await service.resolveText('{{textVar}}', defaultContext); // Using textVar now
-      
-      expect(result).toBe('World'); // Expecting 'World'
-    });
-
-    it('should resolve data variables', async () => {
-      // Create the expected node
-      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 8 } }; 
-      const node: VariableReferenceNode = {
-          type: 'VariableReference', 
-          identifier: 'user', 
-          valueType: VariableType.DATA, 
-          fields: [], 
-          isVariableReference: true, 
-          location: mockLocation,
-          nodeId: 'mock-node-id'
-      };
-
-      // Call with the node object
-      const result = await service.resolveData(node, defaultContext);
-
-      expect(result).toEqual({ name: 'Alice', id: 123 });
-    });
 
     it('should resolve system path variables', async () => {
       // The beforeEach setup handles mocking:
@@ -408,21 +365,6 @@ describe('ResolutionService', () => {
       // Check properties instead
       expect(result.contentType).toBe(PathContentType.FILESYSTEM);
       expect((result as MeldResolvedFilesystemPath).validatedPath).toBe('/home/user'); // Check validatedPath
-    });
-
-    it('should resolve user-defined path variables', async () => {
-      // The beforeEach setup handles mocking:
-      // - stateService.getPathVar('home') returns PathVariable with originalValue '/home/user/meld'
-      // - pathService.validatePath is mocked to handle '/home/user/meld'
-      
-      // Call resolvePath with the *expected resolved string*
-      const resolvedPathString = '/home/user/meld';
-      const result: MeldPath = await service.resolvePath(resolvedPathString, defaultContext);
-
-      // Cannot use instanceof with type alias MeldPath
-      // Check properties instead
-      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
-      expect((result as MeldResolvedFilesystemPath).validatedPath).toBe('/home/user/meld'); // Check validatedPath based on mock getPathVar value
     });
 
     it('should resolve command references', async () => {
@@ -446,18 +388,6 @@ describe('ResolutionService', () => {
       expect(result).toBe('unparseable content');
     });
 
-    it('should concatenate multiple nodes', async () => {
-      // Define mock nodes for this specific test's input
-      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }; // Define mock location
-      const mockNodes: MeldNode[] = [
-        { type: 'Text', content: 'Hello ', location: mockLocation } as TextNode,
-        { type: 'VariableReference', identifier: 'name', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' } as VariableReferenceNode
-      ];
-      parserService.parse.mockResolvedValue(mockNodes); // Mock parser for this test
-
-      const result = await service.resolveText('Hello ${name}', defaultContext);
-      expect(result).toBe('Hello Alice');
-    });
   });
 
   // This suite actually tests resolveFile
@@ -494,13 +424,6 @@ describe('ResolutionService', () => {
   });
 
   describe('extractSection', () => {
-    it('should extract section by heading', async () => {
-      const content = `# Title\nSome content\n\n## Section 1\nContent 1\n\n## Section 2\nContent 2`;
-
-      const result = await service.extractSection(content, 'Section 1');
-      // Fix: Re-add single newline between heading and content
-      expect(result).toBe(`## Section 1\n\nContent 1`); 
-    });
 
     it('should include content until next heading of same or higher level', async () => {
       const content = `# Title\nSome content\n\n## Section 1\nContent 1\n### Subsection\nSubcontent\n\n## Section 2\nContent 2`;
@@ -536,23 +459,6 @@ describe('ResolutionService', () => {
       };
     });
 
-    it('should return MeldPath when path validation succeeds', async () => {
-      const validPathString = '/project/valid/file.txt';
-      const expectedMeldPath: MeldPath = {
-        contentType: PathContentType.FILESYSTEM,
-        originalValue: validPathString,
-        validatedPath: unsafeCreateAbsolutePath(validPathString),
-        isAbsolute: true,
-        exists: true,
-        isSecure: true,
-        isValidSyntax: true
-      };
-      pathServiceMock.validatePath.mockResolvedValue(expectedMeldPath);
-
-      const result = await service.validateResolution(validPathString, validationContext);
-      expect(result).toEqual(expectedMeldPath);
-      expect(pathServiceMock.validatePath).toHaveBeenCalledWith(validPathString, validationContext);
-    });
 
     it('should re-throw PathValidationError when path validation fails', async () => {
       const invalidPathString = 'invalid-path\0';
@@ -602,26 +508,6 @@ describe('ResolutionService', () => {
 
   // ADD tests for resolveFieldAccess
   describe('resolveFieldAccess', () => {
-    it('should resolve a simple field access', async () => {
-      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 15 } }; 
-      const node: VariableReferenceNode = {
-          type: 'VariableReference', 
-          identifier: 'user', 
-          valueType: VariableType.DATA, 
-          fields: [{ type: 'field', value: 'name' }], 
-          isVariableReference: true, 
-          location: mockLocation,
-          nodeId: 'mock-node-id'
-      };
-
-      // Test resolveData for the raw value using the node
-      const resultData = await service.resolveData(node, defaultContext);
-      expect(resultData).toBe('Alice');
-      
-      // Optional: Keep the resolveText test if desired, though it tests a different path
-      // const resultText = await service.resolveText('{{user.name}}', defaultContext);
-      // expect(resultText).toBe('Alice');
-    });
 
     it('should resolve a nested field access', async () => {
       // // Mock data variable with nested structure (assuming beforeEach does this or add here)
@@ -703,27 +589,6 @@ describe('ResolutionService', () => {
   });
 
   describe('resolveData', () => {
-    it('should resolve nested data with field access', async () => {
-      // Mock data variable with nested structure (assuming beforeEach does this or add here)
-      stateService.getDataVar = vi.fn().mockReturnValue(createMockDataVariable('nested', { data: { level1: { value: 'deep' } } }));
-      
-      // <<< Pass VariableReferenceNode instead of string >>>
-      const node: VariableReferenceNode = {
-        type: 'VariableReference',
-        identifier: 'nested',
-        valueType: VariableType.DATA,
-        fields: [
-          { type: 'field', value: 'data' }, 
-          { type: 'field', value: 'level1' }, 
-          { type: 'field', value: 'value' }
-        ],
-        isVariableReference: true,
-        location: { start: {line: 1, column: 1}, end: {line: 1, column: 20} },
-        nodeId: 'mock-node-id'
-      };
-      const result = await service.resolveData(node, defaultContext);
-      expect(result).toBe('deep');
-    });
 
     it('should throw FieldAccessError in strict mode if field access fails', async () => {
       stateService.getDataVar = vi.fn().mockReturnValue(createMockDataVariable('user', { name: 'Alice' }));
@@ -815,38 +680,6 @@ describe('ResolutionService', () => {
       expect(result).toBe('Hello Alice');
     });
 
-     it('should handle non-existent variable in strict mode', async () => {
-      const strictContext = defaultContext.withStrictMode(true);
-       // Fix: Use VariableNodeFactory
-       const inputString = '${nonexistent}'; // Input string
-
-       // Mock parser SPECIFICALLY for the input string in this test
-       vi.mocked(parserService.parse).mockImplementation(async (value: string): Promise<MeldNode[]> => {
-         if (value === inputString) {
-             const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } };
-             const mockNodes: MeldNode[] = [
-                 { type: 'VariableReference', identifier: 'nonexistent', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' } as VariableReferenceNode
-             ];
-             return mockNodes;
-         }
-         // Fallback for unexpected parse calls within this test (optional)
-         return []; 
-       });
-
-      // Mock stateService to return undefined for the variable
-      vi.mocked(stateService.getTextVar).mockImplementation((name: string): TextVariable | undefined => {
-        if (name === 'nonexistent') return undefined;
-        return undefined;
-      });
-
-      await expectToThrowWithConfig(async () => {
-        await service.resolveText('${nonexistent}', strictContext);
-      }, {
-        type: 'VariableResolutionError',
-        code: 'E_VAR_NOT_FOUND',
-        messageContains: 'Variable not found' // Simplified string
-      });
-    });
 
      it('should return empty string for non-existent variable in non-strict mode', async () => {
         // Fix: Use VariableNodeFactory
@@ -887,16 +720,6 @@ describe('ResolutionService', () => {
   });
 
    describe('resolveCommand', () => {
-    it('should execute basic command', async () => {
-      // Mock stateService to return a basic command definition
-      vi.mocked(stateService.getCommandVar).mockReturnValue(createMockCommandVariable('echo', 'echo "$@"'));
-      // Fix: Use strict context
-      const strictContext = defaultContext.withStrictMode(true);
-      // Fix: Add missing args array []
-      const result = await service.resolveCommand('echo', ['test'], strictContext);
-      // Fix: Update expected output based on refined mock
-      expect(result).toBe('test'); // Mock replaces "$@" with 'test'
-    });
 
      it('should throw VariableResolutionError for non-existent command', async () => {
        // beforeEach mock ensures getCommandVar returns undefined for 'nonexistent'

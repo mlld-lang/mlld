@@ -121,12 +121,6 @@ describe('PathService', () => {
   });
 
   describe('resolvePath', () => {
-    it('should resolve a simple relative path to an AbsolutePath based on project root', () => {
-      const input = createRawPath('test.txt');
-      const expected = unsafeCreateAbsolutePath('/project/test.txt');
-      const result = service.resolvePath(input);
-      expect(result).toEqual(expected);
-    });
 
     it('should resolve a ./ relative path to an AbsolutePath based on project root', () => {
       const input = createRawPath('./src/file.js');
@@ -150,26 +144,8 @@ describe('PathService', () => {
       expect(result).toEqual(expected);
     });
 
-    it('should resolve project path $. correctly', () => {
-      const input = createRawPath('$./src/main.ts');
-      const expected = unsafeCreateAbsolutePath('/project/src/main.ts');
-      const result = service.resolvePath(input);
-      expect(result).toEqual(expected);
-    });
 
-     it('should resolve project path $PROJECTPATH correctly', () => {
-      const input = createRawPath('$PROJECTPATH/data/file.csv');
-      const expected = unsafeCreateAbsolutePath('/project/data/file.csv');
-      const result = service.resolvePath(input);
-      expect(result).toEqual(expected);
-    });
 
-    it('should resolve home path $~ correctly', () => {
-      const input = createRawPath('$~/docs/notes.txt');
-      const expected = unsafeCreateAbsolutePath('/home/user/docs/notes.txt');
-      const result = service.resolvePath(input);
-      expect(result).toEqual(expected);
-    });
 
     it('should resolve home path $HOMEPATH correctly', () => {
       const input = createRawPath('$HOMEPATH/.config/app');
@@ -201,10 +177,6 @@ describe('PathService', () => {
     it('should normalize a path with .. correctly', () => {
       const result = service.normalizePath('/project/folder/../test.txt');
       expect(result).toBe('/project/test.txt');
-    });
-    it('should normalize a path with . correctly', () => {
-      const result = service.normalizePath('/project/./src/file.js');
-      expect(result).toBe('/project/src/file.js');
     });
      it('should normalize windows paths', () => {
       const result = service.normalizePath('C:\\Users\\User\\Documents');

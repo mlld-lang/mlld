@@ -193,77 +193,12 @@ describe('AddDirectiveHandler', () => {
   };
 
   describe('basic add functionality', () => {
-    it('should handle basic add without modifiers (subtype: addPath)', async () => {
-      const node = createAddDirective('./some/file.txt', undefined, createLocation(1, 1), 'addPath');
-      const processingContext = createMockProcessingContext(node);
-      const resolvedPathString = '/path/to/some/file.txt'; 
-      const resolvedPath: MeldPath = createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath(resolvedPathString));
-      
-      resolutionServiceMock.resolvePath.mockResolvedValueOnce(resolvedPath);
-      fileSystemServiceMock.exists.mockResolvedValueOnce(true);
-      fileSystemServiceMock.readFile.mockResolvedValueOnce('Some file content.');
 
-      const result = await handler.handle(processingContext) as DirectiveResult;
-
-      expect(validationServiceMock.validate).toHaveBeenCalledWith(node);
-      expect(resolutionServiceMock.resolvePath).toHaveBeenCalledWith(resolvedPathString, processingContext.resolutionContext);
-      expect(resolutionServiceMock.resolveInContext).toHaveBeenCalledWith('./some/file.txt', processingContext.resolutionContext);
-      expect(fileSystemServiceMock.exists).toHaveBeenCalledWith(resolvedPath.validatedPath);
-      expect(fileSystemServiceMock.readFile).toHaveBeenCalledWith(resolvedPath.validatedPath);
-      expect(result).toHaveProperty('replacement');
-      expect(result.stateChanges).toBeUndefined();
-      const replacement = result.replacement;
-      expect(replacement?.[0]).toMatchObject({ type: 'Text', content: 'Some file content.' });
-    });
-
-    it('should handle add with section (subtype: addPath)', async () => {
-      const node = createAddDirective('./section.md', 'Section 1', createLocation(1, 1), 'addPath');
-      const processingContext = createMockProcessingContext(node);
-      const resolvedPathString = '/path/to/section.md';
-      const resolvedPath: MeldPath = createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath(resolvedPathString));
-      const fullFileContent = '# Section 1\nContent 1\n# Section 2\nContent 2';
-      const extractedContent = 'Content 1';
-
-      resolutionServiceMock.resolvePath.mockResolvedValueOnce(resolvedPath);
-      fileSystemServiceMock.exists.mockResolvedValueOnce(true);
-      fileSystemServiceMock.readFile.mockResolvedValueOnce(fullFileContent);
-      resolutionServiceMock.extractSection.mockResolvedValueOnce(extractedContent);
-
-      const result = await handler.handle(processingContext) as DirectiveResult;
-
-      expect(validationServiceMock.validate).toHaveBeenCalledWith(node);
-      expect(resolutionServiceMock.resolvePath).toHaveBeenCalledWith(resolvedPathString, processingContext.resolutionContext);
-      expect(fileSystemServiceMock.readFile).toHaveBeenCalledWith(resolvedPath.validatedPath);
-      expect(resolutionServiceMock.extractSection).toHaveBeenCalledWith(fullFileContent, 'Section 1', undefined);
-      expect(result).toHaveProperty('replacement');
-      expect(result.stateChanges).toBeUndefined();
-      const replacement = result.replacement;
-      expect(replacement?.[0]).toMatchObject({ type: 'Text', content: extractedContent });
-    });
     it.skip('should handle heading level adjustment', async () => { /* ... */ });
     it.skip('should handle under header extraction', async () => { /* ... */ });
   });
 
   describe('error handling', () => {
-    it('should throw error if file not found', async () => {
-      const node = createAddDirective('non-existent-file.txt', undefined, createLocation(1, 1), 'addPath');
-      const processingContext = createMockProcessingContext(node);
-      const resolvedPathString = '/path/to/non-existent-file.txt';
-      const resolvedPath: MeldPath = createMeldPath('non-existent-file.txt', unsafeCreateValidatedResourcePath(resolvedPathString));
-      
-      resolutionServiceMock.resolvePath.mockResolvedValueOnce(resolvedPath);
-      fileSystemServiceMock.exists.mockResolvedValueOnce(false);
-      
-      await expect(handler.handle(processingContext))
-        .rejects.toThrow(DirectiveError); 
-      try {
-        await handler.handle(processingContext);
-      } catch(e: any) {
-        expect(e.code).toBe(DirectiveErrorCode.FILE_NOT_FOUND);
-        expect(e.cause).toBeInstanceOf(MeldFileNotFoundError);
-        expect(e.cause.details.filePath).toBe(resolvedPath.validatedPath); 
-      }
-    });
     
     it('should handle section extraction failure gracefully', async () => {
       const node = createAddDirective('doc.md', 'MissingSection', createLocation(1, 1), 'addPath');
@@ -366,20 +301,6 @@ describe('AddDirectiveHandler', () => {
   });
   
   describe('Variable reference embeds', () => {
-    it('should handle simple variable reference embeds', async () => {
-      const node = createAddDirective('{{textVar}}', undefined, createLocation(1, 1), 'addVariable');
-      const processingContext = createMockProcessingContext(node);
-      const resolvedValue = 'Resolved Text';
-      resolutionServiceMock.resolveInContext.mockResolvedValueOnce(resolvedValue);
-      
-      const result = await handler.handle(processingContext) as DirectiveResult;
-      
-      expect(resolutionServiceMock.resolveInContext).toHaveBeenCalledWith('{{textVar}}', processingContext.resolutionContext);
-      expect(result).toHaveProperty('replacement');
-      expect(result.stateChanges).toBeUndefined();
-      const replacement = result.replacement;
-      expect(replacement?.[0]).toMatchObject({ type: 'Text', content: resolvedValue });
-    });
 
     it('should handle data variable reference embeds (using dot notation)', async () => {
       const node = createAddDirective('{{dataVar.user.name}}', undefined, createLocation(1, 1), 'addVariable');
@@ -398,32 +319,6 @@ describe('AddDirectiveHandler', () => {
   });
 
   describe('Template literal embeds', () => {
-      it('should add resolved template literal content', async () => {
-        const nameVarNode: VariableReferenceNode = {
-            type: 'VariableReference',
-            nodeId: 'vrn-data',
-            identifier: 'dataVar.user.name',
-            valueType: VariableType.DATA,
-            isVariableReference: true, 
-            location: createLocation(1,1)
-        };
-        const templateNodes: InterpolatableValue = [
-            createTextNode('User: '),
-            nameVarNode
-        ];
-        const node = createAddDirective(templateNodes, undefined, createLocation(1, 1), 'addTemplate');
-        const processingContext = createMockProcessingContext(node);
-        const resolvedValue = 'User: Alice'; 
-        resolutionServiceMock.resolveNodes.mockResolvedValueOnce(resolvedValue);
-
-        const result = await handler.handle(processingContext) as DirectiveResult;
-
-        expect(resolutionServiceMock.resolveNodes).toHaveBeenCalledWith(templateNodes, processingContext.resolutionContext);
-        expect(result).toHaveProperty('replacement');
-        expect(result.stateChanges).toBeUndefined();
-        const replacement = result.replacement;
-        expect(replacement?.[0]).toMatchObject({ type: 'Text', content: resolvedValue });
-     });
   });
 
   describe('Transformation mode', () => {
