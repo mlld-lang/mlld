@@ -216,7 +216,7 @@ This step involves updating multiple services to use the new `MeldNode` union ty
 - Simplify type checking with union discrimination
 - Update handler dispatch logic
 
-#### 5c. Directive Handlers (2-3 days) *(In Progress)*
+#### 5c. Directive Handlers (2-3 days) *(Completed)*
 - Update all directive handlers to accept new types
 - Remove redundant type conversions
 - Update return types to match new structure
@@ -243,14 +243,14 @@ During test migrations, we discovered that the handlers themselves are using the
    - Create tests without adapter layers
    - Ensure handlers work with real AST structure
 
-**Migration Order (Updated)**:
-1. TextDirectiveHandler (example complete)
-2. DataDirectiveHandler (tests migrated, handler needs update)
-3. PathDirectiveHandler (tests migrated, handler needs update)
-4. ImportDirectiveHandler (tests migrated, handler needs update)
-5. AddDirectiveHandler (update handler + tests together)
-6. RunDirectiveHandler (update handler + tests together)
-7. ExecDirectiveHandler (update handler + tests together)
+**Migration Order (Completed)**:
+1. TextDirectiveHandler ✅
+2. DataDirectiveHandler ✅
+3. PathDirectiveHandler ✅
+4. ImportDirectiveHandler ✅
+5. AddDirectiveHandler ✅
+6. RunDirectiveHandler ✅
+7. ExecDirectiveHandler ✅
 
 **Benefits**:
 - Ensures handlers work with correct AST structure
@@ -312,10 +312,18 @@ During test migrations, we discovered that the handlers themselves are using the
 - 127 failed tests total
 - Primary issue: Node structure access patterns throughout directive handlers
 
-#### 5d. Other Services (1-2 days)
-- Update remaining services
-- Fix dependency injection types
-- Ensure consistent type usage across services
+#### 5d. Other Services (6-8 days) *(Next)*
+**Reference:** See `STEP-5D-SERVICE-MIGRATION-PLAN-V2.md` for comprehensive migration strategy
+
+- Update remaining services using fixture-based approach:
+  - ResolutionService (2-3 days)
+  - ValidationService (1 day)
+  - PathService (1 day) 
+  - OutputService (1 day)
+  - ParserService cleanup (1 day)
+- Leverage fixtures from `core/examples/` and `core/ast/fixtures/`
+- Test against expected outputs where available
+- Remove all `@core/syntax/types` imports
 
 ### Step 6: Remove Legacy Types (1 day)
 
@@ -541,6 +549,7 @@ Phase 3 will be considered successful when:
 3. **`AST-BASE-INTERFACES.md`** - Canonical list of all base interfaces and field mappings
 4. **`STATE-AFFECTED-METHODS.md`** - Inventory of StateService methods needing updates
 5. **`STATE-UPDATES.md`** - Detailed plan for StateService migration (prototype for other services)
+6. **`STEP-5D-SERVICE-MIGRATION-PLAN-V2.md`** - Comprehensive plan for remaining service migrations using fixture-based approach
 
 ### Implementation Guidelines
 1. The AST restructuring provides a template for clean organization

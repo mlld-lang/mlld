@@ -200,15 +200,18 @@ describe('Directive State Change Propagation', () => {
     mockTextHandler = {
       kind: 'text',
       handle: vi.fn(async (ctx: DirectiveProcessingContext) => {
-        const value = ctx.directiveNode.directive?.value;
-        if (Array.isArray(value)) {
-          const resolvedValue = value
-            .map(node => node.type === 'Text' ? node.content : 'RESOLVED')
+        const node = ctx.directiveNode as DirectiveNode;
+        const identifier = node.raw?.identifier;
+        const values = node.values?.value || node.values?.content; // Check both for compatibility
+        
+        if (identifier && Array.isArray(values)) {
+          const resolvedValue = values
+            .map(n => n.type === 'Text' ? n.content : 'RESOLVED')
             .join('');
           return {
             stateChanges: {
               variables: {
-                [ctx.directiveNode.directive.identifier]: {
+                [identifier]: {
                   type: VariableType.TEXT,
                   value: resolvedValue
                 }

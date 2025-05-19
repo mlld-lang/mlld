@@ -4,15 +4,17 @@
 Unify AST and runtime types into a single coherent type system, eliminating artificial separation between parsing and execution types.
 
 ## 📍 Current Status
-**Phase 5c: Directive Handlers** - PAUSED to implement test infrastructure update first.
+**Phase 5c: Directive Handlers** - COMPLETED
+**Phase 5d: Other Services** - NEXT (ResolutionService, ValidationService, PathService, OutputService, ParserService)
 
 ## 🗂️ Key Reference Documents
 
 ### Primary Plan Documents
-1. **`TYPE-RESTRUCTURE.md`** - Main project plan (currently on Step 5c)
-2. **`UPDATE-TESTS-FIXTURES.md`** - Test infrastructure update plan (HIGH PRIORITY)
-3. **`MIGRATION-TO-FIXTURES.md`** - Guide for migrating tests to fixture-based approach
-4. **`FIXTURE-MIGRATION-TRACKER.md`** - Progress tracker for test migrations
+1. **`TYPE-RESTRUCTURE.md`** - Main project plan (currently on Step 5d)
+2. **`STEP-5D-SERVICE-MIGRATION-PLAN-V2.md`** - Migration plan for remaining services using fixtures
+3. **`UPDATE-TESTS-FIXTURES.md`** - Test infrastructure update plan
+4. **`MIGRATION-TO-FIXTURES.md`** - Guide for migrating tests to fixture-based approach
+5. **`FIXTURE-MIGRATION-TRACKER.md`** - Progress tracker for test migrations
 
 ### Supporting Documents
 5. **`PLAN-CONTEXT.md`** - Current code structure and service dependencies
@@ -33,14 +35,22 @@ Tests are creating incorrect node structures, causing handlers to be modified ba
 - [x] Create `ASTFixtureLoader` utility
 - [x] Create migration guide and example
 - [x] Discover handler issues via test migration
-- [ ] Update handlers and tests together:
-  - [x] TextDirectiveHandler (example complete)
-  - [x] DataDirectiveHandler (complete - handler and tests updated)
-  - [x] PathDirectiveHandler (complete - handler and tests updated)
-  - [x] ImportDirectiveHandler (complete - handler and tests updated)
-  - [x] AddDirectiveHandler (complete - handler and tests updated)
-  - [ ] RunDirectiveHandler (update both)
-  - [ ] ExecDirectiveHandler (update both)
+- [x] Update handlers and tests together:
+  - [x] TextDirectiveHandler (complete)
+  - [x] DataDirectiveHandler (complete)
+  - [x] PathDirectiveHandler (complete)
+  - [x] ImportDirectiveHandler (complete)
+  - [x] AddDirectiveHandler (complete)
+  - [x] RunDirectiveHandler (complete)
+  - [x] ExecDirectiveHandler (complete)
+
+### 2. Update Remaining Services (Step 5d)
+- [ ] ResolutionService (2-3 days)
+- [ ] ValidationService (1 day)
+- [ ] PathService (1 day)
+- [ ] OutputService (1 day)
+- [ ] ParserService cleanup (1 day)
+- **Reference**: See `STEP-5D-SERVICE-MIGRATION-PLAN-V2.md` for detailed approach
 
 ### 2. Critical Handler Updates Required
 All handlers need to be updated to use the actual AST structure:
@@ -149,29 +159,30 @@ npm run ast:validate        # Validate generated types
 - ✅ Steps 1-4: Type analysis and union creation
 - ✅ Step 5a: StateService migration
 - ✅ Step 5b: InterpreterService update
+- ✅ Step 5c: Directive handler updates
 - ✅ Test infrastructure design and tooling
 
 ### In Progress
-- 🔄 Test migration to fixtures (HIGH PRIORITY)
-- 🔄 Step 5c: Directive handler updates (PAUSED)
+- 🔄 Step 5d: Other Services (ResolutionService, ValidationService, etc.)
 
 ### Upcoming
 - ⏳ Step 6: Remove legacy types
-- ⏳ Step 7: Update all imports
+- ⏳ Step 7: Update all imports (~330 references) 
 - ⏳ Step 8: Documentation and validation
 
 ## 🎬 Getting Started in New Session
 
 1. Read this file for context
-2. Check `FIXTURE-MIGRATION-TRACKER.md` for current test migration status
-3. Continue migrating tests following `MIGRATION-TO-FIXTURES.md`
-4. Once tests are migrated, resume handler updates per `TYPE-RESTRUCTURE.md` Step 5c
+2. Check `STEP-5D-SERVICE-MIGRATION-PLAN-V2.md` for service migration approach
+3. Use fixtures from `core/examples/` and `core/ast/fixtures/`
+4. Follow successful handler migration pattern for remaining services
 
 ## 🔗 Related Files Structure
 ```
 _dev/
 ├── TYPE-RESTRUCTURE-ENTRYPOINT.md (THIS FILE)
 ├── TYPE-RESTRUCTURE.md
+├── STEP-5D-SERVICE-MIGRATION-PLAN-V2.md  # NEW: Service migration plan
 ├── UPDATE-TESTS-FIXTURES.md
 ├── PLAN-CONTEXT.md
 ├── AST-NODE-DESIGN.md
