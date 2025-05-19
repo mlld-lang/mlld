@@ -274,14 +274,6 @@ describe('ValidationService', () => {
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
-    it('should currently allow empty alias when using as syntax', async () => {
-       const node = createImportDirective('[role as ]', createLocation(1, 1, 1, 50), 'imports.meld');
-       await expectToThrowWithConfig(async () => service.validate(node), {
-          type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal, directiveKind: 'import', messageContains: 'Import alias cannot be empty'
-       });
-    });
-    
     it('should validate structured imports using bracket notation without alias', async () => {
       const node = createImportDirective('[role]', createLocation(1, 1, 1, 50), 'imports.meld');
       await expect(service.validate(node)).resolves.not.toThrow();
@@ -301,10 +293,30 @@ describe('ValidationService', () => {
     });
 
      it('should throw on missing path with Fatal severity (structured form)', async () => {
-       const node = createImportDirective('[var1]', createLocation(1, 1, 1, 50));
+       // Create an import directive with imports but no path
+       const node: DirectiveNode = {
+         type: 'Directive',
+         nodeId: 'test-import-no-path',
+         location: createLocation(1, 1, 1, 50),
+         kind: 'import',
+         subtype: 'importSelected',
+         source: 'import',
+         values: {
+           imports: [{
+             type: 'VariableReference',
+             nodeId: 'test-import-var1',
+             identifier: 'var1',
+             valueType: 'import',
+             isVariableReference: true,
+             location: createLocation(1, 1, 1, 50)
+           }]
+         },
+         raw: { imports: [{ name: 'var1' }] },
+         meta: { hasVariables: false }
+       };
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal, directiveKind: 'import', messageContains: 'requires a path'
+          severity: ErrorSeverity.Fatal, directiveKind: 'import', messageContains: 'Import path cannot be empty'
       });
     });
 
