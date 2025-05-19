@@ -21,6 +21,17 @@ The parser is having trouble with the nested property notation in data directive
 - `/core/examples/data/primitive/example-number.md`
 - `/core/examples/data/primitive/example-boolean.md`
 
+### Root Cause
+The grammar rule for `@data` identifiers relies on `BaseIdentifier`, which only
+allows alphanumeric characters and underscores. Dotted property paths like
+`greeting.text` do not match this pattern, so the parser fails before reaching
+the assignment.
+
+### Potential Fix
+Introduce a new identifier rule that accepts dotted paths or parse the property
+path into separate nodes. Update the `@data` directive to use this rule so that
+nested properties can be assigned directly.
+
 ## Nested Directives
 
 **Error:** helpers.isInRunCodeBlockContext is not a function
@@ -36,30 +47,17 @@ The parser is having issues with directives that contain other directives. This 
 **Files affected:**
 - `/core/examples/data/directive/example.md`
 
-## Language Specifiers in Exec Directives
+### Root Cause
+The parser calls a helper named `isInRunCodeBlockContext` when determining
+context for nested directives. This function is referenced in the generated
+parser but does not exist in `grammar-core.ts`, resulting in a runtime error
+whenever nested directives are encountered.
 
-**Error:** Expected "@run" or whitespace but "j" or "e" found
-
-**Examples:**
-```
-@exec sum (a, b) = javascript [console.log(Number(a) + Number(b));]
-@exec format (name) = javascript [
-  // Format the name with title case
-  const words = name.split(' ');
-  const titled = words.map(word => {
-    return word.charAt(0).toUpperCase() + word.slice(1).toUpperCase();
-  });
-  return titled.join(' ');
-]
-```
-
-**Description:**
-The parser is having trouble with the language specificity in exec directives. It's expecting a run directive but finding the language specifier (like "javascript").
-
-**Files affected:**
-- `/core/examples/exec/code/example.md`
-- `/core/examples/exec/code/example-multiline.md`
-- `/core/examples/run/exec/example.md`
+### Potential Fix
+Implement the missing `helpers.isInRunCodeBlockContext` function in the grammar
+helpers module. It should analyze the input around the current position to
+detect `@run` code block patterns. Rebuild the parser after adding the helper so
+that nested directives parse correctly.
 
 ## Directives in Markdown Code Blocks
 
@@ -70,6 +68,16 @@ These errors occur when trying to parse directives contained within markdown cod
 
 **Files affected:**
 - `/core/examples/EXAMPLES.md`
+
+### Root Cause
+The directive extractor currently scans entire Markdown files and attempts to
+parse every `@` symbol as a real directive. Code examples inside fenced blocks
+use the same syntax but should be ignored. Because the extractor does not skip
+code fences, it feeds these examples directly to the parser, which then fails.
+
+### Potential Fix
+Enhance the extraction logic to detect fenced code blocks and omit their
+contents from parsing. A flag could allow processing of examples when desired.
 
 ## Multiline Template Parsing in Add Directives
 
@@ -103,6 +111,17 @@ The parser is incorrectly parsing `@add [[` as the start of a path directive (ad
 - The template content should be parsed as part of the directive's `content` value
 - Variables within the template should be properly recognized
 
+### Root Cause
+`@add` uses several alternatives in order of precedence. The path variant can
+match bracketed content, and because PEG.js selects the first successful match,
+`[[` is consumed by the path rule before the template rule gets a chance. The
+remaining template body then becomes regular text nodes.
+
+### Potential Fix
+Add a lookahead so the path rule fails when the next characters are `[[`. This
+ensures the template rule is chosen for multiline templates. Reordering alone is
+not sufficient without the explicit check.
+
 ## Section Extraction Syntax Not Parsed
 
 **Error:** Section extraction using `#` syntax is not properly parsed
@@ -127,6 +146,16 @@ The parser is not correctly parsing the section extraction syntax. When using th
 - Should create `values.path` containing "file.md"
 - Should create `values.section` containing "Section 1"
 - The handler can then use both properties to properly extract the section
+
+### Root Cause
+`@add` uses the generic `PathCore` rule, which does not recognise the `#`
+section syntax. As a result the entire string is treated as a single path value
+and the section portion is lost.
+
+### Potential Fix
+Use `SectionPathCore` (or a new helper rule) when a `#` marker is present.
+This will split the file path and section name into separate AST properties so
+handlers can easily extract the desired section.
 
 ## Text Node Position Calculation
 
@@ -154,29 +183,13 @@ The parser is incorrectly calculating end positions for text nodes. All text nod
 - End position should reflect the actual end of the text content
 - For "This is a simple paragraph of text.", end should be `{ line: 1, column: 36 }`
 
-## Suggested Fixes
+### Root Cause
+Node creation defaults to a zeroed location when no explicit location data is
+provided. Several grammar rules create text nodes without passing `location()`
+to `helpers.createNode`, so every text node inherits the default end position of
+`{ line: 1, column: 1, offset: 0 }`.
 
-1. **Nested Property Notation:**
-   - Update the parser grammar to support dot notation in identifiers for data directives
-   - Consider adding specific rules for data property paths
-
-2. **Nested Directives:**
-   - Implement the missing `isInRunCodeBlockContext` helper function
-   - Ensure the parser can properly handle directives nested within other directives
-
-3. **Language Specifiers:**
-   - Enhance the parser to recognize language specifiers in exec directives
-   - Add specific grammar rules for different language constructs
-
-4. **Markdown Code Blocks:**
-   - Enhance the directive extractor to ignore content within markdown code blocks
-   - Consider adding a flag to control whether to parse examples in documentation
-
-5. **Multiline Template Parsing:**
-   - Fix the grammar rule for `@add` directives to prioritize template detection over path detection
-   - Ensure the parser correctly identifies `[[` as the start of a template rather than a path
-   - Update the lookahead logic to properly distinguish between templates and paths
-
-6. **Text Node Position Calculation:**
-   - Fix the position calculation logic in the parser to correctly compute end positions
-   - Ensure offset values are properly calculated for all node types
+### Potential Fix
+Audit the grammar for all `createNode` calls and ensure `location()` (or the
+appropriate computed location) is supplied. After rebuilding the parser, text
+nodes should report accurate start and end offsets.

@@ -1,10 +1,32 @@
-2. "The grammar creates variablereference nodes with an alias property, but the VariableReferenceNode type doesn't include this property." <-- we actually should remove the `alias` import feature in the grammar as we don't intend to use it.
+## 2. Remove alias support from import references
 
-3. "The grammar produces text directives with content as node arrays (e.g., line 42-60), but the types expect content to be either ContentNodeArray | DirectiveNode. The grammar seems to be missing the ability to produce DirectiveNode instances for nested directives." <-- this is a problem if so; we'll need to investigate it. It's possible we're just handling this differently than what the older types expect?
+The grammar currently creates `VariableReference` nodes with an `alias` property for import directives. However, the `VariableReferenceNode` type does not define this property and the project no longer plans to support import aliases.
 
-9. "The grammar produces text directives with content as array of nodes, but doesn't properly create nested DirectiveNode instances when text content is a directive (e.g., @text foo = @run [command])." <-- related to #3; we need to investigate.
-13. The grammar outputs `headerLevel` as an array of Number nodes with `value` and `raw`, but the AddValues interfaces use a plain `number`.
-14. RunCommand and Exec directive metadata include a `hasVariables` flag (and Exec directives also inherit `language`, `isMultiLine`, and `isBracketed` from RunCode), none of which exist in RunMeta or ExecMeta. (remove isBracketed, add the others)
+**Potential change:** Drop the alias handling from `grammar/directives/import.peggy` and update related tests and documentation. Remove the alias examples from `grammar/docs/import.md` once the grammar no longer emits this field.
+
+## 3. Text directive content should support nested directives
+
+Text directives produce `content` as an array of nodes, but the type definition allows either a `ContentNodeArray` or a nested `DirectiveNode`. If a nested directive is used (e.g. `@text value = @add "file"`), the grammar should return the full `DirectiveNode` rather than flattening it into nodes.
+
+**Potential change:** Review the rules in `grammar/directives/text.peggy` and the helper functions that build text directive nodes. Ensure that when a directive is parsed as the content, the resulting AST includes that directive object and sets `source: 'directive'` in metadata.
+
+## 9. Nested directive instances missing
+
+Related to issue #3, when the text content itself is a directive such as `@run`, the parser currently yields only node arrays. This prevents consumers from distinguishing embedded directives from plain text.
+
+**Potential change:** After addressing issue #3, verify that nested directives like `@run` or `@add` are preserved as `DirectiveNode` instances within the `content` field. Update tests under `grammar/tests/text.test.ts` (or create new ones) to assert that nested directives are returned correctly.
+
+## 13. headerLevel value type mismatch
+
+`Add` directive variants output `headerLevel` as an array containing a single `Number` node with `value` and `raw`. The `AddValues` interfaces in `core/ast/types/add.ts` currently define this property as a plain `number`.
+
+**Potential change:** Decide on a consistent representation. Either change the grammar to return a plain numeric level or update the type definitions to use a `NumberNodeArray`. Documentation such as `grammar/docs/addTemplate.md` already shows a `NumberNode`, so aligning the types with the grammar may be preferable.
+
+## 14. Align Run and Exec directive metadata
+
+`RunCommand` and `Exec` directives output metadata flags like `hasVariables`, and exec directives also inherit `language` and `isMultiLine` from the run code implementation. The existing `RunMeta` and `ExecMeta` interfaces omit some of these fields.
+
+**Potential change:** Extend `RunMeta` and `ExecMeta` (in `core/ast/types/run.ts` and `core/ast/types/exec.ts`) to include `hasVariables`, `language`, and `isMultiLine`, and remove the unused `isBracketed` field. Ensure the grammar still sets these flags in `run.peggy` and `exec.peggy`.
 
 ## COMPLETED
 
