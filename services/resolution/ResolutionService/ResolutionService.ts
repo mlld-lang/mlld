@@ -53,9 +53,8 @@ import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/f
 import type { IParserService } from '@services/pipeline/ParserService/IParserService';
 import { VariableResolutionErrorFactory } from './resolvers/error-factory';
 import { isTextVariable, isPathVariable, isCommandVariable, isDataVariable, isFilesystemPath } from '@core/types/guards';
-// Import and alias the AST Field type
-import { Field as AstField } from '@core/ast/types/index';
-import { InterpolatableValue } from '@core/ast/types/index';
+// Import AST types
+import { Field as AstField, InterpolatableValue } from '@core/ast/types/index';
 import type {
   AbsolutePath,
   RelativePath,
@@ -70,11 +69,7 @@ import {
   createRawPath,
   isValidatedResourcePath
 } from '@core/types/paths';
-import { PathValidationErrorDetails } from '@core/errors/PathValidationError';
-import {
-  // Import StructuredPath explicitly from syntax types
-  StructuredPath 
-} from '@core/syntax/types/nodes'; 
+import { PathValidationErrorDetails } from '@core/errors/PathValidationError'; 
 // Import VariableReferenceResolver for constructor injection
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver';
 
@@ -908,40 +903,35 @@ export class ResolutionService implements IResolutionService {
 
   /**
    * Resolve potentially interpolated values, handling both plain strings and AST path structures.
-   * If the input is an AST-like path object, it resolves the `interpolatedValue` if present,
-   * otherwise it falls back to resolving the `raw` string.
+   * Since the new AST types don't have StructuredPath, we'll process values based on their structure.
    */
   async resolveInContext(
-    value: string | StructuredPath, 
+    value: string | { raw: string; values?: InterpolatableValue }, 
     context: ResolutionContext
   ): Promise<string> { 
-    // --- Revert temporary changes, use original async logic --- 
     logger.debug('resolveInContext called', { valueType: typeof value, contextFlags: context.flags });
     let result: string = ''; 
 
     try { 
-      if (typeof value === 'object' && value !== null && 'raw' in value && 'structured' in value) {
-        const pathObject = value as StructuredPath;
-        logger.debug(`resolveInContext: Value is StructuredPath`);
-        if (Array.isArray(pathObject.interpolatedValue)) { 
-          logger.debug('Resolving interpolatedValue from StructuredPath');
+      if (typeof value === 'object' && value !== null && 'raw' in value) {
+        logger.debug(`resolveInContext: Value is object with raw property`);
+        // Check if it has values array (new AST structure)
+        if (Array.isArray(value.values)) { 
+          logger.debug('Resolving values array from object');
           try { 
-            result = await this.resolveNodes(pathObject.interpolatedValue, context);
-
+            result = await this.resolveNodes(value.values, context);
           } catch (innerError) {
             logger.error('Error inside resolveInContext -> resolveNodes await', { innerError });
             result = ''; // Default to empty on inner error
           }
         } else {
-          logger.debug('No interpolatedValue on StructuredPath, returning raw string directly');
-          result = String(pathObject.raw); 
-
+          logger.debug('No values array on object, returning raw string directly');
+          result = String(value.raw); 
         }
       } else if (typeof value === 'string') {
         logger.debug('resolveInContext: Value is plain string, calling resolveText');
         try { 
           result = await this.resolveText(value, context);
-
         } catch (innerError) {
             logger.error('Error inside resolveInContext -> resolveText await', { innerError });
             result = ''; // Default to empty on inner error
@@ -954,8 +944,6 @@ export class ResolutionService implements IResolutionService {
       logger.error('Outer error in resolveInContext', { outerError });
       result = ''; // Default to empty on outer error
     }
-
-    // Log just before returning
 
     return result; 
   }
@@ -1160,7 +1148,9 @@ export class ResolutionService implements IResolutionService {
           return '```' + (codeFence.language || '') + '\n' + codeFence.content + '\n```';
         case 'Directive':
           const directive = node as DirectiveNode;
-          return `@${directive.directive.kind} ${directive.directive.value || ''}`;
+          // Access kind directly on the directive node
+          const rawContent = directive.raw ? Object.values(directive.raw).join(' ') : '';
+          return `@${directive.kind} ${rawContent}`;
         default:
           return '';
       }
