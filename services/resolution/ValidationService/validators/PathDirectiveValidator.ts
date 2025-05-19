@@ -1,4 +1,4 @@
-import { DirectiveNode } from '@core/types/ast-nodes';
+import { DirectiveNode } from '@core/ast/types';
 import { MeldDirectiveError, DirectiveLocation } from '@core/errors/MeldDirectiveError';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { ErrorSeverity } from '@core/errors/MeldError';

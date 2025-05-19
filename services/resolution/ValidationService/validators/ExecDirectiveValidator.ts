@@ -1,4 +1,4 @@
-import { DirectiveNode } from '@core/types/ast-nodes';
+import { DirectiveNode } from '@core/ast/types';
 import { ValidationContext } from '@core/types/index';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 
