@@ -17,13 +17,13 @@ import type {
   SourceLocation,
   Position
 } from '@core/ast/types/index';
-import type { IVariableReference } from '@core/syntax/types-old/interfaces/IVariableReference';
 import { parse } from '@core/ast/index';  // Import the parse function directly
 import type { Location } from '@core/types/index';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
-import { VariableNodeFactory } from '@core/syntax/types-old/factories/VariableNodeFactory';
+import { isVariableReferenceNode } from '@core/ast/types/guards';
+import type { VariableReferenceNode } from '@core/ast/types/primitives';
 
 // Define our own ParseError type since it's not exported from meld-ast
 interface ParseError {
@@ -66,16 +66,13 @@ function isMeldAstError(error: unknown): error is MeldAstError {
 export class ParserService implements IParserService {
   private resolutionClient?: IResolutionServiceClient;
   private factoryInitialized: boolean = false;
-  private variableNodeFactory: VariableNodeFactory;
 
   /**
    * Creates a new instance of the ParserService
    */
   constructor(
-    @inject(VariableNodeFactory) variableNodeFactory: VariableNodeFactory,
     @inject(delay(() => ResolutionServiceClientFactory)) private resolutionClientFactory?: ResolutionServiceClientFactory
   ) {
-    this.variableNodeFactory = variableNodeFactory;
     if (process.env.DEBUG === 'true') {
       console.log('ParserService: Initialized with factory:', !!this.resolutionClientFactory);
     }
@@ -320,21 +317,6 @@ export class ParserService implements IParserService {
     );
   }
   
-  /**
-   * Check if a node is a variable reference node using the factory
-   */
-  private isVariableReferenceNode(node: any): node is IVariableReference {
-    if (this.variableNodeFactory) {
-      return this.variableNodeFactory.isVariableReferenceNode(node);
-    }
-    
-    // Fallback to direct checking
-    return (
-      node?.type === 'VariableReference' &&
-      typeof node?.identifier === 'string' &&
-      typeof node?.valueType === 'string'
-    );
-  }
 
   private validateCodeFences(nodes: OldMeldNode[]): void {
     // Since we're using the meld-ast parser with validateNodes=true and preserveCodeFences=true,
@@ -411,7 +393,7 @@ export class ParserService implements IParserService {
    * @param context - The resolution context
    * @returns The resolved node
    */
-  async resolveVariableReference(node: IVariableReference, context: ResolutionContext): Promise<IVariableReference> {
+  async resolveVariableReference(node: VariableReferenceNode, context: ResolutionContext): Promise<VariableReferenceNode> {
     try {
       // Ensure factory is initialized
       this.ensureFactoryInitialized();
@@ -429,7 +411,7 @@ export class ParserService implements IParserService {
           return {
             ...node,
             resolvedValue: resolvedStr
-          } as IVariableReference & { resolvedValue: string };
+          } as VariableReferenceNode & { resolvedValue: string };
         } catch (error) {
           logger.warn('Error using resolutionClient.resolve', { 
             error, 

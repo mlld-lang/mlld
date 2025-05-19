@@ -8,7 +8,6 @@ import { ResolutionContext } from '@core/types/resolution';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient';
 import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory';
-import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory';
 import { VariableType } from '@core/types/variables';
 import { StateService } from '@services/state/StateService/StateService';
 import { Service } from '@core/ServiceProvider';
@@ -470,8 +469,7 @@ type FormatConverter = (
     { token: 'IStateService', name: 'state', optional: true },
     { token: 'IResolutionService', name: 'resolutionService' },
     { token: 'ResolutionServiceClientFactory', name: 'resolutionServiceClientFactory', optional: true },
-    { token: 'VariableReferenceResolverClientFactory', name: 'variableResolverClientFactory', optional: true },
-    { token: 'VariableNodeFactory', name: 'variableNodeFactory', optional: true } 
+    { token: 'VariableReferenceResolverClientFactory', name: 'variableResolverClientFactory', optional: true } 
   ]
 })
 export class OutputService implements IOutputService {
@@ -483,16 +481,13 @@ export class OutputService implements IOutputService {
   private fieldAccessHandler: FieldAccessHandler;
   private contextStack: FormattingContext[] = [];
 
-  private readonly variableNodeFactory?: VariableNodeFactory;
 
   constructor(
     @inject('IResolutionService') resolutionService: IResolutionService,
     @inject('IStateService') state?: IStateService,
     @inject('ResolutionServiceClientFactory') resolutionServiceClientFactory?: ResolutionServiceClientFactory,
-    @inject(delay(() => VariableReferenceResolverClientFactory)) variableResolverClientFactory?: VariableReferenceResolverClientFactory,
-    @inject('VariableNodeFactory') variableNodeFactory?: VariableNodeFactory
+    @inject(delay(() => VariableReferenceResolverClientFactory)) variableResolverClientFactory?: VariableReferenceResolverClientFactory
   ) {
-    this.variableNodeFactory = variableNodeFactory;
     
     this.resolutionService = resolutionService; 
 

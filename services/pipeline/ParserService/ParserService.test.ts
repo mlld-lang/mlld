@@ -10,8 +10,7 @@ import {
   contentExamples 
 } from '@core/syntax/index';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers';
-import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory';
-import { NodeFactory } from '@core/syntax/types/factories/NodeFactory';
+// Factory imports removed - using AST types directly
 import { container, type DependencyContainer } from 'tsyringe';
 import { mock, mockDeep } from 'vitest-mock-extended';
 import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
@@ -58,17 +57,13 @@ function hasFilePath(location: any): location is LocationWithFilePath {
 describe('ParserService', () => {
   let service: ParserService;
   let testContainer: DependencyContainer;
-  let mockNodeFactory: NodeFactory;
-  let mockVariableNodeFactory: VariableNodeFactory;
   let mockResolutionClient: IResolutionServiceClient;
   let mockResolutionClientFactory: ResolutionServiceClientFactory;
 
   beforeEach(async () => {
     testContainer = container.createChildContainer();
     
-    // --- Mocks & Real Instances ---
-    mockNodeFactory = new NodeFactory(); 
-    mockVariableNodeFactory = new VariableNodeFactory(mockNodeFactory); 
+    // --- Mocks & Real Instances --- 
     mockResolutionClient = mock<IResolutionServiceClient>();
     // mockResolutionClientFactory = mock<ResolutionServiceClientFactory>(); // OLD MOCK
     // Configure factory mock to return the client mock directly
@@ -77,9 +72,7 @@ describe('ParserService', () => {
     } as unknown as ResolutionServiceClientFactory;
     // vi.spyOn(mockResolutionClientFactory, 'createClient').mockReturnValue(mockResolutionClient); // REMOVED SPY
     
-    // --- Registration --- 
-    testContainer.registerInstance(NodeFactory, mockNodeFactory);
-    testContainer.registerInstance(VariableNodeFactory, mockVariableNodeFactory);
+    // --- Registration ---
     testContainer.registerInstance(ResolutionServiceClientFactory, mockResolutionClientFactory);
     testContainer.registerInstance('DependencyContainer', testContainer);
     

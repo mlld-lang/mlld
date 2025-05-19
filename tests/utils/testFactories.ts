@@ -5,8 +5,7 @@ import type {
   CodeFenceNode,
   VariableReferenceNode
 } from '@core/ast/types/index';
-import type { DirectiveKind, DirectiveSubtype } from '@core/syntax/types/directives';
-import type { DirectiveData } from '@core/syntax/types';
+// Directive types are now in the main AST types
 import type { Location, Position } from '@core/types';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
@@ -18,8 +17,8 @@ import type { IInterpreterService } from '@services/pipeline/InterpreterService/
 import type { IPathService } from '@services/fs/PathService/IPathService';
 import { vi, type Mock } from 'vitest';
 import { mock } from 'vitest-mock-extended';
-import { isInterpolatableValueArray } from '@core/syntax/types/guards';
-import type { InterpolatableValue, StructuredPath as AstStructuredPath, VariableReferenceNode } from '@core/syntax/types/nodes';
+import { isInterpolatableValueArray } from '@core/ast/types/guards';
+import type { InterpolatableValue } from '@core/ast/types';
 import { VariableOrigin, VariableType } from '@core/types/variables';
 import type { TextVariable, DataVariable, IPathVariable, CommandVariable, VariableMetadata } from '@core/types/variables';
 import type { JsonValue } from '@core/types';

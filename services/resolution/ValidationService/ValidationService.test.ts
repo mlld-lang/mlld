@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, Mock } from 'vitest';
 import { mockDeep, mockReset, DeepMockProxy } from 'vitest-mock-extended';
 import { ValidationService } from '@services/resolution/ValidationService/ValidationService';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
-import type { DirectiveNode } from '@core/syntax/types/index';
+import type { DirectiveNode } from '@core/ast/types';
 import {
   createTextDirective,
   createDataDirective,
@@ -24,9 +24,7 @@ import {
 import { textDirectiveExamples } from '@core/syntax/index';
 // import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers'; // Commented out due to path issues
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
-import { DirectiveKind } from '@core/syntax/types/interfaces/IDirectiveNode';
-import { NodeFactory } from '@core/syntax/types/factories/NodeFactory';
-import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNodeFactory';
+import { DirectiveKind } from '@core/ast/types/directives';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import { MockFactory } from '@tests/utils/mocks/MockFactory';
 import { createMeldPath, unsafeCreateValidatedResourcePath } from '@core/types/paths';
@@ -36,8 +34,6 @@ describe('ValidationService', () => {
   let service: IValidationService;
   let testContainer: DependencyContainer;
   let mockResolutionService: DeepMockProxy<IResolutionService>;
-  let directiveNodeFactory: DirectiveNodeFactory;
-  let nodeFactory: NodeFactory;
   
   beforeEach(async () => {
     testContainer = container.createChildContainer();
@@ -47,12 +43,8 @@ describe('ValidationService', () => {
     mockResolutionService.resolveInContext.mockImplementation(async (val) => String(val));
     mockResolutionService.validateResolution.mockResolvedValue(createMeldPath('/resolved/path'));
 
-    nodeFactory = new NodeFactory();
-    directiveNodeFactory = new DirectiveNodeFactory(nodeFactory);
 
     testContainer.registerInstance<IResolutionService>('IResolutionService', mockResolutionService);
-    testContainer.registerInstance(NodeFactory, nodeFactory);
-    testContainer.registerInstance(DirectiveNodeFactory, directiveNodeFactory);
     testContainer.registerInstance('DependencyContainer', testContainer);
     
     testContainer.register<IValidationService>('IValidationService', { useClass: ValidationService });
@@ -273,17 +265,17 @@ describe('ValidationService', () => {
     });
     
     it('should validate a valid import directive with from syntax without alias', async () => {
-      const node = directiveNodeFactory.createDirectiveNode('import', { path: 'imports.meld', imports: [{ name: 'role' }] });
+      const node = createImportDirective('[role]', createLocation(1, 1, 1, 50), 'imports.meld');
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
     it('should validate a valid import directive with from syntax and alias', async () => {
-      const node = directiveNodeFactory.createDirectiveNode('import', { path: 'imports.meld', imports: [{ name: 'role', alias: 'roles' }] });
+      const node = createImportDirective('[role as roles]', createLocation(1, 1, 1, 50), 'imports.meld');
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
     it('should currently allow empty alias when using as syntax', async () => {
-       const node = directiveNodeFactory.createDirectiveNode('import', { path: 'imports.meld', imports: [{ name: 'role', alias: '' }] });
+       const node = createImportDirective('[role as ]', createLocation(1, 1, 1, 50), 'imports.meld');
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
           severity: ErrorSeverity.Fatal, directiveKind: 'import', messageContains: 'Import alias cannot be empty'
@@ -291,15 +283,12 @@ describe('ValidationService', () => {
     });
     
     it('should validate structured imports using bracket notation without alias', async () => {
-      const node = directiveNodeFactory.createDirectiveNode('import', { path: 'imports.meld', imports: [{ name: 'role' }] });
+      const node = createImportDirective('[role]', createLocation(1, 1, 1, 50), 'imports.meld');
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
     it('should validate structured imports with multiple variables', async () => {
-       const node = directiveNodeFactory.createDirectiveNode('import', {
-           path: 'imports.meld',
-           imports: [{ name: 'var1' }, { name: 'var2', alias: 'alias2' }, { name: 'var3' }]
-       });
+       const node = createImportDirective('[var1, var2 as alias2, var3]', createLocation(1, 1, 1, 50), 'imports.meld');
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
@@ -312,7 +301,7 @@ describe('ValidationService', () => {
     });
 
      it('should throw on missing path with Fatal severity (structured form)', async () => {
-       const node = directiveNodeFactory.createDirectiveNode('import', { imports: [{ name: 'var1' }] });
+       const node = createImportDirective('[var1]', createLocation(1, 1, 1, 50));
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
           severity: ErrorSeverity.Fatal, directiveKind: 'import', messageContains: 'requires a path'
@@ -320,7 +309,7 @@ describe('ValidationService', () => {
     });
 
      it('should throw on missing import specifiers with Fatal severity (structured form)', async () => {
-       const node = directiveNodeFactory.createDirectiveNode('import', { path: 'path.meld', imports: [] });
+       const node = createImportDirective('[]', createLocation(1, 1, 1, 50), 'path.meld');
        await expect(service.validate(node)).resolves.not.toThrow();
     });
   });

@@ -24,8 +24,8 @@ import {
   type IFilesystemPathState,
   type IUrlPathState
 } from '@core/types';
-import type { Field as AstField } from '@core/syntax/types/shared-types';
-import type { MeldNode, TextNode, VariableReferenceNode, CommentNode, DirectiveNode, StructuredPath } from '@core/syntax/types/nodes';
+import type { MeldNode, TextNode, VariableReferenceNode, CommentNode, DirectiveNode } from '@core/ast/types';
+import type { Field as AstField } from '@core/ast/types/primitives';
 import {
   MeldPath, 
   PathPurpose,
@@ -61,8 +61,6 @@ import { ParserServiceClientFactory } from '@services/pipeline/ParserService/fac
 import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
-// Import AST factories
-import { TextNodeFactory, VariableNodeFactory } from '@core/syntax/types';
 // Import client interfaces
 import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
 import { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient';
@@ -163,8 +161,6 @@ describe('ResolutionService', () => {
   let mockDirectiveClientFactory: Mocked<DirectiveServiceClientFactory>;
   let mockFileSystemClient: Mocked<IFileSystemServiceClient>;
   let mockFileSystemClientFactory: Mocked<FileSystemServiceClientFactory>;
-  let mockTextNodeFactory: Mocked<TextNodeFactory>;
-  let mockVariableNodeFactory: Mocked<VariableNodeFactory>;
 
   beforeEach(async () => {
     // --- 1. Initialize ALL Mocks --- 
@@ -180,9 +176,6 @@ describe('ResolutionService', () => {
     mockDirectiveClientFactory = mockDeep<DirectiveServiceClientFactory>();
     mockFileSystemClient = mockDeep<IFileSystemServiceClient>();
     mockFileSystemClientFactory = mockDeep<FileSystemServiceClientFactory>();
-    // Use mockDeep for AST factories too - may need adjustments if constructors are complex
-    mockTextNodeFactory = mockDeep<TextNodeFactory>(); 
-    mockVariableNodeFactory = mockDeep<VariableNodeFactory>();
 
     // --- 2. Configure Mocks --- 
     // Set default return value for parserService.parse
@@ -279,7 +272,7 @@ describe('ResolutionService', () => {
     pathServiceMock.getHomePath.mockReturnValue('/home/user');
     pathServiceMock.getProjectPath.mockReturnValue('/project');
     pathServiceMock.dirname.mockImplementation(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : '');
-    pathServiceMock.resolvePath.mockImplementation((filePath: RawPath | StructuredPath, baseDir?: RawPath): AbsolutePath | RelativePath => { 
+    pathServiceMock.resolvePath.mockImplementation((filePath: RawPath, baseDir?: RawPath): AbsolutePath | RelativePath => { 
       const pathString = typeof filePath === 'string' ? filePath : filePath.raw; 
       // Basic mock: Assume it resolves to an absolute path for simplicity
       const cleanString = pathString.replace(/^[$]|\/\//g, ''); // Remove leading $ or slashes
@@ -302,9 +295,13 @@ describe('ResolutionService', () => {
        if (text === '{{nonexistent}}') {
           return [{ type: 'VariableReference', identifier: 'nonexistent', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation, nodeId: 'mock-node-id' } as VariableReferenceNode];
        }
-       // Mock other specific cases needed by tests using mockVariableNodeFactory and mockTextNodeFactory
-       // Fallback
-       return [mockTextNodeFactory.createTextNode(text, mockLocation)];
+       // Fallback - create text node directly
+       return [{ 
+         type: 'Text', 
+         content: text, 
+         location: mockLocation, 
+         nodeId: 'mock-text-node-' + Math.random().toString(36).substr(2, 9) 
+       } as TextNode];
     });
 
     // --- 3. Create Manual Child Container ---
@@ -330,9 +327,6 @@ describe('ResolutionService', () => {
     testContainer.registerInstance(DirectiveServiceClientFactory, mockDirectiveClientFactory);
     testContainer.registerInstance(FileSystemServiceClientFactory, mockFileSystemClientFactory);
 
-    // Register AST Factory Mocks
-    testContainer.registerInstance(TextNodeFactory, mockTextNodeFactory);
-    testContainer.registerInstance(VariableNodeFactory, mockVariableNodeFactory);
 
     // --- 5. Register Real Service Implementation ---
     testContainer.register('IResolutionService', { useClass: ResolutionService });
@@ -356,9 +350,13 @@ describe('ResolutionService', () => {
 
   describe('resolveInContext', () => {
     it('should handle text nodes', async () => {
-      if (!mockTextNodeFactory) throw new Error('Mock TextNodeFactory not initialized');
-      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 12 } }; // Add mock location
-      const textNode = mockTextNodeFactory.createTextNode('simple text', mockLocation);
+      const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 12 } };
+      const textNode: TextNode = {
+        type: 'Text',
+        content: 'simple text',
+        location: mockLocation,
+        nodeId: 'test-text-node'
+      };
       vi.mocked(mockParserClient.parseString).mockResolvedValue([textNode]);
 
       const result = await service.resolveInContext('simple text', defaultContext);

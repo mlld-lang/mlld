@@ -6,7 +6,6 @@ import type { MeldNode } from '@core/syntax/types/index';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
 import type { OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService';
-import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory';
 import {
   createTextNode,
   createDirectiveNode,
@@ -52,7 +51,6 @@ describe('OutputService', () => {
   let service: OutputService;
   let mockState: IStateService;
   let mockResolutionService: IResolutionService;
-  let mockVariableNodeFactory: VariableNodeFactory;
   let mockResolutionServiceClientFactory: ResolutionServiceClientFactory;
   let mockVariableReferenceResolverClientFactory: VariableReferenceResolverClientFactory;
   let mockResolutionServiceClient: IResolutionServiceClient;
@@ -77,10 +75,6 @@ describe('OutputService', () => {
       // Add other methods used by OutputService if needed
     } as unknown as IResolutionService;
 
-    mockVariableNodeFactory = {
-      createVariableReference: vi.fn(),
-      // Add other methods if needed
-    } as unknown as VariableNodeFactory;
 
     // Mock Clients first
     mockResolutionServiceClient = {
@@ -105,7 +99,6 @@ describe('OutputService', () => {
     // Register Manual Mocks
     testContainer.registerInstance<IStateService>('IStateService', mockState);
     testContainer.registerInstance<IResolutionService>('IResolutionService', mockResolutionService);
-    testContainer.registerInstance(VariableNodeFactory, mockVariableNodeFactory); // Register class token
     testContainer.registerInstance(ResolutionServiceClientFactory, mockResolutionServiceClientFactory); // Register class token (optional constructor arg)
     testContainer.registerInstance('VariableReferenceResolverClientFactory', mockVariableReferenceResolverClientFactory); // Register string token (internal resolve)
     testContainer.registerInstance('DependencyContainer', testContainer); // Register container itself
@@ -362,7 +355,7 @@ describe('OutputService', () => {
 
   describe('Directive boundary handling', () => {
     beforeEach(() => {
-      service = new OutputService(mockState, mockResolutionService, undefined, mockVariableNodeFactory);
+      service = new OutputService(mockState, mockResolutionService, undefined);
       
       vi.spyOn(mockState, 'isTransformationEnabled').mockReturnValue(true);
       vi.spyOn(mockState, 'getVariable').mockImplementation((name, type?) => {
