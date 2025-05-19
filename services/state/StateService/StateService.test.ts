@@ -298,7 +298,10 @@ describe('StateService', () => {
         nodeId: 'test-text-node',
         type: 'Text',
         content: 'test',
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 4 } }
+        location: { 
+          start: { line: 1, column: 1, offset: 0 }, 
+          end: { line: 1, column: 4, offset: 3 } 
+        }
       };
       stateService.addNode(node);
       expect(stateService.getNodes()).toEqual([node]);
@@ -672,7 +675,10 @@ describe('StateService', () => {
         type: 'Text',
         content: 'test content',
         nodeId: 'test-node-id',
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+        location: { 
+          start: { line: 1, column: 1, offset: 0 }, 
+          end: { line: 1, column: 1, offset: 0 } 
+        }
       };
 
       await stateService.addNode(originalNode);

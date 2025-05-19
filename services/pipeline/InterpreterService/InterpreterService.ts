@@ -1,5 +1,5 @@
-import type { MeldNode, DirectiveNode, TextNode, VariableReferenceNode } from '@core/ast/types/index';
-import type { SourceLocation, InterpolatableValue } from '@core/syntax/types/nodes';
+import type { MeldNode, DirectiveNode, TextNode, VariableReferenceNode, SourceLocation } from '@core/ast/types/index';
+import { isTextNode, isDirectiveNode, isVariableReferenceNode } from '@core/ast/types/guards';
 import { interpreterLogger as logger } from '@core/utils/logger';
 import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService';
 import type { IStateService } from '@services/state/StateService/IStateService';
@@ -207,14 +207,14 @@ export class InterpreterService implements IInterpreterService {
     this.ensureClientsInitialized(); 
     
     if (this.directiveClient && this.directiveClient.handleDirective) {
-      // process.stdout.write(`DEBUG [callDirectiveHandleDirective] TRY block entered for ${node.directive.kind}\n`);
+      // process.stdout.write(`DEBUG [callDirectiveHandleDirective] TRY block entered for ${node.kind}\n`);
       try {
-        // process.stdout.write(`DEBUG [callDirectiveHandleDirective] BEFORE AWAIT directiveClient.handleDirective for ${node.directive.kind}\n`);
+        // process.stdout.write(`DEBUG [callDirectiveHandleDirective] BEFORE AWAIT directiveClient.handleDirective for ${node.kind}\n`);
         const result = await this.directiveClient.handleDirective(node, context);
-        // process.stdout.write(`DEBUG [callDirectiveHandleDirective] AFTER AWAIT directiveClient.handleDirective for ${node.directive.kind}. Received type: ${typeof result}, Structure: ${JSON.stringify(result, null, 2)}\n`);
+        // process.stdout.write(`DEBUG [callDirectiveHandleDirective] AFTER AWAIT directiveClient.handleDirective for ${node.kind}. Received type: ${typeof result}, Structure: ${JSON.stringify(result, null, 2)}\n`);
         return result as DirectiveResult;
       } catch (error) {
-        // process.stdout.write(`DEBUG [callDirectiveHandleDirective] CAUGHT error during client call for ${node.directive.kind}: ${error instanceof Error ? error.message : String(error)}\n`);
+        // process.stdout.write(`DEBUG [callDirectiveHandleDirective] CAUGHT error during client call for ${node.kind}: ${error instanceof Error ? error.message : String(error)}\n`);
         // Re-throw the original error to preserve its type and details
         throw error;
       }
@@ -459,9 +459,9 @@ export class InterpreterService implements IInterpreterService {
               (typeof nodeResult !== 'object' || 
                (nodeResult.stateChanges === undefined && nodeResult.replacement === undefined))) // Removed transformedContent check
           {
-            logger.error('Invalid result type returned from directive handler client after interpretNode', { nodeResult, nodeId: node.nodeId, kind: (node as DirectiveNode).kind });
+            logger.error('Invalid result type returned from directive handler client after interpretNode', { nodeResult, nodeId: node.nodeId, kind: isDirectiveNode(node) ? node.kind : undefined });
             throw new MeldInterpreterError(
-              `Invalid result type returned from directive handler client for directive '${(node as DirectiveNode).kind}'`, 
+              `Invalid result type returned from directive handler client for directive '${isDirectiveNode(node) ? node.kind : 'unknown'}'`, 
               'directive_client_error', 
               convertLocation(node.location),
               { severity: ErrorSeverity.Fatal }
@@ -487,7 +487,7 @@ export class InterpreterService implements IInterpreterService {
               const index = nodesBefore.findIndex(n => n.nodeId === node.nodeId);
   
               // <<< ADD LOGGING HERE >>>
-              logger.debug(`[Interpreter Loop] Processing node ${node.nodeId} (Type: ${node.type}, Kind: ${(node as DirectiveNode).directive?.kind}). Replacement found? ${!!nodeResult.replacement}. Index in transformed list: ${index}`);
+              logger.debug(`[Interpreter Loop] Processing node ${node.nodeId} (Type: ${node.type}, Kind: ${isDirectiveNode(node) ? node.kind : 'N/A'}). Replacement found? ${!!nodeResult.replacement}. Index in transformed list: ${index}`);
               if (nodeResult.replacement) {
                 logger.debug(`[Interpreter Loop] Replacement content: ${JSON.stringify(nodeResult.replacement)}`);
               }
@@ -496,7 +496,7 @@ export class InterpreterService implements IInterpreterService {
               if (index !== -1) {
                 const replacementNodes = nodeResult.replacement;
                 // <<< ADD LOGGING HERE >>>
-                logger.debug(`[Interpreter Loop] Calling transformNode. Index: ${index}, Replacement Node Count: ${replacementNodes.length}, First Replacement Node Type: ${replacementNodes[0]?.type}, First Replacement Node Content: ${(replacementNodes[0] as TextNode)?.content?.substring(0, 50)}...`);
+                logger.debug(`[Interpreter Loop] Calling transformNode. Index: ${index}, Replacement Node Count: ${replacementNodes.length}, First Replacement Node Type: ${replacementNodes[0]?.type}, First Replacement Node Content: ${replacementNodes[0] && isTextNode(replacementNodes[0]) ? replacementNodes[0].content.substring(0, 50) : 'N/A'}...`);
                 currentState.transformNode(index, replacementNodes.length > 0 ? replacementNodes : undefined);
                 // <<< END LOGGING >>>
                 logger.debug(`Applied ${replacementNodes.length} replacement nodes for original node ${node.nodeId} at index ${index}`);
@@ -601,8 +601,8 @@ export class InterpreterService implements IInterpreterService {
 
     switch (node.type) {
       case 'Text':
-        const textNode = node as TextNode;
-        currentState.addNode(textNode); // Correct: Interpreter adds the node as-is
+        // TypeScript knows node is TextNode within this case due to the discriminated union
+        currentState.addNode(node); // Correct: Interpreter adds the node as-is
         break;
 
       case 'CodeFence':
@@ -610,24 +610,24 @@ export class InterpreterService implements IInterpreterService {
         break;
 
       case 'VariableReference':
-         const varNode = node as VariableReferenceNode;
+         // TypeScript knows node is VariableReferenceNode within this case
          try {
              const varRefContext = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
-             const resolvedStringValue = await this.resolutionService.resolveNodes([varNode], varRefContext);
+             const resolvedStringValue = await this.resolutionService.resolveNodes([node], varRefContext);
              const resolvedTextNode: TextNode = {
                  type: 'Text',
                  nodeId: crypto.randomUUID(),
-                 location: varNode.location,
+                 location: node.location,
                  content: resolvedStringValue
              };
              currentState.addNode(resolvedTextNode);
          } catch (error) {
               logger.error('Failed to resolve VariableReferenceNode during interpretation', {
                  error: error instanceof Error ? error.message : String(error),
-                 identifier: varNode.identifier
+                 identifier: node.identifier
               });
               const errorState = currentState.clone();
-              errorState.addNode(varNode);
+              errorState.addNode(node);
               currentState = errorState;
          }
          break;
@@ -638,26 +638,27 @@ export class InterpreterService implements IInterpreterService {
       case 'Directive':
         currentState.addNode(node);
 
-        if (node.type !== 'Directive' || !('kind' in node) || !node.kind) {
+        // Redundant check since we're already in the Directive case, but keep for defensive programming
+        if (!('kind' in node) || !node.kind) {
           throw new MeldInterpreterError(
             'Invalid directive node',
             'invalid_directive',
             convertLocation(node.location)
           );
         }
-        const directiveNode = node as DirectiveNode;
-        const isImportDirective = directiveNode.kind === 'import';
+        // TypeScript knows node is DirectiveNode within this case
+        const isImportDirective = node.kind === 'import';
         
         const baseResolutionContext = ResolutionContextFactory.create(currentState, currentState.getCurrentFilePath() ?? undefined);
         const formattingContext: OutputFormattingContext = {
           isOutputLiteral: currentState.isTransformationEnabled?.() || false,
           contextType: 'block',
-          nodeType: directiveNode.type,
+          nodeType: node.type,
           atLineStart: true,
           atLineEnd: false
         };
         let executionContext: ExecutionContext | undefined = undefined;
-        if (directiveNode.kind === 'run') {
+        if (node.kind === 'run') {
           executionContext = {
              cwd: currentState.getCurrentFilePath() ? this.pathService.dirname(currentState.getCurrentFilePath()!) : process.cwd(),
           };
@@ -667,12 +668,12 @@ export class InterpreterService implements IInterpreterService {
           resolutionContext: baseResolutionContext, 
           formattingContext: formattingContext,
           executionContext: executionContext, 
-          directiveNode: directiveNode, 
+          directiveNode: node, 
           circularityService: circularityService // Pass the service here
         };
 
         // Call the directive handler (now returns new DirectiveResult)
-        directiveResult = await this.callDirectiveHandleDirective(directiveNode, handlerContext);
+        directiveResult = await this.callDirectiveHandleDirective(node, handlerContext);
         
         break;
 

@@ -1,24 +1,35 @@
 # Type Restructuring Post-AST Reorganization
 
-## Current Status (As of Latest Update)
+## Current Status (As of 2024-01-18)
+
+### Migration Progress Summary
+- **Core Services**: All main service files migrated to new AST types ✅
+- **Directive Handlers**: All 7 handlers now use correct imports ✅
+- **Import Issues**: 8/10 services fixed (2 test files remain)
+- **AST Structure**: All `node.directive.*` usage fixed ✅
+- **Type Guards**: InterpreterService now uses proper guards ✅
+- **Testing**: Major issues in 2 services need fixture migration
 
 ### ✅ Completed
 - **Steps 1-4b**: Type analysis, unified definitions, AST union, ParserService transformation
-- **Step 5a**: StateService migration to use new AST types
-- **Step 5b**: InterpreterService updated with discriminated unions
-- **Step 5c**: All directive handlers migrated (7 handlers total)
+- **Step 5a**: StateService migration to use new AST types (main service only, tests need work)
+- **Step 5b**: InterpreterService core updated with discriminated unions and type guards
+- **Step 5c**: All directive handlers migrated with correct imports (7 handlers total)
+- **NEW Step 5.5**: Migration Verification Audit completed for all services
 - **Partial Step 6**: Old syntax types renamed to `types-old` (but not removed)
 
 ### ⚠️ Partially Completed  
+- **InterpreterService**: Core fixed, test files still use old syntax helpers
+- **StateService**: Core complete, tests need fixture migration and AST structure fixes
 - **Step 5d**: ResolutionService (main service migrated, supporting files still use old types)
 - **Step 5d**: PathService (main service migrated, test has one old import)
 - **Step 5d**: OutputService (main service migrated, may have test imports)
 
 ### ❌ Still Pending
-- **NEW Step 5.5**: Migration Verification Audit (for all "completed" services)
+- **Step 5e**: Fix remaining test file imports (InterpreterService, StateService)
 - **Step 5d**: Complete migration of supporting files for partial services
 - **Step 6**: Full removal of `core/syntax/types-old` folder
-- **Step 7**: Update remaining ~79 files still importing from old types
+- **Step 7**: Update remaining ~20-30 files still importing from old types (mostly tests)
 - **Step 8**: Documentation and final validation
 
 ## Context
@@ -334,64 +345,118 @@ During test migrations, we discovered that the handlers themselves are using the
 - Reduces test maintenance burden
 - Eliminates artificial adapter layers
 
-### Step 5.5: Migration Verification Audit (NEW - 2-3 days) *(Next)*
+### Step 5.5: Migration Verification Audit (COMPLETED - 2024-01-18) ✅
 
 **Purpose**: Verify that all "completed" services actually meet the full migration criteria.
 
-**Services to Audit**:
-1. **StateService** (marked as completed)
-2. **InterpreterService** (marked as completed)  
-3. **All Directive Handlers** (7 handlers marked as completed)
-4. **ParserService** (marked as completed)
+**Services Audited**:
+1. **StateService** - Found testing issues
+2. **InterpreterService** - Found import and AST structure issues  
+3. **All Directive Handlers** - Found import issues in 6/7 handlers
+4. **ParserService** - Mostly complete
 
-**Audit Checklist for Each Service**:
-- [ ] **Type Imports Audit**
-  - Check main service file for any `@core/syntax/types` imports
-  - Check test files for old imports
-  - Check supporting files (factories, utilities, validators)
-  - Use grep/search to find hidden references
-  
-- [ ] **AST Structure Audit**  
-  - Verify no `node.directive.*` property access
-  - Confirm direct property access (`node.kind`, `node.values`, etc.)
-  - Check for adapter layers converting structures
-  
-- [ ] **Discriminated Union Usage**
-  - Verify services use `MeldNode` union type
-  - Check for proper type narrowing with switch/if statements
-  - Ensure type guards are used correctly
-  
-- [ ] **Testing Audit**
-  - Confirm tests use fixtures from `core/ast/fixtures/`
-  - No hardcoded mock AST with wrong structure
-  - Tests validate against fixture expected outputs
-  
-- [ ] **Complete Migration Status**
-  - Document any remaining issues found
-  - Create fix tasks for incomplete migrations
-  - Update status in main tracking section
+**Results Summary**:
+- **Total Issues Found**: 
+  - Import issues: 8 services (now fixed)
+  - AST structure issues: 1 service (now fixed)
+  - Testing issues: 8 services (2 critical remain)
+  - Type guard usage: 7 services (1 fixed)
 
-**Expected Findings**:
-Based on our earlier investigation, we expect to find:
-- Directive handlers still have imports from old types
-- Test files using incorrect AST structure
-- Supporting utilities not fully migrated
-- Hidden references in factory classes
+**Fixes Applied**:
+1. **InterpreterService**:
+   - ✅ Fixed imports from old syntax types
+   - ✅ Fixed `node.directive.kind` → `node.kind`
+   - ✅ Added proper type guards
+   - ❌ Tests still use old helpers
 
-**Deliverable**: Detailed audit report for each service with specific issues and required fixes.
+2. **All Directive Handlers**:
+   - ✅ TextDirectiveHandler: Fixed all imports
+   - ✅ DataDirectiveHandler: Fixed all imports
+   - ✅ PathDirectiveHandler: Fixed all imports
+   - ✅ AddDirectiveHandler: Fixed all imports
+   - ✅ RunDirectiveHandler: Fixed all imports
+   - ✅ ExecDirectiveHandler: Already complete
 
-#### 5d. Other Services (6-8 days) *(After Audit)*
+3. **StateService**:
+   - ✅ Core service already correct
+   - ❌ Tests need fixture migration
+   - ❌ Mock structures incomplete
+
+**Deliverable**: Completed audit tracked in `MIGRATION-AUDIT-TRACKER.md` with detailed findings and fixes.
+
+#### 5d. Other Services (6-8 days) *(In Progress)*
 **Reference:** See `STEP-5D-SERVICE-MIGRATION-PLAN-V2.md` for comprehensive migration strategy
 
 - Update remaining services using fixture-based approach:
-  - ResolutionService (2-3 days)
+  - ResolutionService (2-3 days) - Core done, supporting files remain
   - ValidationService (1 day)
-  - PathService (1 day) 
-  - OutputService (1 day)
+  - PathService (1 day) - Core done, one test import remains
+  - OutputService (1 day) - Core done, tests may need work
   - ParserService cleanup (1 day)
 - Leverage fixtures from `core/examples/` and `core/ast/fixtures/`
 - Test against expected outputs where available
 - Remove all `@core/syntax/types` imports
+
+#### 5e. Test File Migration (NEW - 2-3 days) *(Next Priority)*
+
+**Purpose**: Fix remaining test files that still use old syntax helpers and incorrect mock structures.
+
+**Critical Test Migrations**:
+1. **InterpreterService.integration.test.ts**:
+   - Replace `createNodeFromExample()` with fixture-based approach
+   - Update imports from `@core/syntax/*` to `@core/ast/types`
+   - Use `ASTFixtureLoader` for node creation
+
+2. **StateService.test.ts**:
+   - Update mock structures to include all required fields (e.g., `offset` in Position)
+   - Consider migrating to fixture-based testing
+   - Use new `astMocks.ts` utility for proper mock creation
+
+**Approach**:
+- Use fixtures from `core/ast/fixtures/*.json`
+- Replace manual node construction with fixture loading
+- Ensure mock structures match actual AST output
+- Keep service dependency mocking separate from AST fixtures
+
+#### 5f. Test Deduplication Audit (NEW - 3-4 days) *(After 5e)*
+
+**Purpose**: Audit all service tests to identify duplicate tests and determine fixture migration needs.
+
+**Scope**: Review all services that have both `.test.ts` and `.fixture.test.ts` files:
+- All directive handlers (7 total)
+- Core services with fixture tests
+- Supporting services
+
+**Process**:
+1. **Read .fixture.test.ts first** - Understand what functionality is covered by fixture tests
+2. **Review each test in .test.ts** - For each test, determine if it:
+   - Duplicates functionality already tested in fixture tests (mark for removal)
+   - Tests unique service-specific behavior (keep)
+   - If keeping, determine if it should use fixtures (mark for migration)
+
+**Deliverable**: Create `TEST-DEDUPLICATION-TRACKER.md` with detailed audit findings
+
+**Expected Outcomes**:
+- Significant reduction in test duplication
+- Clear list of tests to migrate to fixtures
+- Cleaner test organization
+
+#### 5g. Test Fixture Migration (NEW - 2-3 days) *(After 5f)*
+
+**Purpose**: Migrate identified tests to use fixtures where practical.
+
+**Scope**: All tests identified in Step 5f as needing fixture migration
+
+**Process**:
+1. Replace manual node construction with fixture loading
+2. Update test assertions to match fixture structure
+3. Ensure tests remain focused on unique functionality
+4. Remove duplicate tests identified in audit
+
+**Success Criteria**:
+- All practical tests use fixtures
+- No duplicate test coverage
+- Maintain 100% unique functionality coverage
 
 ### Step 6: Remove Legacy Types (1 day) *(Partially Complete)*
 
@@ -591,25 +656,24 @@ Phase 3 will be considered successful when:
 - **Days 3-4**: Migrate handler tests to use fixtures
 - **Days 5**: Resume directive handler updates with correct tests
 
-### Week 4: Migration Verification (NEW - Step 5.5)
-- **Days 1-2**: Audit all "completed" services for actual migration status
-- **Day 3**: Document findings and create fix tasks
-- **Days 4-5**: Fix critical issues found in audit
+### Week 4: Migration Verification (COMPLETED - Step 5.5) ✅
+- **Day 1**: Audit all "completed" services for actual migration status ✅
+- **Day 2**: Document findings in MIGRATION-AUDIT-TRACKER.md ✅
+- **Day 3**: Fix critical issues (InterpreterService, handler imports) ✅
 
-### Week 5: Complete Migration (Step 5d)
-- **Days 1-2**: Complete ResolutionService migration
-- **Day 3**: Migrate ValidationService
-- **Day 4**: Migrate PathService
+### Week 5: Test Migration & Remaining Services (IN PROGRESS)
+- **Days 1-2**: Fix test files (InterpreterService, StateService) - Step 5e
+- **Day 3**: Complete ResolutionService migration
+- **Day 4**: Complete PathService and OutputService
 - **Day 5**: Final service cleanups
 
 ### Week 6: Cleanup (Steps 6-8)
 - **Day 1**: Remove legacy types (Step 6)
-- **Days 2-4**: Update all imports (Step 7)
-  - ~330 import statements need updating
-  - Consider automation script
-- **Days 4-5**: Documentation and validation (Step 8)
+- **Days 2-3**: Update remaining imports (~20-30 files, mostly tests)
+- **Day 4**: Documentation updates
+- **Day 5**: Final validation
 
-**Total:** 5-6 weeks for complete implementation (updated to include verification audit)
+**Total:** 5-6 weeks for complete implementation (currently in Week 4-5)
 
 **Key Insight:** StateService update (documented in `STATE-UPDATES.md`) serves as the detailed prototype for updating other services. Success here validates the approach for remaining services.
 

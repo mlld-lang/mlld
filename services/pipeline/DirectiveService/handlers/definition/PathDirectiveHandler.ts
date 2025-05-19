@@ -1,4 +1,4 @@
-import { DirectiveNode, DirectiveData } from '@core/syntax/types/index';
+import type { DirectiveNode, PathNodeArray } from '@core/ast/types/index';
 import { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IStateService } from '@services/state/StateService/IStateService';
@@ -14,9 +14,8 @@ import { VariableOrigin, VariableType, type VariableMetadata, type VariableDefin
 import type { SourceLocation } from '@core/types/common';
 import type { DirectiveProcessingContext } from '@core/types/index';
 import type { ResolutionContext } from '@core/types/resolution';
-import type { PathDirectiveData } from '@core/syntax/types/directives';
+// PathDirectiveData and StructuredPath now handled by new AST types
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler.ts';
-import type { StructuredPath } from '@core/syntax/types/nodes';
 
 /**
  * Handler for @path directives

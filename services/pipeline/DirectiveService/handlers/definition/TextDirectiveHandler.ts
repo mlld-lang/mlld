@@ -2,9 +2,10 @@ import type {
     DirectiveNode, 
     TextNode, 
     VariableReferenceNode,
-    MeldNode 
+    MeldNode,
+    PathNodeArray  
 } from '@core/ast/types/index';
-import type { InterpolatableValue, StructuredPath } from '@core/syntax/types/nodes'; 
+import type { InterpolatableValue } from '@core/ast/types/guards'; 
 import type { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IStateService } from '@services/state/StateService/IStateService';
@@ -23,12 +24,12 @@ import { isInterpolatableValueArray } from '@core/ast/types/guards';
 import { ICommandDefinition, isBasicCommand } from '@core/types/exec';
 import type { DirectiveProcessingContext } from '@core/types/index';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler'; 
-import { DirectiveKind } from '@core/syntax/types/directives'; 
+// DirectiveKind now handled by node.kind property directly 
 import { isCommandVariable } from '@core/types/guards';
 
 interface EmbedRHSStructure {
     subtype: 'addPath' | 'addVariable' | 'addTemplate';
-    path?: StructuredPath; 
+    path?: PathNodeArray; 
     content?: InterpolatableValue;
     section?: string;
 }

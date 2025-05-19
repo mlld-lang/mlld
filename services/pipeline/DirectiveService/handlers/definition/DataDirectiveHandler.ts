@@ -1,10 +1,10 @@
 import type { 
     DirectiveNode, 
-    InterpolatableValue, 
     VariableReferenceNode, 
-    TextNode, 
-    StructuredPath as AstStructuredPath
-} from '@core/syntax/types/nodes'; 
+    TextNode,
+    PathNodeArray
+} from '@core/ast/types/index';
+import type { InterpolatableValue } from '@core/ast/types/guards'; 
 // Remove imports for non-existent types
 // import type {
 //     DataDirectiveData, 

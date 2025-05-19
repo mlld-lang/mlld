@@ -5,8 +5,7 @@ import type {
   VariableReferenceNode,
   RunDirectiveNode
 } from '@core/ast/types';
-import type { InterpolatableValue } from '@core/ast/types/nodes';
-import { NodeType } from '@core/ast/types/nodes';
+import type { InterpolatableValue } from '@core/ast/types/guards';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
@@ -19,7 +18,7 @@ import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
 import { PathValidationError } from '@core/errors';
-import { isInterpolatableValueArray } from '@core/syntax/types/guards';
+import { isInterpolatableValueArray } from '@core/ast/types/guards';
 import * as os from 'os';
 import * as fs from 'fs-extra';
 import * as path from 'path';
