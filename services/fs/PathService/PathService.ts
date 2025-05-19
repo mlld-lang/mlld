@@ -4,7 +4,7 @@ import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
 import type { Position, Location } from '@core/types/index';
 import * as path from 'path';
 import * as os from 'os';
-import type { MeldNode } from '@core/syntax/types/index';
+import type { MeldNode } from '@core/ast/types/index';
 import { 
   MeldError 
 } from '@core/errors/MeldError';
@@ -24,8 +24,8 @@ import {
   URLError 
 } from '@services/fs/PathService/errors/url/index';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver';
-import type { StructuredPath } from '@core/syntax/types/nodes';
-import type { TextNode, VariableReferenceNode } from '@core/syntax/types/nodes';
+import type { PathNodeArray } from '@core/ast/types/values';
+import type { TextNode, VariableReferenceNode } from '@core/ast/types/nodes';
 import {
   AbsolutePath,
   RelativePath,
