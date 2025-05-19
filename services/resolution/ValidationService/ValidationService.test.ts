@@ -9,7 +9,9 @@ import {
   createImportDirective,
   createAddDirective,
   createPathDirective,
-  createLocation
+  createLocation,
+  createDirectiveNode,
+  createVariableReferenceArray
 } from '@tests/utils/testFactories';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { ErrorSeverity, MeldError } from '@core/errors/MeldError';

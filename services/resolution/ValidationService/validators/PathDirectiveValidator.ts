@@ -77,12 +77,10 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
     );
   }
   
-  // Check for path value - could be in values.path or raw.path
-  const pathValue = node.values?.path || node.raw?.path;
-  
-  if (!pathValue || (typeof pathValue === 'string' && pathValue.trim() === '')) {
+  // Check for path value in values.path array
+  if (!node.values?.path || !Array.isArray(node.values.path) || node.values.path.length === 0) {
     throw new MeldDirectiveError(
-      'Path directive requires a non-empty path.raw string',
+      'Path directive requires a non-empty path value',
       'path',
       {
         location: convertLocation(node.location?.start),
@@ -92,10 +90,11 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
     );
   }
   
-  // Check if path has required structure (for test compatibility)
-  if (typeof pathValue === 'object' && pathValue.raw && pathValue.raw.trim() === '') {
+  // Check the actual content of path nodes
+  const pathContent = node.values.path[0];
+  if (!pathContent || pathContent.type !== 'Text' || pathContent.content.trim() === '') {
     throw new MeldDirectiveError(
-      'Path directive requires a non-empty path.raw string',
+      'Path directive requires a non-empty path value',
       'path',
       {
         location: convertLocation(node.location?.start),

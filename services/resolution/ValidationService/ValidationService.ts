@@ -59,16 +59,19 @@ export class ValidationService implements IValidationService {
    * @throws {MeldDirectiveError} If validation fails
    */
   async validate(node: DirectiveNode): Promise<void> {
+    // Handle both new AST structure (node.kind) and old structure (node.directive.kind)
+    const kind = node.kind || (node as any).directive?.kind;
+    
     logger.debug('Validating directive', {
-      kind: node.kind,
+      kind: kind,
       location: node.location
     });
     
-    const validator = this.validators.get(node.kind);
+    const validator = this.validators.get(kind);
     if (!validator) {
       throw new MeldDirectiveError(
-        `Unknown directive kind: ${node.kind}`,
-        node.kind,
+        `Unknown directive kind: ${kind}`,
+        kind,
         {
           location: node.location?.start,
           code: DirectiveErrorCode.HANDLER_NOT_FOUND,
