@@ -497,7 +497,7 @@ export function createPathDirective(
 export function createRunDirective(
   commandInput: string | InterpolatableValue | { name: string, args: any[], raw: string }, 
   location?: Location,
-  subtype?: 'runCommand' | 'runCode' | 'runCodeParams' | 'runDefined',
+  subtype?: 'runCommand' | 'runCode' | 'runCodeParams' | 'runExec',
   language?: string,
   parameters?: Array<VariableReferenceNode | string>,
   outputVar?: string,
@@ -512,7 +512,7 @@ export function createRunDirective(
   // Determine subtype if not provided
   if (!resolvedSubtype) {
     if (typeof commandInput === 'object' && 'name' in commandInput) {
-      resolvedSubtype = 'runDefined';
+      resolvedSubtype = 'runExec';
     } else if (language) {
       resolvedSubtype = parameters ? 'runCodeParams' : 'runCode';
     } else {
@@ -529,8 +529,8 @@ export function createRunDirective(
     case 'runCodeParams':
       source = 'code';
       break;
-    case 'runDefined':
-      source = 'defined';
+    case 'runExec':
+      source = 'exec';
       break;
     default:
       source = 'command';
@@ -574,15 +574,20 @@ export function createRunDirective(
     
     meta.isMultiLine = codeText.includes('\n');
     meta.isBracketed = true;
-  } else if (resolvedSubtype === 'runDefined') {
+  } else if (resolvedSubtype === 'runExec') {
     // Reference to defined command
-    const definedCmd = commandInput as { name: string, args: any[], raw: string };
-    values.command = createVariableReferenceArray(definedCmd.name, 'command', location);
-    raw.command = definedCmd.raw;
-    
-    if (definedCmd.args && definedCmd.args.length > 0) {
-      values.args = definedCmd.args.map(arg => createTextNodeArray(String(arg), location)[0]);
-      raw.args = definedCmd.args;
+    if (typeof commandInput === 'string') {
+      values.identifier = createTextNodeArray(commandInput, location);
+      raw.identifier = commandInput;
+    } else if (typeof commandInput === 'object' && 'name' in commandInput) {
+      const definedCmd = commandInput as { name: string, args: any[], raw: string };
+      values.identifier = createTextNodeArray(definedCmd.name, location);
+      raw.identifier = definedCmd.name;
+      
+      if (definedCmd.args && definedCmd.args.length > 0) {
+        values.args = definedCmd.args.map(arg => createTextNodeArray(String(arg), location)[0]);
+        raw.args = definedCmd.args;
+      }
     }
   }
   
