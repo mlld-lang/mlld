@@ -5,7 +5,12 @@ Unify AST and runtime types into a single coherent type system, eliminating arti
 
 ## 📍 Current Status
 **Phase 5c: Directive Handlers** - COMPLETED
-**Phase 5d: Other Services** - NEXT (ResolutionService, ValidationService, PathService, OutputService, ParserService)
+**Phase 5d: Other Services** - IN PROGRESS
+  - ✅ ResolutionService - COMPLETED
+  - ✅ ValidationService - COMPLETED
+  - ✅ PathService - COMPLETED
+  - ⏳ OutputService - NEXT
+  - ⏳ ParserService cleanup - PENDING
 
 ## 🗂️ Key Reference Documents
 
@@ -45,10 +50,10 @@ Tests are creating incorrect node structures, causing handlers to be modified ba
   - [x] ExecDirectiveHandler (complete)
 
 ### 2. Update Remaining Services (Step 5d)
-- [ ] ResolutionService (2-3 days)
-- [ ] ValidationService (1 day)
-- [ ] PathService (1 day)
-- [ ] OutputService (1 day)
+- [x] ResolutionService - COMPLETED
+- [x] ValidationService - COMPLETED
+- [x] PathService - COMPLETED 
+- [ ] OutputService (1 day) - NEXT
 - [ ] ParserService cleanup (1 day)
 - **Reference**: See `STEP-5D-SERVICE-MIGRATION-PLAN-V2.md` for detailed approach
 

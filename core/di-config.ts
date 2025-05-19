@@ -37,10 +37,10 @@ import {
   // ... other loggers ...
 } from '@core/utils/logger';
 
-// Import AST factory classes
-import { NodeFactory } from '@core/ast/types/factories/NodeFactory';
-import { VariableNodeFactory } from '@core/ast/types/factories/VariableNodeFactory';
-import { DirectiveNodeFactory } from '@core/ast/types/factories/DirectiveNodeFactory';
+// Import AST factory classes (temporarily from old location)
+import { NodeFactory } from '@core/syntax/types-old/factories/NodeFactory';
+import { VariableNodeFactory } from '@core/syntax/types-old/factories/VariableNodeFactory';
+import { DirectiveNodeFactory } from '@core/syntax/types-old/factories/DirectiveNodeFactory';
 // ... other AST factories ...
 
 // Import Directive Handlers

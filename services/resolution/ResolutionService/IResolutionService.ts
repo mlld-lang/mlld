@@ -1,7 +1,6 @@
 import type { 
     MeldNode, 
     InterpolatableValue, 
-    StructuredPath, 
     Field, 
     VariableReferenceNode 
 } from '@core/ast/types/index';
@@ -110,12 +109,12 @@ export interface IResolutionService {
    * Resolves any value based on the provided context rules.
    * This is the preferred general-purpose resolution method.
    * 
-   * @param value - The string, structured path representation, or pre-parsed node array to resolve
+   * @param value - The string or pre-parsed node array to resolve
    * @param context - The resolution context defining allowed types and rules
    * @returns The resolved value as a string
    * @throws {MeldResolutionError} If resolution fails and context.strict is true
    */
-  resolveInContext(value: string | StructuredPath | InterpolatableValue, context: ResolutionContext): Promise<string>;
+  resolveInContext(value: string | InterpolatableValue, context: ResolutionContext): Promise<string>;
 
   /**
    * Resolves a field access path against a given base value.

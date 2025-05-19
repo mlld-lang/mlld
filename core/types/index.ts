@@ -36,8 +36,8 @@ import type {
   SourceLocation as EmbedSourceLocation,
   EmbedResult
 } from './add';
-import type { MeldNode } from '@core/syntax/types/index';
-import type { DirectiveNode } from '@core/syntax/types/index';
+import type { MeldNode } from '@core/ast/types/index';
+import type { DirectiveNode } from '@core/ast/types/index';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService';
 

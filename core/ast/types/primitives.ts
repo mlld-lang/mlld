@@ -1,0 +1,121 @@
+/**
+ * Primitive node types for the Meld AST
+ * These are the fundamental building blocks used by directive types
+ */
+
+// Position and source location tracking
+export interface Position {
+  line: number;
+  column: number;
+  offset: number;
+}
+
+export interface SourceLocation {
+  start: Position;
+  end: Position;
+}
+
+// Base interface for all nodes
+export interface BaseMeldNode {
+  type: string;
+  nodeId: string;
+  location?: SourceLocation;
+}
+
+// Text content node - represents plain text
+export interface TextNode extends BaseMeldNode {
+  type: 'Text';
+  content: string;
+  formattingMetadata?: FormattingMetadata;
+}
+
+// Variable reference node
+export interface VariableReferenceNode extends BaseMeldNode {
+  type: 'VariableReference';
+  identifier: string;
+  valueType: string;
+  isVariableReference: boolean;
+  fields?: Array<{ type: 'field' | 'index'; value: string | number }>;
+  format?: string;
+}
+
+// Literal value node
+export interface LiteralNode extends BaseMeldNode {
+  type: 'Literal';
+  value: any;
+  valueType?: string;
+}
+
+// Separator nodes
+export interface DotSeparatorNode extends BaseMeldNode {
+  type: 'DotSeparator';
+  value: '.';
+}
+
+export interface PathSeparatorNode extends BaseMeldNode {
+  type: 'PathSeparator';
+  value: '/';
+}
+
+// Code fence node for code blocks
+export interface CodeFenceNode extends BaseMeldNode {
+  type: 'CodeFence';
+  language?: string;
+  content: string;
+}
+
+// Comment node
+export interface CommentNode extends BaseMeldNode {
+  type: 'Comment';
+  content: string;
+}
+
+// Error node for parse errors
+export interface ErrorNode extends BaseMeldNode {
+  type: 'Error';
+  error: string;
+  debugDetails?: any;
+  partialNode?: any;
+}
+
+// Formatting metadata for text nodes
+export interface FormattingMetadata {
+  trimLines?: boolean;
+  trimInline?: boolean;
+  removeEmptyLines?: boolean;
+  preserveLineBreaks?: boolean;
+  indentationLevel?: number;
+  language?: string;
+}
+
+// Directive types
+export type DirectiveKind = 
+  | 'run'
+  | 'import'
+  | 'add'
+  | 'exec'
+  | 'text'
+  | 'path'
+  | 'data';
+
+export type DirectiveSubtype = 
+  | 'importAll' | 'importSelected'
+  | 'addPath' | 'addVariable' | 'addTemplate'
+  | 'textAssignment' | 'textTemplate'  // Updated to match new names
+  | 'dataDirective'
+  | 'pathAssignment'
+  | 'runCommand' | 'runExec' | 'runCode'  // Updated to match new names
+  | 'execCode' | 'execCommand';  // Updated to match new names
+
+export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
+
+// Directive base node
+export interface DirectiveNode extends BaseMeldNode {
+  type: 'Directive';
+  kind: DirectiveKind;
+  subtype: DirectiveSubtype;
+  source?: DirectiveSource;
+  values: { [key: string]: BaseMeldNode[] };
+  raw: { [key: string]: string };
+  meta: { [key: string]: unknown };
+}

@@ -8,13 +8,13 @@ import {
 import { resolutionLogger as logger } from '@core/utils/logger';
 import { ResolutionContext } from '@core/types/resolution';
 import { JsonValue } from '@core/types/common';
-import { Field } from '@core/syntax/types/shared-types';
+import { Field } from '@core/syntax/types-old/shared-types';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
 import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
-import { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types/nodes';
+import { MeldNode, TextNode, VariableReferenceNode } from '@core/ast/types/index';
 import { ResolutionContextFactory } from '../ResolutionContextFactory';
-import { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference';
-import { createVariableReferenceNode } from '@core/syntax/types/variables';
+import { IVariableReference } from '@core/syntax/types-old/interfaces/IVariableReference';
+import { createVariableReferenceNode } from '@core/ast/types/variables';
 import { VariableType } from '@core/types/variables';
 
 /**

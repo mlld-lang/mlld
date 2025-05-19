@@ -7,8 +7,8 @@
  * IMPORTANT: This file must NOT import from any service implementation files to avoid circular dependencies.
  */
 
-import type { NodeType, BaseNode } from './syntax/types/shared-types';
-import type { MeldNode, DirectiveNode, TextNode } from './syntax/types/index';
+import type { NodeType } from './syntax/types/shared-types';
+import type { MeldNode, DirectiveNode, TextNode, BaseNode } from './ast/types/index';
 import type { ResolutionContextBase, DirectiveContextBase } from './shared/types';
 // Import the actual variable types
 import type {
@@ -27,7 +27,6 @@ import type {
 // These are OK because they import concrete types, not interfaces that might depend back
 import type { VariableType } from '@core/types/variables';
 import type { PathValidationContext, RawPath, ValidatedResourcePath } from '@core/types/paths';
-import type { StructuredPath } from '@core/syntax/types/nodes';
 
 /**
  * Common client factory interface
@@ -207,7 +206,7 @@ export interface PathServiceLike {
   /** Validate a path */
   validatePath(filePath: string | MeldPath, context: PathValidationContext): Promise<MeldPath>;
   /** Resolve a path */
-  resolvePath(filePath: RawPath | StructuredPath, baseDir?: RawPath): ValidatedResourcePath;
+  resolvePath(filePath: RawPath, baseDir?: RawPath): ValidatedResourcePath;
   /** Join path segments */
   joinPaths(...paths: string[]): RawPath;
 }
@@ -232,9 +231,9 @@ export interface ResolutionServiceLike {
   /** Resolve raw content nodes, preserving formatting but skipping comments */
   resolveContent(nodes: MeldNode[], context: ResolutionContextBase): Promise<string>;
   /** Resolve any value based on the provided context rules */
-  resolveInContext(value: string | StructuredPath, context?: ResolutionContextBase): Promise<string>;
+  resolveInContext(value: string, context?: ResolutionContextBase): Promise<string>;
   /** Validate that a value can be resolved with the given context */
-  validateResolution(value: string | StructuredPath, context?: ResolutionContextBase): Promise<void>;
+  validateResolution(value: string, context?: ResolutionContextBase): Promise<void>;
   /** Extract a section from content by its heading */
   extractSection(content: string, section: string, fuzzy?: number): Promise<string>;
   /** Check for circular variable references */
@@ -422,6 +421,5 @@ export interface DirectiveServiceLike {
 }
 
 export type {
-  BaseNode,
-  StructuredPath
+  BaseNode
 };

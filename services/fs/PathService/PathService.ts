@@ -25,7 +25,7 @@ import {
 } from '@services/fs/PathService/errors/url/index';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver';
 import type { PathNodeArray } from '@core/ast/types/values';
-import type { TextNode, VariableReferenceNode } from '@core/ast/types/nodes';
+import type { TextNode, VariableReferenceNode } from '@core/ast/types';
 import {
   AbsolutePath,
   RelativePath,
@@ -250,12 +250,17 @@ export class PathService implements IPathService {
     
     return (
       pathString.includes('$PROJECTPATH') ||
+      pathString.includes('@PROJECTPATH') ||
       pathString.includes('$USERPROFILE') ||
+      pathString.includes('@USERPROFILE') ||
       pathString.includes('$HOMEPATH') ||
+      pathString.includes('@HOMEPATH') ||
       pathString.includes('~/') ||
       pathString === '~' ||
       pathString.startsWith('$.') ||
-      pathString.startsWith('$~')
+      pathString.startsWith('@.') ||
+      pathString.startsWith('$~') ||
+      pathString.startsWith('@~')
     );
   }
 
@@ -277,13 +282,13 @@ export class PathService implements IPathService {
    * - $~ paths are resolved relative to home directory
    * - **Throws an error for URLs.** Use `validateURL` for URLs.
    *
-   * @param filePath The path to resolve (RawPath or StructuredPath)
+   * @param filePath The path to resolve (RawPath)
    * @param baseDir Optional base directory for simple paths (RawPath)
    * @returns The resolved path (AbsolutePath or RelativePath)
    * @throws PathValidationError if path format is invalid or if input is a URL.
    */
-  resolvePath(filePath: RawPath | StructuredPath, baseDir?: RawPath): AbsolutePath | RelativePath {
-    const rawInputPath = isRawPath(filePath) ? filePath : filePath.raw;
+  resolvePath(filePath: RawPath, baseDir?: RawPath): AbsolutePath | RelativePath {
+    const rawInputPath = filePath;
 
     if (!rawInputPath) {
       // Return empty RelativePath for empty input.
@@ -305,9 +310,9 @@ export class PathService implements IPathService {
     let resolvedString: string;
 
     // Handle special path variables first
-    if (rawInputPath.startsWith('$~') || rawInputPath.startsWith('$HOMEPATH')) {
+    if (rawInputPath.startsWith('$~') || rawInputPath.startsWith('$HOMEPATH') || rawInputPath.startsWith('@HOMEPATH')) {
       resolvedString = this.resolveHomePath(createRawPath(rawInputPath));
-    } else if (rawInputPath.startsWith('$.') || rawInputPath.startsWith('$PROJECTPATH')) {
+    } else if (rawInputPath.startsWith('$.') || rawInputPath.startsWith('$PROJECTPATH') || rawInputPath.startsWith('@PROJECTPATH')) {
       resolvedString = this.resolveProjPath(createRawPath(rawInputPath));
     } else if (this.hasPathVariables(rawInputPath)) {
        // Resolve other magic variables like $USERPROFILE (less common)
@@ -342,11 +347,14 @@ export class PathService implements IPathService {
   resolveHomePath(pathString: RawPath): string {
     const home = this.getHomePath();
     let relPath: string;
-    if (pathString === '$HOMEPATH') {
+    if (pathString === '$HOMEPATH' || pathString === '@HOMEPATH') {
       relPath = '';
     } else {
       // Use substring based on the prefix length
-      const prefix = pathString.startsWith('$HOMEPATH') ? '$HOMEPATH' : '$~';
+      const prefix = pathString.startsWith('$HOMEPATH') ? '$HOMEPATH' : 
+                    pathString.startsWith('@HOMEPATH') ? '@HOMEPATH' :
+                    pathString.startsWith('$~') ? '$~' :
+                    pathString.startsWith('@~') ? '@~' : '$~';
       relPath = pathString.substring(prefix.length);
       // Remove leading separator if present
       if (relPath.startsWith('/') || relPath.startsWith('\\')) {
@@ -362,11 +370,14 @@ export class PathService implements IPathService {
    */
   resolveProjPath(pathString: RawPath): string {
     let relPath: string;
-    if (pathString === '$PROJECTPATH') {
+    if (pathString === '$PROJECTPATH' || pathString === '@PROJECTPATH') {
       relPath = '';
     } else {
       // Use substring based on the prefix length
-      const prefix = pathString.startsWith('$PROJECTPATH') ? '$PROJECTPATH' : '$.';
+      const prefix = pathString.startsWith('$PROJECTPATH') ? '$PROJECTPATH' :
+                    pathString.startsWith('@PROJECTPATH') ? '@PROJECTPATH' :
+                    pathString.startsWith('$.') ? '$.' :
+                    pathString.startsWith('@.') ? '@.' : '$.';
       relPath = pathString.substring(prefix.length);
       // Remove leading separator if present
       if (relPath.startsWith('/') || relPath.startsWith('\\')) {
@@ -382,75 +393,42 @@ export class PathService implements IPathService {
    */
   resolveMagicPath(pathString: RawPath): string {
     // Handle HOMEPATH/USERPROFILE variations
-    if (pathString.startsWith('$HOMEPATH') || pathString.startsWith('$USERPROFILE')) {
+    if (pathString.startsWith('$HOMEPATH') || pathString.startsWith('$USERPROFILE') || 
+        pathString.startsWith('@HOMEPATH') || pathString.startsWith('@USERPROFILE')) {
       const home = this.getHomePath();
-      const prefix = pathString.startsWith('$HOMEPATH') ? '$HOMEPATH' : '$USERPROFILE';
+      const prefix = pathString.startsWith('$HOMEPATH') ? '$HOMEPATH' : 
+                    pathString.startsWith('@HOMEPATH') ? '@HOMEPATH' :
+                    pathString.startsWith('$USERPROFILE') ? '$USERPROFILE' : '@USERPROFILE';
       const relPath = pathString.substring(prefix.length);
       return this.normalizePath(path.join(home, relPath.startsWith('/') || relPath.startsWith('\\') ? relPath.substring(1) : relPath));
     }
     // Handle PROJECTPATH variations
-    if (pathString.startsWith('$PROJECTPATH')) {
+    if (pathString.startsWith('$PROJECTPATH') || pathString.startsWith('@PROJECTPATH')) {
       const proj = this.projectPath;
-      const relPath = pathString.substring('$PROJECTPATH'.length);
+      const prefix = pathString.startsWith('$PROJECTPATH') ? '$PROJECTPATH' : '@PROJECTPATH';
+      const relPath = pathString.substring(prefix.length);
       return this.normalizePath(path.join(proj, relPath.startsWith('/') || relPath.startsWith('\\') ? relPath.substring(1) : relPath));
     }
     // Handle tilde variations
-    if (pathString === '~' || pathString.startsWith('~/')) {
+    if (pathString === '~' || pathString.startsWith('~/') || pathString === '@~' || pathString.startsWith('@~/')) {
       const home = this.getHomePath();
-      const relPath = pathString.startsWith('~/') ? pathString.substring(1) : '';
+      const prefix = pathString.startsWith('~/') ? '~' : 
+                    pathString.startsWith('@~/') ? '@~' :
+                    pathString === '~' ? '~' : '@~';
+      const relPath = pathString.startsWith(prefix + '/') ? pathString.substring(prefix.length) : '';
       return this.normalizePath(path.join(home, relPath.startsWith('/') || relPath.startsWith('\\') ? relPath.substring(1) : relPath));
     }
     // Handle dollar-dot variations
-    if (pathString.startsWith('$.')) {
+    if (pathString.startsWith('$.') || pathString.startsWith('@.')) {
       const proj = this.projectPath;
-      const relPath = pathString.substring(1);
+      const prefix = pathString.startsWith('$.') ? '$.' : '@.';
+      const relPath = pathString.substring(prefix.length - 1); // -1 to include the dot
       return this.normalizePath(path.join(proj, relPath.startsWith('/') || relPath.startsWith('\\') ? relPath.substring(1) : relPath));
     }
     // If no magic variables are found, just normalize
     return this.normalizePath(pathString);
   }
 
-  /**
-   * Get the structured representation of a path
-   */
-  getStructuredPath(pathString: string): StructuredPath {
-    const raw = pathString;
-    const normalized = this.normalizePath(pathString);
-    const base = path.isAbsolute(normalized) ? path.parse(normalized).root : '.';
-    const segments = normalized.substring(base.length).split('/').filter(Boolean);
-    const isUrl = this.isURL(createRawPath(pathString));
-
-    // TODO: Populate structured.variables properly based on parsing/resolution info if available
-    // This current implementation is simplified.
-    // TODO: Refactor this method to accept the parsed path object from the AST/grammar
-    //       instead of just the raw string. This will allow using the actual 'values'
-    //       array and flags instead of the current placeholders/defaults.
-    return {
-      raw: raw,
-      // Placeholder values - requires parsing logic similar to grammar
-      values: [
-        { 
-          type: 'Text', 
-          value: pathString, 
-          content: pathString, 
-          nodeId: 'placeholder-node-id', 
-          loc: { 
-            start: { offset: 0, line: 1, column: 1 }, 
-            end: { offset: pathString.length, line: 1, column: pathString.length + 1 } 
-          } 
-        } as TextNode
-      ],
-      // Defaults/Placeholders for flags and properties not easily determined here
-      isVariableReference: false, 
-      isPathVariable: false,
-      isAbsolute: path.isAbsolute(normalized),
-      isRelativeToCwd: !path.isAbsolute(normalized), // Simplified assumption
-      hasVariables: false, // Placeholder
-      hasTextVariables: false, // Placeholder
-      hasPathVariables: false, // Placeholder
-      variable_warning: false // Placeholder
-    };
-  }
 
   /**
    * Validate a filesystem path according to Meld rules and the provided context.

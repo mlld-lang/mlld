@@ -49,3 +49,25 @@ export interface Field {
   type: 'field' | 'index';
   value: string | number;
 }
+
+/**
+ * Create a variable reference node with proper type checking
+ */
+export function createVariableReferenceNode(
+  identifier: string,
+  valueType: string,
+  fields?: Field[],
+  format?: string,
+  location?: { start: { line: number; column: number }; end: { line: number; column: number } }
+): any {  // Return any for now since we need VariableReferenceNode
+  return {
+    type: 'VariableReference',
+    identifier,
+    valueType,
+    fields,
+    isVariableReference: true,
+    nodeId: 'generated-' + Date.now() + '-' + Math.random(),  // Simple ID generation
+    ...(format && { format }),
+    ...(location && { location })
+  };
+}

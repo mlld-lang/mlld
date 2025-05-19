@@ -17,8 +17,7 @@ import type {
   PathValidationContext, // Import the new context
   MeldPath
 } from '@core/types/paths';
-// Import StructuredPath from syntax/types
-import type { StructuredPath } from '@core/syntax/types/nodes';
+//
 
 /**
  * Options for URL validation and operations
@@ -167,12 +166,12 @@ export interface IPathService {
   /**
    * Resolve a path to its absolute or relative validated form.
    *
-   * @param filePath - The path to resolve (RawPath or StructuredPath)
+   * @param filePath - The path to resolve (RawPath)
    * @param baseDir - Optional base directory for simple paths (RawPath)
    * @returns The resolved validated path (AbsolutePath or RelativePath)
    * @throws {PathValidationError} If path format is invalid
    */
-  resolvePath(filePath: RawPath | StructuredPath, baseDir?: RawPath): AbsolutePath | RelativePath;
+  resolvePath(filePath: RawPath, baseDir?: RawPath): AbsolutePath | RelativePath;
 
   /**
    * Validate a filesystem path according to Meld rules and context.

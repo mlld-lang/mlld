@@ -34,7 +34,7 @@ import {
     VariableType
 } from '@core/types/index'; 
 import { SourceLocation } from '@core/types/common'; // Import SourceLocation directly
-import { isInterpolatableValueArray } from '@core/syntax/types/guards';
+import { isInterpolatableValueArray } from '@core/ast/types/guards';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import type { IPathService } from '@services/fs/PathService/IPathService';
 import { MeldResolutionError, FieldAccessError, PathValidationError, MeldError } from '@core/errors';

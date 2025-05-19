@@ -31,9 +31,8 @@ export async function parse(input: string, options: ParserOptions = {}): Promise
 
   try {
     // Get the parse result from the grammar parser
-    const result = await grammarParse(input, opts);
-    const ast = result.ast;
-    const warnings = result.warnings || [];
+    const ast = grammarParse(input, opts);
+    const warnings: MeldAstError[] = [];
 
     // Validate nodes if requested
     if (opts.validateNodes) {

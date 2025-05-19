@@ -16,14 +16,14 @@ import type {
   DirectiveKind,
   SourceLocation,
   Position
-} from '@core/syntax/types/index';
-import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference';
+} from '@core/ast/types/index';
+import type { IVariableReference } from '@core/syntax/types-old/interfaces/IVariableReference';
 import { parse } from '@core/ast/index';  // Import the parse function directly
 import type { Location } from '@core/types/index';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
-import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory';
+import { VariableNodeFactory } from '@core/syntax/types-old/factories/VariableNodeFactory';
 
 // Define our own ParseError type since it's not exported from meld-ast
 interface ParseError {

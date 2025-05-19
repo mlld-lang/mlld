@@ -19,7 +19,7 @@ import { Service } from '@core/ServiceProvider';
 import type { VariableMetadata, VariableDefinition } from '@core/types/variables';
 import { VariableType, VariableOrigin, createTextVariable } from '@core/types/variables';
 import type { SourceLocation } from '@core/types/common';
-import { isInterpolatableValueArray } from '@core/syntax/types/guards'; 
+import { isInterpolatableValueArray } from '@core/ast/types/guards'; 
 import { ICommandDefinition, isBasicCommand } from '@core/types/exec';
 import type { DirectiveProcessingContext } from '@core/types/index';
 import type { DirectiveResult, StateChanges } from '@core/directives/DirectiveHandler'; 

@@ -190,17 +190,17 @@ Systematically update imports in services:
 
 ## Migration Checklist
 
-- [ ] Rename core/syntax/types to core/syntax/types-old
-- [ ] Create primitives.ts with all base types
-- [ ] Update nodes.ts to export from primitives
-- [ ] Update values.ts imports
-- [ ] Update base.ts imports  
-- [ ] Create proper MeldNode union in index.ts
+- [x] Rename core/syntax/types to core/syntax/types-old
+- [x] Create primitives.ts with all base types
+- [x] Update nodes.ts to export from primitives
+- [x] Update values.ts imports
+- [x] Update base.ts imports  
+- [x] Create proper MeldNode union in index.ts
 - [ ] Migrate StateService imports
 - [ ] Migrate InterpreterService imports
-- [ ] Migrate ResolutionService imports
-- [ ] Migrate ValidationService imports
-- [ ] Migrate PathService imports
+- [x] Migrate ResolutionService imports
+- [x] Migrate ValidationService imports
+- [x] Migrate PathService imports
 - [ ] Migrate DirectiveHandler imports
 - [ ] Update ParserService with transformation
 - [ ] Update all test file imports

@@ -21,7 +21,7 @@ import { ResolutionService } from '@services/resolution/ResolutionService/Resolu
 import logger, { ILogger } from '@core/utils/logger';
 // +++ Import NodeFileSystem +++
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
-import type { MeldNode, TextNode } from '@core/syntax/types/index'; // <<< Add TextNode import
+import type { MeldNode, TextNode } from '@core/ast/types/index'; // <<< Add TextNode import
 
 // DI Container is configured by importing @core/di-config.js elsewhere
 

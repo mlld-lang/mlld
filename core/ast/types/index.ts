@@ -17,6 +17,9 @@ export * from './values';
 // Raw types
 export * from './raw';
 
+// Variable types
+export * from './variables';
+
 // Directive-specific types
 export * from './import';
 export * from './text'; // Implemented
@@ -29,6 +32,9 @@ export * from './run'; // Now implemented
 // Type guards
 export * from './guards';
 
+// Error types
+export * from './errors';
+
 // Import all node types for the union
 import {
   TextNode,
@@ -38,7 +44,8 @@ import {
   VariableReferenceNode,
   LiteralNode,
   DotSeparatorNode,
-  PathSeparatorNode
+  PathSeparatorNode,
+  ErrorNode
 } from './nodes';
 
 /**
@@ -61,4 +68,5 @@ export type MeldNode =
   | VariableReferenceNode
   | LiteralNode
   | DotSeparatorNode
-  | PathSeparatorNode;
+  | PathSeparatorNode
+  | ErrorNode;

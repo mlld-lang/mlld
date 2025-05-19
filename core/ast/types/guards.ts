@@ -12,7 +12,7 @@ import type {
   LiteralNode,
   DotSeparatorNode,
   PathSeparatorNode
-} from './nodes';
+} from './primitives';
 
 // Import the union type
 import type { MeldNode } from './index';
@@ -40,8 +40,8 @@ import {
 } from './data';
 import { ImportWildcardNode } from './values';
 
-// Import InterpolatableValue for the guard function
-import type { InterpolatableValue } from './nodes';
+// Define InterpolatableValue for the guard function
+export type InterpolatableValue = Array<TextNode | VariableReferenceNode>;
 
 /**
  * Type guard to check if a value is an InterpolatableValue array.

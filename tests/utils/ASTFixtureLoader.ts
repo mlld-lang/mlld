@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
-import { parseDocument } from '@core/ast/parser';
-import { ASTNode } from '@core/types/ast-nodes';
+import { parse } from '@core/ast/parser';
+import { MeldNode } from '@core/ast/types';
 
 interface ASTFixture {
   name: string;
@@ -18,7 +18,7 @@ interface ASTFixture {
 
 interface ParsedFixture {
   fixture: ASTFixture;
-  ast: ASTNode;
+  ast: MeldNode[];
 }
 
 export class ASTFixtureLoader {
@@ -94,8 +94,8 @@ export class ASTFixtureLoader {
     }
 
     try {
-      const ast = await parseDocument(fixture.input);
-      const parsed: ParsedFixture = { fixture, ast };
+      const result = await parse(fixture.input);
+      const parsed: ParsedFixture = { fixture, ast: result.ast };
       this.parsedCache.set(name, parsed);
       return parsed;
     } catch (error) {

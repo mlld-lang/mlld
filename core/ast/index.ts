@@ -43,9 +43,12 @@ export type {
   PeggyLocation
 } from './types';
 
-// Utilities
-export {
+// Import helpers from the correct location
+import helpers from './grammar/deps/helpers';
+
+// Utilities - destructure from the helpers object
+export const {
   createNode,
   getLocation,
   textJoin
-} from './grammar/helpers'; 
+} = helpers; 

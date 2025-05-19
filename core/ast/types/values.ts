@@ -6,8 +6,8 @@ import {
   VariableReferenceNode,
   DotSeparatorNode,
   PathSeparatorNode,
-  MeldNode
-} from '@core/syntax/types/nodes';
+  BaseMeldNode
+} from './primitives';
 
 /**
  * Common node array types that may be shared across directives
@@ -65,7 +65,7 @@ export interface EmbedValues {
   variable?: VariableNodeArray;
   content?: ContentNodeArray;
   section?: TextNode[];
-  options?: MeldNode[];
+  options?: BaseMeldNode[];
 }
 
 /**
@@ -82,7 +82,7 @@ export interface PathValues {
 export interface RunValues {
   command: ContentNodeArray;
   parameters?: ContentNodeArray;
-  options?: MeldNode[];
+  options?: BaseMeldNode[];
 }
 
 /**
