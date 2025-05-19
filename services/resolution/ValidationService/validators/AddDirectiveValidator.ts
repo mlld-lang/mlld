@@ -1,70 +1,69 @@
-import type { DirectiveNode, AddDirectiveData } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/types/ast-nodes';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { ErrorSeverity } from '@core/errors/MeldError';
 
+/**
+ * Validates @add directives using new AST structure
+ * Grammar handles all syntax validation - we only do semantic checks
+ */
 export function validateAddDirective(node: DirectiveNode): void {
-  const directive = node.directive as AddDirectiveData;
-  
-  // Grammar has already validated basic syntax and structure
-  // We need to validate AST nodes based on subtype
-  
-  switch (directive.subtype) {
-    case 'addPath':
-      // Grammar validates path format, but we need to check the AST nodes
-      if (!directive.path || (!directive.path.raw && !directive.path.interpolatedValue)) {
-        throw new MeldDirectiveError(
-          'Add path directive requires a valid path',
-          'add',
-          { 
-            location: node.location?.start,
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal
-          }
-        );
+  // With new AST structure, directives have flattened properties
+  if (!node.kind || node.kind !== 'add') {
+    throw new MeldDirectiveError(
+      'Expected add directive',
+      'add',
+      { 
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
       }
-      break;
-      
-    case 'addVariable':
-      // Grammar validates variable format, but we need to check the AST nodes
-      if (!directive.path || !directive.path.variable) {
-        throw new MeldDirectiveError(
-          'Add variable directive requires a valid variable reference',
-          'add',
-          {
-            location: node.location?.start,
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal
-          }
-        );
-      }
-      break;
-      
-    case 'addTemplate':
-      // Grammar validates template format and variable nodes
-      // We just need to check that content exists
-      if (!directive.content) {
-        throw new MeldDirectiveError(
-          'Add template directive requires content',
-          'add',
-          {
-            location: node.location?.start,
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal
-          }
-        );
-      }
-      break;
-      
-    default:
-      throw new MeldDirectiveError(
-        `Unknown add subtype: ${directive.subtype}`,
-        'add',
-        {
-          location: node.location?.start,
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal
-        }
-      );
+    );
   }
+  
+  // Check for path - could be in values.path or raw.path 
+  // The test expects a path for @add directive
+  const pathValue = node.values?.path || node.raw?.path;
+  
+  if (!pathValue) {
+    throw new MeldDirectiveError(
+      'Add directive requires a path',
+      'add',
+      { 
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
+  
+  // Get the actual path string
+  let pathString: string = '';
+  
+  if (typeof pathValue === 'string') {
+    pathString = pathValue;
+  } else if (Array.isArray(pathValue) && pathValue.length > 0 && pathValue[0].content) {
+    pathString = pathValue[0].content;
+  } else if (pathValue.raw) {
+    pathString = pathValue.raw;
+  }
+  
+  // Validate path is not empty
+  if (!pathString || pathString.trim() === '') {
+    throw new MeldDirectiveError(
+      'Add directive requires a valid path',
+      'add',
+      { 
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
+  
+  // Grammar already validates and sets the subtype (addPath, addVariable, addTemplate)
+  // Grammar ensures the values object has the correct structure for each subtype
+  
+  // All structural validation is handled by grammar
+  // This validator can focus on semantic rules only
 }

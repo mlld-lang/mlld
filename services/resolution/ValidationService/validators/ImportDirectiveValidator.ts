@@ -1,27 +1,7 @@
-import { DirectiveNode, ImportDirectiveData } from '@core/syntax/types';
+import { DirectiveNode } from '@core/types/ast-nodes';
 import { MeldDirectiveError, DirectiveLocation } from '@core/errors/MeldDirectiveError';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { ErrorSeverity } from '@core/errors/MeldError';
-
-// Local definition for StructuredPath interface
-interface StructuredPath {
-  raw: string;
-  normalized?: string;
-  structured?: {
-    base?: string;
-    segments?: string[];
-    variables?: {
-      special?: string[];
-      [key: string]: any;
-    };
-  };
-}
-
-// Definition for Import item from meld-ast 3.4.0
-interface ImportItem {
-  name: string;
-  alias?: string;
-}
 
 /**
  * Convert AST SourceLocation to DirectiveLocation
@@ -37,13 +17,27 @@ function convertLocation(location: any): DirectiveLocation | undefined {
 }
 
 /**
- * Validates @import directives
+ * Validates @import directives using new AST structure
+ * Grammar handles all syntax validation - we only do semantic checks
  */
 export function validateImportDirective(node: DirectiveNode): void {
-  const directive = node.directive as ImportDirectiveData;
+  // With new AST structure, directives have flattened properties
+  if (!node.kind || node.kind !== 'import') {
+    throw new MeldDirectiveError(
+      'Expected import directive',
+      'import',
+      {
+        location: convertLocation(node.location),
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
   
-  // Validate that a path exists
-  if (!directive.path) {
+  // Check for path - could be in values.path or raw.path
+  const pathValue = node.values?.path || node.raw?.path;
+  
+  if (!pathValue) {
     throw new MeldDirectiveError(
       'Import directive requires a path',
       'import',
@@ -54,30 +48,22 @@ export function validateImportDirective(node: DirectiveNode): void {
       }
     );
   }
-
-  // Get path value from structured path or string
-  let pathValue: string;
   
-  if (typeof directive.path === 'string') {
-    pathValue = directive.path;
-  } else if (directive.path.raw) {
-    pathValue = directive.path.raw;
-  } else if (directive.path.normalized) {
-    pathValue = directive.path.normalized;
-  } else {
-    throw new MeldDirectiveError(
-      'Import directive has an invalid path format',
-      'import',
-      {
-        location: convertLocation(node.location),
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Fatal
-      }
-    );
+  // Get the actual path string
+  let pathString: string = '';
+  
+  if (typeof pathValue === 'string') {
+    pathString = pathValue;
+  } else if (Array.isArray(pathValue) && pathValue.length > 0 && pathValue[0].content) {
+    pathString = pathValue[0].content;
+  } else if (pathValue.raw) {
+    pathString = pathValue.raw;
+  } else if (pathValue.normalized) {
+    pathString = pathValue.normalized;
   }
   
   // Validate path is not empty
-  if (pathValue.trim() === '') {
+  if (!pathString || pathString.trim() === '') {
     throw new MeldDirectiveError(
       'Import path cannot be empty',
       'import',
@@ -88,9 +74,9 @@ export function validateImportDirective(node: DirectiveNode): void {
       }
     );
   }
-
+  
   // Allow path variables starting with $ but still validate ..
-  if (!pathValue.startsWith('$') && pathValue.includes('..')) {
+  if (!pathString.startsWith('$') && pathString.includes('..')) {
     throw new MeldDirectiveError(
       'Import path cannot contain parent directory references (..) unless using a path variable',
       'import',
@@ -101,38 +87,14 @@ export function validateImportDirective(node: DirectiveNode): void {
       }
     );
   }
-
-  // Validate imports - Grammar MUST provide the structured 'imports' array.
-  if (!directive.imports || !Array.isArray(directive.imports)) {
-    // If imports array is missing or not an array, it's a grammar/AST generation issue.
-    throw new MeldDirectiveError(
-      'Invalid or missing structured imports array in AST node for @import', 
-      'import',
-      {
-        location: convertLocation(node.location),
-        code: DirectiveErrorCode.VALIDATION_FAILED, 
-        severity: ErrorSeverity.Fatal // Problem with core AST structure
-      }
-    );
-  }
-
-  // Validate the structured imports array provided by the grammar.
-  validateStructuredImports(directive.imports, node);
-}
-
-/**
- * Validates structured imports array from meld-ast 3.4.0
- * @private
- */
-function validateStructuredImports(imports: ImportItem[], node: DirectiveNode): void {
-  if (imports.length === 0) {
-    // Empty imports array is valid - equivalent to "*"
-    return;
-  }
-
-  // Check if there's a wildcard import
-  if (imports.some(imp => imp.name === '*')) {
-    if (imports.length > 1) {
+  
+  // Check for imports structure - could be in values.imports
+  const imports = node.values?.imports;
+  
+  // Validate imports if present (optional validation)
+  if (imports && Array.isArray(imports)) {
+    // Check for wildcard with other imports
+    if (imports.some(imp => imp.name === '*') && imports.length > 1) {
       throw new MeldDirectiveError(
         'Wildcard import (*) cannot be combined with other imports',
         'import',
@@ -143,35 +105,20 @@ function validateStructuredImports(imports: ImportItem[], node: DirectiveNode): 
         }
       );
     }
-    return; // Single wildcard import is valid
-  }
-
-  // Validate each import item
-  for (const item of imports) {
-    if (!item.name || item.name.trim() === '') {
-      throw new MeldDirectiveError(
-        'Import identifier cannot be empty',
-        'import',
-        {
-          location: convertLocation(node.location),
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal
-        }
-      );
-    }
-
-    // Only validate the alias if it's a non-undefined, non-null string
-    // This allows for cases where alias is undefined (no alias specified)
-    if (item.alias !== undefined && item.alias !== null && item.alias.trim() === '') {
-      throw new MeldDirectiveError(
-        'Import alias cannot be empty',
-        'import',
-        {
-          location: convertLocation(node.location),
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal
-        }
-      );
+    
+    // Check for empty import names
+    for (const imp of imports) {
+      if (!imp.name || imp.name.trim() === '') {
+        throw new MeldDirectiveError(
+          'Import identifier cannot be empty',
+          'import',
+          {
+            location: convertLocation(node.location),
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Fatal
+          }
+        );
+      }
     }
   }
 }

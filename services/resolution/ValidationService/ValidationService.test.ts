@@ -369,15 +369,21 @@ describe('ValidationService', () => {
   
   describe('Unknown directive handling', () => {
     it('should throw on unknown directive kind with Fatal severity', async () => {
-       const node: DirectiveNode = {
-         type: 'Directive',
-         directive: {
-           kind: 'unknown' as any,
-           identifier: 'test', 
-           value: 'test'
+       const node: DirectiveNode = createDirectiveNode(
+         'unknown' as any,
+         {
+           identifier: 'test',
+           value: 'test',
+           values: {
+             identifier: createVariableReferenceArray('test')
+           },
+           raw: {
+             identifier: 'test',
+             value: 'test'
+           }
          },
-         location: createLocation()
-       };
+         createLocation()
+       );
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.HANDLER_NOT_FOUND,
           severity: ErrorSeverity.Fatal, directiveKind: 'unknown', messageContains: 'Unknown directive kind:'

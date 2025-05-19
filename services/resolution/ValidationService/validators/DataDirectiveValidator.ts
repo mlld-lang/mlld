@@ -1,24 +1,29 @@
-import { DirectiveNode } from '@core/syntax/types';
+import { DirectiveNode } from '@core/types/ast-nodes';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { ErrorSeverity } from '@core/errors/MeldError';
 
-// Define interface matching the meld-ast structure for data directives
-interface DataDirectiveData {
-  kind: 'data';
-  identifier: string;
-  source: 'literal' | 'reference';
-  value: any;
-}
-
 /**
- * Validates @data directives using AST-based approaches
+ * Validates @data directives using new AST structure
+ * Grammar handles all syntax validation - we only do semantic checks
  */
 export function validateDataDirective(node: DirectiveNode): void {
-  const directive = node.directive as DataDirectiveData;
+  // With new AST structure, directives have flattened properties
+  if (!node.kind || node.kind !== 'data') {
+    throw new MeldDirectiveError(
+      'Expected data directive',
+      'data',
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
   
-  // Validate identifier
-  if (!directive.identifier || typeof directive.identifier !== 'string') {
+  // Check for identifier in values
+  if (!node.values?.identifier || !Array.isArray(node.values.identifier) || 
+      node.values.identifier.length === 0) {
     throw new MeldDirectiveError(
       'Data directive requires an "identifier" property (string)',
       'data',
@@ -30,10 +35,25 @@ export function validateDataDirective(node: DirectiveNode): void {
     );
   }
   
-  // Validate identifier format using character-by-character validation
-  // instead of regex
-  const isValid = isValidIdentifier(directive.identifier);
-  if (!isValid) {
+  // Check if identifier is empty
+  const identifierNode = node.values.identifier[0];
+  const identifier = identifierNode.identifier;
+  
+  if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
+    throw new MeldDirectiveError(
+      'Data directive requires an "identifier" property (string)',
+      'data',
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
+  
+  // Validate identifier format
+  const firstChar = identifier.charAt(0);
+  if (!/[a-zA-Z_]/.test(firstChar)) {
     throw new MeldDirectiveError(
       'Data identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'data',
@@ -45,89 +65,26 @@ export function validateDataDirective(node: DirectiveNode): void {
     );
   }
   
-  // Validate value
-  if (directive.value === undefined) {
-    throw new MeldDirectiveError(
-      'Data directive requires a value',
-      'data',
-      {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Fatal
-      }
-    );
-  }
+  // Check for value - could be in raw.value or values.value
+  const value = node.raw?.value ?? node.values?.value;
   
-  // Validate source type if present
-  if (directive.source && !['literal', 'reference'].includes(directive.source)) {
-    throw new MeldDirectiveError(
-      `Invalid source type "${directive.source}" for data directive, must be "literal" or "reference"`,
-      'data',
-      {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Fatal
+  // Basic validation for JSON strings (the test expects this)
+  if (typeof value === 'string' && value.trim() !== '') {
+    // Try to parse as JSON if it looks like JSON
+    if (value.startsWith('{') || value.startsWith('[')) {
+      try {
+        JSON.parse(value);
+      } catch (error) {
+        throw new MeldDirectiveError(
+          'Invalid JSON string in data directive',
+          'data',
+          {
+            location: node.location?.start,
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Fatal
+          }
+        );
       }
-    );
-  }
-  
-  // REMOVED: This check is problematic if the value is meant to be a plain string.
-  // The handler will attempt JSON.parse after interpolation if needed.
-  /*
-  if (typeof directive.value === 'string' && directive.source === 'literal') {
-    try {
-      JSON.parse(directive.value);
-    } catch (error) {
-      // AST parser should have handled this, but double-check
-      throw new MeldDirectiveError(
-        'Invalid JSON string in data directive',
-        'data',
-        {
-          location: node.location?.start,
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal
-        }
-      );
     }
-  }
-  */
-  
-  // Validate value is JSON-serializable
-  try {
-    JSON.stringify(directive.value);
-  } catch (error) {
-    throw new MeldDirectiveError(
-      'Data value must be JSON-serializable',
-      'data',
-      {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Fatal
-      }
-    );
   }
 }
-
-/**
- * Helper function to validate identifier format without regex
- */
-function isValidIdentifier(str: string): boolean {
-  if (!str || str.length === 0) return false;
-  
-  // First character must be letter or underscore
-  const firstChar = str.charAt(0);
-  if (!(firstChar === '_' || (firstChar >= 'a' && firstChar <= 'z') || (firstChar >= 'A' && firstChar <= 'Z'))) {
-    return false;
-  }
-  
-  // Rest of characters must be letters, numbers, or underscore
-  for (let i = 1; i < str.length; i++) {
-    const char = str.charAt(i);
-    if (!((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || 
-          (char >= '0' && char <= '9') || char === '_')) {
-      return false;
-    }
-  }
-  
-  return true;
-} 

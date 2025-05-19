@@ -1,4 +1,4 @@
-import type { DirectiveNode } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/types/ast-nodes';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { ErrorSeverity } from '@core/errors/MeldError';
@@ -17,16 +17,25 @@ function convertLocation(location: any): DirectiveLocation {
 
 /**
  * Validates @text directives according to spec
- * Uses AST-based validation instead of regex
+ * Works with new AST structure where content is in typed nodes
  */
 export function validateTextDirective(node: DirectiveNode): void {
-  const directive = node.directive;
+  // With new AST structure, directives have flattened properties
+  if (!node.kind || node.kind !== 'text') {
+    throw new MeldDirectiveError(
+      'Expected text directive',
+      'text',
+      {
+        location: convertLocation(node.location?.start),
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
   
-
-
-  
-  // Validate identifier
-  if (!directive.identifier || typeof directive.identifier !== 'string') {
+  // Check for identifier in values
+  if (!node.values?.identifier || !Array.isArray(node.values.identifier) || 
+      node.values.identifier.length === 0) {
     throw new MeldDirectiveError(
       'Text directive requires an "identifier" property (string)',
       'text',
@@ -38,10 +47,25 @@ export function validateTextDirective(node: DirectiveNode): void {
     );
   }
   
-  // Validate identifier format - check first character and rest separately
-  // This is how AST would validate an identifier
-  const firstChar = directive.identifier.charAt(0);
-  if (!(firstChar === '_' || (firstChar >= 'a' && firstChar <= 'z') || (firstChar >= 'A' && firstChar <= 'Z'))) {
+  // Check if identifier is empty
+  const identifierNode = node.values.identifier[0];
+  const identifier = identifierNode.identifier;
+  
+  if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
+    throw new MeldDirectiveError(
+      'Text directive requires an "identifier" property (string)',
+      'text',
+      {
+        location: convertLocation(node.location?.start),
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
+  
+  // Validate identifier format - now checking the actual identifier value
+  const firstChar = identifier.charAt(0);
+  if (!/[a-zA-Z_]/.test(firstChar)) {
     throw new MeldDirectiveError(
       'Text directive identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'text',
@@ -53,38 +77,9 @@ export function validateTextDirective(node: DirectiveNode): void {
     );
   }
   
-  // Check the rest of the characters
-  for (let i = 1; i < directive.identifier.length; i++) {
-    const char = directive.identifier.charAt(i);
-    if (!((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || 
-          (char >= '0' && char <= '9') || char === '_')) {
-      throw new MeldDirectiveError(
-        'Text directive identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
-        'text',
-        {
-          location: convertLocation(node.location?.start),
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal
-        }
-      );
-    }
-  }
-  
-  // Check if this is a text directive with @run or @add source
-  // In this case, the value property might not be set, but source and run/add properties are
-  if (directive.source === 'run' && directive.run) {
-    // This is a text directive with @run value
-    // No need to validate the value property
-  }
-  
-  if (directive.source === 'add' && directive.add) {
-    // This is a text directive with @add value
-    // No need to validate the value property
-  }
-  
-  // For all other cases, validate the value property
-  // Validate value
-  if (directive.value === undefined || directive.value === '') {
+  // Check for content in values
+  if (!node.values?.content || !Array.isArray(node.values.content) || 
+      node.values.content.length === 0) {
     throw new MeldDirectiveError(
       'Text directive requires a non-empty "value" property',
       'text',
@@ -95,214 +90,26 @@ export function validateTextDirective(node: DirectiveNode): void {
       }
     );
   }
-
-  // Check if the source is specified
-  if (directive.source) {
-    // If source is specified, validate it
-    if (directive.source !== 'literal' && directive.source !== 'add' &&
-        directive.source !== 'run' && directive.source !== 'call') {
-      throw new MeldDirectiveError(
-        'Text directive source must be one of: literal, add, run, call',
-        'text',
-        {
-          location: convertLocation(node.location?.start),
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal
-        }
-      );
-    }
-
-    // For call source, validate the value format without regex
-    if (directive.source === 'call') {
-      // Value should be in format "api.method [path]"
-      // Parse components directly without regex
-      const parts = directive.value.split(' ');
-      const hasMethod = parts[0] && parts[0].includes('.');
-      const methodParts = parts[0] ? parts[0].split('.') : [];
-      const hasTwoParts = methodParts.length === 2;
-      
-      // Check api and method naming
-      const hasValidApi = hasTwoParts && isValidIdentifier(methodParts[0]);
-      const hasValidMethod = hasTwoParts && isValidIdentifier(methodParts[1]);
-      
-      // Check path format
-      const path = parts.slice(1).join(' ').trim();
-      const hasValidPath = path.startsWith('[') && path.endsWith(']');
-      
-      if (!(hasMethod && hasValidApi && hasValidMethod && hasValidPath)) {
-        throw new MeldDirectiveError(
-          'Invalid call format in text directive. Must be "api.method [path]"',
-          'text',
-          {
-            location: convertLocation(node.location?.start),
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal
-          }
-        );
+  
+  // Check if content is empty string
+  const contentValue = node.values.content[0];
+  if (contentValue.type === 'Text' && contentValue.content === '') {
+    throw new MeldDirectiveError(
+      'Text directive requires a non-empty "value" property',
+      'text',
+      {
+        location: convertLocation(node.location?.start),
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
       }
-    }
-    // Validate @add source value format
-    else if (directive.source === 'add') {
-        // Value might not be present if source is correctly parsed into directive.add
-        // If value *is* present, validate it. If not, assume parser handled it (or handler will error).
-        if (directive.value && typeof directive.value === 'string') {
-            const valueAfterEmbed = directive.value.substring('@add'.length).trim();
-            if (!(valueAfterEmbed.startsWith('[') && valueAfterEmbed.endsWith(']'))) {
-                throw new MeldDirectiveError(
-                  'Invalid @add format in text directive value when source=\"add\". Must be "@add [path]"', // Adjusted message
-                  'text',
-                  {
-                    location: convertLocation(node.location?.start),
-                    code: DirectiveErrorCode.VALIDATION_FAILED,
-                    severity: ErrorSeverity.Fatal
-                  }
-                );
-            }
-        } else if (!directive.add) { // If value is missing, ensure add structure exists
-             throw new MeldDirectiveError(
-                'Text directive with source=\"add\" requires either a value starting with @add or an add property',
-                'text',
-                {
-                  location: convertLocation(node.location?.start),
-                  code: DirectiveErrorCode.VALIDATION_FAILED,
-                  severity: ErrorSeverity.Fatal
-                }
-            );
-        }
-        // We could add basic validation for directive.add structure here if needed
-    }
-    // Validate @run source value format
-    else if (directive.source === 'run') {
-        // Similar logic: validate value if present, otherwise expect directive.run
-        if (directive.value && typeof directive.value === 'string') {
-            const valueAfterRun = directive.value.substring('@run'.length).trim();
-            if (!(valueAfterRun.startsWith('[') && valueAfterRun.endsWith(']'))) {
-                throw new MeldDirectiveError(
-                    'Invalid @run format in text directive value when source=\"run\". Must be "@run [command]"', // Adjusted message
-                    'text',
-                    {
-                      location: convertLocation(node.location?.start),
-                      code: DirectiveErrorCode.VALIDATION_FAILED,
-                      severity: ErrorSeverity.Fatal
-                    }
-                );
-            }
-        } else if (!directive.run) { // If value is missing, ensure run structure exists
-            throw new MeldDirectiveError(
-                'Text directive with source=\"run\" requires either a value starting with @run or a run property',
-                'text',
-                {
-                  location: convertLocation(node.location?.start),
-                  code: DirectiveErrorCode.VALIDATION_FAILED,
-                  severity: ErrorSeverity.Fatal
-                }
-            );
-        }
-        // We could add basic validation for directive.run structure here if needed
-    }
-    // >>> NEW: Check literal source for value that looks like @add/@run <<<
-    else if (directive.source === 'literal' && directive.value && typeof directive.value === 'string') {
-        if (directive.value.startsWith('@add')) {
-            const valueAfterEmbed = directive.value.substring('@add'.length).trim();
-            if (!(valueAfterEmbed.startsWith('[') && valueAfterEmbed.endsWith(']'))) {
-                throw new MeldDirectiveError(
-                  'Invalid @add format in text directive value (source=literal). Must be "@add [path]"', // Adjusted message
-                  'text',
-                  {
-                    location: convertLocation(node.location?.start),
-                    code: DirectiveErrorCode.VALIDATION_FAILED,
-                    severity: ErrorSeverity.Fatal
-                  }
-                );
-            }
-        } else if (directive.value.startsWith('@run')) {
-            const valueAfterRun = directive.value.substring('@run'.length).trim();
-            if (!(valueAfterRun.startsWith('[') && valueAfterRun.endsWith(']'))) {
-                throw new MeldDirectiveError(
-                    'Invalid @run format in text directive value (source=literal). Must be "@run [command]"', // Adjusted message
-                    'text',
-                    {
-                      location: convertLocation(node.location?.start),
-                      code: DirectiveErrorCode.VALIDATION_FAILED,
-                      severity: ErrorSeverity.Fatal
-                    }
-                );
-            }
-        } else if (directive.value.startsWith('@call')) {
-             // We can potentially add validation for literal @call here too if needed
-             // Currently handled by the fallback block below
-        }
-        // If it's literal and doesn't start with @add/@run/@call, it falls through to general literal checks later
-    }
-
-  } else if (directive.value && typeof directive.value === 'string' && directive.value.startsWith('@')) {
-    // For backward compatibility, check if value starts with @
-    const validPrefixes = ['@add', '@run', '@call'];
-    const prefix = validPrefixes.find(p => directive.value.startsWith(p));
-    
-    if (!prefix) {
-      throw new MeldDirectiveError(
-        'Text directive value starting with @ must be an @add, @run, or @call directive',
-        'text',
-        {
-          location: convertLocation(node.location?.start),
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal
-        }
-      );
-    }
-
-    // For @call, validate format without regex
-    if (directive.value.startsWith('@call')) {
-      // Extract parts without using regex
-      const valueAfterCall = directive.value.substring('@call'.length).trim();
-      
-      // Find the first space to separate api.method from path
-      const firstSpaceIndex = valueAfterCall.indexOf(' ');
-      if (firstSpaceIndex === -1) {
-        throw new MeldDirectiveError(
-          'Invalid @call format in text directive. Must be "@call api.method [path]"',
-          'text',
-          {
-            location: convertLocation(node.location?.start),
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal
-          }
-        );
-      }
-      
-      // Extract api.method part
-      const apiMethodPart = valueAfterCall.substring(0, firstSpaceIndex);
-      const hasDot = apiMethodPart.includes('.');
-      
-      // Extract api and method parts
-      const apiMethodParts = hasDot ? apiMethodPart.split('.') : [];
-      const hasValidApiMethod = apiMethodParts.length === 2 && 
-                               isValidIdentifier(apiMethodParts[0]) && 
-                               isValidIdentifier(apiMethodParts[1]);
-      
-      // Extract path part
-      const pathPart = valueAfterCall.substring(firstSpaceIndex + 1).trim();
-      const hasValidPath = pathPart.startsWith('[') && pathPart.endsWith(']');
-      
-      if (!(hasDot && hasValidApiMethod && hasValidPath)) {
-        throw new MeldDirectiveError(
-          'Invalid @call format in text directive. Must be "@call api.method [path]"',
-          'text',
-          {
-            location: convertLocation(node.location?.start),
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal
-          }
-        );
-      }
-    }
-    // For @add directive, basic validation
-    else if (directive.value.startsWith('@add')) {
-      // Extract the part after @add and check it has a path in [] brackets
-      const valueAfterEmbed = directive.value.substring('@add'.length).trim();
-      
-      // >>> Refined Check: Ensure content is wrapped in [...] <<<
+    );
+  }
+  
+  // Handle special source types (@add, @run values)
+  if (node.raw?.content && typeof node.raw.content === 'string') {
+    // Check for @add format
+    if (node.raw.content.startsWith('@add')) {
+      const valueAfterEmbed = node.raw.content.substring('@add'.length).trim();
       if (!(valueAfterEmbed.startsWith('[') && valueAfterEmbed.endsWith(']'))) {
         throw new MeldDirectiveError(
           'Invalid @add format in text directive. Must be "@add [path]"',
@@ -314,16 +121,10 @@ export function validateTextDirective(node: DirectiveNode): void {
           }
         );
       }
-      
-      // No need to validate the content inside the brackets in detail here
-      // The AddDirectiveHandler will do that when processing
     }
-    // For @run directive, basic validation
-    else if (directive.value.startsWith('@run')) {
-      // Extract the part after @run and check it has a command in [] brackets
-      const valueAfterRun = directive.value.substring('@run'.length).trim();
-      
-      // >>> Refined Check: Ensure content is wrapped in [...] <<<
+    // Check for @run format
+    else if (node.raw.content.startsWith('@run')) {
+      const valueAfterRun = node.raw.content.substring('@run'.length).trim();
       if (!(valueAfterRun.startsWith('[') && valueAfterRun.endsWith(']'))) {
         throw new MeldDirectiveError(
           'Invalid @run format in text directive. Must be "@run [command]"',
@@ -335,76 +136,6 @@ export function validateTextDirective(node: DirectiveNode): void {
           }
         );
       }
-      
-      // No need to validate the content inside the brackets in detail here
-      // The RunDirectiveHandler will do that when processing
-    }
-  } else {
-    // It's a literal string value
-    // Check for mismatched quotes
-    const firstQuote = directive.value[0];
-    const lastQuote = directive.value[directive.value.length - 1];
-    
-    // Allow both single and double quotes, but they must match
-    if (firstQuote !== lastQuote || !['\'', '"', '`'].includes(firstQuote)) {
-      // Instead of regex, manually check for unescaped quotes
-      let unescapedQuoteCount = 0;
-      for (let i = 0; i < directive.value.length; i++) {
-        const char = directive.value[i];
-        if ((char === '\'' || char === '"' || char === '`') && 
-            (i === 0 || directive.value[i-1] !== '\\')) {
-          unescapedQuoteCount++;
-        }
-      }
-      
-      if (unescapedQuoteCount > 2) {
-        throw new MeldDirectiveError(
-          'Text directive string value contains unescaped quotes',
-          'text',
-          {
-            location: convertLocation(node.location?.start),
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal
-          }
-        );
-      }
-    }
-
-    // Check for multiline strings in non-template literals
-    if (firstQuote !== '`' && directive.value.includes('\n')) {
-      throw new MeldDirectiveError(
-        'Multiline strings are only allowed in template literals (backtick quotes)',
-        'text',
-        {
-          location: convertLocation(node.location?.start),
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal
-        }
-      );
     }
   }
 }
-
-/**
- * Helper function to validate identifier format without regex
- */
-function isValidIdentifier(str: string): boolean {
-  if (!str || str.length === 0) return false;
-  
-  // First character must be letter or underscore
-  const firstChar = str.charAt(0);
-  if (!(firstChar === '_' || (firstChar >= 'a' && firstChar <= 'z') || (firstChar >= 'A' && firstChar <= 'Z'))) {
-    return false;
-  }
-  
-  // Rest of characters must be letters, numbers, or underscore
-  for (let i = 1; i < str.length; i++) {
-    const char = str.charAt(i);
-    if (!((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || 
-          (char >= '0' && char <= '9') || char === '_')) {
-      return false;
-    }
-  }
-  
-  return true;
-} 

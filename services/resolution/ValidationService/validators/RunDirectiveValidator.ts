@@ -1,43 +1,34 @@
-import { DirectiveNode } from '@core/syntax/types';
+import { DirectiveNode } from '@core/types/ast-nodes';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 
-// Define valid subtypes for @run directive
-const VALID_RUN_SUBTYPES = ['runExec', 'runCommand', 'runCode', 'runCodeParams'] as const;
-type RunDirectiveSubtype = typeof VALID_RUN_SUBTYPES[number];
-
 /**
- * Validates @run directives
+ * Validates @run directives using new AST structure
+ * Grammar handles all syntax validation - we only do semantic checks
  */
 export async function validateRunDirective(node: DirectiveNode): Promise<void> {
-  const directive = node.directive;
+  // With new AST structure, directives have flattened properties
+  if (!node.kind || node.kind !== 'run') {
+    throw new MeldDirectiveError(
+      'Expected run directive',
+      'run',
+      { 
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
+    );
+  }
   
-  // 1. Check for the existence of the 'command' property (fundamental)
-  if (!directive.command) { // Assuming grammar ensures 'command' holds the core content
-    throw new MeldDirectiveError(
-      '@run directive requires a "command" property representing the command to run or reference',
-      'run',
-      { 
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
-      }
-    );
-  }
-
-  // 2. Check for the existence and validity of the 'subtype' property
-  const subtype = directive.subtype as RunDirectiveSubtype;
-  if (!subtype || !VALID_RUN_SUBTYPES.includes(subtype)) {
-    throw new MeldDirectiveError(
-      `@run directive requires a valid "subtype" (${VALID_RUN_SUBTYPES.join(' | ')}). Found: ${subtype || 'undefined'}`, 
-      'run',
-      { 
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
-      }
-    );
-  }
-
-  // Note: We trust the grammar to set the correct structure for 'directive.command' 
-  // based on the 'subtype'. e.g., object for 'runExec', array for others.
-  // Further structural validation here would be redundant with grammar rules.
+  // Grammar already validates structure and sets the correct subtype
+  // Subtypes like runExec, runCommand, runCode are guaranteed by grammar
+  
+  // The values object contains the parsed command/code/exec info
+  // Grammar ensures proper structure so we don't need to validate that
+  
+  // Only semantic validation needed here
+  // For example, checking if referenced executables exist would be a runtime concern
+  // Not something to validate here
+  
+  // Most validation is now done by grammar
+  // This validator can be very minimal
 }
