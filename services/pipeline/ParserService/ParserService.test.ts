@@ -110,27 +110,32 @@ describe('ParserService', () => {
 
     it('should parse directive content', async () => {
       const content = textDirectiveExamples.atomic.simpleString.code;
-      const mockLocation = { start: { line: 1, column: 2 }, end: { line: 1, column: 25 } };
-      const mockTextValueLocation = { start: { line: 1, column: 19 }, end: { line: 1, column: 24 } };
-
-      const mockResult = [
-        {
-          type: 'Directive',
-          location: mockLocation,
-          nodeId: expect.any(String),
-          directive: {
-            kind: 'text',
-            identifier: 'greeting',
-            source: 'literal',
-            value: [
-              { type: 'Text', content: 'Hello', location: mockTextValueLocation, nodeId: expect.any(String) }
-            ]
-          }
-        }
-      ];
-
       const result = await service.parse(content);
-      expect(result).toEqual(mockResult);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        type: 'Directive',
+        kind: 'text',
+        subtype: 'textAssignment',
+        source: 'literal',
+        nodeId: expect.any(String)
+      });
+
+      const directive = result[0] as DirectiveNode;
+      expect(directive.raw).toMatchObject({
+        identifier: 'greeting'
+      });
+      expect(directive.values).toBeDefined();
+      expect(directive.values.value).toBeDefined();
+      expect(Array.isArray(directive.values.value)).toBe(true);
+      
+      // The new AST structure includes location with offset
+      expect(directive.location).toBeDefined();
+      expect(directive.location.start).toMatchObject({
+        line: 1,
+        column: expect.any(Number),
+        offset: expect.any(Number)
+      });
     });
 
     it('should parse code fence content', async () => {

@@ -3,7 +3,6 @@
  */
 
 import type { MeldNode } from '@core/ast/types';
-import type { MeldNode as OldMeldNode } from '@core/syntax/types';
 import { MeldParseError } from '@core/errors/MeldParseError';
 import { parserLogger as logger } from '@core/utils/logger';
 
@@ -26,7 +25,7 @@ function isValidMeldNode(node: any): node is MeldNode {
  * @returns Array of typed MeldNode instances
  * @throws MeldParseError if any node is invalid
  */
-export function transformParsedNodes(rawNodes: OldMeldNode[]): MeldNode[] {
+export function transformParsedNodes(rawNodes: any[]): MeldNode[] {
   logger.debug('Transforming parsed nodes', { count: rawNodes.length });
   
   const transformedNodes: MeldNode[] = [];

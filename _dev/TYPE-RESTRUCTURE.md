@@ -1,10 +1,94 @@
 # Type Restructuring Post-AST Reorganization
 
+## Current Status (As of Latest Update)
+
+### ✅ Completed
+- **Steps 1-4b**: Type analysis, unified definitions, AST union, ParserService transformation
+- **Step 5a**: StateService migration to use new AST types
+- **Step 5b**: InterpreterService updated with discriminated unions
+- **Step 5c**: All directive handlers migrated (7 handlers total)
+- **Partial Step 6**: Old syntax types renamed to `types-old` (but not removed)
+
+### ⚠️ Partially Completed  
+- **Step 5d**: ResolutionService (main service migrated, supporting files still use old types)
+- **Step 5d**: PathService (main service migrated, test has one old import)
+- **Step 5d**: OutputService (main service migrated, may have test imports)
+
+### ❌ Still Pending
+- **NEW Step 5.5**: Migration Verification Audit (for all "completed" services)
+- **Step 5d**: Complete migration of supporting files for partial services
+- **Step 6**: Full removal of `core/syntax/types-old` folder
+- **Step 7**: Update remaining ~79 files still importing from old types
+- **Step 8**: Documentation and final validation
+
 ## Context
 
 1. **AST types** properly organized in `core/ast/types/` - These are the grammar-generated node types
 2. **General types** in `core/types/` - These are the broader system types
 3. Additional notes on current file locations are collected in `PLAN-CONTEXT.md`
+
+## Full Service/Handler Migration Requirements
+
+A service or handler is considered **fully migrated** when ALL of the following criteria are met:
+
+### 1. Updated Type Imports
+- All imports changed from `@core/syntax/types` to `@core/ast/types`
+- No references to old type paths in main service files or tests
+- Supporting files (factories, utilities) also updated
+
+### 2. Using Correct AST Structure
+- Direct property access (e.g., `node.kind` not `node.directive.kind`)
+- Properties map to actual AST output from grammar:
+  - `node.values` instead of `node.directive.values`
+  - `node.raw` for raw content access
+  - `node.metadata` for additional attributes
+- No adapter layers converting between structures
+
+### 3. Discriminated Union Implementation
+The `MeldNode` discriminated union enables type-safe node handling:
+
+```typescript
+// MeldNode is a union of all possible node types
+type MeldNode = TextNode | DirectiveNode | CodeFenceNode | ...
+
+// Usage with type narrowing:
+function processNode(node: MeldNode) {
+  switch (node.type) {
+    case 'Text':
+      // TypeScript knows this is TextNode
+      console.log(node.content);
+      break;
+    case 'Directive':
+      // TypeScript knows this is DirectiveNode
+      console.log(node.kind);
+      break;
+  }
+}
+
+// Type guards for specific checks:
+if (isTextNode(node)) {
+  // node is narrowed to TextNode type
+}
+```
+
+**Key Implications:**
+- Services process nodes generically as `MeldNode`
+- Type narrowing via `type` field discriminator
+- No need for manual type assertions
+- Compile-time safety for node-specific properties
+
+### 4. Fixture-Based Testing
+- Tests use real AST fixtures from `core/ast/fixtures/`
+- No mock AST structures with incorrect shape
+- Tests validate against expected outputs in fixtures
+- Integration tests use multi-directive fixtures
+
+### 5. Complete Migration
+- Main service file uses new types
+- All test files updated with new imports
+- Supporting utilities (factories, validators) migrated
+- No console warnings about deprecated imports
+- Service passes all tests with real AST data
 
 ## Related Documentation
 
@@ -15,6 +99,7 @@ This plan references several supporting documents:
 - **`STATE-AFFECTED-METHODS.md`** - Inventory of StateService methods requiring updates
 - **`STATE-UPDATES.md`** - Detailed execution plan for StateService migration (part of Step 5)
 - **`TYPE-RESTRUCTURE-CONTEXT.md`** - Implementation context and decisions from completed phases
+- **`STEP-5D-SERVICE-MIGRATION-PLAN-V2.md`** - Detailed fixture-based migration strategy
 
 ## Updated Goals
 
@@ -26,49 +111,39 @@ This plan references several supporting documents:
 - Create comprehensive documentation for the unified type system
 - Remove outdated types; no backward compatibility or shims
 
-## Target Directory Structure
+## Actual Directory Structure (As Implemented)
+
+**Note**: The implementation followed AST-TYPES-CLEANUP.md approach rather than the elaborate structure originally planned. This simpler structure achieves all objectives.
 
 ```
-/core
-  /types            # All types (both AST and runtime)
-    /base           # Fundamental types and interfaces
-      /index.ts
-      /common.ts    # Common utility types
-      /positions.ts # Position and SourceLocation types
-      /metadata.ts  # Standard metadata interfaces
-    /nodes          # All node types (unified AST/runtime)
-      /index.ts
-      /text.ts      # TextNode type
-      /variable.ts  # Variable type
-      /directive.ts # DirectiveNode and subtypes
-      /comment.ts   # CommentNode type
-      /codefence.ts # CodeFenceNode type
-      /guards.ts    # Type guards for all nodes
-    /directives     # Directive-specific types
-      /index.ts
-      /import.ts    # Import directive types
-      /text.ts      # Text directive types
-      /add.ts       # Add directive types
-      /exec.ts      # Exec directive types
-      /path.ts      # Path directive types
-      /data.ts      # Data directive types
-    /services       # Service-related types
-      /index.ts
-      /handlers.ts  # Handler interfaces
-      /context.ts   # Processing context types
-      /state.ts     # State service types
-    /system         # System integration types
-      /index.ts
-      /paths.ts     # Path-related types
-      /dependencies.ts # Dependency types
-      /resolution.ts # Resolution types
-    /extensions     # Standard extension patterns
-      /index.ts
-      /lifecycle.ts # Lifecycle stage extensions
-      /validation.ts # Validation extensions
-      /execution.ts # Execution extensions
-    /index.ts       # Main re-export point
+/core/ast/types/    # All AST and type definitions
+  primitives.ts     # Base node types (TextNode, VariableReferenceNode, etc.)
+  base.ts          # Base interfaces and types
+  nodes.ts         # Node type exports
+  meta.ts          # Metadata types
+  values.ts        # Value array types
+  raw.ts           # Raw content types
+  variables.ts     # Variable-specific types
+  guards.ts        # Type guards for all nodes
+  errors.ts        # Error types
+  
+  # Directive-specific types
+  import.ts        # Import directive types
+  text.ts          # Text directive types
+  add.ts           # Add directive types (renamed from embed)
+  exec.ts          # Exec directive types (renamed from define)
+  path.ts          # Path directive types
+  data.ts          # Data directive types
+  run.ts           # Run directive types
+  
+  index.ts         # Main exports and MeldNode union
 ```
+
+**Key Decisions Made**:
+1. Kept all types in `/core/ast/types/` instead of creating `/core/types/`
+2. Created `primitives.ts` as single source for base node types
+3. Each directive has its own file for specific types
+4. MeldNode union defined in `index.ts`
 
 ## Implementation Approach
 
@@ -259,60 +334,53 @@ During test migrations, we discovered that the handlers themselves are using the
 - Reduces test maintenance burden
 - Eliminates artificial adapter layers
 
-**Comprehensive Issues List (from test analysis):**
+### Step 5.5: Migration Verification Audit (NEW - 2-3 days) *(Next)*
 
-1. **AddDirectiveHandler (previously EmbedDirectiveHandler) - 14 failed tests**
-   - Error: "Invalid node type provided to AddDirectiveHandler"
-   - Handler expecting old structure with `node.directive` property
-   - Needs update from `node.directive.kind` to `node.kind`
-   - All internal property access needs updating
+**Purpose**: Verify that all "completed" services actually meet the full migration criteria.
 
-2. **TextDirectiveHandler - 7 failed tests**
-   - Error: "Invalid value type for @text source 'literal'. Expected string or InterpolatableValue array"
-   - Value access patterns need updating
-   - Identifier extraction broken: old `node.directive.identifier` → new `node.raw.identifier`
-   - Resolution integration failing
+**Services to Audit**:
+1. **StateService** (marked as completed)
+2. **InterpreterService** (marked as completed)  
+3. **All Directive Handlers** (7 handlers marked as completed)
+4. **ParserService** (marked as completed)
 
-3. **DirectiveService Tests - 3 failed tests**
-   - Mock resolution service returning 'ResolvedNodesValue' instead of actual values
-   - Tests expecting actual directive values but getting placeholder strings
-   - Mock handlers need updates to match new node structure
+**Audit Checklist for Each Service**:
+- [ ] **Type Imports Audit**
+  - Check main service file for any `@core/syntax/types` imports
+  - Check test files for old imports
+  - Check supporting files (factories, utilities, validators)
+  - Use grep/search to find hidden references
+  
+- [ ] **AST Structure Audit**  
+  - Verify no `node.directive.*` property access
+  - Confirm direct property access (`node.kind`, `node.values`, etc.)
+  - Check for adapter layers converting structures
+  
+- [ ] **Discriminated Union Usage**
+  - Verify services use `MeldNode` union type
+  - Check for proper type narrowing with switch/if statements
+  - Ensure type guards are used correctly
+  
+- [ ] **Testing Audit**
+  - Confirm tests use fixtures from `core/ast/fixtures/`
+  - No hardcoded mock AST with wrong structure
+  - Tests validate against fixture expected outputs
+  
+- [ ] **Complete Migration Status**
+  - Document any remaining issues found
+  - Create fix tasks for incomplete migrations
+  - Update status in main tracking section
 
-4. **Node Structure Migration Patterns:**
-   - Old: `node.directive.kind` → New: `node.kind`
-   - Old: `node.directive.identifier` → New: `node.raw.identifier`
-   - Old: `node.directive.values` → New: `node.values`
-   - Old: `node.directive.subtype` → New: `node.subtype`
+**Expected Findings**:
+Based on our earlier investigation, we expect to find:
+- Directive handlers still have imports from old types
+- Test files using incorrect AST structure
+- Supporting utilities not fully migrated
+- Hidden references in factory classes
 
-5. **Handlers Requiring Updates:**
-   - **AddDirectiveHandler**: Remove nested directive property checks
-   - **TextDirectiveHandler**: Fix value type validation and access patterns
-   - **DataDirectiveHandler**: Similar issues to TextDirectiveHandler
-   - **ExecDirectiveHandler** (previously DefineDirectiveHandler): Node structure updates
-   - **RunDirectiveHandler**: Structure updates needed
-   - **ImportDirectiveHandler**: Structure updates needed
-   - **PathDirectiveHandler**: Structure updates needed
+**Deliverable**: Detailed audit report for each service with specific issues and required fixes.
 
-6. **Import Path Updates:**
-   - All handlers: `@core/syntax/types` → `@core/ast/types`
-   - Test files: Fix mock implementations
-
-7. **Resolution Service Integration:**
-   - Mock resolution in tests not configured correctly
-   - Returning placeholder 'ResolvedNodesValue' instead of actual resolved content
-   - Need to update resolution mocks to work with new node structure
-
-8. **Additional Issues from Directive Renaming:**
-   - Old syntax: `@embed` → New: `@add`
-   - Old syntax: `@define` → New: `@exec`
-   - Handler class names already updated, but tests and internal references need fixes
-
-**Test Failure Summary:**
-- 15 failed test files out of 41 service test files
-- 127 failed tests total
-- Primary issue: Node structure access patterns throughout directive handlers
-
-#### 5d. Other Services (6-8 days) *(Next)*
+#### 5d. Other Services (6-8 days) *(After Audit)*
 **Reference:** See `STEP-5D-SERVICE-MIGRATION-PLAN-V2.md` for comprehensive migration strategy
 
 - Update remaining services using fixture-based approach:
@@ -325,12 +393,18 @@ During test migrations, we discovered that the handlers themselves are using the
 - Test against expected outputs where available
 - Remove all `@core/syntax/types` imports
 
-### Step 6: Remove Legacy Types (1 day)
+### Step 6: Remove Legacy Types (1 day) *(Partially Complete)*
 
-1. Remove old syntax types from `core/syntax/types`
-2. Update all remaining imports
+**Status**: Old syntax types renamed to `core/syntax/types-old` but not yet removed
+
+**Remaining Tasks**:
+1. ~~Rename old syntax types folder~~ ✅ (Now at `core/syntax/types-old`)
+2. Update all remaining imports (~79 files still using old paths)
 3. Clean up unused type definitions
 4. Verify no circular dependencies
+5. Final removal of `types-old` folder after all imports updated
+
+**Note**: Per `AST-TYPES-CLEANUP.md`, the renaming helps identify dependencies by breaking old imports
 
 ### Step 7: Update All Imports (2-3 days)
 
@@ -517,14 +591,25 @@ Phase 3 will be considered successful when:
 - **Days 3-4**: Migrate handler tests to use fixtures
 - **Days 5**: Resume directive handler updates with correct tests
 
-### Week 4: Cleanup (Steps 6-8)
+### Week 4: Migration Verification (NEW - Step 5.5)
+- **Days 1-2**: Audit all "completed" services for actual migration status
+- **Day 3**: Document findings and create fix tasks
+- **Days 4-5**: Fix critical issues found in audit
+
+### Week 5: Complete Migration (Step 5d)
+- **Days 1-2**: Complete ResolutionService migration
+- **Day 3**: Migrate ValidationService
+- **Day 4**: Migrate PathService
+- **Day 5**: Final service cleanups
+
+### Week 6: Cleanup (Steps 6-8)
 - **Day 1**: Remove legacy types (Step 6)
 - **Days 2-4**: Update all imports (Step 7)
   - ~330 import statements need updating
   - Consider automation script
 - **Days 4-5**: Documentation and validation (Step 8)
 
-**Total:** 3-4 weeks for complete implementation
+**Total:** 5-6 weeks for complete implementation (updated to include verification audit)
 
 **Key Insight:** StateService update (documented in `STATE-UPDATES.md`) serves as the detailed prototype for updating other services. Success here validates the approach for remaining services.
 

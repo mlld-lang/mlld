@@ -128,6 +128,32 @@ The parser is not correctly parsing the section extraction syntax. When using th
 - Should create `values.section` containing "Section 1"
 - The handler can then use both properties to properly extract the section
 
+## Text Node Position Calculation
+
+**Error:** Parser returns incorrect end positions for text nodes
+
+**Examples:**
+```
+# Test Document
+
+This is a simple paragraph of text.
+```
+
+**Description:**
+The parser is incorrectly calculating end positions for text nodes. All text nodes are returning `end: { line: 1, column: 1, offset: 0 }` regardless of their actual end position. This affects position reporting and error messages.
+
+**Files affected:**
+- `/services/pipeline/ParserService/ParserService.test.ts`
+- Any code relying on accurate position information from text nodes
+
+**Current behavior:**
+- Text node end positions always show `{ line: 1, column: 1, offset: 0 }`
+- This happens regardless of the actual text length or position
+
+**Expected behavior:**
+- End position should reflect the actual end of the text content
+- For "This is a simple paragraph of text.", end should be `{ line: 1, column: 36 }`
+
 ## Suggested Fixes
 
 1. **Nested Property Notation:**
@@ -150,3 +176,7 @@ The parser is not correctly parsing the section extraction syntax. When using th
    - Fix the grammar rule for `@add` directives to prioritize template detection over path detection
    - Ensure the parser correctly identifies `[[` as the start of a template rather than a path
    - Update the lookahead logic to properly distinguish between templates and paths
+
+6. **Text Node Position Calculation:**
+   - Fix the position calculation logic in the parser to correctly compute end positions
+   - Ensure offset values are properly calculated for all node types

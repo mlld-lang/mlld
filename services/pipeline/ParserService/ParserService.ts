@@ -5,7 +5,6 @@ import { MeldParseError } from '@core/errors/MeldParseError';
 import { ErrorSeverity } from '@core/errors/MeldError';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
 import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
-import type { MeldNode as OldMeldNode } from '@core/syntax/types/index';
 import type { MeldNode } from '@core/ast/types/index';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService';
 import { transformParsedNodes, createParserOptions } from './transformations';
@@ -140,7 +139,7 @@ export class ParserService implements IParserService {
       }
 
       // Transform the raw AST nodes to our typed MeldNode union
-      return transformParsedNodes(rawAst as OldMeldNode[]);
+      return transformParsedNodes(rawAst);
     } catch (error) {
       if (isMeldAstError(error)) {
         const errorLocation = error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } };

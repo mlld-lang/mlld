@@ -1,5 +1,5 @@
 import { parse } from '@core/ast/parser';
-import type { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/ast/types';
 import { MeldAstError, ParseErrorCode } from '@core/ast/types';
 import type { ParseResult, ParserOptions } from '@core/ast/types';
 import { parse as grammarParse, SyntaxError } from '@core/ast/grammar/index';
@@ -12,7 +12,7 @@ export { grammarParse, SyntaxError };
 export { MeldAstError, ParseErrorCode };
 export type { ParseResult, ParserOptions, MeldNode };
 
-// Types from consolidated core syntax types
+// Types from consolidated core AST types
 export type {
   DirectiveNode,
   TextNode,
@@ -35,7 +35,7 @@ export type {
   ValidationContext,
   ValidationResult,
   Example
-} from '@core/syntax/types/index';
+} from '@core/ast/types/index';
 
 // Additional types
 export type {

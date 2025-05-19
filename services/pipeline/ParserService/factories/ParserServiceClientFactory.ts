@@ -3,7 +3,8 @@ import { Service } from '@core/ServiceProvider';
 import type { IParserService } from '../IParserService';
 import type { IParserServiceClient } from '../interfaces/IParserServiceClient';
 import { parserLogger as logger } from '@core/utils/logger';
-import type { MeldNode, InterpolatableValue } from '@core/syntax/types/nodes';
+import type { MeldNode } from '@core/ast/types';
+import type { InterpolatableValue } from '@core/types';
 import type { ParserOptions } from '@core/ast/index';
 
 /**
