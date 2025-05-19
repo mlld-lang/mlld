@@ -33,6 +33,7 @@ Audit all "completed" services:
 3. All 7 Directive Handlers
 4. ParserService
 
+**📊 Track progress in `MIGRATION-AUDIT-TRACKER.md`**
 See `TYPE-RESTRUCTURE.md` for detailed audit checklist.
 
 ## 🗂️ Reference Documents
@@ -45,6 +46,7 @@ See `TYPE-RESTRUCTURE.md` for detailed audit checklist.
 - **`STEP-5D-SERVICE-MIGRATION-PLAN-V2.md`** - Service migration strategy
 - **`AST-TYPES-CLEANUP.md`** - Type cleanup plan
 - **`FIXTURE-MIGRATION-TRACKER.md`** - Test migration progress
+- **`MIGRATION-AUDIT-TRACKER.md`** - Step 5.5 verification audit progress *(NEW)*
 
 ## 🛠️ Working Commands
 

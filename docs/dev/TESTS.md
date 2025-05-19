@@ -262,6 +262,86 @@ describe('MyService', () => {
 });
 ```
 
+## AST Fixtures vs Service Mocks
+
+### Purpose and Scope
+
+**AST Fixtures** are for creating Abstract Syntax Tree node structures, while **Service Mocks** are for simulating service dependencies. They serve different purposes and are both still needed in tests.
+
+### AST Fixtures
+- **Purpose**: Provide consistent, valid AST node structures for testing
+- **Use for**: Creating MeldNode instances, directive nodes, and AST properties
+- **Location**: Load from `@tests/fixtures/*.json` or use factory helpers
+- **Example**:
+  ```typescript
+  // GOOD: Use fixtures or factories for AST nodes
+  const textNode = await ASTFixtureLoader.loadNode('text', 'assignment');
+  // or
+  const runNode = createRunCodeNode({ code: 'echo "test"' });
+  
+  // BAD: Don't create AST nodes manually
+  const badNode = {
+    type: NodeType.TextAssignment,
+    directive: { kind: 'text', type: 'assignment' },
+    // ... manual structure ...
+  };
+  ```
+
+### Service Mocks
+- **Purpose**: Simulate service behavior and dependencies
+- **Use for**: Mocking IFileSystem, IStateService, or any other service dependencies
+- **Creation**: Use manual objects + vi.spyOn or mock utilities
+- **Example**:
+  ```typescript
+  // Mock service dependencies as usual
+  const mockStateService = {
+    get: vi.fn(),
+    set: vi.fn(),
+    toObject: vi.fn()
+  } as unknown as IStateService;
+  
+  testContainer.registerInstance('IStateService', mockStateService);
+  ```
+
+### Key Principles
+1. **Fixtures complement mocks**: Fixtures provide AST structures, mocks provide service behavior
+2. **Don't mix concerns**: Use fixtures for AST nodes, mocks for services
+3. **Standardize node creation**: Always use fixtures/factories for AST nodes, never manual construction
+4. **Type safety**: Ensure fixtures match the discriminated union types from `@core/ast/types`
+
+### Testing Approach
+```typescript
+describe('DirectiveHandlerTest', () => {
+  let testContainer: DependencyContainer;
+  let mockStateService: IStateService;
+  
+  beforeEach(async () => {
+    // 1. Load AST fixture
+    const node = await ASTFixtureLoader.loadNode('run', 'command');
+    
+    // 2. Create service mocks
+    mockStateService = {
+      get: vi.fn(),
+      set: vi.fn()
+    } as unknown as IStateService;
+    
+    // 3. Register mocks in container
+    testContainer.registerInstance('IStateService', mockStateService);
+    
+    // 4. Resolve handler and test with both fixture and mocks
+    const handler = testContainer.resolve<IRunDirectiveHandler>('IRunDirectiveHandler');
+    await handler.execute(node, mockStateService);
+  });
+});
+```
+
+### Migration Guidelines
+When updating tests to use the new AST structure:
+1. Replace manual node construction with fixture loading
+2. Update property access to use discriminated unions (not `node.directive.*`)
+3. Keep existing service mocks - they're still needed
+4. Use type guards to narrow union types when needed
+
 ### Container Leak Detection
 
 Enable leak detection in tests that create many services:
