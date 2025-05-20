@@ -317,7 +317,7 @@ export class ParserService implements IParserService {
   }
   
 
-  private validateCodeFences(nodes: OldMeldNode[]): void {
+  private validateCodeFences(nodes: MeldNode[]): void {
     // Since we're using the meld-ast parser with validateNodes=true and preserveCodeFences=true,
     // we can trust that the code fences are already valid.
     // This is just an extra validation layer to ensure code fence integrity
