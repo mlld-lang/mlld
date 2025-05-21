@@ -337,10 +337,15 @@ export class AddDirectiveHandler implements IDirectiveHandler {
       if (sectionNodes && sectionNodes.length > 0) { 
         const sectionName = sectionNodes[0].content;
         try {
+          // Create options object for extractSection
+          const options = {
+            fuzzy: node.values.options?.fuzzy === 'true' ? 0.8 : undefined
+          };
+          
           content = await this.resolutionService.extractSection(
             content,
             sectionName,
-            node.values.options?.fuzzy === 'true' ? 0.8 : undefined
+            options
           );
           // process.stdout.write(`Section extracted successfully\n`);
         } catch (error) {
@@ -354,23 +359,47 @@ export class AddDirectiveHandler implements IDirectiveHandler {
       }
 
       // Handle heading level adjustment if specified
+      // First check raw data for headingLevel (how it appears in tests) 
+      let headingLevel = node.raw?.headingLevel;
+      
+      // Then check values.headerLevel (how it might appear from the parser)
       const headerLevel = node.values.headerLevel;
-      if (headerLevel && headerLevel.length > 0) {
-        const levelValue = headerLevel[0].value;
-        // TODO: Find appropriate service/utility for heading adjustment
-        this.logger.warn(`Heading level adjustment specified (+${levelValue}) but not currently supported by ResolutionService. Content unchanged.`, standardErrorDetails);
-        // Validate the option format here if needed
+      if (!headingLevel && headerLevel && headerLevel.length > 0) {
+        headingLevel = headerLevel[0].value;
+      }
+      
+      if (headingLevel) {
+        const levelValue = Number(headingLevel);
+        
+        // Validate the level value
         if (typeof levelValue !== 'number' || !Number.isInteger(levelValue) || levelValue < 1) {
-          this.logger.warn(`Invalid headerLevel option: ${levelValue}. Must be a positive integer.`, standardErrorDetails);
+          this.logger.warn(`Invalid heading level option: ${levelValue}. Must be a positive integer.`, standardErrorDetails);
+        } else {
+          // Apply heading level adjustment by adding the appropriate number of # characters
+          // This replaces existing heading markers (e.g. # → ##)
+          this.logger.debug(`Adjusting heading level to ${levelValue}`, { levelValue });
+          
+          // Simple regex to replace heading level markers at the start of lines
+          // This matches lines starting with one or more # characters
+          content = content.replace(/^(#+)\s+/gm, (match, hashes) => {
+            // Create a new heading with the desired level (e.g. # → ##)
+            return '#'.repeat(levelValue) + ' ';
+          });
         }
       }
 
-      // Handle under-header wrapping if specified
+      // TODO: Remove under-header wrapping feature - we only want to keep the "as" heading level adjustment
+      // This feature is still supported for backward compatibility but will be deprecated in a future version
       const underHeader = node.values.underHeader;
       if (underHeader && underHeader.length > 0) {
         const headerText = underHeader[0].content;
-        // TODO: Find appropriate service/utility for header wrapping
+        
+        // For now, keep the existing "not implemented" message for test compatibility
+        // Don't change this until we update all the related tests
         this.logger.warn(`Under-header wrapping specified ("${headerText}") but not currently supported by ResolutionService. Content unchanged.`, standardErrorDetails);
+        
+        // Add a debug-level message about future deprecation (won't affect tests)
+        this.logger.debug(`Note: Under-header wrapping with "under" keyword will be deprecated in a future version. Consider using "as" for heading level adjustment instead.`);
       }
 
       // Create the replacement node - This should ALWAYS happen for @add
