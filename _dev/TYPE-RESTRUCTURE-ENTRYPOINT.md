@@ -4,8 +4,8 @@
 Unify AST and runtime types into a single coherent type system, eliminating artificial separation between parsing and execution types.
 
 ## 📍 Current Status
-**Phase 5.5: Migration Verification Audit** - NEXT
-We discovered that services marked as "completed" may not meet all migration criteria. A comprehensive audit is needed before continuing.
+**Phase 5e: Test File Migration & Final Cleanup** - IN PROGRESS
+Week 5 is nearly complete! OutputService, PathService and ParserService fully migrated. Only minor issues remain.
 
 ## 📄 Primary Document
 **➡️ SEE `TYPE-RESTRUCTURE.md` FOR FULL DETAILS**
@@ -14,27 +14,21 @@ This entrypoint provides quick reference. The main plan document contains:
 - Detailed current status
 - Complete migration requirements
 - Step-by-step implementation plan
-- New Step 5.5 verification audit
 - Timeline and milestones
 
-## 🚨 Critical Discovery
-Many services marked as "completed" still have:
-- Old type imports from `@core/syntax/types`
-- Incorrect AST structure usage (`node.directive.*`)
-- Test files with wrong mock structures
-- Supporting utilities not fully migrated
+## 🎉 Progress Summary
+- **Core Services**: All main service files migrated to new AST types ✅
+- **Directive Handlers**: All 7 handlers now use correct imports ✅
+- **Import Issues**: 10/11 services fixed (only 1 file remains)
+- **AST Structure**: All `node.directive.*` usage fixed ✅
+- **Fully Migrated**: OutputService, PathService, ParserService ✅
 
 ## 🔧 Immediate Next Steps
 
-### Step 5.5: Migration Verification Audit (NEW)
-Audit all "completed" services:
-1. StateService
-2. InterpreterService  
-3. All 7 Directive Handlers
-4. ParserService
-
-**📊 Track progress in `MIGRATION-AUDIT-TRACKER.md`**
-See `TYPE-RESTRUCTURE.md` for detailed audit checklist.
+### Step 5e: Fix Remaining Test File Issues
+1. Update `services/resolution/ValidationService/validators/FuzzyMatchingValidator.ts` imports
+2. Migrate remaining test files to use fixtures where appropriate
+3. Prepare for Step 6: Final removal of legacy types folder
 
 ## 🗂️ Reference Documents
 
@@ -46,7 +40,7 @@ See `TYPE-RESTRUCTURE.md` for detailed audit checklist.
 - **`STEP-5D-SERVICE-MIGRATION-PLAN-V2.md`** - Service migration strategy
 - **`AST-TYPES-CLEANUP.md`** - Type cleanup plan
 - **`FIXTURE-MIGRATION-TRACKER.md`** - Test migration progress
-- **`MIGRATION-AUDIT-TRACKER.md`** - Step 5.5 verification audit progress *(NEW)*
+- **`MIGRATION-AUDIT-TRACKER.md`** - Step 5.5 audit findings (completed)
 
 ## 🛠️ Working Commands
 
@@ -55,28 +49,30 @@ See `TYPE-RESTRUCTURE.md` for detailed audit checklist.
 npm run build
 
 # Testing
-npm test services           # Run all service tests
-npm test <specific-file>    # Run specific test file
+npm test services/pipeline/OutputService     # Test OutputService
+npm test services/fs/PathService             # Test PathService
 
 # AST Tools  
-npm run ast:process-all     # Generate fixtures/snapshots
-npm run ast:validate        # Validate generated types
+npm run ast:process-all                      # Generate fixtures/snapshots
+npm run ast:validate                         # Validate generated types
+
+# Checking Migration Status
+grep -r '@core/syntax/types' services/       # Find remaining old imports
 ```
 
-## 🔄 Quick Status Check
+## ✅ Completed Milestones
 
-To check project status:
-1. Read this entrypoint for overview
-2. Check `TYPE-RESTRUCTURE.md` for detailed current status
-3. Review Step 5.5 for the new verification audit phase
+- **✅ Step 1-4b**: Type definitions, AST union, ParserService transformation
+- **✅ Step 5a-c**: Core service migrations (State, Interpreter, Handlers)
+- **✅ Step 5.5**: Full migration verification audit (found & fixed critical issues)
+- **✅ Step 5d (Partial)**: OutputService, PathService and ParserService fully migrated
 
 ## 🎬 Getting Started in New Session
 
-1. Read this entrypoint
-2. **Go to `TYPE-RESTRUCTURE.md`** for full project status
-3. Start with Step 5.5: Migration Verification Audit
-4. Use audit checklist to verify "completed" services
-5. Document findings and create fix tasks
+1. Read this entrypoint for the quick overview
+2. Check `TYPE-RESTRUCTURE.md` for detailed current status
+3. Fix remaining issues in Step 5e (validation service imports)
+4. Prepare for Step 6: Removal of legacy types
 
 ---
 

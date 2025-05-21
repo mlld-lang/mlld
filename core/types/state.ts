@@ -7,8 +7,8 @@ import type { VariableType, VariableMetadata, MeldVariable, TextVariable, DataVa
 import type { IFilesystemPathState, IUrlPathState } from './paths';
 import type { ICommandDefinition } from './define';
 
-// Import MeldNode from the correct index file
-import type { DirectiveKind, MeldNode } from '@core/syntax/types';
+// Import MeldNode from the AST types
+import type { DirectiveKind, MeldNode } from '@core/ast/types';
 
 /**
  * Options for variable copying between states.

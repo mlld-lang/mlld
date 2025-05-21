@@ -1,4 +1,4 @@
-import type { DirectiveNode } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/ast/types';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 
 /**
