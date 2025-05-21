@@ -178,7 +178,7 @@ export async function debugTransformCommand(options: DebugTransformOptions): Pro
       let result;
       
       const nodeType = node.type;
-      const directiveKind = node.directive?.kind || 'unknown';
+      const directiveKind = node.kind || 'unknown';
       
       // Skip if we're filtering by directive type and this doesn't match
       if (directiveType && directiveKind !== directiveType) {

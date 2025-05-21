@@ -19,7 +19,7 @@ describe('FuzzyMatchingValidator', () => {
 
     it.skip('should reject fuzzy thresholds below 0 - Edge case validation deferred for V1', async () => {
       const node = createAddDirective('test.md', 'section', createLocation(1, 1));
-      node.directive.fuzzy = -0.5; // Invalid negative threshold
+      (node as any).meta = { fuzzy: -0.5 }; // Invalid negative threshold
       
       await expectThrowsInStrictButWarnsInPermissive(
         async () => validateFuzzyThreshold(node),
@@ -30,7 +30,7 @@ describe('FuzzyMatchingValidator', () => {
 
     it.skip('should reject fuzzy thresholds above 1 - Edge case validation deferred for V1', async () => {
       const node = createAddDirective('test.md', 'section', createLocation(1, 1));
-      node.directive.fuzzy = 1.5; // Invalid threshold above 1
+      (node as any).meta = { fuzzy: 1.5 }; // Invalid threshold above 1
       
       await expectThrowsInStrictButWarnsInPermissive(
         async () => validateFuzzyThreshold(node),
@@ -42,7 +42,7 @@ describe('FuzzyMatchingValidator', () => {
     it.skip('should reject non-numeric fuzzy thresholds - Edge case validation deferred for V1', async () => {
       const node = createAddDirective('test.md', 'section', createLocation(1, 1));
       // @ts-ignore - Intentionally setting an invalid type for testing
-      node.directive.fuzzy = 'not-a-number';
+      (node as any).meta = { fuzzy: 'not-a-number' };
       
       await expectThrowsInStrictButWarnsInPermissive(
         async () => validateFuzzyThreshold(node),

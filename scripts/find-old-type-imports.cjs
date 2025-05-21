@@ -28,9 +28,9 @@ const OLD_TYPE_PATTERNS = [
   // Other significant imports
   '@core/syntax/types/factories',
   '@core/syntax/types/legacy',
+  '@core/types-old'
   
-  // Base type import (this might be too broad but check results)
-  '@core/types'
+  // NOTE: @core/types is the canonical location for non-AST types, so we don't flag it
 ];
 
 // Important node types to look for specifically
@@ -128,6 +128,29 @@ function findSpecificImports(pattern) {
   }
 }
 
+// Function to find files using old node.directive.* access patterns
+function findOldNodeAccessPatterns() {
+  try {
+    // Look for node.directive.* patterns which should be changed to node.*
+    const command = `rg -l "node\\.directive\\." ${SEARCH_DIRS.join(' ')} --type ts`;
+    
+    if (process.env.DEBUG) {
+      console.log(`Running node.directive pattern search: ${command}`);
+    }
+    
+    const output = execSync(command, { encoding: 'utf-8' });
+    return output.trim().split('\n').filter(Boolean);
+  } catch (error) {
+    // Handle case where rg doesn't find any matches
+    if (error.status === 1 && (error.stdout === '' || !error.stdout)) {
+      return [];
+    }
+    
+    console.error('Error searching for node.directive patterns:', error.message);
+    return [];
+  }
+}
+
 // Group files by directory for better analysis
 function groupFilesByDirectory(files) {
   const grouped = {};
@@ -177,6 +200,7 @@ Examples:
   
   const results = {};
   const specificResults = {};
+  const nodeAccessResults = [];
   const uniqueFiles = new Set();
   
   // Search for each pattern
@@ -201,6 +225,14 @@ Examples:
         files.forEach(file => uniqueFiles.add(file));
       }
     }
+  }
+  
+  // Search for node.directive.* access patterns
+  console.log('Searching for old node.directive.* access patterns...');
+  const nodeDirectiveFiles = findOldNodeAccessPatterns();
+  if (nodeDirectiveFiles.length > 0) {
+    nodeAccessResults.push(...nodeDirectiveFiles);
+    nodeDirectiveFiles.forEach(file => uniqueFiles.add(file));
   }
 
   // Display results
@@ -238,6 +270,14 @@ Examples:
     }
   }
   
+  // Display node.directive.* access pattern results
+  if (nodeAccessResults.length > 0) {
+    console.log('\n=== OLD NODE.DIRECTIVE.* ACCESS PATTERNS ===');
+    console.log('These files use node.directive.* which should be updated to node.*');
+    console.log('-'.repeat(70));
+    nodeAccessResults.forEach(file => console.log(`- ${file}`));
+  }
+  
   // Display results by directory
   console.log('\n\n=== RESULTS BY DIRECTORY ===');
   const allFiles = Array.from(uniqueFiles);
@@ -257,6 +297,9 @@ Examples:
   }
   if (hasSpecificResults) {
     console.log(`Total specific node type imports found: ${totalSpecificMatches}`);
+  }
+  if (nodeAccessResults.length > 0) {
+    console.log(`Total files with node.directive.* patterns: ${nodeAccessResults.length}`);
   }
   
   // File types categorization

@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types/index';
+import type { MeldNode } from '@core/ast/types/common';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { VariableType, VariableMetadata } from '@core/types/variables';
 // Import core types

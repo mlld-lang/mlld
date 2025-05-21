@@ -59,8 +59,8 @@ export class ValidationService implements IValidationService {
    * @throws {MeldDirectiveError} If validation fails
    */
   async validate(node: DirectiveNode): Promise<void> {
-    // Handle both new AST structure (node.kind) and old structure (node.directive.kind)
-    const kind = node.kind || (node as any).directive?.kind;
+    // Get the directive kind
+    const kind = node.kind;
     
     logger.debug('Validating directive', {
       kind: kind,

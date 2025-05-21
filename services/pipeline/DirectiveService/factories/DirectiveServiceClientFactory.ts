@@ -4,7 +4,7 @@ import type { IDirectiveServiceClient } from '../interfaces/IDirectiveServiceCli
 import type { IDirectiveServiceClientFactory } from './IDirectiveServiceClientFactory';
 import { Service } from '@core/ServiceProvider';
 import type { DirectiveProcessingContext } from '@core/types/index';
-import type { MeldNode, DirectiveNode } from '@core/syntax/types/index';
+import type { MeldNode, DirectiveNode } from '@core/ast/types/common';
 import type { StateServiceLike } from '@core/shared-service-types';
 import type { DirectiveResult } from '@core/directives/DirectiveHandler';
 import type { IStateService } from '@services/state/StateService/IStateService';

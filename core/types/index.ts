@@ -115,11 +115,18 @@ export interface ProcessOptions {
  * Centralized export point for core Meld types.
  */
 
-// New unified type structure exports
-export * from './base';
+// New unified type structure exports - use explicit exports to avoid ambiguities
+export type {
+  BaseMeldNode,
+  Position as BasePosition
+} from './base';
 export * from './nodes';
 export * from './directives';
-export * from './services';
+export * from './services/context';
+export * from './services/handlers';
+export type {
+  StateChanges as ServiceStateChanges
+} from './services/state';
 export * from './system';
 export * from './extensions';
 
@@ -136,10 +143,30 @@ export {
   type SourceLocation
 } from './common';
 
-export * from './variables';
+// Export variables with explicit naming to avoid conflicts
+export {
+  VariableType,
+  type MeldVariable,
+  type TextVariable,
+  type DataVariable,
+  type IPathVariable,
+  type CommandVariable,
+  type VariableDefinition,
+  type VariableMetadata,
+  VariableOrigin,
+  type VariableChange,
+  // Include factory functions
+  createTextVariable,
+  createDataVariable,
+  createPathVariable, 
+  createCommandVariable
+} from './variables';
 export * from './paths';
 export * from './exec';
-export * from './state';
+export type {
+  TransformationOptions,
+  IStateService
+} from './state';
 export * from '../errors/index';
 export * from './dependencies';
 export * from './guards';

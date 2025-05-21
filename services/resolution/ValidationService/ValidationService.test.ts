@@ -347,13 +347,13 @@ describe('ValidationService', () => {
     
     it('should validate fuzzy matching threshold', async () => {
       const node = createAddDirective('test.md', 'section');
-      if (node.directive) node.directive.fuzzy = 0.8; 
+      (node as any).meta = { fuzzy: 0.8 };
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
     it.skip('should throw on invalid fuzzy threshold (below 0) with Fatal severity', async () => {
       const node = createAddDirective('test.md', 'section');
-      if (node.directive) node.directive.fuzzy = -0.1;
+      (node as any).meta = { fuzzy: -0.1 };
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
           severity: ErrorSeverity.Fatal, directiveKind: 'add', messageContains: 'must be a number between 0 and 1'
@@ -362,7 +362,7 @@ describe('ValidationService', () => {
     
     it.skip('should throw on invalid fuzzy threshold (above 1) with Fatal severity', async () => {
       const node = createAddDirective('test.md', 'section');
-       if (node.directive) node.directive.fuzzy = 1.1;
+      (node as any).meta = { fuzzy: 1.1 };
        await expectToThrowWithConfig(async () => service.validate(node), {
           type: 'MeldDirectiveError', code: DirectiveErrorCode.VALIDATION_FAILED,
           severity: ErrorSeverity.Fatal, directiveKind: 'add', messageContains: 'must be a number between 0 and 1'

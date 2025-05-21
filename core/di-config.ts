@@ -37,11 +37,7 @@ import {
   // ... other loggers ...
 } from '@core/utils/logger';
 
-// Import AST factory classes (temporarily from old location)
-import { NodeFactory } from '@core/syntax/types-old/factories/NodeFactory';
-import { VariableNodeFactory } from '@core/syntax/types-old/factories/VariableNodeFactory';
-import { DirectiveNodeFactory } from '@core/syntax/types-old/factories/DirectiveNodeFactory';
-// ... other AST factories ...
+// AST factories no longer needed - using AST types directly
 
 // Import Directive Handlers
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler';
@@ -106,11 +102,7 @@ container.register(StateServiceClientFactory, { useClass: StateServiceClientFact
 // container.register(StateTrackingServiceClientFactory, { useClass: StateTrackingServiceClientFactory }); 
 container.register(InterpreterServiceClientFactory, { useClass: InterpreterServiceClientFactory });
 
-// Register AST factory classes
-container.register(NodeFactory, { useClass: NodeFactory });
-container.register(VariableNodeFactory, { useClass: VariableNodeFactory });
-container.register(DirectiveNodeFactory, { useClass: DirectiveNodeFactory });
-// ... (rest of AST factories) ...
+// AST factory registrations removed - using AST types directly
 
 // Register other services
 container.register(InterpreterService, { useClass: InterpreterService });

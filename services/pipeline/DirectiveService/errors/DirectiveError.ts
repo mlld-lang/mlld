@@ -1,6 +1,6 @@
 import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from '@core/errors/MeldError';
 import type { DirectiveProcessingContext } from '@core/types/index';
-import type { DirectiveNode, DirectiveKind } from '@core/syntax/types/index';
+import type { DirectiveNode, DirectiveKind } from '@core/ast/types/common';
 import { MeldDirectiveError, DirectiveLocation, MeldDirectiveErrorOptions } from '@core/errors/MeldDirectiveError';
 import type { Location } from '@core/types';
 

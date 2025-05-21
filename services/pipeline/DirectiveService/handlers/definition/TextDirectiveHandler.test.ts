@@ -6,7 +6,7 @@ import { type DirectiveProcessingContext } from '@core/types/index';
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { ErrorSeverity, MeldResolutionError } from '@core/errors';
 import { type VariableDefinition } from '@core/types/variables';
-import { type DirectiveNode } from '@core/syntax/types/index';
+import { type DirectiveNode } from '@core/ast/types/index';
 import { type IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import { type IStateService } from '@services/state/StateService/IStateService';
 import { type IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
@@ -16,7 +16,7 @@ import { type ResolutionContext, type ResolutionFlags, type FormattingContext, t
 import { type DirectiveResult } from '@core/directives/DirectiveHandler';
 import { type VariableMetadata, VariableOrigin, VariableType } from '@core/types/variables';
 import { PathPurpose } from '@core/types/paths';
-import type { InterpolatableValue } from '@core/syntax/types/nodes';
+import type { InterpolatableValue } from '@core/ast/types/values';
 import { textDirectiveExamples } from '@core/syntax/index';
 
 /**

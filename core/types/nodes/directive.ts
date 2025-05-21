@@ -1,5 +1,5 @@
 import { BaseMeldNode, SourceLocation } from '@core/types/base';
-import { DirectiveKind, DirectiveSubtype } from '@core/syntax/types/directives';
+import { DirectiveKind, DirectiveSubtype } from '@core/ast/types/primitives';
 
 /**
  * Source values for content origin in directives

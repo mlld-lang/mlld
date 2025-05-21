@@ -4,14 +4,14 @@ import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveS
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
-import { DirectiveNode, TextNode, VariableReferenceNode, NodeType } from '@core/syntax/types/nodes';
-import { DirectiveKind, IDirectiveNode } from '@core/syntax/types/interfaces/IDirectiveNode';
+import { DirectiveNode, TextNode, VariableReferenceNode, NodeType } from '@core/ast/types/nodes';
+import { DirectiveKind, IDirectiveNode } from '@core/ast/types/interfaces/IDirectiveNode';
 import { createTextNode, createVariableReferenceNode, createDirectiveNode } from '@tests/utils/testFactories';
 import { createStateServiceMock, createResolutionServiceMock } from '@tests/utils/mocks/serviceMocks';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
 import type { DirectiveProcessingContext } from '@core/types/index';
 import type { FormattingContext } from '@core/types/resolution';
-import type { InterpolatableValue } from '@core/syntax/types/nodes';
+import type { InterpolatableValue } from '@core/ast/types/nodes';
 
 // --- Import REAL Service Implementations for Integration Test ---
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';

@@ -21,9 +21,9 @@ function convertLocation(location: any): DirectiveLocation | undefined {
  * Grammar handles all syntax validation - we only do semantic checks
  */
 export function validateImportDirective(node: DirectiveNode): void {
-  // Handle both new AST structure (node.kind) and old structure (node.directive.kind)
-  const kind = node.kind || (node as any).directive?.kind;
-  const directive = (node as any).directive || node;
+  // Get the directive kind
+  const kind = node.kind;
+  const directive = node;
   
   if (!kind || kind !== 'import') {
     throw new MeldDirectiveError(
