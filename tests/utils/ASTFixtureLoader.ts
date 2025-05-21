@@ -1,7 +1,9 @@
 import { readFileSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { parse } from '@core/ast/parser';
 import { MeldNode } from '@core/ast/types';
+// Import this to allow resolving the fixtures path relative to project root
+import * as path from 'path';
 
 interface ASTFixture {
   name: string;
@@ -27,7 +29,29 @@ export class ASTFixtureLoader {
   private parsedCache: Map<string, ParsedFixture> = new Map();
 
   constructor(fixturesPath?: string) {
-    this.fixturesPath = fixturesPath || join(process.cwd(), 'core', 'ast', 'fixtures');
+    // If path is provided, use it; otherwise find the fixtures directory relative to project root
+    if (fixturesPath) {
+      this.fixturesPath = fixturesPath;
+    } else {
+      // Find the project root by looking for package.json
+      let projectRoot = process.cwd();
+      let currentDir = projectRoot;
+      
+      // Traverse up the directory tree until we find package.json or hit the root
+      while (!readdirSync(currentDir).includes('package.json')) {
+        const parentDir = path.dirname(currentDir);
+        if (parentDir === currentDir) {
+          // We've hit the root without finding package.json
+          break;
+        }
+        currentDir = parentDir;
+      }
+      
+      // Use the found directory as project root
+      projectRoot = currentDir;
+      this.fixturesPath = join(projectRoot, 'core', 'ast', 'fixtures');
+    }
+    
     this.loadFixtures();
   }
 
@@ -250,5 +274,5 @@ export class ASTFixtureLoader {
   }
 }
 
-// Export singleton instance for convenience
+// Export singleton instance for convenience - allow it to auto-detect the fixtures directory
 export const astFixtureLoader = new ASTFixtureLoader();

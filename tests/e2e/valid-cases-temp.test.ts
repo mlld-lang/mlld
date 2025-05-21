@@ -11,10 +11,10 @@ import path from 'path';
 import type { Services } from '@core/types';
 
 describe.skip('Command References in Run directives', async () => {
-  // Test files to run
+  // Test files to run - use relative paths instead of absolute
   const validTestCases = [
-    '/Users/adam/dev/claude-meld/tests/cases/valid/directives.mld',
-    '/Users/adam/dev/claude-meld/tests/cases/valid/run-command-parameter-parsing.mld'
+    path.resolve(process.cwd(), 'tests/cases/valid/directives.mld'),
+    path.resolve(process.cwd(), 'tests/cases/valid/run-command-parameter-parsing.mld')
   ];
   const context = await setupTestContext(validTestCases);
   
@@ -28,7 +28,7 @@ describe.skip('Command References in Run directives', async () => {
 
   // Use directives.mld as a basic test for command references
   it('processes command references correctly in directives.mld', async () => {
-    const testPath = '/Users/adam/dev/claude-meld/tests/cases/valid/directives.mld';
+    const testPath = path.resolve(process.cwd(), 'tests/cases/valid/directives.mld');
     
     // Process through API
     const result = await main(testPath, {
@@ -48,8 +48,8 @@ describe.skip('Command References in Run directives', async () => {
   
   // Test parameter parsing with the dedicated test file
   it.skip('correctly parses parameters in command references', async () => {
-    const testPath = '/Users/adam/dev/claude-meld/tests/cases/valid/run-command-parameter-parsing.mld';
-    const expectedPath = '/Users/adam/dev/claude-meld/tests/cases/valid/run-command-parameter-parsing.expected.mld';
+    const testPath = path.resolve(process.cwd(), 'tests/cases/valid/run-command-parameter-parsing.mld');
+    const expectedPath = path.resolve(process.cwd(), 'tests/cases/valid/run-command-parameter-parsing.expected.mld');
     
     // Process through API
     const result = await main(testPath, {

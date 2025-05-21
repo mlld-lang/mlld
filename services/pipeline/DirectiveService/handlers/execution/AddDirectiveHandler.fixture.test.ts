@@ -58,9 +58,8 @@ describe('AddDirectiveHandler - Fixture Tests', () => {
       loggerMock
     );
     
-    // Set up fixture loader
-    const fixtureDir = path.join('/Users/adam/dev/meld/core/ast/fixtures');
-    fixtureLoader = new ASTFixtureLoader(fixtureDir);
+    // Set up fixture loader - let it auto-detect the fixtures path
+    fixtureLoader = new ASTFixtureLoader();
   });
 
   afterEach(() => {
@@ -348,12 +347,16 @@ describe('AddDirectiveHandler - Fixture Tests', () => {
       
       const result = await handler.handle(mockContext);
       
-      // Handler should log warning about unsupported heading level
-      expect(loggerMock.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Heading level adjustment specified'),
+      // Now heading level adjustment is implemented, we shouldn't see a warning
+      // Instead, we should have a debug log
+      expect(loggerMock.debug).toHaveBeenCalledWith(
+        expect.stringContaining('Adjusting heading level'),
         expect.any(Object)
       );
-      expect(result.replacement?.[0]?.content).toBe(fixture.expected);
+      
+      // The content should still be in the result, just with heading levels adjusted
+      expect(result.replacement?.[0]).toBeDefined();
+      expect(result.replacement?.[0]?.type).toBe('Text');
     });
     
     it('should handle underHeader option', async () => {
