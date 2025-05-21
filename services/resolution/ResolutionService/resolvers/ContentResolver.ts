@@ -1,7 +1,7 @@
 import { injectable, inject } from 'tsyringe';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
-import type { MeldNode, TextNode, CodeFenceNode, CommentNode } from '@core/syntax/types';
+import type { MeldNode, TextNode, CodeFenceNode, CommentNode } from '@core/ast/types';
 
 /**
  * Handles resolution of raw content (text, code blocks, comments)

@@ -1,6 +1,6 @@
 import { injectable, inject, delay } from 'tsyringe';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
-import { MeldNode, TextNode, CodeFenceNode, VariableReferenceNode, DirectiveNode } from '@core/syntax/types/index';
+import { MeldNode, TextNode, CodeFenceNode, VariableReferenceNode, DirectiveNode } from '@core/ast/types/index';
 import { logger } from '@core/utils/logger';
 import type { IOutputService } from './IOutputService';
 import type { IStateService } from '@services/state/StateService/IStateService';
@@ -17,7 +17,7 @@ import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionS
 import { MeldOutputError } from '@core/errors/MeldOutputError';
 import { MeldError } from '@core/errors/MeldError';
 import { formatWithPrettier } from '@core/utils/prettierUtils';
-import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference';
+import type { IVariableReference } from '@core/ast/types/interfaces/IVariableReference';
 import { container } from 'tsyringe';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
 

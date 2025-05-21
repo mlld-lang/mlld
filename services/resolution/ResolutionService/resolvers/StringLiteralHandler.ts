@@ -1,6 +1,6 @@
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService';
-import type { MeldNode, TextNode } from '@core/syntax/types';
+import type { MeldNode, TextNode } from '@core/ast/types';
 
 /**
  * Handles validation and parsing of string literals in text directives

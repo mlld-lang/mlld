@@ -18,7 +18,7 @@ import { MeldPath, PathValidationContext, PathPurpose, RawPath, NormalizedAbsolu
 import type { IPathService } from '@services/fs/PathService/IPathService';
 import {
   Field as AstField
-} from '@core/syntax/types-old/shared-types';
+} from '@core/ast/types/shared-types';
 import type { InterpolatableValue } from '@core/ast/types/guards';
 import { isInterpolatableValueArray } from '@core/ast/types/guards';
 import { Service } from '@core/ServiceProvider';

@@ -26,7 +26,7 @@ import {
   isRelativePath,
   PathContentType
 } from '@core/types/paths';
-import type { StructuredPath } from '@core/syntax/types/nodes';
+import type { StructuredPath } from '@core/ast/types/nodes';
 
 // Import necessary interfaces for mocks
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';

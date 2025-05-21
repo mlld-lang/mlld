@@ -3,7 +3,7 @@ import { Service } from '@core/ServiceProvider';
 import type { IResolutionService, ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService';
 import type { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective';
 import { resolutionLogger as logger } from '@core/utils/logger';
-import type { MeldNode, VariableReferenceNode } from '@core/syntax/types';
+import type { MeldNode, VariableReferenceNode } from '@core/ast/types';
 import { JsonValue } from '@core/types';
 
 /**

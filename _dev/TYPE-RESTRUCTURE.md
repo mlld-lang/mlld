@@ -1,14 +1,17 @@
 # Type Restructuring Post-AST Reorganization
 
-## Current Status (As of 2024-01-18)
+## Current Status (As of 2024-05-19)
 
 ### Migration Progress Summary
 - **Core Services**: All main service files migrated to new AST types ✅
 - **Directive Handlers**: All 7 handlers now use correct imports ✅
-- **Import Issues**: 8/10 services fixed (2 test files remain)
+- **Import Issues**: 9/10 services fixed (1 test file remains)
 - **AST Structure**: All `node.directive.*` usage fixed ✅
 - **Type Guards**: InterpreterService now uses proper guards ✅
-- **Testing**: Major issues in 2 services need fixture migration
+- **Testing**: 
+  - ParserService tests fully updated and passing ✅
+  - Handler tests improved with missing implementations ✅
+  - Major issue in 1 service still needs fixture migration
 
 ### ✅ Completed
 - **Steps 1-4b**: Type analysis, unified definitions, AST union, ParserService transformation
@@ -24,12 +27,13 @@
 - **Step 5d**: ResolutionService (main service migrated, supporting files still use old types)
 - **Step 5d**: PathService (main service migrated, test has one old import)
 - **Step 5d**: OutputService (main service migrated, may have test imports)
+- **Step 5d**: ParserService (core complete ✅, tests updated and passing ✅)
 
 ### ❌ Still Pending
-- **Step 5e**: Fix remaining test file imports (InterpreterService, StateService)
+- **Step 5e**: Fix remaining test file imports (InterpreterService)
 - **Step 5d**: Complete migration of supporting files for partial services
 - **Step 6**: Full removal of `core/syntax/types-old` folder
-- **Step 7**: Update remaining ~20-30 files still importing from old types (mostly tests)
+- **Step 7**: Update remaining ~15-20 files still importing from old types (mostly tests)
 - **Step 8**: Documentation and final validation
 
 ## Context
@@ -359,8 +363,25 @@ During test migrations, we discovered that the handlers themselves are using the
 - **Total Issues Found**: 
   - Import issues: 8 services (now fixed)
   - AST structure issues: 1 service (now fixed)
-  - Testing issues: 8 services (2 critical remain)
+  - Testing issues: 8 services (now 1 critical remains)
   - Type guard usage: 7 services (1 fixed)
+
+### 2024-05-19 Update: ParserService and Handler Tests ✅
+
+1. **Fixed ParserService Types**
+   - Replaced `OldMeldNode` with the correct `MeldNode` type
+   - Updated fixture tests to handle the new AST structure
+   - Improved validation functions to account for Newline nodes
+
+2. **Enhanced Handler Tests**
+   - Implemented missing tests for `ImportDirectiveHandler`'s basic importing
+   - Added comprehensive tests for `AddDirectiveHandler`'s template literals
+   - Fixed skipped tests for header manipulation
+
+3. **Test Verification**
+   - Confirmed all ParserService tests pass with updated types 
+   - All fixture validation procedures properly handle new AST structure
+   - Services directory tests passing successfully
 
 **Fixes Applied**:
 1. **InterpreterService**:
@@ -662,7 +683,7 @@ Phase 3 will be considered successful when:
 - **Day 3**: Fix critical issues (InterpreterService, handler imports) ✅
 
 ### Week 5: Test Migration & Remaining Services (IN PROGRESS)
-- **Days 1-2**: Fix test files (InterpreterService, StateService) - Step 5e
+- **Days 1-2**: Fix test files (InterpreterService, ParserService) - Step 5e ✅ (ParserService completed)
 - **Day 3**: Complete ResolutionService migration
 - **Day 4**: Complete PathService and OutputService
 - **Day 5**: Final service cleanups

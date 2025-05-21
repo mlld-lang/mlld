@@ -3,7 +3,7 @@ import { StringLiteralHandler } from '@services/resolution/ResolutionService/res
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService';
-import type { MeldNode, TextNode } from '@core/syntax/types';
+import type { MeldNode, TextNode } from '@core/ast/types';
 
 /**
  * Handles string concatenation operations using the ++ operator

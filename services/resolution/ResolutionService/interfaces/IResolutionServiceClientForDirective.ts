@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/ast/types';
 import type { ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService';
 
 /**

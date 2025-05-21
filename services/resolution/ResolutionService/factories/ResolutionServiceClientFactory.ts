@@ -4,7 +4,7 @@ import type { IResolutionService, ResolutionContext } from '@services/resolution
 import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
 import { resolutionLogger as logger } from '@core/utils/logger';
 import type { StructuredPath } from '@core/shared-service-types';
-import type { MeldNode, TextNode, VariableReferenceNode, StructuredPath as SyntaxStructuredPath, InterpolatableValue } from '@core/syntax/types/nodes';
+import type { MeldNode, TextNode, VariableReferenceNode, StructuredPath as SyntaxStructuredPath, InterpolatableValue } from '@core/ast/types/nodes';
 import { VariableType } from '@core/types/variables';
 import { MeldPath, createMeldPath, unsafeCreateValidatedResourcePath, RawPath } from '@core/types/paths';
 

@@ -16,9 +16,9 @@ import { VariableType, TextVariable, DataVariable, MeldVariable, JsonValue } fro
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils';
 import type { IPathService } from '@services/fs/PathService/IPathService';
 import { createStateServiceMock } from '@tests/utils/mocks/serviceMocks';
-import { isInterpolatableValueArray } from '@core/syntax/types/guards';
-import type { InterpolatableValue } from '@core/syntax/types/nodes';
-import type { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes';
+import { isInterpolatableValueArray } from '@core/ast/types/guards';
+import type { InterpolatableValue } from '@core/ast/types/nodes';
+import type { StructuredPath as AstStructuredPath } from '@core/ast/types/nodes';
 import type { VariableReferenceNode, TextNode } from '@core/ast/ast/astTypes';
 import { container, type DependencyContainer } from 'tsyringe';
 

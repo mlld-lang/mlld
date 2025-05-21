@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ContentResolver } from '@services/resolution/ResolutionService/resolvers/ContentResolver';
-import type { MeldNode, TextNode, CodeFenceNode, CommentNode, DirectiveNode } from '@core/syntax/types';
+import type { MeldNode, TextNode, CodeFenceNode, CommentNode, DirectiveNode } from '@core/ast/types';
 import { ResolutionContext } from '@core/types';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory';
 import type { IStateService } from '@services/state/StateService/IStateService';

@@ -499,7 +499,194 @@ describe('ImportDirectiveHandler', () => {
       vi.spyOn(mockStateService, 'createChildState').mockResolvedValue(mockDeep<IStateService>()); 
     });
 
+    it('should import all variables from a file', async () => {
+      const node = createDirectiveNode('import', {
+        kind: 'import',
+        subtype: 'importAll',
+        values: {
+          imports: [{ type: 'VariableReference', identifier: '*', valueType: 'import' }],
+          path: [
+            { type: 'Text', content: 'basic.meld' }
+          ]
+        },
+        raw: {
+          imports: '*',
+          path: 'basic.meld'
+        }
+      }) as ImportDirectiveNode;
+      mockProcessingContext = createMockProcessingContext(node);
+      
+      // Setup for basic importing test
+      const resolvedPath = createMeldPath('basic.meld', unsafeCreateValidatedResourcePath('/project/basic.meld'), true);
+      mockResolutionService.resolveNodes.mockResolvedValueOnce('basic.meld');
+      mockResolutionService.resolvePath.mockResolvedValueOnce(resolvedPath);
+      
+      // Create test variables to be imported
+      const textVar: TextVariable = { 
+        name: 'textVar', 
+        type: VariableType.TEXT, 
+        value: 'Text Value', 
+        metadata: { origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } 
+      };
+      
+      const dataVar: DataVariable = { 
+        name: 'dataVar', 
+        type: VariableType.DATA, 
+        value: { key: 'value' }, 
+        metadata: { origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } 
+      };
+      
+      // Setup mock interpreted state with variables
+      const mockInterpretedState = createMockInterpretedState({
+        text: new Map([['textVar', textVar]]),
+        data: new Map([['dataVar', dataVar]])
+      });
+      
+      mockInterpreterServiceClient.interpret.mockResolvedValue(mockInterpretedState);
+      
+      const result = await handler.handle(mockProcessingContext);
+      
+      // Validate results
+      expect(mockResolutionService.resolveNodes).toHaveBeenCalledWith(node.values.path, expect.anything());
+      expect(mockResolutionService.resolvePath).toHaveBeenCalledWith('basic.meld', expect.anything());
+      expect(mockFileSystemService.exists).toHaveBeenCalledWith('/project/basic.meld');
+      expect(mockFileSystemService.readFile).toHaveBeenCalledWith('/project/basic.meld');
+      expect(mockCircularityService.beginImport).toHaveBeenCalledWith('/project/basic.meld');
+      expect(mockCircularityService.endImport).toHaveBeenCalledWith('/project/basic.meld');
+      expect(mockInterpreterServiceClient.interpret).toHaveBeenCalled();
+      
+      // Check that variables were imported with correct origin
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('textVar');
+      expect(result.stateChanges?.variables?.textVar?.value).toBe('Text Value');
+      expect(result.stateChanges?.variables?.textVar?.metadata?.origin).toBe(VariableOrigin.IMPORT);
+      
+      expect(result.stateChanges?.variables).toHaveProperty('dataVar');
+      expect(result.stateChanges?.variables?.dataVar?.value).toEqual({ key: 'value' });
+      expect(result.stateChanges?.variables?.dataVar?.metadata?.origin).toBe(VariableOrigin.IMPORT);
+    });
 
+    it('should import selected variables from a file', async () => {
+      const node = createDirectiveNode('import', {
+        kind: 'import',
+        subtype: 'importSelected',
+        values: {
+          imports: [
+            { type: 'VariableReference', identifier: 'specificVar', valueType: 'import' }
+          ],
+          path: [
+            { type: 'Text', content: 'selective.meld' }
+          ]
+        },
+        raw: {
+          imports: 'specificVar',
+          path: 'selective.meld'
+        }
+      }) as ImportDirectiveNode;
+      mockProcessingContext = createMockProcessingContext(node);
+      
+      // Setup for selective importing test
+      const resolvedPath = createMeldPath('selective.meld', unsafeCreateValidatedResourcePath('/project/selective.meld'), true);
+      mockResolutionService.resolveNodes.mockResolvedValueOnce('selective.meld');
+      mockResolutionService.resolvePath.mockResolvedValueOnce(resolvedPath);
+      
+      // Setup mock variables in interpreted file
+      const specificVar: TextVariable = { 
+        name: 'specificVar', 
+        type: VariableType.TEXT, 
+        value: 'Selected Value', 
+        metadata: { origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } 
+      };
+      
+      const otherVar: TextVariable = { 
+        name: 'otherVar', 
+        type: VariableType.TEXT, 
+        value: 'Should Not Import', 
+        metadata: { origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } 
+      };
+      
+      // Setup mock interpreted state with both variables
+      const mockInterpretedState = createMockInterpretedState({
+        text: new Map([
+          ['specificVar', specificVar],
+          ['otherVar', otherVar]
+        ])
+      });
+      
+      // Mock the interpreter to return our state
+      mockInterpreterServiceClient.interpret.mockResolvedValue(mockInterpretedState);
+      
+      const result = await handler.handle(mockProcessingContext);
+      
+      // Validate results
+      expect(mockFileSystemService.readFile).toHaveBeenCalledWith('/project/selective.meld');
+      expect(mockInterpreterServiceClient.interpret).toHaveBeenCalled();
+      
+      // Check that only the selected variable was imported
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('specificVar');
+      expect(result.stateChanges?.variables?.specificVar?.value).toBe('Selected Value');
+      expect(result.stateChanges?.variables?.specificVar?.metadata?.origin).toBe(VariableOrigin.IMPORT);
+      
+      // The other variable should not be included
+      expect(result.stateChanges?.variables?.otherVar).toBeUndefined();
+    });
+
+    it('should handle relative paths correctly', async () => {
+      const node = createDirectiveNode('import', {
+        kind: 'import',
+        subtype: 'importAll',
+        values: {
+          imports: [{ type: 'VariableReference', identifier: '*', valueType: 'import' }],
+          path: [
+            { type: 'Text', content: './subdirectory/relative.meld' }
+          ]
+        },
+        raw: {
+          imports: '*',
+          path: './subdirectory/relative.meld'
+        }
+      }) as ImportDirectiveNode;
+      
+      // Set current file path to establish relative context
+      mockStateService.getCurrentFilePath.mockReturnValue('/project/folder/main.meld');
+      mockProcessingContext = createMockProcessingContext(node);
+      
+      // Setup path resolution
+      const resolvedRelativePath = '/project/folder/subdirectory/relative.meld';
+      mockResolutionService.resolveNodes.mockResolvedValueOnce('./subdirectory/relative.meld');
+      mockResolutionService.resolvePath.mockResolvedValueOnce(
+        createMeldPath('./subdirectory/relative.meld', unsafeCreateValidatedResourcePath(resolvedRelativePath), true)
+      );
+      
+      // Setup variables to import
+      const relativeVar: TextVariable = { 
+        name: 'relativeVar', 
+        type: VariableType.TEXT, 
+        value: 'From Relative Path', 
+        metadata: { origin: VariableOrigin.DIRECT_DEFINITION, createdAt: Date.now(), modifiedAt: Date.now() } 
+      };
+      
+      const mockInterpretedState = createMockInterpretedState({
+        text: new Map([['relativeVar', relativeVar]])
+      });
+      
+      mockInterpreterServiceClient.interpret.mockResolvedValue(mockInterpretedState);
+      
+      const result = await handler.handle(mockProcessingContext);
+      
+      // Validate file path resolution
+      expect(mockResolutionService.resolveNodes).toHaveBeenCalledWith(node.values.path, expect.anything());
+      expect(mockResolutionService.resolvePath).toHaveBeenCalledWith('./subdirectory/relative.meld', expect.anything());
+      expect(mockFileSystemService.exists).toHaveBeenCalledWith(resolvedRelativePath);
+      expect(mockFileSystemService.readFile).toHaveBeenCalledWith(resolvedRelativePath);
+      
+      // Validate import results
+      expect(result.stateChanges).toBeDefined();
+      expect(result.stateChanges?.variables).toHaveProperty('relativeVar');
+      expect(result.stateChanges?.variables?.relativeVar?.value).toBe('From Relative Path');
+      expect(result.stateChanges?.variables?.relativeVar?.metadata?.origin).toBe(VariableOrigin.IMPORT);
+    });
   });
 
   describe('error handling', () => {

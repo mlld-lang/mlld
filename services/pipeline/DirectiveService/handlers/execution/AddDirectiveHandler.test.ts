@@ -194,8 +194,65 @@ describe('AddDirectiveHandler', () => {
 
   describe('basic add functionality', () => {
 
-    it.skip('should handle heading level adjustment', async () => { /* ... */ });
-    it.skip('should handle under header extraction', async () => { /* ... */ });
+    it('should handle heading level adjustment', async () => {
+      const node = createAddDirective('./section.md', undefined, createLocation(1, 1), 'addPath');
+      // Add specific heading level info to raw data
+      node.raw = {
+        ...node.raw,
+        path: './section.md',
+        headingLevel: 2 // Adjust heading level to h2
+      };
+      
+      const processingContext = createMockProcessingContext(node);
+      const resolvedPath = createMeldPath('./section.md', unsafeCreateValidatedResourcePath('/path/to/section.md'));
+      
+      resolutionServiceMock.resolvePath.mockResolvedValueOnce(resolvedPath);
+      fileSystemServiceMock.exists.mockResolvedValueOnce(true);
+      fileSystemServiceMock.readFile.mockResolvedValueOnce('# Section 1\nContent 1\n# Section 2\nContent 2');
+      
+      const result = await handler.handle(processingContext) as DirectiveResult;
+      
+      // Check the result
+      expect(result).toHaveProperty('replacement');
+      expect(result.replacement?.length).toBe(1);
+      
+      // The heading level should have been changed from h1 (# Heading) to h2 (## Heading)
+      const expectedContent = '## Section 1\nContent 1\n## Section 2\nContent 2';
+      expect(result.replacement?.[0]).toMatchObject({ 
+        type: 'Text', 
+        content: expectedContent
+      });
+    });
+
+    it('should handle under header extraction', async () => {
+      const node = createAddDirective('./section.md', 'Section 1', createLocation(1, 1), 'addPath');
+      const processingContext = createMockProcessingContext(node);
+      const resolvedPath = createMeldPath('./section.md', unsafeCreateValidatedResourcePath('/path/to/section.md'));
+      
+      resolutionServiceMock.resolvePath.mockResolvedValueOnce(resolvedPath);
+      fileSystemServiceMock.exists.mockResolvedValueOnce(true);
+      fileSystemServiceMock.readFile.mockResolvedValueOnce('# Section 1\nContent 1\n# Section 2\nContent 2');
+      
+      // Mock the extractSection method to return only the content under Section 1
+      resolutionServiceMock.extractSection.mockResolvedValueOnce('Content 1');
+      
+      const result = await handler.handle(processingContext) as DirectiveResult;
+      
+      // Check that extract section was called correctly
+      expect(resolutionServiceMock.extractSection).toHaveBeenCalledWith(
+        '# Section 1\nContent 1\n# Section 2\nContent 2', 
+        'Section 1', 
+        expect.anything()
+      );
+      
+      // Check the result
+      expect(result).toHaveProperty('replacement');
+      expect(result.replacement?.length).toBe(1);
+      expect(result.replacement?.[0]).toMatchObject({ 
+        type: 'Text', 
+        content: 'Content 1'
+      });
+    });
   });
 
   describe('error handling', () => {
@@ -319,6 +376,130 @@ describe('AddDirectiveHandler', () => {
   });
 
   describe('Template literal embeds', () => {
+    it('should handle simple template literals', async () => {
+      // Create a template with text and a variable reference
+      const templateNodes: InterpolatableValue = [
+        createTextNode('Hello, '),
+        createVariableReferenceNode('textVar', VariableType.TEXT)
+      ];
+      
+      const node = createAddDirective(templateNodes, undefined, createLocation(1, 1), 'addTemplate');
+      const processingContext = createMockProcessingContext(node);
+      
+      // Setup resolution service to resolve the template
+      resolutionServiceMock.resolveNodes.mockResolvedValueOnce('Hello, Resolved Text');
+      
+      const result = await handler.handle(processingContext) as DirectiveResult;
+      
+      // Verify the handler called the right methods
+      expect(resolutionServiceMock.resolveNodes).toHaveBeenCalledWith(templateNodes, expect.anything());
+      
+      // Check the result
+      expect(result).toHaveProperty('replacement');
+      expect(result.replacement?.length).toBe(1);
+      expect(result.replacement?.[0]).toMatchObject({ 
+        type: 'Text', 
+        content: 'Hello, Resolved Text' 
+      });
+    });
+    
+    it('should handle complex template literals with nested objects', async () => {
+      // Create a template with text and a variable reference with dot notation
+      const templateNodes: InterpolatableValue = [
+        createTextNode('User: '),
+        { 
+          type: 'VariableReference', 
+          identifier: 'dataVar.user.name', 
+          valueType: VariableType.TEXT,
+          isVariableReference: true,
+          nodeId: 'test-var-ref-1',
+          location: createLocation(1, 10)
+        }
+      ];
+      
+      const node = createAddDirective(templateNodes, undefined, createLocation(1, 1), 'addTemplate');
+      const processingContext = createMockProcessingContext(node);
+      
+      // Setup resolution service to resolve the template
+      resolutionServiceMock.resolveNodes.mockResolvedValueOnce('User: Alice');
+      
+      const result = await handler.handle(processingContext) as DirectiveResult;
+      
+      // Verify the handler called the right methods
+      expect(resolutionServiceMock.resolveNodes).toHaveBeenCalledWith(templateNodes, expect.anything());
+      
+      // Check the result
+      expect(result).toHaveProperty('replacement');
+      expect(result.replacement?.length).toBe(1);
+      expect(result.replacement?.[0]).toMatchObject({ 
+        type: 'Text', 
+        content: 'User: Alice' 
+      });
+    });
+    
+    it('should handle multiline template literals', async () => {
+      // Create a multiline template
+      const templateNodes: InterpolatableValue = [
+        createTextNode('Line 1: '),
+        createVariableReferenceNode('textVar', VariableType.TEXT),
+        createTextNode('\nLine 2: Another line\nLine 3: '),
+        createVariableReferenceNode('dataVar.key', VariableType.TEXT)
+      ];
+      
+      const node = createAddDirective(templateNodes, undefined, createLocation(1, 1), 'addTemplate');
+      const processingContext = createMockProcessingContext(node);
+      
+      // Setup resolution service to resolve the template
+      const resolvedTemplate = 'Line 1: Resolved Text\nLine 2: Another line\nLine 3: value';
+      resolutionServiceMock.resolveNodes.mockResolvedValueOnce(resolvedTemplate);
+      
+      const result = await handler.handle(processingContext) as DirectiveResult;
+      
+      // Verify the handler called the right methods
+      expect(resolutionServiceMock.resolveNodes).toHaveBeenCalledWith(templateNodes, expect.anything());
+      
+      // Check the result
+      expect(result).toHaveProperty('replacement');
+      expect(result.replacement?.length).toBe(1);
+      expect(result.replacement?.[0]).toMatchObject({ 
+        type: 'Text', 
+        content: resolvedTemplate
+      });
+    });
+    
+    it('should handle template literals with path variables', async () => {
+      // Create a template with text and a path variable reference
+      const templateNodes: InterpolatableValue = [
+        createTextNode('Path: '),
+        { 
+          type: 'VariableReference', 
+          identifier: 'docsPath', 
+          valueType: VariableType.PATH,
+          isVariableReference: true,
+          nodeId: 'test-path-var-ref',
+          location: createLocation(1, 10)
+        }
+      ];
+      
+      const node = createAddDirective(templateNodes, undefined, createLocation(1, 1), 'addTemplate');
+      const processingContext = createMockProcessingContext(node);
+      
+      // Setup resolution service to resolve the template
+      resolutionServiceMock.resolveNodes.mockResolvedValueOnce('Path: /path/to/docs');
+      
+      const result = await handler.handle(processingContext) as DirectiveResult;
+      
+      // Verify the handler called the right methods
+      expect(resolutionServiceMock.resolveNodes).toHaveBeenCalledWith(templateNodes, expect.anything());
+      
+      // Check the result
+      expect(result).toHaveProperty('replacement');
+      expect(result.replacement?.length).toBe(1);
+      expect(result.replacement?.[0]).toMatchObject({ 
+        type: 'Text', 
+        content: 'Path: /path/to/docs' 
+      });
+    });
   });
 
   describe('Transformation mode', () => {

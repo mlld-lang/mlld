@@ -1,4 +1,15 @@
-import type { MeldNode } from '@core/syntax/types';
+import type { 
+  MeldNode, 
+  TextNode, 
+  VariableReferenceNode, 
+  DirectiveNode 
+} from '@core/ast/types';
+import { 
+  isTextNode, 
+  isVariableReferenceNode, 
+  isDirectiveNode 
+} from '@core/ast/types/guards';
+import { VariableType } from '@core/types/variables';
 
 /**
  * Represents a field access in a variable reference
@@ -10,82 +21,35 @@ export interface Field {
 }
 
 /**
- * Text node containing static content
- */
-export interface TextNode extends MeldNode {
-  type: 'Text';
-  value: string; 
-  content?: string; // Support legacy property name
-}
-
-/**
- * Base node type for variable references
- */
-export interface VariableReferenceNode extends MeldNode {
-  type: 'VariableReference';
-  identifier: string;
-  fields?: Field[];
-  isVariableReference: boolean;
-}
-
-/**
- * Text variable reference (previously ${var})
+ * Text variable reference node
  */
 export interface TextVarNode extends VariableReferenceNode {
-  valueType?: 'text';
+  valueType: VariableType.TEXT;
 }
 
 /**
- * Data variable reference (previously #{data})
+ * Data variable reference node
  */
 export interface DataVarNode extends VariableReferenceNode {
-  valueType?: 'data';
-}
-
-/**
- * Directive node (@directive)
- */
-export interface DirectiveNode extends MeldNode {
-  type: 'Directive';
-  directive: {
-    kind: string;
-    identifier: string;
-    value?: string;
-    [key: string]: any;
-  };
-}
-
-/**
- * Type guard for text nodes
- */
-export function isTextNode(node: MeldNode): node is TextNode {
-  return node.type === 'Text';
-}
-
-/**
- * Type guard for variable reference nodes
- */
-export function isVariableReferenceNode(node: MeldNode): node is VariableReferenceNode {
-  return node.type === 'VariableReference';
+  valueType: VariableType.DATA;
 }
 
 /**
  * Type guard for text variable nodes
  */
 export function isTextVarNode(node: MeldNode): node is TextVarNode {
-  return node.type === 'VariableReference' && (!('valueType' in node) || (node as any).valueType === 'text');
+  return isVariableReferenceNode(node) && 
+         (!('valueType' in node) || node.valueType === VariableType.TEXT);
 }
 
 /**
  * Type guard for data variable nodes
  */
 export function isDataVarNode(node: MeldNode): node is DataVarNode {
-  return node.type === 'VariableReference' && 'valueType' in node && (node as any).valueType === 'data';
+  return isVariableReferenceNode(node) && 
+         'valueType' in node && 
+         node.valueType === VariableType.DATA;
 }
 
-/**
- * Type guard for directive nodes
- */
-export function isDirectiveNode(node: MeldNode): node is DirectiveNode {
-  return node.type === 'Directive';
-}
+// Re-export the imported type guards for convenience
+export { isTextNode, isVariableReferenceNode, isDirectiveNode };
