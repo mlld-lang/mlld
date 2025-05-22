@@ -16,7 +16,7 @@ import type { InterpolatableValue } from '@core/ast/types/nodes';
 // --- Import REAL Service Implementations for Integration Test ---
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory';
-import { StateService } from '@services/state/StateService/StateService';
+import { StateServiceAdapter } from '@services/state/StateService/StateServiceAdapter';
 import { ValidationService } from '@services/resolution/ValidationService/ValidationService';
 import { PathService } from '@services/fs/PathService/PathService';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
@@ -89,7 +89,7 @@ describe('DirectiveService Integration Tests', () => {
         useFactory: () => null 
     });
     
-    testContainer.register<StateService>('IStateService', { useClass: StateService }, { lifecycle: Lifecycle.Singleton });
+    testContainer.register<IStateService>('IStateService', { useClass: StateServiceAdapter }, { lifecycle: Lifecycle.Singleton });
 
     // Pipeline Services
     testContainer.register<ParserService>('IParserService', { useClass: ParserService }, { lifecycle: Lifecycle.Singleton });

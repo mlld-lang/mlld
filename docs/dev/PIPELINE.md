@@ -2,20 +2,27 @@
 
 ## Overview
 
-The Meld pipeline processes `.mld` files through several stages to produce either `.xml` or `.md` output. Here's a detailed look at how it works:
+The Meld pipeline processes `.mld` files through a simplified, handler-based architecture that follows the "AST Knows All" principle:
 
 ```ascii
 ┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│  Service    │     │   Service   │     │   Pipeline   │     │    Final     │
-│Initialization├────►│ Validation  ├────►│  Execution   ├────►│   Output     │
+│   Parser    │     │ Interpreter │     │   Handlers   │     │   Output     │
+│  (Smart)    ├────►│  (Simple)   ├────►│ (Focused)    ├────►│ (Formatter)  │
 └─────────────┘     └─────────────┘     └──────────────┘     └──────────────┘
       │                    │                    │                    │
       ▼                    ▼                    ▼                    ▼
 ┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│Dependencies │     │Validate All │     │Process Input │     │Generate Clean│
-│  Resolved   │     │ Services    │     │   Content    │     │   Output    │
+│ AST with    │     │ Route by    │     │Return State  │     │Format Final  │
+│ Rich Types  │     │ Node Type   │     │  Changes     │     │   Nodes      │
 └─────────────┘     └─────────────┘     └──────────────┘     └──────────────┘
 ```
+
+Key principles:
+- **Parser produces rich AST** with discriminated unions and pre-parsed structures
+- **Interpreter is a simple router** that dispatches based on node type
+- **Handlers process specific directives** and return state changes as data
+- **State is updated immutably** based on handler results
+- **Output formats the final nodes** without complex logic
 
 ## Service Organization
 
@@ -63,29 +70,22 @@ The pipeline is organized into logical service groups, with strict initializatio
 
 ## Detailed Flow
 
-1. **Service Initialization** (`core/types/dependencies.ts`)
+1. **Service Initialization** (Simplified with DI)
    ```ascii
    ┌─────────────┐
-   │Load Service │
-   │Dependencies │
+   │ DI Container│
+   │  Resolves   │
    └─────┬───────┘
          │
          ▼
    ┌─────────────┐
-   │Initialize in│
-   │   Order    │
-   └─────┬───────┘
-         │
-         ▼
-   ┌─────────────┐
-   │  Validate   │
    │  Services   │
+   │ Auto-wired  │
    └─────────────┘
    ```
-   - Resolves service dependencies
-   - Initializes in correct order
-   - Validates service configuration
-   - Enables transformation if requested
+   - TSyringe container handles all dependencies
+   - Services have minimal interfaces
+   - Handlers registered automatically
 
 2. **Input Processing** (`CLIService`)
    - User runs `meld prompt.mld`
@@ -103,27 +103,25 @@ The pipeline is organized into logical service groups, with strict initializatio
          │
          ▼
    ┌─────────────┐
-   │  AST Tree   │ ← Uses grammar/meld.peggy and its
-   │  Generator  │   imported lexer/directive rules
+   │ Rich AST    │ ← Produces discriminated union types
+   │  Generator  │   with all intelligence built-in
    └─────┬───────┘
          │
          ▼
    ┌─────────────┐
-   │ MeldNode[]  │
-   │   Array     │
+   │ MeldNode[]  │ ← Each node has 'type' discriminator
+   │(Smart Types)│   enabling TypeScript narrowing
    └─────────────┘
    ```
-   - Uses modular Peggy grammar rules organized in `grammar/`:
-     - `lexer/`: Basic tokens, literals, interpolation
-     - `directives/`: Specific directive syntax rules
-   - Each node has a specific type (Text, Comment, Directive, etc.).
-   - Adds source location information.
-   - **Adds a unique `nodeId` to every AST node.**
-   - Parses into a rich, **context-aware** AST using `@core/ast`.
-   - Variable syntax (`{{...}}`, `$var`) is parsed as `VariableReferenceNode` only in contexts where interpolation is allowed (e.g., directive values, certain string literals). Otherwise, it remains literal text within `TextNode`s.
-   - Directive values (like strings, paths) that support interpolation are parsed into `InterpolatableValue` arrays (sequences of `TextNode` and `VariableReferenceNode`).
-   - Adds source location information.
-   - **Adds a unique `nodeId` to every AST node.**
+   - Produces **discriminated union** AST nodes with `type` field
+   - Each node type has specific structure (TextNode, DirectiveNode, etc.)
+   - **Pre-parses directive values** into structured data:
+     - `directive.values.value` for data directives (already parsed JSON)
+     - `directive.values.content` for text directives (array of nodes)
+     - `directive.values.path` for import directives
+   - Variables in templates become `VariableReferenceNode` objects
+   - Every node gets unique `nodeId` and optional `location`
+   - **AST contains all parsing intelligence** - no re-parsing needed later
 
 4. **Interpretation** (`InterpreterService`)
    ```ascii
@@ -149,20 +147,27 @@ The pipeline is organized into logical service groups, with strict initializatio
                        └────────────────────────────────────────────────────────────┘
 
    ```
-   - Processes each rich AST node sequentially.
+   - **Simple type-based routing** using switch on `node.type`
    - For `TextNode`s:
-     - Checks if `content` contains `{{...}}`.
-     - If yes, uses `ParserServiceClient` to parse the content into an `InterpolatableValue` array.
-     - Uses `ResolutionService` to resolve the `InterpolatableValue` array to a final string.
-     - Adds a new `TextNode` with the *resolved* content to the state.
-     - If no `{{...}}`, adds the original `TextNode` to the state.
+     - Simply adds to state (no processing needed)
+     - Text is just text - no hidden complexity
    - For `DirectiveNode`s:
-     - Routes directives to appropriate handlers via `DirectiveService`.
-     - Handlers process structured directive data (e.g., `InterpolatableValue`) and use `ResolutionService` as needed.
-     - Handlers return a `DirectiveResult` (defined in `@core/directives/DirectiveHandler.ts`). This result can optionally include a `stateChanges` property of type `StateChanges`. `StateChanges` contains `variables?: Record<string, VariableDefinition | null>`, where `VariableDefinition` (from `@core/types/variables.ts`) is a generic structure holding the variable's `name`, `type`, `value`, and `metadata`. Setting a variable name to `null` signifies removal.
-     - The `InterpreterService` receives the `DirectiveResult` from the handler (via `DirectiveService`). If `stateChanges` are present, the `InterpreterService` calls `IStateService.applyStateChanges(changes)` to update the current state.
-     - `InterpreterService` applies node replacements (if any) from the `DirectiveResult` to the transformed AST if transformation is enabled.
-   - Handles file imports and embedding.
+     - Routes to specific handler based on `directive.kind`
+     - Handler receives:
+       - The directive node with pre-parsed values
+       - Current state (read-only access)
+       - Processing options (strict mode, file path)
+     - Handler returns `DirectiveResult`:
+       ```typescript
+       {
+         stateChanges?: {
+           variables?: Record<string, MeldVariable>;
+         };
+         replacement?: MeldNode[];  // For transformation mode
+       }
+       ```
+     - Interpreter applies state changes (if any)
+     - No direct state mutation by handlers
 
 5. **Output Generation** (`OutputService`)
    ```ascii

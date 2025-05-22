@@ -9,7 +9,7 @@ import type { IInterpreterService } from '@services/pipeline/InterpreterService/
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService';
 import type { IStateService } from '@services/state/StateService/IStateService';
-import { StateService } from '@services/state/StateService/StateService';
+import { StateServiceAdapter } from '@services/state/StateService/StateServiceAdapter';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService';
 import { ParserService } from '@services/pipeline/ParserService/ParserService';
 import { logger } from '@core/utils/logger';
@@ -81,8 +81,8 @@ describe('InterpreterService Integration Tests with Fixtures', () => {
     // Mock DirectiveServiceClient with proper interface implementation
     mockDirectiveClient = {
       handleDirective: vi.fn().mockResolvedValue({
-        success: true,
-        output: ''
+        stateChanges: undefined,
+        replacement: undefined
       })
     } as unknown as IDirectiveServiceClient;
     
@@ -130,7 +130,7 @@ describe('InterpreterService Integration Tests with Fixtures', () => {
     // Register services
     testContainer.register(FileSystemService, { useClass: FileSystemService });
     testContainer.register('IFileSystemService', { useToken: FileSystemService });
-    testContainer.register('IStateService', { useClass: StateService });
+    testContainer.register('IStateService', { useClass: StateServiceAdapter });
     testContainer.register('IParserService', { useClass: ParserService });
     testContainer.register(ParserService, { useClass: ParserService });
     testContainer.register('IResolutionService', { useClass: ResolutionService });

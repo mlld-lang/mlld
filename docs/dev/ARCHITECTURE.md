@@ -1,5 +1,3 @@
-** NEEDS REVIEW / UPDATE FOLLOWING AST REFACTOR **
-
 # Meld Architecture
 
 ## INTRODUCTION
@@ -18,6 +16,51 @@ The main idea:
 3. Optional transformations (e.g., output formatting) generate final representations (Markdown, LLM-friendly XML, etc.).  
 
 Below is an overview of the directory and service-level architecture, referencing code from this codebase.
+
+## CORE ARCHITECTURE PRINCIPLE: "AST KNOWS ALL"
+
+The fundamental principle of Meld's architecture is that **all intelligence lives in the AST types**, not in the services. This approach provides:
+
+• **Type Safety**: Discriminated unions allow TypeScript to guide correct usage
+• **Simplicity**: Services become simple routers/containers rather than complex business logic holders  
+• **Maintainability**: Business logic is co-located with the data it operates on
+• **Testability**: Pure data transformations are easier to test than stateful services
+
+### Key Architectural Patterns
+
+1. **Discriminated Union AST Nodes**: Every AST node has a `type` field that allows TypeScript to narrow types:
+   ```typescript
+   type MeldNode = TextNode | DirectiveNode | VariableReferenceNode | ...
+   
+   // Usage with type narrowing
+   if (node.type === 'Directive') {
+     // TypeScript knows this is a DirectiveNode
+     console.log(node.kind); // directive-specific property
+   }
+   ```
+
+2. **Handler Pattern**: Each directive type has a dedicated handler that processes its specific AST node:
+   ```typescript
+   interface IDirectiveHandler {
+     kind: string; // 'text', 'data', 'path', etc.
+     handle(directive: DirectiveNode, state: IStateService, options: HandlerOptions): Promise<DirectiveResult>;
+   }
+   ```
+
+3. **Immutable State Flow**: Handlers return state changes as data, they don't mutate state:
+   ```typescript
+   interface DirectiveResult {
+     stateChanges?: {
+       variables?: Record<string, MeldVariable>;
+     };
+     replacement?: MeldNode[]; // For transformation mode
+   }
+   ```
+
+4. **Minimal Service Interfaces**: Services have narrow, focused APIs:
+   - StateService: 8 methods (down from 50+)
+   - DirectiveService: 3 methods (register, handle, process)
+   - InterpreterService: 2 methods (interpret, processNode)
 
 ## DEPENDENCY INJECTION ARCHITECTURE
 
@@ -233,36 +276,31 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Dependencies: (Optional) `ResolutionServiceClientFactory`, `VariableNodeFactory`
 
 ### DirectiveService  
-   - Routes directives to the correct directive handler  
-   - Validates directives using ValidationService  
-   - Calls ResolutionService for variable resolution within directives
-   - Interprets DirectiveResult from handlers and applies specified stateChanges to StateService
-   - Supports node transformation through DirectiveResult interface
-   - Handlers can provide replacement nodes for transformed output
-   - Dependencies: ValidationService, StateService, PathService, FileSystemService, ParserService, InterpreterService, CircularityService, ResolutionService
+   - **Simple router** that matches directives to handlers by `kind`
+   - Registers handlers during initialization
+   - Passes directive nodes to appropriate handlers
+   - Returns handler results to interpreter
+   - **No state manipulation** - just routing
+   - Dependencies: Registered handlers only
 
 ### InterpreterService  
-   - Orchestrates the main interpret(nodes) pipeline  
+   - **Simple node processor** using type-based dispatch
    - For each AST node:
-       a) If it's text:
-          - Resolves `{{...}}` variables within the text content (using `ParserServiceClient` and `ResolutionService`).
-          - Adds the (potentially resolved) `TextNode` to the state.
-       b) If it's a directive:
-          - Calls DirectiveService for processing.
-          - Handles node transformations based on `DirectiveResult`.
-          - Applies state changes from `DirectiveResult`.
-   - Maintains the top-level process flow
-   - Supports transformation mode through feature flags
-   - Dependencies: DirectiveService, StateService, ParserService, FileSystemService, PathService, CircularityService, `ParserServiceClientFactory`
+     - Switch on `node.type` (discriminated union)
+     - TextNode → add to state
+     - DirectiveNode → route to DirectiveService
+   - Applies state changes returned by handlers
+   - **No complex logic** - just routing and state updates
+   - Dependencies: DirectiveService, StateService
 
 ### StateService  
-   - Manages application state, including different types of variables (text, data, path, commands) and AST nodes. While it exposes methods like `getVariable(name, type?)`, `setVariable(variableDefinition)`, and importantly `applyStateChanges(changes)`, its internal storage (`StateNode`) uses type-specific maps for efficiency (`variables.text`, `variables.data`, `variables.path`, and `commands`). The `setVariable` and `applyStateChanges` methods handle the translation from the generic `VariableDefinition` (used in `StateChanges`) to the appropriate internal typed map.
-   - Tracks both original and transformed MeldNodes (when transformation is enabled)
-   - Manages the current file path associated with the state
-   - Emits events via StateEventService on state changes
-   - Provides child states for nested imports using `createChildState()`
-   - Supports immutability toggles (`setImmutable`)
-   - Dependencies: StateFactory, StateEventService, StateTrackingService, DependencyContainer, `ParentStateServiceForChild?`
+   - **Minimal state container** with just 8 methods (down from 50+)
+   - Stores variables as simple key-value pairs: `Map<string, MeldVariable>`
+   - Accumulates processed nodes for output generation
+   - Tracks current file path for context
+   - Creates child states for scoped operations
+   - **No business logic** - just storage and retrieval
+   - Dependencies: None (truly minimal)
 
 ### ResolutionService  
    - Handles variable interpolation **within directive arguments/AST structures** based on the AST (e.g., `InterpolatableValue` arrays, `VariableReferenceNode`s) when invoked by directive handlers.
@@ -302,12 +340,45 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Dependencies: PathOperationsService, PathServiceClient, IFileSystem
 
 ### OutputService  
-   - Converts final AST and state to desired format (markdown, llm-xml).
-   - Uses transformed nodes when available.
-   - Handles the rich AST structures containing `InterpolatableValue` arrays.
-   - Expects `TextNode` content to be **pre-resolved** by `InterpreterService`.
-   - Uses `VariableReferenceResolverClient` via a factory for detailed field access resolution and context-aware value-to-string conversion during formatting.
-   - Dependencies: `StateService`, (Optional) `ResolutionServiceClientFactory` or `IResolutionService`, (optional) `VariableReferenceResolverClientFactory`
+   - Converts final AST and state to desired format (markdown, llm-xml)
+   - Formats nodes based on their types
+   - Uses state for variable lookups during formatting
+   - **Pure formatting** - no complex transformations
+   - Dependencies: StateService (for variable access)
+
+## DIRECTIVE HANDLERS
+
+Handlers are the heart of the new architecture. Each directive type has a dedicated handler:
+
+### Handler Pattern
+```typescript
+interface IDirectiveHandler {
+  readonly kind: string;  // 'text', 'data', 'path', etc.
+  handle(
+    directive: DirectiveNode,
+    state: IStateService,
+    options: { strict: boolean; filePath?: string }
+  ): Promise<DirectiveResult>;
+}
+```
+
+### Available Handlers
+
+- **TextDirectiveHandler**: Processes `@text` directives, creates text variables
+- **DataDirectiveHandler**: Processes `@data` directives, stores parsed JSON
+- **PathDirectiveHandler**: Processes `@path` directives, validates paths
+- **RunDirectiveHandler**: Executes commands, returns output as nodes
+- **ExecDirectiveHandler**: Executes commands, captures output
+- **AddDirectiveHandler**: Adds content to output
+- **ImportDirectiveHandler**: Imports other Meld files
+
+### Handler Responsibilities
+
+1. **Process AST Data**: Work with pre-parsed directive values
+2. **Validate Input**: Ensure directive is well-formed
+3. **Return State Changes**: Return variables to add/update as data
+4. **Provide Replacements**: Optionally return nodes for transformation
+5. **No Side Effects**: Handlers are pure functions (given same input, same output)
 
 ## TESTING INFRASTRUCTURE
 

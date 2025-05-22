@@ -2,7 +2,176 @@
 
 ## Overview
 
-This document describes the core type system in Meld, focusing on the canonical types and their relationships. This is a living document that will be expanded as the type system evolves.
+This document describes the core type system in Meld, focusing on the AST-centric approach where all intelligence lives in the types themselves through discriminated unions. The type system follows the "AST Knows All" principle.
+
+## AST Node Types (Discriminated Unions)
+
+The foundation of Meld's type system is the AST node hierarchy, which uses discriminated unions for type safety:
+
+```typescript
+// Base interface for all AST nodes
+interface BaseMeldNode {
+  type: string;       // Discriminator field
+  nodeId: string;     // Unique identifier
+  location?: Location; // Source position
+}
+
+// Specific node types
+interface TextNode extends BaseMeldNode {
+  type: 'Text';
+  content: string;
+}
+
+interface DirectiveNode extends BaseMeldNode {
+  type: 'Directive';
+  kind: DirectiveKind; // 'text' | 'data' | 'path' | 'run' | etc.
+  subtype: string;     // 'assignment' | 'template' | etc.
+  values: DirectiveValues;
+  raw: RawDirectiveData;
+  meta?: DirectiveMetadata;
+}
+
+interface VariableReferenceNode extends BaseMeldNode {
+  type: 'VariableReference';
+  identifier: string;
+  fields?: Field[];  // For dot notation access
+}
+
+// The discriminated union of all node types
+type MeldNode = 
+  | TextNode 
+  | DirectiveNode 
+  | VariableReferenceNode
+  | CodeFenceNode
+  | CommentNode
+  | LiteralNode
+  | DotSeparatorNode
+  | PathSeparatorNode;
+```
+
+### Type Narrowing with Discriminated Unions
+
+The `type` field enables TypeScript to narrow types safely:
+
+```typescript
+function processNode(node: MeldNode) {
+  switch (node.type) {
+    case 'Text':
+      // TypeScript knows node is TextNode
+      console.log(node.content);
+      break;
+    
+    case 'Directive':
+      // TypeScript knows node is DirectiveNode
+      switch (node.kind) {
+        case 'text':
+          handleTextDirective(node);
+          break;
+        case 'data':
+          handleDataDirective(node);
+          break;
+      }
+      break;
+      
+    case 'VariableReference':
+      // TypeScript knows node is VariableReferenceNode
+      resolveVariable(node.identifier, node.fields);
+      break;
+  }
+}
+```
+
+## Handler Types
+
+The handler pattern uses specific types for processing directives:
+
+```typescript
+// Handler interface - minimal and focused
+interface IDirectiveHandler {
+  readonly kind: string;
+  handle(
+    directive: DirectiveNode,
+    state: IStateService,
+    options: HandlerOptions
+  ): Promise<DirectiveResult>;
+}
+
+// Handler options
+interface HandlerOptions {
+  strict: boolean;
+  filePath?: string;
+}
+
+// Handler result - returns changes as data
+interface DirectiveResult {
+  stateChanges?: StateChanges;
+  replacement?: MeldNode[];  // For transformation mode
+  error?: MeldError;
+}
+
+// State changes - immutable data structure
+interface StateChanges {
+  variables?: Record<string, MeldVariable>;
+}
+```
+
+## Minimal Service Interfaces
+
+Services have been simplified to focus on their core responsibilities:
+
+```typescript
+// Minimal state service - just 8 methods
+interface IStateService {
+  readonly stateId: string;
+  currentFilePath: string | null;
+  
+  // Variable operations
+  getVariable(name: string): MeldVariable | undefined;
+  setVariable(variable: MeldVariable): void;
+  getAllVariables(): Map<string, MeldVariable>;
+  
+  // Node operations
+  addNode(node: MeldNode): void;
+  getNodes(): MeldNode[];
+  
+  // State hierarchy
+  createChild(): IStateService;
+}
+
+// Minimal directive service
+interface IDirectiveService {
+  registerHandler(handler: IDirectiveHandler): void;
+  handleDirective(
+    directive: DirectiveNode,
+    state: IStateService,
+    options: HandlerOptions
+  ): Promise<DirectiveResult>;
+  processDirectives(
+    directives: DirectiveNode[],
+    state: IStateService,
+    options: HandlerOptions
+  ): Promise<IStateService>;
+}
+
+// Minimal interpreter service
+interface IInterpreterService {
+  interpret(
+    nodes: MeldNode[],
+    options?: InterpreterOptions,
+    initialState?: IStateService
+  ): Promise<IStateService>;
+}
+```
+
+## Type Flow Through the System
+
+The type system ensures safe data flow through the pipeline:
+
+1. **Parser** → produces `MeldNode[]` (discriminated union)
+2. **Interpreter** → processes each `MeldNode` based on its `type`
+3. **Handlers** → receive specific `DirectiveNode` subtypes, return `DirectiveResult`
+4. **State** → updated with `StateChanges` from handlers
+5. **Output** → formats final `MeldNode[]` based on types
 
 ## Core Type Categories
 

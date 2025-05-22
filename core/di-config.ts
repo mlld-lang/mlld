@@ -4,6 +4,7 @@ import { container } from 'tsyringe';
 // Import all service classes
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
 import { StateService } from '@services/state/StateService/StateService';
+import { StateServiceAdapter } from '@services/state/StateService/StateServiceAdapter';
 import { StateFactory } from '@services/state/StateService/StateFactory';
 import { StateEventService } from '@services/state/StateEventService/StateEventService';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
@@ -82,8 +83,9 @@ container.register(StateFactory, { useClass: StateFactory });
 container.register(StateEventService, { useClass: StateEventService });
 container.register('IStateEventService', { useToken: StateEventService }); // Use Class as token
 
-container.register(StateService, { useClass: StateService });
-container.register('IStateService', { useToken: StateService }); // Use Class as token
+// Using StateServiceAdapter to bridge the new minimal StateService with legacy interface
+container.register(StateService, { useClass: StateServiceAdapter });
+container.register('IStateService', { useClass: StateServiceAdapter });
 
 container.register(ResolutionService, { useClass: ResolutionService });
 container.register('IResolutionService', { useToken: ResolutionService }); // Use Class as token
