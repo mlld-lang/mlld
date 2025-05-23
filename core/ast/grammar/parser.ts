@@ -231,6 +231,7 @@ function peg$parse(input, options) {
   var peg$c49 = "~";
   var peg$c50 = "PROJECTPATH";
   var peg$c51 = "@text";
+  var peg$c52 = "run";
 
   var peg$r0 = /^[ \t\r]/;
   var peg$r1 = /^[ ]/;
@@ -252,7 +253,6 @@ function peg$parse(input, options) {
   var peg$r17 = /^[^\\s\\n]/;
   var peg$r18 = /^[),]/;
   var peg$r19 = /^[^,)]/;
-  var peg$r20 = /^[^\]]/;
 
   var peg$e0 = peg$classExpectation([" ", "\t", "\r"], false, false);
   var peg$e1 = peg$literalExpectation(">>", false);
@@ -368,7 +368,7 @@ function peg$parse(input, options) {
   var peg$e111 = peg$literalExpectation("PROJECTPATH", false);
   var peg$e112 = peg$classExpectation([",", ")"], true, false);
   var peg$e113 = peg$literalExpectation("@text", false);
-  var peg$e114 = peg$classExpectation(["]"], true, false);
+  var peg$e114 = peg$literalExpectation("run", false);
 
   var peg$f0 = function(nodes) {
     helpers.debug('Start: Entered');
@@ -948,9 +948,10 @@ function peg$parse(input, options) {
           ...(language ? { language } : {})
         },
         meta: {
-          isBracketed: code.raw.trim().startsWith('[') && code.raw.trim().endsWith(']'),
           hasLanguage: !!language,
-          language: language || 'text'
+          language: language || 'text',
+          hasVariables: false,  // Code blocks don't support variable interpolation
+          isMultiLine: codeContent.includes('\n')
         }
       };
     };
@@ -970,9 +971,10 @@ function peg$parse(input, options) {
           code: code.raw
         },
         meta: {
-          isBracketed: code.raw.trim().startsWith('[') && code.raw.trim().endsWith(']'),
           hasLanguage: true,
-          language
+          language,
+          hasVariables: false,  // Code blocks don't support variable interpolation
+          isMultiLine: code.raw.includes('\n')
         }
       };
     };
@@ -1002,7 +1004,7 @@ function peg$parse(input, options) {
       const meta = {
         isMultiLine: codeContent.includes('\n'),
         language: language,
-        isBracketed: true
+        hasVariables: false  // Code blocks don't support variable interpolation
       };
       
       // Return a structured result that can be used by both directives
@@ -1932,26 +1934,23 @@ function peg$parse(input, options) {
       helpers.debug('AtImport matched', { imports, path });
       
       // Get the raw imports text
-      const importsRaw = imports.map(item => 
-        item.alias ? `${item.name} as ${item.alias}` : item.name
-      ).join(", ");
+      const importsRaw = imports.join(", ");
       
       // Determine subtype (importAll or importSelected)
-      const subtype = imports.length === 1 && imports[0].name === '*' ? 
+      const subtype = imports.length === 1 && imports[0] === '*' ? 
                      'importAll' : 'importSelected';
       
       // Create values object with variable references
       const values = {
         imports: imports.map(item => helpers.createVariableReferenceNode('import', { 
-          identifier: item.name,
-          alias: item.alias || null
+          identifier: item
         })),
         path: path.values.path
       };
       
       // Create raw object with text segments
       const raw = {
-        imports: imports.length === 1 && imports[0].name === '*' ? '*' : importsRaw,
+        imports: imports.length === 1 && imports[0] === '*' ? '*' : importsRaw,
         path: path.raw.path
       };
       
@@ -1976,7 +1975,7 @@ function peg$parse(input, options) {
       );
     };
   var peg$f187 = function() {
-      return [{name: "*", alias: null}];
+      return ["*"];
     };
   var peg$f188 = function(first, item) { return item; };
   var peg$f189 = function(first, rest) {
@@ -1985,13 +1984,10 @@ function peg$parse(input, options) {
   var peg$f190 = function() {
       return [];
     };
-  var peg$f191 = function(name, alias) { 
-      return {name, alias};
+  var peg$f191 = function(name) { 
+      return name;
     };
-  var peg$f192 = function(name) { 
-      return {name, alias: null};
-    };
-  var peg$f193 = function(id, pathContent) {
+  var peg$f192 = function(id, pathContent) {
       helpers.debug('AtPath matched bracketed path', { id, pathContent });
       
       // Process special path variables @~ and @. directly
@@ -2074,7 +2070,7 @@ function peg$parse(input, options) {
         'path'  // Source parameter
       );
     };
-  var peg$f194 = function(id, path) {
+  var peg$f193 = function(id, path) {
       helpers.debug('AtPath matched normal path', { id, path });
       
       // ProcessedPath might need @~ and @. transformed like we did above
@@ -2124,10 +2120,10 @@ function peg$parse(input, options) {
         'path'  // Source parameter
       );
     };
-  var peg$f195 = function() {
+  var peg$f194 = function() {
       return text();
     };
-  var peg$f196 = function(runCode) {
+  var peg$f195 = function(runCode) {
       helpers.debug('AtRun matched language code block using shared abstraction', runCode);
       
       // Since we're using the shared abstraction, we just need to format it for this context
@@ -2141,7 +2137,7 @@ function peg$parse(input, options) {
         'code'  // Source parameter
       );
     };
-  var peg$f197 = function(command) {
+  var peg$f196 = function(command) {
       helpers.debug('AtRun matched shell command', { command });
       
       return helpers.createStructuredDirective(
@@ -2157,7 +2153,7 @@ function peg$parse(input, options) {
         'command'  // Source parameter
       );
     };
-  var peg$f198 = function(commandRef) {
+  var peg$f197 = function(commandRef) {
       helpers.debug('AtRun matched command reference', { commandRef });
       
       // This is used to run a previously defined command (created with @exec)
@@ -2179,7 +2175,7 @@ function peg$parse(input, options) {
         'exec'  // Source parameter
       );
     };
-  var peg$f199 = function(runCode) {
+  var peg$f198 = function(runCode) {
       helpers.debug('RunDirectiveRef matched code in RHS using shared abstraction', runCode);
       
       // Use the shared abstraction but add RHS-specific metadata
@@ -2195,7 +2191,7 @@ function peg$parse(input, options) {
         runCode.location
       );
     };
-  var peg$f200 = function(command) {
+  var peg$f199 = function(command) {
       helpers.debug('RunDirectiveRef matched in RHS', { command });
       
       return helpers.createStructuredDirective(
@@ -2211,7 +2207,7 @@ function peg$parse(input, options) {
         location()
       );
     };
-  var peg$f201 = function(identifier, args) {
+  var peg$f200 = function(identifier, args) {
       // Process arguments if present
       const processedArgs = args || [];
       const rawArgs = processedArgs.map(arg => {
@@ -2227,54 +2223,24 @@ function peg$parse(input, options) {
         rawArgs: rawArgs
       };
     };
-  var peg$f202 = function(args) {
+  var peg$f201 = function(args) {
       return args || [];
     };
-  var peg$f203 = function(first, arg) { return arg; };
-  var peg$f204 = function(first, rest) {
+  var peg$f202 = function(first, arg) { return arg; };
+  var peg$f203 = function(first, rest) {
       return [first, ...rest];
     };
-  var peg$f205 = function(str) {
+  var peg$f204 = function(str) {
       return helpers.createNode(NodeType.Text, { content: str, location: location() });
     };
-  var peg$f206 = function(varRef) {
+  var peg$f205 = function(varRef) {
       return varRef;
     };
-  var peg$f207 = function(val) {
+  var peg$f206 = function(val) {
       // Plain value (raw argument)
       return helpers.createNode(NodeType.Text, { content: val.trim(), location: location() });
     };
-  var peg$f208 = function(id, path) {
-      const subtype = 'textAssignment';
-      const sourceType = 'directive';
-      
-      // Create meta object with add info for test compatibility
-      const meta = { 
-        sourceType: sourceType,
-        directive: 'add',
-        hasVariables: false,
-        add: {}
-      };
-      
-      const pathValue = path.trim();
-      
-      return helpers.createStructuredDirective(
-        'text',
-        subtype,
-          {
-            identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-            content: [helpers.createNode(NodeType.Text, { content: pathValue, location: location() })]
-          },
-        {
-          identifier: id,
-          content: `@add [${pathValue}]`
-        },
-        meta,
-        location(),
-        'add'
-      );
-    };
-  var peg$f209 = function(id, template) {
+  var peg$f207 = function(id, template) {
       // Use both variables and template syntax for detection
       // The meta now contains both hasVariables and isTemplateContent
       
@@ -2311,40 +2277,42 @@ function peg$parse(input, options) {
         sourceType
       );
     };
-  var peg$f210 = function(id, command) {
-      helpers.debug('AtText matched @run with CommandCore abstraction', { id, command });
+  var peg$f208 = function(id, commandRef) {
+      helpers.debug('AtText matched command reference', { id, commandRef });
       
-      // Use the proper subtype and sourceType
       const subtype = 'textAssignment';
-      const sourceType = 'directive';
+      const sourceType = 'commandRef';
       
-      // Create meta object with run information
       const meta = { 
         sourceType: sourceType,
-        directive: 'run',
-        hasVariables: command.meta.hasVariables || false,
-        run: {
-          isCommand: true
-        }
+        hasVariables: false,
+        isCommandRef: true,
+        commandName: commandRef.name
       };
+      
+      // Create command reference syntax
+      const rawContent = `@${commandRef.name}${
+        commandRef.args && commandRef.args.length > 0 ? 
+        `(${commandRef.args.map(arg => arg.value || '').join(', ')})` : ''
+      }`;
       
       return helpers.createStructuredDirective(
         'text',
         subtype,
-        {
-          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          content: command.values.command // Use the command array from CommandCore
-        },
+          {
+            identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+            content: [helpers.createNode(NodeType.Text, { content: rawContent, location: location() })]
+          },
         {
           identifier: id,
-          content: `@run ${command.raw.command}`
+          content: rawContent
         },
         meta,
         location(),
-        'run'
+        sourceType
       );
     };
-  var peg$f211 = function(id, runCode) {
+  var peg$f209 = function(id, runCode) {
       helpers.debug('AtText matched @run using RunLanguageCodeCore abstraction', { id, runCode });
       
       // Use the proper subtype and sourceType
@@ -2384,7 +2352,40 @@ function peg$parse(input, options) {
         'run'
       );
     };
-  var peg$f212 = function(id, commandRef) {
+  var peg$f210 = function(id, command) {
+      helpers.debug('AtText matched @run with CommandCore abstraction', { id, command });
+      
+      // Use the proper subtype and sourceType
+      const subtype = 'textAssignment';
+      const sourceType = 'directive';
+      
+      // Create meta object with run information
+      const meta = { 
+        sourceType: sourceType,
+        directive: 'run',
+        hasVariables: command.meta.hasVariables || false,
+        run: {
+          isCommand: true
+        }
+      };
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          content: command.values.command // Use the command array from CommandCore
+        },
+        {
+          identifier: id,
+          content: `@run ${command.raw.command}`
+        },
+        meta,
+        location(),
+        'run'
+      );
+    };
+  var peg$f211 = function(id, commandRef) {
       helpers.debug('AtText matched @run with command reference', { id, commandRef });
       
       // Use the proper subtype and sourceType
@@ -2424,34 +2425,38 @@ function peg$parse(input, options) {
         'run'
       );
     };
-  var peg$f213 = function(id, addPath) {
-      // Hardcoded values to start with (same as before)
+  var peg$f212 = function(id, pathContent) {
       const subtype = 'textAssignment';
-      const sourceType = 'directive';
+      const sourceType = 'path';
       
-      // Create meta object with hardcoded values for now
+      // Check if the path contains variables
+      const hasVariables = pathContent.some(part => 
+        part && part.type === NodeType.VariableReference
+      );
+      
+      // Create meta object
       const meta = { 
         sourceType: sourceType,
-        directive: 'add',
-        hasVariables: false,
-        add: {}, // Add empty add object for test compatibility
-        path: addPath.meta.path // Include path metadata
+        hasVariables: hasVariables
       };
+      
+      // Reconstruct raw path from parts
+      const rawPath = helpers.reconstructRawString(pathContent);
       
       return helpers.createStructuredDirective(
         'text',
         subtype,
-        {
-          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          content: addPath
-        },
+          {
+            identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+            content: pathContent
+          },
         {
           identifier: id,
-          content: `@add ${addPath.raw.path || ''}`
+          content: `[${rawPath}]`
         },
         meta,
         location(),
-        'add'
+        sourceType
       );
     };
   var peg$currPos = options.peg$currPos | 0;
@@ -7718,19 +7723,40 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
               s3 = peg$parse_();
-              s4 = peg$parsePathCore();
+              s4 = peg$currPos;
+              peg$silentFails++;
+              if (input.substr(peg$currPos, 2) === peg$c4) {
+                s5 = peg$c4;
+                peg$currPos += 2;
+              } else {
+                s5 = peg$FAILED;
+                if (peg$silentFails === 0) { peg$fail(peg$e7); }
+              }
+              peg$silentFails--;
+              if (s5 === peg$FAILED) {
+                s4 = undefined;
+              } else {
+                peg$currPos = s4;
+                s4 = peg$FAILED;
+              }
               if (s4 !== peg$FAILED) {
-                s5 = peg$parse_();
-                s6 = peg$parseHeaderLevel();
-                if (s6 === peg$FAILED) {
-                  s6 = null;
+                s5 = peg$parsePathCore();
+                if (s5 !== peg$FAILED) {
+                  s6 = peg$parse_();
+                  s7 = peg$parseHeaderLevel();
+                  if (s7 === peg$FAILED) {
+                    s7 = null;
+                  }
+                  s8 = peg$parseUnderHeader();
+                  if (s8 === peg$FAILED) {
+                    s8 = null;
+                  }
+                  peg$savedPos = s0;
+                  s0 = peg$f134(s5, s7, s8);
+                } else {
+                  peg$currPos = s0;
+                  s0 = peg$FAILED;
                 }
-                s7 = peg$parseUnderHeader();
-                if (s7 === peg$FAILED) {
-                  s7 = null;
-                }
-                peg$savedPos = s0;
-                s0 = peg$f134(s4, s6, s7);
               } else {
                 peg$currPos = s0;
                 s0 = peg$FAILED;
@@ -9583,46 +9609,15 @@ function peg$parse(input, options) {
   }
 
   function peg$parseImportItem() {
-    var s0, s1, s2, s3, s4, s5;
+    var s0, s1;
 
     s0 = peg$currPos;
     s1 = peg$parseBaseIdentifier();
     if (s1 !== peg$FAILED) {
-      s2 = peg$parse_();
-      if (input.substr(peg$currPos, 2) === peg$c35) {
-        s3 = peg$c35;
-        peg$currPos += 2;
-      } else {
-        s3 = peg$FAILED;
-        if (peg$silentFails === 0) { peg$fail(peg$e94); }
-      }
-      if (s3 !== peg$FAILED) {
-        s4 = peg$parse_();
-        s5 = peg$parseBaseIdentifier();
-        if (s5 !== peg$FAILED) {
-          peg$savedPos = s0;
-          s0 = peg$f191(s1, s5);
-        } else {
-          peg$currPos = s0;
-          s0 = peg$FAILED;
-        }
-      } else {
-        peg$currPos = s0;
-        s0 = peg$FAILED;
-      }
-    } else {
-      peg$currPos = s0;
-      s0 = peg$FAILED;
+      peg$savedPos = s0;
+      s1 = peg$f191(s1);
     }
-    if (s0 === peg$FAILED) {
-      s0 = peg$currPos;
-      s1 = peg$parseBaseIdentifier();
-      if (s1 !== peg$FAILED) {
-        peg$savedPos = s0;
-        s1 = peg$f192(s1);
-      }
-      s0 = s1;
-    }
+    s0 = s1;
 
     return s0;
   }
@@ -9749,7 +9744,7 @@ function peg$parse(input, options) {
               }
               if (s10 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s0 = peg$f193(s4, s9);
+                s0 = peg$f192(s4, s9);
               } else {
                 peg$currPos = s0;
                 s0 = peg$FAILED;
@@ -9802,7 +9797,7 @@ function peg$parse(input, options) {
               s8 = peg$parsePathCore();
               if (s8 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s0 = peg$f194(s4, s8);
+                s0 = peg$f193(s4, s8);
               } else {
                 peg$currPos = s0;
                 s0 = peg$FAILED;
@@ -9865,7 +9860,7 @@ function peg$parse(input, options) {
           }
           if (s1 !== peg$FAILED) {
             peg$savedPos = s0;
-            s1 = peg$f195();
+            s1 = peg$f194();
           }
           s0 = s1;
         }
@@ -9893,7 +9888,7 @@ function peg$parse(input, options) {
         s4 = peg$parseRunLanguageCodeCore();
         if (s4 !== peg$FAILED) {
           peg$savedPos = s0;
-          s0 = peg$f196(s4);
+          s0 = peg$f195(s4);
         } else {
           peg$currPos = s0;
           s0 = peg$FAILED;
@@ -9922,7 +9917,7 @@ function peg$parse(input, options) {
           s4 = peg$parseCommandCore();
           if (s4 !== peg$FAILED) {
             peg$savedPos = s0;
-            s0 = peg$f197(s4);
+            s0 = peg$f196(s4);
           } else {
             peg$currPos = s0;
             s0 = peg$FAILED;
@@ -9959,7 +9954,7 @@ function peg$parse(input, options) {
               s5 = peg$parseRunCommandReference();
               if (s5 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s0 = peg$f198(s5);
+                s0 = peg$f197(s5);
               } else {
                 peg$currPos = s0;
                 s0 = peg$FAILED;
@@ -9991,7 +9986,7 @@ function peg$parse(input, options) {
       s2 = peg$parseRunLanguageCodeCore();
       if (s2 !== peg$FAILED) {
         peg$savedPos = s0;
-        s0 = peg$f199(s2);
+        s0 = peg$f198(s2);
       } else {
         peg$currPos = s0;
         s0 = peg$FAILED;
@@ -10005,7 +10000,7 @@ function peg$parse(input, options) {
       s1 = peg$parseCommandCore();
       if (s1 !== peg$FAILED) {
         peg$savedPos = s0;
-        s1 = peg$f200(s1);
+        s1 = peg$f199(s1);
       }
       s0 = s1;
     }
@@ -10025,7 +10020,7 @@ function peg$parse(input, options) {
         s3 = null;
       }
       peg$savedPos = s0;
-      s0 = peg$f201(s1, s3);
+      s0 = peg$f200(s1, s3);
     } else {
       peg$currPos = s0;
       s0 = peg$FAILED;
@@ -10061,7 +10056,7 @@ function peg$parse(input, options) {
       }
       if (s5 !== peg$FAILED) {
         peg$savedPos = s0;
-        s0 = peg$f202(s3);
+        s0 = peg$f201(s3);
       } else {
         peg$currPos = s0;
         s0 = peg$FAILED;
@@ -10095,7 +10090,7 @@ function peg$parse(input, options) {
         s7 = peg$parseRunCommandArg();
         if (s7 !== peg$FAILED) {
           peg$savedPos = s3;
-          s3 = peg$f203(s1, s7);
+          s3 = peg$f202(s1, s7);
         } else {
           peg$currPos = s3;
           s3 = peg$FAILED;
@@ -10120,7 +10115,7 @@ function peg$parse(input, options) {
           s7 = peg$parseRunCommandArg();
           if (s7 !== peg$FAILED) {
             peg$savedPos = s3;
-            s3 = peg$f203(s1, s7);
+            s3 = peg$f202(s1, s7);
           } else {
             peg$currPos = s3;
             s3 = peg$FAILED;
@@ -10131,7 +10126,7 @@ function peg$parse(input, options) {
         }
       }
       peg$savedPos = s0;
-      s0 = peg$f204(s1, s2);
+      s0 = peg$f203(s1, s2);
     } else {
       peg$currPos = s0;
       s0 = peg$FAILED;
@@ -10147,7 +10142,7 @@ function peg$parse(input, options) {
     s1 = peg$parseStringLiteral();
     if (s1 !== peg$FAILED) {
       peg$savedPos = s0;
-      s1 = peg$f205(s1);
+      s1 = peg$f204(s1);
     }
     s0 = s1;
     if (s0 === peg$FAILED) {
@@ -10155,7 +10150,7 @@ function peg$parse(input, options) {
       s1 = peg$parseVariable();
       if (s1 !== peg$FAILED) {
         peg$savedPos = s0;
-        s1 = peg$f206(s1);
+        s1 = peg$f205(s1);
       }
       s0 = s1;
       if (s0 === peg$FAILED) {
@@ -10190,7 +10185,7 @@ function peg$parse(input, options) {
         }
         if (s1 !== peg$FAILED) {
           peg$savedPos = s0;
-          s1 = peg$f207(s1);
+          s1 = peg$f206(s1);
         }
         s0 = s1;
       }
@@ -10200,7 +10195,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parseAtText() {
-    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12;
 
     s0 = peg$currPos;
     s1 = peg$parseDirectiveContext();
@@ -10226,61 +10221,10 @@ function peg$parse(input, options) {
           }
           if (s6 !== peg$FAILED) {
             s7 = peg$parse_();
-            if (input.substr(peg$currPos, 4) === peg$c21) {
-              s8 = peg$c21;
-              peg$currPos += 4;
-            } else {
-              s8 = peg$FAILED;
-              if (peg$silentFails === 0) { peg$fail(peg$e79); }
-            }
+            s8 = peg$parseTemplateCore();
             if (s8 !== peg$FAILED) {
-              s9 = peg$parse_();
-              if (input.charCodeAt(peg$currPos) === 91) {
-                s10 = peg$c17;
-                peg$currPos++;
-              } else {
-                s10 = peg$FAILED;
-                if (peg$silentFails === 0) { peg$fail(peg$e62); }
-              }
-              if (s10 !== peg$FAILED) {
-                s11 = peg$currPos;
-                s12 = [];
-                s13 = input.charAt(peg$currPos);
-                if (peg$r20.test(s13)) {
-                  peg$currPos++;
-                } else {
-                  s13 = peg$FAILED;
-                  if (peg$silentFails === 0) { peg$fail(peg$e114); }
-                }
-                while (s13 !== peg$FAILED) {
-                  s12.push(s13);
-                  s13 = input.charAt(peg$currPos);
-                  if (peg$r20.test(s13)) {
-                    peg$currPos++;
-                  } else {
-                    s13 = peg$FAILED;
-                    if (peg$silentFails === 0) { peg$fail(peg$e114); }
-                  }
-                }
-                s11 = input.substring(s11, peg$currPos);
-                if (input.charCodeAt(peg$currPos) === 93) {
-                  s12 = peg$c18;
-                  peg$currPos++;
-                } else {
-                  s12 = peg$FAILED;
-                  if (peg$silentFails === 0) { peg$fail(peg$e63); }
-                }
-                if (s12 !== peg$FAILED) {
-                  peg$savedPos = s0;
-                  s0 = peg$f208(s4, s11);
-                } else {
-                  peg$currPos = s0;
-                  s0 = peg$FAILED;
-                }
-              } else {
-                peg$currPos = s0;
-                s0 = peg$FAILED;
-              }
+              peg$savedPos = s0;
+              s0 = peg$f207(s4, s8);
             } else {
               peg$currPos = s0;
               s0 = peg$FAILED;
@@ -10326,10 +10270,52 @@ function peg$parse(input, options) {
             }
             if (s6 !== peg$FAILED) {
               s7 = peg$parse_();
-              s8 = peg$parseTemplateCore();
+              if (input.charCodeAt(peg$currPos) === 64) {
+                s8 = peg$c19;
+                peg$currPos++;
+              } else {
+                s8 = peg$FAILED;
+                if (peg$silentFails === 0) { peg$fail(peg$e64); }
+              }
               if (s8 !== peg$FAILED) {
-                peg$savedPos = s0;
-                s0 = peg$f209(s4, s8);
+                s9 = peg$currPos;
+                peg$silentFails++;
+                s10 = peg$currPos;
+                if (input.substr(peg$currPos, 3) === peg$c52) {
+                  s11 = peg$c52;
+                  peg$currPos += 3;
+                } else {
+                  s11 = peg$FAILED;
+                  if (peg$silentFails === 0) { peg$fail(peg$e114); }
+                }
+                if (s11 !== peg$FAILED) {
+                  s12 = peg$parse_();
+                  s11 = [s11, s12];
+                  s10 = s11;
+                } else {
+                  peg$currPos = s10;
+                  s10 = peg$FAILED;
+                }
+                peg$silentFails--;
+                if (s10 === peg$FAILED) {
+                  s9 = undefined;
+                } else {
+                  peg$currPos = s9;
+                  s9 = peg$FAILED;
+                }
+                if (s9 !== peg$FAILED) {
+                  s10 = peg$parseCommandReference();
+                  if (s10 !== peg$FAILED) {
+                    peg$savedPos = s0;
+                    s0 = peg$f208(s4, s10);
+                  } else {
+                    peg$currPos = s0;
+                    s0 = peg$FAILED;
+                  }
+                } else {
+                  peg$currPos = s0;
+                  s0 = peg$FAILED;
+                }
               } else {
                 peg$currPos = s0;
                 s0 = peg$FAILED;
@@ -10384,10 +10370,10 @@ function peg$parse(input, options) {
                 }
                 if (s8 !== peg$FAILED) {
                   s9 = peg$parse_();
-                  s10 = peg$parseCommandCore();
+                  s10 = peg$parseRunLanguageCodeCore();
                   if (s10 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s0 = peg$f210(s4, s10);
+                    s0 = peg$f209(s4, s10);
                   } else {
                     peg$currPos = s0;
                     s0 = peg$FAILED;
@@ -10446,10 +10432,10 @@ function peg$parse(input, options) {
                   }
                   if (s8 !== peg$FAILED) {
                     s9 = peg$parse_();
-                    s10 = peg$parseRunLanguageCodeCore();
+                    s10 = peg$parseCommandCore();
                     if (s10 !== peg$FAILED) {
                       peg$savedPos = s0;
-                      s0 = peg$f211(s4, s10);
+                      s0 = peg$f210(s4, s10);
                     } else {
                       peg$currPos = s0;
                       s0 = peg$FAILED;
@@ -10519,7 +10505,7 @@ function peg$parse(input, options) {
                         s11 = peg$parseCommandReference();
                         if (s11 !== peg$FAILED) {
                           peg$savedPos = s0;
-                          s0 = peg$f212(s4, s11);
+                          s0 = peg$f211(s4, s11);
                         } else {
                           peg$currPos = s0;
                           s0 = peg$FAILED;
@@ -10573,23 +10559,10 @@ function peg$parse(input, options) {
                     }
                     if (s6 !== peg$FAILED) {
                       s7 = peg$parse_();
-                      if (input.substr(peg$currPos, 4) === peg$c21) {
-                        s8 = peg$c21;
-                        peg$currPos += 4;
-                      } else {
-                        s8 = peg$FAILED;
-                        if (peg$silentFails === 0) { peg$fail(peg$e79); }
-                      }
+                      s8 = peg$parseBracketContent();
                       if (s8 !== peg$FAILED) {
-                        s9 = peg$parse_();
-                        s10 = peg$parseAddDirectiveRef();
-                        if (s10 !== peg$FAILED) {
-                          peg$savedPos = s0;
-                          s0 = peg$f213(s4, s10);
-                        } else {
-                          peg$currPos = s0;
-                          s0 = peg$FAILED;
-                        }
+                        peg$savedPos = s0;
+                        s0 = peg$f212(s4, s8);
                       } else {
                         peg$currPos = s0;
                         s0 = peg$FAILED;

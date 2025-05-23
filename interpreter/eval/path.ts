@@ -33,7 +33,7 @@ export async function evaluatePath(
   const resolvedPath = env.resolvePath(interpolatedPath);
   
   // Normalize the path (remove ./ prefix if present)
-  const normalizedPath = resolvedPath.replace(/^\\.\\//g, '');
+  const normalizedPath = resolvedPath.replace(/^\.\//, '');
   
   // Create and store the variable
   const variable = createPathVariable(identifier, {

@@ -82,7 +82,15 @@ export async function evaluateAdd(
     }
     
     // Convert final value to string
-    content = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    if (typeof value === 'string') {
+      content = value;
+    } else if (typeof value === 'number' || typeof value === 'boolean') {
+      // For primitives, just convert to string
+      content = String(value);
+    } else {
+      // For objects/arrays, use JSON
+      content = JSON.stringify(value, null, 2);
+    }
     
   } else if (directive.subtype === 'addPath') {
     // Handle path inclusion (whole file)

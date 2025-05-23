@@ -47,6 +47,10 @@ describe('Meld Interpreter - Fixture Tests', () => {
                  fixture.name === 'add-section' || 
                  fixture.name === 'add-section-rename') {
         await fileSystem.writeFile('/file.md', '# Title\n## Section 1\n### Subsection 1.1\nContent from file\n## Section 2\n\n# Section Title\nContent under this section\n\n# Original Title\nContent under this section');
+      } else if (fixture.name.startsWith('import-')) {
+        // Set up import test files
+        await fileSystem.writeFile('/config.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text author = "Meld Test Suite"');
+        await fileSystem.writeFile('/utils.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text version = "1.0.0"\n@path docs = "./docs"');
       }
       
       try {

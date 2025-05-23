@@ -1,0 +1,4 @@
+@text greeting = "Hello, world!"
+@data count = 42
+@text version = "1.0.0"
+@path docs = "./docs"
