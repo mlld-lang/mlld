@@ -219,7 +219,9 @@ export async function evaluateAdd(
         value = argValue.value;
       } else if (typeof argValue === 'object' && argValue.type === 'variable') {
         // Handle variable references like @userName
-        const varName = argValue.identifier;
+        // The value is a VariableReference node
+        const varRef = argValue.value;
+        const varName = varRef.identifier;
         const variable = env.getVariable(varName);
         if (!variable) {
           throw new Error(`Variable not found: ${varName}`);

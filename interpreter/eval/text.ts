@@ -26,6 +26,7 @@ export async function evaluateText(
     // Store the template definition
     const templateDef = {
       type: 'textTemplate' as const,
+      name: identifier,
       identifier,
       params: directive.values?.params || [],
       content: directive.values?.content || [],
