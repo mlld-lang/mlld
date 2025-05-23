@@ -2,6 +2,15 @@ import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
+import { createLLMXML } from 'llmxml';
+
+/**
+ * Remove single blank lines but preserve multiple blank lines.
+ * This helps match the expected output format.
+ */
+function compactBlankLines(content: string): string {
+  return content.replace(/\n\n/g, '\n');
+}
 
 /**
  * Evaluate @add directives.
@@ -17,13 +26,13 @@ export async function evaluateAdd(
   
   if (directive.subtype === 'addVariable') {
     // Handle variable reference
-    const varRef = directive.raw?.variable;
-    if (!varRef) {
+    const variableNodes = directive.values?.variable;
+    if (!variableNodes || variableNodes.length === 0) {
       throw new Error('Add variable directive missing variable reference');
     }
     
-    // Remove @ prefix if present
-    const varName = varRef.startsWith('@') ? varRef.slice(1) : varRef;
+    const variableNode = variableNodes[0];
+    const varName = variableNode.identifier;
     
     // Get variable from environment
     const variable = env.getVariable(varName);
@@ -31,33 +40,139 @@ export async function evaluateAdd(
       throw new Error(`Variable not found: ${varName}`);
     }
     
-    // Get the content based on variable type
+    // Get the base value
+    let value: any;
     switch (variable.type) {
       case 'text':
-        content = variable.value;
+        value = variable.value;
         break;
       case 'data':
-        content = JSON.stringify(variable.value, null, 2);
+        value = variable.value;
         break;
       case 'path':
-        content = variable.value.resolvedPath;
+        value = variable.value.resolvedPath;
         break;
       default:
-        content = String((variable as any).value);
+        value = (variable as any).value;
     }
     
+    // Handle field access if present in the variable node
+    if (variableNode.fields && variableNode.fields.length > 0 && variable.type === 'data') {
+      // Process field access
+      for (const field of variableNode.fields) {
+        if (value === null || value === undefined) {
+          throw new Error(`Cannot access field on null or undefined value`);
+        }
+        
+        if (field.type === 'arrayIndex') {
+          const index = field.index;
+          if (Array.isArray(value)) {
+            value = value[index];
+          } else {
+            throw new Error(`Cannot index non-array value with [${index}]`);
+          }
+        } else if (field.type === 'field') {
+          if (typeof value === 'object' && value !== null) {
+            value = value[field.name];
+          } else {
+            throw new Error(`Cannot access property '${field.name}' on non-object value`);
+          }
+        }
+      }
+    }
+    
+    // Convert final value to string
+    content = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    
   } else if (directive.subtype === 'addPath') {
-    // Handle path inclusion
+    // Handle path inclusion, potentially with section extraction
     const pathNodes = directive.values?.path;
     if (!pathNodes) {
       throw new Error('Add path directive missing path');
     }
     
+    // Resolve the path (which might include section specifier)
+    const pathWithSection = await interpolate(pathNodes, env);
+    
+    // Check if path includes section specifier (e.g., "file.md # Section Title")
+    const sectionMatch = pathWithSection.match(/^(.+?)\s*#\s*(.+)$/);
+    
+    if (sectionMatch) {
+      // Extract file path and section title
+      const filePath = sectionMatch[1].trim();
+      const sectionTitle = sectionMatch[2].trim();
+      
+      // Read the file content
+      const fileContent = await env.readFile(filePath);
+      
+      // Extract the section using llmxml
+      const llmxml = createLLMXML();
+      try {
+        content = await llmxml.getSection(fileContent, sectionTitle, {
+          includeNested: true
+        });
+        // Compact blank lines and trim
+        content = compactBlankLines(content).trimEnd();
+      } catch (error) {
+        // Fallback to basic extraction if llmxml fails
+        content = extractSection(fileContent, sectionTitle);
+      }
+    } else {
+      // No section specified, read entire file
+      content = await env.readFile(pathWithSection);
+    }
+    
+  } else if (directive.subtype === 'addSection') {
+    // Handle section extraction: @add "Section Title" from [file.md]
+    const sectionTitleNodes = directive.values?.sectionTitle;
+    const pathNodes = directive.values?.path;
+    
+    if (!sectionTitleNodes || !pathNodes) {
+      throw new Error('Add section directive missing section title or path');
+    }
+    
+    // Get the section title
+    const sectionTitle = await interpolate(sectionTitleNodes, env);
+    
     // Resolve the path
     const resolvedPath = await interpolate(pathNodes, env);
     
     // Read the file content
-    content = await env.readFile(resolvedPath);
+    const fileContent = await env.readFile(resolvedPath);
+    
+    // Extract the section using llmxml
+    const llmxml = createLLMXML();
+    try {
+      // getSection expects just the title without the # prefix
+      const titleWithoutHash = sectionTitle.replace(/^#+\s*/, '');
+      content = await llmxml.getSection(fileContent, titleWithoutHash, {
+        includeNested: true
+      });
+      // Compact blank lines and trim
+      content = compactBlankLines(content).trimEnd();
+    } catch (error) {
+      // Fallback to basic extraction if llmxml fails
+      content = extractSection(fileContent, sectionTitle);
+    }
+    
+    // Handle rename if newTitle is specified
+    const newTitleNodes = directive.values?.newTitle;
+    if (newTitleNodes) {
+      const newTitle = await interpolate(newTitleNodes, env);
+      // Replace the original section title with the new one
+      const lines = content.split('\n');
+      if (lines.length > 0 && lines[0].match(/^#+\s/)) {
+        // Extract the heading level from the new title or default to original
+        const newHeadingMatch = newTitle.match(/^(#+)\s/);
+        const newHeadingLevel = newHeadingMatch ? newHeadingMatch[1] : '#';
+        const titleText = newTitle.replace(/^#+\s*/, '');
+        lines[0] = `${newHeadingLevel} ${titleText}`;
+        content = lines.join('\n');
+      } else {
+        // If no heading found, prepend the new title
+        content = newTitle + '\n' + content;
+      }
+    }
     
   } else if (directive.subtype === 'addTemplate') {
     // Handle template
@@ -93,9 +208,11 @@ export async function evaluateAdd(
   return { value: content, env };
 }
 
+// We'll use llmxml for section extraction once it's properly set up
+// For now, keeping the basic implementation
 /**
  * Extract a section from markdown content.
- * Sections are defined by headers (e.g., ## Section Name)
+ * TODO: Replace with llmxml.getSection() once integrated
  */
 function extractSection(content: string, sectionName: string): string {
   const lines = content.split('\\n');

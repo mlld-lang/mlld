@@ -41,8 +41,11 @@ describe('Meld Interpreter - Fixture Tests', () => {
       }
       
       // Set up default test files for common fixtures
-      if (fixture.name === 'add-path') {
-        await fileSystem.writeFile('/file.md', '# Title\n## Section 1\n### Subsection 1.1\nContent from file\n## Section 2');
+      if (fixture.name === 'add-path' || 
+          fixture.name === 'add-path-section' || 
+          fixture.name === 'add-section' || 
+          fixture.name === 'add-section-rename') {
+        await fileSystem.writeFile('/file.md', '# Title\n## Section 1\n### Subsection 1.1\nContent from file\n## Section 2\n\n# Section Title\nContent under this section\n\n# Original Title\nContent under this section');
       }
       
       try {

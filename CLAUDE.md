@@ -94,57 +94,60 @@ Known issues:
 - You may need to manually update the import paths in the generated `text.ts` files.
 - The current implementation creates separate files for each directive instance (with numeric suffixes) rather than properly consolidating them.
 
-# Current Refactor Status (AST/Types/State)
+# Current Refactor Status - INTERPRETER REWRITE IN PROGRESS
 
-## Architecture Approach: "AST Knows All"
-- **Smart Types, Dumb Services**: All intelligence in AST types via discriminated unions
-- **Handler Pattern**: Each directive has dedicated handler returning StateChanges
-- **Minimal Interfaces**: StateService reduced from 50+ to 8 methods
-- **Immutable State Flow**: Handlers return changes, don't mutate state
+## 🚨 Major Architecture Change: Traditional Interpreter Pattern 🚨
 
-## Migration Strategy
-Using adapter pattern (StateServiceAdapter) to maintain backward compatibility:
-- All 557 existing tests continue passing
-- New implementations use `.new.ts` suffix during migration
-- Old implementations backed up as `.bak` files
+We've moved from the service-oriented architecture to a clean, traditional interpreter pattern. This is a fundamental improvement that simplifies the entire system.
 
-## Current Progress
-- ✅ Minimal StateService implemented
-- ✅ StateServiceAdapter bridging old/new interfaces
-- ✅ All directive handlers migrated to new pattern
-- ✅ New DirectiveService with lazy handler registration
-- ✅ Minimal InterpreterService
-- ✅ 2/6 API integration tests passing
+### New Architecture (Day 1 Complete)
+- **Traditional interpreter**: Single recursive `evaluate()` function
+- **Environment class**: Combines state + capabilities (file I/O, command execution)
+- **Direct evaluation**: No service orchestration or ResolutionService
+- **Smart handlers**: Each directive evaluator does all the work directly
 
-## Key Learnings from Implementation
+### Implementation Status
+- ✅ Core interpreter built and working (`interpreter/` directory)
+- ✅ All directive evaluators implemented (basic functionality)
+- ✅ 6/40 fixtures passing (15%) - core functionality works
+- 🚧 Edge cases documented as GitHub issues (#42-#48)
 
-### AST Structure Insights
-- Data directives: value at `directive.values.value` (already parsed)
-- Text directives: content at `directive.values.content` (array of nodes)
-- Variables in templates: represented as VariableReference nodes in content array
-- Identifiers: usually at `directive.raw.identifier`
+### 📋 CRITICAL: Start Here
+1. **Read `_dev/INTERPRETER-HANDOFF.md`** - Complete handoff document with all context
+2. **Read `_dev/INTERPRETER-REWRITE-PLAN.md`** - Full plan with current progress
+3. **Run tests**: `npm test interpreter/interpreter.fixture.test.ts`
 
-### Common Issues Encountered
-1. **Variable interpolation failing**: ResolutionContext needs full structure including state
-2. **Handler registration**: Must be lazy to avoid circular dependencies
-3. **State mutations**: Services must share same state instance, not create children
-4. **Path operations**: FileSystemService has exists()/stat(), not PathService
+### Key Decisions & Context
+- **Parser returns arrays** - We handle this in evaluate()
+- **Newlines are nodes** - Preserved for markdown output
+- **Skip numbered fixtures** - They're partial tests (e.g., add-variable-1.fixture.json)
+- **Field access is LOW PRIORITY** - Parser limitation, issue #42
+- **Direct execution** - Handlers read files and execute commands directly
 
-### Integration Points
-- `api/` directory contains full integration tests
-- Use `api/index.new.ts` for testing new system
-- OutputService needed for complete processing pipeline
+### Next Steps
+1. Continue implementing missing handler functionality
+2. Focus on high-impact features:
+   - Section extraction (use llmxml from `lib/llmxml`)
+   - Better path resolution
+   - Import improvements
+3. Aim for 65% functionality, not perfection
 
-## Next Steps
-See `_dev/AST-REFACTOR-PLAN.md` for detailed rolling wave plan.
+## Previous Service-Oriented Refactor (Now Obsolete)
 
-## Important Files
+The following was the previous refactor approach, now superseded by the interpreter rewrite:
+
+~~Architecture Approach: "AST Knows All"~~
+~~- Smart Types, Dumb Services: All intelligence in AST types via discriminated unions~~
+~~- Handler Pattern: Each directive has dedicated handler returning StateChanges~~
+~~- Minimal Interfaces: StateService reduced from 50+ to 8 methods~~
+~~- Immutable State Flow: Handlers return changes, don't mutate state~~
+
+### Old Files (For Reference Only)
 - `_dev/NEWSTATE.md` - Original state simplification plan
-- `_dev/AST-REFACTOR-PLAN.md` - Current refactor plan
-- `_dev/AST-REFACTOR-TECHNICAL-NOTES.md` - Implementation patterns and pitfalls
-- `core/di-config.new.ts` - New DI configuration
-- `services/state/StateService/StateService.ts` - New minimal implementation
-- `services/state/StateService/StateServiceAdapter.ts` - Compatibility bridge
+- `_dev/AST-REFACTOR-PLAN.md` - Service refactor plan (see Phase 3 completion notes)
+- `_dev/AST-REFACTOR-TECHNICAL-NOTES.md` - Service implementation patterns
+- `core/di-config.new.ts` - Service-based DI configuration
+- Various `.new.ts` and `.bak` files from service migration
 
 ## Documentation Status
 The following documentation has been updated to reflect the "AST Knows All" architecture:
