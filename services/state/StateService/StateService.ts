@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { MeldNode } from '@core/ast/types';
 import type { MeldVariable } from '@core/types';
-import type { IStateService } from './IStateService.minimal';
+import type { IStateService } from './IStateService';
 
 /**
  * Minimal implementation of StateService.

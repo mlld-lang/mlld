@@ -13,8 +13,8 @@ import type { IInterpreterService } from '@services/pipeline/InterpreterService/
 import type { IParserService } from '@services/pipeline/ParserService/IParserService';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
-import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.new';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.new';
 import logger, { ILogger } from '@core/utils/logger';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
 import type { MeldNode } from '@core/ast/types/index';

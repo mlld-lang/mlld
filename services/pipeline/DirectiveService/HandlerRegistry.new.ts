@@ -2,14 +2,14 @@ import { container } from 'tsyringe';
 import type { IDirectiveHandler } from './IDirectiveService.new';
 import type { IDirectiveService } from './IDirectiveService.new';
 
-// Import all handlers
-import { TextDirectiveHandler } from './handlers/TextDirectiveHandler.new';
-import { DataDirectiveHandler } from './handlers/DataDirectiveHandler.new';
-import { PathDirectiveHandler } from './handlers/PathDirectiveHandler.new';
-import { ExecDirectiveHandler } from './handlers/ExecDirectiveHandler.new';
-import { RunDirectiveHandler } from './handlers/RunDirectiveHandler.new';
-import { AddDirectiveHandler } from './handlers/AddDirectiveHandler.new';
-import { ImportDirectiveHandler } from './handlers/ImportDirectiveHandler.new';
+// Import all handlers (minimal versions)
+import { TextDirectiveHandler } from './handlers/TextDirectiveHandler.minimal';
+import { DataDirectiveHandler } from './handlers/DataDirectiveHandler.minimal';
+import { PathDirectiveHandler } from './handlers/PathDirectiveHandler.minimal';
+import { ExecDirectiveHandler } from './handlers/ExecDirectiveHandler.minimal';
+import { RunDirectiveHandler } from './handlers/RunDirectiveHandler.minimal';
+import { AddDirectiveHandler } from './handlers/AddDirectiveHandler.minimal';
+import { ImportDirectiveHandler } from './handlers/ImportDirectiveHandler.minimal';
 
 /**
  * Registry for directive handlers.

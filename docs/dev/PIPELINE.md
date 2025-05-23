@@ -57,6 +57,12 @@ The pipeline is organized into logical service groups, with strict initializatio
 │ Resolution  │     │ Validation  │     │ Circularity  │
 │   Service   ├────►│   Service   ├────►│   Service    │
 └─────────────┘     └─────────────┘     └──────────────┘
+      │
+      ▼
+┌─────────────┐
+│ Used by     │ ← ResolutionService is used by handlers,
+│ Handlers    │   NOT by InterpreterService directly
+└─────────────┘
 ```
 
 ### File System Services (services/fs/)
@@ -125,26 +131,25 @@ The pipeline is organized into logical service groups, with strict initializatio
 
 4. **Interpretation** (`InterpreterService`)
    ```ascii
-   ┌─────────────┐     ┌─────────────┐
-   │ MeldNode[]  │     │  Directive  │
-   │  Rich AST   ├────►│   Service   │ ← Handles nodes with `InterpolatableValue` etc.
-   └─────────────┘     └──────┬──────┘
-                              │
-                              ▼
-   ┌─────────────┐     ┌─────────────┐     ┌─────────────────────┐
-   │ Resolution  │◄────┤   Handler   │     │ ParserServiceClient │ ← Used by Interpreter
-   │   Service   │     │(with node   │     └─────────────────────┘   to parse TextNode content
-   └──────┬──────┘     │replacements)│               ▲
-          │            └──────┬──────┘               │
-          │                   │                      │
-          ▼                   ▼                      ▼
-   ┌─────────────┐     ┌────────────────────────────────────────────────────────────┐
-   │    State    │     │ Interpreter Service                                        │
-   │   Service   │◄────┤ - Applies stateChanges from DirectiveResult                │
-   │(Original &  │     │ - Handles node replacements from DirectiveResult           │
-   │Transformed) │     │ - **Resolves `{{...}}` in TextNode content (using Parser + │
-   └─────────────┘     │   Resolution) BEFORE adding node to state**                │
-                       └────────────────────────────────────────────────────────────┘
+   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+   │ MeldNode[]  │     │ Interpreter │     │  Directive  │
+   │  Rich AST   ├────►│   Service   ├────►│   Service   │
+   └─────────────┘     └─────────────┘     └──────┬──────┘
+                                                   │
+                                                   ▼
+                       ┌─────────────┐     ┌─────────────┐
+                       │ Resolution  │◄────┤  Handlers   │
+                       │   Service   │     │  (Text,     │
+                       └─────────────┘     │  Data, etc) │
+                                          └──────┬──────┘
+                                                   │
+                                                   ▼
+   ┌─────────────┐     ┌─────────────────────────────────────────┐
+   │    State    │◄────┤ Interpreter Service                      │
+   │   Service   │     │ - Routes nodes to handlers               │
+   │             │     │ - Applies stateChanges from handlers    │
+   │             │     │ - Manages state lifecycle                │
+   └─────────────┘     └─────────────────────────────────────────┘
 
    ```
    - **Simple type-based routing** using switch on `node.type`
@@ -152,22 +157,26 @@ The pipeline is organized into logical service groups, with strict initializatio
      - Simply adds to state (no processing needed)
      - Text is just text - no hidden complexity
    - For `DirectiveNode`s:
-     - Routes to specific handler based on `directive.kind`
+     - Routes to DirectiveService, which routes to specific handler
      - Handler receives:
        - The directive node with pre-parsed values
-       - Current state (read-only access)
+       - Current state (for reading variables)
        - Processing options (strict mode, file path)
+     - **Handlers use ResolutionService** to:
+       - Resolve variable interpolation in templates
+       - Resolve paths with special variables
+       - Execute commands and capture output
      - Handler returns `DirectiveResult`:
        ```typescript
        {
          stateChanges?: {
            variables?: Record<string, MeldVariable>;
+           nodes?: MeldNode[];  // Pre-resolved content to add
          };
-         replacement?: MeldNode[];  // For transformation mode
        }
        ```
-     - Interpreter applies state changes (if any)
-     - No direct state mutation by handlers
+     - Interpreter applies state changes from handlers
+     - All content is **pre-resolved** before being added to state
 
 5. **Output Generation** (`OutputService`)
    ```ascii
@@ -183,11 +192,34 @@ The pipeline is organized into logical service groups, with strict initializatio
    │Definitions) │     └─────────────┘
    └─────────────┘
    ```
-   - Takes the final (transformed) rich AST and state.
-   - Converts to requested format (markdown, llm-xml).
-   - **Treats `TextNode` content as pre-resolved (resolution handled by `InterpreterService`)**. It focuses on formatting, not variable substitution within text.
-   - Uses `VariableReferenceResolverClient` for detailed field/value processing during conversion (e.g., formatting complex objects/arrays).
-   - Writes output to file or stdout.
+   - Takes the final nodes from state (via `state.getNodes()`)
+   - Converts to requested format (markdown, llm-xml)
+   - **All content is already resolved** - handlers did the resolution work
+   - Simply formats the pre-resolved nodes for output
+   - No variable substitution needed at this stage
+
+## Resolution Architecture
+
+The ResolutionService is a key component used by handlers to resolve variables, paths, and execute commands. It is NOT used directly by the InterpreterService:
+
+```ascii
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐
+│  Handlers   │────►│ Resolution  │────►│  Resolved    │
+│             │     │  Service    │     │   Content    │
+└─────────────┘     └─────────────┘     └──────────────┘
+      │                    │                    │
+      ▼                    ▼                    ▼
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐
+│ Get current │     │Interpolate  │     │Return ready  │
+│state, opts  │     │vars, paths  │     │for state     │
+└─────────────┘     └─────────────┘     └──────────────┘
+```
+
+Key points:
+- **Handlers call ResolutionService** with content that needs resolution
+- **ResolutionService returns fully resolved strings** ready to be added to state
+- **InterpreterService never calls ResolutionService** - it only routes and applies changes
+- **OutputService receives pre-resolved content** - no resolution needed
 
 ## Transformation Mode and Variable Resolution
 
@@ -204,18 +236,25 @@ When transformation mode is enabled, the pipeline handles directives and variabl
 
 ### Key Transformation Pipeline Concepts
 
-1. **Directive Handler Replacement Nodes**
-   - Directive handlers can return replacement nodes when in transformation mode.
-   - The InterpreterService must properly apply these replacements in the transformed nodes array.
-   - For import directives, the replacement is typically an empty text node.
-   - For embed directives, the replacement node contains the embedded content.
+1. **Handler Pattern with State Changes**
+   - Handlers process directives and return `DirectiveResult` with state changes
+   - State changes include:
+     - `variables`: New variables to add to state
+     - `nodes`: New nodes (with pre-resolved content) to add to state
+   - InterpreterService applies these changes immutably
+   - No direct state mutation by handlers
 
-2. **State Propagation Across Boundaries**
-   - Variables must be explicitly copied between parent and child states using mechanisms like `StateVariableCopier`.
-   - When importing files, variables must be copied from imported state to parent state (`ImportDirectiveHandler`).
+2. **Resolution Happens in Handlers**
+   - **All resolution happens in handlers** via ResolutionService:
+     - Text handlers resolve `{{...}}` in templates before creating variables
+     - Add handlers resolve content before creating TextNodes
+     - Path handlers resolve special variables like $HOMEPATH
+     - Run/Exec handlers execute commands and capture output
+   - **InterpreterService does NOT resolve** - it only orchestrates
+   - **OutputService does NOT resolve** - it only formats pre-resolved content
+   - The key principle: **Content is resolved once, at the handler level**
 
-3. **Variable Resolution Process**
-   - Variables can be resolved at multiple stages:
-     - During directive processing by handlers (using `ResolutionService` on `InterpolatableValue` arrays or `VariableReferenceNode`s from the AST).
-     - **During interpretation (`InterpreterService`) for `{{...}}` references within plain `TextNode` content.** The `InterpreterService` resolves these before adding the final `TextNode` to the state.
-   - `OutputService` **does not** perform variable resolution on `TextNode` content; it expects pre-resolved text provided by the `InterpreterService`. It may use `VariableReferenceResolverClient` for formatting complex values (like objects or arrays referenced by variables) during final output generation.
+3. **State Propagation Across Boundaries**
+   - When importing files, handlers must merge imported state with current state
+   - Variables from imported files become available in parent scope
+   - Each handler manages its own state merging logic

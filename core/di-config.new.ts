@@ -1,12 +1,11 @@
 import 'reflect-metadata';
 import { container } from 'tsyringe';
 import { StateService } from '@services/state/StateService/StateService';
-import { StateServiceAdapter } from '@services/state/StateService/StateServiceAdapter';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.new';
 import { HandlerRegistry } from '@services/pipeline/DirectiveService/HandlerRegistry.new';
 
 // Import other required services (keep existing ones)
-import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.new';
 import { PathService } from '@services/fs/PathService/PathService';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
 import { ParserService } from '@services/pipeline/ParserService/ParserService';
@@ -18,8 +17,9 @@ import { URLContentResolver } from '@services/resolution/URLContentResolver/URLC
 import { StateEventService } from '@services/state/StateEventService/StateEventService';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
-import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory';
-import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
+// Factories removed - using direct service injection
+// import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory';
+// import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
 import { simpleLogger } from '@core/utils/simpleLogger';
 
 /**
@@ -30,9 +30,9 @@ export function configureDIContainer(): void {
   container.register('ILogger', { useValue: simpleLogger });
   container.register('MainLogger', { useValue: simpleLogger });
   
-  // Register StateService with adapter for now (until all services are migrated)
-  container.register(StateService, { useClass: StateServiceAdapter });
-  container.register('IStateService', { useClass: StateServiceAdapter });
+  // Register StateService
+  container.register(StateService, { useClass: StateService });
+  container.register('IStateService', { useClass: StateService });
   
   // Register file system services
   container.register(NodeFileSystem, { useClass: NodeFileSystem });
@@ -45,7 +45,22 @@ export function configureDIContainer(): void {
   container.register('IPathService', { useToken: PathService });
   
   // Register resolution services
-  container.register(ResolutionService, { useClass: ResolutionService });
+  container.register(ResolutionService, { 
+    useFactory: (c) => {
+      const resolver = new ResolutionService();
+      const pathService = c.resolve<PathService>('IPathService');
+      const fileSystem = c.resolve<FileSystemService>('IFileSystemService');
+      
+      resolver.initialize({
+        fileSystem: fileSystem,
+        pathService: {
+          resolve: (path: string, base: string) => pathService.resolvePath(path, base),
+          normalize: (path: string) => pathService.normalizePath(path)
+        }
+      });
+      return resolver;
+    }
+  });
   container.register('IResolutionService', { useToken: ResolutionService });
   container.register(ValidationService, { useClass: ValidationService });
   container.register('IValidationService', { useToken: ValidationService });
@@ -74,10 +89,11 @@ export function configureDIContainer(): void {
   HandlerRegistry.registerWithContainer(container);
   
   // Register factories
-  container.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
-  container.register('DirectiveServiceClientFactory', { useToken: DirectiveServiceClientFactory });
-  container.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
-  container.register('ParserServiceClientFactory', { useToken: ParserServiceClientFactory });
+  // TODO: Remove these once we're sure they're not needed
+  // container.register(DirectiveServiceClientFactory, { useClass: DirectiveServiceClientFactory });
+  // container.register('DirectiveServiceClientFactory', { useToken: DirectiveServiceClientFactory });
+  // container.register(ParserServiceClientFactory, { useClass: ParserServiceClientFactory });
+  // container.register('ParserServiceClientFactory', { useToken: ParserServiceClientFactory });
   
   // Register container itself for services that need it
   container.register('DependencyContainer', { useValue: container });

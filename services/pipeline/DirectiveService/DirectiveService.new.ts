@@ -101,6 +101,13 @@ export class DirectiveService implements IDirectiveService {
       }
     }
     
+    // Apply node additions
+    if (changes.nodes) {
+      for (const node of changes.nodes) {
+        state.addNode(node);
+      }
+    }
+    
     return state;
   }
 }

@@ -158,23 +158,61 @@ Using adapter pattern to maintain backward compatibility while incrementally mig
 - How to handle async resolution (commands, URLs)?
 - Where does path validation logic belong?
 
+### Known Issues (To Address in Phase 3)
+- **Variable interpolation in new system**: Currently failing in integration tests due to adapter complexity between old/new ResolutionService interfaces. This is expected and will be properly fixed when handlers are migrated to use new interfaces in Phase 3.
+- **Complex directives**: Some directives (import, add with templates) may not work fully until handlers are properly migrated.
+- **ResolutionContext structure**: The mapping between old and new context formats in adapters is imperfect.
+
 ### Potential Adjustments
 - May need to update ParserService if AST structure needs changes
 - OutputService might need updates based on state structure
 
 ---
 
-## FUTURE PHASE: Handler Migration
+## CURRENT PHASE: Handler Migration
 
 **Timeframe**: Day 3-4  
 **Phase Goal**: Migrate all directive handlers to use new interfaces properly  
 
-### Capabilities
-- **Text Handler**: Proper template resolution with variables
-- **Data Handler**: Direct AST data usage (no parsing)
-- **Path Handler**: Clean filesystem integration
-- **Run/Exec Handlers**: Command execution with state updates
-- **Add/Import Handlers**: Content inclusion with proper state
+### Sessions
+
+**Session 3.1**: TextDirectiveHandler Migration [2 hours]
+- Description: Migrate the most critical handler to use new ResolutionService
+- Technical Details:
+  - Update to use new IResolutionService interface directly
+  - Fix ResolutionContext to properly pass state
+  - Ensure variable interpolation works
+  - Handle both = and += operators correctly
+- Dependencies: New ResolutionService from Phase 2
+- Expected Output: Working text directive with variable interpolation
+
+**Session 3.2**: Simple Handlers Migration [2 hours]  
+- Description: Migrate handlers that don't need resolution
+- Technical Details:
+  - DataDirectiveHandler: Direct value storage from AST
+  - PathDirectiveHandler: Simple path resolution
+  - Both should be straightforward migrations
+- Dependencies: Minimal - mostly AST structure
+- Expected Output: Data and path directives fully working
+
+**Session 3.3**: Command Handlers Migration [2 hours]
+- Description: Migrate Run/Exec handlers for command execution
+- Technical Details:
+  - RunDirectiveHandler: Execute without capturing output
+  - ExecDirectiveHandler: Execute and store output
+  - Ensure proper command resolution and execution
+  - Handle both inline code and command references
+- Dependencies: FileSystemService for execution
+- Expected Output: Command execution working properly
+
+**Session 3.4**: Complex Handlers Migration [2 hours]
+- Description: Migrate Add/Import handlers with content inclusion
+- Technical Details:
+  - AddDirectiveHandler: Content addition with resolution
+  - ImportDirectiveHandler: File import with child states
+  - These are most complex due to recursive processing
+- Dependencies: InterpreterService for recursive processing
+- Expected Output: Full directive suite working
 
 ### Exit Criteria
 - All handlers using new interfaces exclusively
@@ -188,16 +226,51 @@ Using adapter pattern to maintain backward compatibility while incrementally mig
 
 ---
 
-## FUTURE PHASE: Integration & Cleanup
+## CURRENT PHASE: Integration & Cleanup
 
 **Timeframe**: Day 5  
 **Phase Goal**: Remove adapters and validate complete system  
 
-### Capabilities
-- **Adapter Removal**: Remove StateServiceAdapter and update all tests
-- **E2E Validation**: Full integration tests using real examples
-- **Performance Testing**: Ensure refactor hasn't degraded performance
-- **Documentation**: Update all docs with new architecture
+### Sessions
+
+**Session 4.1**: Update DI Configuration [1 hour]
+- Description: Wire up new handlers and services in DI container
+- Technical Details:
+  - Replace old handlers with new minimal versions
+  - Ensure proper service registration
+  - Update HandlerRegistry to use new handlers
+- Dependencies: All new handlers from Phase 3
+- Expected Output: DI container using all new components
+
+**Session 4.2**: Remove Adapters [2 hours]
+- Description: Remove adapter pattern and use services directly
+- Technical Details:
+  - Remove StateServiceAdapter usage
+  - Remove ResolutionServiceAdapter usage
+  - Update all imports to use new services
+  - Fix any type mismatches
+- Dependencies: New services fully implemented
+- Expected Output: No adapter usage in codebase
+
+**Session 4.3**: Integration Test Fixes [3 hours]
+- Description: Get all integration tests passing
+- Technical Details:
+  - Run api/smoke.new.test.ts and fix failures
+  - Update test expectations if needed
+  - Ensure variable interpolation works E2E
+  - Validate all directive types
+- Dependencies: Adapters removed, new services wired
+- Expected Output: All integration tests green
+
+**Session 4.4**: Cleanup & Documentation [2 hours]
+- Description: Remove old code and update docs
+- Technical Details:
+  - Delete .bak files
+  - Remove old handler implementations
+  - Update architecture documentation
+  - Create migration summary
+- Dependencies: All tests passing
+- Expected Output: Clean codebase with updated docs
 
 ### Exit Criteria
 - All tests passing without adapters
@@ -228,6 +301,67 @@ Using adapter pattern to maintain backward compatibility while incrementally mig
 - Change Description: Initial plan creation
 - Rationale: Shifting from ad-hoc fixes to systematic refactor
 - Impact on Future Phases: All phases designed around complete migration
+
+**Update [Phase 1 Completion]**:
+- Phase Updated: Interface Design & Validation
+- Change Description: Completed all Phase 1 sessions with comprehensive deliverables
+- Rationale: Established solid foundation for minimal interfaces following AST Knows All
+- Deliverables:
+  - Service usage analysis showing 3-5x over-engineering
+  - Minimal interface designs (StateService: 8 methods vs 50+)
+  - Type flow documentation with discriminated unions
+  - Validation plan using 70+ AST fixtures
+- Key Findings:
+  - ResolutionService needs biggest refactor (15+ methods → 4)
+  - Most complexity belongs in handlers, not services
+  - Adapter pattern working well for gradual migration
+- Impact on Future Phases: 
+  - Phase 2 should prioritize ResolutionService implementation
+  - Variable interpolation fix is blocking integration tests
+  - All handlers need ResolutionContext updates
+
+**Update [Phase 2 In Progress]**:
+- Phase Updated: Core Services Migration
+- Change Description: Implemented StateService and ResolutionService with adapters
+- Status:
+  - ✅ Feature 2.1: StateService already minimal (no changes needed)
+  - ✅ Feature 2.2: ResolutionService minimal implementation complete with tests
+  - ✅ ResolutionServiceAdapter created for backward compatibility
+  - 🔄 Feature 2.3: Integration validation shows 2/6 API tests passing
+- Key Decisions:
+  - Using adapter pattern for ResolutionService (like StateService)
+  - Postponing variable interpolation fixes to Phase 3 (handler migration)
+  - Focusing on forward progress vs perfecting temporary adapter code
+- Known Issues:
+  - Variable interpolation failing due to context structure mismatches
+  - Complex directives (import, add) not fully working
+  - These are expected and will be fixed when handlers are properly migrated
+- Impact on Future Phases:
+  - Phase 3 (Handler Migration) becomes critical for fixing integration tests
+  - Adapters will be removed in Phase 4 after all handlers migrated
+
+**Update [Phase 3 Complete, Architecture Issue Found]**:
+- Phase Updated: Handler Migration
+- Change Description: Migrated all 7 handlers but discovered architectural issue
+- Status:
+  - ✅ All handlers migrated to new pattern (45/45 unit tests passing)
+  - ❌ Handlers doing too much work (executing commands, reading files)
+  - ❌ ResolutionService interface too minimal (missing needed methods)
+- Architectural Discovery:
+  - Initial 4-method ResolutionService interface was too minimal
+  - Handlers were violating "AST Knows All" by executing commands directly
+  - Updated interface to 8 methods that handlers actually need:
+    - resolve, resolveNodes, resolvePath (original)
+    - executeCommand, executeCode, readFile (added)
+    - extractSection, initialize (original)
+- Key Learning:
+  - "Minimal" doesn't mean "insufficient" - need right abstraction level
+  - Handlers should extract from AST, ResolutionService should execute
+  - Command execution, file reading, code eval belong in ResolutionService
+- Impact on Current Work:
+  - Need to implement new ResolutionService methods
+  - Need to update handlers to properly delegate
+  - This fixes the architectural alignment before removing adapters
 
 ---
 

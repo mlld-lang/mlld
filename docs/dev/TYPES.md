@@ -138,28 +138,111 @@ interface IStateService {
   createChild(): IStateService;
 }
 
-// Minimal directive service
+// Minimal resolution service - consolidated from 15+ methods to 4
+interface IResolutionService {
+  // Single entry point for all resolution
+  resolve(input: ResolutionInput): Promise<string>;
+  
+  // Path-specific resolution
+  resolvePath(path: string, context: ResolutionContext): Promise<string>;
+  
+  // Section extraction (consider moving to handler)
+  extractSection(content: string, section: string): string;
+}
+
+// Minimal directive service - single responsibility
 interface IDirectiveService {
-  registerHandler(handler: IDirectiveHandler): void;
   handleDirective(
     directive: DirectiveNode,
     state: IStateService,
-    options: HandlerOptions
+    options: DirectiveOptions
   ): Promise<DirectiveResult>;
-  processDirectives(
-    directives: DirectiveNode[],
-    state: IStateService,
-    options: HandlerOptions
-  ): Promise<IStateService>;
 }
 
 // Minimal interpreter service
 interface IInterpreterService {
   interpret(
     nodes: MeldNode[],
-    options?: InterpreterOptions,
+    options: InterpreterOptions,
     initialState?: IStateService
-  ): Promise<IStateService>;
+  ): Promise<InterpretationResult>;
+}
+
+// Minimal parser service
+interface IParserService {
+  parse(content: string): ParseResult;
+}
+
+// Minimal output service
+interface IOutputService {
+  format(
+    nodes: MeldNode[],
+    format: OutputFormat,
+    options?: OutputOptions
+  ): string;
+}
+```
+
+### Supporting Types
+
+```typescript
+// Resolution types
+interface ResolutionInput {
+  value: string | InterpolatableValue;
+  context: ResolutionContext;
+  type: 'text' | 'path' | 'command';
+}
+
+interface ResolutionContext {
+  state: IStateService;
+  basePath: string;
+  currentFilePath: string;
+}
+
+// Directive processing types
+interface DirectiveOptions {
+  fs: IFileSystemService;
+  resolver: IResolutionService;
+  transformationEnabled?: boolean;
+}
+
+interface DirectiveResult {
+  stateChanges?: StateChanges;
+  output?: string;
+  error?: Error;
+}
+
+interface StateChanges {
+  variables?: Record<string, MeldVariable>;
+  nodes?: MeldNode[];
+  filePath?: string;
+  childStates?: StateChanges[]; // For imports
+}
+
+// Interpreter types
+interface InterpreterOptions {
+  transformationEnabled?: boolean;
+  outputFormat?: string;
+}
+
+interface InterpretationResult {
+  state: IStateService;
+  output?: string;
+  error?: Error;
+}
+
+// Parser types
+interface ParseResult {
+  nodes: MeldNode[];
+  parseErrors: ParseError[];
+}
+
+// Output types
+type OutputFormat = 'text' | 'markdown' | 'json' | 'xml';
+
+interface OutputOptions {
+  includeComments?: boolean;
+  preserveFormatting?: boolean;
 }
 ```
 
