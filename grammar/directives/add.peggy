@@ -188,7 +188,7 @@ AtAdd
         'variable'  // Added source parameter
       );
     }
-  / DirectiveContext "@add" _ path:PathCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "@add" _ !("[[") path:PathCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched path', { path, headerLevel, underHeader });
       
       // Extract header level and under header if provided

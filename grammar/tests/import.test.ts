@@ -99,26 +99,8 @@ describe('Import Directive Syntax Tests', () => {
       expect(isImportSelectedDirective(result)).toBe(true);
     });
     
-    it('should parse an import with aliases', async () => {
-      const input = '@import { var1 as alias1, var2 as alias2 } from "path/to/file.meld"';
-      const result = (await parse(input)).ast[0];
-      
-      expect(result.type).toBe('Directive');
-      expect(result.kind).toBe('import');
-      expect(result.subtype).toBe('importSelected');
-      expect(result.source).toBe('path'); // Check new source field
-      
-      // Check values
-      expect(result.values.imports).toHaveLength(2);
-      // Check type but don't rely on identifier location
-      expect(result.values.imports[0].type).toBe('VariableReference');
-      expect(result.values.imports[0].valueType).toBe('import');
-      expect(result.values.imports[1].type).toBe('VariableReference');
-      expect(result.values.imports[1].valueType).toBe('import');
-      
-      // Check type guard
-      expect(isImportSelectedDirective(result)).toBe(true);
-    });
+    // Alias support has been removed from the grammar
+    // The test for aliases has been removed as this syntax is no longer supported
     
     it('should parse an import with @var variable in path', async () => {
       const input = '@import { var1 } from [prefix/@textVar/suffix.meld]';

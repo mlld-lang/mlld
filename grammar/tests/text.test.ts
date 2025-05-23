@@ -29,8 +29,8 @@ describe('Text Directive Tests', () => {
       expect(isTextAssignmentDirective(result)).toBe(true);
     });
     
-    it('should parse a text assignment with add', async () => {
-      const result = (await parse('@text content = @add [./README.md]')).ast[0] as TextAssignmentDirectiveNode;
+    it('should parse a text assignment with path', async () => {
+      const result = (await parse('@text content = [./README.md]')).ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
@@ -39,10 +39,11 @@ describe('Text Directive Tests', () => {
       // Check values
       expect(result.values.identifier).toHaveLength(1);
       expect(result.values.identifier[0].identifier).toBe('content');
-      expect(result.source).toBe('add');
+      expect(result.source).toBe('path');
       
       // Check meta
-      expect(result.meta.add).toBeDefined();
+      expect(result.meta.sourceType).toBe('path');
+      expect(result.meta.hasVariables).toBe(false);
       
       // Type guard
       expect(isTextAssignmentDirective(result)).toBe(true);
@@ -61,6 +62,8 @@ describe('Text Directive Tests', () => {
       expect(result.source).toBe('run');
       
       // Check meta
+      expect(result.meta.sourceType).toBe('directive');
+      expect(result.meta.directive).toBe('run');
       expect(result.meta.run).toBeDefined();
       
       // Type guard

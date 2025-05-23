@@ -51,9 +51,10 @@ CodeCore
           ...(language ? { language } : {})
         },
         meta: {
-          isBracketed: code.raw.trim().startsWith('[') && code.raw.trim().endsWith(']'),
           hasLanguage: !!language,
-          language: language || 'text'
+          language: language || 'text',
+          hasVariables: false,  // Code blocks don't support variable interpolation
+          isMultiLine: codeContent.includes('\n')
         }
       };
     }
@@ -79,9 +80,10 @@ LanguageCodeCore
           code: code.raw
         },
         meta: {
-          isBracketed: code.raw.trim().startsWith('[') && code.raw.trim().endsWith(']'),
           hasLanguage: true,
-          language
+          language,
+          hasVariables: false,  // Code blocks don't support variable interpolation
+          isMultiLine: code.raw.includes('\n')
         }
       };
     }
@@ -119,7 +121,7 @@ RunLanguageCodeCore
       const meta = {
         isMultiLine: codeContent.includes('\n'),
         language: language,
-        isBracketed: true
+        hasVariables: false  // Code blocks don't support variable interpolation
       };
       
       // Return a structured result that can be used by both directives

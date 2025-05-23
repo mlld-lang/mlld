@@ -6,9 +6,9 @@
 
 The exec directive defines named commands or code blocks that can be executed
 by the @run directive. It can be used in these forms:
-1. @exec cmdName (param1, param2) = command-string   - Define a shell command
-2. @exec fnName (param1) = js [code-block]           - Define a code function
-3. @exec alias (param1) = @run @otherCmd             - Define a command reference
+1. @exec cmdName (param1, param2) = @run command-string   - Define a shell command
+2. @exec fnName (param1) = @run js [code-block]           - Define a code function
+3. @exec alias (param1) = @run @otherCmd                  - Define a command reference
 */
 
 // Core content handlers (context, tokens, whitespace, variables, command, code)

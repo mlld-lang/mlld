@@ -7,8 +7,7 @@
 The import directive brings in variables from other Meld files.
 It can be used in these forms:
 1. @import {var1, var2} from "path/to/file"  - Import specific variables
-2. @import {var1 as alias} from "path/to/file" - Import with alias
-3. @import {*} from "path/to/file"          - Import all variables
+2. @import {*} from "path/to/file"          - Import all variables
 */
 
 // Core content handlers (context, tokens, whitespace, variables, path)
@@ -24,26 +23,23 @@ AtImport
       helpers.debug('AtImport matched', { imports, path });
       
       // Get the raw imports text
-      const importsRaw = imports.map(item => 
-        item.alias ? `${item.name} as ${item.alias}` : item.name
-      ).join(", ");
+      const importsRaw = imports.join(", ");
       
       // Determine subtype (importAll or importSelected)
-      const subtype = imports.length === 1 && imports[0].name === '*' ? 
+      const subtype = imports.length === 1 && imports[0] === '*' ? 
                      'importAll' : 'importSelected';
       
       // Create values object with variable references
       const values = {
         imports: imports.map(item => helpers.createVariableReferenceNode('import', { 
-          identifier: item.name,
-          alias: item.alias || null
+          identifier: item
         })),
         path: path.values.path
       };
       
       // Create raw object with text segments
       const raw = {
-        imports: imports.length === 1 && imports[0].name === '*' ? '*' : importsRaw,
+        imports: imports.length === 1 && imports[0] === '*' ? '*' : importsRaw,
         path: path.raw.path
       };
       
@@ -74,7 +70,7 @@ AtImport
 
 ImportsList
   = "*" {
-      return [{name: "*", alias: null}];
+      return ["*"];
     }
   / first:ImportItem rest:(_ "," _ item:ImportItem { return item; })* {
       return [first, ...rest];
@@ -85,9 +81,6 @@ ImportsList
 
 // Individual import item
 ImportItem
-  = name:BaseIdentifier _ "as" _ alias:BaseIdentifier { 
-      return {name, alias};
-    }
-  / name:BaseIdentifier { 
-      return {name, alias: null};
+  = name:BaseIdentifier { 
+      return name;
     }
