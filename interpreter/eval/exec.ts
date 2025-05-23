@@ -29,17 +29,22 @@ export async function evaluateExec(
       throw new Error('Exec command directive missing command');
     }
     
-    // Interpolate the command
-    const command = await interpolate(commandNodes, env);
+    // Get parameter names if any
+    const params = directive.values?.params || [];
+    const paramNames = params.map(p => {
+      if (p.type === 'VariableReference') {
+        return p.identifier;
+      } else if (p.type === 'Text') {
+        return p.content;
+      }
+      return '';
+    }).filter(Boolean);
     
-    // Parse command into executable and args
-    const parts = command.trim().split(/\\s+/);
-    const executableName = parts[0];
-    const args = parts.slice(1);
-    
+    // Store the command template (not interpolated yet)
     commandDef = {
-      executableName,
-      args
+      commandTemplate: commandNodes,
+      paramNames,
+      type: 'command'
     };
     
   } else if (directive.subtype === 'execCode') {
@@ -49,13 +54,25 @@ export async function evaluateExec(
       throw new Error('Exec code directive missing code');
     }
     
-    // Get the code (but don't execute it)
-    const code = await interpolate(codeNodes, env);
+    // Get parameter names if any
+    const params = directive.values?.params || [];
+    const paramNames = params.map(p => {
+      if (p.type === 'VariableReference') {
+        return p.identifier;
+      } else if (p.type === 'Text') {
+        return p.content;
+      }
+      return '';
+    }).filter(Boolean);
+    
     const language = directive.raw?.language || 'javascript';
     
+    // Store the code template (not interpolated yet)
     commandDef = {
-      code,
-      language
+      codeTemplate: codeNodes,
+      language,
+      paramNames,
+      type: 'code'
     };
     
   } else {
@@ -66,6 +83,6 @@ export async function evaluateExec(
   const variable = createCommandVariable(identifier, commandDef);
   env.setVariable(identifier, variable);
   
-  // Return the command definition
+  // Return the command definition (no output for variable definitions)
   return { value: commandDef, env };
 }

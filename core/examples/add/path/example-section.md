@@ -1,1 +1,1 @@
-@add [file.md # Section 1]
+@add "Section 1" from [file.md]

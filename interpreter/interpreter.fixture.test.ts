@@ -26,8 +26,8 @@ describe('Meld Interpreter - Fixture Tests', () => {
     const fixturePath = path.join(fixturesDir, fixtureFile);
     const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
     
-    // Skip fixtures without expected output
-    if (!fixture.expected) {
+    // Skip fixtures without expected output (but allow empty string)
+    if (fixture.expected === null || fixture.expected === undefined) {
       it.skip(`${fixture.name} (no expected output)`, () => {});
       return;
     }
@@ -41,10 +41,11 @@ describe('Meld Interpreter - Fixture Tests', () => {
       }
       
       // Set up default test files for common fixtures
-      if (fixture.name === 'add-path' || 
-          fixture.name === 'add-path-section' || 
-          fixture.name === 'add-section' || 
-          fixture.name === 'add-section-rename') {
+      if (fixture.name === 'add-path') {
+        await fileSystem.writeFile('/file.md', '# Title\n## Section 1\n### Subsection 1.1\nContent from file\n## Section 2');
+      } else if (fixture.name === 'add-path-section' || 
+                 fixture.name === 'add-section' || 
+                 fixture.name === 'add-section-rename') {
         await fileSystem.writeFile('/file.md', '# Title\n## Section 1\n### Subsection 1.1\nContent from file\n## Section 2\n\n# Section Title\nContent under this section\n\n# Original Title\nContent under this section');
       }
       

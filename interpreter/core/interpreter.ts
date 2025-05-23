@@ -45,6 +45,16 @@ export async function evaluate(node: MeldNode | MeldNode[], env: Environment): P
       // Newlines are just whitespace, ignore them
       return { value: '', env };
       
+    case 'VariableReference':
+      // Variable references are handled by interpolation in context
+      // If we get here, it's likely an error
+      const varRef = node as any;
+      const variable = env.getVariable(varRef.identifier);
+      if (!variable) {
+        throw new Error(`Variable not found: ${varRef.identifier}`);
+      }
+      return { value: variable.value, env };
+      
     default:
       throw new Error(`Unknown node type: ${(node as any).type}`);
   }

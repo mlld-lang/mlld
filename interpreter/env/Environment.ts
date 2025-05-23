@@ -75,34 +75,74 @@ export class Environment {
     }
   }
   
-  async executeCode(code: string, language: string): Promise<string> {
-    // For now, only support JavaScript/Node.js
-    if (language !== 'javascript' && language !== 'js' && language !== 'node') {
-      throw new Error(`Unsupported code language: ${language}`);
-    }
-    
-    try {
-      // Create a function that captures console.log output
-      let output = '';
-      const originalLog = console.log;
-      console.log = (...args: any[]) => {
-        output += args.map(arg => String(arg)).join(' ') + '\\n';
-      };
-      
-      // Execute the code
-      const result = eval(code);
-      
-      // Restore console.log
-      console.log = originalLog;
-      
-      // If there was console output, use that. Otherwise use the result.
-      if (output) {
-        return output.trimEnd();
+  async executeCode(code: string, language: string, params?: Record<string, any>): Promise<string> {
+    if (language === 'javascript' || language === 'js' || language === 'node') {
+      try {
+        // Create a function that captures console.log output
+        let output = '';
+        const originalLog = console.log;
+        console.log = (...args: any[]) => {
+          output += args.map(arg => String(arg)).join(' ') + '\\n';
+        };
+        
+        // If params provided, inject them as variables
+        let fullCode = code;
+        if (params) {
+          const paramDeclarations = Object.entries(params)
+            .map(([key, value]) => `const ${key} = ${JSON.stringify(value)};`)
+            .join('\\n');
+          fullCode = paramDeclarations + '\\n' + code;
+        }
+        
+        // Execute the code
+        const result = eval(fullCode);
+        
+        // Restore console.log
+        console.log = originalLog;
+        
+        // If there was console output, use that. Otherwise use the result.
+        if (output) {
+          return output.trimEnd();
+        }
+        
+        return result !== undefined ? String(result) : '';
+      } catch (error) {
+        throw new Error(`Code execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-      
-      return result !== undefined ? String(result) : '';
-    } catch (error) {
-      throw new Error(`Code execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } else if (language === 'python' || language === 'py') {
+      try {
+        // Create a temporary Python file with parameter injection
+        const fs = require('fs');
+        const os = require('os');
+        const path = require('path');
+        const tmpDir = os.tmpdir();
+        const tmpFile = path.join(tmpDir, `meld_exec_${Date.now()}.py`);
+        
+        // Build Python code with parameters
+        let pythonCode = '';
+        if (params) {
+          for (const [key, value] of Object.entries(params)) {
+            pythonCode += `${key} = ${JSON.stringify(value)}\\n`;
+          }
+        }
+        pythonCode += code;
+        
+        // Write to temp file
+        fs.writeFileSync(tmpFile, pythonCode);
+        
+        try {
+          // Execute Python
+          const result = await this.executeCommand(`python3 ${tmpFile}`);
+          return result;
+        } finally {
+          // Clean up temp file
+          fs.unlinkSync(tmpFile);
+        }
+      } catch (error) {
+        throw new Error(`Python execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    } else {
+      throw new Error(`Unsupported code language: ${language}`);
     }
   }
   

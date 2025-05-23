@@ -156,3 +156,7 @@ The following documentation has been updated to reflect the "AST Knows All" arch
 - `docs/dev/PIPELINE.md` - Simplified flow diagrams, emphasized handler pattern
 
 These docs now describe the target architecture, not the current mixed state.
+
+## Coding Practices
+- **AST Parsing**: ALWAYS use the AST -- never use regex
+- To build the AST fixtures / expected output in core/ast/fixtures from the examples in core/ast/examples, run `npm run ast:process-all`

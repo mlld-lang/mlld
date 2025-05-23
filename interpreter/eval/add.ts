@@ -85,42 +85,17 @@ export async function evaluateAdd(
     content = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
     
   } else if (directive.subtype === 'addPath') {
-    // Handle path inclusion, potentially with section extraction
+    // Handle path inclusion (whole file)
     const pathNodes = directive.values?.path;
     if (!pathNodes) {
       throw new Error('Add path directive missing path');
     }
     
-    // Resolve the path (which might include section specifier)
-    const pathWithSection = await interpolate(pathNodes, env);
+    // Resolve the path
+    const resolvedPath = await interpolate(pathNodes, env);
     
-    // Check if path includes section specifier (e.g., "file.md # Section Title")
-    const sectionMatch = pathWithSection.match(/^(.+?)\s*#\s*(.+)$/);
-    
-    if (sectionMatch) {
-      // Extract file path and section title
-      const filePath = sectionMatch[1].trim();
-      const sectionTitle = sectionMatch[2].trim();
-      
-      // Read the file content
-      const fileContent = await env.readFile(filePath);
-      
-      // Extract the section using llmxml
-      const llmxml = createLLMXML();
-      try {
-        content = await llmxml.getSection(fileContent, sectionTitle, {
-          includeNested: true
-        });
-        // Compact blank lines and trim
-        content = compactBlankLines(content).trimEnd();
-      } catch (error) {
-        // Fallback to basic extraction if llmxml fails
-        content = extractSection(fileContent, sectionTitle);
-      }
-    } else {
-      // No section specified, read entire file
-      content = await env.readFile(pathWithSection);
-    }
+    // Read the entire file content
+    content = await env.readFile(resolvedPath);
     
   } else if (directive.subtype === 'addSection') {
     // Handle section extraction: @add "Section Title" from [file.md]

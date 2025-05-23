@@ -1,14 +1,84 @@
 {
   "name": "run-exec",
-  "input": "@run @greetCommand",
+  "input": "@exec greetCommand = @run [echo \"Hello from predefined command\"]\n@run @greetCommand",
   "expected": "Hello from predefined command",
   "directives": [
+    "@exec greetCommand = @run [echo \"Hello from predefined command\"]",
     "@run @greetCommand"
   ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "66059624-c18c-4e60-ab60-769acf413993",
+      "nodeId": "6cfa5a64-f00d-4d82-9d94-5be9de579343",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 64,
+          "line": 1,
+          "column": 65
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "ba74974c-4979-4a7c-900a-c0a4373a4f55",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 64,
+                "line": 1,
+                "column": 65
+              }
+            },
+            "content": "greetCommand"
+          }
+        ],
+        "params": [],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "585dcf64-25b9-42c3-b3fa-489e51a175f9",
+            "location": {
+              "start": {
+                "offset": 27,
+                "line": 1,
+                "column": 28
+              },
+              "end": {
+                "offset": 63,
+                "line": 1,
+                "column": 64
+              }
+            },
+            "content": "echo \"Hello from predefined command\""
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greetCommand",
+        "params": [],
+        "command": "echo \"Hello from predefined command\""
+      },
+      "meta": {
+        "hasVariables": false,
+        "parameterCount": 0
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "de43cfee-5a7e-4f07-a4e9-4edc717c247a",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +98,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "867e2927-1e72-42bc-b3ba-17bb37ca5180",
+            "nodeId": "7e01c15e-4c01-43d4-8aa7-ee0f8c639d5a",
             "location": {
               "start": {
                 "offset": 6,

@@ -22,7 +22,7 @@ export function formatOutput(nodes: MeldNode[], options: FormatOptions): string 
 }
 
 /**
- * Format as markdown (really just concatenate text nodes)
+ * Format as markdown (concatenate text nodes and preserve directives)
  */
 function formatMarkdown(nodes: MeldNode[], options: FormatOptions): string {
   const parts: string[] = [];
@@ -30,10 +30,71 @@ function formatMarkdown(nodes: MeldNode[], options: FormatOptions): string {
   for (const node of nodes) {
     if (node.type === 'Text') {
       parts.push(node.content);
+    } else if (node.type === 'Directive') {
+      // Reconstruct the directive syntax
+      parts.push(reconstructDirective(node));
     }
   }
   
   return parts.join('');
+}
+
+/**
+ * Reconstruct directive syntax from AST node
+ */
+function reconstructDirective(directive: any): string {
+  // For exec directives, reconstruct the original syntax
+  if (directive.kind === 'exec') {
+    const identifier = directive.raw?.identifier || '';
+    
+    if (directive.subtype === 'execCommand') {
+      // Get parameter list
+      const params = directive.values?.params || [];
+      const paramList = params
+        .map((p: any) => p.identifier || '')
+        .filter(Boolean)
+        .join(', ');
+      
+      // Get command
+      const command = directive.values?.command
+        ?.map((n: any) => {
+          if (n.type === 'Text') {
+            return n.content || '';
+          } else if (n.type === 'VariableReference') {
+            return `@${n.identifier}`;
+          }
+          return '';
+        })
+        .join('');
+      
+      if (paramList) {
+        return `@exec ${identifier} (${paramList}) = @run [${command}]`;
+      } else {
+        return `@exec ${identifier} = ${command}`;
+      }
+    } else if (directive.subtype === 'execCode') {
+      // Get parameter list
+      const params = directive.values?.params || [];
+      const paramList = params
+        .map((p: any) => p.identifier || '')
+        .filter(Boolean)
+        .join(', ');
+      
+      const language = directive.raw?.language || 'javascript';
+      const code = directive.values?.code
+        ?.map((n: any) => n.content || '')
+        .join('');
+      
+      if (paramList) {
+        return `@exec ${identifier} (${paramList}) = @run ${language} [${code}]`;
+      } else {
+        return `@exec ${identifier} = @run ${language} [${code}]`;
+      }
+    }
+  }
+  
+  // For other directives, return empty for now
+  return '';
 }
 
 /**

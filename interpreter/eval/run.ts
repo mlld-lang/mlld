@@ -44,7 +44,7 @@ export async function evaluateRun(
     
   } else if (directive.subtype === 'runExec') {
     // Handle exec reference
-    const execRef = directive.raw?.execRef;
+    const execRef = directive.raw?.identifier;
     if (!execRef) {
       throw new Error('Run exec directive missing exec reference');
     }
@@ -56,13 +56,40 @@ export async function evaluateRun(
     }
     
     const cmdDef = cmdVar.value;
-    if ('executableName' in cmdDef) {
-      // It's a command
-      const fullCommand = `${cmdDef.executableName} ${cmdDef.args.join(' ')}`;
-      output = await env.executeCommand(fullCommand);
-    } else if ('code' in cmdDef) {
-      // It's code
-      output = await env.executeCode(cmdDef.code, cmdDef.language || 'javascript');
+    
+    // Get arguments from the run directive
+    const args = directive.values?.args || [];
+    const argValues: Record<string, any> = {};
+    
+    // Map parameter names to argument values
+    if (cmdDef.paramNames && cmdDef.paramNames.length > 0) {
+      for (let i = 0; i < cmdDef.paramNames.length; i++) {
+        const paramName = cmdDef.paramNames[i];
+        const argValue = args[i] ? await interpolate([args[i]], env) : '';
+        argValues[paramName] = argValue;
+      }
+    }
+    
+    if (cmdDef.type === 'command') {
+      // Create a temporary environment with parameter values
+      const tempEnv = env.createChild();
+      for (const [key, value] of Object.entries(argValues)) {
+        tempEnv.setVariable(key, { type: 'text', value, nodeId: '', location: null });
+      }
+      
+      // Interpolate the command template with parameters
+      const command = await interpolate(cmdDef.commandTemplate, tempEnv);
+      output = await env.executeCommand(command);
+      
+    } else if (cmdDef.type === 'code') {
+      // Interpolate the code template with parameters
+      const tempEnv = env.createChild();
+      for (const [key, value] of Object.entries(argValues)) {
+        tempEnv.setVariable(key, { type: 'text', value, nodeId: '', location: null });
+      }
+      
+      const code = await interpolate(cmdDef.codeTemplate, tempEnv);
+      output = await env.executeCode(code, cmdDef.language || 'javascript', argValues);
     }
   } else {
     throw new Error(`Unsupported run subtype: ${directive.subtype}`);
