@@ -1,6 +1,0 @@
-@text name = "Alice"
-@text greeting = [[Hello, {{name}}!]]
-@text time = "morning"
-@text message = [[Good {{time}}, {{name}}. {{greeting}}]]
-
-@add @message

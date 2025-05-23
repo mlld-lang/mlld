@@ -20,9 +20,15 @@ It can be used in these forms:
 // TOP-LEVEL DATA DIRECTIVE
 // -------------------------------------------------------------
 
+// Dotted identifier for nested property notation (e.g., greeting.text)
+DottedIdentifier "Dotted Identifier"
+  = first:BaseIdentifier rest:("." id:BaseIdentifier { return "." + id; })* {
+      return first + rest.join('');
+    }
+
 // Primary @data directive
 AtData
-  = DirectiveContext "@data" _ id:BaseIdentifier _ "=" _ value:DataValue {
+  = DirectiveContext "@data" _ id:DottedIdentifier _ "=" _ value:DataValue {
       helpers.debug('AtData matched', { id, valueType: value.type });
       
       // Create variable reference node for identifier

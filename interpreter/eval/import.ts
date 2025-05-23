@@ -35,9 +35,6 @@ export async function evaluateImport(
     processedContent = extractSection(content, section);
   }
   
-  // Handle variable selection for importSelected
-  const selectedVars = directive.raw?.selectedVars;
-  
   // Parse the imported content
   const parseResult = await parse(processedContent);
   const ast = parseResult.ast;
@@ -59,12 +56,19 @@ export async function evaluateImport(
       env.setVariable(name, variable);
     }
     
-  } else if (directive.subtype === 'importSelected' && selectedVars) {
-    // Import only selected variables
-    for (const varName of selectedVars) {
+  } else if (directive.subtype === 'importSelected') {
+    // Get selected variables from AST
+    const imports = directive.values?.imports || [];
+    for (const importNode of imports) {
+      const varName = importNode.identifier;
       const variable = childEnv.getVariable(varName);
       if (variable) {
-        env.setVariable(varName, variable);
+        // Use alias if provided, otherwise use original name
+        const targetName = importNode.alias || varName;
+        env.setVariable(targetName, variable);
+      } else {
+        // Variable not found in imported file
+        throw new Error(`Variable '${varName}' not found in imported file: ${resolvedPath}`);
       }
     }
   }

@@ -19,6 +19,7 @@ import { type ProcessOptions, MeldError, ErrorSeverity, type Location } from '@c
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
+import { PathService } from '@services/fs/PathService/PathService';
 import { loggingConfig as loggingConfigCore } from '@core/config/logging';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
 import { PathValidationError, PathErrorCode } from '@services/fs/PathService/errors/PathValidationError';
@@ -528,16 +529,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     const nodeFS = new NodeFileSystem();
     const fsService = new FileSystemService(nodeFS);
     
-    // Create a minimal path service
-    const pathService = {
-      resolve: (p: string) => path.resolve(p),
-      join: (...parts: string[]) => path.join(...parts),
-      dirname: (p: string) => path.dirname(p),
-      basename: (p: string) => path.basename(p),
-      extname: (p: string) => path.extname(p),
-      isAbsolute: (p: string) => path.isAbsolute(p),
-      relative: (from: string, to: string) => path.relative(from, to)
-    };
+    // Create real PathService instance
+    const pathService = new PathService(fsService);
 
     if (debug) {
       console.log('CLI Options:', cliOptions);

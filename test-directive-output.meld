@@ -1,4 +1,0 @@
-@text name = "World"
-Some text before
-@add @name
-Some text after

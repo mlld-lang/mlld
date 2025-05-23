@@ -100,37 +100,45 @@ Known issues:
 
 We've moved from the service-oriented architecture to a clean, traditional interpreter pattern. This is a fundamental improvement that simplifies the entire system.
 
-### New Architecture (Day 1 Complete)
+### New Architecture (Day 2 - Integration Complete)
 - **Traditional interpreter**: Single recursive `evaluate()` function
 - **Environment class**: Combines state + capabilities (file I/O, command execution)
 - **Direct evaluation**: No service orchestration or ResolutionService
-- **Smart handlers**: Each directive evaluator does all the work directly
+- **Smart evaluators**: Each directive evaluator does all the work directly
+- **CLI/API integrated**: Both now use the new interpreter directly
 
 ### Implementation Status
 - ✅ Core interpreter built and working (`interpreter/` directory)
 - ✅ All directive evaluators implemented (basic functionality)
-- ✅ 6/40 fixtures passing (15%) - core functionality works
+- ✅ CLI and API fully integrated with new interpreter
+- ✅ 18/40 fixtures passing (45%) - significant progress!
 - 🚧 Edge cases documented as GitHub issues (#42-#48)
 
-### 📋 CRITICAL: Start Here
-1. **Read `_dev/INTERPRETER-HANDOFF.md`** - Complete handoff document with all context
-2. **Read `_dev/INTERPRETER-REWRITE-PLAN.md`** - Full plan with current progress
+### 📊 Progress Summary
+- **Fixtures Passing**: 18/40 (45%)
+- **Working Directives**: add, text, exec, run (all core functionality)
+- **Variable interpolation**: Fixed and working with `{{variable}}` syntax
+- **Template syntax**: Double brackets `[[...]]` required for interpolation
+- **Target**: 65% functionality (need ~8 more fixtures)
+
+### 📋 Key References
+1. **Read `_dev/INTERPRETER-MIGRATION-STATUS.md`** - Detailed progress tracking
+2. **Read `_dev/INTERPRETER-HANDOFF.md`** - Complete handoff document
 3. **Run tests**: `npm test interpreter/interpreter.fixture.test.ts`
+
+### Remaining Work (Not Grammar-Dependent)
+1. **Import functionality** - Critical for modular files
+2. **Data directive completion** - All data types (primitives, objects, arrays)
+3. **Path resolution improvements** - Various path types
+4. **Section extraction** - Use llmxml from `lib/llmxml`
+5. **Parameter passing** - Fix exec/run with parameters
 
 ### Key Decisions & Context
 - **Parser returns arrays** - We handle this in evaluate()
 - **Newlines are nodes** - Preserved for markdown output
 - **Skip numbered fixtures** - They're partial tests (e.g., add-variable-1.fixture.json)
 - **Field access is LOW PRIORITY** - Parser limitation, issue #42
-- **Direct execution** - Handlers read files and execute commands directly
-
-### Next Steps
-1. Continue implementing missing handler functionality
-2. Focus on high-impact features:
-   - Section extraction (use llmxml from `lib/llmxml`)
-   - Better path resolution
-   - Import improvements
-3. Aim for 65% functionality, not perfection
+- **Direct execution** - Evaluators read files and execute commands directly
 
 ## Previous Service-Oriented Refactor (Now Obsolete)
 

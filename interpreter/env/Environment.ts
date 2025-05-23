@@ -162,8 +162,13 @@ export class Environment {
       inputPath = inputPath.replace('$PROJECTPATH', this.getProjectPath());
     }
     
-    // Use path service for normalization
-    return this.pathService.resolvePath(inputPath, this.basePath);
+    // Use the path module directly for now
+    // TODO: Use PathService properly once types are imported
+    const path = require('path');
+    if (path.isAbsolute(inputPath)) {
+      return inputPath;
+    }
+    return path.resolve(this.basePath, inputPath);
   }
   
   // --- Scope Management ---

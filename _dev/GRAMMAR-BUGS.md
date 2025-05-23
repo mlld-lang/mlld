@@ -59,6 +59,9 @@ helpers module. It should analyze the input around the current position to
 detect `@run` code block patterns. Rebuild the parser after adding the helper so
 that nested directives parse correctly.
 
+### New approach (just added after all this diagnostic above)
+We can actually get rid of RHS @run by just making @exec definitions work without requiring @run. Then we don't have to do @exec var (param1, param2) = @run [echo "@param1 @param2"] we can just do @exec var (param1, param2) = [echo "@param1 @param2"]. This simplifies a lot and lets us get rid of the need for any RHS assignment in meld (at least I believe this is the case, as we've gotten rid of @add RHS assignment by consolidating said features into @text directly without requiring @add)
+
 ## Directives in Markdown Code Blocks
 
 **Error:** Expected "\n" or [^`\r\n] but end of input found

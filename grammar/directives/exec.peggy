@@ -29,10 +29,7 @@ AtExec
       
       // Process parameters
       const processedParams = params || [];
-      const rawParams = processedParams.map(param => {
-        if (param.type === NodeType.VariableReference) return param.identifier;
-        return '';
-      });
+      const rawParams = processedParams; // params are now strings
       
       // Build values and raw objects using the RunLanguageCodeCore values
       const values = {
@@ -78,10 +75,7 @@ AtExec
       
       // Process parameters
       const processedParams = params || [];
-      const rawParams = processedParams.map(param => {
-        if (param.type === NodeType.VariableReference) return param.identifier;
-        return '';
-      });
+      const rawParams = processedParams; // params are now strings
       
       // Build values and raw objects
       const values = {
@@ -127,10 +121,7 @@ AtExec
       
       // Process parameters
       const processedParams = params || [];
-      const rawParams = processedParams.map(param => {
-        if (param.type === NodeType.VariableReference) return param.identifier;
-        return '';
-      });
+      const rawParams = processedParams; // params are now strings
       
       // Build values and raw objects
       const values = {
@@ -239,5 +230,5 @@ ExecParamsList
 
 ExecParam
   = paramName:BaseIdentifier {
-      return helpers.createVariableReferenceNode('variable', { identifier: paramName }, location());
+      return paramName; // Just return the parameter name as a string
     }

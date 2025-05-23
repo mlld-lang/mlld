@@ -42,8 +42,8 @@ describe('Exec directive', () => {
       // Check structured format
       expect(directiveNode.values.identifier[0].content).toBe('formatFile');
       expect(directiveNode.values.params).toHaveLength(2);
-      expect(directiveNode.values.params[0].identifier).toBe('file');
-      expect(directiveNode.values.params[1].identifier).toBe('type');
+      expect(directiveNode.values.params[0]).toBe('file');
+      expect(directiveNode.values.params[1]).toBe('type');
       
       // Command should include text and variable references
       expect(directiveNode.values.command).toBeDefined();
@@ -74,8 +74,8 @@ describe('Exec directive', () => {
       // Check structured format
       expect(directiveNode.values.identifier[0].content).toBe('formatFile');
       expect(directiveNode.values.params).toHaveLength(2);
-      expect(directiveNode.values.params[0].identifier).toBe('file');
-      expect(directiveNode.values.params[1].identifier).toBe('type');
+      expect(directiveNode.values.params[0]).toBe('file');
+      expect(directiveNode.values.params[1]).toBe('type');
       
       expect(directiveNode.raw.identifier).toBe('formatFile');
       expect(directiveNode.raw.params).toEqual(['file', 'type']);
@@ -150,8 +150,8 @@ describe('Exec directive', () => {
       // Check structured format
       expect(directiveNode.values.identifier[0].content).toBe('formatJson');
       expect(directiveNode.values.params).toHaveLength(2);
-      expect(directiveNode.values.params[0].identifier).toBe('data');
-      expect(directiveNode.values.params[1].identifier).toBe('style');
+      expect(directiveNode.values.params[0]).toBe('data');
+      expect(directiveNode.values.params[1]).toBe('style');
       expect(directiveNode.values.lang[0].content).toBe('python');
       
       expect(directiveNode.raw.identifier).toBe('formatJson');
@@ -177,8 +177,8 @@ describe('Exec directive', () => {
       // Check structured format
       expect(directiveNode.values.identifier[0].content).toBe('formatJson');
       expect(directiveNode.values.params).toHaveLength(2);
-      expect(directiveNode.values.params[0].identifier).toBe('data');
-      expect(directiveNode.values.params[1].identifier).toBe('style');
+      expect(directiveNode.values.params[0]).toBe('data');
+      expect(directiveNode.values.params[1]).toBe('style');
       
       expect(directiveNode.raw.identifier).toBe('formatJson');
       expect(directiveNode.raw.params).toEqual(['data', 'style']);

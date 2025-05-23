@@ -1,35 +1,32 @@
-# Rolling Wave Plan: AST/Types/State Refactor
+# ARCHIVED: Service-Oriented Refactor Plan
 
-## About This Format
-This is a rolling wave plan. Current / next work is thoroughly detailed and implementation-focused, future work has slight detail, distant work is just a simple outline of deliverables. As phases complete, the plan "rolls forward" with upcoming phases becoming more detailed. A phase is work that can be done in a day. Each phase is split into a few 2-hour sessions. Each phase should have exit criteria which include updating the next phase's plan and other relevant docs.
+## ⚠️ THIS PLAN IS OBSOLETE ⚠️
 
----
+**Status**: This refactor plan has been superseded by the interpreter rewrite.
 
-## Project Context
-**Project Name**: Meld AST/Types/State System Refactor  
-**Reference Documents**: 
-- `_dev/NEWSTATE.md` - Original state simplification plan
-- `docs/dev/AST.md` - AST design documentation
-- `_dev/TYPE-RESTRUCTURE-UNIFIED.md` - Type system design
-- `_dev/AST-REFACTOR-TECHNICAL-NOTES.md` - Implementation learnings and patterns
-- `CLAUDE.md` - Project guidelines and current status
+**New Direction**: We've moved from a service-oriented architecture to a traditional interpreter pattern. See:
+- `_dev/INTERPRETER-HANDOFF.md` - Complete handoff document
+- `_dev/INTERPRETER-MIGRATION-STATUS.md` - Current progress (45% complete)
+- `CLAUDE.md` - Updated project guidelines
 
-## Architecture Approach
+## Why This Was Archived
 
-### Current Architecture Issues
-1. **Circular Logic**: State service has complex business logic that belongs in handlers
-2. **Type Confusion**: Multiple overlapping type definitions across services
-3. **Tight Coupling**: Services deeply interdependent, making changes risky
-4. **State Mutations**: Unpredictable state changes throughout processing
+The service-oriented "AST Knows All" approach was making the codebase more complex, not simpler. We pivoted to a traditional interpreter pattern that:
+- Eliminates service orchestration complexity
+- Uses direct evaluation with an Environment class
+- Reduces total codebase size significantly
+- Makes the flow much easier to understand
 
-### New Architecture: "AST Knows All"
+## Original Plan Summary (Historical Reference)
+
+### Architecture Approach: "AST Knows All" 
 1. **Smart Types, Dumb Services**: All intelligence in AST types via discriminated unions
 2. **Immutable State Flow**: State changes returned as data, not mutations
 3. **Handler Pattern**: Each directive type has dedicated handler with clear contract
 4. **Minimal Interfaces**: Services have narrow, focused APIs (e.g., StateService: 8 methods vs 50+)
 
 ### Migration Strategy
-Using adapter pattern to maintain backward compatibility while incrementally migrating services. This allows:
+Using adapter pattern to maintain backward compatibility while incrementally migrating services. This allowed:
 - All existing tests to continue passing
 - Gradual migration without breaking changes
 - Validation at each step

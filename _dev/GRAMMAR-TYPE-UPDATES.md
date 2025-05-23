@@ -10,12 +10,6 @@ Text directives produce `content` as an array of nodes, but the type definition 
 
 **Potential change:** Review the rules in `grammar/directives/text.peggy` and the helper functions that build text directive nodes. Ensure that when a directive is parsed as the content, the resulting AST includes that directive object and sets `source: 'directive'` in metadata.
 
-## 9. Nested directive instances missing
-
-Related to issue #3, when the text content itself is a directive such as `@run`, the parser currently yields only node arrays. This prevents consumers from distinguishing embedded directives from plain text.
-
-**Potential change:** After addressing issue #3, verify that nested directives like `@run` or `@add` are preserved as `DirectiveNode` instances within the `content` field. Update tests under `grammar/tests/text.test.ts` (or create new ones) to assert that nested directives are returned correctly.
-
 ## 13. headerLevel value type mismatch
 
 `Add` directive variants output `headerLevel` as an array containing a single `Number` node with `value` and `raw`. The `AddValues` interfaces in `core/ast/types/add.ts` currently define this property as a plain `number`.

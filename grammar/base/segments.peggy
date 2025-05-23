@@ -29,7 +29,7 @@ TemplateTextSegment "Template text segment"
 
 // Command text segment - for command content, allows more characters including quotes
 CommandTextSegment "Command text segment"
-  = chars:$(![/\]@${}] .)+ { 
+  = chars:$(![/[\]@${}] .)+ { 
       helpers.debug('CommandTextSegment matched', { chars });
       return helpers.createNode(NodeType.Text, { content: chars, location: location() });
     }
