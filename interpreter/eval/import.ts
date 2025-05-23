@@ -73,21 +73,8 @@ export async function evaluateImport(
     }
   }
   
-  // Create replacement node (empty for imports)
-  const replacementNode: TextNode = {
-    type: 'Text',
-    nodeId: `${directive.nodeId}-imported`,
-    content: '' // Imports don't produce output
-  };
-  
-  // Add the replacement node
-  env.addNode(replacementNode);
-  
-  // Also add any nodes from the child environment
-  const childNodes = childEnv.getNodes();
-  for (const node of childNodes) {
-    env.addNode(node);
-  }
+  // Imports are definition directives - they don't produce output
+  // Don't add any nodes to the environment
   
   // Return success
   return { value: undefined, env };

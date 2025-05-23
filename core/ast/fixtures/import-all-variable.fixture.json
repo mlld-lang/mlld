@@ -11,7 +11,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "99bbe018-67f4-4538-a61e-b93fd9f18ade",
+      "nodeId": "6da47731-20a8-49b1-a7aa-601fe1ad2de7",
       "location": {
         "start": {
           "offset": 0,
@@ -31,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "f3c63121-f455-4c44-9b15-e09fde518cca",
+            "nodeId": "23926e75-36a7-44dc-b7db-062aa6a12509",
             "location": {
               "start": {
                 "offset": 0,
@@ -52,7 +52,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "e2070ddc-a4bd-466a-86f6-7a15babafa42",
+            "nodeId": "d44e6d82-af6b-421f-94a7-c6f53d65d960",
             "location": {
               "start": {
                 "offset": 0,
@@ -83,17 +83,34 @@
       }
     },
     {
-      "type": "Directive",
-      "nodeId": "6cdbec01-3593-48df-a79e-a47d72a8d995",
+      "type": "Newline",
+      "nodeId": "853cb64d-b59f-45a5-9145-fb6daeee46dc",
       "location": {
         "start": {
-          "offset": 0,
+          "offset": 31,
           "line": 1,
+          "column": 32
+        },
+        "end": {
+          "offset": 32,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "d99e074b-86d2-42bb-aaa2-19b24b72ecf8",
+      "location": {
+        "start": {
+          "offset": 32,
+          "line": 2,
           "column": 1
         },
         "end": {
-          "offset": 30,
-          "line": 1,
+          "offset": 62,
+          "line": 2,
           "column": 31
         }
       },
@@ -104,7 +121,7 @@
         "imports": [
           {
             "type": "VariableReference",
-            "nodeId": "0de1c7cd-8143-4233-92c2-122632d5aa84",
+            "nodeId": "f86d1234-8580-43cf-adaf-c50ec0ad78ea",
             "location": {
               "start": {
                 "offset": 0,
@@ -125,7 +142,7 @@
         "path": [
           {
             "type": "VariableReference",
-            "nodeId": "185dda3e-c268-4496-94a3-327acb97c3a3",
+            "nodeId": "bbabbf7c-813f-43df-9650-381255f1374c",
             "location": {
               "start": {
                 "offset": 0,
@@ -158,18 +175,35 @@
       }
     },
     {
-      "type": "Directive",
-      "nodeId": "fb5a5d98-b6e7-4f7d-a59f-2044107bedb5",
+      "type": "Newline",
+      "nodeId": "95574b52-16b0-4306-bba6-c5f72287a0c7",
       "location": {
         "start": {
-          "offset": 0,
-          "line": 1,
+          "offset": 62,
+          "line": 2,
+          "column": 31
+        },
+        "end": {
+          "offset": 63,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "728b2883-acc3-4f37-8253-0aa08c8fafe0",
+      "location": {
+        "start": {
+          "offset": 63,
+          "line": 3,
           "column": 1
         },
         "end": {
-          "offset": 14,
-          "line": 1,
-          "column": 15
+          "offset": 78,
+          "line": 4,
+          "column": 1
         }
       },
       "kind": "add",
@@ -179,7 +213,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "e254268d-08ba-4f89-9f75-7208639a4584",
+            "nodeId": "55aed05b-75cd-479c-b170-7d02193cb110",
             "location": {
               "start": {
                 "offset": 0,
@@ -205,16 +239,16 @@
     },
     {
       "type": "Directive",
-      "nodeId": "448e3790-d72d-408f-b394-0169646e3798",
+      "nodeId": "9ec03343-9915-4ab4-89ab-1968319640c5",
       "location": {
         "start": {
-          "offset": 0,
-          "line": 1,
+          "offset": 78,
+          "line": 4,
           "column": 1
         },
         "end": {
-          "offset": 11,
-          "line": 1,
+          "offset": 89,
+          "line": 4,
           "column": 12
         }
       },
@@ -225,7 +259,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "e94048e6-344e-46de-800b-1fdc99303484",
+            "nodeId": "b211c898-3759-4835-8327-ab87592bd09b",
             "location": {
               "start": {
                 "offset": 0,

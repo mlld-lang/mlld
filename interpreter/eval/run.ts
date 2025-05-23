@@ -90,6 +90,27 @@ export async function evaluateRun(
       const command = await interpolate(cleanTemplate, tempEnv);
       output = await env.executeCommand(command);
       
+    } else if (cmdDef.type === 'commandRef') {
+      // This command references another command
+      const refCmdVar = env.getVariable(cmdDef.commandRef);
+      if (!refCmdVar || refCmdVar.type !== 'command') {
+        throw new Error(`Referenced command not found: ${cmdDef.commandRef}`);
+      }
+      
+      // Create a new run directive for the referenced command
+      const refDirective = {
+        ...directive,
+        values: {
+          ...directive.values,
+          identifier: [{ type: 'Text', content: cmdDef.commandRef }],
+          args: cmdDef.commandArgs
+        }
+      };
+      
+      // Recursively evaluate the referenced command
+      const result = await evaluateRun(refDirective, env);
+      output = result.value;
+      
     } else if (cmdDef.type === 'code') {
       // Interpolate the code template with parameters
       const tempEnv = env.createChild();
@@ -104,18 +125,22 @@ export async function evaluateRun(
     throw new Error(`Unsupported run subtype: ${directive.subtype}`);
   }
   
+  // Output directives always end with a newline
+  // This is the interpreter's responsibility, not the grammar's
+  if (!output.endsWith('\n')) {
+    output += '\n';
+  }
+  
   // Create replacement text node with the output
-  // Trim trailing newlines for consistency
-  const trimmedOutput = output.replace(/\n+$/, '');
   const replacementNode: TextNode = {
     type: 'Text',
     nodeId: `${directive.nodeId}-output`,
-    content: trimmedOutput
+    content: output
   };
   
   // Add the replacement node to environment
   env.addNode(replacementNode);
   
   // Return the output value
-  return { value: trimmedOutput, env };
+  return { value: output, env };
 }

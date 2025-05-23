@@ -1,14 +1,15 @@
 {
   "name": "add-template-multiline",
-  "input": "@text variable = \"value\"",
+  "input": "@text variable = \"value\"\n@add [[\nContent with {{variable}}\n\nAnd some more content\n\nHey, here's the same variable again: {{variable}}\n]]",
   "expected": "Content with value\n\nAnd some more content\n\nHey, here's the same variable again: value",
   "directives": [
-    "@text variable = \"value\""
+    "@text variable = \"value\"",
+    "@add [[\nContent with {{variable}}"
   ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "21469ed4-944c-4c40-ad50-3b1e54bb853e",
+      "nodeId": "bb01d936-352e-42d6-a6bd-51c9517ef92c",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "27269e4d-0a77-4b11-952e-1cc07e253317",
+            "nodeId": "a5745756-78d3-455c-9d2f-eb5b5c782967",
             "location": {
               "start": {
                 "offset": 0,
@@ -49,7 +50,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "28769ceb-2f59-4d3f-b9fd-438fcfadf833",
+            "nodeId": "732e0d8b-9d18-4c0c-a07f-2587e9812113",
             "location": {
               "start": {
                 "offset": 17,
@@ -74,6 +75,143 @@
         "sourceType": "literal",
         "hasVariables": false,
         "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "cee27229-594a-4ebb-860c-7ae9e03131f7",
+      "location": {
+        "start": {
+          "offset": 24,
+          "line": 1,
+          "column": 25
+        },
+        "end": {
+          "offset": 25,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "96559fe1-5226-4391-8f1f-4b32ec27516e",
+      "location": {
+        "start": {
+          "offset": 25,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 135,
+          "line": 8,
+          "column": 3
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "4adfdc02-beb0-4b7d-887a-89a8b22f89dd",
+            "location": {
+              "start": {
+                "offset": 32,
+                "line": 2,
+                "column": 8
+              },
+              "end": {
+                "offset": 46,
+                "line": 3,
+                "column": 14
+              }
+            },
+            "content": "\nContent with "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "61cd7d8d-ad0a-421e-988b-523e06bd9d49",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "variable"
+          },
+          {
+            "type": "Text",
+            "nodeId": "400a4b51-0909-4af1-ba22-f074847ce738",
+            "location": {
+              "start": {
+                "offset": 58,
+                "line": 3,
+                "column": 26
+              },
+              "end": {
+                "offset": 120,
+                "line": 7,
+                "column": 38
+              }
+            },
+            "content": "\n\nAnd some more content\n\nHey, here's the same variable again: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "e9823047-7ee0-4b24-a53e-d2272ddba33e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "variable"
+          },
+          {
+            "type": "Text",
+            "nodeId": "a12bd75b-9de0-4eca-b6a3-cc4fb83e2f8f",
+            "location": {
+              "start": {
+                "offset": 132,
+                "line": 7,
+                "column": 50
+              },
+              "end": {
+                "offset": 133,
+                "line": 8,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          }
+        ]
+      },
+      "raw": {
+        "content": "\nContent with {{variable}}\n\nAnd some more content\n\nHey, here's the same variable again: {{variable}}\n"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
       }
     }
   ],

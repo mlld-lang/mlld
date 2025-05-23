@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "0ac295e9-1fe2-4c67-aad1-04a6b96ea300",
+      "nodeId": "370932f4-73ec-4e8d-be88-64d59751de94",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "3dc89335-cd6d-4cf8-bede-6b5f140128cd",
+            "nodeId": "b8c32402-f94a-4a7b-9b70-046f152346cc",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +50,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "185a8e9d-c9b8-40c5-9f95-84d96d873d13",
+            "nodeId": "3d41c54e-6a70-4490-ab7e-785656482c0b",
             "location": {
               "start": {
                 "offset": 0,
@@ -81,17 +81,34 @@
       }
     },
     {
-      "type": "Directive",
-      "nodeId": "43edc700-abbf-47fd-9ab5-0493b10f2447",
+      "type": "Newline",
+      "nodeId": "9a95c8f2-5ee4-44e8-9c41-2fdd0a292a1e",
       "location": {
         "start": {
-          "offset": 0,
+          "offset": 44,
           "line": 1,
+          "column": 45
+        },
+        "end": {
+          "offset": 45,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "1efe2c2b-e878-4f8f-8535-b3d33a70d27d",
+      "location": {
+        "start": {
+          "offset": 45,
+          "line": 2,
           "column": 1
         },
         "end": {
-          "offset": 41,
-          "line": 1,
+          "offset": 86,
+          "line": 2,
           "column": 42
         }
       },
@@ -102,16 +119,16 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "a105af8c-8a05-48ad-95c7-a57f1bd36a70",
+            "nodeId": "4e18114d-d710-47cc-8105-064d365b7355",
             "location": {
               "start": {
-                "offset": 7,
-                "line": 1,
+                "offset": 52,
+                "line": 2,
                 "column": 8
               },
               "end": {
-                "offset": 28,
-                "line": 1,
+                "offset": 73,
+                "line": 2,
                 "column": 29
               }
             },
@@ -119,7 +136,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "475058aa-5811-4139-8aa0-75c5e1a438e5",
+            "nodeId": "9d11d9c1-e941-43dc-881d-2b340517aea2",
             "location": {
               "start": {
                 "offset": 0,

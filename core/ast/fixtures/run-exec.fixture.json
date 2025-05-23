@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "a14775e3-b6e9-4592-9575-0077927319e8",
+      "nodeId": "daaa03d9-04c8-4408-8c12-2ec8ec68b086",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "0be04238-15c8-40d5-9f5a-dca0aa8decd9",
+            "nodeId": "d618a02f-d641-4664-8f14-00d6fdd98658",
             "location": {
               "start": {
                 "offset": 0,
@@ -49,7 +49,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "0806d18f-5dff-4331-8e87-b578ba537b5c",
+            "nodeId": "3d713301-fd6b-448b-8114-85cccb465773",
             "location": {
               "start": {
                 "offset": 27,
@@ -77,17 +77,34 @@
       }
     },
     {
-      "type": "Directive",
-      "nodeId": "ea5887b5-e56d-4701-9990-efa56484d773",
+      "type": "Newline",
+      "nodeId": "5009d045-114c-405c-87ed-74eb003afebf",
       "location": {
         "start": {
-          "offset": 0,
+          "offset": 64,
           "line": 1,
+          "column": 65
+        },
+        "end": {
+          "offset": 65,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "d4776252-d931-4f85-b916-2fb0fe1d82b8",
+      "location": {
+        "start": {
+          "offset": 65,
+          "line": 2,
           "column": 1
         },
         "end": {
-          "offset": 18,
-          "line": 1,
+          "offset": 83,
+          "line": 2,
           "column": 19
         }
       },
@@ -98,16 +115,16 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "6d280625-bc68-4587-9869-d14db8644ca8",
+            "nodeId": "297bc64f-13ba-4ef2-9f8d-2dc37fe4d442",
             "location": {
               "start": {
-                "offset": 6,
-                "line": 1,
+                "offset": 71,
+                "line": 2,
                 "column": 7
               },
               "end": {
-                "offset": 18,
-                "line": 1,
+                "offset": 83,
+                "line": 2,
                 "column": 19
               }
             },

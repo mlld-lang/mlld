@@ -177,6 +177,12 @@ export async function evaluateAdd(
     throw new Error(`Unsupported add subtype: ${directive.subtype}`);
   }
   
+  // Output directives always end with a newline
+  // This is the interpreter's responsibility, not the grammar's
+  if (!content.endsWith('\n')) {
+    content += '\n';
+  }
+  
   // Create replacement text node
   const replacementNode: TextNode = {
     type: 'Text',

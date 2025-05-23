@@ -42,8 +42,14 @@ export async function evaluate(node: MeldNode | MeldNode[], env: Environment): P
       return evaluateText(node as TextNode, env);
       
     case 'Newline':
-      // Newlines are just whitespace, ignore them
-      return { value: '', env };
+      // Preserve newlines in output
+      const newlineNode: TextNode = {
+        type: 'Text',
+        nodeId: `${(node as any).nodeId || 'newline'}-text`,
+        content: '\n'
+      };
+      env.addNode(newlineNode);
+      return { value: '\n', env };
       
     case 'VariableReference':
       // Variable references are handled by interpolation in context

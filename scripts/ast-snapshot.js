@@ -244,39 +244,24 @@ async function processExampleFile(examplePath, snapshotsDir, fixturesDir) {
   
   // Process directives - for fixtures with expected output, include all directive ASTs
   if (hasExpectedOutput && directives.length > 0) {
-    // Parse all directives to collect their ASTs
-    const allAsts = [];
-    const allInputs = [];
-    const allMetadata = [];
-    
-    for (const directive of directives) {
-      try {
-        const ast = parse(directive);
-        allAsts.push(...ast); // parser returns array, so spread it
-        allInputs.push(directive);
-        
-        // Collect metadata for each directive
-        const node = Array.isArray(ast) ? ast[0] : ast;
-        if (node) {
-          allMetadata.push({
-            kind: node.kind,
-            subtype: node.subtype
-          });
-        }
-      } catch (error) {
-        console.error(`Error parsing directive: ${directive}`, error.message);
-      }
+    // Parse the entire content as a single document to preserve Newline nodes
+    let fullAst;
+    try {
+      fullAst = parse(content.trim()); // Parse the full content, not individual directives
+    } catch (error) {
+      console.error(`Error parsing content from ${examplePath}:`, error.message);
+      return results;
     }
     
-    // Create a single fixture with all ASTs
+    // Create a single fixture with the complete AST
     const baseName = `${pathInfo.kind}-${pathInfo.subtype}${pathInfo.variant ? `-${pathInfo.variant}` : ''}`;
     
     const fixture = {
       name: baseName,
-      input: allInputs.join('\n'),
-      expected: expectedContent,
-      directives: allInputs,
-      ast: allAsts,
+      input: content.trim(),
+      expected: expectedContent.trim(),
+      directives: directives,
+      ast: fullAst,
       metadata: {
         kind: pathInfo.kind,
         subtype: pathInfo.subtype,
