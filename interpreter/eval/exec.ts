@@ -47,28 +47,48 @@ export async function evaluateExec(
   let commandDef;
   
   if (directive.subtype === 'execCommand') {
-    // Handle command definition
-    const commandNodes = directive.values?.command;
-    if (!commandNodes) {
-      throw new Error('Exec command directive missing command');
+    // Check if this is a command reference
+    const commandRef = directive.values?.commandRef;
+    if (commandRef) {
+      // This is a reference to another exec command
+      const refName = await interpolate(commandRef, env);
+      const args = directive.values?.args || [];
+      
+      // Get parameter names if any
+      const params = directive.values?.params || [];
+      const paramNames = extractParamNames(params);
+      
+      // Store the reference definition
+      commandDef = {
+        commandRef: refName,
+        commandArgs: args,
+        paramNames,
+        type: 'commandRef'
+      };
+    } else {
+      // Handle regular command definition
+      const commandNodes = directive.values?.command;
+      if (!commandNodes) {
+        throw new Error('Exec command directive missing command');
+      }
+      
+      // TODO: Remove this workaround when issue #51 is fixed
+      // The grammar incorrectly splits the command template across multiple top-level nodes
+      // For now, we'll just use what we have in the command field
+      // This means complex commands with variables won't work properly
+      console.warn('Exec command may be incomplete due to grammar bug #51');
+      
+      // Get parameter names if any
+      const params = directive.values?.params || [];
+      const paramNames = extractParamNames(params);
+      
+      // Store the command template (not interpolated yet)
+      commandDef = {
+        commandTemplate: commandNodes,
+        paramNames,
+        type: 'command'
+      };
     }
-    
-    // TODO: Remove this workaround when issue #51 is fixed
-    // The grammar incorrectly splits the command template across multiple top-level nodes
-    // For now, we'll just use what we have in the command field
-    // This means complex commands with variables won't work properly
-    console.warn('Exec command may be incomplete due to grammar bug #51');
-    
-    // Get parameter names if any
-    const params = directive.values?.params || [];
-    const paramNames = extractParamNames(params);
-    
-    // Store the command template (not interpolated yet)
-    commandDef = {
-      commandTemplate: commandNodes,
-      paramNames,
-      type: 'command'
-    };
     
   } else if (directive.subtype === 'execCode') {
     // Handle code definition

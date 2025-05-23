@@ -1,14 +1,15 @@
 {
   "name": "data-primitive",
-  "input": "@add @greeting.text",
+  "input": "@data greeting.text = \"Hello, world!\"\n@add @greeting.text",
   "expected": "Hello, world!",
   "directives": [
+    "@data greeting.text = \"Hello, world!\"",
     "@add @greeting.text"
   ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "ac090d98-6159-4e58-b233-7c609516c978",
+      "nodeId": "fee46545-9295-4f28-bff6-84d66154addd",
       "location": {
         "start": {
           "offset": 0,
@@ -16,9 +17,61 @@
           "column": 1
         },
         "end": {
-          "offset": 14,
+          "offset": 37,
           "line": 1,
-          "column": 15
+          "column": 38
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "af0c5858-7dc7-473d-a8a8-12640b5a1e04",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "greeting.text"
+          }
+        ],
+        "value": [
+          "Hello, world!"
+        ]
+      },
+      "raw": {
+        "identifier": "greeting.text",
+        "value": "\"Hello, world!\""
+      },
+      "meta": {
+        "primitiveType": "string"
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "ca4f438b-b8b7-4b63-ad30-54e3da23155c",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 19,
+          "line": 1,
+          "column": 20
         }
       },
       "kind": "add",
@@ -28,7 +81,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "f7a17edc-a545-439c-b0ec-31b429174a57",
+            "nodeId": "bf2862ee-4c1a-44a2-81f4-92c89a04b5a4",
             "location": {
               "start": {
                 "offset": 0,
@@ -43,7 +96,13 @@
             },
             "valueType": "varIdentifier",
             "isVariableReference": true,
-            "identifier": "greeting"
+            "identifier": "greeting",
+            "fields": [
+              {
+                "type": "field",
+                "name": "text"
+              }
+            ]
           }
         ]
       },
@@ -51,23 +110,6 @@
         "variable": "@greeting"
       },
       "meta": {}
-    },
-    {
-      "type": "Text",
-      "nodeId": "020c9cc0-9d00-4bc1-823f-e6d824decb0b",
-      "location": {
-        "start": {
-          "offset": 14,
-          "line": 1,
-          "column": 15
-        },
-        "end": {
-          "offset": 19,
-          "line": 1,
-          "column": 20
-        }
-      },
-      "content": ".text"
     }
   ],
   "metadata": {

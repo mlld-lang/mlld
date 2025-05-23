@@ -501,7 +501,7 @@ echo Line 2"]
 #### Valid examples:
 
 ```
-@text content = @add [path/to/file.md]
+@text content = [path/to/file.md]
 ```
 
 ### Assignment Run

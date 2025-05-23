@@ -1,14 +1,15 @@
 {
   "name": "data-primitive-boolean",
-  "input": "@add @isEnabled.value",
+  "input": "@data isEnabled.value = true\n@add @isEnabled.value",
   "expected": "true",
   "directives": [
+    "@data isEnabled.value = true",
     "@add @isEnabled.value"
   ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "7ad17d01-f1fc-40b3-8ef3-3abcabe12273",
+      "nodeId": "a800b864-419d-43d7-97a2-d2340339e8ef",
       "location": {
         "start": {
           "offset": 0,
@@ -16,9 +17,61 @@
           "column": 1
         },
         "end": {
-          "offset": 15,
+          "offset": 28,
           "line": 1,
-          "column": 16
+          "column": 29
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "0c3141b9-4a98-449a-9db9-c1bcb56ab38f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "isEnabled.value"
+          }
+        ],
+        "value": [
+          true
+        ]
+      },
+      "raw": {
+        "identifier": "isEnabled.value",
+        "value": "true"
+      },
+      "meta": {
+        "primitiveType": "boolean"
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "ea86f9c6-fd09-4334-a267-dd8b5b8cbd5b",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 21,
+          "line": 1,
+          "column": 22
         }
       },
       "kind": "add",
@@ -28,7 +81,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "54bf01e8-f3f4-4a9d-b87e-f4d89cb2e3fe",
+            "nodeId": "b9754988-92cd-435f-bb70-ce778aa04676",
             "location": {
               "start": {
                 "offset": 0,
@@ -43,7 +96,13 @@
             },
             "valueType": "varIdentifier",
             "isVariableReference": true,
-            "identifier": "isEnabled"
+            "identifier": "isEnabled",
+            "fields": [
+              {
+                "type": "field",
+                "name": "value"
+              }
+            ]
           }
         ]
       },
@@ -51,23 +110,6 @@
         "variable": "@isEnabled"
       },
       "meta": {}
-    },
-    {
-      "type": "Text",
-      "nodeId": "f60d9ea9-ee95-4257-888b-648f0f6ce4c8",
-      "location": {
-        "start": {
-          "offset": 15,
-          "line": 1,
-          "column": 16
-        },
-        "end": {
-          "offset": 21,
-          "line": 1,
-          "column": 22
-        }
-      },
-      "content": ".value"
     }
   ],
   "metadata": {

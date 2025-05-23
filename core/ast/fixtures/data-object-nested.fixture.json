@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "ef162e5e-baa5-4c1c-96e2-91d1383b2796",
+      "nodeId": "b8400f6d-9caa-4729-bef3-1710cbaa69f7",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "857768d5-8fa0-44a7-b552-3a487a82da8f",
+            "nodeId": "7fa00df6-0063-4d7d-af69-a2878b62d437",
             "location": {
               "start": {
                 "offset": 0,
@@ -73,7 +73,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "9040eb30-f994-4d69-ae5d-11e28ab291c9",
+      "nodeId": "7d9bad0b-6fc9-4f19-bcc0-802c2295cf69",
       "location": {
         "start": {
           "offset": 0,
@@ -81,9 +81,9 @@
           "column": 1
         },
         "end": {
-          "offset": 12,
+          "offset": 24,
           "line": 1,
-          "column": 13
+          "column": 25
         }
       },
       "kind": "add",
@@ -93,7 +93,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "e1b50766-9c4e-43ac-87ca-c4ca7c5d61e4",
+            "nodeId": "5e27ce6e-d8da-4270-b965-97140f1d426b",
             "location": {
               "start": {
                 "offset": 0,
@@ -108,7 +108,17 @@
             },
             "valueType": "varIdentifier",
             "isVariableReference": true,
-            "identifier": "config"
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "server"
+              },
+              {
+                "type": "field",
+                "name": "port"
+              }
+            ]
           }
         ]
       },
@@ -116,23 +126,6 @@
         "variable": "@config"
       },
       "meta": {}
-    },
-    {
-      "type": "Text",
-      "nodeId": "c488cbcc-f9d9-47ab-98c5-4d576d765918",
-      "location": {
-        "start": {
-          "offset": 12,
-          "line": 1,
-          "column": 13
-        },
-        "end": {
-          "offset": 24,
-          "line": 1,
-          "column": 25
-        }
-      },
-      "content": ".server.port"
     }
   ],
   "metadata": {

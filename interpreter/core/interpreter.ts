@@ -103,7 +103,7 @@ async function evaluateText(node: TextNode, env: Environment): Promise<EvalResul
  * String interpolation helper - resolves {{variables}} in content
  */
 export async function interpolate(
-  nodes: Array<{ type: string; content?: string; name?: string; identifier?: string }>,
+  nodes: Array<{ type: string; content?: string; name?: string; identifier?: string; fields?: any[] }>,
   env: Environment
 ): Promise<string> {
   const parts: string[] = [];
@@ -123,13 +123,13 @@ export async function interpolate(
       }
       
       // Extract value based on variable type
-      let value = '';
+      let value: any = '';
       switch (variable.type) {
         case 'text':
           value = variable.value;
           break;
         case 'data':
-          value = JSON.stringify(variable.value);
+          value = variable.value;
           break;
         case 'path':
           value = variable.value.resolvedPath;
@@ -139,10 +139,33 @@ export async function interpolate(
           value = `[command: ${variable.name}]`;
           break;
         default:
-          value = String((variable as any).value);
+          value = (variable as any).value;
       }
       
-      parts.push(value);
+      // Handle field access if present
+      if (node.fields && node.fields.length > 0 && typeof value === 'object' && value !== null) {
+        for (const field of node.fields) {
+          if (field.type === 'arrayIndex') {
+            const index = field.index;
+            if (Array.isArray(value)) {
+              value = value[index];
+            } else {
+              value = undefined;
+              break;
+            }
+          } else if (field.type === 'field') {
+            value = value[field.name];
+            if (value === undefined) break;
+          }
+        }
+      }
+      
+      // Convert final value to string
+      if (typeof value === 'object' && value !== null) {
+        parts.push(JSON.stringify(value));
+      } else {
+        parts.push(String(value));
+      }
     }
   }
   

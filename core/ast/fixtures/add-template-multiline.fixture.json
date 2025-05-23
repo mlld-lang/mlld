@@ -1,15 +1,14 @@
 {
   "name": "add-template-multiline",
-  "input": "@text variable = \"value\"\n@add [[\nContent with {{variable}}",
+  "input": "@text variable = \"value\"",
   "expected": "Content with value\n\nAnd some more content\n\nHey, here's the same variable again: value",
   "directives": [
-    "@text variable = \"value\"",
-    "@add [[\nContent with {{variable}}"
+    "@text variable = \"value\""
   ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "426924d8-1d5c-4de8-b7aa-93007f350f54",
+      "nodeId": "21469ed4-944c-4c40-ad50-3b1e54bb853e",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "42c3ea15-b984-4ff7-b29d-e690f54ffcde",
+            "nodeId": "27269e4d-0a77-4b11-952e-1cc07e253317",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +49,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "ac907e1d-9a08-4f7b-94a2-3fc5c680cfc2",
+            "nodeId": "28769ceb-2f59-4d3f-b9fd-438fcfadf833",
             "location": {
               "start": {
                 "offset": 17,
@@ -76,93 +75,6 @@
         "hasVariables": false,
         "isTemplateContent": false
       }
-    },
-    {
-      "type": "Directive",
-      "nodeId": "9b4b5128-e7e7-414b-9d4d-fa56df2dd665",
-      "location": {
-        "start": {
-          "offset": 0,
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "offset": 8,
-          "line": 2,
-          "column": 1
-        }
-      },
-      "kind": "add",
-      "subtype": "addPath",
-      "source": "path",
-      "values": {
-        "path": [
-          {
-            "type": "Text",
-            "nodeId": "464caf81-3c43-4c90-ac2a-7b99c91d7118",
-            "location": {
-              "start": {
-                "offset": 5,
-                "line": 1,
-                "column": 6
-              },
-              "end": {
-                "offset": 7,
-                "line": 1,
-                "column": 8
-              }
-            },
-            "content": "[["
-          }
-        ]
-      },
-      "raw": {
-        "path": "[["
-      },
-      "meta": {
-        "path": {
-          "hasVariables": false,
-          "isAbsolute": false,
-          "hasExtension": false,
-          "extension": null
-        }
-      }
-    },
-    {
-      "type": "Text",
-      "nodeId": "1c1b13b5-f7a4-4fe6-843b-8236d2746559",
-      "location": {
-        "start": {
-          "offset": 8,
-          "line": 2,
-          "column": 1
-        },
-        "end": {
-          "offset": 21,
-          "line": 2,
-          "column": 14
-        }
-      },
-      "content": "Content with "
-    },
-    {
-      "type": "VariableReference",
-      "nodeId": "0a1ae1b7-9519-429c-9378-f6b267a6d8c4",
-      "location": {
-        "start": {
-          "offset": 0,
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "offset": 0,
-          "line": 1,
-          "column": 1
-        }
-      },
-      "valueType": "varInterpolation",
-      "isVariableReference": true,
-      "identifier": "variable"
     }
   ],
   "metadata": {

@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "489d8b8b-450e-43dd-81f0-bbbeca4c8e63",
+      "nodeId": "089ef95e-5aa8-408d-be08-74c0766e3888",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "197d5597-1d48-4246-b9a2-3c3b2dfb47ef",
+            "nodeId": "6bdd0294-c03d-44ab-adaf-6607c5a21228",
             "location": {
               "start": {
                 "offset": 0,
@@ -68,7 +68,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "93e87801-611e-4c88-b8d2-e7f6446c3669",
+      "nodeId": "37785e8d-a910-4b62-a3d7-3ecbed2045bb",
       "location": {
         "start": {
           "offset": 0,
@@ -76,9 +76,9 @@
           "column": 1
         },
         "end": {
-          "offset": 12,
+          "offset": 15,
           "line": 1,
-          "column": 13
+          "column": 16
         }
       },
       "kind": "add",
@@ -88,7 +88,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "9a222fdb-d529-4a20-88f5-234f81cf92fb",
+            "nodeId": "7231e028-6f14-4127-866a-f88a1b4e3629",
             "location": {
               "start": {
                 "offset": 0,
@@ -103,7 +103,13 @@
             },
             "valueType": "varIdentifier",
             "isVariableReference": true,
-            "identifier": "colors"
+            "identifier": "colors",
+            "fields": [
+              {
+                "type": "arrayIndex",
+                "index": 0
+              }
+            ]
           }
         ]
       },
@@ -111,23 +117,6 @@
         "variable": "@colors"
       },
       "meta": {}
-    },
-    {
-      "type": "Text",
-      "nodeId": "d72f4990-f59c-4a3f-88c3-26d703b63e57",
-      "location": {
-        "start": {
-          "offset": 12,
-          "line": 1,
-          "column": 13
-        },
-        "end": {
-          "offset": 15,
-          "line": 1,
-          "column": 16
-        }
-      },
-      "content": "[0]"
     }
   ],
   "metadata": {

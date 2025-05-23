@@ -1,14 +1,15 @@
 {
   "name": "data-primitive-number",
-  "input": "@add @number.count",
+  "input": "@data number.count = 42\n@add @number.count",
   "expected": "42",
   "directives": [
+    "@data number.count = 42",
     "@add @number.count"
   ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "770f9ff7-2380-41ec-817a-610b48c4fd9f",
+      "nodeId": "ff88a749-10d0-468f-abbf-fa69601cc54d",
       "location": {
         "start": {
           "offset": 0,
@@ -16,9 +17,61 @@
           "column": 1
         },
         "end": {
-          "offset": 12,
+          "offset": 23,
           "line": 1,
-          "column": 13
+          "column": 24
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "caef83fe-2900-43f3-bb6c-7d4c5b6aa386",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "number.count"
+          }
+        ],
+        "value": [
+          42
+        ]
+      },
+      "raw": {
+        "identifier": "number.count",
+        "value": "42"
+      },
+      "meta": {
+        "primitiveType": "number"
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "5dd93b9e-2670-420f-af1a-fbec8d060c36",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 18,
+          "line": 1,
+          "column": 19
         }
       },
       "kind": "add",
@@ -28,7 +81,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "eaaf081f-87b5-45bf-87e4-8f8e5201fd30",
+            "nodeId": "0b7a36e9-b255-4470-ba1c-2d7070867d58",
             "location": {
               "start": {
                 "offset": 0,
@@ -43,7 +96,13 @@
             },
             "valueType": "varIdentifier",
             "isVariableReference": true,
-            "identifier": "number"
+            "identifier": "number",
+            "fields": [
+              {
+                "type": "field",
+                "name": "count"
+              }
+            ]
           }
         ]
       },
@@ -51,23 +110,6 @@
         "variable": "@number"
       },
       "meta": {}
-    },
-    {
-      "type": "Text",
-      "nodeId": "8f25ab35-9d6b-43c6-9998-d2890d6fdb4e",
-      "location": {
-        "start": {
-          "offset": 12,
-          "line": 1,
-          "column": 13
-        },
-        "end": {
-          "offset": 18,
-          "line": 1,
-          "column": 19
-        }
-      },
-      "content": ".count"
     }
   ],
   "metadata": {

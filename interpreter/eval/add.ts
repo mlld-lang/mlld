@@ -57,7 +57,7 @@ export async function evaluateAdd(
     }
     
     // Handle field access if present in the variable node
-    if (variableNode.fields && variableNode.fields.length > 0 && variable.type === 'data') {
+    if (variableNode.fields && variableNode.fields.length > 0) {
       // Process field access
       for (const field of variableNode.fields) {
         if (value === null || value === undefined) {
