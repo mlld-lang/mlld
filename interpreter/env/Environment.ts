@@ -1,0 +1,186 @@
+import type { MeldNode, MeldVariable } from '@core/types';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import { execSync } from 'child_process';
+import * as path from 'path';
+
+/**
+ * Environment holds all state and provides capabilities for evaluation.
+ * This replaces StateService, ResolutionService, and capability injection.
+ */
+export class Environment {
+  private variables = new Map<string, MeldVariable>();
+  private nodes: MeldNode[] = [];
+  private parent?: Environment;
+  
+  constructor(
+    private fileSystem: IFileSystemService,
+    private pathService: IPathService,
+    private basePath: string,
+    parent?: Environment
+  ) {
+    this.parent = parent;
+  }
+  
+  // --- Variable Management ---
+  
+  setVariable(name: string, variable: MeldVariable): void {
+    this.variables.set(name, variable);
+  }
+  
+  getVariable(name: string): MeldVariable | undefined {
+    // Check this scope first
+    const variable = this.variables.get(name);
+    if (variable) return variable;
+    
+    // Check parent scope
+    return this.parent?.getVariable(name);
+  }
+  
+  hasVariable(name: string): boolean {
+    return this.variables.has(name) || (this.parent?.hasVariable(name) ?? false);
+  }
+  
+  // --- Node Management ---
+  
+  addNode(node: MeldNode): void {
+    this.nodes.push(node);
+  }
+  
+  getNodes(): MeldNode[] {
+    return this.nodes;
+  }
+  
+  // --- Capabilities ---
+  
+  async readFile(filePath: string): Promise<string> {
+    const resolvedPath = this.resolvePath(filePath);
+    return this.fileSystem.readFile(resolvedPath);
+  }
+  
+  async executeCommand(command: string): Promise<string> {
+    try {
+      const output = execSync(command, {
+        encoding: 'utf8',
+        cwd: this.basePath,
+        env: { ...process.env }
+      });
+      return output.trimEnd();
+    } catch (error: any) {
+      // Even on error, we might have output
+      if (error.stdout) {
+        return error.stdout.trimEnd();
+      }
+      throw new Error(`Command execution failed: ${error.message}`);
+    }
+  }
+  
+  async executeCode(code: string, language: string): Promise<string> {
+    // For now, only support JavaScript/Node.js
+    if (language !== 'javascript' && language !== 'js' && language !== 'node') {
+      throw new Error(`Unsupported code language: ${language}`);
+    }
+    
+    try {
+      // Create a function that captures console.log output
+      let output = '';
+      const originalLog = console.log;
+      console.log = (...args: any[]) => {
+        output += args.map(arg => String(arg)).join(' ') + '\\n';
+      };
+      
+      // Execute the code
+      const result = eval(code);
+      
+      // Restore console.log
+      console.log = originalLog;
+      
+      // If there was console output, use that. Otherwise use the result.
+      if (output) {
+        return output.trimEnd();
+      }
+      
+      return result !== undefined ? String(result) : '';
+    } catch (error) {
+      throw new Error(`Code execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+  
+  resolvePath(inputPath: string): string {
+    // Handle special path variables
+    if (inputPath.startsWith('$HOMEPATH')) {
+      const homePath = process.env.HOME || process.env.USERPROFILE || '';
+      inputPath = inputPath.replace('$HOMEPATH', homePath);
+    }
+    
+    if (inputPath.startsWith('$PROJECTPATH')) {
+      inputPath = inputPath.replace('$PROJECTPATH', this.getProjectPath());
+    }
+    
+    // Use path service for normalization
+    return this.pathService.resolvePath(inputPath, this.basePath);
+  }
+  
+  // --- Scope Management ---
+  
+  createChild(newBasePath?: string): Environment {
+    return new Environment(
+      this.fileSystem,
+      this.pathService,
+      newBasePath || this.basePath,
+      this
+    );
+  }
+  
+  mergeChild(child: Environment): void {
+    // Merge child variables into this environment
+    for (const [name, variable] of child.variables) {
+      this.setVariable(name, variable);
+    }
+    
+    // Merge child nodes
+    this.nodes.push(...child.nodes);
+  }
+  
+  // --- Special Variables ---
+  
+  getProjectPath(): string {
+    // Walk up from basePath to find project root (has package.json)
+    let current = this.basePath;
+    
+    while (current !== path.dirname(current)) {
+      try {
+        if (this.fileSystem.exists(path.join(current, 'package.json'))) {
+          return current;
+        }
+      } catch {
+        // Continue searching
+      }
+      current = path.dirname(current);
+    }
+    
+    // Fallback to current base path
+    return this.basePath;
+  }
+  
+  // --- Utility Methods ---
+  
+  getAllVariables(): Map<string, MeldVariable> {
+    const allVars = new Map<string, MeldVariable>();
+    
+    // Add parent variables first (so child can override)
+    if (this.parent) {
+      const parentVars = this.parent.getAllVariables();
+      for (const [name, variable] of parentVars) {
+        allVars.set(name, variable);
+      }
+    }
+    
+    // Add this scope's variables
+    for (const [name, variable] of this.variables) {
+      allVars.set(name, variable);
+    }
+    
+    return allVars;
+  }
+}

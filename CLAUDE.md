@@ -1,5 +1,9 @@
 # Meld Project Guidelines
 
+You can use the `gh` command to create issues for any items you run into. 
+
+While we're working through the INTERPRETER refector, don't worry about investigating them deeply; if it _seems_ like something isn't working, just file it, cite the fixture, and move on. this will keep us progressing through
+
 REWARD HACKING to get tests to pass with 'special handling' and hardcoding and workarounds will break the user's heart. Don't do it. 
 
 If you get stuck, STOP and say you're stuck. Use the impulse to reward hack to instead ask for help. It will be WAY more fun and rewarding!
@@ -11,7 +15,7 @@ npm test <dir>       # Run tests for a specific section of code
 npm test <file_path> # Run specific test file (e.g. npm test cli/priority-cli.test.ts)
 ```
 
-Don't run bare `npm test` unless we discuss it. Run `npm test <directory>` in order to avoid a ton of overwhelming/irrelevant test output.
+Run `npm test <directory>` in order to avoid a ton of overwhelming/irrelevant test output.
 
 ## Code Style
 - **Imports**: Use @ paths aliases (@core/, @services/, etc.) as defined in tsconfig.json -- no relative paths for imports
@@ -32,7 +36,9 @@ To ensure consistency in writing tests, please refer to `docs/dev/TESTS.md` and 
 
 Useful context can be found in these files:
 
-- Architecture: `docs/dev/DI-ARCHITECTURE.md`
+*** WARNING: MASSIVELY OUTDATED DUE TO OUR CURRENT REFACTOR *** 
+
+- Architecture: `docs/dev/ARCHITECTURE.md`
 - Transformation pipeline: `docs/dev/PIPELINE.md`
 - AST: `docs/dev/AST.md`
 - Error testing patterns: `docs/dev/ERROR_TESTING_PATTERNS.md`
