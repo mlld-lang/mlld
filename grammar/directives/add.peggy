@@ -129,6 +129,75 @@ AtAdd
         'template'  // Added source parameter
       );
     }
+  // Template invocation - @add @templateName(args)
+  / DirectiveContext "@add" _ "@" id:BaseIdentifier _ "(" _ args:TemplateArgsList? _ ")" _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+      helpers.debug('AtAdd matched template invocation', { id, args, headerLevel, underHeader });
+      
+      // Process arguments
+      const processedArgs = args || [];
+      
+      // Extract header level and under header if provided
+      const headerLevelValue = headerLevel ? headerLevel : null;
+      const underHeaderValue = underHeader ? underHeader : null;
+      
+      // Create values object with template name and arguments
+      const values = {
+        templateName: [helpers.createNode(NodeType.Text, { content: id, location: location() })],
+        arguments: processedArgs
+      };
+      
+      // Add headerLevel and underHeader if present
+      if (headerLevelValue) {
+        values.headerLevel = [helpers.createNode(NodeType.Number, {
+          value: headerLevelValue.value,
+          raw: headerLevelValue.raw,
+          location: location()
+        })];
+      }
+      
+      if (underHeaderValue) {
+        values.underHeader = [helpers.createNode(NodeType.Text, {
+          content: underHeaderValue,
+          raw: underHeaderValue,
+          location: location()
+        })];
+      }
+      
+      // Create raw object with template invocation syntax
+      const raw = {
+        templateName: id,
+        arguments: processedArgs.map(arg => {
+          if (arg.type === 'string') return `"${arg.value}"`;
+          if (arg.type === 'variable') return `@${arg.value.identifier}`;
+          return arg.value || '';
+        })
+      };
+      
+      // Add headerLevel and underHeader to raw if present
+      if (headerLevelValue) {
+        raw.headerLevel = headerLevelValue.raw;
+      }
+      
+      if (underHeaderValue) {
+        raw.underHeader = underHeaderValue;
+      }
+      
+      // Create meta object for template invocation
+      const meta = {
+        isTemplateInvocation: true,
+        argumentCount: processedArgs.length
+      };
+      
+      return helpers.createStructuredDirective(
+        'add', 
+        'addTemplateInvocation', 
+        values, 
+        raw, 
+        meta, 
+        location(),
+        'templateInvocation'
+      );
+    }
   / DirectiveContext "@add" _ "@" varRef:VariableReference _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched variable reference', { varRef, headerLevel, underHeader });
       
@@ -321,3 +390,23 @@ AsNewTitle
       return title;
     }
 
+
+
+// Helper rule for template invocation arguments
+TemplateArgsList
+  = first:TemplateArg rest:(_ "," _ arg:TemplateArg { return arg; })* {
+      return [first, ...rest];
+    }
+
+TemplateArg
+  = str:QuotedStringContent {
+      return { type: 'string', value: str };
+    }
+  / "@" varRef:VariableReference {
+      return { type: 'variable', value: varRef };
+    }
+
+// Helper for quoted strings in template arguments
+QuotedStringContent
+  = '"' content:$(!'"' .)* '"' { return content; }
+  / "'" content:$(!"'" .)* "'" { return content; }

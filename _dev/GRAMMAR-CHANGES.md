@@ -4,6 +4,32 @@ This document tracks grammar changes made and their implications for type update
 
 ## Completed Changes
 
+### 13. Added Parameterized Text Templates
+**Status**: ✅ Completed
+**Issue**: New feature - parameterized text templates (similar to exec/run pattern)
+**Changes made**:
+- Added new `textTemplateDefinition` subtype in `text.peggy` for `@text name(params) = @add [[...]]`
+- Added new `addTemplateInvocation` subtype in `add.peggy` for `@add @templateName(args)`
+- Added parameter parsing rules `TextParamsList` and `TextParam` in `text.peggy`
+- Added argument parsing rules `TemplateArgsList` and `TemplateArg` in `add.peggy`
+- Created comprehensive test suite in `grammar/tests/text-templates.test.ts`
+**Type Implications**: 
+- New subtype `textTemplateDefinition` with `params` array in values/raw
+- New subtype `addTemplateInvocation` with `templateName` and `arguments` in values
+- Metadata includes `isParameterized`, `parameterCount` for definitions
+- Metadata includes `isTemplateInvocation`, `argumentCount` for invocations
+**Example**:
+```meld
+@text greetingTemplate(name, title) = @add [[
+Hello {{title}} {{name}}!
+Welcome back, {{name}}!
+]]
+
+@text userName = "Alice"
+@text userTitle = "Dr."
+@add @greetingTemplate(@userName, @userTitle)
+```
+
 ### 12. Fixed path separator stripping in brackets (Issue #53)
 **Status**: ✅ Completed
 **Issue**: Parser was stripping forward slashes from paths in bracket notation

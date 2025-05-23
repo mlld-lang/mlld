@@ -1,0 +1,493 @@
+{
+  "name": "text-textTemplateDefinition",
+  "input": "@text greetingTemplate(name, title) = @add [[\nHello {{title}} {{name}}!\nWelcome back, {{name}}!\n]]\n\n@text userName = \"Alice\"\n@text userTitle = \"Dr.\"\n@add @greetingTemplate(@userName, @userTitle)",
+  "expected": "Hello Dr. Alice!\nWelcome back, Alice!",
+  "directives": [
+    "@text greetingTemplate(name, title) = @add [[\nHello {{title}} {{name}}!\nWelcome back, {{name}}!\n]]",
+    "@text userName = \"Alice\"",
+    "@text userTitle = \"Dr.\"",
+    "@add @greetingTemplate(@userName, @userTitle)"
+  ],
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "d3dcfe97-c83d-497f-bdd4-c113913d4742",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 98,
+          "line": 4,
+          "column": 3
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplateDefinition",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "85faa97d-edff-46ba-8365-f4752943811b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "greetingTemplate"
+          }
+        ],
+        "params": [
+          "name",
+          "title"
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "48658203-7a42-446f-b35d-02e24482dcb9",
+            "location": {
+              "start": {
+                "offset": 45,
+                "line": 1,
+                "column": 46
+              },
+              "end": {
+                "offset": 52,
+                "line": 2,
+                "column": 7
+              }
+            },
+            "content": "\nHello "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "0be268ce-1303-4009-8708-9ed65750eb6e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "title"
+          },
+          {
+            "type": "Text",
+            "nodeId": "6d9e1ec0-5131-42d6-b478-d51615cb101a",
+            "location": {
+              "start": {
+                "offset": 61,
+                "line": 2,
+                "column": 16
+              },
+              "end": {
+                "offset": 62,
+                "line": 2,
+                "column": 17
+              }
+            },
+            "content": " "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "4daa6c0b-85a1-4327-8eb1-93aa0ccd9b16",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "name"
+          },
+          {
+            "type": "Text",
+            "nodeId": "d4082844-d3df-451c-84b7-ba15542803a8",
+            "location": {
+              "start": {
+                "offset": 70,
+                "line": 2,
+                "column": 25
+              },
+              "end": {
+                "offset": 86,
+                "line": 3,
+                "column": 15
+              }
+            },
+            "content": "!\nWelcome back, "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "4fca300a-bdb4-4a5b-bcc4-4eb16c76685a",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "name"
+          },
+          {
+            "type": "Text",
+            "nodeId": "9f3e2e91-6d08-48d3-b794-89063e84128f",
+            "location": {
+              "start": {
+                "offset": 94,
+                "line": 3,
+                "column": 23
+              },
+              "end": {
+                "offset": 96,
+                "line": 4,
+                "column": 1
+              }
+            },
+            "content": "!\n"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greetingTemplate",
+        "params": [
+          "name",
+          "title"
+        ],
+        "content": "\nHello {{title}} {{name}}!\nWelcome back, {{name}}!\n"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true,
+        "isParameterized": true,
+        "parameterCount": 2
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "ef9078f5-fc29-42bc-a20c-148957abfe39",
+      "location": {
+        "start": {
+          "offset": 98,
+          "line": 4,
+          "column": 3
+        },
+        "end": {
+          "offset": 100,
+          "line": 6,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "47698c16-eefc-4bac-a65e-a454c31af965",
+      "location": {
+        "start": {
+          "offset": 100,
+          "line": 6,
+          "column": 1
+        },
+        "end": {
+          "offset": 124,
+          "line": 6,
+          "column": 25
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "af94e35b-b224-4306-971f-5238920907f8",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "userName"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "a1260732-a5b6-4cbb-9224-0edd037b14cd",
+            "location": {
+              "start": {
+                "offset": 117,
+                "line": 6,
+                "column": 18
+              },
+              "end": {
+                "offset": 124,
+                "line": 6,
+                "column": 25
+              }
+            },
+            "content": "Alice"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "userName",
+        "content": "Alice"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "e0a6263d-068a-4580-a9d5-04bb24e93b05",
+      "location": {
+        "start": {
+          "offset": 124,
+          "line": 6,
+          "column": 25
+        },
+        "end": {
+          "offset": 125,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "8133d005-6139-4480-ae17-ceb1a49646ec",
+      "location": {
+        "start": {
+          "offset": 125,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 148,
+          "line": 7,
+          "column": 24
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "fb52d0fd-4cfb-4b4a-b8a0-3823529d67e1",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "userTitle"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "a2ce06be-3535-456c-8813-49eb844b455d",
+            "location": {
+              "start": {
+                "offset": 143,
+                "line": 7,
+                "column": 19
+              },
+              "end": {
+                "offset": 148,
+                "line": 7,
+                "column": 24
+              }
+            },
+            "content": "Dr."
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "userTitle",
+        "content": "Dr."
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "03759139-c4f9-4d7a-a32c-810df0315efd",
+      "location": {
+        "start": {
+          "offset": 148,
+          "line": 7,
+          "column": 24
+        },
+        "end": {
+          "offset": 149,
+          "line": 8,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "3b486932-1001-415e-8a93-587659ba58cd",
+      "location": {
+        "start": {
+          "offset": 149,
+          "line": 8,
+          "column": 1
+        },
+        "end": {
+          "offset": 194,
+          "line": 8,
+          "column": 46
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplateInvocation",
+      "source": "templateInvocation",
+      "values": {
+        "templateName": [
+          {
+            "type": "Text",
+            "nodeId": "37a94dad-4fe6-48c7-af5f-8339141c0307",
+            "location": {
+              "start": {
+                "offset": 149,
+                "line": 8,
+                "column": 1
+              },
+              "end": {
+                "offset": 194,
+                "line": 8,
+                "column": 46
+              }
+            },
+            "content": "greetingTemplate"
+          }
+        ],
+        "arguments": [
+          {
+            "type": "variable",
+            "value": {
+              "type": "VariableReference",
+              "nodeId": "d3339d99-1807-4ead-9291-3d2f4631e118",
+              "location": {
+                "start": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                },
+                "end": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                }
+              },
+              "valueType": "varIdentifier",
+              "isVariableReference": true,
+              "identifier": "userName"
+            }
+          },
+          {
+            "type": "variable",
+            "value": {
+              "type": "VariableReference",
+              "nodeId": "7a68bc3a-2e61-43a9-b6ce-962003dace90",
+              "location": {
+                "start": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                },
+                "end": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                }
+              },
+              "valueType": "varIdentifier",
+              "isVariableReference": true,
+              "identifier": "userTitle"
+            }
+          }
+        ]
+      },
+      "raw": {
+        "templateName": "greetingTemplate",
+        "arguments": [
+          "@userName",
+          "@userTitle"
+        ]
+      },
+      "meta": {
+        "isTemplateInvocation": true,
+        "argumentCount": 2
+      }
+    }
+  ],
+  "metadata": {
+    "kind": "text",
+    "subtype": "textTemplateDefinition"
+  }
+}

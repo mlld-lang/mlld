@@ -7,6 +7,7 @@ import { createTextVariable } from '@core/types';
 /**
  * Evaluate @text directives.
  * Handles variable interpolation and both = and += operators.
+ * Also handles parameterized text templates.
  * 
  * Ported from TextDirectiveHandler.
  */
@@ -18,6 +19,23 @@ export async function evaluateText(
   const identifier = directive.raw?.identifier;
   if (!identifier) {
     throw new Error('Text directive missing identifier');
+  }
+  
+  // Handle parameterized text templates
+  if (directive.subtype === 'textTemplateDefinition') {
+    // Store the template definition
+    const templateDef = {
+      type: 'textTemplate' as const,
+      identifier,
+      params: directive.values?.params || [],
+      content: directive.values?.content || [],
+      value: '' // Templates don't have a direct value
+    };
+    
+    env.setVariable(identifier, templateDef);
+    
+    // Templates are definition directives, no output
+    return { value: '', env };
   }
   
   // Extract content nodes

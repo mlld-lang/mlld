@@ -50,7 +50,15 @@ export async function evaluateAdd(
         value = variable.value;
         break;
       case 'path':
-        value = variable.value.resolvedPath;
+        // For path variables, we should read the file contents
+        const pathValue = variable.value.resolvedPath;
+        try {
+          // Try to read the file
+          value = await env.readFile(pathValue);
+        } catch (error) {
+          // If it's not a file or can't be read, use the path itself
+          value = pathValue;
+        }
         break;
       default:
         value = (variable as any).value;
@@ -172,6 +180,61 @@ export async function evaluateAdd(
     if (section) {
       content = extractSection(content, section);
     }
+    
+  } else if (directive.subtype === 'addTemplateInvocation') {
+    // Handle parameterized template invocation
+    const templateNameNodes = directive.values?.templateName;
+    if (!templateNameNodes || templateNameNodes.length === 0) {
+      throw new Error('Add template invocation missing template name');
+    }
+    
+    // Get the template name
+    const templateName = await interpolate(templateNameNodes, env);
+    
+    // Look up the template
+    const template = env.getVariable(templateName);
+    if (!template || template.type !== 'textTemplate') {
+      throw new Error(`Template not found: ${templateName}`);
+    }
+    
+    // Get the arguments
+    const args = directive.values?.arguments || [];
+    
+    // Check parameter count
+    if (args.length !== template.params.length) {
+      throw new Error(`Template ${templateName} expects ${template.params.length} parameters, got ${args.length}`);
+    }
+    
+    // Create a child environment with the template parameters
+    const childEnv = env.createChild();
+    
+    // Bind arguments to parameters
+    for (let i = 0; i < template.params.length; i++) {
+      const paramName = template.params[i];
+      const argValue = args[i];
+      
+      // Convert argument to string value
+      let value: string;
+      if (typeof argValue === 'object' && argValue.type === 'string') {
+        value = argValue.value;
+      } else if (typeof argValue === 'object' && argValue.type === 'variable') {
+        // Handle variable references like @userName
+        const varName = argValue.identifier;
+        const variable = env.getVariable(varName);
+        if (!variable) {
+          throw new Error(`Variable not found: ${varName}`);
+        }
+        value = variable.type === 'text' ? variable.value : String(variable.value);
+      } else {
+        value = String(argValue);
+      }
+      
+      // Create a text variable for the parameter
+      childEnv.setVariable(paramName, { type: 'text', identifier: paramName, value });
+    }
+    
+    // Interpolate the template content with the child environment
+    content = await interpolate(template.content, childEnv);
     
   } else {
     throw new Error(`Unsupported add subtype: ${directive.subtype}`);

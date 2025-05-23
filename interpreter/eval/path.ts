@@ -29,8 +29,15 @@ export async function evaluatePath(
   // Interpolate the path (resolve variables)
   const interpolatedPath = await interpolate(pathNodes, env);
   
-  // Resolve the path (handles special variables)
-  const resolvedPath = env.resolvePath(interpolatedPath);
+  // Handle special path variables and absolute paths
+  let resolvedPath = interpolatedPath;
+  
+  // Only resolve special variables and absolute paths
+  if (interpolatedPath.startsWith('$HOMEPATH') || 
+      interpolatedPath.startsWith('$PROJECTPATH') ||
+      interpolatedPath.startsWith('/')) {
+    resolvedPath = env.resolvePath(interpolatedPath);
+  }
   
   // Normalize the path (remove ./ prefix if present)
   const normalizedPath = resolvedPath.replace(/^\.\//, '');

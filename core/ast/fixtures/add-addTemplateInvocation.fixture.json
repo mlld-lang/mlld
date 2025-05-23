@@ -1,0 +1,228 @@
+{
+  "name": "add-addTemplateInvocation",
+  "input": "@text messageTemplate(user, action) = @add [[{{user}} {{action}} successfully!]]\n@add @messageTemplate(\"Bob\", \"logged in\")",
+  "expected": "Bob logged in successfully!",
+  "directives": [
+    "@text messageTemplate(user, action) = @add [[{{user}} {{action}} successfully!]]",
+    "@add @messageTemplate(\"Bob\", \"logged in\")"
+  ],
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "c194bd9f-f2c5-43b1-885f-8197c7e3e0b6",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 80,
+          "line": 1,
+          "column": 81
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplateDefinition",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "e10005e5-313d-4e2d-a16b-4dca19cf5016",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "messageTemplate"
+          }
+        ],
+        "params": [
+          "user",
+          "action"
+        ],
+        "content": [
+          {
+            "type": "VariableReference",
+            "nodeId": "09ab60f4-ce7b-46ee-8f7e-9c54c8509ba9",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "user"
+          },
+          {
+            "type": "Text",
+            "nodeId": "15685733-da9a-44bf-a0f5-ece9eac11056",
+            "location": {
+              "start": {
+                "offset": 53,
+                "line": 1,
+                "column": 54
+              },
+              "end": {
+                "offset": 54,
+                "line": 1,
+                "column": 55
+              }
+            },
+            "content": " "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "11b0e9e4-71ff-4d61-b7b7-2841a20a9465",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "action"
+          },
+          {
+            "type": "Text",
+            "nodeId": "78cc59f0-7d3f-4565-8eb0-03b189d63c9a",
+            "location": {
+              "start": {
+                "offset": 64,
+                "line": 1,
+                "column": 65
+              },
+              "end": {
+                "offset": 78,
+                "line": 1,
+                "column": 79
+              }
+            },
+            "content": " successfully!"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "messageTemplate",
+        "params": [
+          "user",
+          "action"
+        ],
+        "content": "{{user}} {{action}} successfully!"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true,
+        "isParameterized": true,
+        "parameterCount": 2
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "d2594767-e99c-4d84-a314-219f9914e37f",
+      "location": {
+        "start": {
+          "offset": 80,
+          "line": 1,
+          "column": 81
+        },
+        "end": {
+          "offset": 81,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "b9d1d5ff-b475-476a-b890-1e135c7aea42",
+      "location": {
+        "start": {
+          "offset": 81,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 122,
+          "line": 2,
+          "column": 42
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplateInvocation",
+      "source": "templateInvocation",
+      "values": {
+        "templateName": [
+          {
+            "type": "Text",
+            "nodeId": "cfea4f47-3972-4f0e-a8c8-c54c484d71a6",
+            "location": {
+              "start": {
+                "offset": 81,
+                "line": 2,
+                "column": 1
+              },
+              "end": {
+                "offset": 122,
+                "line": 2,
+                "column": 42
+              }
+            },
+            "content": "messageTemplate"
+          }
+        ],
+        "arguments": [
+          {
+            "type": "string",
+            "value": "Bob"
+          },
+          {
+            "type": "string",
+            "value": "logged in"
+          }
+        ]
+      },
+      "raw": {
+        "templateName": "messageTemplate",
+        "arguments": [
+          "\"Bob\"",
+          "\"logged in\""
+        ]
+      },
+      "meta": {
+        "isTemplateInvocation": true,
+        "argumentCount": 2
+      }
+    }
+  ],
+  "metadata": {
+    "kind": "add",
+    "subtype": "addTemplateInvocation"
+  }
+}

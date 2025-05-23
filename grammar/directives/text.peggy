@@ -3,8 +3,42 @@
 
 // Primary @text directive
 AtText
+  // Parameterized template definition - must come before regular template to match params
+  = DirectiveContext "@text" _ id:BaseIdentifier _ "(" _ params:TextParamsList? _ ")" _ "=" _ "@add" _ template:TemplateCore {
+      helpers.debug('AtText matched parameterized template definition', { id, params, template });
+      
+      // Process parameters
+      const processedParams = params || [];
+      
+      // Create meta object with parameter info
+      const meta = { 
+        sourceType: 'template',
+        hasVariables: template.meta.hasVariables,
+        isTemplateContent: true,
+        isParameterized: true,
+        parameterCount: processedParams.length
+      };
+      
+      return helpers.createStructuredDirective(
+        'text',
+        'textTemplateDefinition',
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          params: processedParams,
+          content: template.values.content
+        },
+        {
+          identifier: id,
+          params: processedParams,
+          content: template.raw.content
+        },
+        meta,
+        location(),
+        'template'
+      );
+    }
   // Template content (including [[...]]) - must come before other patterns to avoid misparsing
-  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ template:TemplateCore {
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ template:TemplateCore {
       // Use both variables and template syntax for detection
       // The meta now contains both hasVariables and isTemplateContent
       
@@ -227,4 +261,19 @@ AtText
         location(),
         sourceType
       );
+    }
+
+// -------------------------------------------------------------
+// HELPER RULES
+// -------------------------------------------------------------
+
+// Helper rules for text template parameters
+TextParamsList
+  = first:TextParam rest:(_ "," _ param:TextParam { return param; })* {
+      return [first, ...rest];
+    }
+
+TextParam
+  = paramName:BaseIdentifier {
+      return paramName; // Just return the parameter name as a string
     }

@@ -123,6 +123,11 @@ export async function interpolate(
       
       const variable = env.getVariable(varName);
       if (!variable) {
+        // Handle special path variables
+        if (varName === 'PROJECTPATH' || varName === 'HOMEPATH') {
+          parts.push(`$${varName}`);
+          continue;
+        }
         // TODO: Should we throw in strict mode?
         parts.push(`{{${varName}}}`); // Keep unresolved
         continue;
