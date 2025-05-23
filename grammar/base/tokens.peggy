@@ -56,3 +56,12 @@ BacktickSequence "Backtick Sequence"
     } { 
       return backticks;
     }
+
+// -------------------------------------------------------------
+// RESERVED KEYWORDS
+// -------------------------------------------------------------
+
+// Reserved directive names that cannot be used as variable names
+ReservedDirective "Reserved Directive Name"
+  = "@data" / "@text" / "@run" / "@add" / "@path" 
+  / "@import" / "@exec" / "@define"

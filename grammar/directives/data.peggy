@@ -59,6 +59,12 @@ AtData
           type: 'array',
           items: value.value
         };
+      } else if (value.type === "template") {
+        // Template content - array of content nodes
+        values.value = value.value;
+      } else if (value.type === "variableReference") {
+        // Variable reference - wrap in array
+        values.value = [value.value];
       } else {
         // For primitive values, ensure it's a ContentNodeArray
         values.value = Array.isArray(value.value) ? value.value : [value.value];
@@ -77,6 +83,17 @@ AtData
       } else if (value.type === "array") {
         source = 'array';
         metaObj = { arrayData: { itemCount: value.value.length } };
+      } else if (value.type === "template") {
+        source = 'template';
+        metaObj = { templateData: { hasVariables: value.value.some(part => 
+          part && part.type === NodeType.VariableReference
+        ) } };
+      } else if (value.type === "variableReference") {
+        source = 'variable';
+        metaObj = { variableData: { 
+          identifier: value.value.identifier,
+          hasFieldAccess: !!(value.value.fields && value.value.fields.length > 0)
+        } };
       } else if (value.type === "primitive") {
         source = 'literal';
         // Detect the specific primitive type
@@ -113,22 +130,11 @@ AtData
 // DATA VALUE TYPES
 // -------------------------------------------------------------
 
-// Any data value (object, array, primitive, directive)
+// Any data value (object, array, primitive, directive, template, variable)
 DataValue
-  = "@run" _ runDirective:RunDirectiveRef {
-      return {
-        type: "nestedDirective",
-        directive: runDirective,
-        rawText: "@run " + (runDirective.raw && runDirective.raw.command ? runDirective.raw.command : "")
-      };
-    }
-  / "@add" _ addDirective:AddDirectiveRef {
-      return {
-        type: "nestedDirective",
-        directive: addDirective,
-        rawText: "@add " + (addDirective.raw && addDirective.raw.path ? addDirective.raw.path : "")
-      };
-    }
+  = DirectiveValue
+  / TemplateValue  
+  / VariableReferenceValue
   / object:DataObjectLiteral {
       return {
         type: "object",
@@ -152,6 +158,77 @@ DataValue
         type: "primitive",
         value,
         rawText
+      };
+    }
+
+// Embedded directive value - using core patterns directly for data context
+DirectiveValue
+  = "@run" _ command:CommandCore {
+      const runDirective = helpers.createStructuredDirective(
+        'run',
+        'runCommand',
+        command.values,
+        command.raw,
+        { 
+          ...command.meta, 
+          isDataValue: true,
+          isMultiLine: command.raw.command.includes('\n')
+        },
+        location()
+      );
+      
+      return {
+        type: "nestedDirective",
+        directive: runDirective,
+        rawText: "@run " + (command.raw && command.raw.command ? command.raw.command : "")
+      };
+    }
+  / "@add" _ content:PathCore {
+      const addDirective = helpers.createStructuredDirective(
+        'add',
+        'addPath',
+        content.values,
+        content.raw,
+        {
+          ...content.meta,
+          isDataValue: true
+        },
+        location(),
+        'path'
+      );
+      
+      return {
+        type: "nestedDirective",
+        directive: addDirective,
+        rawText: "@add " + (content.raw && content.raw.path ? content.raw.path : "")
+      };
+    }
+
+// Variable reference (including field access) with proper disambiguation
+VariableReferenceValue  
+  = !ReservedDirective "@" id:BaseIdentifier accessElements:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      const node = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(accessElements.length > 0 ? { fields: accessElements } : {})
+      }, location());
+      
+      return {
+        type: "variableReference",
+        value: node,
+        rawText: "@" + normalizedId + (accessElements ? accessElements.map(f => 
+          f.type === 'dotAccess' ? '.' + f.field : '[' + f.index + ']'
+        ).join('') : '')
+      };
+    }
+
+// Inline template value - using existing template core
+TemplateValue
+  = content:WrappedTemplateContent {
+      return {
+        type: "template",
+        value: content.parts,
+        rawText: content.raw
       };
     }
 
@@ -184,7 +261,15 @@ DataObjectLiteral
               type: 'array',
               items: value.value
             };
-          } 
+          }
+          // Handle template values
+          else if (value.type === "template") {
+            result[key] = value.value; // Array of content nodes
+          }
+          // Handle variable references
+          else if (value.type === "variableReference") {
+            result[key] = value.value; // Variable reference node
+          }
           // Handle primitive values
           else {
             result[key] = value.value || value;
@@ -214,35 +299,8 @@ DataPropertyKey
 
 // Property value (can be any data value)
 DataPropertyValue
-  = "@run" _ runDirective:RunDirectiveRef {
-      return {
-        type: "nestedDirective",
-        directive: runDirective
-      };
-    }
-  / "@add" _ addDirective:AddDirectiveRef {
-      return {
-        type: "nestedDirective",
-        directive: addDirective
-      };
-    }
-  / value:DataObjectLiteral {
-      return {
-        type: "object",
-        value
-      };
-    }
-  / value:DataArrayLiteral {
-      return {
-        type: "array",
-        value
-      };
-    }
-  / value:DataPrimitiveValue {
-      return {
-        type: "primitive",
-        value
-      };
+  = value:DataValue {
+      return value;
     }
 
 // -------------------------------------------------------------
@@ -266,6 +324,10 @@ DataArrayLiteral
             type: 'array',
             items: item.value
           };
+        } else if (item.type === "template") {
+          return item.value; // Array of content nodes
+        } else if (item.type === "variableReference") {
+          return item.value; // Variable reference node
         } else {
           return item.value || item;
         }

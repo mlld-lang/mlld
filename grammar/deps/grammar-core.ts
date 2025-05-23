@@ -195,6 +195,17 @@ export const helpers = {
            !this.isRHSContext(input, pos);
   },
 
+  /**
+   * Determines if the current position is within a run code block context
+   * This is used to identify language + code block patterns
+   */
+  isInRunCodeBlockContext(input: string, pos: number): boolean {
+    // This is a simplified implementation
+    // In a full implementation, this would check for language + code block patterns
+    // For now, return false to avoid breaking the parser
+    return false;
+  },
+
   createNode<T extends object>(type: NodeTypeKey, props: T & { location?: any }) {
     return Object.freeze({
       type,
