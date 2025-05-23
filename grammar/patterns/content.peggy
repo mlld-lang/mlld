@@ -47,18 +47,19 @@ LiteralContent "Literal content without interpolation"
 
 // Content inside single brackets with @var interpolation
 BracketContent "Content with @var interpolation"
-  = '[' parts:(BracketVar / CommandTextSegment / PathSeparator)* ']' {
+  = '[' parts:(BracketVar / PathTextSegment / PathSeparator)* ']' {
       // Return only the content within brackets, not the brackets themselves
       return parts;
     }
 
 // Variable reference within bracketed content
 BracketVar
-  = "@" id:BaseIdentifier { 
+  = "@" id:BaseIdentifier accessElements:AnyFieldAccess* { 
       const node = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id
+        identifier: id,
+        ...(accessElements.length > 0 ? { fields: accessElements } : {})
       }, location());
-      helpers.debug('CreateVAR in BracketContent', { id, node });
+      helpers.debug('CreateVAR in BracketContent', { id, node, fields: accessElements });
       return node;
     }
 

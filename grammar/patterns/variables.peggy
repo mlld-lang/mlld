@@ -13,12 +13,24 @@ Variable
 // AtVar for direct variable references (using context detection)
 // Used in paths, commands, and single bracket contexts
 AtVar
-  = "@" VariableContext id:BaseIdentifier {
+  = "@" VariableContext id:BaseIdentifier accessElements:AnyFieldAccess* {
       const normalizedId = helpers.normalizePathVar(id);
       const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
+        ...(accessElements.length > 0 ? { fields: accessElements } : {})
       }, location());
-      helpers.debug('CreateVAR', { rule: 'AtVar', node });
+      helpers.debug('CreateVAR', { rule: 'AtVar', node, fields: accessElements });
+      return node;
+    }
+  // Special case for top-level @var[...] without VariableContext check
+  // This ensures we capture the full expression when it appears at the start
+  / "@" id:BaseIdentifier &"[" accessElements:AnyFieldAccess+ {
+      const normalizedId = helpers.normalizePathVar(id);
+      const node = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        fields: accessElements
+      }, location());
+      helpers.debug('CreateVAR', { rule: 'AtVar with bracket', node, fields: accessElements });
       return node;
     }
 

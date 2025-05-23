@@ -34,6 +34,13 @@ CommandTextSegment "Command text segment"
       return helpers.createNode(NodeType.Text, { content: chars, location: location() });
     }
 
+// Path text segment - for path content in brackets, excludes path separators to allow PathSeparator nodes
+PathTextSegment "Path text segment"
+  = chars:$(![\]/[\]@${}] .)+ { 
+      helpers.debug('PathTextSegment matched', { chars });
+      return helpers.createNode(NodeType.Text, { content: chars, location: location() });
+    }
+
 // -------------------------------------------------------------
 // SEPARATOR NODES
 // -------------------------------------------------------------

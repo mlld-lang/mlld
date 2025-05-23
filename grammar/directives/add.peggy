@@ -282,9 +282,10 @@ AddDirectiveRef
 
 // Helper rule for variable references in add directive
 VariableReference
-  = id:BaseIdentifier {
+  = id:BaseIdentifier accessElements:AnyFieldAccess* {
       return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id
+        identifier: id,
+        ...(accessElements.length > 0 ? { fields: accessElements } : {})
       }, location());
     }
 
