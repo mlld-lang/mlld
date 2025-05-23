@@ -82,7 +82,7 @@ export class Environment {
         let output = '';
         const originalLog = console.log;
         console.log = (...args: any[]) => {
-          output += args.map(arg => String(arg)).join(' ') + '\\n';
+          output += args.map(arg => String(arg)).join(' ') + '\n';
         };
         
         // If params provided, inject them as variables
@@ -90,8 +90,13 @@ export class Environment {
         if (params) {
           const paramDeclarations = Object.entries(params)
             .map(([key, value]) => `const ${key} = ${JSON.stringify(value)};`)
-            .join('\\n');
-          fullCode = paramDeclarations + '\\n' + code;
+            .join('\n');
+          fullCode = paramDeclarations + '\n' + code;
+        }
+        
+        // If code contains return statement, wrap in IIFE
+        if (fullCode.includes('return')) {
+          fullCode = `(function() { ${fullCode} })()`;
         }
         
         // Execute the code
@@ -102,7 +107,7 @@ export class Environment {
         
         // If there was console output, use that. Otherwise use the result.
         if (output) {
-          return output.trimEnd();
+          return output.replace(/\n+$/, '');
         }
         
         return result !== undefined ? String(result) : '';

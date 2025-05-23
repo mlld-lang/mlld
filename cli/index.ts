@@ -33,6 +33,7 @@ import { IParserService } from '@services/pipeline/ParserService/IParserService'
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
 import { IStateService } from '@services/state/StateService/IStateService';
 import { IOutputService } from '@services/pipeline/OutputService/IOutputService';
+import { interpret } from '../interpreter/index';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -512,6 +513,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
   let outputPath = output;
   const normalizedFormat = normalizeFormat(format); // Use normalized format
 
+
   if (!stdout && !outputPath) {
     outputPath = input.replace(/\.mld$/, '.' + getOutputExtension(normalizedFormat));
   }
@@ -522,13 +524,20 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
   }
 
   try {
-    // Resolve necessary services from the container
-    const parserService = container.resolve<IParserService>('IParserService');
-    const stateService = container.resolve<IStateService>('IStateService');
-    const interpreterService = container.resolve<IInterpreterService>('IInterpreterService');
-    const outputService = container.resolve<IOutputService>('IOutputService');
-    const fsService = container.resolve<IFileSystemService>('IFileSystemService');
-    const pathService = container.resolve<IPathService>('IPathService');
+    // Create filesystem directly without DI
+    const nodeFS = new NodeFileSystem();
+    const fsService = new FileSystemService(nodeFS);
+    
+    // Create a minimal path service
+    const pathService = {
+      resolve: (p: string) => path.resolve(p),
+      join: (...parts: string[]) => path.join(...parts),
+      dirname: (p: string) => path.dirname(p),
+      basename: (p: string) => path.basename(p),
+      extname: (p: string) => path.extname(p),
+      isAbsolute: (p: string) => path.isAbsolute(p),
+      relative: (from: string, to: string) => path.relative(from, to)
+    };
 
     if (debug) {
       console.log('CLI Options:', cliOptions);
@@ -536,17 +545,17 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       console.log('Output Path:', outputPath);
     }
 
-    // Core processing logic using resolved services
-    const content = await fsService.readFile(input as ValidatedResourcePath); // Keep cast for now
-    const ast = await parserService.parse(content);
-    stateService.setCurrentFilePath(input);
-    const resultState = await interpreterService.interpret(ast, {
-      filePath: input,
-      strict: cliOptions.strict ?? true,
-      initialState: stateService
+    // Read the input file using Node's fs directly
+    const fs = await import('fs/promises');
+    const content = await fs.readFile(input, 'utf8');
+    // Use the new interpreter
+    const result = await interpret(content, {
+      basePath: path.dirname(input),
+      format: normalizedFormat,
+      fileSystem: nodeFS as any,
+      pathService: pathService as any,
+      strict: cliOptions.strict
     });
-    const nodesToProcess = resultState.getTransformedNodes();
-    const result = await outputService.convert(nodesToProcess, resultState, normalizedFormat);
 
     // Output handling (remains mostly the same)
     if (stdout) {
@@ -554,23 +563,14 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     } else if (outputPath) {
       const { outputPath: finalPath, shouldOverwrite } = await confirmOverwrite(outputPath);
       if (shouldOverwrite) {
-        // Validate paths before using them with FileSystemService
+        // Use Node's fs directly
         const dirPath = path.dirname(finalPath);
-        const validationContext: PathValidationContext = {
-          workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath(process.cwd()),
-          allowExternalPaths: true,
-          rules: { allowAbsolute: true, allowRelative: true, allowParentTraversal: true, mustExist: false }
-        };
-
-        // Validate directory path
-        const validatedDirPath = await pathService.validatePath(dirPath, validationContext);
-        // Validate file path
-        const validatedFilePath = await pathService.validatePath(finalPath, validationContext);
-
-        // Ensure the output directory exists using the validated path
-        await fsService.ensureDir(validatedDirPath.validatedPath as ValidatedResourcePath);
-        // Write the file using the validated path
-        await fsService.writeFile(validatedFilePath.validatedPath as ValidatedResourcePath, result);
+        
+        // Ensure the output directory exists
+        await fs.mkdir(dirPath, { recursive: true });
+        
+        // Write the file
+        await fs.writeFile(finalPath, result, 'utf8');
         console.log(`Output written to ${finalPath}`);
       } else {
         console.log('Operation cancelled by user.');
@@ -865,27 +865,4 @@ export async function main(customArgs?: string[]): Promise<void> {
   }
 }
 
-// Only call main if this file is being run directly (not imported)
-if (require.main === module) {
-  // Keep reference to options parsed in main, or default if main throws early
-  let optionsForErrorHandler: CLIOptions = { input: 'unknown' };
-  main()
-    .then(() => {
-      // Update options if main completed successfully
-      optionsForErrorHandler = getCurrentCLIOptions() || optionsForErrorHandler;
-    })
-    .catch(async err => { // Make catch async to allow await handleError
-      // Update options if main parsed them before throwing
-      optionsForErrorHandler = getCurrentCLIOptions() || optionsForErrorHandler;
-      // Call the centralized error handler if error hasn't been logged
-      if (!(err && typeof err === 'object' && (err as any).__logged)) {
-          // Ensure err is an Error instance before passing
-          const errorToHandle = err instanceof Error ? err : new Error(String(err));
-          // Pass the options captured from main or the default
-          await handleError(errorToHandle, optionsForErrorHandler);
-      }
-      if (process.env.NODE_ENV !== 'test') {
-        process.exit(1);
-      }
-    });
-}
+// This file is now imported by cli-entry.ts, which handles the main execution

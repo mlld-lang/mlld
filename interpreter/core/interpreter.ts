@@ -47,8 +47,19 @@ export async function evaluate(node: MeldNode | MeldNode[], env: Environment): P
       
     case 'VariableReference':
       // Variable references are handled by interpolation in context
-      // If we get here, it's likely an error
+      // If we get here, it's likely an error or a grammar bug
       const varRef = node as any;
+      
+      // TODO: Remove this workaround when issue #50 is fixed
+      // The grammar incorrectly creates top-level VariableReference nodes
+      // for parameters in exec directives. These have location offset 0,0
+      // which is impossible for real variable references.
+      if (varRef.location?.start?.offset === 0 && 
+          varRef.location?.end?.offset === 0) {
+        // Skip orphaned parameter references from grammar bug
+        return { value: '', env };
+      }
+      
       const variable = env.getVariable(varRef.identifier);
       if (!variable) {
         throw new Error(`Variable not found: ${varRef.identifier}`);
@@ -92,7 +103,7 @@ async function evaluateText(node: TextNode, env: Environment): Promise<EvalResul
  * String interpolation helper - resolves {{variables}} in content
  */
 export async function interpolate(
-  nodes: Array<{ type: string; content?: string; name?: string }>,
+  nodes: Array<{ type: string; content?: string; name?: string; identifier?: string }>,
   env: Environment
 ): Promise<string> {
   const parts: string[] = [];
@@ -101,7 +112,7 @@ export async function interpolate(
     if (node.type === 'Text') {
       parts.push(node.content || '');
     } else if (node.type === 'VariableReference') {
-      const varName = node.name;
+      const varName = node.identifier || node.name;
       if (!varName) continue;
       
       const variable = env.getVariable(varName);

@@ -77,8 +77,17 @@ export async function evaluateRun(
         tempEnv.setVariable(key, { type: 'text', value, nodeId: '', location: null });
       }
       
+      // TODO: Remove this workaround when issue #51 is fixed
+      // Strip leading '[' from first command segment if present
+      const cleanTemplate = cmdDef.commandTemplate.map((seg: any, idx: number) => {
+        if (idx === 0 && seg.type === 'Text' && seg.content.startsWith('[')) {
+          return { ...seg, content: seg.content.substring(1) };
+        }
+        return seg;
+      });
+      
       // Interpolate the command template with parameters
-      const command = await interpolate(cmdDef.commandTemplate, tempEnv);
+      const command = await interpolate(cleanTemplate, tempEnv);
       output = await env.executeCommand(command);
       
     } else if (cmdDef.type === 'code') {
@@ -96,15 +105,17 @@ export async function evaluateRun(
   }
   
   // Create replacement text node with the output
+  // Trim trailing newlines for consistency
+  const trimmedOutput = output.replace(/\n+$/, '');
   const replacementNode: TextNode = {
     type: 'Text',
     nodeId: `${directive.nodeId}-output`,
-    content: output
+    content: trimmedOutput
   };
   
   // Add the replacement node to environment
   env.addNode(replacementNode);
   
   // Return the output value
-  return { value: output, env };
+  return { value: trimmedOutput, env };
 }

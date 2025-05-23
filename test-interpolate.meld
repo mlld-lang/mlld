@@ -1,0 +1,3 @@
+@text name = "Meld"
+@text greeting = [[Hello, {{name}}!]]
+@add @greeting

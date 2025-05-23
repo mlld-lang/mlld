@@ -26,8 +26,20 @@ export async function evaluateText(
     throw new Error('Text directive missing content');
   }
   
-  // Interpolate the content (resolve {{variables}})
-  const resolvedValue = await interpolate(contentNodes, env);
+  // Check if this is a run source (e.g., @text result = @run [echo "hello"])
+  let resolvedValue: string;
+  
+  if (directive.source === 'run') {
+    // The content should be the command to run
+    const command = await interpolate(contentNodes, env);
+    // Execute the command and use the output as the value
+    resolvedValue = await env.executeCommand(command);
+    // Trim trailing newlines for consistency
+    resolvedValue = resolvedValue.replace(/\n+$/, '');
+  } else {
+    // Normal case: interpolate the content (resolve {{variables}})
+    resolvedValue = await interpolate(contentNodes, env);
+  }
   
   // Handle append operator
   const operator = directive.operator || '=';
