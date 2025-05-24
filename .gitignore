@@ -54,12 +54,9 @@ pids
 # /dev/
 # /tmp/
 
-# Example outputs
-examples/*.xml
-examples/*.md
-examples/logs/
-tests/cases/**/*.o.xml
-tests/cases/**/*.o.md
+# mlld output
+*.o.xml
+*.o.md
 
 # Temporary files
 diff.txt
@@ -80,4 +77,15 @@ d.ts.map
 .env
 **/.claude/settings.local.json
 
+# Peggy debug output
 debug-combined-grammar.peggy
+
+# Built packages
+*.tgz
+*.vsix
+
+# If you're using npm pack
+*.tar.gz
+
+# VS Code extension specific
+*.vsix
