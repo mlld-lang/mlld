@@ -28,10 +28,10 @@
   "scripts": {
     "build:grammar:core": "npx tsc -p grammar/tsconfig.grammar.json",
     "build:grammar": "npm run build:grammar:core && node grammar/build-grammar.mjs && npm run ast:fixtures",
+    "build:fixtures": "node ./tests/utils/ast-fixtures.js process-examples ./tests/cases ./tests",
     "build": "npm run build:grammar && tsup",
     "ast": "npm run build:grammar && node ./scripts/ast-output.js",
     "ast:debug": "DEBUG_MELD_GRAMMAR=1 npm run ast --",
-    "ast:fixtures": "node ./tests/utils/ast-fixtures.js process-examples ./tests/cases ./tests",
     "reinstall": "npm run build && npm uninstall meld && npm install -g .",
     "test": "vitest run",
     "test:watch": "vitest",
