@@ -1,0 +1,100 @@
+name: meld-typespec-embed-design
+description: "Generates type specification for the '@embed' directive incorporating feedback from relevant services."
+outputPath: output # Relative to workflow.yaml
+
+files:
+  # General Context
+  architectureDocs:
+    - ../../docs/dev/DI-ARCHITECTURE.md # Relative path
+    - ../../docs/dev/PIPELINE.md       # Relative path
+  directiveClarityDoc: ../../_dev/EMBED-CLARITY.md # Relative path
+
+  # Component-Specific Files
+  CoreDirectiveCode:
+    - ../../services/pipeline/DirectiveService/DirectiveService.ts
+    - ../../services/pipeline/DirectiveService/IDirectiveService.ts
+    - ../../services/pipeline/DirectiveService/interfaces/DirectiveTypes.ts
+  
+  EmbedHandlerCode:
+    - ../../services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.ts
+    - ../../services/pipeline/ValidationService/validators/EmbedDirectiveValidator.ts
+  
+  ParserCoreCode:
+    - ../../services/pipeline/ParserService/ParserService.ts
+    - ../../services/pipeline/ParserService/IParserService.ts
+  
+  InterpreterCoreCode:
+    - ../../services/pipeline/InterpreterService/InterpreterService.ts
+    - ../../services/pipeline/InterpreterService/IInterpreterService.ts
+  
+  ResolutionCoreCode:
+    - ../../services/pipeline/ResolutionService/ResolutionService.ts
+    - ../../services/pipeline/ResolutionService/IResolutionService.ts
+  
+  VariableResolutionCode:
+    - ../../services/pipeline/ResolutionService/resolvers/VariableReferenceResolver.ts
+    - ../../services/pipeline/ResolutionService/resolvers/types.ts
+  
+  ContentResolutionCode:
+    - ../../services/pipeline/ResolutionService/resolvers/ContentResolver.ts
+    - ../../services/pipeline/ResolutionService/resolvers/StringLiteralHandler.ts
+  
+  StateCoreCode:
+    - ../../services/state/StateService/StateService.ts
+    - ../../services/state/StateService/IStateService.ts
+  
+  FileSystemCoreCode:
+    - ../../services/fs/FileSystemService/FileSystemService.ts
+    - ../../services/fs/FileSystemService/IFileSystemService.ts
+
+global_variables:
+  overallArchitecture: "{{ files.architectureDocs }}"
+  directiveName: "embed"
+  directiveClarityContent: "{{ files.directiveClarityDoc }}"
+
+iterable_objects:
+  services:
+    CoreDirective:
+      description: "Core directive handling and type definitions"
+      codeContent: "{{ files.CoreDirectiveCode }}"
+    
+    EmbedHandler:
+      description: "Embed directive implementation and validation"
+      codeContent: "{{ files.EmbedHandlerCode }}"
+    
+    ParserCore:
+      description: "Core parsing functionality for directives"
+      codeContent: "{{ files.ParserCoreCode }}"
+    
+    InterpreterCore:
+      description: "Core interpretation pipeline orchestration"
+      codeContent: "{{ files.InterpreterCoreCode }}"
+    
+    ResolutionCore:
+      description: "Core resolution service functionality"
+      codeContent: "{{ files.ResolutionCoreCode }}"
+    
+    VariableResolution:
+      description: "Variable reference resolution handling"
+      codeContent: "{{ files.VariableResolutionCode }}"
+    
+    ContentResolution:
+      description: "Content and string literal resolution"
+      codeContent: "{{ files.ContentResolutionCode }}"
+    
+    StateCore:
+      description: "Core state management functionality"
+      codeContent: "{{ files.StateCoreCode }}"
+    
+    FileSystemCore:
+      description: "Core filesystem operations"
+      codeContent: "{{ files.FileSystemCoreCode }}"
+
+sets:
+  # Sequence with added grouping set:
+  - useSet: gather-requirements
+  - useSet: group-requirements     # NEW: Group synthesis step
+  - useSet: synthesize-requirements # Now consolidates grouped outputs
+  - useSet: draft-spec
+  - useSet: collect-draft-feedback
+  - useSet: refine-spec 

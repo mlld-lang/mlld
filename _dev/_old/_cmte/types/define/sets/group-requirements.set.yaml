@@ -1,0 +1,30 @@
+name: group-requirements
+description: "Group and synthesize requirements for @define definition, execution context, and validation separately."
+# No for_each, runs once after all feedback is gathered.
+
+tasks:
+  # Task for synthesizing the core definition structure
+  - useTask: synthesize-subtype-reqs
+    prior_outputs:
+      # Map specific component feedback using [Key] syntax from define workflow
+      CoreDirectiveFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[CoreDirective].output }}"
+      DefineHandlerFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[DefineHandler].output }}"
+      ParserCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[ParserCore].output }}"
+      StateCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[StateCore].output }}"
+
+  # Task for synthesizing requirements related to execution context (variable resolution within template during @run)
+  - useTask: synthesize-execution-reqs
+    prior_outputs:
+      # Map specific component feedback using [Key] syntax from define workflow
+      ResolutionCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[ResolutionCore].output }}"
+      VariableResolutionFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[VariableResolution].output }}"
+      ContentResolutionFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[ContentResolution].output }}"
+      InterpreterCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[InterpreterCore].output }}"
+      StateCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[StateCore].output }}"
+
+  # Task for synthesizing validation requirements (for @define syntax)
+  - useTask: synthesize-validation-reqs
+    prior_outputs:
+      # Map specific component feedback using [Key] syntax from define workflow
+      DefineHandlerFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[DefineHandler].output }}"
+      ParserCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[ParserCore].output }}" 

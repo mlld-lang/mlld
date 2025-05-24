@@ -1,0 +1,13 @@
+name: gather-requirements
+description: "Collect service requirements for the '@{{ directiveName }}' directive from the perspective of each relevant service."
+# Iterates over the 'services' object defined in workflow.yaml
+for_each: services
+
+tasks:
+  # This task runs in parallel for each service defined in the services object
+  - useTask: analyze-service-needs-for-directive
+    # Task context automatically includes:
+    # - item (the current service object from the iteration)
+    # - item.key (service name)
+    # - item. (service object properties: description, docsContent, codeContent)
+    # - global_variables (overallArchitecture, directiveName, directiveClarityContent) 

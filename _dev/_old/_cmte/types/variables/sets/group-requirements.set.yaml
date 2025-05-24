@@ -1,0 +1,28 @@
+name: group-requirements
+description: "Group and synthesize requirements for variable structure, resolution, and validation separately."
+# No for_each, runs once after all feedback is gathered.
+
+tasks:
+  # Task for synthesizing the internal type structures
+  - useTask: synthesize-subtype-reqs # Renamed to focus on structure
+    prior_outputs:
+      StateManagementFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[StateManagement].output }}"
+      VariableHandlerFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[VariableHandler].output }}"
+      CoreDirectiveFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[CoreDirective].output }}" # CommandDef structure
+      ParserCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[ParserCore].output }}"
+
+  # Task for synthesizing requirements related to runtime resolution
+  - useTask: synthesize-execution-reqs # Renamed to focus on resolution
+    prior_outputs:
+      VariableHandlerFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[VariableHandler].output }}"
+      ResolutionCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[ResolutionCore].output }}"
+      ContentResolutionFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[ContentResolution].output }}"
+      StateManagementFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[StateManagement].output }}"
+      InterpreterCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[InterpreterCore].output }}"
+
+  # Task for synthesizing validation requirements
+  - useTask: synthesize-validation-reqs
+    prior_outputs:
+      VariableHandlerFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[VariableHandler].output }}"
+      StateManagementFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[StateManagement].output }}"
+      ParserCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[ParserCore].output }}" 

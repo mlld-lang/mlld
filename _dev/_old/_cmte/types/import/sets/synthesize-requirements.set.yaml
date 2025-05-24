@@ -1,0 +1,12 @@
+name: synthesize-requirements
+description: "Consolidate the separately synthesized requirements for file/import handling into a final feature list."
+# No for_each, this is a single architect task
+
+tasks:
+  - useTask: consolidate-synthesized-reqs # Renamed task
+    prior_outputs:
+      # Map outputs from the new 'group-requirements' set
+      subtype_reqs: "{{ group-requirements.synthesize-subtype-reqs.output }}"
+      execution_reqs: "{{ group-requirements.synthesize-execution-reqs.output }}"
+      validation_reqs: "{{ group-requirements.synthesize-validation-reqs.output }}"
+    # Task context includes the three synthesized requirement notes + global_variables 

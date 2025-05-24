@@ -131,15 +131,18 @@ export async function evaluateRun(
     output += '\n';
   }
   
-  // Create replacement text node with the output
-  const replacementNode: TextNode = {
-    type: 'Text',
-    nodeId: `${directive.nodeId}-output`,
-    content: output
-  };
-  
-  // Add the replacement node to environment
-  env.addNode(replacementNode);
+  // Only add output nodes for non-embedded directives
+  if (!directive.meta?.isDataValue) {
+    // Create replacement text node with the output
+    const replacementNode: TextNode = {
+      type: 'Text',
+      nodeId: `${directive.nodeId}-output`,
+      content: output
+    };
+    
+    // Add the replacement node to environment
+    env.addNode(replacementNode);
+  }
   
   // Return the output value
   return { value: output, env };

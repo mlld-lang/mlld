@@ -3,6 +3,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { createLLMXML } from 'llmxml';
+import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
 
 /**
  * Remove single blank lines but preserve multiple blank lines.
@@ -81,12 +82,23 @@ export async function evaluateAdd(
           }
         } else if (field.type === 'field') {
           if (typeof value === 'object' && value !== null) {
-            value = value[field.name];
+            // Handle DataObject type
+            if (value.type === 'object' && value.properties) {
+              value = value.properties[field.name];
+            } else {
+              value = value[field.name];
+            }
           } else {
             throw new Error(`Cannot access property '${field.name}' on non-object value`);
           }
         }
       }
+    }
+    
+    // Check if the value contains unevaluated directives
+    if (hasUnevaluatedDirectives(value)) {
+      // Evaluate any embedded directives
+      value = await evaluateDataValue(value, env);
     }
     
     // Convert final value to string
@@ -95,11 +107,6 @@ export async function evaluateAdd(
     } else if (typeof value === 'number' || typeof value === 'boolean') {
       // For primitives, just convert to string
       content = String(value);
-    } else if (value && typeof value === 'object' && value.type === 'Directive') {
-      // Handle embedded directives in complex data
-      // This is a known limitation - we need lazy evaluation
-      // For now, return a placeholder
-      content = '[Embedded directive - lazy evaluation not yet implemented]';
     } else if (value !== null && value !== undefined) {
       // For objects/arrays, use JSON
       content = JSON.stringify(value, null, 2);

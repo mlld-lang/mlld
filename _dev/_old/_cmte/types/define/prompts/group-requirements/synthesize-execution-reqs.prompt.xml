@@ -1,0 +1,877 @@
+<SynthesizeExecutionRequirementsForRun>
+  <Context>
+You are the **System Architect**. You have received feedback from component leads regarding the execution environment, runtime variable resolution, and state management related to the invocation of defined commands (originally defined by ).
+**CRITICAL NOTE:** Focus *only* on the requirements for the *runtime execution* when a  is encountered. Ignore the static type definitions of the directive itself for now.
+    <FeedbackOnExecutionRuntime></FeedbackOnExecutionRuntime>
+  </Context>
+</SynthesizeExecutionRequirementsForRun>
+
+<NoteInputsAdjustedForDefineContext>
+**ResolutionCore Feedback (Runtime Variable Usage):**
+</NoteInputsAdjustedForDefineContext>
+
+<ImprovingDefineDirectiveTypeSafetyInResolutioncore>
+After analyzing the ResolutionService implementation and understanding the @define directive&apos;s purpose in Meld, I&apos;ve identified several opportunities to enhance type safety and improve code clarity. The current implementation lacks strong typing for command definitions, which introduces complexity in command resolution and execution.
+  <1currentChallengesInCommandResolution>
+The ResolutionService handles command resolution through the  method:
+```typescript
+async resolveCommand(cmd: string, args: string[], context: ResolutionContext): Promise<string> {
+  const node: DirectiveNode = {
+    type: 'Directive',
+    directive: {
+      kind: 'run',
+      name: cmd,
+      identifier: cmd,
+      args
+    }
+  };
+  return this.commandResolver.resolve(node, context);
+}
+```
+However, the code faces several challenges:
+1. **Lack of Type Discrimination**: There&apos;s no clear distinction between basic shell commands and language-specific commands
+2. **Weak Parameter Validation**: No static typing to ensure arguments match command parameters
+3. **Inconsistent Command Representation**: The command definition structure is not strongly typed
+4. **Manual Command Retrieval**: Commands are retrieved from state without type checking
+5. **Error-Prone Parameter Substitution**: Parameter substitution relies on positional matching without type safety
+  </1currentChallengesInCommandResolution>
+  <2proposedTypeImprovements>
+    <21commandDefinitionTypeHierarchy>
+First, I propose creating a discriminated union for command definitions:
+```typescript
+// Base interface for all command definitions
+interface CommandDefinitionBase {
+  name: string;
+  parameters: string[];
+  metadata?: {
+    description?: string;
+    source?: string;
+    definedAt?: {
+      filePath: string;
+      line: number;
+    }
+  };
+}
+
+// For shell commands (using @run [command])
+interface ShellCommandDefinition extends CommandDefinitionBase {
+  type: 'shell';
+  commandTemplate: string; // The template string with {{param}} placeholders
+}
+
+// For language commands (using @run js/python/bash)
+interface LanguageCommandDefinition extends CommandDefinitionBase {
+  type: 'language';
+  language: 'js' | 'python' | 'bash' | string; // Language identifier
+  codeBlock: string; // Raw code block content
+}
+
+// Union type for all command definitions
+type CommandDefinition = ShellCommandDefinition | LanguageCommandDefinition;
+```
+**Benefits:**
+- **Type Safety**: The discriminated union with the  field allows TypeScript to narrow types based on the command type
+- **Self-Documentation**: The structure clearly documents the different command types and their required properties
+- **Error Prevention**: Required properties ensure all necessary data is provided
+- **IDE Support**: Improved autocomplete and type checking during development
+    </21commandDefinitionTypeHierarchy>
+    <22commandArgumentsType>
+To ensure arguments match parameters, we can create a generic type:
+```typescript
+// Type for command arguments that enforces matching with parameters
+type CommandArguments<T extends CommandDefinition> = {
+  [K in keyof T['parameters']]: string;
+};
+```
+**Benefits:**
+- **Parameter Validation**: Ensures arguments match the expected parameters
+- **Prevents Mismatch**: Catches mismatched argument counts at compile time
+- **Self-Documenting**: Makes parameter requirements explicit
+    </22commandArgumentsType>
+    <23commandResolutionContext>
+To improve resolution context, we can extend the existing ResolutionContext:
+```typescript
+interface CommandResolutionContext extends ResolutionContext {
+  commandType?: 'shell' | 'language';
+  substitutionMode?: 'strict' | 'lenient';
+  environmentVariables?: Record<string, string>;
+  workingDirectory?: string;
+}
+```
+**Benefits:**
+- **Contextual Execution**: Provides necessary context for command execution
+- **Flexible Configuration**: Allows customizing command behavior
+- **Environment Control**: Enables specifying environment variables and working directory
+    </23commandResolutionContext>
+    <24stateServiceCommandStorageInterface>
+To improve how commands are stored and retrieved from state:
+```typescript
+// Enhanced interface for StateService command operations
+interface CommandStateOperations {
+  // Store a command definition
+  setCommand(name: string, definition: CommandDefinition): void;
+  
+  // Retrieve a typed command definition
+  getCommand<T extends 'shell' | 'language' = 'shell'>(
+    name: string
+  ): T extends 'shell' ? ShellCommandDefinition : LanguageCommandDefinition;
+  
+  // Check if a command exists
+  hasCommand(name: string): boolean;
+  
+  // Get all commands of a specific type
+  getCommandsByType(type: 'shell' | 'language'): CommandDefinition[];
+}
+```
+**Benefits:**
+- **Type-Safe Retrieval**: Returns properly typed command definitions
+- **Error Prevention**: Prevents accessing undefined commands without checks
+- **Query Capabilities**: Allows filtering commands by type
+    </24stateServiceCommandStorageInterface>
+  </2proposedTypeImprovements>
+  <3implementationInResolutionservice>
+    <31enhancedCommandResolution>
+With these types, the command resolution process becomes more robust:
+```typescript
+async resolveCommand(
+  cmdName: string, 
+  args: string[], 
+  context: ResolutionContext
+): Promise<string> {
+  // Get the command definition with proper typing
+  const commandDef = context.state.getCommand(cmdName);
+  
+  if (!commandDef) {
+    throw new MeldResolutionError(
+      `Command not found: ${cmdName}`,
+      {
+        code: ResolutionErrorCode.COMMAND_NOT_FOUND,
+        details: { commandName: cmdName },
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
+  
+  // Type narrowing based on discriminated union
+  if (commandDef.type === 'shell') {
+    return this.resolveShellCommand(commandDef, args, context);
+  } else {
+    return this.resolveLanguageCommand(commandDef, args, context);
+  }
+}
+```
+    </31enhancedCommandResolution>
+    <32parameterValidation>
+With stronger types, we can validate parameters against the command definition:
+```typescript
+private validateCommandArguments(
+  command: CommandDefinition,
+  args: string[]
+): void {
+  if (command.parameters.length !== args.length) {
+    throw new MeldResolutionError(
+      `Command ${command.name} expects ${command.parameters.length} parameters, but got ${args.length}`,
+      {
+        code: ResolutionErrorCode.INVALID_COMMAND,
+        details: { 
+          commandName: command.name,
+          expectedParams: command.parameters,
+          actualArgs: args
+        },
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
+}
+```
+    </32parameterValidation>
+  </3implementationInResolutionservice>
+  <4improvedCommandResolverImplementation>
+The CommandResolver class would benefit from these types:
+```typescript
+class CommandResolver {
+  constructor(private stateService: IStateService) {}
+  
+  async resolve(node: DirectiveNode, context: ResolutionContext): Promise<string> {
+    const { name, args } = node.directive;
+    
+    // Get typed command definition
+    const commandDef = this.stateService.getCommand(name);
+    if (!commandDef) {
+      throw VariableResolutionErrorFactory.commandNotFound(name);
+    }
+    
+    // Type narrowing works automatically with discriminated union
+    if (commandDef.type === 'shell') {
+      return this.resolveShellCommand(commandDef, args, context);
+    } else {
+      return this.resolveLanguageCommand(commandDef, args, context);
+    }
+  }
+  
+  private async resolveShellCommand(
+    command: ShellCommandDefinition,
+    args: string[],
+    context: ResolutionContext
+  ): Promise<string> {
+    // Validate argument count
+    if (command.parameters.length !== args.length) {
+      throw VariableResolutionErrorFactory.invalidArgumentCount(
+        command.name, 
+        command.parameters.length, 
+        args.length
+      );
+    }
+    
+    // Create parameter substitution map
+    const substitutions = new Map<string, string>();
+    command.parameters.forEach((param, index) => {
+      substitutions.set(param, args[index]);
+    });
+    
+    // Apply substitutions to command template
+    let resolvedCommand = command.commandTemplate;
+    for (const [param, value] of substitutions.entries()) {
+      // Replace {{param}} with the actual value
+      resolvedCommand = resolvedCommand.replace(
+        new RegExp(`{{${param}}}`, 'g'), 
+        value
+      );
+    }
+    
+    return resolvedCommand;
+  }
+  
+  private async resolveLanguageCommand(
+    command: LanguageCommandDefinition,
+    args: string[],
+    context: ResolutionContext
+  ): Promise<string> {
+    // Language-specific command execution logic
+    // ...
+  }
+}
+```
+  </4improvedCommandResolverImplementation>
+  <5benefitsForTheDefineDirectiveHandler>
+The DefineDirectiveHandler would also benefit from these types:
+```typescript
+class DefineDirectiveHandler implements IDirectiveHandler {
+  async execute(
+    node: DirectiveNode, 
+    context: DirectiveContext
+  ): Promise<DirectiveResult> {
+    // Extract command name and parameters
+    const { name, value } = node.directive;
+    
+    // Parse parameters from the define directive
+    const paramMatch = /(\w+)\s*\((.*?)\)/.exec(name);
+    if (!paramMatch) {
+      throw new MeldDirectiveError(
+        'Invalid @define syntax, expected: @define name(param1, param2) = @run ...',
+        { node }
+      );
+    }
+    
+    const commandName = paramMatch[1];
+    const parameters = paramMatch[2]
+      .split(',')
+      .map(p => p.trim())
+      .filter(p => p);
+    
+    // Determine if this is a shell or language command
+    const isLanguageCommand = value.includes('@run js') || 
+                             value.includes('@run python') || 
+                             value.includes('@run bash');
+    
+    let commandDef: CommandDefinition;
+    
+    if (isLanguageCommand) {
+      // Extract language and code block
+      const langMatch = /@run\s+(\w+)\s*\(.*?\)\s*\[\[([\s\S]*?)\]\]/m.exec(value);
+      if (!langMatch) {
+        throw new MeldDirectiveError(
+          'Invalid language command syntax in @define directive',
+          { node }
+        );
+      }
+      
+      commandDef = {
+        type: 'language',
+        name: commandName,
+        parameters,
+        language: langMatch[1],
+        codeBlock: langMatch[2]
+      };
+    } else {
+      // Extract command template
+      const cmdMatch = /@run\s+(?:\[\[([\s\S]*?)\]\]|\[(.*?)\])/m.exec(value);
+      if (!cmdMatch) {
+        throw new MeldDirectiveError(
+          'Invalid shell command syntax in @define directive',
+          { node }
+        );
+      }
+      
+      commandDef = {
+        type: 'shell',
+        name: commandName,
+        parameters,
+        commandTemplate: cmdMatch[1] || cmdMatch[2]
+      };
+    }
+    
+    // Store the command definition in state
+    context.state.setCommand(commandName, commandDef);
+    
+    return {
+      value: null,
+      metadata: {
+        commandName,
+        commandType: commandDef.type,
+        parameters: commandDef.parameters
+      }
+    };
+  }
+}
+```
+  </5benefitsForTheDefineDirectiveHandler>
+  <6benefitsForResolutionAndErrorHandling>
+With these improved types, error handling becomes more precise:
+```typescript
+// Enhanced error factory for command-related errors
+class CommandResolutionErrorFactory {
+  static commandNotFound(commandName: string): MeldResolutionError {
+    return new MeldResolutionError(
+      `Command not found: ${commandName}`,
+      {
+        code: ResolutionErrorCode.COMMAND_NOT_FOUND,
+        details: { commandName },
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
+  
+  static invalidArgumentCount(
+    commandName: string, 
+    expected: number, 
+    actual: number
+  ): MeldResolutionError {
+    return new MeldResolutionError(
+      `Command ${commandName} expects ${expected} arguments, but got ${actual}`,
+      {
+        code: ResolutionErrorCode.INVALID_COMMAND,
+        details: { commandName, expected, actual },
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
+  
+  static languageExecutionError(
+    commandName: string,
+    language: string,
+    error: string
+  ): MeldResolutionError {
+    return new MeldResolutionError(
+      `Error executing ${language} command ${commandName}: ${error}`,
+      {
+        code: ResolutionErrorCode.RESOLUTION_FAILED,
+        details: { commandName, language, error },
+        severity: ErrorSeverity.Fatal
+      }
+    );
+  }
+}
+```
+  </6benefitsForResolutionAndErrorHandling>
+  <7summaryOfBenefits>
+Implementing these type improvements for the @define directive would provide:
+1. **Type Safety**: Discriminated unions ensure proper handling of different command types
+2. **Self-Documentation**: The types themselves document the structure and requirements
+3. **Error Prevention**: Early detection of errors through static type checking
+4. **Simplified Logic**: Cleaner code with less defensive programming and manual checks
+5. **Consistent Structure**: Standard representation of commands across the codebase
+6. **Better IDE Support**: Improved autocomplete, hover information, and refactoring support
+7. **Precise Error Messages**: More specific error messages with detailed context
+8. **Maintainability**: Easier to understand and modify command-related code
+These improvements align with the Meld architecture&apos;s focus on strong typing and dependency injection, making the code more robust and easier to maintain.
+**StateCore Feedback (Command Definitions / Runtime State):**
+  </7summaryOfBenefits>
+</ImprovingDefineDirectiveTypeSafetyInResolutioncore>
+
+<ImprovingDefineDirectiveTypeSafetyInStatecoreService>
+After analyzing the StateCore service code, I&apos;ve identified several areas where enhanced TypeScript types for the  directive would significantly improve code safety, maintainability, and developer experience. The current implementation uses a generic  type that doesn&apos;t fully capture the structure and constraints of command definitions.
+  <CurrentIssuesWithCommandDefinitionTypes>
+    <1inadequateTypeDifferentiationForCommandTypes>
+Currently, the  appears to be a simple object with a string  property and optional :
+```typescript
+// Current implicit type
+type CommandDefinition = {
+  command: string;
+  options?: Record<string, unknown>;
+};
+```
+**Problem:** This doesn&apos;t distinguish between basic shell commands and language-specific commands (JS, Python, Bash), which have different structures and validation requirements.
+    </1inadequateTypeDifferentiationForCommandTypes>
+    <2lackOfParameterTypeSafety>
+Parameters for commands are not strongly typed, making it difficult to validate parameter counts and names when executing commands.
+**Problem:** This can lead to runtime errors when parameter counts mismatch or when required parameters are missing.
+    </2lackOfParameterTypeSafety>
+    <3noDistinctionBetweenCommandTemplateAndRawCodeBlock>
+The current type doesn&apos;t differentiate between command templates (for shell commands) and raw code blocks (for language commands).
+**Problem:** This makes validation complex and error-prone, especially when processing different command types.
+    </3noDistinctionBetweenCommandTemplateAndRawCodeBlock>
+  </CurrentIssuesWithCommandDefinitionTypes>
+  <ProposedTypeImprovements>
+    <1discriminatedUnionForCommandTypes>
+```typescript
+// Base interface for all command definitions
+interface BaseCommandDefinition {
+  type: 'basic' | 'language';
+  name: string;
+  parameters: string[];
+}
+
+// For shell commands (@run)
+interface BasicCommandDefinition extends BaseCommandDefinition {
+  type: 'basic';
+  commandTemplate: string;
+  isMultiline: boolean;
+}
+
+// For language commands (@run js/python/bash)
+interface LanguageCommandDefinition extends BaseCommandDefinition {
+  type: 'language';
+  language: 'js' | 'python' | 'bash' | string;
+  codeBlock: string;
+  languageParameters?: string[];
+}
+
+// Combined type using discriminated union
+type CommandDefinition = BasicCommandDefinition | LanguageCommandDefinition;
+```
+**Benefits:**
+1. **Type Safety:** The discriminated union pattern allows TypeScript to narrow types based on the  property.
+2. **Validation:** Makes validation simpler with clear expectations for each command type.
+3. **IDE Support:** Provides better autocomplete and documentation in IDEs.
+    </1discriminatedUnionForCommandTypes>
+    <2parameterHandlingImprovements>
+```typescript
+// Type for parameter validation
+interface ParameterValidation {
+  required: boolean;
+  defaultValue?: string;
+}
+
+// Enhanced command definition with parameter validation
+interface EnhancedBaseCommandDefinition extends BaseCommandDefinition {
+  parameterValidation?: Record<string, ParameterValidation>;
+}
+```
+**Benefits:**
+1. **Parameter Validation:** Enables validation of required parameters and default values.
+2. **Error Prevention:** Catches parameter mismatches at compile time rather than runtime.
+3. **Documentation:** Self-documents the expected parameters for commands.
+    </2parameterHandlingImprovements>
+    <3commandStorageTypeEnhancements>
+```typescript
+// Enhanced state command storage
+interface CommandStore {
+  getCommand(name: string): CommandDefinition | undefined;
+  setCommand(name: string, definition: CommandDefinition): void;
+  hasCommand(name: string): boolean;
+  validateParameters(name: string, providedParams: string[]): boolean;
+  getAllCommands(): Map<string, CommandDefinition>;
+}
+```
+**Benefits:**
+1. **API Clarity:** Makes the command API more explicit and self-documenting.
+2. **Validation:** Adds parameter validation as a first-class concern.
+3. **Type Safety:** Ensures consistency in command storage and retrieval.
+    </3commandStorageTypeEnhancements>
+  </ProposedTypeImprovements>
+  <ImplementationExamples>
+    <CommandDefinitionStorage>
+```typescript
+// In StateService.ts
+setCommand(name: string, command: string | CommandDefinition): void {
+  this.checkMutable();
+  const commands = new Map(this.currentState.commands);
+  
+  // If string is provided, convert to BasicCommandDefinition
+  let commandDef: CommandDefinition;
+  if (typeof command === 'string') {
+    commandDef = {
+      type: 'basic',
+      name,
+      parameters: [],
+      commandTemplate: command,
+      isMultiline: false
+    };
+  } else if ('command' in command) {
+    // Legacy format conversion
+    const isLanguageCommand = command.command.startsWith('@run js') || 
+                             command.command.startsWith('@run python') ||
+                             command.command.startsWith('@run bash');
+    
+    if (isLanguageCommand) {
+      // Extract language and code block
+      const match = /^@run\s+(\w+)(?:\(([^)]*)\))?\s+\[\[([\s\S]*)\]\]$/m.exec(command.command);
+      if (match) {
+        const [_, language, params, codeBlock] = match;
+        commandDef = {
+          type: 'language',
+          name,
+          parameters: [], // Would be filled from define directive params
+          language,
+          codeBlock: codeBlock.trim(),
+          languageParameters: params ? params.split(',').map(p => p.trim()) : []
+        };
+      } else {
+        // Fallback for malformed language command
+        commandDef = {
+          type: 'basic',
+          name,
+          parameters: [],
+          commandTemplate: command.command,
+          isMultiline: command.command.includes('[[')
+        };
+      }
+    } else {
+      // Basic command
+      commandDef = {
+        type: 'basic',
+        name,
+        parameters: [], // Would be filled from define directive params
+        commandTemplate: command.command,
+        isMultiline: command.command.includes('[[')
+      };
+    }
+  } else {
+    // Already in new format
+    commandDef = command as CommandDefinition;
+  }
+  
+  commands.set(name, commandDef);
+  this.updateState({ commands }, `setCommand:${name}`);
+}
+```
+    </CommandDefinitionStorage>
+    <ParameterValidation>
+```typescript
+// New method in StateService
+validateCommandParameters(commandName: string, providedParams: string[]): boolean {
+  const command = this.getCommand(commandName);
+  if (!command) return false;
+  
+  // For basic validation, just check parameter count
+  if (command.parameters.length !== providedParams.length) {
+    logger.warn(`Parameter count mismatch for command ${commandName}: expected ${command.parameters.length}, got ${providedParams.length}`);
+    return false;
+  }
+  
+  return true;
+}
+```
+    </ParameterValidation>
+    <TypeGuardsForCommandTypes>
+```typescript
+// Type guards for working with command definitions
+function isBasicCommand(command: CommandDefinition): command is BasicCommandDefinition {
+  return command.type === 'basic';
+}
+
+function isLanguageCommand(command: CommandDefinition): command is LanguageCommandDefinition {
+  return command.type === 'language';
+}
+
+// Example usage in command execution
+getCommandForExecution(name: string, args: string[]): string | undefined {
+  const command = this.getCommand(name);
+  if (!command) return undefined;
+  
+  if (isBasicCommand(command)) {
+    // Process basic command
+    let result = command.commandTemplate;
+    command.parameters.forEach((param, index) => {
+      result = result.replace(new RegExp(`{{${param}}}`, 'g'), args[index] || '');
+    });
+    return result;
+  } else if (isLanguageCommand(command)) {
+    // Process language command differently
+    // ...
+  }
+  
+  return undefined;
+}
+```
+    </TypeGuardsForCommandTypes>
+  </ImplementationExamples>
+  <BenefitsToTheStatecoreService>
+    <1improvedErrorDetection>
+The enhanced types would catch many common errors at compile time:
+- Mismatched parameter counts between definition and usage
+- Incorrect command structure for different command types
+- Missing required fields for specific command types
+    </1improvedErrorDetection>
+    <2selfDocumentingCode>
+The discriminated union pattern makes the code self-documenting:
+- Clear separation between basic and language commands
+- Explicit parameter lists and validation
+- Type-driven development for command handling
+    </2selfDocumentingCode>
+    <3simplifiedCommandProcessing>
+Command processing becomes more straightforward with type narrowing:
+```typescript
+// Before
+if (typeof command === 'string' || !command.options) {
+  // Handle basic command
+} else if (command.options.language) {
+  // Handle language command
+}
+
+// After
+if (isBasicCommand(command)) {
+  // TypeScript knows this is a BasicCommandDefinition
+  processBasicCommand(command.commandTemplate, command.parameters);
+} else {
+  // TypeScript knows this is a LanguageCommandDefinition
+  processLanguageCommand(command.language, command.codeBlock, command.languageParameters);
+}
+```
+    </3simplifiedCommandProcessing>
+    <4enhancedDebuggingAndTesting>
+With more specific types:
+- Error messages become more precise
+- Test cases can target specific command types
+- Edge cases are more clearly defined and testable
+    </4enhancedDebuggingAndTesting>
+    <5futureExtensibility>
+The proposed type system allows for future enhancements:
+- Adding new command types with their own specific properties
+- Extending parameter validation with more sophisticated rules
+- Supporting additional metadata for commands without breaking changes
+    </5futureExtensibility>
+  </BenefitsToTheStatecoreService>
+  <Conclusion>
+Implementing these type improvements for the  directive would significantly enhance the StateCore service by:
+1. Making command definitions more explicit and type-safe
+2. Reducing runtime errors through compile-time validation
+3. Simplifying command processing with type narrowing
+4. Improving code readability and maintainability
+5. Providing better developer experience through IDE support
+These changes align with TypeScript best practices and would make the  directive implementation more robust while reducing the cognitive load on developers working with the codebase.
+**InterpreterCore Feedback (Execution Context):**
+  </Conclusion>
+</ImprovingDefineDirectiveTypeSafetyInStatecoreService>
+
+<ImprovingTypescriptTypesForDefineDirectivesInInterpretercore>
+  <CurrentChallengesInTheInterpretercoreImplementation>
+After reviewing the InterpreterCore service code, I&apos;ve identified several areas where the handling of  directives could benefit from stronger TypeScript types. The current implementation has several challenges:
+1. **Ambiguous Directive Result Handling**: The code uses type assertions with  when processing directive results, which is error-prone and bypasses TypeScript&apos;s type checking.
+2. **No Clear Type Definition for Command Templates**: There&apos;s no explicit type for the command templates stored by  directives, making it difficult to enforce correct structure.
+3. **Inconsistent Replacement Node Handling**: The code manually checks for the existence of properties using , which could be replaced with proper type discrimination.
+4. **Missing Parameter Validation**: The code lacks strong typing for command parameters, which are crucial for correct parameter substitution during execution.
+5. **Unclear Distinction Between Command Types**: There&apos;s no type-level distinction between basic shell commands and language-specific commands.
+  </CurrentChallengesInTheInterpretercoreImplementation>
+  <ProposedTypescriptTypeImprovements>
+    <1defineAdiscriminatedUnionForCommandDefinitions>
+```typescript
+// Command parameter definition
+interface CommandParameter {
+  name: string;
+  position: number;
+}
+
+// Base interface for all command definitions
+interface BaseCommandDefinition {
+  name: string;
+  parameters: CommandParameter[];
+  description?: string;
+}
+
+// Basic shell command definition
+interface ShellCommandDefinition extends BaseCommandDefinition {
+  type: 'shell';
+  template: string;
+  isMultiline: boolean;
+}
+
+// Language command definition
+interface LanguageCommandDefinition extends BaseCommandDefinition {
+  type: 'language';
+  language: 'js' | 'python' | 'bash' | string;
+  codeBlock: string;
+  languageParameters: string[];
+}
+
+// Discriminated union type
+type CommandDefinition = ShellCommandDefinition | LanguageCommandDefinition;
+```
+**Justification**: This type structure provides clear discrimination between shell commands and language commands, ensuring that each type has the required properties. It makes it impossible to mix properties that don&apos;t belong together (e.g., using  with a language command) and enables exhaustive type checking when handling different command types.
+    </1defineAdiscriminatedUnionForCommandDefinitions>
+    <2createAproperDirectiveresultInterfaceForDefineDirectives>
+```typescript
+// Generic directive result interface
+interface DirectiveResult<T = unknown> {
+  state: StateServiceLike;
+  replacement?: MeldNode;
+  metadata?: Record<string, unknown>;
+}
+
+// Specific result for define directives
+interface DefineDirectiveResult extends DirectiveResult {
+  commandDefinition: CommandDefinition;
+}
+```
+**Justification**: By creating a specific result type for  directives, we can enforce that all handlers for these directives return the required command definition with the correct structure. This eliminates the need for type assertions and enables proper type checking when processing directive results.
+    </2createAproperDirectiveresultInterfaceForDefineDirectives>
+    <3typeSafeCommandStorageInStateservice>
+```typescript
+// Add to StateServiceLike interface
+interface StateServiceLike {
+  // Existing methods...
+  
+  // New methods for command management
+  storeCommand(name: string, definition: CommandDefinition): void;
+  getCommand(name: string): CommandDefinition | undefined;
+  hasCommand(name: string): boolean;
+}
+```
+**Justification**: Adding proper typed methods for command storage and retrieval ensures that commands are stored with the correct structure and can be retrieved with their full type information. This prevents errors where commands might be stored with missing or incorrect properties.
+    </3typeSafeCommandStorageInStateservice>
+    <4improvedDirectiveNodeTypesForDefineDirectives>
+```typescript
+// Base directive node
+interface DirectiveNode extends MeldNode {
+  type: 'Directive';
+  directive: {
+    kind: string;
+    // Other common properties
+  };
+}
+
+// Define directive node
+interface DefineDirectiveNode extends DirectiveNode {
+  directive: {
+    kind: 'define';
+    name: string;
+    parameters: string[];
+    value: {
+      directive: {
+        kind: 'run';
+        command?: string;
+        language?: string;
+        languageParameters?: string[];
+        content: string;
+      }
+    }
+  };
+}
+```
+**Justification**: Creating a specific type for  directive nodes ensures that all required properties are present and correctly structured. This makes it easier to validate and process these directives, reducing the need for runtime checks and error handling.
+    </4improvedDirectiveNodeTypesForDefineDirectives>
+    <5typeGuardFunctionsForSafeTypeDiscrimination>
+```typescript
+// Type guard for define directive nodes
+function isDefineDirectiveNode(node: MeldNode): node is DefineDirectiveNode {
+  return node.type === 'Directive' && 
+         'directive' in node && 
+         node.directive?.kind === 'define' &&
+         'name' in node.directive &&
+         'value' in node.directive &&
+         node.directive.value?.directive?.kind === 'run';
+}
+
+// Type guard for command definitions
+function isLanguageCommandDefinition(
+  def: CommandDefinition
+): def is LanguageCommandDefinition {
+  return def.type === 'language';
+}
+```
+**Justification**: Type guard functions provide a safe way to check the type of an object at runtime while maintaining type safety. This eliminates the need for type assertions and manual property checks, making the code more robust and easier to maintain.
+    </5typeGuardFunctionsForSafeTypeDiscrimination>
+  </ProposedTypescriptTypeImprovements>
+  <ImplementationImpactOnInterpretercore>
+Let&apos;s look at how these type improvements would simplify the directive handling code in InterpreterCore:
+    <BeforeCurrentImplementation>
+```typescript
+// Check if the directive handler returned a replacement node
+if (directiveResult && 'replacement' in directiveResult && 'state' in directiveResult) {
+  // We need to extract the replacement node and state from the result
+  const result = directiveResult as unknown as { 
+    replacement: MeldNode;
+    state: StateServiceLike;
+  };
+
+  const replacement = result.replacement;
+  const resultState = result.state;
+  
+  // Update current state with the result state
+  currentState = resultState;
+  
+  // Special handling for imports in transformation mode...
+}
+```
+    </BeforeCurrentImplementation>
+    <AfterWithImprovedTypes>
+```typescript
+// The result is now properly typed
+const directiveResult = await this.callDirectiveHandleDirective(directiveNode, context);
+
+// Update current state with the result
+currentState = directiveResult.state;
+
+// Check if we have a replacement node with type safety
+if (directiveResult.replacement) {
+  const replacement = directiveResult.replacement;
+  
+  // Special handling for imports in transformation mode...
+  
+  // If this is a define directive, store the command definition
+  if (isDefineDirectiveNode(directiveNode)) {
+    const defineResult = directiveResult as DefineDirectiveResult;
+    currentState.storeCommand(
+      directiveNode.directive.name, 
+      defineResult.commandDefinition
+    );
+  }
+}
+```
+    </AfterWithImprovedTypes>
+  </ImplementationImpactOnInterpretercore>
+  <BenefitsForTheDefineDirectiveHandler>
+The define directive handler would also benefit from these type improvements:
+1. **Clear Parameter Structure**: The handler can enforce that parameters are correctly structured and positioned.
+2. **Validated Command Templates**: The handler can ensure that command templates have the required structure before storing them.
+3. **Type-Safe Command Storage**: Commands can be stored with their full type information, making them easier to retrieve and use.
+4. **Reduced Runtime Validation**: With stronger types, many runtime checks can be eliminated, simplifying the code.
+5. **Better Error Messages**: TypeScript can provide more specific error messages when types don&apos;t match, making debugging easier.
+  </BenefitsForTheDefineDirectiveHandler>
+  <Conclusion>
+Implementing these TypeScript type improvements for  directives would significantly enhance the InterpreterCore service by:
+1. **Reducing Type Assertions**: Eliminating unsafe  casts that bypass TypeScript&apos;s type checking.
+2. **Ensuring Correct Structure**: Enforcing that all command definitions have the required properties.
+3. **Enabling Better Tooling**: Providing better autocompletion and error checking in IDEs.
+4. **Simplifying Code**: Reducing the need for manual property checks and error handling.
+5. **Improving Maintainability**: Making the code more self-documenting and easier to understand.
+These improvements align with the Meld language&apos;s goal of providing a robust and type-safe scripting environment, particularly for the critical  directive that creates reusable command templates.
+  </Conclusion>
+</ImprovingTypescriptTypesForDefineDirectivesInInterpretercore>
+
+<RemovedFilesystemcorefeedbackCommandexecutionservicefeedback>
+  <TaskSynthesizeExecutionRuntimeRequirements>
+Review the provided feedback. Consolidate the requirements related *specifically* to the runtime execution of  directives.
+- Identify needs for the execution context when running the substituted command template.
+- Note requirements for resolving variables *within* the command template at runtime.
+- List requirements for retrieving the stored command definition and substituting parameters.
+**Output Format:** Produce concise notes outlining the synthesized requirements for the  execution environment and runtime behavior.
+    <SynthesizedRequirementsRunDefinedcommandExecutionRuntime>
+- Requirement 1: (e.g., Parameter substitution must be positional...)
+- Requirement 2: (e.g., ResolutionService must handle  and  within the substituted command template...)
+- Requirement 3: (e.g., StateService needs efficient lookup for command definitions by name...)
+- (List other key execution/runtime requirements)
+    </SynthesizedRequirementsRunDefinedcommandExecutionRuntime>
+  </TaskSynthesizeExecutionRuntimeRequirements>
+</RemovedFilesystemcorefeedbackCommandexecutionservicefeedback>
