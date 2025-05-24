@@ -36,7 +36,7 @@ export async function evaluatePath(
   if (interpolatedPath.startsWith('$HOMEPATH') || 
       interpolatedPath.startsWith('$PROJECTPATH') ||
       interpolatedPath.startsWith('/')) {
-    resolvedPath = env.resolvePath(interpolatedPath);
+    resolvedPath = await env.resolvePath(interpolatedPath);
   }
   
   // Normalize the path (remove ./ prefix if present)

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { interpret } from './index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
-import { PathService } from '@services/fs/PathService/PathService';
+import { PathService } from '@services/fs/PathService';
 import * as fs from 'fs';
 import * as path from 'path';
 

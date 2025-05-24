@@ -2,8 +2,8 @@ import { parse } from '@core/ast/parser';
 import { Environment } from './env/Environment';
 import { evaluate } from './core/interpreter';
 import { formatOutput } from './output/formatter';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
-import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import type { IPathService } from '@services/fs/IPathService';
 
 /**
  * Options for the interpreter

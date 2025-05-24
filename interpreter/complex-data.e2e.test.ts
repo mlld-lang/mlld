@@ -3,7 +3,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { evaluate } from '@interpreter/core/interpreter';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { parse } from '@core/ast/parser';
-import { PathService } from '@services/fs/PathService/PathService';
+import { PathService } from '@services/fs/PathService';
 
 describe('Complex Data Assignment', () => {
   it('should support embedded @run directives in data values', async () => {

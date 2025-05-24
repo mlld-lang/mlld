@@ -1,6 +1,6 @@
 import type { MeldNode, MeldVariable } from '@core/types';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
-import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import type { IPathService } from '@services/fs/IPathService';
 import { execSync } from 'child_process';
 import * as path from 'path';
 
@@ -54,7 +54,7 @@ export class Environment {
   // --- Capabilities ---
   
   async readFile(filePath: string): Promise<string> {
-    const resolvedPath = this.resolvePath(filePath);
+    const resolvedPath = await this.resolvePath(filePath);
     return this.fileSystem.readFile(resolvedPath);
   }
   
@@ -151,7 +151,7 @@ export class Environment {
     }
   }
   
-  resolvePath(inputPath: string): string {
+  async resolvePath(inputPath: string): Promise<string> {
     // Handle special path variables
     if (inputPath.startsWith('$HOMEPATH')) {
       const homePath = process.env.HOME || process.env.USERPROFILE || '';
@@ -159,7 +159,7 @@ export class Environment {
     }
     
     if (inputPath.startsWith('$PROJECTPATH')) {
-      inputPath = inputPath.replace('$PROJECTPATH', this.getProjectPath());
+      inputPath = inputPath.replace('$PROJECTPATH', await this.getProjectPath());
     }
     
     // Use the path module directly for now
@@ -194,13 +194,13 @@ export class Environment {
   
   // --- Special Variables ---
   
-  getProjectPath(): string {
+  async getProjectPath(): Promise<string> {
     // Walk up from basePath to find project root (has package.json)
     let current = this.basePath;
     
     while (current !== path.dirname(current)) {
       try {
-        if (this.fileSystem.exists(path.join(current, 'package.json'))) {
+        if (await this.fileSystem.exists(path.join(current, 'package.json'))) {
           return current;
         }
       } catch {

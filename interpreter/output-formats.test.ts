@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { interpret } from './index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
-import type { IPathService } from '@services/fs/PathService/IPathService';
+import type { IPathService } from '@services/fs/IPathService';
 import * as path from 'path';
 
 // Simple mock path service for tests

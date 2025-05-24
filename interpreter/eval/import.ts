@@ -23,7 +23,7 @@ export async function evaluateImport(
   
   // Resolve the import path
   const importPath = await interpolate(pathNodes, env);
-  const resolvedPath = env.resolvePath(importPath);
+  const resolvedPath = await env.resolvePath(importPath);
   
   // Read the file
   const content = await env.readFile(resolvedPath);

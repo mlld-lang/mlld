@@ -1,2 +1,2 @@
 // Test setup file
-// Currently empty - add global test setup here if needed
+import 'reflect-metadata'; // Required for tsyringe dependency injection

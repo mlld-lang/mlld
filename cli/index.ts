@@ -1,40 +1,18 @@
-import 'reflect-metadata';
-import '@core/di-config.js';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { watch } from 'fs/promises';
 import { existsSync } from 'fs';
 import { createInterface } from 'readline';
 import { initCommand } from './commands/init';
-import { debugResolutionCommand } from './commands/debug-resolution';
-import { debugContextCommand } from './commands/debug-context';
-import { debugTransformCommand } from './commands/debug-transform';
-import { logger, cliLogger } from '@core/utils/logger';
-import { loggingConfig } from '@core/config/logging';
 import chalk from 'chalk';
 import { version } from '@core/version';
-import { container } from 'tsyringe';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
-import { type ProcessOptions, MeldError, ErrorSeverity, type Location } from '@core/types/index';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
-import { PathService } from '@services/fs/PathService/PathService';
-import { loggingConfig as loggingConfigCore } from '@core/config/logging';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
-import { PathValidationError, PathErrorCode } from '@services/fs/PathService/errors/PathValidationError';
-import type { ValidatedResourcePath } from '@core/types/paths';
-import { createRawPath } from '@core/types/paths';
-import { resolveService } from '@core/ServiceProvider';
-import { unsafeCreateNormalizedAbsoluteDirectoryPath, PathValidationContext, NormalizedAbsoluteDirectoryPath } from '@core/types/paths';
-import type { Position } from '@core/types/index';
-import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
-import { IPathService } from '@services/fs/PathService/IPathService';
-import { IParserService } from '@services/pipeline/ParserService/IParserService';
-import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
-import { IStateService } from '@services/state/StateService/IStateService';
-import { IOutputService } from '@services/pipeline/OutputService/IOutputService';
-import { interpret } from '../interpreter/index';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { NodeFileSystem } from '@services/fs/NodeFileSystem';
+import { PathService } from '@services/fs/PathService';
+import { interpret } from '@interpreter/index';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import type { IPathService } from '@services/fs/IPathService';
+import { logger, cliLogger } from '@core/utils/logger';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -525,12 +503,9 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
   }
 
   try {
-    // Create filesystem directly without DI
-    const nodeFS = new NodeFileSystem();
-    const fsService = new FileSystemService(nodeFS);
-    
-    // Create real PathService instance
-    const pathService = new PathService(fsService);
+    // Create services for the interpreter
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
 
     if (debug) {
       console.log('CLI Options:', cliOptions);
@@ -545,8 +520,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     const result = await interpret(content, {
       basePath: path.dirname(input),
       format: normalizedFormat,
-      fileSystem: nodeFS as any,
-      pathService: pathService as any,
+      fileSystem: fileSystem,
+      pathService: pathService,
       strict: cliOptions.strict
     });
 
@@ -824,24 +799,18 @@ export async function main(customArgs?: string[]): Promise<void> {
     if (cliOptions.debug) {
       // Set environment variable for child processes and imported modules
       process.env.DEBUG = 'true';
-      logger.level = 'trace'; // Use the imported logger directly
-      // Set log level for all service loggers using the imported config
-      Object.values(loggingConfig.services).forEach(serviceConfig => {
-        (serviceConfig as any).level = 'debug';
-      });
+      logger.level = 'trace';
+      cliLogger.level = 'trace';
     } else if (cliOptions.verbose) {
       // Show info level messages for verbose, but no debug logs
       logger.level = 'info';
+      cliLogger.level = 'info';
       process.env.DEBUG = ''; // Explicitly disable DEBUG
     } else {
       // Only show errors by default (no debug logs)
       logger.level = 'error';
+      cliLogger.level = 'error';
       process.env.DEBUG = ''; // Explicitly disable DEBUG
-      
-      // Set all service loggers to only show errors using the imported config
-      Object.values(loggingConfig.services).forEach(serviceConfig => {
-        (serviceConfig as any).level = 'error';
-      });
     }
 
     // Watch mode or single processing
