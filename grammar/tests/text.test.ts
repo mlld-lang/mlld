@@ -137,7 +137,9 @@ describe('Text Directive Tests', () => {
     
     it('should reject a template text without an identifier', async () => {
       // A text directive without an identifier should be rejected as invalid syntax
-      await expect(parse('@text [[This is invalid syntax]]')).rejects.toThrow();
+      const result = await parse('@text [[This is invalid syntax]]');
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
     });
   });
 });

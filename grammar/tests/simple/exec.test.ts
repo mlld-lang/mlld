@@ -2,7 +2,7 @@
  * Simple test for the exec directive
  */
 import { describe, expect, test } from 'vitest';
-import { parse } from '@core/ast';
+import { parse } from '@grammar/parser';
 
 describe('Exec Directive Basic Test', () => {
   test('Basic exec value parses', async () => {

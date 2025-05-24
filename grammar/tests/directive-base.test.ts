@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parse } from '../../core/ast';
-import type { DirectiveNode } from '../../core/ast/types';
+import { parse } from '@grammar/parser';
+import type { DirectiveNode } from '@core/types';
 
 /**
  * Basic tests to verify the fundamental structure of all directives
