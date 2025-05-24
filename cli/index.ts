@@ -44,6 +44,12 @@ export interface CLIOptions {
   debugSourceMaps?: boolean; // Flag to display source mapping information
   detailedSourceMaps?: boolean; // Flag to display detailed source mapping information
   pretty?: boolean; // Flag to enable Prettier formatting
+  // URL support options
+  allowUrls?: boolean;
+  urlTimeout?: number;
+  urlMaxSize?: number;
+  urlAllowedDomains?: string[];
+  urlBlockedDomains?: string[];
   // No transform options - transformation is always enabled
 }
 
@@ -225,6 +231,28 @@ function parseArgs(args: string[]): CLIOptions {
       case '--pretty':
         options.pretty = true;
         break;
+      // URL support options
+      case '--allow-urls':
+        options.allowUrls = true;
+        break;
+      case '--url-timeout':
+        options.urlTimeout = parseInt(args[++i]);
+        if (isNaN(options.urlTimeout)) {
+          throw new Error('--url-timeout must be a number');
+        }
+        break;
+      case '--url-max-size':
+        options.urlMaxSize = parseInt(args[++i]);
+        if (isNaN(options.urlMaxSize)) {
+          throw new Error('--url-max-size must be a number');
+        }
+        break;
+      case '--url-allowed-domains':
+        options.urlAllowedDomains = args[++i].split(',').filter(Boolean);
+        break;
+      case '--url-blocked-domains':
+        options.urlBlockedDomains = args[++i].split(',').filter(Boolean);
+        break;
       // Transformation is always enabled by default
       // No transform flags needed
       default:
@@ -303,6 +331,13 @@ Options:
   -w, --watch             Watch for changes and reprocess
   -h, --help              Display this help message
   -V, --version           Display version information
+
+URL Support Options:
+  --allow-urls            Enable URL support in directives
+  --url-timeout <ms>      URL request timeout in milliseconds [default: 30000]
+  --url-max-size <bytes>  Maximum URL response size [default: 5242880]
+  --url-allowed-domains   Comma-separated list of allowed domains
+  --url-blocked-domains   Comma-separated list of blocked domains
   `);
 
   if (!command || command === 'debug-context') {
@@ -520,7 +555,13 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       format: normalizedFormat,
       fileSystem: fileSystem,
       pathService: pathService,
-      strict: cliOptions.strict
+      strict: cliOptions.strict,
+      urlOptions: cliOptions.allowUrls ? {
+        allowedDomains: cliOptions.urlAllowedDomains || [],
+        blockedDomains: cliOptions.urlBlockedDomains || [],
+        timeout: cliOptions.urlTimeout || 30000,
+        maxResponseSize: cliOptions.urlMaxSize || 5 * 1024 * 1024
+      } : undefined
     });
 
     // Output handling (remains mostly the same)

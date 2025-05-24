@@ -95,13 +95,17 @@ export async function evaluateText(
       throw new Error('Text path directive missing path');
     }
     
+    // Check if this is a URL path based on the path node structure
+    const pathNode = pathNodes[0]; // Assuming single path node
+    const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
+    
     // Resolve the path
     const resolvedPath = await interpolate(pathNodes, env);
     if (!resolvedPath) {
       throw new Error('Text path directive resolved to empty path');
     }
     
-    // Read the entire file content
+    // Read the file content or fetch URL (env.readFile handles both)
     resolvedValue = await env.readFile(resolvedPath);
     
   } else if (directive.subtype === 'textPathSection') {
@@ -113,13 +117,17 @@ export async function evaluateText(
       throw new Error('Text section directive missing section title or path');
     }
     
+    // Check if this is a URL path based on the path node structure
+    const pathNode = pathNodes[0]; // Assuming single path node
+    const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
+    
     // Get the section title
     const sectionTitle = await interpolate(sectionNodes, env);
     
     // Resolve the path
     const resolvedPath = await interpolate(pathNodes, env);
     
-    // Read the file content
+    // Read the file content or fetch URL (env.readFile handles both)
     const fileContent = await env.readFile(resolvedPath);
     
     // Extract the section using llmxml

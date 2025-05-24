@@ -280,22 +280,21 @@ AtText
       );
     }
   // @add directive reference - for backward compatibility
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ path:PathCore {
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ path:PathExpression {
       helpers.debug('AtText matched @add with path', { id, path });
       
       const subtype = 'textPath';
       const sourceType = 'directive';
       
       // Check if the path contains variables
-      const hasVariables = path.values.path.some(part => 
-        part && part.type === NodeType.VariableReference
-      );
+      const hasVariables = path.meta.hasVariables;
       
       // Create meta object
       const meta = { 
         sourceType: sourceType,
         directive: 'add',
-        hasVariables: hasVariables
+        hasVariables: hasVariables,
+        pathSubtype: path.subtype // Preserve the specific path type
       };
       
       return helpers.createStructuredDirective(
@@ -303,11 +302,11 @@ AtText
         subtype,
         {
           identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          path: path.values.path
+          path: path.values.path || path.values.url
         },
         {
           identifier: id,
-          path: path.raw.path
+          path: path.raw.path || path.raw.url
         },
         meta,
         location(),
@@ -315,7 +314,7 @@ AtText
       );
     }
   // Path starting with @variable - must come before command reference
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ PathStartingWithVariableContext path:PathCore {
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ PathStartingWithVariableContext path:PathExpression {
       helpers.debug('AtText matched path starting with @variable', { id, path });
       
       const subtype = 'textPath';
@@ -341,7 +340,7 @@ AtText
         },
         {
           identifier: id,
-          path: path.raw.path
+          path: path.raw.path || path.raw.url
         },
         meta,
         location(),
@@ -501,7 +500,7 @@ AtText
       );
     }
   // Direct path content - @text content = [file.md]
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ path:PathCore {
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ path:PathExpression {
       helpers.debug('AtText matched direct path content', { id, path });
       
       const subtype = 'textPath';
@@ -527,7 +526,7 @@ AtText
         },
         {
           identifier: id,
-          path: path.raw.path
+          path: path.raw.path || path.raw.url
         },
         meta,
         location(),

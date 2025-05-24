@@ -18,14 +18,17 @@ allowing reuse in RHS patterns and embedded contexts.
 // -------------------------------------------------------------
 
 AddPathCore
-  = path:PathCore {
+  = path:PathExpression {
       helpers.debug('AddPathCore matched path', { path });
       
       return {
         type: 'addPath',
-        values: { path: path.values.path },
-        raw: { path: path.raw.path },
-        meta: path.meta
+        values: { path: path.values.path || path.values.url },
+        raw: { path: path.raw.path || path.raw.url },
+        meta: {
+          ...path.meta,
+          pathSubtype: path.subtype // Preserve the specific path type
+        }
       };
     }
 
@@ -98,24 +101,25 @@ AddTemplateInvocationCore
 // -------------------------------------------------------------
 
 AddPathSectionCore
-  = sectionTitle:QuotedContent _ "from" _ path:PathCore rename:AsNewTitle? {
+  = sectionTitle:QuotedContent _ "from" _ path:PathExpression rename:AsNewTitle? {
       helpers.debug('AddPathSectionCore matched', { sectionTitle, path, rename });
       
       return {
         type: 'addPathSection',
         values: {
           sectionTitle: sectionTitle,
-          path: path.values.path,
+          path: path.values.path || path.values.url,
           ...(rename ? { newTitle: rename } : {})
         },
         raw: {
           sectionTitle: sectionTitle[0].content,
-          path: path.raw.path,
+          path: path.raw.path || path.raw.url,
           ...(rename ? { newTitle: rename[0].content } : {})
         },
         meta: {
           hasRename: !!rename,
-          ...path.meta
+          ...path.meta,
+          pathSubtype: path.subtype // Preserve the specific path type
         }
       };
     }

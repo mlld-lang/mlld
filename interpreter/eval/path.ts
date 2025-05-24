@@ -26,32 +26,41 @@ export async function evaluatePath(
     throw new Error('Path directive missing path');
   }
   
+  // Check if this is a URL path based on the path node structure
+  const pathNode = pathNodes[0]; // Assuming single path node
+  const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
+  
   // Interpolate the path (resolve variables)
   const interpolatedPath = await interpolate(pathNodes, env);
   
   // Handle special path variables and absolute paths
   let resolvedPath = interpolatedPath;
   
-  // Only resolve special variables and absolute paths
-  if (interpolatedPath.startsWith('$HOMEPATH') || 
-      interpolatedPath.startsWith('$PROJECTPATH') ||
-      interpolatedPath.startsWith('/')) {
-    resolvedPath = await env.resolvePath(interpolatedPath);
+  // For URLs, no path resolution needed
+  if (isURL || env.isURL(interpolatedPath)) {
+    // URLs remain as-is
+    resolvedPath = interpolatedPath;
+  } else {
+    // Only resolve special variables and absolute paths for file paths
+    if (interpolatedPath.startsWith('$HOMEPATH') || 
+        interpolatedPath.startsWith('$PROJECTPATH') ||
+        interpolatedPath.startsWith('/')) {
+      resolvedPath = await env.resolvePath(interpolatedPath);
+    }
+    // Normalize the path (remove ./ prefix if present)
+    resolvedPath = resolvedPath.replace(/^\.\//, '');
   }
-  
-  // Normalize the path (remove ./ prefix if present)
-  const normalizedPath = resolvedPath.replace(/^\.\//, '');
   
   // Create and store the variable
   const variable = createPathVariable(identifier, {
     originalPath: interpolatedPath,
-    resolvedPath: normalizedPath,
-    isAbsolute: normalizedPath.startsWith('/'),
-    isRelative: !normalizedPath.startsWith('/')
+    resolvedPath: resolvedPath,
+    isAbsolute: resolvedPath.startsWith('/') || isURL || env.isURL(resolvedPath),
+    isRelative: !resolvedPath.startsWith('/') && !isURL && !env.isURL(resolvedPath)
   });
   
   env.setVariable(identifier, variable);
   
   // Return the resolved path
-  return { value: normalizedPath, env };
+  return { value: resolvedPath, env };
 }

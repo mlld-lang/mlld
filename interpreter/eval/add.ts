@@ -122,13 +122,17 @@ export async function evaluateAdd(
       throw new Error('Add path directive missing path');
     }
     
+    // Check if this is a URL path based on the path node structure
+    const pathNode = pathNodes[0]; // Assuming single path node
+    const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
+    
     // Resolve the path
     const resolvedPath = await interpolate(pathNodes, env);
     if (!resolvedPath) {
       throw new Error('Add path directive resolved to empty path');
     }
     
-    // Read the entire file content
+    // Read the file content or fetch URL (env.readFile handles both)
     content = await env.readFile(resolvedPath);
     
   } else if (directive.subtype === 'addPathSection') {
@@ -140,13 +144,17 @@ export async function evaluateAdd(
       throw new Error('Add section directive missing section title or path');
     }
     
+    // Check if this is a URL path based on the path node structure
+    const pathNode = pathNodes[0]; // Assuming single path node
+    const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
+    
     // Get the section title
     const sectionTitle = await interpolate(sectionTitleNodes, env);
     
     // Resolve the path
     const resolvedPath = await interpolate(pathNodes, env);
     
-    // Read the file content
+    // Read the file content or fetch URL (env.readFile handles both)
     const fileContent = await env.readFile(resolvedPath);
     
     // Extract the section using llmxml

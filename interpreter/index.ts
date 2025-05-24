@@ -14,6 +14,12 @@ export interface InterpretOptions {
   format?: 'markdown' | 'xml';
   fileSystem: IFileSystemService;
   pathService: IPathService;
+  urlOptions?: {
+    allowedDomains?: string[];
+    blockedDomains?: string[];
+    timeout?: number;
+    maxResponseSize?: number;
+  };
 }
 
 /**
@@ -34,6 +40,11 @@ export async function interpret(
     options.pathService,
     options.basePath || process.cwd()
   );
+  
+  // Configure URL options if provided
+  if (options.urlOptions) {
+    env.setURLOptions(options.urlOptions);
+  }
   
   // Evaluate the AST
   await evaluate(ast, env);

@@ -1,46 +1,28 @@
-# URL Functionality Demo
+# URL Support Demo
 
 This example demonstrates how to use URLs in Meld directives.
 
-## URL Embedding Examples
+## Import from URL
+@import "https://raw.githubusercontent.com/example/repo/main/config.mld"
 
-### Embedding content from a URL
+## Text from URL
+@text readme = [https://raw.githubusercontent.com/example/repo/main/README.md]
 
-@embed(url="https://raw.githubusercontent.com/anthropics/claude-code/main/README.md", allowURLs=true)
+## Add content from URL
+@add [https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md]
 
-### Embedding with custom URL options
+## Path assignment with URL
+@path apiEndpoint = "https://api.example.com/v1"
 
-@embed(url="https://raw.githubusercontent.com/anthropics/claude-code/main/README.md", 
-  allowURLs=true, 
-  urlOptions={
-    allowedProtocols: ["https"],
-    allowedDomains: ["raw.githubusercontent.com"],
-    maxResponseSize: 1048576,  // 1MB
-    timeout: 10000  // 10 seconds
-  }
-)
+## Complex data with URL-fetching directives
+@data projectInfo = {
+  "readme": @add [https://raw.githubusercontent.com/example/repo/main/README.md],
+  "version": @run [curl -s https://api.example.com/version],
+  "apiBase": @apiEndpoint
+}
 
-### Embedding a specific section
+## Using the API endpoint
+@run [curl -s {{apiEndpoint}}/users]
 
-@embed(url="https://raw.githubusercontent.com/anthropics/claude-code/main/README.md", 
-  allowURLs=true,
-  section="Installation"
-)
-
-## URL Import Examples
-
-### Importing variables from a URL
-
-@import(url="https://raw.githubusercontent.com/anthropics/claude-code/main/examples/demo.mld", allowURLs=true)
-
-### Using imported variables
-
-After importing from the URL, you can use the variables:
-
-{{greeting}}
-
-## Using URL with path parameter
-
-The URL functionality also works when using the path parameter with allowURLs=true:
-
-@embed(path="https://raw.githubusercontent.com/anthropics/claude-code/main/README.md", allowURLs=true)
+Note: To run this example with actual URLs, use the --allow-urls flag:
+meld url-demo.mld --allow-urls --url-allowed-domains github.com,githubusercontent.com,api.example.com

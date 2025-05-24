@@ -29,7 +29,36 @@ PathExpression "Any path expression"
 // -------------------------------------------------------------
 
 URLSectionPath "URL with section marker"
-  = url:URLPath _ "#" _ section:BaseIdentifier {
+  = '"' protocol:URLProtocolType ":" rest:URLRest "#" section:BaseIdentifier '"' {
+      // Handle quoted URLs with sections
+      const fullUrl = `${protocol}:${rest.raw}`;
+      helpers.debug('URLSectionPath matched quoted', { fullUrl, section });
+      
+      return {
+        type: 'path',
+        subtype: 'urlSectionPath',
+        values: { 
+          url: fullUrl,
+          protocol,
+          parts: rest.parts,
+          section
+        },
+        raw: { 
+          url: fullUrl,
+          protocol,
+          section
+        },
+        meta: {
+          isUrl: true,
+          protocol,
+          hasVariables: rest.parts.some(part => 
+            part && part.type === NodeType.VariableReference
+          ),
+          hasSection: true
+        }
+      };
+    }
+  / url:URLPath _ "#" _ section:BaseIdentifier {
       helpers.debug('URLSectionPath matched', { url, section });
       
       return {
@@ -56,9 +85,114 @@ URLSectionPath "URL with section marker"
     }
 
 URLPath "URL path"
-  = protocol:URLProtocol ":" rest:URLRest {
+  = '"' protocol:URLProtocolType ":" rest:URLRest '"' {
+      // Handle quoted URLs
       const fullUrl = `${protocol}:${rest.raw}`;
-      helpers.debug('URLPath matched', { protocol, fullUrl });
+      helpers.debug('URLPath matched quoted', { protocol, fullUrl });
+      
+      return {
+        type: 'path',
+        subtype: 'urlPath',
+        values: { 
+          url: fullUrl,
+          protocol,
+          parts: rest.parts
+        },
+        raw: { 
+          url: fullUrl,
+          protocol
+        },
+        meta: {
+          isUrl: true,
+          protocol,
+          hasVariables: rest.parts.some(part => 
+            part && part.type === NodeType.VariableReference
+          )
+        }
+      };
+    }
+  / "'" protocol:URLProtocolType ":" rest:URLRest "'" {
+      // Handle single-quoted URLs
+      const fullUrl = `${protocol}:${rest.raw}`;
+      helpers.debug('URLPath matched single-quoted', { protocol, fullUrl });
+      
+      return {
+        type: 'path',
+        subtype: 'urlPath',
+        values: { 
+          url: fullUrl,
+          protocol,
+          parts: rest.parts
+        },
+        raw: { 
+          url: fullUrl,
+          protocol
+        },
+        meta: {
+          isUrl: true,
+          protocol,
+          hasVariables: rest.parts.some(part => 
+            part && part.type === NodeType.VariableReference
+          )
+        }
+      };
+    }
+  / "`" protocol:URLProtocolType ":" rest:URLRest "`" {
+      // Handle backtick-quoted URLs
+      const fullUrl = `${protocol}:${rest.raw}`;
+      helpers.debug('URLPath matched backtick-quoted', { protocol, fullUrl });
+      
+      return {
+        type: 'path',
+        subtype: 'urlPath',
+        values: { 
+          url: fullUrl,
+          protocol,
+          parts: rest.parts
+        },
+        raw: { 
+          url: fullUrl,
+          protocol
+        },
+        meta: {
+          isUrl: true,
+          protocol,
+          hasVariables: rest.parts.some(part => 
+            part && part.type === NodeType.VariableReference
+          )
+        }
+      };
+    }
+  / "[" protocol:URLProtocolType ":" rest:URLRest "]" {
+      // Handle bracketed URLs
+      const fullUrl = `${protocol}:${rest.raw}`;
+      helpers.debug('URLPath matched bracketed', { protocol, fullUrl });
+      
+      return {
+        type: 'path',
+        subtype: 'urlPath',
+        values: { 
+          url: fullUrl,
+          protocol,
+          parts: rest.parts
+        },
+        raw: { 
+          url: fullUrl,
+          protocol
+        },
+        meta: {
+          isUrl: true,
+          protocol,
+          hasVariables: rest.parts.some(part => 
+            part && part.type === NodeType.VariableReference
+          )
+        }
+      };
+    }
+  / protocol:URLProtocolType ":" rest:URLRest {
+      // Handle unquoted URLs
+      const fullUrl = `${protocol}:${rest.raw}`;
+      helpers.debug('URLPath matched unquoted', { protocol, fullUrl });
       
       return {
         type: 'path',
@@ -83,7 +217,7 @@ URLPath "URL path"
     }
 
 // URL protocol (http, https, file)
-URLProtocol "URL protocol"
+URLProtocolType "URL protocol type"
   = proto:$("http" "s"? / "file") {
       return proto;
     }
@@ -109,9 +243,9 @@ URLParts "URL parts"
 
 // Variable reference in URL
 URLVariableRef "URL variable reference"
-  = "@" var:ValidIdentifier {
+  = "@" varName:BaseIdentifier {
       return helpers.createVariableReferenceNode('url', { 
-        identifier: var,
+        identifier: varName,
         location: location()
       });
     }
@@ -155,7 +289,12 @@ FileSectionPath "File path with section marker"
     }
 
 FilePath "File path"
-  = path:WrappedPathContent {
+  = path:WrappedPathContent &{
+      // Check if this looks like a URL - if so, fail this rule
+      const raw = path.raw;
+      const isURL = /^https?:\/\//.test(raw) || /^file:\/\//.test(raw);
+      return !isURL;
+    } {
       helpers.debug('FilePath matched', { path });
       
       // Examine path for special attributes

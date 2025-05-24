@@ -72,7 +72,7 @@ AtAdd
         'section'  // Added source parameter
       );
     }
-  / DirectiveContext "@add" _ sectionTitle:QuotedContent _ "from" _ path:PathCore _ asTitle:AsNewTitle? {
+  / DirectiveContext "@add" _ sectionTitle:QuotedContent _ "from" _ path:PathExpression _ asTitle:AsNewTitle? {
       // This rule should match section syntax FIRST before the template rule below
       helpers.debug('AtAdd matched section', { sectionTitle, path, asTitle });
       
@@ -82,7 +82,7 @@ AtAdd
       // Create values object
       const values = {
         sectionTitle: sectionTitle,
-        path: path.values.path
+        path: path.values.path || path.values.url
       };
       
       // Add new title if provided
@@ -93,7 +93,7 @@ AtAdd
       // Create raw object
       const raw = {
         sectionTitle: sectionTitleNode.content,
-        path: path.raw.path
+        path: path.raw.path || path.raw.url
       };
       
       // Add new title to raw if present
@@ -104,10 +104,8 @@ AtAdd
       // Create meta object with path metadata
       const meta = {
         path: {
-          hasVariables: path.meta.hasVariables,
-          isAbsolute: path.meta.isAbsolute,
-          hasExtension: path.meta.hasExtension,
-          extension: path.meta.extension
+          ...path.meta,
+          pathSubtype: path.subtype // Preserve the specific path type
         }
       };
       
@@ -308,7 +306,7 @@ AtAdd
         'variable'  // Added source parameter
       );
     }
-  / DirectiveContext "@add" _ !("[[") !(BracketWithSection) path:PathCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "@add" _ !("[[") !(BracketWithSection) path:PathExpression _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched path', { path, headerLevel, underHeader });
       
       // Extract header level and under header if provided
@@ -317,7 +315,7 @@ AtAdd
       
       // Create values object with path parts
       const values = {
-        path: path.values.path
+        path: path.values.path || path.values.url
       };
       
       // Add headerLevel and underHeader if present
@@ -339,7 +337,7 @@ AtAdd
       
       // Create raw object with raw path string
       const raw = {
-        path: path.raw.path
+        path: path.raw.path || path.raw.url
       };
       
       // Add headerLevel and underHeader to raw if present
@@ -354,10 +352,8 @@ AtAdd
       // Create meta object with path metadata
       const meta = {
         path: {
-          hasVariables: path.meta.hasVariables,
-          isAbsolute: path.meta.isAbsolute,
-          hasExtension: path.meta.hasExtension,
-          extension: path.meta.extension
+          ...path.meta,
+          pathSubtype: path.subtype // Preserve the specific path type
         }
       };
       
