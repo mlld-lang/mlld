@@ -1,15 +1,14 @@
 {
   "name": "data-primitive-boolean",
+  "description": "Test fixture for data/primitive",
+  "category": "data",
+  "subcategory": "primitive",
   "input": "@data isEnabled.value = true\n@add @isEnabled.value",
   "expected": "true",
-  "directives": [
-    "@data isEnabled.value = true",
-    "@add @isEnabled.value"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "b1f60789-cf4a-4d7a-85ee-69519dd54386",
+      "nodeId": "ec15d495-cfb1-4c44-b4e3-8e7fa346d53a",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "848e60cb-1906-468e-aba9-8a8518deedc9",
+            "nodeId": "587731e3-d5a6-4295-9e6b-247b0380d6e2",
             "location": {
               "start": {
                 "offset": 0,
@@ -61,7 +60,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "33ed7c18-d13a-4add-9b6d-6287e2e2cdba",
+      "nodeId": "2d6062fa-28a6-4867-848b-7fe9efc3cf3c",
       "location": {
         "start": {
           "offset": 28,
@@ -78,7 +77,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "943d9eaf-f492-4b7a-b7a0-acce06baf66a",
+      "nodeId": "57c38db4-a96e-4df5-809c-2a3197f1663b",
       "location": {
         "start": {
           "offset": 29,
@@ -98,7 +97,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "afb885b8-4930-4509-92a2-a1198e1d176b",
+            "nodeId": "a4b54f52-a038-4e2a-9dec-72e5eca16c9b",
             "location": {
               "start": {
                 "offset": 0,
@@ -128,10 +127,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "data",
-    "subtype": "primitive",
-    "variant": "boolean"
-  }
+  ]
 }

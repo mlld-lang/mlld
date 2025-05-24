@@ -1,15 +1,14 @@
 {
   "name": "data-array-mixed",
+  "description": "Test fixture for data/array",
+  "category": "data",
+  "subcategory": "array",
   "input": "@data items = [1, \"two\", { name: \"three\" }, [4, 5]]\n@add @items[2].name",
   "expected": "three",
-  "directives": [
-    "@data items = [1, \"two\", { name: \"three\" }, [4, 5]]",
-    "@add @items[2].name"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "76ecb16a-414c-4686-91f2-7b4c4486d865",
+      "nodeId": "881af4e7-59cf-4b84-9f06-72511cbe24ba",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "05357559-ba66-4007-93de-289b00f86446",
+            "nodeId": "b397287c-9536-4830-b8bd-7c676ccdc072",
             "location": {
               "start": {
                 "offset": 0,
@@ -54,7 +53,7 @@
             [
               {
                 "type": "Text",
-                "nodeId": "d56c1308-41ad-4548-be1d-609809fc1a30",
+                "nodeId": "77b1580e-8069-4ef1-9e68-4df7d15c5a8c",
                 "location": {
                   "start": {
                     "offset": 18,
@@ -76,7 +75,7 @@
                 "name": [
                   {
                     "type": "Text",
-                    "nodeId": "2418a167-8bd9-4f94-b36f-326bf615e98b",
+                    "nodeId": "8d278f3a-63fd-4118-a789-b2c3dac7c708",
                     "location": {
                       "start": {
                         "offset": 33,
@@ -106,7 +105,7 @@
       },
       "raw": {
         "identifier": "items",
-        "value": "[\n  1,\n  [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"d56c1308-41ad-4548-be1d-609809fc1a30\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 18,\n          \"line\": 1,\n          \"column\": 19\n        },\n        \"end\": {\n          \"offset\": 23,\n          \"line\": 1,\n          \"column\": 24\n        }\n      },\n      \"content\": \"two\"\n    }\n  ],\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"2418a167-8bd9-4f94-b36f-326bf615e98b\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 33,\n              \"line\": 1,\n              \"column\": 34\n            },\n            \"end\": {\n              \"offset\": 40,\n              \"line\": 1,\n              \"column\": 41\n            }\n          },\n          \"content\": \"three\"\n        }\n      ]\n    }\n  },\n  {\n    \"type\": \"array\",\n    \"items\": [\n      4,\n      5\n    ]\n  }\n]"
+        "value": "[\n  1,\n  [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"77b1580e-8069-4ef1-9e68-4df7d15c5a8c\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 18,\n          \"line\": 1,\n          \"column\": 19\n        },\n        \"end\": {\n          \"offset\": 23,\n          \"line\": 1,\n          \"column\": 24\n        }\n      },\n      \"content\": \"two\"\n    }\n  ],\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"8d278f3a-63fd-4118-a789-b2c3dac7c708\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 33,\n              \"line\": 1,\n              \"column\": 34\n            },\n            \"end\": {\n              \"offset\": 40,\n              \"line\": 1,\n              \"column\": 41\n            }\n          },\n          \"content\": \"three\"\n        }\n      ]\n    }\n  },\n  {\n    \"type\": \"array\",\n    \"items\": [\n      4,\n      5\n    ]\n  }\n]"
       },
       "meta": {
         "arrayData": {
@@ -116,7 +115,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "13f91244-8438-4afa-b743-36302d5bd8c2",
+      "nodeId": "68e11d20-dea2-4b7d-b8f0-3f8bbdab6e2d",
       "location": {
         "start": {
           "offset": 51,
@@ -133,7 +132,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "b3aac2c2-02d2-496a-880d-59c3f0f96185",
+      "nodeId": "e916b622-64d4-4543-a719-a1c5dccd8d80",
       "location": {
         "start": {
           "offset": 52,
@@ -153,7 +152,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "0bd1889f-ff4a-4f4f-a4f8-d9bb09e3e996",
+            "nodeId": "7356399e-c616-4ade-a021-9e69294a753c",
             "location": {
               "start": {
                 "offset": 0,
@@ -187,10 +186,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "data",
-    "subtype": "array",
-    "variant": "mixed"
-  }
+  ]
 }

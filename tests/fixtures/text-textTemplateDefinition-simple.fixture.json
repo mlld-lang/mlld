@@ -1,15 +1,14 @@
 {
   "name": "text-textTemplateDefinition-simple",
+  "description": "Test fixture for text/textTemplateDefinition",
+  "category": "text",
+  "subcategory": "textTemplateDefinition",
   "input": "@text greeting(name) = @add [[Hello, {{name}}!]]\n@add @greeting(\"World\")",
   "expected": "Hello, World!",
-  "directives": [
-    "@text greeting(name) = @add [[Hello, {{name}}!]]",
-    "@add @greeting(\"World\")"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "6debb080-6d30-41fa-87e7-8b7c5c31c535",
+      "nodeId": "d9fd00b9-0826-4443-8753-bd5ccf963421",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "4627cb2c-413f-411d-b40f-a0ae6bcbe6ff",
+            "nodeId": "af0a26cf-1fc9-4981-acf6-e341923bc94b",
             "location": {
               "start": {
                 "offset": 0,
@@ -53,7 +52,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "5a901875-d5c3-473c-b9ca-f9e41ff3192c",
+            "nodeId": "b1b32399-178e-4dee-8734-3ec3eaba81a1",
             "location": {
               "start": {
                 "offset": 30,
@@ -70,7 +69,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "f729cf59-8116-4500-b838-3e9f3566329a",
+            "nodeId": "938e5804-6f96-4718-a436-14b8e0645ea8",
             "location": {
               "start": {
                 "offset": 0,
@@ -89,7 +88,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "2c62f79a-10af-4674-b257-ee19c558d5a1",
+            "nodeId": "cd785beb-b211-464e-bb6b-97fcd7b904b8",
             "location": {
               "start": {
                 "offset": 45,
@@ -123,7 +122,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "1efb1d06-6578-45f1-98bb-615180652551",
+      "nodeId": "771deb77-9c96-4e2c-a97d-ed7b4d5816f9",
       "location": {
         "start": {
           "offset": 48,
@@ -140,7 +139,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "c84d08ca-0b40-4bef-9558-e1f6afe4177e",
+      "nodeId": "909d7f27-2eaf-4d6f-a458-843eed611a20",
       "location": {
         "start": {
           "offset": 49,
@@ -160,7 +159,7 @@
         "templateName": [
           {
             "type": "Text",
-            "nodeId": "9f066092-d033-49aa-bdd7-60af75ad644c",
+            "nodeId": "2095c0f8-c2ce-422d-81f7-3f15d3817a96",
             "location": {
               "start": {
                 "offset": 49,
@@ -194,10 +193,5 @@
         "argumentCount": 1
       }
     }
-  ],
-  "metadata": {
-    "kind": "text",
-    "subtype": "textTemplateDefinition",
-    "variant": "simple"
-  }
+  ]
 }

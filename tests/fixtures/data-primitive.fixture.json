@@ -1,15 +1,14 @@
 {
   "name": "data-primitive",
+  "description": "Test fixture for data/primitive",
+  "category": "data",
+  "subcategory": "primitive",
   "input": "@data greeting.text = \"Hello, world!\"\n@add @greeting.text",
   "expected": "Hello, world!",
-  "directives": [
-    "@data greeting.text = \"Hello, world!\"",
-    "@add @greeting.text"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "4adebac7-820a-49eb-a41a-c45eff61f8b0",
+      "nodeId": "9da3e952-5a9d-4e5e-a745-9178e0373022",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "b7c2557d-fc53-41fb-81f2-ae5e7ebe126a",
+            "nodeId": "1ca21850-743c-4578-bb8e-a341b400860f",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +49,7 @@
         "value": [
           {
             "type": "Text",
-            "nodeId": "1a77ab00-a0e3-4717-970f-d3227f197f6c",
+            "nodeId": "165971ae-56e4-40bc-ae66-7930bf2a542a",
             "location": {
               "start": {
                 "offset": 22,
@@ -79,7 +78,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "2e89002d-1a47-4c64-aecd-673c1328a9b6",
+      "nodeId": "36041de1-8056-4091-9ca3-8b15bf56f81a",
       "location": {
         "start": {
           "offset": 37,
@@ -96,7 +95,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "210189ea-d594-4255-8012-5e094c8656e1",
+      "nodeId": "c328a1ef-eb02-456a-89c5-fb141df9de26",
       "location": {
         "start": {
           "offset": 38,
@@ -116,7 +115,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "8603bc44-8b82-45bd-9aed-63112cc31e06",
+            "nodeId": "e9a66c64-b7e9-417d-84f2-a9015846d745",
             "location": {
               "start": {
                 "offset": 0,
@@ -146,9 +145,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "data",
-    "subtype": "primitive"
-  }
+  ]
 }

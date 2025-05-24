@@ -1,15 +1,14 @@
 {
   "name": "data-object-nested",
+  "description": "Test fixture for data/object",
+  "category": "data",
+  "subcategory": "object",
   "input": "@data config = {\n  server: {\n    port: 8080,\n    host: \"localhost\"\n  },\n  debug: true\n}\n@add @config.server.port",
   "expected": "8080",
-  "directives": [
-    "@data config = {\n  server: {\n    port: 8080,\n    host: \"localhost\"\n  },\n  debug: true\n}",
-    "@add @config.server.port"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "505ebf5e-3e16-484e-a534-ec9413686dc1",
+      "nodeId": "89c5001e-b4da-4d21-9da9-fe2806290cad",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "4bbef431-c59e-4e1e-964f-e99add02ee49",
+            "nodeId": "9987839b-6c7d-452e-b7b2-b3f42e7cd7d0",
             "location": {
               "start": {
                 "offset": 0,
@@ -57,7 +56,7 @@
                 "host": [
                   {
                     "type": "Text",
-                    "nodeId": "a7b392e0-05e2-4158-9749-d09b4166a176",
+                    "nodeId": "9695dd00-031c-4c8c-b182-80767a26ee74",
                     "location": {
                       "start": {
                         "offset": 55,
@@ -81,7 +80,7 @@
       },
       "raw": {
         "identifier": "config",
-        "value": "{\n  \"server\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"port\": 8080,\n      \"host\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"a7b392e0-05e2-4158-9749-d09b4166a176\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 55,\n              \"line\": 4,\n              \"column\": 11\n            },\n            \"end\": {\n              \"offset\": 66,\n              \"line\": 4,\n              \"column\": 22\n            }\n          },\n          \"content\": \"localhost\"\n        }\n      ]\n    }\n  },\n  \"debug\": true\n}"
+        "value": "{\n  \"server\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"port\": 8080,\n      \"host\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"9695dd00-031c-4c8c-b182-80767a26ee74\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 55,\n              \"line\": 4,\n              \"column\": 11\n            },\n            \"end\": {\n              \"offset\": 66,\n              \"line\": 4,\n              \"column\": 22\n            }\n          },\n          \"content\": \"localhost\"\n        }\n      ]\n    }\n  },\n  \"debug\": true\n}"
       },
       "meta": {
         "objectData": {
@@ -91,7 +90,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "8daadefa-7456-4304-af65-8d6be7736cec",
+      "nodeId": "e2f72d3d-3a66-4e94-8ead-85ad59d7296d",
       "location": {
         "start": {
           "offset": 87,
@@ -108,7 +107,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "0f5fb261-f17e-434d-8d38-834f63c9958e",
+      "nodeId": "541336ec-cace-4284-a9e4-cb784acc0a50",
       "location": {
         "start": {
           "offset": 88,
@@ -128,7 +127,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "7d40c25c-5ce4-4f54-b8af-1be925285378",
+            "nodeId": "a49fc195-e225-4acf-a42c-bf499fa98106",
             "location": {
               "start": {
                 "offset": 0,
@@ -162,10 +161,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "data",
-    "subtype": "object",
-    "variant": "nested"
-  }
+  ]
 }

@@ -1,14 +1,14 @@
 {
   "name": "run-command-multiline",
+  "description": "Test fixture for run/command",
+  "category": "run",
+  "subcategory": "command",
   "input": "@run [bash -c \"echo Line 1 && \\\necho Line 2\"]",
   "expected": "Line 1\nLine 2",
-  "directives": [
-    "@run [bash -c \"echo Line 1 && \\\necho Line 2\"]"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "d80abe61-96db-4e9f-89b4-926e4c9fe210",
+      "nodeId": "3eba5928-d180-4c74-b70c-cb194e7d4681",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "e2a2972f-13b0-4293-af49-31274aa0c708",
+            "nodeId": "9bdd8ac2-fd8e-4d00-a0c0-e9e316a08b6b",
             "location": {
               "start": {
                 "offset": 6,
@@ -53,10 +53,5 @@
         "isMultiLine": true
       }
     }
-  ],
-  "metadata": {
-    "kind": "run",
-    "subtype": "command",
-    "variant": "multiline"
-  }
+  ]
 }

@@ -1,15 +1,14 @@
 {
   "name": "text-assignment",
+  "description": "Test fixture for text/assignment",
+  "category": "text",
+  "subcategory": "assignment",
   "input": "@text greeting = \"Hello, world!\"\n@add @greeting",
   "expected": "Hello, world!",
-  "directives": [
-    "@text greeting = \"Hello, world!\"",
-    "@add @greeting"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "853f472f-e6ce-4610-acec-ee6e03acbbe2",
+      "nodeId": "3bf48f23-1b6f-4597-8af9-c7b5798e7849",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "f87f309d-8566-4806-91b5-af8e4070b1fe",
+            "nodeId": "f5680bea-056a-492a-9144-227982394884",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +49,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "26d8ca42-5f12-4997-9159-8f49fa23c30c",
+            "nodeId": "7235c606-3db2-4684-8561-494b75b26d2d",
             "location": {
               "start": {
                 "offset": 17,
@@ -79,7 +78,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "7b4a1ab8-3426-45ce-a63c-e8117df5524f",
+      "nodeId": "07e85d4d-6b27-4763-aad5-dc8eda22d2e0",
       "location": {
         "start": {
           "offset": 32,
@@ -96,7 +95,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "e1cf9ae9-f9ec-41f0-9f71-c9428d0120ec",
+      "nodeId": "6d138ab4-2a81-4f33-aa62-87aca2680f7f",
       "location": {
         "start": {
           "offset": 33,
@@ -116,7 +115,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "a45e962d-7668-4b54-ab23-c25ca8983369",
+            "nodeId": "136a2e45-277a-40d6-b907-1b035d59738a",
             "location": {
               "start": {
                 "offset": 0,
@@ -140,9 +139,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "text",
-    "subtype": "assignment"
-  }
+  ]
 }

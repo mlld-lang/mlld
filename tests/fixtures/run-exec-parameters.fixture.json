@@ -1,15 +1,14 @@
 {
   "name": "run-exec-parameters",
+  "description": "Test fixture for run/exec",
+  "category": "run",
+  "subcategory": "exec",
   "input": "@exec greetCommand(param) = @run [echo \"Hello, @param!\"]\n@run @greetCommand(\"World\")",
   "expected": "Hello, World!",
-  "directives": [
-    "@exec greetCommand(param) = @run [echo \"Hello, @param!\"]",
-    "@run @greetCommand(\"World\")"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "a28c4304-44b4-40bd-8e50-3db14b95c3f5",
+      "nodeId": "30b11353-4738-4701-abb6-ca35dc2857d7",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "bfb5cbe5-3881-451b-9ba9-8c76a6e5dd99",
+            "nodeId": "5ffa39d5-f2a6-4867-ba28-2bb7105556f2",
             "location": {
               "start": {
                 "offset": 0,
@@ -51,7 +50,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "44ffcb1e-93a7-4ad8-be2e-c17de44e7600",
+            "nodeId": "daa25cd2-eb61-4525-830e-049ff335d07f",
             "location": {
               "start": {
                 "offset": 34,
@@ -68,7 +67,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "45cbce7c-254b-4462-a1a3-8538fdac91fb",
+            "nodeId": "5e3a5705-a331-4233-baa8-928078d94358",
             "location": {
               "start": {
                 "offset": 0,
@@ -87,7 +86,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "8a78e746-f19e-4796-8636-82ca98fd4acd",
+            "nodeId": "0804cbf0-4940-420a-b551-5a869f323f36",
             "location": {
               "start": {
                 "offset": 53,
@@ -118,7 +117,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "430e36df-3cb4-4cec-838b-2b97b03d5bbe",
+      "nodeId": "a07a049c-8e7e-4b4d-a402-e10949aee7f5",
       "location": {
         "start": {
           "offset": 56,
@@ -135,7 +134,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "b23df888-1bbc-4ece-81b7-f1bd0916ce29",
+      "nodeId": "3191396e-e9ea-4e08-8880-ab0f528e5f39",
       "location": {
         "start": {
           "offset": 57,
@@ -155,7 +154,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "d4e48440-da09-4ab8-9e5b-1a5735a7405f",
+            "nodeId": "c51d2a32-0169-46c6-9c18-745f13ee0652",
             "location": {
               "start": {
                 "offset": 63,
@@ -174,7 +173,7 @@
         "args": [
           {
             "type": "Text",
-            "nodeId": "a0a41599-c0a1-415b-9dfe-3f980481d8d1",
+            "nodeId": "a52c2a40-8b1d-482b-ad84-957acbc0b0ff",
             "location": {
               "start": {
                 "offset": 76,
@@ -201,10 +200,5 @@
         "argumentCount": 1
       }
     }
-  ],
-  "metadata": {
-    "kind": "run",
-    "subtype": "exec",
-    "variant": "parameters"
-  }
+  ]
 }

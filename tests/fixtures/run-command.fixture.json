@@ -1,14 +1,14 @@
 {
   "name": "run-command",
+  "description": "Test fixture for run/command",
+  "category": "run",
+  "subcategory": "command",
   "input": "@run echo \"Hello from command\"",
   "expected": "Hello from command",
-  "directives": [
-    "@run echo \"Hello from command\""
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "5c8bcfa1-5955-49c1-b8f4-ef16dc3f369f",
+      "nodeId": "3ed3976f-161f-40d1-a8fc-5c598e339669",
       "location": {
         "start": {
           "offset": 5,
@@ -28,7 +28,7 @@
         "lang": [
           {
             "type": "Text",
-            "nodeId": "2da61cda-8e16-487a-9f28-4f3968e25841",
+            "nodeId": "a68a9523-a87e-44a7-9452-a634d2e6a955",
             "location": {
               "start": {
                 "offset": 5,
@@ -48,7 +48,7 @@
         "code": [
           {
             "type": "Text",
-            "nodeId": "7044cc25-90e7-494b-a358-2f3eba92a825",
+            "nodeId": "eaed3344-52dc-4cd1-a1c6-f4ab93d170ba",
             "location": {
               "start": {
                 "offset": 10,
@@ -76,9 +76,5 @@
         "hasVariables": false
       }
     }
-  ],
-  "metadata": {
-    "kind": "run",
-    "subtype": "command"
-  }
+  ]
 }

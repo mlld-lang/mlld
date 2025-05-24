@@ -1,14 +1,14 @@
 {
   "name": "add-section",
+  "description": "Test fixture for add/section",
+  "category": "add",
+  "subcategory": "section",
   "input": "@add \"# Section Title\" from [file.md]",
   "expected": "# Section Title\nContent under this section",
-  "directives": [
-    "@add \"# Section Title\" from [file.md]"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "c66b76b8-8f77-4f44-a864-90ff09a8677b",
+      "nodeId": "aa3acb46-f669-4e54-be8b-67a43ccbcea7",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "sectionTitle": [
           {
             "type": "Text",
-            "nodeId": "35097c22-885e-4918-8dd4-40d81742df2b",
+            "nodeId": "2e76fcc8-9dcc-445f-9e8d-8bbb7d683c74",
             "location": {
               "start": {
                 "offset": 5,
@@ -47,7 +47,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "2bea34ff-a8eb-4107-9cc6-eff89df12e75",
+            "nodeId": "15f12d87-42c9-409a-a525-db161f854d39",
             "location": {
               "start": {
                 "offset": 29,
@@ -77,9 +77,5 @@
         }
       }
     }
-  ],
-  "metadata": {
-    "kind": "add",
-    "subtype": "section"
-  }
+  ]
 }

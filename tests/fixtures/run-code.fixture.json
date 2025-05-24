@@ -1,14 +1,14 @@
 {
   "name": "run-code",
+  "description": "Test fixture for run/code",
+  "category": "run",
+  "subcategory": "code",
   "input": "@run javascript [console.log(\"Hello from code\")]",
   "expected": "Hello from code",
-  "directives": [
-    "@run javascript [console.log(\"Hello from code\")]"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "146e4b3d-dd62-418b-b290-9fe785944e11",
+      "nodeId": "a3080270-9519-47fc-b49e-0eaf39ce25e1",
       "location": {
         "start": {
           "offset": 5,
@@ -28,7 +28,7 @@
         "lang": [
           {
             "type": "Text",
-            "nodeId": "dc09ec6e-f280-4ecf-964d-b46b2fa00655",
+            "nodeId": "6c6a1d59-24dd-493d-b9c8-269385f3bd5c",
             "location": {
               "start": {
                 "offset": 5,
@@ -48,7 +48,7 @@
         "code": [
           {
             "type": "Text",
-            "nodeId": "92926546-0836-4c86-b698-81ab7c7eb3af",
+            "nodeId": "60868656-c900-4312-8ee1-bf2cfa1a3d61",
             "location": {
               "start": {
                 "offset": 16,
@@ -76,9 +76,5 @@
         "hasVariables": false
       }
     }
-  ],
-  "metadata": {
-    "kind": "run",
-    "subtype": "code"
-  }
+  ]
 }

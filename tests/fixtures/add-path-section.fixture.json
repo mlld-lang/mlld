@@ -1,14 +1,14 @@
 {
   "name": "add-path-section",
+  "description": "Test fixture for add/path",
+  "category": "add",
+  "subcategory": "path",
   "input": "@add \"Section 1\" from [file.md]",
   "expected": "## Section 1\n### Subsection 1.1\nContent from file",
-  "directives": [
-    "@add \"Section 1\" from [file.md]"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "c0f76064-856b-4492-b7a6-d1432ed5da65",
+      "nodeId": "41c8fb64-e36c-4cff-a5fc-1219229f861d",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "sectionTitle": [
           {
             "type": "Text",
-            "nodeId": "1d49a0ae-1d59-4ba0-be6b-cf7878690f8d",
+            "nodeId": "6115fcbb-d58e-4fe6-9691-a4bbbb51d151",
             "location": {
               "start": {
                 "offset": 5,
@@ -47,7 +47,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "c7396816-cfa2-437e-aee2-4937d1d5fcdf",
+            "nodeId": "164cb17d-957c-4e80-aae4-0403c0f12ef8",
             "location": {
               "start": {
                 "offset": 23,
@@ -77,10 +77,5 @@
         }
       }
     }
-  ],
-  "metadata": {
-    "kind": "add",
-    "subtype": "path",
-    "variant": "section"
-  }
+  ]
 }

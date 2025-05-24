@@ -1,14 +1,14 @@
 {
   "name": "run-code-multiline",
+  "description": "Test fixture for run/code",
+  "category": "run",
+  "subcategory": "code",
   "input": "@run javascript [\nfunction greet() {\n  return \"Hello from multiline code\";\n}\nconsole.log(greet());\n]",
   "expected": "Hello from multiline code",
-  "directives": [
-    "@run javascript [\nfunction greet() {\n  return \"Hello from multiline code\";\n}\nconsole.log(greet());\n]"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "ca1d2d96-cce0-4a5a-9ae5-a1bed0a888f3",
+      "nodeId": "e67bb4e7-01a6-4026-8345-0f6a3eb06687",
       "location": {
         "start": {
           "offset": 5,
@@ -28,7 +28,7 @@
         "lang": [
           {
             "type": "Text",
-            "nodeId": "cd8dc3a3-af98-4884-8639-815fdb207ab3",
+            "nodeId": "393991b5-33f0-49d9-8064-98bfc3185e61",
             "location": {
               "start": {
                 "offset": 5,
@@ -48,7 +48,7 @@
         "code": [
           {
             "type": "Text",
-            "nodeId": "fcf77bb9-d15d-40cc-a24b-455c4965cffa",
+            "nodeId": "2f5e712f-036d-4cbe-b49b-229e8f5d2dfd",
             "location": {
               "start": {
                 "offset": 16,
@@ -76,10 +76,5 @@
         "hasVariables": false
       }
     }
-  ],
-  "metadata": {
-    "kind": "run",
-    "subtype": "code",
-    "variant": "multiline"
-  }
+  ]
 }

@@ -1,15 +1,14 @@
 {
   "name": "data-primitive-number",
+  "description": "Test fixture for data/primitive",
+  "category": "data",
+  "subcategory": "primitive",
   "input": "@data number.count = 42\n@add @number.count",
   "expected": "42",
-  "directives": [
-    "@data number.count = 42",
-    "@add @number.count"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "732242a3-3cd3-4a92-a89d-6797097f214d",
+      "nodeId": "00b1ca4a-6f9e-4281-8003-d045f9ad51d8",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "04790786-9b1f-411a-926f-789a555fe24f",
+            "nodeId": "27f9375b-6e81-460b-bee2-7921c26a30af",
             "location": {
               "start": {
                 "offset": 0,
@@ -61,7 +60,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "c7884719-e824-4ab2-a8b5-4f2320ae1abd",
+      "nodeId": "2fecde7d-44b9-4069-ba1f-f32c103f9659",
       "location": {
         "start": {
           "offset": 23,
@@ -78,7 +77,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "6205b840-b2d0-43e8-a00b-bbcfba7cf507",
+      "nodeId": "33ff887d-a3bf-476f-a3b1-e5b192c99652",
       "location": {
         "start": {
           "offset": 24,
@@ -98,7 +97,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "5cf02acf-938a-4db4-810b-e1567d3ee22d",
+            "nodeId": "a665e747-ef08-434f-be09-875e38b5abf3",
             "location": {
               "start": {
                 "offset": 0,
@@ -128,10 +127,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "data",
-    "subtype": "primitive",
-    "variant": "number"
-  }
+  ]
 }

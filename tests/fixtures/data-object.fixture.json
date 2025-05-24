@@ -1,15 +1,14 @@
 {
   "name": "data-object",
+  "description": "Test fixture for data/object",
+  "category": "data",
+  "subcategory": "object",
   "input": "@data user = { \"name\": \"John\", \"age\": 30 }\n@add [[\n{{user.name}} is {{user.age}}.\n]]",
   "expected": "John is 30.",
-  "directives": [
-    "@data user = { \"name\": \"John\", \"age\": 30 }",
-    "@add [[\n{{user.name}} is {{user.age}}.\n]]"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "4af235a6-3973-4289-9f66-c1cfcf1ed4be",
+      "nodeId": "025ceb6c-5f75-41cd-8d1e-41acd481e3d6",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "9d985855-f859-49e5-b368-51eff597bd80",
+            "nodeId": "2efcbc0e-db0d-4f06-942b-3e0cc6d07528",
             "location": {
               "start": {
                 "offset": 0,
@@ -53,7 +52,7 @@
             "name": [
               {
                 "type": "Text",
-                "nodeId": "838c0597-5e88-4bbe-aff6-4f76792c65ab",
+                "nodeId": "c5fb5d01-d75f-425c-bde3-a3245d417f43",
                 "location": {
                   "start": {
                     "offset": 23,
@@ -75,7 +74,7 @@
       },
       "raw": {
         "identifier": "user",
-        "value": "{\n  \"name\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"838c0597-5e88-4bbe-aff6-4f76792c65ab\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 23,\n          \"line\": 1,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 29,\n          \"line\": 1,\n          \"column\": 30\n        }\n      },\n      \"content\": \"John\"\n    }\n  ],\n  \"age\": 30\n}"
+        "value": "{\n  \"name\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"c5fb5d01-d75f-425c-bde3-a3245d417f43\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 23,\n          \"line\": 1,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 29,\n          \"line\": 1,\n          \"column\": 30\n        }\n      },\n      \"content\": \"John\"\n    }\n  ],\n  \"age\": 30\n}"
       },
       "meta": {
         "objectData": {
@@ -85,7 +84,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "1b569e0e-9aea-4c13-8379-20063937a24e",
+      "nodeId": "5f96bbfa-fb72-4482-b90e-ca502a2f2cee",
       "location": {
         "start": {
           "offset": 42,
@@ -102,7 +101,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "07234bef-cf1c-40a4-a0c5-497ed517e599",
+      "nodeId": "6d12e29f-54c2-4c4d-8072-4c309efa1f6a",
       "location": {
         "start": {
           "offset": 43,
@@ -122,7 +121,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "44e62f72-d4d8-48bd-97a2-5a5b7a1bac9d",
+            "nodeId": "5f180790-e8fa-420c-ad16-38c034477dc3",
             "location": {
               "start": {
                 "offset": 50,
@@ -139,7 +138,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "7c5d210c-b5f3-430f-8929-5faa8c281fe3",
+            "nodeId": "482ad09a-a09f-48f7-93cd-1a0d37ff158a",
             "location": {
               "start": {
                 "offset": 0,
@@ -164,7 +163,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "fa155871-2f39-4bde-84a8-40418f4d9535",
+            "nodeId": "530d14e3-c8d1-431d-ab80-d4456302e177",
             "location": {
               "start": {
                 "offset": 64,
@@ -181,7 +180,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "158832ef-216c-464f-b330-efcad4a7f1bd",
+            "nodeId": "345c6ed8-3700-4022-bf58-8960b9b017e5",
             "location": {
               "start": {
                 "offset": 0,
@@ -206,7 +205,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "8d1e821d-8bf1-4da3-9fe5-136fe0473cdf",
+            "nodeId": "5631ac6e-4207-4c1b-b16d-35ab81b4b7c6",
             "location": {
               "start": {
                 "offset": 80,
@@ -232,9 +231,5 @@
         "wrapperType": "doubleBracket"
       }
     }
-  ],
-  "metadata": {
-    "kind": "data",
-    "subtype": "object"
-  }
+  ]
 }

@@ -1,15 +1,14 @@
 {
   "name": "path-assignment-special",
+  "description": "Test fixture for path/assignment",
+  "category": "path",
+  "subcategory": "assignment",
   "input": "@path homeConfig = [@~/config]\n@add [[The config is {{homeConfig}}]]",
   "expected": "The config is /Users/adam/config",
-  "directives": [
-    "@path homeConfig = [@~/config]",
-    "@add [[The config is {{homeConfig}}]]"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "6aea7f17-3a98-4f31-83ff-e00a31e73192",
+      "nodeId": "ddbfe903-0e1f-4dd0-9eea-8dc8d4164c56",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "a1f1d329-0b2e-4ebf-a00d-746ad0dfafda",
+            "nodeId": "8646f96e-a98e-486f-a442-8fe1e8320741",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +49,7 @@
         "path": [
           {
             "type": "VariableReference",
-            "nodeId": "2b6fa830-d208-4526-bda5-a59eab018a8e",
+            "nodeId": "9d95a9f5-3e26-48f1-aea8-a0812479b7e1",
             "location": {
               "start": {
                 "offset": 0,
@@ -69,7 +68,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "d9f56eb7-d49e-4ec7-96fd-3cff72bf91b6",
+            "nodeId": "9a01f529-8022-4472-a101-b83f314ad800",
             "location": {
               "start": {
                 "offset": 0,
@@ -101,7 +100,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "88428891-8a11-4d0d-a9ab-0300722dab71",
+      "nodeId": "c6d8fe8c-bc0e-4747-9c3a-694432c29689",
       "location": {
         "start": {
           "offset": 30,
@@ -118,7 +117,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "ccda7b98-e29e-4362-b1eb-9c0e80840d7a",
+      "nodeId": "df466b11-4ebe-413a-8efe-1c1ad0cf8820",
       "location": {
         "start": {
           "offset": 31,
@@ -138,7 +137,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "70f7a6b6-5212-446d-8ae9-d782fc7e4fcc",
+            "nodeId": "61009390-95d5-4222-a940-ef0385c88fd6",
             "location": {
               "start": {
                 "offset": 38,
@@ -155,7 +154,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "00b23228-8e99-49ef-9296-1e1f0eb0dbfc",
+            "nodeId": "4dc663bd-c2fb-4601-bab2-0c5c588a95b4",
             "location": {
               "start": {
                 "offset": 0,
@@ -183,10 +182,5 @@
         "wrapperType": "doubleBracket"
       }
     }
-  ],
-  "metadata": {
-    "kind": "path",
-    "subtype": "assignment",
-    "variant": "special"
-  }
+  ]
 }

@@ -1,15 +1,14 @@
 {
   "name": "add-variable",
+  "description": "Test fixture for add/variable",
+  "category": "add",
+  "subcategory": "variable",
   "input": "@text variableName = \"hello world\"\n@add @variableName",
   "expected": "hello world",
-  "directives": [
-    "@text variableName = \"hello world\"",
-    "@add @variableName"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "84f10fe7-b6e3-49a4-a526-86496faea452",
+      "nodeId": "cbc3487b-5c83-4465-81a9-c50b9397296b",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "d6206d8d-698a-4d82-b765-54dc6cdb5e17",
+            "nodeId": "6112f5d0-be10-4a25-9fb5-695b12a57d54",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +49,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "d350555d-c7f8-4d2a-a3ff-0b2533b64862",
+            "nodeId": "3c442733-508e-40cb-bb4a-abc688b152bd",
             "location": {
               "start": {
                 "offset": 21,
@@ -79,7 +78,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "61710abd-5fc9-417b-8f90-497fee4c49dd",
+      "nodeId": "6bd9cc37-0666-428a-8a98-12dca53024a8",
       "location": {
         "start": {
           "offset": 34,
@@ -96,7 +95,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "05984aca-04b6-43d6-a8e4-9c03fb76daf0",
+      "nodeId": "12823699-6e21-4a97-bbb3-7fc199a17cc2",
       "location": {
         "start": {
           "offset": 35,
@@ -116,7 +115,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "1afa1dcc-06ff-4197-b7b9-e61294c28f74",
+            "nodeId": "a67e74af-5e57-4fc7-bb90-2369286e9021",
             "location": {
               "start": {
                 "offset": 0,
@@ -140,9 +139,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "add",
-    "subtype": "variable"
-  }
+  ]
 }

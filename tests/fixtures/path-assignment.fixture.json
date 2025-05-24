@@ -1,15 +1,14 @@
 {
   "name": "path-assignment",
+  "description": "Test fixture for path/assignment",
+  "category": "path",
+  "subcategory": "assignment",
   "input": "@path docsDir = [file.md]\n@add @docsDir",
   "expected": "Contents of file.md",
-  "directives": [
-    "@path docsDir = [file.md]",
-    "@add @docsDir"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "c8a4cca7-1dbb-4220-95f7-26f9b4361ed4",
+      "nodeId": "340798bb-72b1-4930-a721-9bfa6bb4243b",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "03672759-e7c8-4b24-83db-34ac66a251eb",
+            "nodeId": "04d7fda9-1969-416a-80e7-a2c8e1170037",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +49,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "d0579306-5981-4ffb-a16f-835838336f03",
+            "nodeId": "1480db06-2bbf-4d46-840d-6d877cdc195c",
             "location": {
               "start": {
                 "offset": 0,
@@ -82,7 +81,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "91959eb0-9a61-4316-b574-cef28bccff95",
+      "nodeId": "4b8f63d8-1d88-4f6a-8f0a-481bae9f87cf",
       "location": {
         "start": {
           "offset": 25,
@@ -99,7 +98,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "713b5055-7139-4aeb-9226-5e2b193d2330",
+      "nodeId": "ce2ffab4-7ab5-4586-87d7-8f7950f22c79",
       "location": {
         "start": {
           "offset": 26,
@@ -119,7 +118,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "ba2867d0-c40a-4674-9141-4f3e6964d20f",
+            "nodeId": "f757fdd7-b6da-402e-89c2-d002b7d4a174",
             "location": {
               "start": {
                 "offset": 0,
@@ -143,9 +142,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "path",
-    "subtype": "assignment"
-  }
+  ]
 }

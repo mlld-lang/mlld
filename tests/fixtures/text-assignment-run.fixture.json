@@ -1,15 +1,14 @@
 {
   "name": "text-assignment-run",
+  "description": "Test fixture for text/assignment-run",
+  "category": "text",
+  "subcategory": "assignment-run",
   "input": "@text result = @run [echo \"Command output\"]\n@add @result",
   "expected": "Command output",
-  "directives": [
-    "@text result = @run [echo \"Command output\"]",
-    "@add @result"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "9183460f-96b1-4791-824c-c709c15a495c",
+      "nodeId": "4a9f7127-7897-4f86-8d75-5e0e3a18ae1d",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "d9640ad6-c6ae-4e85-a70d-a7951cb3f2e5",
+            "nodeId": "436f6e70-8fbd-453a-bfc8-ba6feb2ae929",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +49,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "93a3b4e8-cd53-49ff-ae15-41ca37bea7a5",
+            "nodeId": "59a8104d-653d-4293-b60c-03c9c9c64bad",
             "location": {
               "start": {
                 "offset": 21,
@@ -82,7 +81,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "ed2f14f9-70ad-47b0-8ba8-fbe25e106fff",
+      "nodeId": "dc1b4677-3586-4ccb-8b5a-2cdc8aac7b0c",
       "location": {
         "start": {
           "offset": 43,
@@ -99,7 +98,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "f8f7bb31-6491-4ae2-859c-c3794f7c667e",
+      "nodeId": "9fe3fcc7-8cbb-4f0e-aa2f-16e9376de1b8",
       "location": {
         "start": {
           "offset": 44,
@@ -119,7 +118,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "e5b72ca9-657a-40a6-b027-7c725be6cdcb",
+            "nodeId": "d67077e0-3504-4230-a671-2d139a9fdce0",
             "location": {
               "start": {
                 "offset": 0,
@@ -143,9 +142,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "text",
-    "subtype": "assignment-run"
-  }
+  ]
 }

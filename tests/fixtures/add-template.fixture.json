@@ -1,14 +1,14 @@
 {
   "name": "add-template",
+  "description": "Test fixture for add/template",
+  "category": "add",
+  "subcategory": "template",
   "input": "@add [[This is template content]]",
   "expected": "This is template content",
-  "directives": [
-    "@add [[This is template content]]"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "292defa2-81d5-4b69-99f4-600b1454884e",
+      "nodeId": "60bd5cb4-b298-49a7-bcaa-203d126f81f0",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "65637aaa-58bb-4970-9452-2b6aaa663a24",
+            "nodeId": "cbd6f3aa-b4d9-41fd-9e3e-ba32471494a1",
             "location": {
               "start": {
                 "offset": 7,
@@ -54,9 +54,5 @@
         "wrapperType": "doubleBracket"
       }
     }
-  ],
-  "metadata": {
-    "kind": "add",
-    "subtype": "template"
-  }
+  ]
 }

@@ -1,15 +1,14 @@
 {
   "name": "add-addTemplateInvocation",
+  "description": "Test fixture for add/addTemplateInvocation",
+  "category": "add",
+  "subcategory": "addTemplateInvocation",
   "input": "@text messageTemplate(user, action) = @add [[{{user}} {{action}} successfully!]]\n@add @messageTemplate(\"Bob\", \"logged in\")",
   "expected": "Bob logged in successfully!",
-  "directives": [
-    "@text messageTemplate(user, action) = @add [[{{user}} {{action}} successfully!]]",
-    "@add @messageTemplate(\"Bob\", \"logged in\")"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "defc8809-8d4f-407b-8ff2-3c7e00898981",
+      "nodeId": "3fda242a-3ba2-41e6-8ac4-4f266c501a9c",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "5551b245-2dee-4eed-994f-ef0d47617743",
+            "nodeId": "4110a5c4-98f1-4b37-9c24-d9708bcdaba4",
             "location": {
               "start": {
                 "offset": 0,
@@ -54,7 +53,7 @@
         "content": [
           {
             "type": "VariableReference",
-            "nodeId": "2a1a2232-49cc-4a93-b303-7c1e7833679a",
+            "nodeId": "eced664b-b23b-48d9-a55d-ff091b822457",
             "location": {
               "start": {
                 "offset": 0,
@@ -73,7 +72,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "e48d2639-549d-42da-a05e-0e8beafd5c53",
+            "nodeId": "d13a9751-094c-493b-a01c-d6dfff61185f",
             "location": {
               "start": {
                 "offset": 53,
@@ -90,7 +89,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "08415d8e-efa9-46f5-bfe1-87138cb45da9",
+            "nodeId": "b9e47e66-f09e-4baa-887a-fd9a71211dd9",
             "location": {
               "start": {
                 "offset": 0,
@@ -109,7 +108,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "9058ccca-6ff3-40ac-910b-0578e132bc9f",
+            "nodeId": "547f913c-492d-44f6-88fd-1e7548d0b65c",
             "location": {
               "start": {
                 "offset": 64,
@@ -144,7 +143,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "1772e54e-152f-4a15-a391-d66f90c83d38",
+      "nodeId": "520dca0f-4349-419e-9222-031edf823a40",
       "location": {
         "start": {
           "offset": 80,
@@ -161,7 +160,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "b64412be-c789-4c0c-bc65-5bfae1d4998e",
+      "nodeId": "239e9a23-44a5-4bbb-9755-33cfc7470b4a",
       "location": {
         "start": {
           "offset": 81,
@@ -181,7 +180,7 @@
         "templateName": [
           {
             "type": "Text",
-            "nodeId": "2e6f5791-006a-4db4-b8b0-ec397db9c489",
+            "nodeId": "424316bc-0a65-498a-bb46-2eccc6892dc7",
             "location": {
               "start": {
                 "offset": 81,
@@ -220,9 +219,5 @@
         "argumentCount": 2
       }
     }
-  ],
-  "metadata": {
-    "kind": "add",
-    "subtype": "addTemplateInvocation"
-  }
+  ]
 }

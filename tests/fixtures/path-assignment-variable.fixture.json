@@ -1,16 +1,14 @@
 {
   "name": "path-assignment-variable",
+  "description": "Test fixture for path/assignment",
+  "category": "path",
+  "subcategory": "assignment",
   "input": "@text username = \"john\"\n@path userConfig = [config/@username/settings.json]\n@add [[The user config is at {{userConfig}}]]",
   "expected": "The user config is at config/john/settings.json",
-  "directives": [
-    "@text username = \"john\"",
-    "@path userConfig = [config/@username/settings.json]",
-    "@add [[The user config is at {{userConfig}}]]"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "f0ea705a-36a3-4132-80e5-8fb2edb3ba3d",
+      "nodeId": "38a23ed0-9873-46c0-a38d-8b11f4e92d4d",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "13c4ec22-b280-494a-960b-2e7be6f344b5",
+            "nodeId": "229d16c2-9b67-4a77-9877-c6b448199edb",
             "location": {
               "start": {
                 "offset": 0,
@@ -51,7 +49,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "7ee02ae0-dc0e-4375-a110-ea0e95642679",
+            "nodeId": "c002b3d9-5d65-4010-8580-733cc96d9f78",
             "location": {
               "start": {
                 "offset": 17,
@@ -80,7 +78,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "a3f9e95e-20b0-4d20-8d05-d008c2ea5179",
+      "nodeId": "d8ceb7af-5bdc-4ce3-8398-cbd84a219d46",
       "location": {
         "start": {
           "offset": 23,
@@ -97,7 +95,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "f5597e87-64c1-4af2-ba4f-a75a7df399e0",
+      "nodeId": "499b881c-69d0-4bde-be1f-aea8ddddf171",
       "location": {
         "start": {
           "offset": 24,
@@ -117,7 +115,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "f69c78f4-0f10-4c8a-ae7d-6702134788aa",
+            "nodeId": "843c589d-8885-4c50-9ceb-8008658009bd",
             "location": {
               "start": {
                 "offset": 0,
@@ -138,7 +136,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "66c9d39a-2afb-4db6-8cc0-f25e242f9046",
+            "nodeId": "3f5cfb16-6f81-4718-b375-e5b0baf2e302",
             "location": {
               "start": {
                 "offset": 24,
@@ -155,7 +153,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "c42d76c8-9b7b-46a4-9935-4b1239ae0b8c",
+            "nodeId": "fe5406de-e004-4a2e-9544-864eb5d45c1b",
             "location": {
               "start": {
                 "offset": 0,
@@ -174,7 +172,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "3202a6cd-d597-48e4-8a3b-d9f10ae946a2",
+            "nodeId": "7b208779-77c9-48eb-957b-456a0ee357b5",
             "location": {
               "start": {
                 "offset": 24,
@@ -206,7 +204,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "c6d478f8-e835-489b-872d-33b606ff4e1e",
+      "nodeId": "42477468-d29f-44fc-97bd-53bfce68216c",
       "location": {
         "start": {
           "offset": 75,
@@ -223,7 +221,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "3658289c-683b-4245-be57-e7da263466ae",
+      "nodeId": "cb3a0466-568c-4b2e-a4b2-f5249bcedccd",
       "location": {
         "start": {
           "offset": 76,
@@ -243,7 +241,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "332d3f83-672f-46ef-9f61-ae0d3da0aacd",
+            "nodeId": "d22bfcf9-1a8e-4ac1-bf1c-b8aeaaa836c7",
             "location": {
               "start": {
                 "offset": 83,
@@ -260,7 +258,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "707f1eab-2571-417c-8135-d1219eb905c2",
+            "nodeId": "5cc07fc9-d1e6-48c2-9d41-05c6cf7692b4",
             "location": {
               "start": {
                 "offset": 0,
@@ -288,10 +286,5 @@
         "wrapperType": "doubleBracket"
       }
     }
-  ],
-  "metadata": {
-    "kind": "path",
-    "subtype": "assignment",
-    "variant": "variable"
-  }
+  ]
 }

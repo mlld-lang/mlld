@@ -1,16 +1,14 @@
 {
   "name": "exec-reference",
+  "description": "Test fixture for exec/reference",
+  "category": "exec",
+  "subcategory": "reference",
   "input": "@exec echo (text) = @run [echo \"@text\"]\n@exec greet (name) = @run [echo \"Hello, @name!\"]\n@run @greet(\"World\")",
   "expected": "Hello, World!",
-  "directives": [
-    "@exec echo (text) = @run [echo \"@text\"]",
-    "@exec greet (name) = @run [echo \"Hello, @name!\"]",
-    "@run @greet(\"World\")"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "6c32fc97-c892-4dc0-be35-66990d8a7f82",
+      "nodeId": "0e09ef05-f44f-4fd2-be1d-a72aa4a59ff6",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +28,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "867cc69f-7884-4781-bb92-26024f16bb88",
+            "nodeId": "9604a6f6-0512-4cd3-b165-d4bf1644f206",
             "location": {
               "start": {
                 "offset": 0,
@@ -52,7 +50,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "d82142d6-2a96-48aa-8da1-894877d3bc66",
+            "nodeId": "472f4c13-3c55-4b6c-888f-359732de27a4",
             "location": {
               "start": {
                 "offset": 26,
@@ -69,7 +67,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "4021eb4a-aa3d-442e-b81f-358df55ffbd8",
+            "nodeId": "1d8b5fca-c433-471d-ba4b-b9d88a301246",
             "location": {
               "start": {
                 "offset": 0,
@@ -88,7 +86,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "c4f42eac-eea8-4105-8870-72d994d9de1c",
+            "nodeId": "7c003f2d-72e3-4b9a-8652-94a8d160ce78",
             "location": {
               "start": {
                 "offset": 37,
@@ -119,7 +117,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "21090a14-b941-4da4-a29b-6cc9038e8da1",
+      "nodeId": "8be9f476-8274-4223-a387-45951e518933",
       "location": {
         "start": {
           "offset": 39,
@@ -136,7 +134,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "0581dfd3-44d2-4b26-a06c-3b523aebc0eb",
+      "nodeId": "6432c737-6f3d-4f8e-83e3-de3980906e08",
       "location": {
         "start": {
           "offset": 40,
@@ -156,7 +154,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "a86ae02f-8027-48c9-a02b-06e35ac83662",
+            "nodeId": "ddae6d5d-3347-4d21-9251-32c910f92313",
             "location": {
               "start": {
                 "offset": 40,
@@ -178,7 +176,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "1cecc6ad-367c-4c01-82b4-b8fb14186078",
+            "nodeId": "0955b506-0b43-43ff-a8a2-06a886a2336d",
             "location": {
               "start": {
                 "offset": 67,
@@ -195,7 +193,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "6e8eed58-0dcd-44fc-be9c-66c789a87c2e",
+            "nodeId": "cc6c3410-a770-41a4-8b44-d8b63a12da2b",
             "location": {
               "start": {
                 "offset": 0,
@@ -214,7 +212,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "d507f354-eb66-4224-8178-30416f409765",
+            "nodeId": "d1d3ea4f-3653-486a-ae30-b2f18826cd3d",
             "location": {
               "start": {
                 "offset": 85,
@@ -245,7 +243,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "b11da46e-a57c-41f9-80d3-4afbc873762f",
+      "nodeId": "f1589952-a1f2-4d21-add8-37ed5fdedbd6",
       "location": {
         "start": {
           "offset": 88,
@@ -262,7 +260,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "e4f9f8e0-5bc0-4c03-b963-55c03c4653e2",
+      "nodeId": "2ffe368f-5143-432a-920e-0a3c558918f2",
       "location": {
         "start": {
           "offset": 89,
@@ -282,7 +280,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "f4e01836-988a-4e67-90fb-060a1aa58af6",
+            "nodeId": "688d7e6f-9f01-4dde-b88c-2e45f7f56ef7",
             "location": {
               "start": {
                 "offset": 95,
@@ -301,7 +299,7 @@
         "args": [
           {
             "type": "Text",
-            "nodeId": "13478f86-c6c8-4c87-ad01-773bb2d1d504",
+            "nodeId": "b8085bc8-e9bd-420c-94eb-a234d21f984e",
             "location": {
               "start": {
                 "offset": 101,
@@ -328,9 +326,5 @@
         "argumentCount": 1
       }
     }
-  ],
-  "metadata": {
-    "kind": "exec",
-    "subtype": "reference"
-  }
+  ]
 }

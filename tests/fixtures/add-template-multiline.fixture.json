@@ -1,15 +1,14 @@
 {
   "name": "add-template-multiline",
+  "description": "Test fixture for add/template",
+  "category": "add",
+  "subcategory": "template",
   "input": "@text variable = \"value\"\n@add [[\nContent with {{variable}}\n\nAnd some more content\n\nHey, here's the same variable again: {{variable}}\n]]",
   "expected": "Content with value\n\nAnd some more content\n\nHey, here's the same variable again: value",
-  "directives": [
-    "@text variable = \"value\"",
-    "@add [[\nContent with {{variable}}"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "5a111508-f1c2-408a-bbf7-5f3bd5b0fc80",
+      "nodeId": "0d6b0e1c-0d50-4988-8625-d25a14c4d0d6",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "e85ececd-6368-4aff-9768-8ca290c04a35",
+            "nodeId": "be92965d-432d-4c66-baaa-4f789b9b56d2",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +49,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "841462dc-781f-4bfd-8a3e-d12365ae4e71",
+            "nodeId": "d699b08b-2ded-4120-b731-e7342a49962e",
             "location": {
               "start": {
                 "offset": 17,
@@ -79,7 +78,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "fccc5445-fffe-4afb-b214-c5d717cc77a6",
+      "nodeId": "ffcb9ada-3503-4aa5-93e1-e951ae59a264",
       "location": {
         "start": {
           "offset": 24,
@@ -96,7 +95,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "59cea373-2475-4b51-9278-ac6a7b11d308",
+      "nodeId": "4265b244-f659-4058-9dcc-e9bda3280ed6",
       "location": {
         "start": {
           "offset": 25,
@@ -116,7 +115,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "7c944161-e005-4d91-8465-c84a3645d59b",
+            "nodeId": "47cb0f0f-0f87-483c-b78e-a9181ca7858e",
             "location": {
               "start": {
                 "offset": 32,
@@ -133,7 +132,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "338869a6-8c57-4522-b68f-eb9df656c17d",
+            "nodeId": "00086daf-17a4-41ed-a993-0d7b43592947",
             "location": {
               "start": {
                 "offset": 0,
@@ -152,7 +151,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "2c80bc42-1691-461f-bfd7-e1e51849c87c",
+            "nodeId": "36ab4737-804a-46a2-b5a5-8f52effd951a",
             "location": {
               "start": {
                 "offset": 58,
@@ -169,7 +168,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "de366a55-4c58-4631-b315-7dad677515e8",
+            "nodeId": "32aa319a-61dd-419b-9a0a-e7f58da73d85",
             "location": {
               "start": {
                 "offset": 0,
@@ -188,7 +187,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "0f65e93b-7c79-4eaa-ad7c-e6e464ea026a",
+            "nodeId": "ffb2b62c-048d-4885-8df8-4a1bce478c16",
             "location": {
               "start": {
                 "offset": 132,
@@ -214,10 +213,5 @@
         "wrapperType": "doubleBracket"
       }
     }
-  ],
-  "metadata": {
-    "kind": "add",
-    "subtype": "template",
-    "variant": "multiline"
-  }
+  ]
 }

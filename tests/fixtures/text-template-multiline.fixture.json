@@ -1,16 +1,14 @@
 {
   "name": "text-template-multiline",
-  "input": "@text variable = \"value\"\n@text multiline = [[\nThis is a\nmulti-line template\nwith {{variable}}\n]]\n@add @multiline",
+  "description": "Test fixture for text/template",
+  "category": "text",
+  "subcategory": "template",
+  "input": "@text variable = \"value\"\n@text multiline = [[\nThis is a\nmulti-line template\nwith {{variable}}\n]]\n@add @multiline\n",
   "expected": "This is a\nmulti-line template\nwith value",
-  "directives": [
-    "@text variable = \"value\"",
-    "@text multiline = [[\nThis is a\nmulti-line template\nwith {{variable}}\n]]",
-    "@add @multiline"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "982222b9-47e7-49fb-8485-37d7dcca20c7",
+      "nodeId": "5e72e38f-8a43-4436-b748-2c8ffdf16b7b",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "c2dd7b06-7775-4915-bad3-90e70718c4c2",
+            "nodeId": "877df4e9-2ca4-4f20-aa6a-fcd5bc3f3641",
             "location": {
               "start": {
                 "offset": 0,
@@ -51,7 +49,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "65aef3bf-9630-4971-84c9-8d551b2e254f",
+            "nodeId": "e754ed14-be43-4f8a-bf6b-ffb943798c34",
             "location": {
               "start": {
                 "offset": 17,
@@ -80,7 +78,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "051ff7f8-7807-4eb5-927c-78ff58544b95",
+      "nodeId": "8f29997f-5027-4e60-9265-6af8a27c524c",
       "location": {
         "start": {
           "offset": 24,
@@ -97,7 +95,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "efe63443-3262-4f43-8735-055d868e34ff",
+      "nodeId": "3a9d4936-04d5-4a6e-9e74-94a5849b13ed",
       "location": {
         "start": {
           "offset": 25,
@@ -117,7 +115,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "13624524-4ab6-4669-9f76-8dcc6307b804",
+            "nodeId": "d2822441-d0c4-4759-a082-84dbb8ee788c",
             "location": {
               "start": {
                 "offset": 0,
@@ -138,7 +136,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "c9568e07-f2f3-40c3-add8-080e8147329b",
+            "nodeId": "e2de42a1-cdc3-4445-88a3-b748984517a4",
             "location": {
               "start": {
                 "offset": 45,
@@ -155,7 +153,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "b06dd073-820d-44ed-bf73-6615290a1049",
+            "nodeId": "3da03ff3-f616-4711-92b5-fa727990a15c",
             "location": {
               "start": {
                 "offset": 0,
@@ -174,7 +172,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "88d1c844-aa05-4534-9666-6d94afc12153",
+            "nodeId": "3a5d7df6-dd53-4526-9a7c-63f9a2641bc0",
             "location": {
               "start": {
                 "offset": 93,
@@ -203,7 +201,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "48b0e1ff-7cbc-447c-8061-f298f893053e",
+      "nodeId": "65498391-1e1e-474a-aa63-ab263a70e0c2",
       "location": {
         "start": {
           "offset": 96,
@@ -220,7 +218,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "40b255c7-01e4-4f97-b85b-f456a299b90f",
+      "nodeId": "6310d484-0820-4f17-8be5-8f65a02f506b",
       "location": {
         "start": {
           "offset": 97,
@@ -228,9 +226,9 @@
           "column": 1
         },
         "end": {
-          "offset": 112,
-          "line": 7,
-          "column": 16
+          "offset": 113,
+          "line": 8,
+          "column": 1
         }
       },
       "kind": "add",
@@ -240,7 +238,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "405cf7b4-a1ef-45d4-bc39-3a692bcbc02e",
+            "nodeId": "6b07b4fc-0d4d-417c-be14-4f38c6e574eb",
             "location": {
               "start": {
                 "offset": 0,
@@ -264,10 +262,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "text",
-    "subtype": "template",
-    "variant": "multiline"
-  }
+  ]
 }

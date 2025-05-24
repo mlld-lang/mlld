@@ -1,14 +1,14 @@
 {
   "name": "exec-command",
+  "description": "Test fixture for exec/command",
+  "category": "exec",
+  "subcategory": "command",
   "input": "@exec greet (name) = @run [echo \"Hello, @name!\"]",
   "expected": "",
-  "directives": [
-    "@exec greet (name) = @run [echo \"Hello, @name!\"]"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "800fbd86-5268-4718-91c3-603f315ffa9f",
+      "nodeId": "8030e8b5-4fbc-4d5e-a1ac-c4698c946985",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "6a178fcf-26cf-45bf-b84a-ec39b03498b3",
+            "nodeId": "e5bd0b6e-cb44-434e-9452-6c4a71bf0a4e",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +50,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "297fa477-e8f9-4ed4-87aa-abf60aa5f84c",
+            "nodeId": "41905782-68c5-444d-943f-557d3d915623",
             "location": {
               "start": {
                 "offset": 27,
@@ -67,7 +67,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "d2d6c9c6-045d-4d1f-af93-851d6a807510",
+            "nodeId": "fc580ffb-5355-46af-9927-05628ce22d71",
             "location": {
               "start": {
                 "offset": 0,
@@ -86,7 +86,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "16ef13c8-1334-4af5-954b-ec2f8153083d",
+            "nodeId": "f36c4046-03d1-4d55-a5f2-02b9824f4000",
             "location": {
               "start": {
                 "offset": 45,
@@ -115,9 +115,5 @@
         "parameterCount": 1
       }
     }
-  ],
-  "metadata": {
-    "kind": "exec",
-    "subtype": "command"
-  }
+  ]
 }

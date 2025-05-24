@@ -1,14 +1,14 @@
 {
   "name": "add-section-rename",
+  "description": "Test fixture for add/section",
+  "category": "add",
+  "subcategory": "section",
   "input": "@add \"# Original Title\" from [file.md] as \"# New Title\"",
   "expected": "# New Title\nContent under this section",
-  "directives": [
-    "@add \"# Original Title\" from [file.md] as \"# New Title\""
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "646599a0-4b13-46f4-b5ad-e8ee603c8069",
+      "nodeId": "76f7e856-887a-40f0-8d57-52afa92815eb",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "sectionTitle": [
           {
             "type": "Text",
-            "nodeId": "468bed74-b487-4cae-8208-ddf3d5f858e1",
+            "nodeId": "9820f08b-a880-4e1a-9275-000a15dba53d",
             "location": {
               "start": {
                 "offset": 5,
@@ -47,7 +47,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "3c741cc1-0a1a-463d-a408-47c24d183629",
+            "nodeId": "5d6cd68b-5c47-4279-857b-07c79af42195",
             "location": {
               "start": {
                 "offset": 30,
@@ -66,7 +66,7 @@
         "newTitle": [
           {
             "type": "Text",
-            "nodeId": "77d270a8-14c4-4c1d-9ac8-ca1cd3ac2919",
+            "nodeId": "35950afc-f92e-4edc-819d-808052c82f1c",
             "location": {
               "start": {
                 "offset": 42,
@@ -97,10 +97,5 @@
         }
       }
     }
-  ],
-  "metadata": {
-    "kind": "add",
-    "subtype": "section",
-    "variant": "rename"
-  }
+  ]
 }

@@ -1,15 +1,14 @@
 {
   "name": "data-complex",
+  "description": "Test fixture for data/complex",
+  "category": "data",
+  "subcategory": "complex",
   "input": "@data results = {\n  greeting: @run [echo \"Hello from embedded command\"],\n  value: 42\n}\n@add @results.greeting",
   "expected": "Hello from embedded command",
-  "directives": [
-    "@data results = {\n  greeting: @run [echo \"Hello from embedded command\"],\n  value: 42\n}",
-    "@add @results.greeting"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "4f14ff67-88f4-4d1b-ba29-3354b1bf24e8",
+      "nodeId": "2522f2f6-ca8c-46e4-8537-e1fa7082bcd9",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "d66867a3-19f2-42b8-8611-38f3469f19c7",
+            "nodeId": "7a093e88-2513-44f7-8ebe-02ab378ec405",
             "location": {
               "start": {
                 "offset": 0,
@@ -52,7 +51,7 @@
           "properties": {
             "greeting": {
               "type": "Directive",
-              "nodeId": "6766820d-0293-4547-8e03-2d1169b8b0fb",
+              "nodeId": "b5173ae7-ac0a-473d-a2f3-30d2425457f3",
               "location": {
                 "start": {
                   "offset": 30,
@@ -72,7 +71,7 @@
                 "command": [
                   {
                     "type": "Text",
-                    "nodeId": "d7afc433-cada-4e4e-9263-d87380d22c78",
+                    "nodeId": "d6449adc-6891-4ad5-9390-3fe975f2c51b",
                     "location": {
                       "start": {
                         "offset": 36,
@@ -104,7 +103,7 @@
       },
       "raw": {
         "identifier": "results",
-        "value": "{\n  \"greeting\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"6766820d-0293-4547-8e03-2d1169b8b0fb\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 30,\n        \"line\": 2,\n        \"column\": 13\n      },\n      \"end\": {\n        \"offset\": 71,\n        \"line\": 2,\n        \"column\": 54\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runCommand\",\n    \"source\": null,\n    \"values\": {\n      \"command\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"d7afc433-cada-4e4e-9263-d87380d22c78\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 36,\n              \"line\": 2,\n              \"column\": 19\n            },\n            \"end\": {\n              \"offset\": 70,\n              \"line\": 2,\n              \"column\": 53\n            }\n          },\n          \"content\": \"echo \\\"Hello from embedded command\\\"\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"command\": \"echo \\\"Hello from embedded command\\\"\"\n    },\n    \"meta\": {\n      \"hasVariables\": false,\n      \"isDataValue\": true,\n      \"isMultiLine\": false\n    }\n  },\n  \"value\": 42\n}"
+        "value": "{\n  \"greeting\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"b5173ae7-ac0a-473d-a2f3-30d2425457f3\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 30,\n        \"line\": 2,\n        \"column\": 13\n      },\n      \"end\": {\n        \"offset\": 71,\n        \"line\": 2,\n        \"column\": 54\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runCommand\",\n    \"source\": null,\n    \"values\": {\n      \"command\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"d6449adc-6891-4ad5-9390-3fe975f2c51b\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 36,\n              \"line\": 2,\n              \"column\": 19\n            },\n            \"end\": {\n              \"offset\": 70,\n              \"line\": 2,\n              \"column\": 53\n            }\n          },\n          \"content\": \"echo \\\"Hello from embedded command\\\"\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"command\": \"echo \\\"Hello from embedded command\\\"\"\n    },\n    \"meta\": {\n      \"hasVariables\": false,\n      \"isDataValue\": true,\n      \"isMultiLine\": false\n    }\n  },\n  \"value\": 42\n}"
       },
       "meta": {
         "objectData": {
@@ -114,7 +113,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "36b988b2-4a08-44e3-9b6c-334d9261fdcd",
+      "nodeId": "09fecfe0-203a-4446-a0f4-8e4976fbd7db",
       "location": {
         "start": {
           "offset": 86,
@@ -131,7 +130,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "888a5b14-3ec7-4267-b73e-8d4614c40fc2",
+      "nodeId": "f78ab4e1-c510-4655-ab46-8ae97da9da56",
       "location": {
         "start": {
           "offset": 87,
@@ -151,7 +150,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "abaa7a45-9764-4418-a3ae-5a22839573cc",
+            "nodeId": "83b02da6-b308-4de9-8c58-106ba4dcb775",
             "location": {
               "start": {
                 "offset": 0,
@@ -181,9 +180,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "data",
-    "subtype": "complex"
-  }
+  ]
 }

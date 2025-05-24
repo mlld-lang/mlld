@@ -1,15 +1,14 @@
 {
   "name": "text-path",
+  "description": "Test fixture for text/path",
+  "category": "text",
+  "subcategory": "path",
   "input": "@text content = file.md\n@add @content",
   "expected": "Content from file",
-  "directives": [
-    "@text content = file.md",
-    "@add @content"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "2ea35045-d35a-4ce0-9aae-cd67fe824e1d",
+      "nodeId": "7f53443c-03f8-4376-a625-ca4981b66c75",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "8f7f5a8a-4780-4d78-996f-ef34ef7e299c",
+            "nodeId": "9d6abfbb-2bf6-4003-b2fb-811265a5a540",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +49,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "36ab9292-1ac4-43fa-ad09-de3364482015",
+            "nodeId": "31e78a83-a5dc-4826-a07a-70162ce6dbb8",
             "location": {
               "start": {
                 "offset": 16,
@@ -78,7 +77,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "2bf4028c-7f4f-4a1c-a0d1-1252aecebcf5",
+      "nodeId": "7d93a879-7db8-418f-86b5-fb146976b2c6",
       "location": {
         "start": {
           "offset": 23,
@@ -95,7 +94,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "952f48bd-ab00-4299-a56e-f21a976021af",
+      "nodeId": "f9180430-6f1a-4ad6-9858-7e117f03c34d",
       "location": {
         "start": {
           "offset": 24,
@@ -115,7 +114,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "b2ab635d-1a6d-4a77-84b9-226d30378f92",
+            "nodeId": "b81e1aac-dacc-4461-aa85-3637c0bd4259",
             "location": {
               "start": {
                 "offset": 0,
@@ -139,9 +138,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "text",
-    "subtype": "path"
-  }
+  ]
 }

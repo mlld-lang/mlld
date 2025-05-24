@@ -1,15 +1,14 @@
 {
   "name": "text-assignment-path",
+  "description": "Test fixture for text/assignment-path",
+  "category": "text",
+  "subcategory": "assignment-path",
   "input": "@text content = [file.md]\n@add @content",
   "expected": "Content from file",
-  "directives": [
-    "@text content = [file.md]",
-    "@add @content"
-  ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "2cf1110a-59d9-4aee-97a5-1456e3ae1c6b",
+      "nodeId": "21b9275c-cd0e-43ae-a8d4-63572349ba08",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "fdbdeda7-d1cd-4a0a-bd50-5efc6b6b9951",
+            "nodeId": "8da3741e-f61e-4d87-a1e2-740623047728",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +49,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "50b781b5-08b5-429f-91de-515bd50e95ab",
+            "nodeId": "3505b8dd-8098-4521-b712-50fba8fdf724",
             "location": {
               "start": {
                 "offset": 17,
@@ -78,7 +77,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "472449b5-f4e6-4d39-bdf3-7a474c396a7b",
+      "nodeId": "12f5bda3-a706-421e-9052-7f82f92db4b8",
       "location": {
         "start": {
           "offset": 25,
@@ -95,7 +94,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "80faaf5a-db78-4dc3-9d8e-5ac387879915",
+      "nodeId": "b721cacf-12ea-4c21-a321-81ae2133152c",
       "location": {
         "start": {
           "offset": 26,
@@ -115,7 +114,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "a031a7bc-acc3-4c50-9290-b7d490e7cf1f",
+            "nodeId": "a40d8b12-ea94-478e-81c6-34ada32727a9",
             "location": {
               "start": {
                 "offset": 0,
@@ -139,9 +138,5 @@
       },
       "meta": {}
     }
-  ],
-  "metadata": {
-    "kind": "text",
-    "subtype": "assignment-path"
-  }
+  ]
 }
