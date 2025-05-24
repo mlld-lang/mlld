@@ -1,0 +1,461 @@
+{
+  "name": "data-array-directives",
+  "description": "Test fixture for data/array-directives",
+  "category": "data",
+  "subcategory": "array-directives",
+  "input": "@data testResults = {\n  suites: [\n    @run [echo \"unit: passed\"],\n    @run [echo \"integration: passed\"],\n    @run [echo \"e2e: passed\"]\n  ],\n  count: 3\n}\n@add [[Test Results:\n{{testResults.suites[0]}}\n{{testResults.suites[1]}}\n{{testResults.suites[2]}}\nTotal: {{testResults.count}} suites]]",
+  "expected": "Test Results:\nunit: passed\nintegration: passed\ne2e: passed\nTotal: 3 suites",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "4b72c2d4-5e15-457f-b3d1-88b0e421c822",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 152,
+          "line": 8,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "7ea4047b-fdab-4eb7-9ab0-2370b75cac28",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "testResults"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "suites": {
+              "type": "array",
+              "items": [
+                {
+                  "type": "Directive",
+                  "nodeId": "af3af032-f6fe-4d04-b58b-fec8ac4fa161",
+                  "location": {
+                    "start": {
+                      "offset": 38,
+                      "line": 3,
+                      "column": 5
+                    },
+                    "end": {
+                      "offset": 64,
+                      "line": 3,
+                      "column": 31
+                    }
+                  },
+                  "kind": "run",
+                  "subtype": "runCommand",
+                  "source": null,
+                  "values": {
+                    "command": [
+                      {
+                        "type": "Text",
+                        "nodeId": "ffcc6a4a-c830-41c5-9ca8-dabcfe65d8cb",
+                        "location": {
+                          "start": {
+                            "offset": 44,
+                            "line": 3,
+                            "column": 11
+                          },
+                          "end": {
+                            "offset": 63,
+                            "line": 3,
+                            "column": 30
+                          }
+                        },
+                        "content": "echo \"unit: passed\""
+                      }
+                    ]
+                  },
+                  "raw": {
+                    "command": "echo \"unit: passed\""
+                  },
+                  "meta": {
+                    "hasVariables": false,
+                    "isDataValue": true,
+                    "isMultiLine": false
+                  }
+                },
+                {
+                  "type": "Directive",
+                  "nodeId": "28f3be92-d435-4c85-aa04-46f4a5b7d40d",
+                  "location": {
+                    "start": {
+                      "offset": 70,
+                      "line": 4,
+                      "column": 5
+                    },
+                    "end": {
+                      "offset": 103,
+                      "line": 4,
+                      "column": 38
+                    }
+                  },
+                  "kind": "run",
+                  "subtype": "runCommand",
+                  "source": null,
+                  "values": {
+                    "command": [
+                      {
+                        "type": "Text",
+                        "nodeId": "a9e60f4c-c93f-4f35-809c-2e436f684125",
+                        "location": {
+                          "start": {
+                            "offset": 76,
+                            "line": 4,
+                            "column": 11
+                          },
+                          "end": {
+                            "offset": 102,
+                            "line": 4,
+                            "column": 37
+                          }
+                        },
+                        "content": "echo \"integration: passed\""
+                      }
+                    ]
+                  },
+                  "raw": {
+                    "command": "echo \"integration: passed\""
+                  },
+                  "meta": {
+                    "hasVariables": false,
+                    "isDataValue": true,
+                    "isMultiLine": false
+                  }
+                },
+                {
+                  "type": "Directive",
+                  "nodeId": "662e7051-27d7-4868-80b0-46cd99b69122",
+                  "location": {
+                    "start": {
+                      "offset": 109,
+                      "line": 5,
+                      "column": 5
+                    },
+                    "end": {
+                      "offset": 134,
+                      "line": 5,
+                      "column": 30
+                    }
+                  },
+                  "kind": "run",
+                  "subtype": "runCommand",
+                  "source": null,
+                  "values": {
+                    "command": [
+                      {
+                        "type": "Text",
+                        "nodeId": "c40b72a7-c2e2-4d6d-bc75-45ff6a20ff88",
+                        "location": {
+                          "start": {
+                            "offset": 115,
+                            "line": 5,
+                            "column": 11
+                          },
+                          "end": {
+                            "offset": 133,
+                            "line": 5,
+                            "column": 29
+                          }
+                        },
+                        "content": "echo \"e2e: passed\""
+                      }
+                    ]
+                  },
+                  "raw": {
+                    "command": "echo \"e2e: passed\""
+                  },
+                  "meta": {
+                    "hasVariables": false,
+                    "isDataValue": true,
+                    "isMultiLine": false
+                  }
+                }
+              ]
+            },
+            "count": 3
+          }
+        }
+      },
+      "raw": {
+        "identifier": "testResults",
+        "value": "{\n  \"suites\": {\n    \"type\": \"array\",\n    \"items\": [\n      {\n        \"type\": \"Directive\",\n        \"nodeId\": \"af3af032-f6fe-4d04-b58b-fec8ac4fa161\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 38,\n            \"line\": 3,\n            \"column\": 5\n          },\n          \"end\": {\n            \"offset\": 64,\n            \"line\": 3,\n            \"column\": 31\n          }\n        },\n        \"kind\": \"run\",\n        \"subtype\": \"runCommand\",\n        \"source\": null,\n        \"values\": {\n          \"command\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"ffcc6a4a-c830-41c5-9ca8-dabcfe65d8cb\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 44,\n                  \"line\": 3,\n                  \"column\": 11\n                },\n                \"end\": {\n                  \"offset\": 63,\n                  \"line\": 3,\n                  \"column\": 30\n                }\n              },\n              \"content\": \"echo \\\"unit: passed\\\"\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"command\": \"echo \\\"unit: passed\\\"\"\n        },\n        \"meta\": {\n          \"hasVariables\": false,\n          \"isDataValue\": true,\n          \"isMultiLine\": false\n        }\n      },\n      {\n        \"type\": \"Directive\",\n        \"nodeId\": \"28f3be92-d435-4c85-aa04-46f4a5b7d40d\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 70,\n            \"line\": 4,\n            \"column\": 5\n          },\n          \"end\": {\n            \"offset\": 103,\n            \"line\": 4,\n            \"column\": 38\n          }\n        },\n        \"kind\": \"run\",\n        \"subtype\": \"runCommand\",\n        \"source\": null,\n        \"values\": {\n          \"command\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"a9e60f4c-c93f-4f35-809c-2e436f684125\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 76,\n                  \"line\": 4,\n                  \"column\": 11\n                },\n                \"end\": {\n                  \"offset\": 102,\n                  \"line\": 4,\n                  \"column\": 37\n                }\n              },\n              \"content\": \"echo \\\"integration: passed\\\"\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"command\": \"echo \\\"integration: passed\\\"\"\n        },\n        \"meta\": {\n          \"hasVariables\": false,\n          \"isDataValue\": true,\n          \"isMultiLine\": false\n        }\n      },\n      {\n        \"type\": \"Directive\",\n        \"nodeId\": \"662e7051-27d7-4868-80b0-46cd99b69122\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 109,\n            \"line\": 5,\n            \"column\": 5\n          },\n          \"end\": {\n            \"offset\": 134,\n            \"line\": 5,\n            \"column\": 30\n          }\n        },\n        \"kind\": \"run\",\n        \"subtype\": \"runCommand\",\n        \"source\": null,\n        \"values\": {\n          \"command\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"c40b72a7-c2e2-4d6d-bc75-45ff6a20ff88\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 115,\n                  \"line\": 5,\n                  \"column\": 11\n                },\n                \"end\": {\n                  \"offset\": 133,\n                  \"line\": 5,\n                  \"column\": 29\n                }\n              },\n              \"content\": \"echo \\\"e2e: passed\\\"\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"command\": \"echo \\\"e2e: passed\\\"\"\n        },\n        \"meta\": {\n          \"hasVariables\": false,\n          \"isDataValue\": true,\n          \"isMultiLine\": false\n        }\n      }\n    ]\n  },\n  \"count\": 3\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 2
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "7da93dfb-c690-468c-8225-f73c25c233d9",
+      "location": {
+        "start": {
+          "offset": 152,
+          "line": 8,
+          "column": 2
+        },
+        "end": {
+          "offset": 153,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "9d7e0ec7-b555-4108-83d1-5d8a8b8fc31b",
+      "location": {
+        "start": {
+          "offset": 153,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 289,
+          "line": 13,
+          "column": 38
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "2cf7c786-97c1-4c20-a6f1-88976c17c3eb",
+            "location": {
+              "start": {
+                "offset": 160,
+                "line": 9,
+                "column": 8
+              },
+              "end": {
+                "offset": 174,
+                "line": 10,
+                "column": 1
+              }
+            },
+            "content": "Test Results:\n"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "971c6872-c933-44bc-a17d-5e7f398efa01",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "testResults",
+            "fields": [
+              {
+                "type": "field",
+                "name": "suites"
+              },
+              {
+                "type": "arrayIndex",
+                "index": 0
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "ce84a907-696b-443e-aa6b-b97d1d545b3d",
+            "location": {
+              "start": {
+                "offset": 199,
+                "line": 10,
+                "column": 26
+              },
+              "end": {
+                "offset": 200,
+                "line": 11,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "4e6bd26f-de1d-42cc-94e2-7159bed4c825",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "testResults",
+            "fields": [
+              {
+                "type": "field",
+                "name": "suites"
+              },
+              {
+                "type": "arrayIndex",
+                "index": 1
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "4b06dba2-1beb-4ffa-88a7-3c5971e631a3",
+            "location": {
+              "start": {
+                "offset": 225,
+                "line": 11,
+                "column": 26
+              },
+              "end": {
+                "offset": 226,
+                "line": 12,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "7b9493a0-1277-45f9-a257-357e3bfa97e0",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "testResults",
+            "fields": [
+              {
+                "type": "field",
+                "name": "suites"
+              },
+              {
+                "type": "arrayIndex",
+                "index": 2
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "0b1f72b8-a2b5-4664-95d7-f15c63dee6f8",
+            "location": {
+              "start": {
+                "offset": 251,
+                "line": 12,
+                "column": 26
+              },
+              "end": {
+                "offset": 259,
+                "line": 13,
+                "column": 8
+              }
+            },
+            "content": "\nTotal: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "d4ae6149-1e2e-4e30-879a-93590774d336",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "testResults",
+            "fields": [
+              {
+                "type": "field",
+                "name": "count"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "61e623d0-a144-4745-9595-ec3d8d6d0572",
+            "location": {
+              "start": {
+                "offset": 280,
+                "line": 13,
+                "column": 29
+              },
+              "end": {
+                "offset": 287,
+                "line": 13,
+                "column": 36
+              }
+            },
+            "content": " suites"
+          }
+        ]
+      },
+      "raw": {
+        "content": "Test Results:\n{{testResults}}\n{{testResults}}\n{{testResults}}\nTotal: {{testResults}} suites"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ]
+}

@@ -1,0 +1,486 @@
+{
+  "name": "data-template-multiline",
+  "description": "Test fixture for data/template-multiline",
+  "category": "data",
+  "subcategory": "template-multiline",
+  "input": "@text projectName = \"MeldProject\"\n@text version = \"2.0.0\"\n@data report = {\n  timestamp: @run [echo \"2024-01-15T10:30:00Z\"],\n  status: \"Success\"\n}\n@add [[\n## Build Summary\nProject: {{projectName}}\nVersion: {{version}}\nStatus: {{report.status}}\n]]",
+  "expected": "## Build Summary\nProject: MeldProject\nVersion: 2.0.0\nStatus: Success",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "b50442dd-3a15-4cbf-a876-acfb434312a1",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 33,
+          "line": 1,
+          "column": 34
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "d2b8dd37-3f18-43fc-b500-200556d7367a",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "projectName"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "03edc7d2-aa47-48b2-9be0-a1a67eb533ae",
+            "location": {
+              "start": {
+                "offset": 20,
+                "line": 1,
+                "column": 21
+              },
+              "end": {
+                "offset": 33,
+                "line": 1,
+                "column": 34
+              }
+            },
+            "content": "MeldProject"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "projectName",
+        "content": "MeldProject"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "4189b38a-7ef2-4e6f-9bb6-53947b90954e",
+      "location": {
+        "start": {
+          "offset": 33,
+          "line": 1,
+          "column": 34
+        },
+        "end": {
+          "offset": 34,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "9ea2eaf5-b7bf-46c4-ad33-7fdf36a14f8e",
+      "location": {
+        "start": {
+          "offset": 34,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 57,
+          "line": 2,
+          "column": 24
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "02180919-6e71-40a3-8e18-fc74455c3331",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "version"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "09ebf9ee-e854-4eaa-b675-a2631b466b4b",
+            "location": {
+              "start": {
+                "offset": 50,
+                "line": 2,
+                "column": 17
+              },
+              "end": {
+                "offset": 57,
+                "line": 2,
+                "column": 24
+              }
+            },
+            "content": "2.0.0"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "version",
+        "content": "2.0.0"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "d49f54f0-bc5d-4d25-a1ee-910337b38642",
+      "location": {
+        "start": {
+          "offset": 57,
+          "line": 2,
+          "column": 24
+        },
+        "end": {
+          "offset": 58,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "4844fbed-ed77-445f-9029-648fa56cd210",
+      "location": {
+        "start": {
+          "offset": 58,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 145,
+          "line": 6,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "250f7d48-a769-4761-870d-8ec9b9ba4e64",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "report"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "timestamp": {
+              "type": "Directive",
+              "nodeId": "08e5c183-acb5-4c7b-a961-0d31847b6665",
+              "location": {
+                "start": {
+                  "offset": 88,
+                  "line": 4,
+                  "column": 14
+                },
+                "end": {
+                  "offset": 122,
+                  "line": 4,
+                  "column": 48
+                }
+              },
+              "kind": "run",
+              "subtype": "runCommand",
+              "source": null,
+              "values": {
+                "command": [
+                  {
+                    "type": "Text",
+                    "nodeId": "310e2008-f562-4640-93e2-57fe88c546fe",
+                    "location": {
+                      "start": {
+                        "offset": 94,
+                        "line": 4,
+                        "column": 20
+                      },
+                      "end": {
+                        "offset": 121,
+                        "line": 4,
+                        "column": 47
+                      }
+                    },
+                    "content": "echo \"2024-01-15T10:30:00Z\""
+                  }
+                ]
+              },
+              "raw": {
+                "command": "echo \"2024-01-15T10:30:00Z\""
+              },
+              "meta": {
+                "hasVariables": false,
+                "isDataValue": true,
+                "isMultiLine": false
+              }
+            },
+            "status": [
+              {
+                "type": "Text",
+                "nodeId": "5c705555-7656-4ee6-a5c3-211724fcbae3",
+                "location": {
+                  "start": {
+                    "offset": 134,
+                    "line": 5,
+                    "column": 11
+                  },
+                  "end": {
+                    "offset": 143,
+                    "line": 5,
+                    "column": 20
+                  }
+                },
+                "content": "Success"
+              }
+            ]
+          }
+        }
+      },
+      "raw": {
+        "identifier": "report",
+        "value": "{\n  \"timestamp\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"08e5c183-acb5-4c7b-a961-0d31847b6665\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 88,\n        \"line\": 4,\n        \"column\": 14\n      },\n      \"end\": {\n        \"offset\": 122,\n        \"line\": 4,\n        \"column\": 48\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runCommand\",\n    \"source\": null,\n    \"values\": {\n      \"command\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"310e2008-f562-4640-93e2-57fe88c546fe\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 94,\n              \"line\": 4,\n              \"column\": 20\n            },\n            \"end\": {\n              \"offset\": 121,\n              \"line\": 4,\n              \"column\": 47\n            }\n          },\n          \"content\": \"echo \\\"2024-01-15T10:30:00Z\\\"\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"command\": \"echo \\\"2024-01-15T10:30:00Z\\\"\"\n    },\n    \"meta\": {\n      \"hasVariables\": false,\n      \"isDataValue\": true,\n      \"isMultiLine\": false\n    }\n  },\n  \"status\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"5c705555-7656-4ee6-a5c3-211724fcbae3\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 134,\n          \"line\": 5,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 143,\n          \"line\": 5,\n          \"column\": 20\n        }\n      },\n      \"content\": \"Success\"\n    }\n  ]\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 2
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "f62402d5-8297-455d-b26f-954751b5fdd8",
+      "location": {
+        "start": {
+          "offset": 145,
+          "line": 6,
+          "column": 2
+        },
+        "end": {
+          "offset": 146,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "bd263454-4806-4266-98b3-53195e9ce7b0",
+      "location": {
+        "start": {
+          "offset": 146,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 245,
+          "line": 12,
+          "column": 3
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "c3218e21-58df-4ce7-91a8-82b342682747",
+            "location": {
+              "start": {
+                "offset": 153,
+                "line": 7,
+                "column": 8
+              },
+              "end": {
+                "offset": 180,
+                "line": 9,
+                "column": 10
+              }
+            },
+            "content": "\n## Build Summary\nProject: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "8cece9a8-fe42-41f5-b0e5-e1d8417b7b84",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "projectName"
+          },
+          {
+            "type": "Text",
+            "nodeId": "07652037-2db5-4485-802d-670d1658f784",
+            "location": {
+              "start": {
+                "offset": 195,
+                "line": 9,
+                "column": 25
+              },
+              "end": {
+                "offset": 205,
+                "line": 10,
+                "column": 10
+              }
+            },
+            "content": "\nVersion: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "5930332f-57f4-400b-b3ee-9c719fa63b39",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "version"
+          },
+          {
+            "type": "Text",
+            "nodeId": "bad55a09-b4ec-49ef-bcd2-cb1f21102055",
+            "location": {
+              "start": {
+                "offset": 216,
+                "line": 10,
+                "column": 21
+              },
+              "end": {
+                "offset": 225,
+                "line": 11,
+                "column": 9
+              }
+            },
+            "content": "\nStatus: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "8bdc7f4c-5a9c-4d7c-953d-3a852b2aad3b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "report",
+            "fields": [
+              {
+                "type": "field",
+                "name": "status"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "7dd88d09-1bb4-4432-91e8-e8e60ac6c73f",
+            "location": {
+              "start": {
+                "offset": 242,
+                "line": 11,
+                "column": 26
+              },
+              "end": {
+                "offset": 243,
+                "line": 12,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          }
+        ]
+      },
+      "raw": {
+        "content": "\n## Build Summary\nProject: {{projectName}}\nVersion: {{version}}\nStatus: {{report}}\n"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ]
+}

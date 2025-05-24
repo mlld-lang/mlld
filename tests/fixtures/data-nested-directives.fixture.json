@@ -1,0 +1,381 @@
+{
+  "name": "data-nested-directives",
+  "description": "Test fixture for data/nested-directives",
+  "category": "data",
+  "subcategory": "nested-directives",
+  "input": "@data config = {\n  server: {\n    host: \"localhost\",\n    port: 8080,\n    version: @run [echo \"v1.2.3\"],\n    env: {\n      status: @run [echo \"ready\"],\n      mode: @run [echo \"production\"]\n    }\n  },\n  debug: true\n}\n@add [[Server running on {{config.server.host}}:{{config.server.port}}]]",
+  "expected": "Server running on localhost:8080",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "1597671c-676b-4ec8-9814-b4023856a263",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 212,
+          "line": 12,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "56a05fd9-5ac3-4a19-ba28-54cf9ab27773",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "config"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "server": {
+              "type": "object",
+              "properties": {
+                "host": [
+                  {
+                    "type": "Text",
+                    "nodeId": "f421c796-d6bd-4769-9272-03ab9a79fc9b",
+                    "location": {
+                      "start": {
+                        "offset": 39,
+                        "line": 3,
+                        "column": 11
+                      },
+                      "end": {
+                        "offset": 50,
+                        "line": 3,
+                        "column": 22
+                      }
+                    },
+                    "content": "localhost"
+                  }
+                ],
+                "port": 8080,
+                "version": {
+                  "type": "Directive",
+                  "nodeId": "fdd2a9d5-f71d-4e38-989c-d1507f026612",
+                  "location": {
+                    "start": {
+                      "offset": 81,
+                      "line": 5,
+                      "column": 14
+                    },
+                    "end": {
+                      "offset": 101,
+                      "line": 5,
+                      "column": 34
+                    }
+                  },
+                  "kind": "run",
+                  "subtype": "runCommand",
+                  "source": null,
+                  "values": {
+                    "command": [
+                      {
+                        "type": "Text",
+                        "nodeId": "30a3a85e-64e3-49c5-8aa4-baa3f7757fb5",
+                        "location": {
+                          "start": {
+                            "offset": 87,
+                            "line": 5,
+                            "column": 20
+                          },
+                          "end": {
+                            "offset": 100,
+                            "line": 5,
+                            "column": 33
+                          }
+                        },
+                        "content": "echo \"v1.2.3\""
+                      }
+                    ]
+                  },
+                  "raw": {
+                    "command": "echo \"v1.2.3\""
+                  },
+                  "meta": {
+                    "hasVariables": false,
+                    "isDataValue": true,
+                    "isMultiLine": false
+                  }
+                },
+                "env": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "Directive",
+                      "nodeId": "19aa5957-5c5f-4040-b65d-2876de5441bd",
+                      "location": {
+                        "start": {
+                          "offset": 128,
+                          "line": 7,
+                          "column": 15
+                        },
+                        "end": {
+                          "offset": 147,
+                          "line": 7,
+                          "column": 34
+                        }
+                      },
+                      "kind": "run",
+                      "subtype": "runCommand",
+                      "source": null,
+                      "values": {
+                        "command": [
+                          {
+                            "type": "Text",
+                            "nodeId": "45e03358-19f3-4ed4-b38d-296f51442a1b",
+                            "location": {
+                              "start": {
+                                "offset": 134,
+                                "line": 7,
+                                "column": 21
+                              },
+                              "end": {
+                                "offset": 146,
+                                "line": 7,
+                                "column": 33
+                              }
+                            },
+                            "content": "echo \"ready\""
+                          }
+                        ]
+                      },
+                      "raw": {
+                        "command": "echo \"ready\""
+                      },
+                      "meta": {
+                        "hasVariables": false,
+                        "isDataValue": true,
+                        "isMultiLine": false
+                      }
+                    },
+                    "mode": {
+                      "type": "Directive",
+                      "nodeId": "d3526deb-c4f3-4ae9-89a7-3950708db55a",
+                      "location": {
+                        "start": {
+                          "offset": 161,
+                          "line": 8,
+                          "column": 13
+                        },
+                        "end": {
+                          "offset": 185,
+                          "line": 8,
+                          "column": 37
+                        }
+                      },
+                      "kind": "run",
+                      "subtype": "runCommand",
+                      "source": null,
+                      "values": {
+                        "command": [
+                          {
+                            "type": "Text",
+                            "nodeId": "e9a01291-cb29-41cf-b2f7-75fb15704eee",
+                            "location": {
+                              "start": {
+                                "offset": 167,
+                                "line": 8,
+                                "column": 19
+                              },
+                              "end": {
+                                "offset": 184,
+                                "line": 8,
+                                "column": 36
+                              }
+                            },
+                            "content": "echo \"production\""
+                          }
+                        ]
+                      },
+                      "raw": {
+                        "command": "echo \"production\""
+                      },
+                      "meta": {
+                        "hasVariables": false,
+                        "isDataValue": true,
+                        "isMultiLine": false
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "debug": true
+          }
+        }
+      },
+      "raw": {
+        "identifier": "config",
+        "value": "{\n  \"server\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"host\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"f421c796-d6bd-4769-9272-03ab9a79fc9b\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 39,\n              \"line\": 3,\n              \"column\": 11\n            },\n            \"end\": {\n              \"offset\": 50,\n              \"line\": 3,\n              \"column\": 22\n            }\n          },\n          \"content\": \"localhost\"\n        }\n      ],\n      \"port\": 8080,\n      \"version\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"fdd2a9d5-f71d-4e38-989c-d1507f026612\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 81,\n            \"line\": 5,\n            \"column\": 14\n          },\n          \"end\": {\n            \"offset\": 101,\n            \"line\": 5,\n            \"column\": 34\n          }\n        },\n        \"kind\": \"run\",\n        \"subtype\": \"runCommand\",\n        \"source\": null,\n        \"values\": {\n          \"command\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"30a3a85e-64e3-49c5-8aa4-baa3f7757fb5\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 87,\n                  \"line\": 5,\n                  \"column\": 20\n                },\n                \"end\": {\n                  \"offset\": 100,\n                  \"line\": 5,\n                  \"column\": 33\n                }\n              },\n              \"content\": \"echo \\\"v1.2.3\\\"\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"command\": \"echo \\\"v1.2.3\\\"\"\n        },\n        \"meta\": {\n          \"hasVariables\": false,\n          \"isDataValue\": true,\n          \"isMultiLine\": false\n        }\n      },\n      \"env\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"status\": {\n            \"type\": \"Directive\",\n            \"nodeId\": \"19aa5957-5c5f-4040-b65d-2876de5441bd\",\n            \"location\": {\n              \"start\": {\n                \"offset\": 128,\n                \"line\": 7,\n                \"column\": 15\n              },\n              \"end\": {\n                \"offset\": 147,\n                \"line\": 7,\n                \"column\": 34\n              }\n            },\n            \"kind\": \"run\",\n            \"subtype\": \"runCommand\",\n            \"source\": null,\n            \"values\": {\n              \"command\": [\n                {\n                  \"type\": \"Text\",\n                  \"nodeId\": \"45e03358-19f3-4ed4-b38d-296f51442a1b\",\n                  \"location\": {\n                    \"start\": {\n                      \"offset\": 134,\n                      \"line\": 7,\n                      \"column\": 21\n                    },\n                    \"end\": {\n                      \"offset\": 146,\n                      \"line\": 7,\n                      \"column\": 33\n                    }\n                  },\n                  \"content\": \"echo \\\"ready\\\"\"\n                }\n              ]\n            },\n            \"raw\": {\n              \"command\": \"echo \\\"ready\\\"\"\n            },\n            \"meta\": {\n              \"hasVariables\": false,\n              \"isDataValue\": true,\n              \"isMultiLine\": false\n            }\n          },\n          \"mode\": {\n            \"type\": \"Directive\",\n            \"nodeId\": \"d3526deb-c4f3-4ae9-89a7-3950708db55a\",\n            \"location\": {\n              \"start\": {\n                \"offset\": 161,\n                \"line\": 8,\n                \"column\": 13\n              },\n              \"end\": {\n                \"offset\": 185,\n                \"line\": 8,\n                \"column\": 37\n              }\n            },\n            \"kind\": \"run\",\n            \"subtype\": \"runCommand\",\n            \"source\": null,\n            \"values\": {\n              \"command\": [\n                {\n                  \"type\": \"Text\",\n                  \"nodeId\": \"e9a01291-cb29-41cf-b2f7-75fb15704eee\",\n                  \"location\": {\n                    \"start\": {\n                      \"offset\": 167,\n                      \"line\": 8,\n                      \"column\": 19\n                    },\n                    \"end\": {\n                      \"offset\": 184,\n                      \"line\": 8,\n                      \"column\": 36\n                    }\n                  },\n                  \"content\": \"echo \\\"production\\\"\"\n                }\n              ]\n            },\n            \"raw\": {\n              \"command\": \"echo \\\"production\\\"\"\n            },\n            \"meta\": {\n              \"hasVariables\": false,\n              \"isDataValue\": true,\n              \"isMultiLine\": false\n            }\n          }\n        }\n      }\n    }\n  },\n  \"debug\": true\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 2
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "b6575d19-556c-4816-b3dd-2331a173de10",
+      "location": {
+        "start": {
+          "offset": 212,
+          "line": 12,
+          "column": 2
+        },
+        "end": {
+          "offset": 213,
+          "line": 13,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "d95564ab-06a2-4a1e-8365-317a85df8df9",
+      "location": {
+        "start": {
+          "offset": 213,
+          "line": 13,
+          "column": 1
+        },
+        "end": {
+          "offset": 285,
+          "line": 13,
+          "column": 73
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "1df6382d-1813-46a6-b92f-428eddde0a7e",
+            "location": {
+              "start": {
+                "offset": 220,
+                "line": 13,
+                "column": 8
+              },
+              "end": {
+                "offset": 238,
+                "line": 13,
+                "column": 26
+              }
+            },
+            "content": "Server running on "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "a990fef8-f6c3-4d78-afba-1d48b4de2f7b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "server"
+              },
+              {
+                "type": "field",
+                "name": "host"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "6f862d56-758d-453c-9a67-766639cc4c6a",
+            "location": {
+              "start": {
+                "offset": 260,
+                "line": 13,
+                "column": 48
+              },
+              "end": {
+                "offset": 261,
+                "line": 13,
+                "column": 49
+              }
+            },
+            "content": ":"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "63540fbb-7a8d-46e5-80be-dffc4e0adbf3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "server"
+              },
+              {
+                "type": "field",
+                "name": "port"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "content": "Server running on {{config}}:{{config}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ]
+}
