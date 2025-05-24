@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "3547bc3f-1184-4439-bbca-52fca685f7ce",
+      "nodeId": "79fd4616-42a5-444a-a9ab-867ddc4f5b59",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "1859b67b-3b79-474f-ac1e-e1d31de9b4f9",
+            "nodeId": "973445cf-e0ec-428a-8a55-5da15ac53a42",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +50,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "23abdc2e-c8b4-4d4e-99af-2e30f9049ca7",
+            "nodeId": "391f1778-0c9d-4943-840d-45f916b7def9",
             "location": {
               "start": {
                 "offset": 27,
@@ -67,7 +67,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "f20d23c1-6b36-4204-9e0a-4b36f00e4051",
+            "nodeId": "3eddf9f2-8483-4e51-9d87-77935dcf5b73",
             "location": {
               "start": {
                 "offset": 0,
@@ -86,7 +86,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "24d01bbc-12d0-434c-b3a1-668ac08de037",
+            "nodeId": "78ecd404-fb1c-4daa-a25e-007495625ba3",
             "location": {
               "start": {
                 "offset": 45,
@@ -101,6 +101,24 @@
             },
             "content": "!\""
           }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "d2aab812-5e96-4d6f-83f7-88c4c5ad6f12",
+            "location": {
+              "start": {
+                "offset": 26,
+                "line": 1,
+                "column": 27
+              },
+              "end": {
+                "offset": 48,
+                "line": 1,
+                "column": 49
+              }
+            },
+            "command": "echo"
+          }
         ]
       },
       "raw": {
@@ -108,10 +126,15 @@
         "params": [
           "name"
         ],
-        "command": "echo \"Hello, @name!\""
+        "command": "echo \"Hello, @name!\"",
+        "commandBases": [
+          "echo"
+        ]
       },
       "meta": {
         "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
         "parameterCount": 1
       }
     }

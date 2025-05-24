@@ -237,8 +237,26 @@ URLRest "URL content"
 
 // URL parts with variable interpolation support
 URLParts "URL parts"
-  = parts:(URLVariableRef / URLSegment)+ {
+  = parts:(URLEscapedBackslash / URLEscapedAt / URLVariableRef / URLSegment)+ {
       return parts;
+    }
+
+// Escaped backslash in URL
+URLEscapedBackslash "Escaped backslash in URL"
+  = "\\\\" {
+      return helpers.createNode(NodeType.Text, { 
+        content: '\\', 
+        location: location() 
+      });
+    }
+
+// Escaped @ symbol in URL
+URLEscapedAt "Escaped @ in URL"
+  = "\\@" {
+      return helpers.createNode(NodeType.Text, { 
+        content: '@', 
+        location: location() 
+      });
     }
 
 // Variable reference in URL
@@ -250,9 +268,9 @@ URLVariableRef "URL variable reference"
       });
     }
 
-// Regular URL segment (everything except @ and whitespace)
+// Regular URL segment (everything except @, \, and whitespace)
 URLSegment "URL segment"
-  = chars:$([^@\s\n]+) {
+  = chars:$([^@\\\s\n]+) {
       return helpers.createNode(NodeType.Text, { 
         content: chars, 
         location: location() 

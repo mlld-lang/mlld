@@ -1,0 +1,319 @@
+{
+  "name": "text-url",
+  "description": "Test fixture for text/url",
+  "category": "text",
+  "subcategory": "url",
+  "input": "# Text from URL Example\n\nThis example demonstrates fetching text content from a URL.\n\n@text readme = [https://raw.githubusercontent.com/example/repo/main/README.md]\n\nThe content is: {{readme}}",
+  "expected": "# Text from URL Example\n\nThis example demonstrates fetching text content from a URL.\n\nThe content is: # Example Project\n\nThis is the README content fetched from the URL.",
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "05a6f6e9-db98-419d-aea9-a020843c119c",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 86,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "# Text from URL Example\n\nThis example demonstrates fetching text content from a URL.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "c02ff5e4-80ae-4930-840e-b267c8ecd859",
+      "location": {
+        "start": {
+          "offset": 86,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 164,
+          "line": 5,
+          "column": 79
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "76838817-9243-4564-8ff9-a17ed3e648b3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "readme"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "45fad8b7-500d-45a1-b54e-daf5711c432f",
+            "location": {
+              "start": {
+                "offset": 102,
+                "line": 5,
+                "column": 17
+              },
+              "end": {
+                "offset": 108,
+                "line": 5,
+                "column": 23
+              }
+            },
+            "content": "https:"
+          },
+          {
+            "type": "PathSeparator",
+            "nodeId": "2745ee74-c2d8-49ad-8b5f-778b67ef584d",
+            "location": {
+              "start": {
+                "offset": 108,
+                "line": 5,
+                "column": 23
+              },
+              "end": {
+                "offset": 109,
+                "line": 5,
+                "column": 24
+              }
+            },
+            "value": "/"
+          },
+          {
+            "type": "PathSeparator",
+            "nodeId": "2db829b1-a5a0-4137-9c8d-324881b4fd18",
+            "location": {
+              "start": {
+                "offset": 109,
+                "line": 5,
+                "column": 24
+              },
+              "end": {
+                "offset": 110,
+                "line": 5,
+                "column": 25
+              }
+            },
+            "value": "/"
+          },
+          {
+            "type": "Text",
+            "nodeId": "607df800-2c4d-4582-b220-5c8dc01e0bf3",
+            "location": {
+              "start": {
+                "offset": 110,
+                "line": 5,
+                "column": 25
+              },
+              "end": {
+                "offset": 135,
+                "line": 5,
+                "column": 50
+              }
+            },
+            "content": "raw.githubusercontent.com"
+          },
+          {
+            "type": "PathSeparator",
+            "nodeId": "1cc7ec5b-6f20-4932-8199-cc4575514836",
+            "location": {
+              "start": {
+                "offset": 135,
+                "line": 5,
+                "column": 50
+              },
+              "end": {
+                "offset": 136,
+                "line": 5,
+                "column": 51
+              }
+            },
+            "value": "/"
+          },
+          {
+            "type": "Text",
+            "nodeId": "982aa1bb-3bb6-4469-9744-261a8c418e17",
+            "location": {
+              "start": {
+                "offset": 136,
+                "line": 5,
+                "column": 51
+              },
+              "end": {
+                "offset": 143,
+                "line": 5,
+                "column": 58
+              }
+            },
+            "content": "example"
+          },
+          {
+            "type": "PathSeparator",
+            "nodeId": "05b66acd-c904-4d4c-a901-12c5fd862e75",
+            "location": {
+              "start": {
+                "offset": 143,
+                "line": 5,
+                "column": 58
+              },
+              "end": {
+                "offset": 144,
+                "line": 5,
+                "column": 59
+              }
+            },
+            "value": "/"
+          },
+          {
+            "type": "Text",
+            "nodeId": "f8ce725b-f3e9-464d-a1ee-3be1f3a772b4",
+            "location": {
+              "start": {
+                "offset": 144,
+                "line": 5,
+                "column": 59
+              },
+              "end": {
+                "offset": 148,
+                "line": 5,
+                "column": 63
+              }
+            },
+            "content": "repo"
+          },
+          {
+            "type": "PathSeparator",
+            "nodeId": "d226efb0-253b-4ce3-ae7e-6b0d7a045927",
+            "location": {
+              "start": {
+                "offset": 148,
+                "line": 5,
+                "column": 63
+              },
+              "end": {
+                "offset": 149,
+                "line": 5,
+                "column": 64
+              }
+            },
+            "value": "/"
+          },
+          {
+            "type": "Text",
+            "nodeId": "eee2b3d2-2fa4-42f5-a861-0a713452f64e",
+            "location": {
+              "start": {
+                "offset": 149,
+                "line": 5,
+                "column": 64
+              },
+              "end": {
+                "offset": 153,
+                "line": 5,
+                "column": 68
+              }
+            },
+            "content": "main"
+          },
+          {
+            "type": "PathSeparator",
+            "nodeId": "c67d13d0-5c8b-4a5c-885b-131623a06d06",
+            "location": {
+              "start": {
+                "offset": 153,
+                "line": 5,
+                "column": 68
+              },
+              "end": {
+                "offset": 154,
+                "line": 5,
+                "column": 69
+              }
+            },
+            "value": "/"
+          },
+          {
+            "type": "Text",
+            "nodeId": "2fd8e41e-cacb-4ef6-abf0-0cbd1d8290f7",
+            "location": {
+              "start": {
+                "offset": 154,
+                "line": 5,
+                "column": 69
+              },
+              "end": {
+                "offset": 163,
+                "line": 5,
+                "column": 78
+              }
+            },
+            "content": "README.md"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "readme",
+        "content": "[https://raw.githubusercontent.com/example/repo/main/README.md]"
+      },
+      "meta": {
+        "sourceType": "path",
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "7a09be11-d5e2-4709-b98d-7c5b1de14fa8",
+      "location": {
+        "start": {
+          "offset": 164,
+          "line": 5,
+          "column": 79
+        },
+        "end": {
+          "offset": 182,
+          "line": 7,
+          "column": 17
+        }
+      },
+      "content": "\n\nThe content is: "
+    },
+    {
+      "type": "VariableReference",
+      "nodeId": "09a9bad6-6496-4e89-abbe-a72290db08ea",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "valueType": "varInterpolation",
+      "isVariableReference": true,
+      "identifier": "readme"
+    }
+  ]
+}

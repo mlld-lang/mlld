@@ -1,0 +1,481 @@
+{
+  "name": "run-command-bases-operators",
+  "description": "Test fixture for run/command-bases",
+  "category": "run",
+  "subcategory": "command-bases",
+  "input": "# Test command operators\n\n@run [ls -la | grep foo | wc -l]\n\n@run [mkdir test && cd test && touch file.txt]\n\n@run [rm -rf temp || echo \"Already clean\"]\n\n@run [npm test; npm run build; npm run deploy]",
+  "expected": "# Test command operators\n\n@run [ls -la | grep foo | wc -l]\n\n@run [mkdir test && cd test && touch file.txt]\n\n@run [rm -rf temp || echo \"Already clean\"]\n\n@run [npm test; npm run build; npm run deploy]",
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "c3604208-01aa-4313-8239-50399e8e6139",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 26,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "# Test command operators\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "3364fd8b-2711-4b4e-824c-e7b45391d1e0",
+      "location": {
+        "start": {
+          "offset": 26,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 58,
+          "line": 3,
+          "column": 33
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "e6e4658f-274d-472d-b420-0cb3fe859fcd",
+            "location": {
+              "start": {
+                "offset": 32,
+                "line": 3,
+                "column": 7
+              },
+              "end": {
+                "offset": 57,
+                "line": 3,
+                "column": 32
+              }
+            },
+            "content": "ls -la | grep foo | wc -l"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "fd8058ed-ae7e-42ea-9e26-eb841509da0f",
+            "location": {
+              "start": {
+                "offset": 31,
+                "line": 3,
+                "column": 6
+              },
+              "end": {
+                "offset": 58,
+                "line": 3,
+                "column": 33
+              }
+            },
+            "command": "ls"
+          },
+          {
+            "nodeId": "3931661c-d80d-4906-91d6-acaff13fe7a2",
+            "location": {
+              "start": {
+                "offset": 31,
+                "line": 3,
+                "column": 6
+              },
+              "end": {
+                "offset": 58,
+                "line": 3,
+                "column": 33
+              }
+            },
+            "command": "grep"
+          },
+          {
+            "nodeId": "92fc5922-03f8-4e3e-b86e-0160d34929ce",
+            "location": {
+              "start": {
+                "offset": 31,
+                "line": 3,
+                "column": 6
+              },
+              "end": {
+                "offset": 58,
+                "line": 3,
+                "column": 33
+              }
+            },
+            "command": "wc"
+          }
+        ]
+      },
+      "raw": {
+        "command": "ls -la | grep foo | wc -l",
+        "commandBases": [
+          "ls",
+          "grep",
+          "wc"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 3,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "0f86f310-495a-4be9-87a4-23c5d21ad08d",
+      "location": {
+        "start": {
+          "offset": 58,
+          "line": 3,
+          "column": 33
+        },
+        "end": {
+          "offset": 60,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "0d6743f1-239e-4929-8125-0eda4d71e0ff",
+      "location": {
+        "start": {
+          "offset": 60,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 106,
+          "line": 5,
+          "column": 47
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "3222caf5-cdb5-4f97-abde-7f87ea3d93b6",
+            "location": {
+              "start": {
+                "offset": 66,
+                "line": 5,
+                "column": 7
+              },
+              "end": {
+                "offset": 105,
+                "line": 5,
+                "column": 46
+              }
+            },
+            "content": "mkdir test && cd test && touch file.txt"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "15b96942-e0b6-4cec-9965-220182baaca8",
+            "location": {
+              "start": {
+                "offset": 65,
+                "line": 5,
+                "column": 6
+              },
+              "end": {
+                "offset": 106,
+                "line": 5,
+                "column": 47
+              }
+            },
+            "command": "mkdir"
+          },
+          {
+            "nodeId": "115f9889-f96a-49e3-a979-8d3717ed8e7c",
+            "location": {
+              "start": {
+                "offset": 65,
+                "line": 5,
+                "column": 6
+              },
+              "end": {
+                "offset": 106,
+                "line": 5,
+                "column": 47
+              }
+            },
+            "command": "cd"
+          },
+          {
+            "nodeId": "b31e8ff7-3ae9-48ca-a261-04656a5dd58a",
+            "location": {
+              "start": {
+                "offset": 65,
+                "line": 5,
+                "column": 6
+              },
+              "end": {
+                "offset": 106,
+                "line": 5,
+                "column": 47
+              }
+            },
+            "command": "touch"
+          }
+        ]
+      },
+      "raw": {
+        "command": "mkdir test && cd test && touch file.txt",
+        "commandBases": [
+          "mkdir",
+          "cd",
+          "touch"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 3,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "426b372c-e7f4-4219-b514-a0ea0f1c8813",
+      "location": {
+        "start": {
+          "offset": 106,
+          "line": 5,
+          "column": 47
+        },
+        "end": {
+          "offset": 108,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "27148fa2-8e4b-4006-9f25-e2b2c37bb10a",
+      "location": {
+        "start": {
+          "offset": 108,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 150,
+          "line": 7,
+          "column": 43
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "176015b1-1f8d-4a39-a7d3-f9b6a40a9ce5",
+            "location": {
+              "start": {
+                "offset": 114,
+                "line": 7,
+                "column": 7
+              },
+              "end": {
+                "offset": 149,
+                "line": 7,
+                "column": 42
+              }
+            },
+            "content": "rm -rf temp || echo \"Already clean\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "7f4eb5aa-3667-4d71-8458-657839c34885",
+            "location": {
+              "start": {
+                "offset": 113,
+                "line": 7,
+                "column": 6
+              },
+              "end": {
+                "offset": 150,
+                "line": 7,
+                "column": 43
+              }
+            },
+            "command": "rm"
+          },
+          {
+            "nodeId": "ecdac293-4110-4e69-a8e9-09cde2c6027e",
+            "location": {
+              "start": {
+                "offset": 113,
+                "line": 7,
+                "column": 6
+              },
+              "end": {
+                "offset": 150,
+                "line": 7,
+                "column": 43
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "rm -rf temp || echo \"Already clean\"",
+        "commandBases": [
+          "rm",
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 2,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "fc593d36-57d9-42c4-b364-4ae19c6279fc",
+      "location": {
+        "start": {
+          "offset": 150,
+          "line": 7,
+          "column": 43
+        },
+        "end": {
+          "offset": 152,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "41b41b2e-0031-4095-bef6-959b34e97abb",
+      "location": {
+        "start": {
+          "offset": 152,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 198,
+          "line": 9,
+          "column": 47
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "9f099b8a-4416-4625-a96e-aefd357fbbeb",
+            "location": {
+              "start": {
+                "offset": 158,
+                "line": 9,
+                "column": 7
+              },
+              "end": {
+                "offset": 197,
+                "line": 9,
+                "column": 46
+              }
+            },
+            "content": "npm test; npm run build; npm run deploy"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "861126ba-a595-4405-8fb1-c414c50df853",
+            "location": {
+              "start": {
+                "offset": 157,
+                "line": 9,
+                "column": 6
+              },
+              "end": {
+                "offset": 198,
+                "line": 9,
+                "column": 47
+              }
+            },
+            "command": "npm"
+          },
+          {
+            "nodeId": "c67bf9a2-4ffc-4170-a92f-d6a3e5cad8a3",
+            "location": {
+              "start": {
+                "offset": 157,
+                "line": 9,
+                "column": 6
+              },
+              "end": {
+                "offset": 198,
+                "line": 9,
+                "column": 47
+              }
+            },
+            "command": "npm run",
+            "script": "build",
+            "isScriptRunner": true
+          },
+          {
+            "nodeId": "6a80c906-55d6-4f1b-b5f9-82878bb79209",
+            "location": {
+              "start": {
+                "offset": 157,
+                "line": 9,
+                "column": 6
+              },
+              "end": {
+                "offset": 198,
+                "line": 9,
+                "column": 47
+              }
+            },
+            "command": "npm run",
+            "script": "deploy",
+            "isScriptRunner": true
+          }
+        ]
+      },
+      "raw": {
+        "command": "npm test; npm run build; npm run deploy",
+        "commandBases": [
+          "npm",
+          "npm run",
+          "npm run"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 3,
+        "hasScriptRunner": true,
+        "isMultiLine": false
+      }
+    }
+  ]
+}

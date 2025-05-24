@@ -32,25 +32,25 @@ CONTENT TYPES
 // -------------------------------------------------------------
 
 // Quoted string - captures content within quotes WITHOUT including the quotes
-// No interpolation for quoted strings - just literal text
+// No interpolation for quoted strings - but with escape sequence support
 LiteralContent "Literal content without interpolation"
-  = '"' content:$(!'"' .)* '"' { 
-      // Return only the content within quotes as a Text node (no variable processing)
+  = '"' content:EscapedStringContent '"' { 
+      // Return the escaped content as a Text node
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
-  / "'" content:$(!"'" .)* "'" { 
+  / "'" content:EscapedSingleStringContent "'" { 
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
-  / "`" content:$(!'`' .)* "`" { 
+  / "`" content:EscapedBacktickStringContent "`" { 
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
 
-// Quoted section title - same as LiteralContent but for clarity in section extraction
+// Quoted section title - with escape sequence support
 QuotedSectionTitle "Quoted section title"
-  = '"' content:$(!'"' .)* '"' {
+  = '"' content:EscapedStringContent '"' {
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
-  / "'" content:$(!"'" .)* "'" {
+  / "'" content:EscapedSingleStringContent "'" {
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
 

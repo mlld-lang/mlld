@@ -10,36 +10,100 @@ escape sequences based on its intended usage.
 */
 
 // -------------------------------------------------------------
+// ESCAPE SEQUENCES
+// -------------------------------------------------------------
+
+// Universal escape sequence - returns the literal character
+EscapeSequence "Escape sequence"
+  = "\\" char:("@" / "\\" / "[" / "]" / "{" / "}") {
+      return char === "\\" ? "\\" : char;
+    }
+
+// -------------------------------------------------------------
 // TEXT SEGMENT PATTERNS
 // -------------------------------------------------------------
 
 // Basic text segment - excludes all special characters
 BaseTextSegment "Plain text segment"
-  = chars:$(![ \t\r\n/\]@${{}"'`] .)+ { 
-      helpers.debug('BaseTextSegment matched', { chars });
-      return helpers.createNode(NodeType.Text, { content: chars, location: location() });
+  = chars:BaseChar+ { 
+      const content = chars.join('');
+      helpers.debug('BaseTextSegment matched', { content });
+      return helpers.createNode(NodeType.Text, { content, location: location() });
     }
 
-// Template text segment - for template content, allows most characters except interpolation
+BaseChar
+  = EscapeSequence
+  / ![ \t\r\n/\]@${{}"'`] char:. { return char; }
+
+// Template text segment - for template content, with escape support
 TemplateTextSegment "Template text segment"
-  = chars:$(!('{{' / '}}' / '[[' / ']]') .)+ { 
-      helpers.debug('TemplateTextSegment matched', { chars });
-      return helpers.createNode(NodeType.Text, { content: chars, location: location() });
+  = chars:TemplateChar+ { 
+      const content = chars.join('');
+      helpers.debug('TemplateTextSegment matched', { content });
+      return helpers.createNode(NodeType.Text, { content, location: location() });
     }
 
-// Command text segment - for command content, allows more characters including quotes
+TemplateChar
+  = EscapeSequence
+  / !('{{' / '}}' / '[[' / ']]') char:. { return char; }
+
+// Command text segment - for command content, with escape support
 CommandTextSegment "Command text segment"
-  = chars:$(![/[\]@${}] .)+ { 
-      helpers.debug('CommandTextSegment matched', { chars });
-      return helpers.createNode(NodeType.Text, { content: chars, location: location() });
+  = chars:CommandChar+ { 
+      const content = chars.join('');
+      helpers.debug('CommandTextSegment matched', { content });
+      return helpers.createNode(NodeType.Text, { content, location: location() });
     }
 
-// Path text segment - for path content in brackets, excludes path separators to allow PathSeparator nodes
+CommandChar
+  = EscapeSequence
+  / ![/[\]@${}] char:. { return char; }
+
+// Path text segment - for path content in brackets, with escape support
 PathTextSegment "Path text segment"
-  = chars:$(![\]/[\]@${}] .)+ { 
-      helpers.debug('PathTextSegment matched', { chars });
-      return helpers.createNode(NodeType.Text, { content: chars, location: location() });
+  = chars:PathChar+ { 
+      const content = chars.join('');
+      helpers.debug('PathTextSegment matched', { content });
+      return helpers.createNode(NodeType.Text, { content, location: location() });
     }
+
+PathChar
+  = EscapeSequence
+  / ![\]/[\]@${}] char:. { return char; }
+
+// -------------------------------------------------------------
+// ESCAPE-AWARE STRING CONTENT  
+// -------------------------------------------------------------
+
+// Text with escape sequences for double-quoted string literals
+EscapedStringContent "String content with escapes"
+  = chars:EscapedStringChar* {
+      return chars.join('');
+    }
+
+EscapedStringChar
+  = EscapeSequence
+  / !'"' char:. { return char; }
+
+// Text with escape sequences for single-quoted strings
+EscapedSingleStringContent "Single-quoted string content with escapes"
+  = chars:EscapedSingleStringChar* {
+      return chars.join('');
+    }
+
+EscapedSingleStringChar
+  = EscapeSequence
+  / !"'" char:. { return char; }
+
+// Text with escape sequences for backtick strings
+EscapedBacktickStringContent "Backtick string content with escapes"
+  = chars:EscapedBacktickStringChar* {
+      return chars.join('');
+    }
+
+EscapedBacktickStringChar
+  = EscapeSequence
+  / !"`" char:. { return char; }
 
 // -------------------------------------------------------------
 // SEPARATOR NODES

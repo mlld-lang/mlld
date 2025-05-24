@@ -241,16 +241,28 @@ describe('URL Support', () => {
         }
       };
 
-      // Create environment with options
+      // Create environment with configuration
       const testEnv = new Environment(
         options.fileSystem,
         options.pathService,
         options.basePath
       );
       
-      if (options.urlOptions) {
-        testEnv.setURLOptions(options.urlOptions);
-      }
+      // Set URL configuration
+      testEnv.setURLConfig({
+        enabled: true,
+        allowedDomains: options.urlOptions.allowedDomains,
+        blockedDomains: options.urlOptions.blockedDomains,
+        allowedProtocols: ['https', 'http'],
+        timeout: options.urlOptions.timeout,
+        maxSize: options.urlOptions.maxResponseSize,
+        warnOnInsecureProtocol: true,
+        cache: {
+          enabled: true,
+          defaultTTL: 5 * 60 * 1000,
+          rules: []
+        }
+      });
 
       // Verify options were set - with empty allowed list, all domains except blocked are allowed
       await expect(testEnv.validateURL('https://github.com/test')).resolves.toBeUndefined();

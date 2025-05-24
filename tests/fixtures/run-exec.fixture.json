@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "7501d1eb-bdf2-46da-8ded-50b70a9ddd26",
+      "nodeId": "4bbc5b6d-dfd2-4379-9ac5-8c6fc6e1485f",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "3790fc6c-4461-4cba-8d03-0f384dcf30af",
+            "nodeId": "430dfbc0-8cbb-417a-9c72-9bb2610c2751",
             "location": {
               "start": {
                 "offset": 0,
@@ -48,7 +48,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "980d4855-22f8-48a2-8213-39ce005a3b3f",
+            "nodeId": "a62fece9-7130-4a1a-a128-33a49a035397",
             "location": {
               "start": {
                 "offset": 27,
@@ -63,21 +63,44 @@
             },
             "content": "echo \"Hello from predefined command\""
           }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "495fb72a-603e-4102-adac-1263518ffb44",
+            "location": {
+              "start": {
+                "offset": 26,
+                "line": 1,
+                "column": 27
+              },
+              "end": {
+                "offset": 64,
+                "line": 1,
+                "column": 65
+              }
+            },
+            "command": "echo"
+          }
         ]
       },
       "raw": {
         "identifier": "greetCommand",
         "params": [],
-        "command": "echo \"Hello from predefined command\""
+        "command": "echo \"Hello from predefined command\"",
+        "commandBases": [
+          "echo"
+        ]
       },
       "meta": {
         "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
         "parameterCount": 0
       }
     },
     {
       "type": "Newline",
-      "nodeId": "c531f67b-7a19-49e2-8c87-c2a080d05c26",
+      "nodeId": "10def0fd-4eaf-44f1-a782-f7cfb419e424",
       "location": {
         "start": {
           "offset": 64,
@@ -94,7 +117,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "d38b89af-8cf7-4c91-96b5-95bfcdd5d273",
+      "nodeId": "760f76a3-1fa8-4d2c-95d0-1867ae25c0fe",
       "location": {
         "start": {
           "offset": 65,
@@ -114,7 +137,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "70b0c54b-d1d3-49bd-b9fc-f2190c34562d",
+            "nodeId": "fd4d657a-4338-4065-9aeb-e7a6bc8edb91",
             "location": {
               "start": {
                 "offset": 71,

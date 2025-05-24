@@ -14,6 +14,8 @@ import { interpret } from '@interpreter/index';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import { logger, cliLogger } from '@core/utils/logger';
+import { ConfigLoader } from '@core/config/loader';
+import type { ResolvedURLConfig } from '@core/config/types';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -338,6 +340,13 @@ URL Support Options:
   --url-max-size <bytes>  Maximum URL response size [default: 5242880]
   --url-allowed-domains   Comma-separated list of allowed domains
   --url-blocked-domains   Comma-separated list of blocked domains
+
+Configuration:
+  Meld looks for configuration in:
+  1. ~/.config/meld.json (global/user config)
+  2. meld.config.json (project config)
+  
+  CLI options override configuration file settings.
   `);
 
   if (!command || command === 'debug-context') {
@@ -549,6 +558,39 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     // Read the input file using Node's fs directly
     const fs = await import('fs/promises');
     const content = await fs.readFile(input, 'utf8');
+    
+    // Load configuration
+    const configLoader = new ConfigLoader(path.dirname(input));
+    const config = configLoader.load();
+    const urlConfig = configLoader.resolveURLConfig(config);
+    
+    // CLI options override config
+    let finalUrlConfig: ResolvedURLConfig | undefined = urlConfig;
+    
+    if (cliOptions.allowUrls) {
+      // CLI explicitly enables URLs, override config
+      finalUrlConfig = {
+        enabled: true,
+        allowedDomains: cliOptions.urlAllowedDomains || urlConfig?.allowedDomains || [],
+        blockedDomains: cliOptions.urlBlockedDomains || urlConfig?.blockedDomains || [],
+        allowedProtocols: urlConfig?.allowedProtocols || ['https', 'http'],
+        timeout: cliOptions.urlTimeout || urlConfig?.timeout || 30000,
+        maxSize: cliOptions.urlMaxSize || urlConfig?.maxSize || 5 * 1024 * 1024,
+        warnOnInsecureProtocol: urlConfig?.warnOnInsecureProtocol ?? true,
+        cache: urlConfig?.cache || {
+          enabled: true,
+          defaultTTL: 5 * 60 * 1000,
+          rules: []
+        }
+      };
+    } else if (urlConfig?.enabled && cliOptions.allowUrls !== false) {
+      // Config enables URLs and CLI doesn't explicitly disable
+      finalUrlConfig = urlConfig;
+    } else {
+      // URLs disabled
+      finalUrlConfig = undefined;
+    }
+    
     // Use the new interpreter
     const result = await interpret(content, {
       basePath: path.dirname(input),
@@ -556,12 +598,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       fileSystem: fileSystem,
       pathService: pathService,
       strict: cliOptions.strict,
-      urlOptions: cliOptions.allowUrls ? {
-        allowedDomains: cliOptions.urlAllowedDomains || [],
-        blockedDomains: cliOptions.urlBlockedDomains || [],
-        timeout: cliOptions.urlTimeout || 30000,
-        maxResponseSize: cliOptions.urlMaxSize || 5 * 1024 * 1024
-      } : undefined
+      urlConfig: finalUrlConfig
     });
 
     // Output handling (remains mostly the same)

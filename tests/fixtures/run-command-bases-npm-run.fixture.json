@@ -1,0 +1,366 @@
+{
+  "name": "run-command-bases-npm-run",
+  "description": "Test fixture for run/command-bases",
+  "category": "run",
+  "subcategory": "command-bases",
+  "input": "# Test npm run script detection\n\n@run [npm run build]\n\n@run [yarn run test]\n\n@run [pnpm run dev]\n\n@run [npm run build:prod]",
+  "expected": "# Test npm run script detection\n\n@run [npm run build]\n\n@run [yarn run test]\n\n@run [pnpm run dev]\n\n@run [npm run build:prod]",
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "82d38371-612a-4f8a-bdaf-ab120fe714a3",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 33,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "# Test npm run script detection\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "ea6d8950-7148-45e7-98f8-5f2cc62d7d57",
+      "location": {
+        "start": {
+          "offset": 33,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 53,
+          "line": 3,
+          "column": 21
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "bcf83b57-d591-4797-9c50-578b2eef2fe9",
+            "location": {
+              "start": {
+                "offset": 39,
+                "line": 3,
+                "column": 7
+              },
+              "end": {
+                "offset": 52,
+                "line": 3,
+                "column": 20
+              }
+            },
+            "content": "npm run build"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "98d3559e-ecdd-47d5-a237-e11a5e120bde",
+            "location": {
+              "start": {
+                "offset": 38,
+                "line": 3,
+                "column": 6
+              },
+              "end": {
+                "offset": 53,
+                "line": 3,
+                "column": 21
+              }
+            },
+            "command": "npm run",
+            "script": "build",
+            "isScriptRunner": true
+          }
+        ]
+      },
+      "raw": {
+        "command": "npm run build",
+        "commandBases": [
+          "npm run"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": true,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "b2ea8c1b-dbfa-4402-9877-15f9d4ef156e",
+      "location": {
+        "start": {
+          "offset": 53,
+          "line": 3,
+          "column": 21
+        },
+        "end": {
+          "offset": 55,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "492d7c05-a00b-4025-8adb-65af2095bf99",
+      "location": {
+        "start": {
+          "offset": 55,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 75,
+          "line": 5,
+          "column": 21
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "cd63f139-7352-4e26-884b-eb77e99cbb8f",
+            "location": {
+              "start": {
+                "offset": 61,
+                "line": 5,
+                "column": 7
+              },
+              "end": {
+                "offset": 74,
+                "line": 5,
+                "column": 20
+              }
+            },
+            "content": "yarn run test"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "4ca6baf5-1525-4179-bcfb-8d0e8b9704e5",
+            "location": {
+              "start": {
+                "offset": 60,
+                "line": 5,
+                "column": 6
+              },
+              "end": {
+                "offset": 75,
+                "line": 5,
+                "column": 21
+              }
+            },
+            "command": "yarn run",
+            "script": "test",
+            "isScriptRunner": true
+          }
+        ]
+      },
+      "raw": {
+        "command": "yarn run test",
+        "commandBases": [
+          "yarn run"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": true,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "374c22ef-c5ea-4253-b55e-0c1a9da7b5e9",
+      "location": {
+        "start": {
+          "offset": 75,
+          "line": 5,
+          "column": 21
+        },
+        "end": {
+          "offset": 77,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "3208f754-d16e-4ed5-a4c3-17a1935bde92",
+      "location": {
+        "start": {
+          "offset": 77,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 96,
+          "line": 7,
+          "column": 20
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "0bcdfe82-38f8-4713-8c2f-76746c3a23cd",
+            "location": {
+              "start": {
+                "offset": 83,
+                "line": 7,
+                "column": 7
+              },
+              "end": {
+                "offset": 95,
+                "line": 7,
+                "column": 19
+              }
+            },
+            "content": "pnpm run dev"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "575e2632-8496-4efa-9f19-1178ad82497a",
+            "location": {
+              "start": {
+                "offset": 82,
+                "line": 7,
+                "column": 6
+              },
+              "end": {
+                "offset": 96,
+                "line": 7,
+                "column": 20
+              }
+            },
+            "command": "pnpm run",
+            "script": "dev",
+            "isScriptRunner": true
+          }
+        ]
+      },
+      "raw": {
+        "command": "pnpm run dev",
+        "commandBases": [
+          "pnpm run"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": true,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "3de35bae-379c-4c98-a688-b77ca607c8dd",
+      "location": {
+        "start": {
+          "offset": 96,
+          "line": 7,
+          "column": 20
+        },
+        "end": {
+          "offset": 98,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "48ab35e5-32f0-4b60-a6ec-37ddb8e1bef5",
+      "location": {
+        "start": {
+          "offset": 98,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 123,
+          "line": 9,
+          "column": 26
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "983c7636-2c09-4f1b-83f4-b443d0755020",
+            "location": {
+              "start": {
+                "offset": 104,
+                "line": 9,
+                "column": 7
+              },
+              "end": {
+                "offset": 122,
+                "line": 9,
+                "column": 25
+              }
+            },
+            "content": "npm run build:prod"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "59607613-e73a-4d23-bafa-5f94a83c9f90",
+            "location": {
+              "start": {
+                "offset": 103,
+                "line": 9,
+                "column": 6
+              },
+              "end": {
+                "offset": 123,
+                "line": 9,
+                "column": 26
+              }
+            },
+            "command": "npm run",
+            "script": "build:prod",
+            "isScriptRunner": true
+          }
+        ]
+      },
+      "raw": {
+        "command": "npm run build:prod",
+        "commandBases": [
+          "npm run"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": true,
+        "isMultiLine": false
+      }
+    }
+  ]
+}

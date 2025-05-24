@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "13d0b11c-b51b-46a5-b909-427bd074881d",
+      "nodeId": "e9c502d8-7822-454f-a873-cb9802cfe920",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "sectionTitle": [
           {
             "type": "Text",
-            "nodeId": "14cfd0da-f269-4c00-94ed-2e34ad1b772e",
+            "nodeId": "bd3b72d1-1422-4e8d-a644-7871a0c61d6c",
             "location": {
               "start": {
                 "offset": 0,
@@ -47,7 +47,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "40b845ce-6d53-4b1f-b612-40868dc54670",
+            "nodeId": "ac1a234d-4c31-47de-b1c4-c1c58d7d0c2e",
             "location": {
               "start": {
                 "offset": 0,

@@ -3,32 +3,50 @@
   "description": "Test fixture for run/command",
   "category": "run",
   "subcategory": "command",
-  "input": "@run echo \"Hello from command\"",
+  "input": "@run [echo \"Hello from command\"]",
   "expected": "Hello from command",
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "f19da552-51b5-4e2b-a8cd-148f0227eb18",
+      "nodeId": "95328af0-05bc-45de-85a4-a0c35fcc248c",
       "location": {
         "start": {
-          "offset": 5,
+          "offset": 0,
           "line": 1,
-          "column": 6
+          "column": 1
         },
         "end": {
-          "offset": 30,
+          "offset": 32,
           "line": 1,
-          "column": 31
+          "column": 33
         }
       },
       "kind": "run",
-      "subtype": "runCode",
-      "source": "code",
+      "subtype": "runCommand",
+      "source": "command",
       "values": {
-        "lang": [
+        "command": [
           {
             "type": "Text",
-            "nodeId": "4b5a4d09-b057-49a3-9ec0-f226742615c6",
+            "nodeId": "6c4f0532-3474-40a2-8aa1-86d3a7a03520",
+            "location": {
+              "start": {
+                "offset": 6,
+                "line": 1,
+                "column": 7
+              },
+              "end": {
+                "offset": 31,
+                "line": 1,
+                "column": 32
+              }
+            },
+            "content": "echo \"Hello from command\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "ba4a962b-2220-4f27-ac21-9ddff54b9744",
             "location": {
               "start": {
                 "offset": 5,
@@ -36,44 +54,26 @@
                 "column": 6
               },
               "end": {
-                "offset": 30,
+                "offset": 32,
                 "line": 1,
-                "column": 31
+                "column": 33
               }
             },
-            "content": "echo"
-          }
-        ],
-        "args": [],
-        "code": [
-          {
-            "type": "Text",
-            "nodeId": "c1e21c00-9c7b-4e8b-a979-f7923716ac89",
-            "location": {
-              "start": {
-                "offset": 10,
-                "line": 1,
-                "column": 11
-              },
-              "end": {
-                "offset": 30,
-                "line": 1,
-                "column": 31
-              }
-            },
-            "content": "\"Hello from command\""
+            "command": "echo"
           }
         ]
       },
       "raw": {
-        "lang": "echo",
-        "args": [],
-        "code": "\"Hello from command\""
+        "command": "echo \"Hello from command\"",
+        "commandBases": [
+          "echo"
+        ]
       },
       "meta": {
-        "isMultiLine": false,
-        "language": "echo",
-        "hasVariables": false
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
       }
     }
   ]

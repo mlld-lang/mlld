@@ -12,11 +12,11 @@ used throughout the Meld grammar.
 // STRING LITERALS
 // -------------------------------------------------------------
 
-// String literal with all quotes types (double, single, backtick)
+// String literal with all quotes types (double, single, backtick) - now with escape support
 StringLiteral "String Literal"
-  = '"' chars:(!'"' char:. { return char; })* '"' { return chars.join(''); }
-  / "'" chars:(!"'" char:. { return char; })* "'" { return chars.join(''); }
-  / "`" chars:(!"`" char:. { return char; })* "`" { return chars.join(''); }
+  = '"' content:EscapedStringContent '"' { return content; }
+  / "'" content:EscapedSingleStringContent "'" { return content; }
+  / "`" content:EscapedBacktickStringContent "`" { return content; }
 
 // -------------------------------------------------------------
 // NUMBER LITERALS
@@ -45,8 +45,12 @@ NullLiteral "Null Literal"
 // TEMPLATE LITERALS
 // -------------------------------------------------------------
 
-// Multiline template with double brackets
+// Multiline template with double brackets - now with escape support
 MultilineTemplateLiteral "Multi-line Template Literal"
-  = "[[" content:(!"]]" char:. { return char; })* "]]" { 
-      return content.join(''); 
+  = "[[" chars:MultilineTemplateChar* "]]" { 
+      return chars.join(''); 
     }
+
+MultilineTemplateChar
+  = EscapeSequence
+  / !"]]" char:. { return char; }

@@ -47,7 +47,10 @@ export async function evaluateImport(
   
   try {
     // Read the file or fetch the URL
-    const content = await env.readFile(resolvedPath);
+    // For URL imports, use the special import flag to trigger approval
+    const content = isURL || env.isURL(resolvedPath) 
+      ? await env.fetchURL(resolvedPath, true) // true = forImport
+      : await env.readFile(resolvedPath);
     
     // Handle section extraction if specified
     let processedContent = content;

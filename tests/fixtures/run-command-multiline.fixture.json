@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "25995220-708c-42f3-9448-5e0f547a9f8e",
+      "nodeId": "67dd22c4-1bc9-4e97-84a2-1e18b3662259",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "7c0cb52e-6b60-4cd2-9785-caeb2ee71687",
+            "nodeId": "155c0b94-e319-4f41-aabe-0e5f7e6354c8",
             "location": {
               "start": {
                 "offset": 6,
@@ -43,13 +43,53 @@
             },
             "content": "bash -c \"echo Line 1 && \\\necho Line 2\""
           }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "156ec305-a4b1-465f-ba80-f81bd915a6d9",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 45,
+                "line": 2,
+                "column": 14
+              }
+            },
+            "command": "bash"
+          },
+          {
+            "nodeId": "2b68dc15-ab87-42da-bb7e-9dcc17543283",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 45,
+                "line": 2,
+                "column": 14
+              }
+            },
+            "command": "\\"
+          }
         ]
       },
       "raw": {
-        "command": "bash -c \"echo Line 1 && \\\necho Line 2\""
+        "command": "bash -c \"echo Line 1 && \\\necho Line 2\"",
+        "commandBases": [
+          "bash",
+          "\\"
+        ]
       },
       "meta": {
         "hasVariables": false,
+        "commandCount": 2,
+        "hasScriptRunner": false,
         "isMultiLine": true
       }
     }

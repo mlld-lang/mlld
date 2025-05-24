@@ -21,6 +21,37 @@ Context is determined by four primary factors:
 
 ## Node Context Rules
 
+### CommandBase Nodes
+
+CommandBase nodes appear within command directives to identify executable commands:
+
+#### Security Authorization Context
+- **Context**: Within `values.commandBases` array of run/exec directives
+- **Purpose**: Identify executables for security authorization
+- **Examples**: 
+  - Simple: `{ command: "ls" }`
+  - Script runner: `{ command: "npm run", script: "build", isScriptRunner: true }`
+  - Package runner: `{ command: "npx", package: "prettier", isPackageRunner: true }`
+
+#### Detection Patterns
+```javascript
+// Simple command detection
+{ command: "grep" }
+
+// Script runner detection (npm/yarn/pnpm run)
+{ 
+  command: "npm run", 
+  script: "test",
+  isScriptRunner: true 
+}
+
+// Special command patterns
+{
+  command: "python -m",
+  module: "http.server"
+}
+```
+
 ### VariableReference Nodes
 
 VariableReference nodes appear in many contexts with different `valueType` values:
@@ -227,9 +258,11 @@ function isTopLevelDirective(node: any, parent: any): boolean {
 
 ### Directive-Specific Meta
 
-**Run Directive**:
+**Run/Exec Directive**:
 - `language`: Programming language for code blocks
 - `isMultiLine`: Command spans multiple lines
+- `commandCount`: Number of command bases detected
+- `hasScriptRunner`: Contains npm/yarn/pnpm run commands
 
 **Import Directive**:
 - `hasWildcard`: Import uses `*` selector
@@ -366,6 +399,43 @@ if (Array.isArray(value)) {
 }
 ```
 
+## Working with Command Bases
+
+### Accessing Command Bases
+
+```typescript
+function getCommandBases(directive: RunDirective): CommandBase[] {
+  return directive.values.commandBases || [];
+}
+
+function hasScriptRunner(directive: RunDirective): boolean {
+  return directive.meta.hasScriptRunner || false;
+}
+
+function getFirstCommand(directive: RunDirective): string | undefined {
+  return directive.values.commandBases?.[0]?.command;
+}
+```
+
+### Security Authorization Example
+
+```typescript
+async function authorizeRunDirective(directive: RunDirective) {
+  const commandBases = directive.values.commandBases || [];
+  
+  for (const base of commandBases) {
+    // Different authorization for different command types
+    if (base.isScriptRunner) {
+      await checkScriptPermission(base.command, base.script);
+    } else if (base.isPackageRunner) {
+      await checkPackagePermission(base.package);
+    } else {
+      await checkExecutablePermission(base.command);
+    }
+  }
+}
+```
+
 ## Best Practices for AST Consumers
 
 1. **Always check context indicators** before processing nodes
@@ -373,6 +443,7 @@ if (Array.isArray(value)) {
 3. **Handle all valueType cases** for polymorphic nodes
 4. **Test with nested structures** to ensure context handling works at all levels
 5. **Document assumptions** about node contexts in your code
+6. **Check commandBases array** when processing run/exec directives for security
 
 ## Conclusion
 

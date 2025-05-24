@@ -8,27 +8,27 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "c68afd65-7391-4ce3-a9d0-55ca76589a78",
+      "nodeId": "33c5a28e-cdde-4bb9-953c-66bd40cedb83",
       "location": {
         "start": {
-          "offset": 5,
+          "offset": 0,
           "line": 1,
-          "column": 6
+          "column": 1
         },
         "end": {
-          "offset": 48,
+          "offset": 15,
           "line": 1,
-          "column": 49
+          "column": 16
         }
       },
       "kind": "run",
-      "subtype": "runCode",
-      "source": "code",
+      "subtype": "runCommand",
+      "source": "command",
       "values": {
-        "lang": [
+        "command": [
           {
             "type": "Text",
-            "nodeId": "427f859b-41ad-4fd5-91a4-b14b74f6b365",
+            "nodeId": "b2decb19-680a-4e49-90d6-218b0ce4d8f7",
             "location": {
               "start": {
                 "offset": 5,
@@ -36,45 +36,62 @@
                 "column": 6
               },
               "end": {
-                "offset": 48,
+                "offset": 15,
                 "line": 1,
-                "column": 49
+                "column": 16
               }
             },
             "content": "javascript"
           }
         ],
-        "args": [],
-        "code": [
+        "commandBases": [
           {
-            "type": "Text",
-            "nodeId": "858eef5a-bce0-4f2e-989a-69ce4889fc0b",
+            "nodeId": "56661a3e-d78a-4633-8b34-7f9b9240a126",
             "location": {
               "start": {
-                "offset": 16,
+                "offset": 5,
                 "line": 1,
-                "column": 17
+                "column": 6
               },
               "end": {
-                "offset": 48,
+                "offset": 15,
                 "line": 1,
-                "column": 49
+                "column": 16
               }
             },
-            "content": "console.log(\"Hello from code\")"
+            "command": "javascript"
           }
         ]
       },
       "raw": {
-        "lang": "javascript",
-        "args": [],
-        "code": "console.log(\"Hello from code\")"
+        "command": "javascript",
+        "commandBases": [
+          "javascript"
+        ]
       },
       "meta": {
-        "isMultiLine": false,
-        "language": "javascript",
-        "hasVariables": false
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
       }
+    },
+    {
+      "type": "Text",
+      "nodeId": "acdb2e63-89ff-4ef7-88b2-18eba3b7557d",
+      "location": {
+        "start": {
+          "offset": 15,
+          "line": 1,
+          "column": 16
+        },
+        "end": {
+          "offset": 48,
+          "line": 1,
+          "column": 49
+        }
+      },
+      "content": " [console.log(\"Hello from code\")]"
     }
   ]
 }

@@ -20,37 +20,7 @@ It can be used in three main forms:
 
 // Primary @run directive 
 AtRun
-  = DirectiveContext "@run" _ runCode:RunLanguageCodeCore {
-      helpers.debug('AtRun matched language code block using shared abstraction', runCode);
-      
-      // Since we're using the shared abstraction, we just need to format it for this context
-      return helpers.createStructuredDirective(
-        'run',
-        'runCode',
-        runCode.values,
-        runCode.raw,
-        runCode.meta,
-        runCode.location,
-        'code'  // Source parameter
-      );
-    }
-  / DirectiveContext "@run" _ command:CommandCore {
-      helpers.debug('AtRun matched shell command', { command });
-      
-      return helpers.createStructuredDirective(
-        'run',
-        'runCommand',
-        command.values,
-        command.raw,
-        {
-          ...command.meta,
-          isMultiLine: command.raw.command.includes('\n')
-        },
-        location(),
-        'command'  // Source parameter
-      );
-    }
-  / DirectiveContext "@run" _ "@" commandRef:RunCommandReference {
+  = DirectiveContext "@run" _ "@" commandRef:RunCommandReference {
       helpers.debug('AtRun matched command reference', { commandRef });
       
       // This is used to run a previously defined command (created with @exec)
@@ -70,6 +40,36 @@ AtRun
         },
         location(),
         'exec'  // Source parameter
+      );
+    }
+  / DirectiveContext "@run" _ command:CommandCore {
+      helpers.debug('AtRun matched shell command', { command });
+      
+      return helpers.createStructuredDirective(
+        'run',
+        'runCommand',
+        command.values,
+        command.raw,
+        {
+          ...command.meta,
+          isMultiLine: command.raw.command.includes('\n')
+        },
+        location(),
+        'command'  // Source parameter
+      );
+    }
+  / DirectiveContext "@run" _ runCode:RunLanguageCodeCore {
+      helpers.debug('AtRun matched language code block using shared abstraction', runCode);
+      
+      // Since we're using the shared abstraction, we just need to format it for this context
+      return helpers.createStructuredDirective(
+        'run',
+        'runCode',
+        runCode.values,
+        runCode.raw,
+        runCode.meta,
+        runCode.location,
+        'code'  // Source parameter
       );
     }
 

@@ -5,6 +5,8 @@ import { formatOutput } from './output/formatter';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 
+import type { ResolvedURLConfig } from '@core/config/types';
+
 /**
  * Options for the interpreter
  */
@@ -14,12 +16,7 @@ export interface InterpretOptions {
   format?: 'markdown' | 'xml';
   fileSystem: IFileSystemService;
   pathService: IPathService;
-  urlOptions?: {
-    allowedDomains?: string[];
-    blockedDomains?: string[];
-    timeout?: number;
-    maxResponseSize?: number;
-  };
+  urlConfig?: ResolvedURLConfig;
 }
 
 /**
@@ -41,9 +38,9 @@ export async function interpret(
     options.basePath || process.cwd()
   );
   
-  // Configure URL options if provided
-  if (options.urlOptions) {
-    env.setURLOptions(options.urlOptions);
+  // Configure URL settings if provided
+  if (options.urlConfig) {
+    env.setURLConfig(options.urlConfig);
   }
   
   // Evaluate the AST

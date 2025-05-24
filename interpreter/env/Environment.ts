@@ -1,8 +1,12 @@
 import type { MeldNode, MeldVariable } from '@core/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
+import type { ResolvedURLConfig } from '@core/config/types';
 import { execSync } from 'child_process';
 import * as path from 'path';
+import { ImportApproval } from '@core/security/ImportApproval';
+import { ImmutableCache } from '@core/security/ImmutableCache';
+import { GistTransformer } from '@core/security/GistTransformer';
 
 /**
  * Environment holds all state and provides capabilities for evaluation.
@@ -12,12 +16,14 @@ export class Environment {
   private variables = new Map<string, MeldVariable>();
   private nodes: MeldNode[] = [];
   private parent?: Environment;
-  private urlCache: Map<string, { content: string; timestamp: number }> = new Map();
-  private urlCacheMaxAge = 5 * 60 * 1000; // 5 minutes
+  private urlCache: Map<string, { content: string; timestamp: number; ttl?: number }> = new Map();
   private importStack: Set<string> = new Set(); // Track imports to prevent circular dependencies
+  private urlConfig?: ResolvedURLConfig;
+  private importApproval?: ImportApproval;
+  private immutableCache?: ImmutableCache;
   
-  // URL validation options
-  private urlOptions = {
+  // Default URL validation options (used if no config provided)
+  private defaultUrlOptions = {
     allowedProtocols: ['http', 'https'],
     allowedDomains: [] as string[],
     blockedDomains: [] as string[],
@@ -32,6 +38,12 @@ export class Environment {
     parent?: Environment
   ) {
     this.parent = parent;
+    
+    // Initialize security components for root environment only
+    if (!parent) {
+      this.importApproval = new ImportApproval(basePath);
+      this.immutableCache = new ImmutableCache(basePath);
+    }
   }
   
   // --- Property Accessors ---
@@ -266,17 +278,34 @@ export class Environment {
     }
   }
   
+  areURLsEnabled(): boolean {
+    return this.urlConfig?.enabled || false;
+  }
+  
   async validateURL(url: string): Promise<void> {
     const parsed = new URL(url);
+    const config = this.urlConfig || this.defaultUrlOptions;
+    
+    // Check if URLs are enabled
+    if (this.urlConfig && !this.urlConfig.enabled) {
+      throw new Error('URL support is not enabled in configuration');
+    }
     
     // Check protocol
-    if (!this.urlOptions.allowedProtocols.includes(parsed.protocol.slice(0, -1))) {
+    const allowedProtocols = this.urlConfig?.allowedProtocols || config.allowedProtocols;
+    if (!allowedProtocols.includes(parsed.protocol.slice(0, -1))) {
       throw new Error(`Protocol not allowed: ${parsed.protocol}`);
     }
     
+    // Warn on insecure protocol if configured
+    if (this.urlConfig?.warnOnInsecureProtocol && parsed.protocol === 'http:') {
+      console.warn(`Warning: Using insecure HTTP protocol for ${url}`);
+    }
+    
     // Check domain allowlist if configured
-    if (this.urlOptions.allowedDomains.length > 0) {
-      const allowed = this.urlOptions.allowedDomains.some(
+    const allowedDomains = this.urlConfig?.allowedDomains || config.allowedDomains;
+    if (allowedDomains.length > 0) {
+      const allowed = allowedDomains.some(
         domain => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
       );
       if (!allowed) {
@@ -285,7 +314,8 @@ export class Environment {
     }
     
     // Check domain blocklist
-    const blocked = this.urlOptions.blockedDomains.some(
+    const blockedDomains = this.urlConfig?.blockedDomains || config.blockedDomains;
+    const blocked = blockedDomains.some(
       domain => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
     );
     if (blocked) {
@@ -293,19 +323,43 @@ export class Environment {
     }
   }
   
-  async fetchURL(url: string): Promise<string> {
-    // Check cache first
-    const cached = this.urlCache.get(url);
-    if (cached && Date.now() - cached.timestamp < this.urlCacheMaxAge) {
-      return cached.content;
+  async fetchURL(url: string, forImport: boolean = false): Promise<string> {
+    // Transform Gist URLs to raw URLs
+    if (GistTransformer.isGistUrl(url)) {
+      url = await GistTransformer.transformToRaw(url);
+    }
+    // For imports, check immutable cache first
+    if (forImport && this.getImmutableCache()) {
+      const cached = await this.getImmutableCache()!.get(url);
+      if (cached) {
+        return cached;
+      }
+    }
+    
+    // Check if caching is enabled
+    const cacheEnabled = this.urlConfig?.cache.enabled ?? true;
+    
+    if (cacheEnabled && !forImport) {
+      // Check runtime cache for non-imports
+      const cached = this.urlCache.get(url);
+      if (cached) {
+        const ttl = cached.ttl || this.getURLCacheTTL(url);
+        if (Date.now() - cached.timestamp < ttl) {
+          return cached.content;
+        }
+      }
     }
     
     // Validate URL
     await this.validateURL(url);
     
+    // Get timeout and max size from config
+    const timeout = this.urlConfig?.timeout || this.defaultUrlOptions.timeout;
+    const maxSize = this.urlConfig?.maxSize || this.defaultUrlOptions.maxResponseSize;
+    
     // Fetch with timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.urlOptions.timeout);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
     
     try {
       const response = await fetch(url, { signal: controller.signal });
@@ -317,24 +371,60 @@ export class Environment {
       
       // Check content size
       const content = await response.text();
-      if (content.length > this.urlOptions.maxResponseSize) {
+      if (content.length > maxSize) {
         throw new Error(`Response too large: ${content.length} bytes`);
       }
       
-      // Cache the response
-      this.urlCache.set(url, { content, timestamp: Date.now() });
+      // For imports, check approval and cache in immutable cache
+      if (forImport && this.getImportApproval()) {
+        const approved = await this.getImportApproval()!.checkApproval(url, content);
+        if (!approved) {
+          throw new Error('Import not approved by user');
+        }
+        
+        // Store in immutable cache
+        if (this.getImmutableCache()) {
+          await this.getImmutableCache()!.set(url, content);
+        }
+      }
+      
+      // Cache the response with URL-specific TTL for non-imports
+      if (cacheEnabled && !forImport) {
+        const ttl = this.getURLCacheTTL(url);
+        this.urlCache.set(url, { content, timestamp: Date.now(), ttl });
+      }
       
       return content;
     } catch (error: any) {
       if (error.name === 'AbortError') {
-        throw new Error(`Request timed out after ${this.urlOptions.timeout}ms`);
+        throw new Error(`Request timed out after ${timeout}ms`);
       }
       throw error;
     }
   }
   
-  setURLOptions(options: Partial<typeof this.urlOptions>): void {
-    Object.assign(this.urlOptions, options);
+  private getURLCacheTTL(url: string): number {
+    if (!this.urlConfig?.cache.rules) {
+      return this.urlConfig?.cache.defaultTTL || 5 * 60 * 1000;
+    }
+    
+    // Find matching rule
+    for (const rule of this.urlConfig.cache.rules) {
+      if (rule.pattern.test(url)) {
+        return rule.ttl;
+      }
+    }
+    
+    // Fall back to default
+    return this.urlConfig.cache.defaultTTL;
+  }
+  
+  setURLOptions(options: Partial<typeof this.defaultUrlOptions>): void {
+    Object.assign(this.defaultUrlOptions, options);
+  }
+  
+  setURLConfig(config: ResolvedURLConfig): void {
+    this.urlConfig = config;
   }
   
   // --- Import Tracking (for circular import detection) ---
@@ -361,5 +451,19 @@ export class Environment {
     // Share import stack with parent to detect circular imports across scopes
     child.importStack = this.importStack;
     return child;
+  }
+  
+  private getImportApproval(): ImportApproval | undefined {
+    // Walk up to root environment to find import approval
+    if (this.importApproval) return this.importApproval;
+    if (this.parent) return this.parent.getImportApproval();
+    return undefined;
+  }
+  
+  private getImmutableCache(): ImmutableCache | undefined {
+    // Walk up to root environment to find immutable cache
+    if (this.immutableCache) return this.immutableCache;
+    if (this.parent) return this.parent.getImmutableCache();
+    return undefined;
   }
 }
