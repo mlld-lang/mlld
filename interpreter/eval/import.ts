@@ -62,7 +62,7 @@ export async function evaluateImport(
     
     // Create a child environment for the imported file
     // For URLs, use the current directory as basePath since URLs don't have directories
-    const importDir = isURL ? env.basePath : path.dirname(resolvedPath);
+    const importDir = isURL ? env.getBasePath() : path.dirname(resolvedPath);
     const childEnv = env.createChildEnvironment();
   
   // Evaluate the imported file
