@@ -1,0 +1,661 @@
+{
+  "name": "data-null-values",
+  "description": "Test fixture for data/null-values",
+  "category": "data",
+  "subcategory": "null-values",
+  "input": "@data config = {\n  name: \"TestApp\",\n  version: \"1.0.0\",\n  description: null,\n  settings: {\n    debug: false,\n    logLevel: null,\n    features: {\n      auth: true,\n      cache: null,\n      api: \"v2\"\n    }\n  },\n  metadata: null\n}\n\n@add [[Application Config:\nName: {{config.name}}\nVersion: {{config.version}}\nDescription: {{config.description}}\nDebug: {{config.settings.debug}}\nLog Level: {{config.settings.logLevel}}\nAuth: {{config.settings.features.auth}}\nCache: {{config.settings.features.cache}}\nAPI: {{config.settings.features.api}}\nMetadata: {{config.metadata}}]]",
+  "expected": "Application Config:\nName: TestApp\nVersion: 1.0.0\nDescription: null\nDebug: false\nLog Level: null\nAuth: true\nCache: null\nAPI: v2\nMetadata: null",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "deb47a37-8d0a-478a-bbe3-7aef668c419a",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 227,
+          "line": 15,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "22742d3c-540b-415c-a7dd-8e19cbc4bf1b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "config"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "name": [
+              {
+                "type": "Text",
+                "nodeId": "46ca9577-313d-4af1-bad5-8ae9cd078a81",
+                "location": {
+                  "start": {
+                    "offset": 25,
+                    "line": 2,
+                    "column": 9
+                  },
+                  "end": {
+                    "offset": 34,
+                    "line": 2,
+                    "column": 18
+                  }
+                },
+                "content": "TestApp"
+              }
+            ],
+            "version": [
+              {
+                "type": "Text",
+                "nodeId": "de85503c-67c8-446e-9a56-940c38501164",
+                "location": {
+                  "start": {
+                    "offset": 47,
+                    "line": 3,
+                    "column": 12
+                  },
+                  "end": {
+                    "offset": 54,
+                    "line": 3,
+                    "column": 19
+                  }
+                },
+                "content": "1.0.0"
+              }
+            ],
+            "description": {
+              "nodeId": "218180f3-d2d8-4b1c-ae7c-86f15feea31a",
+              "location": {
+                "start": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                },
+                "end": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                }
+              },
+              "value": null
+            },
+            "settings": {
+              "type": "object",
+              "properties": {
+                "debug": {
+                  "type": "primitive",
+                  "value": false,
+                  "rawText": "false"
+                },
+                "logLevel": {
+                  "nodeId": "63678228-33c1-4954-b4cb-79c7b0573a6d",
+                  "location": {
+                    "start": {
+                      "offset": 0,
+                      "line": 1,
+                      "column": 1
+                    },
+                    "end": {
+                      "offset": 0,
+                      "line": 1,
+                      "column": 1
+                    }
+                  },
+                  "value": null
+                },
+                "features": {
+                  "type": "object",
+                  "properties": {
+                    "auth": true,
+                    "cache": {
+                      "nodeId": "6e32a7b0-3b3d-4704-a407-68f8b372bcca",
+                      "location": {
+                        "start": {
+                          "offset": 0,
+                          "line": 1,
+                          "column": 1
+                        },
+                        "end": {
+                          "offset": 0,
+                          "line": 1,
+                          "column": 1
+                        }
+                      },
+                      "value": null
+                    },
+                    "api": [
+                      {
+                        "type": "Text",
+                        "nodeId": "0c90f56c-997c-4de9-b434-0bab22416df6",
+                        "location": {
+                          "start": {
+                            "offset": 193,
+                            "line": 11,
+                            "column": 12
+                          },
+                          "end": {
+                            "offset": 197,
+                            "line": 11,
+                            "column": 16
+                          }
+                        },
+                        "content": "v2"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "metadata": {
+              "nodeId": "f30dc61b-d9e8-49eb-b58b-fa4a43484367",
+              "location": {
+                "start": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                },
+                "end": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                }
+              },
+              "value": null
+            }
+          }
+        }
+      },
+      "raw": {
+        "identifier": "config",
+        "value": "{\n  \"name\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"46ca9577-313d-4af1-bad5-8ae9cd078a81\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 25,\n          \"line\": 2,\n          \"column\": 9\n        },\n        \"end\": {\n          \"offset\": 34,\n          \"line\": 2,\n          \"column\": 18\n        }\n      },\n      \"content\": \"TestApp\"\n    }\n  ],\n  \"version\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"de85503c-67c8-446e-9a56-940c38501164\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 47,\n          \"line\": 3,\n          \"column\": 12\n        },\n        \"end\": {\n          \"offset\": 54,\n          \"line\": 3,\n          \"column\": 19\n        }\n      },\n      \"content\": \"1.0.0\"\n    }\n  ],\n  \"description\": {\n    \"nodeId\": \"218180f3-d2d8-4b1c-ae7c-86f15feea31a\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      },\n      \"end\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      }\n    },\n    \"value\": null\n  },\n  \"settings\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"debug\": {\n        \"type\": \"primitive\",\n        \"value\": false,\n        \"rawText\": \"false\"\n      },\n      \"logLevel\": {\n        \"nodeId\": \"63678228-33c1-4954-b4cb-79c7b0573a6d\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 0,\n            \"line\": 1,\n            \"column\": 1\n          },\n          \"end\": {\n            \"offset\": 0,\n            \"line\": 1,\n            \"column\": 1\n          }\n        },\n        \"value\": null\n      },\n      \"features\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"auth\": true,\n          \"cache\": {\n            \"nodeId\": \"6e32a7b0-3b3d-4704-a407-68f8b372bcca\",\n            \"location\": {\n              \"start\": {\n                \"offset\": 0,\n                \"line\": 1,\n                \"column\": 1\n              },\n              \"end\": {\n                \"offset\": 0,\n                \"line\": 1,\n                \"column\": 1\n              }\n            },\n            \"value\": null\n          },\n          \"api\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"0c90f56c-997c-4de9-b434-0bab22416df6\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 193,\n                  \"line\": 11,\n                  \"column\": 12\n                },\n                \"end\": {\n                  \"offset\": 197,\n                  \"line\": 11,\n                  \"column\": 16\n                }\n              },\n              \"content\": \"v2\"\n            }\n          ]\n        }\n      }\n    }\n  },\n  \"metadata\": {\n    \"nodeId\": \"f30dc61b-d9e8-49eb-b58b-fa4a43484367\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      },\n      \"end\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      }\n    },\n    \"value\": null\n  }\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 5
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "a9d2fcc0-a119-4700-8060-d71ceb70bcfd",
+      "location": {
+        "start": {
+          "offset": 227,
+          "line": 15,
+          "column": 2
+        },
+        "end": {
+          "offset": 229,
+          "line": 17,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "eaadf752-3ba4-4bab-8270-4830ba19eb10",
+      "location": {
+        "start": {
+          "offset": 229,
+          "line": 17,
+          "column": 1
+        },
+        "end": {
+          "offset": 566,
+          "line": 26,
+          "column": 32
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "d1726040-d760-4f42-bb9a-1886b8b2a14c",
+            "location": {
+              "start": {
+                "offset": 236,
+                "line": 17,
+                "column": 8
+              },
+              "end": {
+                "offset": 262,
+                "line": 18,
+                "column": 7
+              }
+            },
+            "content": "Application Config:\nName: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "16471545-bc7c-4379-a38e-9d4d79d262d3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "name"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "c9041c62-c729-402b-860d-aa4ff8f3305f",
+            "location": {
+              "start": {
+                "offset": 277,
+                "line": 18,
+                "column": 22
+              },
+              "end": {
+                "offset": 287,
+                "line": 19,
+                "column": 10
+              }
+            },
+            "content": "\nVersion: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "4bc83b4c-08f1-4411-8047-393c4616156e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "version"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "8cd9074c-1d50-4406-89f0-c945a4fdb139",
+            "location": {
+              "start": {
+                "offset": 305,
+                "line": 19,
+                "column": 28
+              },
+              "end": {
+                "offset": 319,
+                "line": 20,
+                "column": 14
+              }
+            },
+            "content": "\nDescription: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "06c5745f-595f-4624-80ec-3916025a713c",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "description"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "de18ba25-510d-4c1b-bb64-3f810089a6a3",
+            "location": {
+              "start": {
+                "offset": 341,
+                "line": 20,
+                "column": 36
+              },
+              "end": {
+                "offset": 349,
+                "line": 21,
+                "column": 8
+              }
+            },
+            "content": "\nDebug: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "a7578574-0571-4e67-8374-ae6c10965a36",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "settings"
+              },
+              {
+                "type": "field",
+                "name": "debug"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "5ffdd1f1-159b-486c-9bb1-d1236b180f78",
+            "location": {
+              "start": {
+                "offset": 374,
+                "line": 21,
+                "column": 33
+              },
+              "end": {
+                "offset": 386,
+                "line": 22,
+                "column": 12
+              }
+            },
+            "content": "\nLog Level: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "3a5216b5-6c39-4f29-9a4d-cdc555f444fa",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "settings"
+              },
+              {
+                "type": "field",
+                "name": "logLevel"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "31b27b07-a220-4a6a-a24b-56525ab409fb",
+            "location": {
+              "start": {
+                "offset": 414,
+                "line": 22,
+                "column": 40
+              },
+              "end": {
+                "offset": 421,
+                "line": 23,
+                "column": 7
+              }
+            },
+            "content": "\nAuth: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "25c18607-adb1-4ace-9da1-224c0d88150b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "settings"
+              },
+              {
+                "type": "field",
+                "name": "features"
+              },
+              {
+                "type": "field",
+                "name": "auth"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "1eb129c6-5913-4431-9b70-dd1325454299",
+            "location": {
+              "start": {
+                "offset": 454,
+                "line": 23,
+                "column": 40
+              },
+              "end": {
+                "offset": 462,
+                "line": 24,
+                "column": 8
+              }
+            },
+            "content": "\nCache: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "c29647bc-4dc8-460c-8137-d290550fe7eb",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "settings"
+              },
+              {
+                "type": "field",
+                "name": "features"
+              },
+              {
+                "type": "field",
+                "name": "cache"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "62e53cba-8ca7-4853-b0f8-4741970b21fb",
+            "location": {
+              "start": {
+                "offset": 496,
+                "line": 24,
+                "column": 42
+              },
+              "end": {
+                "offset": 502,
+                "line": 25,
+                "column": 6
+              }
+            },
+            "content": "\nAPI: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "6cd20a4b-ad82-4066-90e6-31fb49fe1913",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "settings"
+              },
+              {
+                "type": "field",
+                "name": "features"
+              },
+              {
+                "type": "field",
+                "name": "api"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "5d5d7355-2043-41ba-b9e1-3345f99981f9",
+            "location": {
+              "start": {
+                "offset": 534,
+                "line": 25,
+                "column": 38
+              },
+              "end": {
+                "offset": 545,
+                "line": 26,
+                "column": 11
+              }
+            },
+            "content": "\nMetadata: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "6a0d1573-89bd-4cd7-a3d6-c7858d25f7d9",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "metadata"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "content": "Application Config:\nName: {{config}}\nVersion: {{config}}\nDescription: {{config}}\nDebug: {{config}}\nLog Level: {{config}}\nAuth: {{config}}\nCache: {{config}}\nAPI: {{config}}\nMetadata: {{config}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ]
+}

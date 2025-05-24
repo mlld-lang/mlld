@@ -106,7 +106,9 @@ AtData
           metaObj = { primitiveType: 'boolean' };
         } else if (primitiveValue === null) {
           metaObj = { primitiveType: 'null' };
-        } else if (primitiveValue.type === NodeType.VariableReference) {
+        } else if (primitiveValue && primitiveValue.type === NodeType.Null) {
+          metaObj = { primitiveType: 'null' };
+        } else if (primitiveValue && primitiveValue.type === NodeType.VariableReference) {
           metaObj = { primitiveType: 'variable' };
         }
       }
@@ -183,10 +185,41 @@ DirectiveValue
         rawText: "@run " + (command.raw && command.raw.command ? command.raw.command : "")
       };
     }
-  / "@add" _ content:PathCore {
+  / "@run" _ exec:RunExecCore {
+      const runDirective = helpers.createStructuredDirective(
+        'run',
+        'runExec',
+        exec.values,
+        exec.raw,
+        {
+          ...exec.meta,
+          isDataValue: true
+        },
+        location(),
+        'exec'
+      );
+      
+      return {
+        type: "nestedDirective",
+        directive: runDirective,
+        rawText: "@run @" + exec.raw.identifier
+      };
+    }
+  / "@add" _ content:AddCore {
+      // Map the core type to the appropriate directive subtype
+      const subtypeMap = {
+        'addPath': 'addPath',
+        'addTemplate': 'addTemplate',
+        'addVariable': 'addVariable',
+        'addTemplateInvocation': 'addTemplateInvocation',
+        'addPathSection': 'addPathSection'
+      };
+      
+      const subtype = subtypeMap[content.type] || 'add';
+      
       const addDirective = helpers.createStructuredDirective(
         'add',
-        'addPath',
+        subtype,
         content.values,
         content.raw,
         {
@@ -194,13 +227,22 @@ DirectiveValue
           isDataValue: true
         },
         location(),
-        'path'
+        content.type === 'addPath' ? 'path' : 
+        content.type === 'addTemplate' ? 'template' :
+        content.type === 'addVariable' ? 'variable' :
+        content.type === 'addTemplateInvocation' ? 'templateInvocation' :
+        'section'
       );
       
       return {
         type: "nestedDirective",
         directive: addDirective,
-        rawText: "@add " + (content.raw && content.raw.path ? content.raw.path : "")
+        rawText: "@add " + (content.raw && content.raw.path ? content.raw.path : 
+                   content.raw && content.raw.content ? content.raw.content :
+                   content.raw && content.raw.variable ? content.raw.variable :
+                   content.raw && content.raw.templateName ? 
+                     "@" + content.raw.templateName + "(" + (content.raw.arguments || []).join(", ") + ")" :
+                   "")
       };
     }
 
@@ -349,7 +391,10 @@ DataPrimitiveValue
   = value:StringLiteral { return value; }
   / value:NumberLiteral { return value; }
   / value:BooleanLiteral { return value; }
-  / value:NullLiteral { return value; }
+  / NullLiteral { 
+      // Return a proper node instead of raw null to avoid AST processing errors
+      return helpers.createNode(NodeType.Null, { value: null }, location());
+    }
   / varRef:Variable { return varRef; }
 
 // -------------------------------------------------------------

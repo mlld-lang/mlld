@@ -41,8 +41,11 @@ export async function evaluateDataValue(
     }
     
     try {
-      // Evaluate the directive in the current environment
-      const result = await evaluate([value], env);
+      // Create a child environment to capture output without affecting the parent
+      const childEnv = env.createChild();
+      
+      // Evaluate the directive in the child environment
+      const result = await evaluate([value], childEnv);
       
       // For run and add directives in data context, trim trailing newlines
       let finalValue = result.value;

@@ -225,13 +225,24 @@ export async function interpolate(
             }
           } else if (field.type === 'field') {
             value = value[field.name];
+            
+            // Handle null nodes from the grammar
+            if (value && typeof value === 'object' && value.type === 'Null') {
+              value = null;
+            }
+            
             if (value === undefined) break;
           }
         }
       }
       
       // Convert final value to string
-      if (typeof value === 'object' && value !== null) {
+      if (value === null) {
+        parts.push('null');
+      } else if (typeof value === 'object' && value.type === 'Null') {
+        // Handle null nodes from the grammar
+        parts.push('null');
+      } else if (typeof value === 'object') {
         parts.push(JSON.stringify(value));
       } else {
         parts.push(String(value));

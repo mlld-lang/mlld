@@ -17,6 +17,11 @@ import {
  * are represented as their native node types.
  */
 export function parseDataValue(node: any): DataValue {
+  // Handle null nodes from the grammar
+  if (node?.type === 'Null') {
+    return null;
+  }
+  
   // Handle primitive values
   if (isPrimitiveValue(node)) {
     return node;
@@ -82,6 +87,11 @@ export function parseDataValue(node: any): DataValue {
     };
   }
   
+  // Handle wrapped primitive values from grammar
+  if (node?.type === 'primitive' && 'value' in node) {
+    return node.value;
+  }
+  
   // If we can't identify the node type, treat it as a literal
   console.warn('Unexpected node type in data value:', node);
   return node;
@@ -91,6 +101,11 @@ export function parseDataValue(node: any): DataValue {
  * Extract plain value from DataValue (for simple data variables)
  */
 export function extractPlainValue(value: DataValue): any {
+  // Handle null nodes from the grammar
+  if (value?.type === 'Null') {
+    return null;
+  }
+  
   if (isPrimitiveValue(value)) {
     return value;
   }

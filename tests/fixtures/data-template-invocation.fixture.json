@@ -1,0 +1,812 @@
+{
+  "name": "data-template-invocation",
+  "description": "Test fixture for data/template-invocation",
+  "category": "data",
+  "subcategory": "template-invocation",
+  "input": "@text greeting(name) = @add [[Hello, {{name}}!]]\n@text farewell(name, time) = @add [[Goodbye {{name}}, see you {{time}}!]]\n\n@data messages = {\n  welcome: @add @greeting(\"Alice\"),\n  goodbye: @add @farewell(\"Bob\", \"tomorrow\"),\n  nested: {\n    morning: @add @greeting(\"Charlie\"),\n    evening: @add @farewell(\"David\", \"next week\")\n  }\n}\n\n@add [[{{messages.welcome}}\n{{messages.goodbye}}\n{{messages.nested.morning}}\n{{messages.nested.evening}}]]",
+  "expected": "Hello, Alice!\nGoodbye Bob, see you tomorrow!\nHello, Charlie!\nGoodbye David, see you next week!",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "53ca9df6-6f70-4a5f-836f-a67f86496035",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 48,
+          "line": 1,
+          "column": 49
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplateDefinition",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "0a4fb585-a336-4ab0-ad34-758642eef4b7",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "greeting"
+          }
+        ],
+        "params": [
+          "name"
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "dd3e0fa0-eb17-4ac7-83f4-ddd74285d73c",
+            "location": {
+              "start": {
+                "offset": 30,
+                "line": 1,
+                "column": 31
+              },
+              "end": {
+                "offset": 37,
+                "line": 1,
+                "column": 38
+              }
+            },
+            "content": "Hello, "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "57b3045a-abe1-4dfa-a9e9-d1df5cddf67c",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "name"
+          },
+          {
+            "type": "Text",
+            "nodeId": "72296fae-31df-458a-8e9f-0256e4c727b8",
+            "location": {
+              "start": {
+                "offset": 45,
+                "line": 1,
+                "column": 46
+              },
+              "end": {
+                "offset": 46,
+                "line": 1,
+                "column": 47
+              }
+            },
+            "content": "!"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greeting",
+        "params": [
+          "name"
+        ],
+        "content": "Hello, {{name}}!"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true,
+        "isParameterized": true,
+        "parameterCount": 1
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "35ea995f-fb8f-42bb-a593-b74a4c3101a3",
+      "location": {
+        "start": {
+          "offset": 48,
+          "line": 1,
+          "column": 49
+        },
+        "end": {
+          "offset": 49,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "3afc128e-d158-47dd-b4e2-611fd54f9b6d",
+      "location": {
+        "start": {
+          "offset": 49,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 122,
+          "line": 2,
+          "column": 74
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplateDefinition",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "00dc1b05-a75d-42b7-a992-1d80e349cdff",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "farewell"
+          }
+        ],
+        "params": [
+          "name",
+          "time"
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "14258c0f-193e-42be-ac34-c4eac1ede737",
+            "location": {
+              "start": {
+                "offset": 85,
+                "line": 2,
+                "column": 37
+              },
+              "end": {
+                "offset": 93,
+                "line": 2,
+                "column": 45
+              }
+            },
+            "content": "Goodbye "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "a09a5f1e-f4a8-44d0-b379-9f9d59505a75",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "name"
+          },
+          {
+            "type": "Text",
+            "nodeId": "8dd73599-ad92-48d6-8384-691abad30275",
+            "location": {
+              "start": {
+                "offset": 101,
+                "line": 2,
+                "column": 53
+              },
+              "end": {
+                "offset": 111,
+                "line": 2,
+                "column": 63
+              }
+            },
+            "content": ", see you "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "95bcef36-e489-42c4-b891-44765a3283d6",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "time"
+          },
+          {
+            "type": "Text",
+            "nodeId": "99aca8f4-3dd4-4a24-a15b-f4f26a01315e",
+            "location": {
+              "start": {
+                "offset": 119,
+                "line": 2,
+                "column": 71
+              },
+              "end": {
+                "offset": 120,
+                "line": 2,
+                "column": 72
+              }
+            },
+            "content": "!"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "farewell",
+        "params": [
+          "name",
+          "time"
+        ],
+        "content": "Goodbye {{name}}, see you {{time}}!"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true,
+        "isParameterized": true,
+        "parameterCount": 2
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "d9e259a2-4700-49e7-b420-11ff823fd666",
+      "location": {
+        "start": {
+          "offset": 122,
+          "line": 2,
+          "column": 74
+        },
+        "end": {
+          "offset": 124,
+          "line": 4,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "b522700a-a371-4617-b752-e18b28f8a097",
+      "location": {
+        "start": {
+          "offset": 124,
+          "line": 4,
+          "column": 1
+        },
+        "end": {
+          "offset": 332,
+          "line": 11,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "e5c9637a-e383-4376-b654-989ddde6b71f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "messages"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "welcome": {
+              "type": "Directive",
+              "nodeId": "40999382-9641-47e1-9634-ca15e19921f0",
+              "location": {
+                "start": {
+                  "offset": 154,
+                  "line": 5,
+                  "column": 12
+                },
+                "end": {
+                  "offset": 177,
+                  "line": 5,
+                  "column": 35
+                }
+              },
+              "kind": "add",
+              "subtype": "addTemplateInvocation",
+              "source": "templateInvocation",
+              "values": {
+                "templateName": [
+                  {
+                    "type": "Text",
+                    "nodeId": "83934806-906b-4fb3-99da-43e2ffe89135",
+                    "location": {
+                      "start": {
+                        "offset": 159,
+                        "line": 5,
+                        "column": 17
+                      },
+                      "end": {
+                        "offset": 177,
+                        "line": 5,
+                        "column": 35
+                      }
+                    },
+                    "content": "greeting"
+                  }
+                ],
+                "arguments": [
+                  {
+                    "type": "string",
+                    "value": "Alice"
+                  }
+                ]
+              },
+              "raw": {
+                "templateName": "greeting",
+                "arguments": [
+                  "\"Alice\""
+                ]
+              },
+              "meta": {
+                "argumentCount": 1,
+                "isDataValue": true
+              }
+            },
+            "goodbye": {
+              "type": "Directive",
+              "nodeId": "dc31919e-c27b-4e41-b3dc-45024dc26642",
+              "location": {
+                "start": {
+                  "offset": 190,
+                  "line": 6,
+                  "column": 12
+                },
+                "end": {
+                  "offset": 223,
+                  "line": 6,
+                  "column": 45
+                }
+              },
+              "kind": "add",
+              "subtype": "addTemplateInvocation",
+              "source": "templateInvocation",
+              "values": {
+                "templateName": [
+                  {
+                    "type": "Text",
+                    "nodeId": "8b9a21a9-9d82-42ed-ab45-b2e4bc3c91b1",
+                    "location": {
+                      "start": {
+                        "offset": 195,
+                        "line": 6,
+                        "column": 17
+                      },
+                      "end": {
+                        "offset": 223,
+                        "line": 6,
+                        "column": 45
+                      }
+                    },
+                    "content": "farewell"
+                  }
+                ],
+                "arguments": [
+                  {
+                    "type": "string",
+                    "value": "Bob"
+                  },
+                  {
+                    "type": "string",
+                    "value": "tomorrow"
+                  }
+                ]
+              },
+              "raw": {
+                "templateName": "farewell",
+                "arguments": [
+                  "\"Bob\"",
+                  "\"tomorrow\""
+                ]
+              },
+              "meta": {
+                "argumentCount": 2,
+                "isDataValue": true
+              }
+            },
+            "nested": {
+              "type": "object",
+              "properties": {
+                "morning": {
+                  "type": "Directive",
+                  "nodeId": "03dfba24-71b4-4115-8bc9-f3f288146b9e",
+                  "location": {
+                    "start": {
+                      "offset": 250,
+                      "line": 8,
+                      "column": 14
+                    },
+                    "end": {
+                      "offset": 275,
+                      "line": 8,
+                      "column": 39
+                    }
+                  },
+                  "kind": "add",
+                  "subtype": "addTemplateInvocation",
+                  "source": "templateInvocation",
+                  "values": {
+                    "templateName": [
+                      {
+                        "type": "Text",
+                        "nodeId": "a679fbdc-1fd9-4378-873f-2823335852e2",
+                        "location": {
+                          "start": {
+                            "offset": 255,
+                            "line": 8,
+                            "column": 19
+                          },
+                          "end": {
+                            "offset": 275,
+                            "line": 8,
+                            "column": 39
+                          }
+                        },
+                        "content": "greeting"
+                      }
+                    ],
+                    "arguments": [
+                      {
+                        "type": "string",
+                        "value": "Charlie"
+                      }
+                    ]
+                  },
+                  "raw": {
+                    "templateName": "greeting",
+                    "arguments": [
+                      "\"Charlie\""
+                    ]
+                  },
+                  "meta": {
+                    "argumentCount": 1,
+                    "isDataValue": true
+                  }
+                },
+                "evening": {
+                  "type": "Directive",
+                  "nodeId": "bc10f4c3-0172-463a-b3cb-e78bb1ede28d",
+                  "location": {
+                    "start": {
+                      "offset": 290,
+                      "line": 9,
+                      "column": 14
+                    },
+                    "end": {
+                      "offset": 326,
+                      "line": 9,
+                      "column": 50
+                    }
+                  },
+                  "kind": "add",
+                  "subtype": "addTemplateInvocation",
+                  "source": "templateInvocation",
+                  "values": {
+                    "templateName": [
+                      {
+                        "type": "Text",
+                        "nodeId": "38bf8106-32da-4cc6-a121-8a063ae0b989",
+                        "location": {
+                          "start": {
+                            "offset": 295,
+                            "line": 9,
+                            "column": 19
+                          },
+                          "end": {
+                            "offset": 326,
+                            "line": 9,
+                            "column": 50
+                          }
+                        },
+                        "content": "farewell"
+                      }
+                    ],
+                    "arguments": [
+                      {
+                        "type": "string",
+                        "value": "David"
+                      },
+                      {
+                        "type": "string",
+                        "value": "next week"
+                      }
+                    ]
+                  },
+                  "raw": {
+                    "templateName": "farewell",
+                    "arguments": [
+                      "\"David\"",
+                      "\"next week\""
+                    ]
+                  },
+                  "meta": {
+                    "argumentCount": 2,
+                    "isDataValue": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "raw": {
+        "identifier": "messages",
+        "value": "{\n  \"welcome\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"40999382-9641-47e1-9634-ca15e19921f0\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 154,\n        \"line\": 5,\n        \"column\": 12\n      },\n      \"end\": {\n        \"offset\": 177,\n        \"line\": 5,\n        \"column\": 35\n      }\n    },\n    \"kind\": \"add\",\n    \"subtype\": \"addTemplateInvocation\",\n    \"source\": \"templateInvocation\",\n    \"values\": {\n      \"templateName\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"83934806-906b-4fb3-99da-43e2ffe89135\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 159,\n              \"line\": 5,\n              \"column\": 17\n            },\n            \"end\": {\n              \"offset\": 177,\n              \"line\": 5,\n              \"column\": 35\n            }\n          },\n          \"content\": \"greeting\"\n        }\n      ],\n      \"arguments\": [\n        {\n          \"type\": \"string\",\n          \"value\": \"Alice\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"templateName\": \"greeting\",\n      \"arguments\": [\n        \"\\\"Alice\\\"\"\n      ]\n    },\n    \"meta\": {\n      \"argumentCount\": 1,\n      \"isDataValue\": true\n    }\n  },\n  \"goodbye\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"dc31919e-c27b-4e41-b3dc-45024dc26642\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 190,\n        \"line\": 6,\n        \"column\": 12\n      },\n      \"end\": {\n        \"offset\": 223,\n        \"line\": 6,\n        \"column\": 45\n      }\n    },\n    \"kind\": \"add\",\n    \"subtype\": \"addTemplateInvocation\",\n    \"source\": \"templateInvocation\",\n    \"values\": {\n      \"templateName\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"8b9a21a9-9d82-42ed-ab45-b2e4bc3c91b1\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 195,\n              \"line\": 6,\n              \"column\": 17\n            },\n            \"end\": {\n              \"offset\": 223,\n              \"line\": 6,\n              \"column\": 45\n            }\n          },\n          \"content\": \"farewell\"\n        }\n      ],\n      \"arguments\": [\n        {\n          \"type\": \"string\",\n          \"value\": \"Bob\"\n        },\n        {\n          \"type\": \"string\",\n          \"value\": \"tomorrow\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"templateName\": \"farewell\",\n      \"arguments\": [\n        \"\\\"Bob\\\"\",\n        \"\\\"tomorrow\\\"\"\n      ]\n    },\n    \"meta\": {\n      \"argumentCount\": 2,\n      \"isDataValue\": true\n    }\n  },\n  \"nested\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"morning\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"03dfba24-71b4-4115-8bc9-f3f288146b9e\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 250,\n            \"line\": 8,\n            \"column\": 14\n          },\n          \"end\": {\n            \"offset\": 275,\n            \"line\": 8,\n            \"column\": 39\n          }\n        },\n        \"kind\": \"add\",\n        \"subtype\": \"addTemplateInvocation\",\n        \"source\": \"templateInvocation\",\n        \"values\": {\n          \"templateName\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"a679fbdc-1fd9-4378-873f-2823335852e2\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 255,\n                  \"line\": 8,\n                  \"column\": 19\n                },\n                \"end\": {\n                  \"offset\": 275,\n                  \"line\": 8,\n                  \"column\": 39\n                }\n              },\n              \"content\": \"greeting\"\n            }\n          ],\n          \"arguments\": [\n            {\n              \"type\": \"string\",\n              \"value\": \"Charlie\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"templateName\": \"greeting\",\n          \"arguments\": [\n            \"\\\"Charlie\\\"\"\n          ]\n        },\n        \"meta\": {\n          \"argumentCount\": 1,\n          \"isDataValue\": true\n        }\n      },\n      \"evening\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"bc10f4c3-0172-463a-b3cb-e78bb1ede28d\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 290,\n            \"line\": 9,\n            \"column\": 14\n          },\n          \"end\": {\n            \"offset\": 326,\n            \"line\": 9,\n            \"column\": 50\n          }\n        },\n        \"kind\": \"add\",\n        \"subtype\": \"addTemplateInvocation\",\n        \"source\": \"templateInvocation\",\n        \"values\": {\n          \"templateName\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"38bf8106-32da-4cc6-a121-8a063ae0b989\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 295,\n                  \"line\": 9,\n                  \"column\": 19\n                },\n                \"end\": {\n                  \"offset\": 326,\n                  \"line\": 9,\n                  \"column\": 50\n                }\n              },\n              \"content\": \"farewell\"\n            }\n          ],\n          \"arguments\": [\n            {\n              \"type\": \"string\",\n              \"value\": \"David\"\n            },\n            {\n              \"type\": \"string\",\n              \"value\": \"next week\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"templateName\": \"farewell\",\n          \"arguments\": [\n            \"\\\"David\\\"\",\n            \"\\\"next week\\\"\"\n          ]\n        },\n        \"meta\": {\n          \"argumentCount\": 2,\n          \"isDataValue\": true\n        }\n      }\n    }\n  }\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 3
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "d7c2f32b-2d95-4db0-a9bc-664443aa1bb8",
+      "location": {
+        "start": {
+          "offset": 332,
+          "line": 11,
+          "column": 2
+        },
+        "end": {
+          "offset": 334,
+          "line": 13,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "248f856b-e79d-4075-a95b-a302d408e4a1",
+      "location": {
+        "start": {
+          "offset": 334,
+          "line": 13,
+          "column": 1
+        },
+        "end": {
+          "offset": 440,
+          "line": 16,
+          "column": 30
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "VariableReference",
+            "nodeId": "f6ca8cf8-39ca-49db-80a8-5ada2062ce0b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "messages",
+            "fields": [
+              {
+                "type": "field",
+                "name": "welcome"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "20adcf29-0416-471a-a652-aeb46911876c",
+            "location": {
+              "start": {
+                "offset": 361,
+                "line": 13,
+                "column": 28
+              },
+              "end": {
+                "offset": 362,
+                "line": 14,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "560a1520-999b-4cae-8cc6-e3dd6685afbd",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "messages",
+            "fields": [
+              {
+                "type": "field",
+                "name": "goodbye"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "4db162c8-c42e-4e97-aeab-ab7378086463",
+            "location": {
+              "start": {
+                "offset": 382,
+                "line": 14,
+                "column": 21
+              },
+              "end": {
+                "offset": 383,
+                "line": 15,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "fc2c0a6d-16fc-425a-8845-528dd7c571e9",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "messages",
+            "fields": [
+              {
+                "type": "field",
+                "name": "nested"
+              },
+              {
+                "type": "field",
+                "name": "morning"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "3c65c2e0-0aba-4395-b996-e1ffb797324b",
+            "location": {
+              "start": {
+                "offset": 410,
+                "line": 15,
+                "column": 28
+              },
+              "end": {
+                "offset": 411,
+                "line": 16,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "03771bee-27d0-4d0b-8c9f-d67eb4d94427",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "isVariableReference": true,
+            "identifier": "messages",
+            "fields": [
+              {
+                "type": "field",
+                "name": "nested"
+              },
+              {
+                "type": "field",
+                "name": "evening"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "content": "{{messages}}\n{{messages}}\n{{messages}}\n{{messages}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ]
+}
