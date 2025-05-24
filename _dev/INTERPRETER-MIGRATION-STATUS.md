@@ -12,7 +12,7 @@
 
 ### Working Directives
 - ✅ `@add` - variable references, paths, sections, templates, template invocations
-- ✅ `@text` - assignments, templates with interpolation, template definitions
+- ✅ `@text` - assignments, templates with interpolation, template definitions, **direct path/section syntax** ✨
 - ✅ `@exec` - code and command execution, references (mostly working)
 - ✅ `@run` - code, commands, and exec references
 - ✅ `@data` - objects, arrays, nested structures, **complex data with embedded directives** ✨
@@ -27,6 +27,13 @@
 - ✅ Inline templates in data (`@data msgs = { greeting: [[Hello {{name}}!]] }`)
 - ✅ Lazy evaluation of embedded directives
 - ✅ Partial failure handling with error reporting
+
+### New Text Directive Features ✨
+- ✅ Direct path syntax: `@text content = [file.md]`
+- ✅ Direct section extraction: `@text section = "## Setup" from [file.md]`
+- ✅ Section extraction with rename: `@text section = "## Setup" from [file.md] as "## Installation"`
+- ✅ Backward compatibility with @add syntax maintained
+- ⚠️ Variable interpolation in quoted strings not supported (grammar limitation)
 
 ## ❌ Remaining Work (20% - 9/44 fixtures failing)
 

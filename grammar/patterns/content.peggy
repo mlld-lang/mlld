@@ -97,8 +97,33 @@ DoubleBracketContent "Content with {{var}} interpolation"
 
 // Unquoted path with @var interpolation (no delimiters)
 UnquotedPath "Unquoted path with @var interpolation"
-  = parts:(AtVar / BaseTextSegment / PathSeparator)+ {
+  = parts:(UnquotedPathPart)+ {
       return parts;
+    }
+
+// Individual part of an unquoted path
+UnquotedPathPart
+  = PathSeparator
+  / UnquotedPathVar
+  / UnquotedPathText
+
+// Variable reference in unquoted paths - without VariableContext check
+UnquotedPathVar
+  = "@" id:BaseIdentifier accessElements:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      const node = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(accessElements.length > 0 ? { fields: accessElements } : {})
+      }, location());
+      helpers.debug('CreateVAR in UnquotedPath', { id: normalizedId, node, fields: accessElements });
+      return node;
+    }
+
+// Text segment for unquoted paths - handles @ when not a valid variable
+UnquotedPathText "Unquoted path text"
+  = chars:$(![ \t\r\n/\]{}] .)+ {
+      helpers.debug('UnquotedPathText matched', { chars });
+      return helpers.createNode(NodeType.Text, { content: chars, location: location() });
     }
 
 // Unquoted command with @var interpolation (no delimiters)

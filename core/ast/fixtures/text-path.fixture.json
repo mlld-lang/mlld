@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "becabf6c-3323-4cb7-ae93-9199c81fdcfa",
+      "nodeId": "b857a7dc-ca97-48ac-b18e-1e8ec7cce9d8",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "857a2d55-f97d-4d96-ba35-77274f4794df",
+            "nodeId": "dbff5b1d-d3dd-4627-ab49-c6e209624912",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +50,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "a82924f3-cccd-47c4-8197-7fec2fd555ca",
+            "nodeId": "f37a3544-4e1e-48da-9f8a-4c946d35a561",
             "location": {
               "start": {
                 "offset": 16,
@@ -79,7 +79,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "94634070-4ca6-48c1-8450-87c24da554ab",
+      "nodeId": "e01b4307-8019-4f00-9ca1-11153fb7f4e3",
       "location": {
         "start": {
           "offset": 25,
@@ -96,7 +96,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "2bd633f4-f89d-4343-962d-2f18341c9517",
+      "nodeId": "8379f501-a638-451a-b82f-2fcd5977384a",
       "location": {
         "start": {
           "offset": 26,
@@ -116,7 +116,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "47de9d9e-4212-47b0-b976-3c26420d22d1",
+            "nodeId": "1a263318-c9f9-46ed-bcd6-3d1ac180eb4f",
             "location": {
               "start": {
                 "offset": 0,

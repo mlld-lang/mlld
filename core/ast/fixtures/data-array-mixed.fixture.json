@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "ad392656-10c3-47fe-9410-a54d4ad269ff",
+      "nodeId": "ea80859e-3a7a-423d-a6bd-5f66bcf8ecae",
       "location": {
         "start": {
           "offset": 0,
@@ -29,7 +29,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "80ad296f-aef6-408a-8638-328d30638b63",
+            "nodeId": "d84c5a6f-2b99-49cb-8274-70ab569f585f",
             "location": {
               "start": {
                 "offset": 0,
@@ -51,11 +51,47 @@
           "type": "array",
           "items": [
             1,
-            "two",
+            [
+              {
+                "type": "Text",
+                "nodeId": "7e3177b6-3f68-474a-8145-b3eb7477373f",
+                "location": {
+                  "start": {
+                    "offset": 18,
+                    "line": 1,
+                    "column": 19
+                  },
+                  "end": {
+                    "offset": 23,
+                    "line": 1,
+                    "column": 24
+                  }
+                },
+                "content": "two"
+              }
+            ],
             {
               "type": "object",
               "properties": {
-                "name": "three"
+                "name": [
+                  {
+                    "type": "Text",
+                    "nodeId": "690b3dfd-a898-4f46-b5b5-069b682c8f9a",
+                    "location": {
+                      "start": {
+                        "offset": 33,
+                        "line": 1,
+                        "column": 34
+                      },
+                      "end": {
+                        "offset": 40,
+                        "line": 1,
+                        "column": 41
+                      }
+                    },
+                    "content": "three"
+                  }
+                ]
               }
             },
             {
@@ -70,7 +106,7 @@
       },
       "raw": {
         "identifier": "items",
-        "value": "[\n  1,\n  \"two\",\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": \"three\"\n    }\n  },\n  {\n    \"type\": \"array\",\n    \"items\": [\n      4,\n      5\n    ]\n  }\n]"
+        "value": "[\n  1,\n  [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"7e3177b6-3f68-474a-8145-b3eb7477373f\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 18,\n          \"line\": 1,\n          \"column\": 19\n        },\n        \"end\": {\n          \"offset\": 23,\n          \"line\": 1,\n          \"column\": 24\n        }\n      },\n      \"content\": \"two\"\n    }\n  ],\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"690b3dfd-a898-4f46-b5b5-069b682c8f9a\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 33,\n              \"line\": 1,\n              \"column\": 34\n            },\n            \"end\": {\n              \"offset\": 40,\n              \"line\": 1,\n              \"column\": 41\n            }\n          },\n          \"content\": \"three\"\n        }\n      ]\n    }\n  },\n  {\n    \"type\": \"array\",\n    \"items\": [\n      4,\n      5\n    ]\n  }\n]"
       },
       "meta": {
         "arrayData": {
@@ -80,7 +116,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "a49dd9ad-8dc9-4a29-905d-eee1babb0244",
+      "nodeId": "b365878d-7444-4cf9-a393-fe99cae95b2d",
       "location": {
         "start": {
           "offset": 51,
@@ -97,7 +133,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "a5151f92-04ae-4cea-afb5-50936cb4679b",
+      "nodeId": "271bf911-e44f-463a-97e2-4c15bbe03a78",
       "location": {
         "start": {
           "offset": 52,
@@ -117,7 +153,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "360bdd1a-86cc-4d54-9740-4fefffd30175",
+            "nodeId": "4d5b2d74-fd37-4278-88e1-d0c6aa62a728",
             "location": {
               "start": {
                 "offset": 0,

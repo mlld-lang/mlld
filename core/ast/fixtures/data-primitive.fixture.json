@@ -9,7 +9,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "adc5e8b0-40d2-4656-8ceb-51e0dd32dcd0",
+      "nodeId": "f4b7d71f-9516-4e1c-addc-bea151d24331",
       "location": {
         "start": {
           "offset": 0,
@@ -24,12 +24,12 @@
       },
       "kind": "data",
       "subtype": "dataAssignment",
-      "source": "literal",
+      "source": "template",
       "values": {
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "06576553-5dff-4c0e-80de-c2c2e019df11",
+            "nodeId": "bb10071e-bd10-4697-8e50-00c3a76b7704",
             "location": {
               "start": {
                 "offset": 0,
@@ -48,20 +48,38 @@
           }
         ],
         "value": [
-          "Hello, world!"
+          {
+            "type": "Text",
+            "nodeId": "591d7878-e7b7-46d6-b964-15877e60e65b",
+            "location": {
+              "start": {
+                "offset": 22,
+                "line": 1,
+                "column": 23
+              },
+              "end": {
+                "offset": 37,
+                "line": 1,
+                "column": 38
+              }
+            },
+            "content": "Hello, world!"
+          }
         ]
       },
       "raw": {
         "identifier": "greeting.text",
-        "value": "\"Hello, world!\""
+        "value": "Hello, world!"
       },
       "meta": {
-        "primitiveType": "string"
+        "templateData": {
+          "hasVariables": false
+        }
       }
     },
     {
       "type": "Newline",
-      "nodeId": "ba98d5c4-88a9-49fb-ba3b-255ea17ffbbe",
+      "nodeId": "b79f91e5-11e1-4a2e-8ab3-229ea7dc2de3",
       "location": {
         "start": {
           "offset": 37,
@@ -78,7 +96,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "6f6d036b-ed12-4b03-bdcd-2f892cb74baa",
+      "nodeId": "a604f88a-2b97-4a74-a00e-28b6e9ddcdcd",
       "location": {
         "start": {
           "offset": 38,
@@ -98,7 +116,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "d05429c1-df67-4dcc-86d9-a90f1daf47c8",
+            "nodeId": "fb6275c2-528c-4119-a150-749bb9a220a4",
             "location": {
               "start": {
                 "offset": 0,

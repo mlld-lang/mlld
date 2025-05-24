@@ -41,11 +41,11 @@ describe('Path Separator in Brackets - Regression Test for Issue #53', () => {
     expect(result).toHaveLength(1);
     expect(result[0].type).toBe('Directive');
     expect(result[0].kind).toBe('text');
-    expect(result[0].subtype).toBe('textAssignment');
+    expect(result[0].subtype).toBe('textPath');
     expect(result[0].source).toBe('path');
     
-    // Check that content array contains PathSeparator nodes
-    const contentArray = result[0].values.content;
+    // Check that path array contains PathSeparator nodes
+    const contentArray = result[0].values.path;
     expect(contentArray).toHaveLength(5);
     
     // Verify structure
@@ -85,7 +85,8 @@ describe('Path Separator in Brackets - Regression Test for Issue #53', () => {
     const parseResult = await parse(input);
     const result = parseResult.ast;
     
-    const contentArray = result[0].values.content;
+    expect(result[0].subtype).toBe('textPath');
+    const contentArray = result[0].values.path;
     
     // First element should be the variable
     expect(contentArray[0].type).toBe('VariableReference');
