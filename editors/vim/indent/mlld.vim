@@ -1,19 +1,19 @@
 " Vim indent file
-" Language: Meld
+" Language: mlld
 
 if exists("b:did_indent")
   finish
 endif
 let b:did_indent = 1
 
-setlocal indentexpr=GetMeldIndent()
+setlocal indentexpr=GetmlldIndent()
 setlocal indentkeys=0{,0},0],!^F,o,O,e
 
-if exists("*GetMeldIndent")
+if exists("*GetmlldIndent")
   finish
 endif
 
-function! GetMeldIndent()
+function! GetmlldIndent()
   let lnum = prevnonblank(v:lnum - 1)
   
   if lnum == 0

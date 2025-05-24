@@ -8,16 +8,16 @@ import { MeldCompletionProvider } from './providers/completion-provider';
 let analyzer: DocumentAnalyzer;
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Meld extension is now active!');
+  console.log('mlld extension is now active!');
 
-  // Command to set Meld mode for .md files
-  const setMeldModeCommand = vscode.commands.registerCommand('meld.setMeldMode', () => {
+  // Command to manually switch .md files to mlld mode
+  const switchToMLLDCommand = vscode.commands.registerCommand('mlld.switchToMLLD', () => {
     const editor = vscode.window.activeTextEditor;
     if (editor && editor.document.fileName.endsWith('.md')) {
-      vscode.languages.setTextDocumentLanguage(editor.document, 'meld');
+      vscode.languages.setTextDocumentLanguage(editor.document, 'mlld');
     }
   });
-  context.subscriptions.push(setMeldModeCommand);
+  context.subscriptions.push(switchToMLLDCommand);
 
   // Initialize document analyzer
   analyzer = new DocumentAnalyzer();
@@ -26,7 +26,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Register semantic tokens provider
   const semanticTokensProvider = new MeldSemanticTokensProvider(analyzer);
   const semanticTokensRegistration = vscode.languages.registerDocumentSemanticTokensProvider(
-    { language: 'meld' },
+    { language: 'mlld' },
     semanticTokensProvider,
     semanticTokensProvider.getLegend()
   );
@@ -35,7 +35,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Register hover provider
   const hoverProvider = new MeldHoverProvider(analyzer);
   const hoverRegistration = vscode.languages.registerHoverProvider(
-    { language: 'meld' },
+    { language: 'mlld' },
     hoverProvider
   );
   context.subscriptions.push(hoverRegistration);
@@ -43,7 +43,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Register definition provider
   const definitionProvider = new MeldDefinitionProvider(analyzer);
   const definitionRegistration = vscode.languages.registerDefinitionProvider(
-    { language: 'meld' },
+    { language: 'mlld' },
     definitionProvider
   );
   context.subscriptions.push(definitionRegistration);
@@ -51,7 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Register completion provider
   const completionProvider = new MeldCompletionProvider(analyzer);
   const completionRegistration = vscode.languages.registerCompletionItemProvider(
-    { language: 'meld' },
+    { language: 'mlld' },
     completionProvider,
     '@', '[', '{', '"', '#' // Trigger characters
   );
@@ -59,26 +59,26 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Analyze open documents on activation
   vscode.workspace.textDocuments.forEach(doc => {
-    if (doc.languageId === 'meld') {
+    if (doc.languageId === 'mlld') {
       analyzer.analyzeDocument(doc);
-    } else if (doc.fileName.endsWith('.md')) {
-      detectAndSetMeldMode(doc);
+    } else if (doc.fileName.endsWith('.md') && doc.languageId === 'markdown') {
+      detectAndSwitchToMLLD(doc);
     }
   });
 
   // Analyze documents when opened
   const openListener = vscode.workspace.onDidOpenTextDocument(doc => {
-    if (doc.languageId === 'meld') {
+    if (doc.languageId === 'mlld') {
       analyzer.analyzeDocument(doc);
-    } else if (doc.fileName.endsWith('.md')) {
-      detectAndSetMeldMode(doc);
+    } else if (doc.fileName.endsWith('.md') && doc.languageId === 'markdown') {
+      detectAndSwitchToMLLD(doc);
     }
   });
   context.subscriptions.push(openListener);
 
   // Re-analyze documents when changed
   const changeListener = vscode.workspace.onDidChangeTextDocument(event => {
-    if (event.document.languageId === 'meld') {
+    if (event.document.languageId === 'mlld') {
       analyzer.analyzeDocument(event.document);
     }
   });
@@ -86,7 +86,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Clear analysis when documents are closed
   const closeListener = vscode.workspace.onDidCloseTextDocument(doc => {
-    if (doc.languageId === 'meld') {
+    if (doc.languageId === 'mlld') {
       analyzer.clearDiagnostics(doc);
     }
   });
@@ -94,33 +94,44 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register configuration change handler
   vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration('meld')) {
-      console.log('Meld configuration changed');
+    if (e.affectsConfiguration('mlld')) {
+      console.log('MLLD configuration changed');
     }
   });
 }
 
 export function deactivate() {
-  console.log('Meld extension is now deactivated');
+  console.log('mlld extension is now deactivated');
 }
 
 /**
- * Detect if a markdown file contains Meld directives and switch to Meld mode
+ * Detect if a markdown file contains mlld directives and switch to mlld mode
  */
-function detectAndSetMeldMode(document: vscode.TextDocument) {
-  // Only check first 50 lines for performance
-  const linesToCheck = Math.min(50, document.lineCount);
+function detectAndSwitchToMLLD(document: vscode.TextDocument) {
+  // Only check first 100 lines for performance
+  const linesToCheck = Math.min(100, document.lineCount);
   const text = document.getText(new vscode.Range(0, 0, linesToCheck, 0));
   
-  // Check for Meld directives
-  const meldDirectivePattern = /^@(text|data|path|run|exec|add|import)\s+/m;
-  const meldCommentPattern = /^>>/m;
+  // Check for mlld directives - the only patterns that activate mlld processing
+  const mlldDirectivePattern = /^@(text|data|path|run|exec|add|import)\s+/m;
+  const hasMLLDContent = mlldDirectivePattern.test(text);
   
-  if (meldDirectivePattern.test(text) || meldCommentPattern.test(text)) {
-    // Found Meld content, switch to Meld mode
-    vscode.languages.setTextDocumentLanguage(document, 'meld').then(
-      () => console.log(`Switched ${document.fileName} to Meld mode`),
-      (err) => console.error(`Failed to switch to Meld mode: ${err}`)
+  if (hasMLLDContent) {
+    // Found mlld content, switch to mlld mode
+    vscode.languages.setTextDocumentLanguage(document, 'mlld').then(
+      () => {
+        console.log(`Auto-detected mlld content in ${document.fileName}`);
+        // Show notification
+        vscode.window.showInformationMessage(
+          'Detected mlld syntax. Switched to mlld mode.',
+          'Keep as Markdown'
+        ).then(selection => {
+          if (selection === 'Keep as Markdown') {
+            vscode.languages.setTextDocumentLanguage(document, 'markdown');
+          }
+        });
+      },
+      (err) => console.error(`Failed to switch to mlld mode: ${err}`)
     );
   }
 }

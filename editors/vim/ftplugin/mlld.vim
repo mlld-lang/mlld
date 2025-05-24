@@ -1,5 +1,5 @@
 " Vim filetype plugin file
-" Language: Meld
+" Language: MLLD
 
 if exists("b:did_ftplugin")
   finish
@@ -39,8 +39,8 @@ if exists("loaded_matchit")
   let b:match_words = '@\(text\|data\|path\|run\|exec\):=,\[\[:]]'
 endif
 
-" Commands for switching between Meld and Markdown
-command! -buffer MeldMode setlocal filetype=meld
+" Commands for switching between mlld and Markdown
+command! -buffer MlldMode setlocal filetype=mlld
 command! -buffer MarkdownMode setlocal filetype=markdown
 
 " Restore compatibility options

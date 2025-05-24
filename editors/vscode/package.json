@@ -1,9 +1,18 @@
 {
-  "name": "meld-vscode",
-  "displayName": "Meld",
-  "description": "Language support for Meld - A powerful markdown composition language",
+  "name": "mlld-vscode",
+  "displayName": "mlld",
+  "description": "Language support for mlld - A modular prompt scripting language",
   "version": "0.1.0",
-  "publisher": "meld-lang",
+  "publisher": "mlld-lang",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mlld-lang/mlld.git"
+  },
+  "homepage": "https://github.com/mlld-lang/mlld/tree/main/editors/vscode",
+  "bugs": {
+    "url": "https://github.com/mlld-lang/mlld/issues"
+  },
+  "license": "MIT",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -13,58 +22,58 @@
     "Formatters"
   ],
   "keywords": [
-    "meld",
+    "mlld",
     "markdown",
     "composition",
     "template"
   ],
   "icon": "images/icon.png",
   "activationEvents": [
-    "onLanguage:meld"
+    "onLanguage:mlld"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "languages": [
       {
-        "id": "meld",
+        "id": "mlld",
         "aliases": [
-          "Meld",
-          "meld"
+          "mlld",
+          "Mlld"
         ],
         "extensions": [
-          ".mld",
-          ".meld"
+          ".mlld",
+          ".mld"
         ],
         "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "meld",
-        "scopeName": "source.meld",
-        "path": "./syntaxes/meld.tmLanguage.json"
+        "language": "mlld",
+        "scopeName": "source.mlld",
+        "path": "./syntaxes/mlld.tmLanguage.json"
       }
     ],
     "snippets": [
       {
-        "language": "meld",
-        "path": "./snippets/meld.json"
+        "language": "mlld",
+        "path": "./snippets/mlld.json"
       }
     ],
     "configuration": {
-      "title": "Meld",
+      "title": "mlld",
       "properties": {
-        "meld.enableAutocomplete": {
+        "mlld.enableAutocomplete": {
           "type": "boolean",
           "default": true,
           "description": "Enable/disable autocomplete features"
         },
-        "meld.projectPath": {
+        "mlld.projectPath": {
           "type": "string",
           "default": null,
           "description": "Override @PROJECTPATH detection"
         },
-        "meld.includePaths": {
+        "mlld.includePaths": {
           "type": "array",
           "default": [],
           "description": "Additional paths for import resolution"
@@ -73,9 +82,9 @@
     },
     "commands": [
       {
-        "command": "meld.setMeldMode",
-        "title": "Meld: Set Language Mode to Meld",
-        "when": "resourceExtname == .md"
+        "command": "mlld.switchToMLLD",
+        "title": "mlld: Switch to mlld Mode",
+        "when": "resourceExtname == .md && editorLangId != mlld"
       }
     ]
   },

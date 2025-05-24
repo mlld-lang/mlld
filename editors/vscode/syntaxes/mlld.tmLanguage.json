@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "Meld",
-  "scopeName": "source.meld",
+  "name": "mlld",
+  "scopeName": "source.mlld",
   "patterns": [
     {
       "include": "#comments"
@@ -17,11 +17,11 @@
     "comments": {
       "patterns": [
         {
-          "name": "comment.line.double-angle.meld",
+          "name": "comment.line.double-angle.mlld",
           "match": "^\\s*(>>).*$",
           "captures": {
             "1": {
-              "name": "punctuation.definition.comment.meld"
+              "name": "punctuation.definition.comment.mlld"
             }
           }
         }
@@ -55,17 +55,17 @@
     "text-directive": {
       "patterns": [
         {
-          "name": "meta.directive.text.meld",
+          "name": "meta.directive.text.mlld",
           "begin": "(@text)\\s+(\\w+)\\s*(=)",
           "beginCaptures": {
             "1": {
-              "name": "keyword.control.directive.text.meld"
+              "name": "keyword.control.directive.text.mlld"
             },
             "2": {
-              "name": "variable.other.meld"
+              "name": "variable.other.mlld"
             },
             "3": {
-              "name": "keyword.operator.assignment.meld"
+              "name": "keyword.operator.assignment.mlld"
             }
           },
           "end": "(?=^(?!\\s)|^\\s*@|^\\s*>>)",
@@ -80,17 +80,17 @@
     "data-directive": {
       "patterns": [
         {
-          "name": "meta.directive.data.meld",
+          "name": "meta.directive.data.mlld",
           "begin": "(@data)\\s+([\\w\\.]+)\\s*(=)",
           "beginCaptures": {
             "1": {
-              "name": "keyword.control.directive.data.meld"
+              "name": "keyword.control.directive.data.mlld"
             },
             "2": {
-              "name": "variable.other.meld"
+              "name": "variable.other.mlld"
             },
             "3": {
-              "name": "keyword.operator.assignment.meld"
+              "name": "keyword.operator.assignment.mlld"
             }
           },
           "end": "(?=^(?!\\s)|^\\s*@|^\\s*>>)",
@@ -105,20 +105,20 @@
     "path-directive": {
       "patterns": [
         {
-          "name": "meta.directive.path.meld",
+          "name": "meta.directive.path.mlld",
           "match": "(@path)\\s+(\\w+)\\s*(=)\\s*(.+)$",
           "captures": {
             "1": {
-              "name": "keyword.control.directive.path.meld"
+              "name": "keyword.control.directive.path.mlld"
             },
             "2": {
-              "name": "variable.other.meld"
+              "name": "variable.other.mlld"
             },
             "3": {
-              "name": "keyword.operator.assignment.meld"
+              "name": "keyword.operator.assignment.mlld"
             },
             "4": {
-              "name": "string.unquoted.path.meld"
+              "name": "string.unquoted.path.mlld"
             }
           }
         }
@@ -127,17 +127,17 @@
     "run-directive": {
       "patterns": [
         {
-          "name": "meta.directive.run.meld",
+          "name": "meta.directive.run.mlld",
           "begin": "(@run)\\s+(\\w+)\\s*(=)",
           "beginCaptures": {
             "1": {
-              "name": "keyword.control.directive.run.meld"
+              "name": "keyword.control.directive.run.mlld"
             },
             "2": {
-              "name": "variable.other.meld"
+              "name": "variable.other.mlld"
             },
             "3": {
-              "name": "keyword.operator.assignment.meld"
+              "name": "keyword.operator.assignment.mlld"
             }
           },
           "end": "(?=^(?!\\s)|^\\s*@|^\\s*>>)",
@@ -152,17 +152,17 @@
     "exec-directive": {
       "patterns": [
         {
-          "name": "meta.directive.exec.meld",
+          "name": "meta.directive.exec.mlld",
           "begin": "(@exec)\\s+(\\w+)\\s*(=)",
           "beginCaptures": {
             "1": {
-              "name": "keyword.control.directive.exec.meld"
+              "name": "keyword.control.directive.exec.mlld"
             },
             "2": {
-              "name": "variable.other.meld"
+              "name": "variable.other.mlld"
             },
             "3": {
-              "name": "keyword.operator.assignment.meld"
+              "name": "keyword.operator.assignment.mlld"
             }
           },
           "end": "(?=^(?!\\s)|^\\s*@|^\\s*>>)",
@@ -177,20 +177,20 @@
     "add-directive": {
       "patterns": [
         {
-          "name": "meta.directive.add.template.meld",
+          "name": "meta.directive.add.template.mlld",
           "begin": "(@add)\\s+(template)\\s+(\\w+)\\s*(\\(([^)]*)\\))?",
           "beginCaptures": {
             "1": {
-              "name": "keyword.control.directive.add.meld"
+              "name": "keyword.control.directive.add.mlld"
             },
             "2": {
-              "name": "keyword.other.template.meld"
+              "name": "keyword.other.template.mlld"
             },
             "3": {
-              "name": "entity.name.function.meld"
+              "name": "entity.name.function.mlld"
             },
             "5": {
-              "name": "variable.parameter.meld"
+              "name": "variable.parameter.mlld"
             }
           },
           "end": "(?=^(?!\\s)|^\\s*@|^\\s*>>)",
@@ -201,47 +201,47 @@
           ]
         },
         {
-          "name": "meta.directive.add.section.meld",
+          "name": "meta.directive.add.section.mlld",
           "match": "(@add)\\s+\"([^\"]+)\"\\s+(from)\\s+\\[([^\\]]+)\\]",
           "captures": {
             "1": {
-              "name": "keyword.control.directive.add.meld"
+              "name": "keyword.control.directive.add.mlld"
             },
             "2": {
-              "name": "string.quoted.double.section-name.meld"
+              "name": "string.quoted.double.section-name.mlld"
             },
             "3": {
-              "name": "keyword.other.from.meld"
+              "name": "keyword.other.from.mlld"
             },
             "4": {
-              "name": "string.unquoted.path.meld"
+              "name": "string.unquoted.path.mlld"
             }
           }
         },
         {
-          "name": "meta.directive.add.path.meld",
+          "name": "meta.directive.add.path.mlld",
           "match": "(@add)\\s+\\[([^\\]]+)\\]",
           "captures": {
             "1": {
-              "name": "keyword.control.directive.add.meld"
+              "name": "keyword.control.directive.add.mlld"
             },
             "2": {
-              "name": "string.unquoted.path.meld"
+              "name": "string.unquoted.path.mlld"
             }
           }
         },
         {
-          "name": "meta.directive.add.template-invocation.meld",
+          "name": "meta.directive.add.template-invocation.mlld",
           "match": "(@add)\\s+(\\w+)\\s*(\\(([^)]*)\\))?",
           "captures": {
             "1": {
-              "name": "keyword.control.directive.add.meld"
+              "name": "keyword.control.directive.add.mlld"
             },
             "2": {
-              "name": "entity.name.function.meld"
+              "name": "entity.name.function.mlld"
             },
             "4": {
-              "name": "variable.parameter.meld"
+              "name": "variable.parameter.mlld"
             }
           }
         }
@@ -250,35 +250,35 @@
     "import-directive": {
       "patterns": [
         {
-          "name": "meta.directive.import.all.meld",
+          "name": "meta.directive.import.all.mlld",
           "match": "(@import)\\s+\\*\\s+(from)\\s+\\[([^\\]]+)\\]",
           "captures": {
             "1": {
-              "name": "keyword.control.directive.import.meld"
+              "name": "keyword.control.directive.import.mlld"
             },
             "2": {
-              "name": "keyword.other.from.meld"
+              "name": "keyword.other.from.mlld"
             },
             "3": {
-              "name": "string.unquoted.path.meld"
+              "name": "string.unquoted.path.mlld"
             }
           }
         },
         {
-          "name": "meta.directive.import.selected.meld",
+          "name": "meta.directive.import.selected.mlld",
           "match": "(@import)\\s+\\{([^}]+)\\}\\s+(from)\\s+\\[([^\\]]+)\\]",
           "captures": {
             "1": {
-              "name": "keyword.control.directive.import.meld"
+              "name": "keyword.control.directive.import.mlld"
             },
             "2": {
-              "name": "variable.other.meld"
+              "name": "variable.other.mlld"
             },
             "3": {
-              "name": "keyword.other.from.meld"
+              "name": "keyword.other.from.mlld"
             },
             "4": {
-              "name": "string.unquoted.path.meld"
+              "name": "string.unquoted.path.mlld"
             }
           }
         }
@@ -287,23 +287,23 @@
     "text-value": {
       "patterns": [
         {
-          "name": "string.quoted.double.meld",
+          "name": "string.quoted.double.mlld",
           "begin": "\"",
           "end": "\"",
           "patterns": [
             {
-              "name": "constant.character.escape.meld",
+              "name": "constant.character.escape.mlld",
               "match": "\\\\."
             }
           ]
         },
         {
-          "name": "string.quoted.single.meld",
+          "name": "string.quoted.single.mlld",
           "begin": "'",
           "end": "'",
           "patterns": [
             {
-              "name": "constant.character.escape.meld",
+              "name": "constant.character.escape.mlld",
               "match": "\\\\."
             }
           ]
@@ -332,20 +332,20 @@
     "json-value": {
       "patterns": [
         {
-          "name": "constant.language.meld",
+          "name": "constant.language.mlld",
           "match": "\\b(true|false|null)\\b"
         },
         {
-          "name": "constant.numeric.meld",
+          "name": "constant.numeric.mlld",
           "match": "-?\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b"
         },
         {
-          "name": "string.quoted.double.json.meld",
+          "name": "string.quoted.double.json.mlld",
           "begin": "\"",
           "end": "\"",
           "patterns": [
             {
-              "name": "constant.character.escape.meld",
+              "name": "constant.character.escape.mlld",
               "match": "\\\\."
             }
           ]
@@ -373,14 +373,14 @@
     "json-object-content": {
       "patterns": [
         {
-          "name": "meta.object-member.meld",
+          "name": "meta.object-member.mlld",
           "match": "(\"[^\"]*\")\\s*(:)",
           "captures": {
             "1": {
-              "name": "support.type.property-name.json.meld"
+              "name": "support.type.property-name.json.mlld"
             },
             "2": {
-              "name": "punctuation.separator.dictionary.key-value.json.meld"
+              "name": "punctuation.separator.dictionary.key-value.json.mlld"
             }
           }
         },
@@ -392,20 +392,20 @@
     "code-block": {
       "patterns": [
         {
-          "name": "meta.embedded.block.shell.meld",
+          "name": "meta.embedded.block.shell.mlld",
           "begin": "```(bash|sh|shell)?\\s*$",
           "beginCaptures": {
             "0": {
-              "name": "punctuation.definition.code.meld"
+              "name": "punctuation.definition.code.mlld"
             },
             "1": {
-              "name": "constant.other.language.meld"
+              "name": "constant.other.language.mlld"
             }
           },
           "end": "^\\s*```\\s*$",
           "endCaptures": {
             "0": {
-              "name": "punctuation.definition.code.meld"
+              "name": "punctuation.definition.code.mlld"
             }
           },
           "patterns": [
@@ -415,20 +415,20 @@
           ]
         },
         {
-          "name": "meta.embedded.block.javascript.meld",
+          "name": "meta.embedded.block.javascript.mlld",
           "begin": "```(javascript|js|node)?\\s*$",
           "beginCaptures": {
             "0": {
-              "name": "punctuation.definition.code.meld"
+              "name": "punctuation.definition.code.mlld"
             },
             "1": {
-              "name": "constant.other.language.meld"
+              "name": "constant.other.language.mlld"
             }
           },
           "end": "^\\s*```\\s*$",
           "endCaptures": {
             "0": {
-              "name": "punctuation.definition.code.meld"
+              "name": "punctuation.definition.code.mlld"
             }
           },
           "patterns": [
@@ -438,7 +438,7 @@
           ]
         },
         {
-          "name": "string.unquoted.code.meld",
+          "name": "string.unquoted.code.mlld",
           "match": ".+"
         }
       ]
@@ -446,17 +446,17 @@
     "template-content": {
       "patterns": [
         {
-          "name": "meta.template.meld",
+          "name": "meta.template.mlld",
           "begin": "\\[\\[",
           "beginCaptures": {
             "0": {
-              "name": "punctuation.definition.template.begin.meld"
+              "name": "punctuation.definition.template.begin.mlld"
             }
           },
           "end": "\\]\\]",
           "endCaptures": {
             "0": {
-              "name": "punctuation.definition.template.end.meld"
+              "name": "punctuation.definition.template.end.mlld"
             }
           },
           "patterns": [
@@ -470,11 +470,11 @@
     "variable-interpolation": {
       "patterns": [
         {
-          "name": "variable.other.interpolation.meld",
+          "name": "variable.other.interpolation.mlld",
           "match": "\\{\\{(\\w+)\\}\\}",
           "captures": {
             "1": {
-              "name": "variable.other.meld"
+              "name": "variable.other.mlld"
             }
           }
         }
@@ -483,17 +483,17 @@
     "path-reference": {
       "patterns": [
         {
-          "name": "meta.path-reference.section.meld",
+          "name": "meta.path-reference.section.mlld",
           "begin": "\\[([^\\]#]+)(#)([^\\]]+)\\]",
           "beginCaptures": {
             "1": {
-              "name": "string.unquoted.path.meld"
+              "name": "string.unquoted.path.mlld"
             },
             "2": {
-              "name": "punctuation.separator.section.meld"
+              "name": "punctuation.separator.section.mlld"
             },
             "3": {
-              "name": "entity.name.section.meld"
+              "name": "entity.name.section.mlld"
             }
           },
           "end": "(?=\\s*(?:as\\s+\"|$))",
@@ -504,11 +504,11 @@
           ]
         },
         {
-          "name": "meta.path-reference.meld",
+          "name": "meta.path-reference.mlld",
           "match": "\\[([^\\]]+)\\]",
           "captures": {
             "1": {
-              "name": "string.unquoted.path.meld"
+              "name": "string.unquoted.path.mlld"
             }
           }
         }
@@ -517,14 +517,14 @@
     "section-rename": {
       "patterns": [
         {
-          "name": "meta.section-rename.meld",
+          "name": "meta.section-rename.mlld",
           "match": "(as)\\s+(\"[^\"]+\")",
           "captures": {
             "1": {
-              "name": "keyword.other.as.meld"
+              "name": "keyword.other.as.mlld"
             },
             "2": {
-              "name": "string.quoted.double.section-name.meld"
+              "name": "string.quoted.double.section-name.mlld"
             }
           }
         }
@@ -533,14 +533,14 @@
     "run-reference": {
       "patterns": [
         {
-          "name": "meta.run-reference.meld",
+          "name": "meta.run-reference.mlld",
           "match": "(@)(\\w+)",
           "captures": {
             "1": {
-              "name": "punctuation.definition.variable.meld"
+              "name": "punctuation.definition.variable.mlld"
             },
             "2": {
-              "name": "variable.other.meld"
+              "name": "variable.other.mlld"
             }
           }
         }

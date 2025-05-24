@@ -1,10 +1,10 @@
-# Meld Syntax Highlighting for Vim
+# mlld Syntax Highlighting for Vim
 
-This plugin provides syntax highlighting and filetype support for Meld files in Vim/Neovim.
+This plugin provides syntax highlighting and filetype support for mlld files in Vim/Neovim.
 
 ## Features
 
-- Syntax highlighting for all Meld directives (`@text`, `@data`, `@path`, `@run`, `@exec`, `@add`, `@import`)
+- Syntax highlighting for all mlld directives (`@text`, `@data`, `@path`, `@run`, `@exec`, `@add`, `@import`)
 - Variable highlighting and references
 - Template interpolation with `{{variable}}` syntax
 - Code block highlighting with language detection
@@ -76,14 +76,15 @@ cp -r indent ~/.config/nvim/
 ## Usage
 
 The plugin automatically activates for:
-- Files with `.mld` or `.meld` extensions
-- Markdown files (`.md`) that contain Meld directives or `>>` comments
+- `.mlld` and `.mld` files (always treated as mlld)
+- `.md` files that contain mlld directives:
+  - Only when lines start with: `@text`, `@data`, `@path`, `@run`, `@exec`, `@add`, or `@import`
 
 ### Manual Mode Switching
 
-You can manually switch between Meld and Markdown modes:
-- `:MeldMode` - Switch current buffer to Meld syntax
-- `:MarkdownMode` - Switch current buffer back to Markdown syntax
+For markdown files, you can manually switch modes:
+- `:MlldMode` - Force current buffer to use mlld syntax
+- `:MarkdownMode` - Switch to standard Markdown syntax
 
 ### Key Features
 
@@ -191,4 +192,4 @@ Feel free to submit issues or pull requests to improve the syntax highlighting o
 
 ## License
 
-Same as the Meld project license.
+Same as the mlld project license.

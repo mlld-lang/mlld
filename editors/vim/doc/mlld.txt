@@ -1,20 +1,20 @@
-*meld.txt*  Meld syntax highlighting and filetype plugin
+*mlld.txt*  mlld syntax highlighting and filetype plugin
 
-CONTENTS                                        *meld-contents*
+CONTENTS                                        *mlld-contents*
 
-1. Introduction ................. |meld-intro|
-2. Syntax ....................... |meld-syntax|
-3. Configuration ................ |meld-config|
-4. Commands ..................... |meld-commands|
-
-==============================================================================
-1. INTRODUCTION                                 *meld-intro*
-
-Meld is a powerful markdown composition language. This plugin provides syntax
-highlighting and filetype support for Meld files (.mld, .meld).
+1. Introduction ................. |mlld-intro|
+2. Syntax ....................... |mlld-syntax|
+3. Configuration ................ |mlld-config|
+4. Commands ..................... |mlld-commands|
 
 ==============================================================================
-2. SYNTAX                                       *meld-syntax*
+1. INTRODUCTION                                 *mlld-intro*
+
+mlld is a modular prompt scripting language. This plugin provides syntax
+highlighting and filetype support for mlld files (.mlld, .mld).
+
+==============================================================================
+2. SYNTAX                                       *mlld-syntax*
 
 The following elements are highlighted:
 
@@ -39,20 +39,20 @@ Special~
     ```lang     Code block
 
 ==============================================================================
-3. CONFIGURATION                                *meld-config*
+3. CONFIGURATION                                *mlld-config*
 
 Options that can be set in your vimrc:
 
-                                                *g:meld_fold_enable*
-g:meld_fold_enable      Enable folding for code blocks and data structures
+                                                *g:mlld_fold_enable*
+g:mlld_fold_enable      Enable folding for code blocks and data structures
                         Default: 1
 
 Example: >
-    let g:meld_fold_enable = 0
+    let g:mlld_fold_enable = 0
 <
 
 ==============================================================================
-4. COMMANDS                                     *meld-commands*
+4. COMMANDS                                     *mlld-commands*
 
 This plugin provides no special commands. Use standard Vim commands:
 

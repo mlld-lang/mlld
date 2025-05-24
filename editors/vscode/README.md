@@ -1,16 +1,19 @@
-# Meld Language Support for VSCode
+# mlld Language Support for VSCode
 
-This extension provides rich language support for Meld, a powerful markdown composition language.
+This extension provides rich language support for mlld, a modular prompt scripting language.
 
 ## Features
 
-### Automatic Detection for Markdown Files
-- Automatically detects `.md` files containing Meld directives
-- Switches to Meld mode when `@` directives or `>>` comments are found
-- Use Command Palette: "Meld: Set Language Mode to Meld" to manually switch
+### Intelligent File Detection
+- `.mlld` and `.mld` files are always treated as mlld
+- `.md` files are automatically detected:
+  - Switches to mlld mode only when mlld directives are found
+  - Detection looks for: `@text`, `@data`, `@path`, `@run`, `@exec`, `@add`, or `@import`
+  - Shows a notification allowing you to keep it as markdown if preferred
+  - Use Command Palette: "mlld: Switch to mlld Mode" to manually switch
 
 ### Syntax Highlighting
-- Full syntax highlighting for all Meld directives
+- Full syntax highlighting for all MLLD directives
 - Variable highlighting with `@variableName` and `{{variableName}}` patterns
 - Embedded code block highlighting (JavaScript, Shell)
 - Comment highlighting with `>>` prefix
@@ -19,7 +22,7 @@ This extension provides rich language support for Meld, a powerful markdown comp
 - **Autocomplete**: Path completion, variable completion, section headers
 - **Go to Definition**: Navigate to variable declarations
 - **Hover Information**: See variable values and types
-- **Error Checking**: Real-time syntax validation using the Meld parser
+- **Error Checking**: Real-time syntax validation using the MLLD parser
 
 ## Supported Directives
 
@@ -35,9 +38,9 @@ This extension provides rich language support for Meld, a powerful markdown comp
 
 This extension contributes the following settings:
 
-* `meld.enableAutocomplete`: Enable/disable autocomplete features
-* `meld.projectPath`: Override @PROJECTPATH detection
-* `meld.includePaths`: Additional paths for import resolution
+* `mlld.enableAutocomplete`: Enable/disable autocomplete features
+* `mlld.projectPath`: Override @PROJECTPATH detection
+* `mlld.includePaths`: Additional paths for import resolution
 
 ## Known Issues
 
