@@ -1,0 +1,184 @@
+{
+  "name": "text-assignment-add-section-bracket-rename",
+  "description": "Test fixture for text/assignment-add",
+  "category": "text",
+  "subcategory": "assignment-add",
+  "input": "@text intro = @add [file.md # Original Title] as \"# Renamed Section\"\n@add @intro",
+  "expected": "# Renamed Section\nContent under this section",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "d9282c08-7592-4e12-9291-ec232456d9b7",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 68,
+          "line": 1,
+          "column": 69
+        }
+      },
+      "kind": "text",
+      "subtype": "textPathSection",
+      "source": "directive",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "fff27b64-e670-42c6-84b2-90a567cbbb9e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "intro"
+          }
+        ],
+        "section": [
+          {
+            "type": "Text",
+            "nodeId": "63f081e4-83f6-408e-afe6-065b5c2a6378",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 68,
+                "line": 1,
+                "column": 69
+              }
+            },
+            "content": "Original Title"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "dc714f17-fcdb-409c-9b28-7c5d848779f7",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 68,
+                "line": 1,
+                "column": 69
+              }
+            },
+            "content": "file.md"
+          }
+        ],
+        "rename": [
+          {
+            "type": "Text",
+            "nodeId": "0ebecd5a-41a9-464b-99d8-fc19e84c47b2",
+            "location": {
+              "start": {
+                "offset": 49,
+                "line": 1,
+                "column": 50
+              },
+              "end": {
+                "offset": 68,
+                "line": 1,
+                "column": 69
+              }
+            },
+            "content": "# Renamed Section"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "intro",
+        "section": "Original Title",
+        "path": "file.md",
+        "rename": "# Renamed Section"
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "add",
+        "hasRename": true,
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "c6aec4b4-1f65-44d7-8b1d-bfb2a743d111",
+      "location": {
+        "start": {
+          "offset": 68,
+          "line": 1,
+          "column": 69
+        },
+        "end": {
+          "offset": 69,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "db555992-aab0-4093-8dd2-4f22a2422f32",
+      "location": {
+        "start": {
+          "offset": 69,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 80,
+          "line": 2,
+          "column": 12
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "d01fca83-067e-41d5-a3ac-8d13c8309137",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "intro"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@intro"
+      },
+      "meta": {}
+    }
+  ]
+}

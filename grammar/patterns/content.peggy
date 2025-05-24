@@ -72,6 +72,7 @@ BracketVar
       return node;
     }
 
+
 // Content inside double brackets with {{var}} interpolation
 DoubleBracketContent "Content with {{var}} interpolation"
   = '[[' parts:(InterpolationVar / TemplateTextSegment)* ']]' {

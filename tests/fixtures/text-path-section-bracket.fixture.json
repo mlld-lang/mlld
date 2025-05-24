@@ -1,0 +1,100 @@
+{
+  "name": "text-path-section-bracket",
+  "description": "Test fixture for text/path",
+  "category": "text",
+  "subcategory": "path",
+  "input": "@text sectionContent = [file.md # Section 1]",
+  "expected": "",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "ff92db02-1d9e-4874-8254-f637d277e081",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 44,
+          "line": 1,
+          "column": 45
+        }
+      },
+      "kind": "text",
+      "subtype": "textPathSection",
+      "source": "section",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "9a9e890f-c181-4d5e-ab4e-5086a03ee558",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "sectionContent"
+          }
+        ],
+        "section": [
+          {
+            "type": "Text",
+            "nodeId": "26748fb6-c941-4933-8858-2da0a5eb6819",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 44,
+                "line": 1,
+                "column": 45
+              }
+            },
+            "content": "Section 1"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "d79dde20-05b2-40f8-9ef2-381cf7d9a0cd",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 44,
+                "line": 1,
+                "column": 45
+              }
+            },
+            "content": "file.md"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "sectionContent",
+        "section": "Section 1",
+        "path": "file.md"
+      },
+      "meta": {
+        "sourceType": "section",
+        "hasRename": false,
+        "hasVariables": false
+      }
+    }
+  ]
+}

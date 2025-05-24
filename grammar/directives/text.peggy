@@ -3,8 +3,60 @@
 
 // Primary @text directive
 AtText
+  // Bracketed path with section: [path/to/file.md # Section] - must come first for precedence
+  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ '[' pathText:$([^#\]]+) '#' _ sectionText:$([^\]]+) ']' rename:AsNewTitle? {
+      helpers.debug('AtText matched bracketed path section', { id, pathText, sectionText, rename });
+      
+      const subtype = 'textPathSection';
+      const sourceType = 'section';
+      
+      const rawPath = pathText.trim();
+      
+      // Parse the path text into parts (simplified)
+      const pathParts = [helpers.createNode(NodeType.Text, { content: rawPath, location: location() })];
+      
+      // Create values object with section and path
+      const values = {
+        identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+        section: [helpers.createNode(NodeType.Text, { content: sectionText.trim(), location: location() })],
+        path: pathParts
+      };
+      
+      // Add rename if present
+      if (rename) {
+        values.rename = rename;
+      }
+      
+      // Create raw object
+      const raw = {
+        identifier: id,
+        section: sectionText.trim(),
+        path: rawPath
+      };
+      
+      if (rename) {
+        raw.rename = helpers.reconstructRawString(rename);
+      }
+      
+      // Create meta object
+      const meta = { 
+        sourceType: sourceType,
+        hasRename: !!rename,
+        hasVariables: false // Simplified for now
+      };
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        values,
+        raw,
+        meta,
+        location(),
+        sourceType
+      );
+    }
   // Section extraction - must come first to avoid quoted string being matched as template
-  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ section:SectionExtractionCore {
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ section:SectionExtractionCore {
       helpers.debug('AtText matched section extraction', { id, section });
       
       const subtype = section.rename ? 'textPathSection' : 'textPathSection';
@@ -119,6 +171,59 @@ AtText
           identifier: id,
           content: template.raw.content
         },
+        meta,
+        location(),
+        sourceType
+      );
+    }
+  // @add directive with bracketed path section: @text var = @add [path/to/file.md # Section]
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ '[' pathText:$([^#\]]+) '#' _ sectionText:$([^\]]+) ']' rename:AsNewTitle? {
+      helpers.debug('AtText matched @add with bracketed path section', { id, pathText, sectionText, rename });
+      
+      const subtype = 'textPathSection';
+      const sourceType = 'directive';
+      
+      const rawPath = pathText.trim();
+      
+      // Parse the path text into parts (simplified)
+      const pathParts = [helpers.createNode(NodeType.Text, { content: rawPath, location: location() })];
+      
+      // Create values object with section and path
+      const values = {
+        identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+        section: [helpers.createNode(NodeType.Text, { content: sectionText.trim(), location: location() })],
+        path: pathParts
+      };
+      
+      // Add rename if present
+      if (rename) {
+        values.rename = rename;
+      }
+      
+      // Create raw object
+      const raw = {
+        identifier: id,
+        section: sectionText.trim(),
+        path: rawPath
+      };
+      
+      if (rename) {
+        raw.rename = helpers.reconstructRawString(rename);
+      }
+      
+      // Create meta object
+      const meta = { 
+        sourceType: sourceType,
+        directive: 'add',
+        hasRename: !!rename,
+        hasVariables: false // Simplified for now
+      };
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        values,
+        raw,
         meta,
         location(),
         sourceType

@@ -85,6 +85,32 @@ Content from file
 
 ### Add Section
 
+#### Bracket rename Variant
+
+**Input:**
+```meld
+@add [file.md # Original Title] as "# New Title"
+```
+
+**Expected Output:**
+```markdown
+# New Title
+Content under this section
+```
+
+#### Bracket Variant
+
+**Input:**
+```meld
+@add [file.md # Section Title]
+```
+
+**Expected Output:**
+```markdown
+# Section Title
+Content under this section
+```
+
 #### Rename Variant
 
 **Input:**
@@ -562,6 +588,35 @@ Hello, world!
 
 ### Text Assignment add
 
+#### Section bracket rename Variant
+
+**Input:**
+```meld
+@text intro = @add [file.md # Original Title] as "# Renamed Section"
+@add @intro
+```
+
+**Expected Output:**
+```markdown
+# Renamed Section
+Content under this section
+```
+
+#### Section bracket Variant
+
+**Input:**
+```meld
+@text intro = @add [file.md # Section 1]
+@add @intro
+```
+
+**Expected Output:**
+```markdown
+## Section 1
+### Subsection 1.1
+Content from file
+```
+
 **Input:**
 ```meld
 @text content = [file.md]
@@ -600,6 +655,20 @@ Command output
 ```
 
 ### Text Path
+
+#### Section bracket rename Variant
+
+**Input:**
+```meld
+@text sectionContent = [file.md # Original Title] as "# Modified Title"
+```
+
+#### Section bracket Variant
+
+**Input:**
+```meld
+@text sectionContent = [file.md # Section 1]
+```
 
 **Input:**
 ```meld

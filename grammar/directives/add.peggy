@@ -21,7 +21,58 @@ It can be used in these forms:
 
 // Primary @add directive with all variants
 AtAdd
-  = DirectiveContext "@add" _ sectionTitle:QuotedContent _ "from" _ path:PathCore _ asTitle:AsNewTitle? {
+  // Bracketed path with section: [path/to/file.md # Section] - must come first for precedence  
+  = DirectiveContext "@add" _ !'[[' '[' pathText:$([^#\]]+) '#' _ sectionText:$([^\]]+) ']' rename:AsNewTitle? {
+      helpers.debug('AtAdd matched bracketed path section', { pathText, sectionText, rename });
+      
+      const rawPath = pathText.trim();
+      
+      // Parse the path text into parts (this is simplified - in real implementation you'd want proper parsing)
+      const pathParts = [helpers.createNode(NodeType.Text, { content: rawPath, location: location() })];
+      
+      // Create values object
+      const values = {
+        sectionTitle: [helpers.createNode(NodeType.Text, { content: sectionText.trim(), location: location() })],
+        path: pathParts
+      };
+      
+      // Add new title if provided
+      if (rename) {
+        values.newTitle = rename;
+      }
+      
+      // Create raw object
+      const raw = {
+        sectionTitle: sectionText.trim(),
+        path: rawPath
+      };
+      
+      // Add new title to raw if present
+      if (rename) {
+        raw.newTitle = rename[0].content;
+      }
+      
+      // Create meta object with path metadata
+      const meta = {
+        path: {
+          hasVariables: false, // Simplified for now
+          isAbsolute: rawPath.startsWith('/'),
+          hasExtension: /\.[a-zA-Z0-9]+$/.test(rawPath),
+          extension: rawPath.match(/\.([a-zA-Z0-9]+)$/)?.[1] || null
+        }
+      };
+      
+      return helpers.createStructuredDirective(
+        'add', 
+        'addPathSection', 
+        values, 
+        raw, 
+        meta, 
+        location(),
+        'section'  // Added source parameter
+      );
+    }
+  / DirectiveContext "@add" _ sectionTitle:QuotedContent _ "from" _ path:PathCore _ asTitle:AsNewTitle? {
       // This rule should match section syntax FIRST before the template rule below
       helpers.debug('AtAdd matched section', { sectionTitle, path, asTitle });
       
@@ -257,7 +308,7 @@ AtAdd
         'variable'  // Added source parameter
       );
     }
-  / DirectiveContext "@add" _ !("[[") path:PathCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "@add" _ !("[[") !(BracketWithSection) path:PathCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched path', { path, headerLevel, underHeader });
       
       // Extract header level and under header if provided
@@ -390,7 +441,9 @@ AsNewTitle
       return title;
     }
 
-
+// Helper to check if we have a bracketed path with section
+BracketWithSection
+  = '[' [^\]]* '#' [^\]]* ']'
 
 // Helper rule for template invocation arguments
 TemplateArgsList

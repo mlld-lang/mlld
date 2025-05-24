@@ -1,0 +1,101 @@
+{
+  "name": "add-section-bracket-rename",
+  "description": "Test fixture for add/section",
+  "category": "add",
+  "subcategory": "section",
+  "input": "@add [file.md # Original Title] as \"# New Title\"",
+  "expected": "# New Title\nContent under this section",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "bc82c2af-64ab-403d-a360-1a3bca9ca183",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 48,
+          "line": 1,
+          "column": 49
+        }
+      },
+      "kind": "add",
+      "subtype": "addPathSection",
+      "source": "section",
+      "values": {
+        "sectionTitle": [
+          {
+            "type": "Text",
+            "nodeId": "44bf3260-a9ea-4abd-8ec3-069b6dd95d4e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 48,
+                "line": 1,
+                "column": 49
+              }
+            },
+            "content": "Original Title"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "0dac3542-2532-4b5f-b7fe-79b87e3d934e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 48,
+                "line": 1,
+                "column": 49
+              }
+            },
+            "content": "file.md"
+          }
+        ],
+        "newTitle": [
+          {
+            "type": "Text",
+            "nodeId": "5199e90c-9ccb-41f5-9490-31a3aed1b18f",
+            "location": {
+              "start": {
+                "offset": 35,
+                "line": 1,
+                "column": 36
+              },
+              "end": {
+                "offset": 48,
+                "line": 1,
+                "column": 49
+              }
+            },
+            "content": "# New Title"
+          }
+        ]
+      },
+      "raw": {
+        "sectionTitle": "Original Title",
+        "path": "file.md",
+        "newTitle": "# New Title"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "md"
+        }
+      }
+    }
+  ]
+}

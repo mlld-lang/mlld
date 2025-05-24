@@ -1,0 +1,164 @@
+{
+  "name": "text-assignment-add-section-bracket",
+  "description": "Test fixture for text/assignment-add",
+  "category": "text",
+  "subcategory": "assignment-add",
+  "input": "@text intro = @add [file.md # Section 1]\n@add @intro",
+  "expected": "## Section 1\n### Subsection 1.1\nContent from file",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "dd2c985e-1409-4188-a11a-dae7a0edc5d3",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 40,
+          "line": 1,
+          "column": 41
+        }
+      },
+      "kind": "text",
+      "subtype": "textPathSection",
+      "source": "directive",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "c3d83cd4-0fb0-4133-9804-fb6911fd7233",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "intro"
+          }
+        ],
+        "section": [
+          {
+            "type": "Text",
+            "nodeId": "b76c3363-38e6-4a87-ac3c-0f4cef6f7577",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 40,
+                "line": 1,
+                "column": 41
+              }
+            },
+            "content": "Section 1"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "56efcbcf-6264-4280-a643-014bfeffec54",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 40,
+                "line": 1,
+                "column": 41
+              }
+            },
+            "content": "file.md"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "intro",
+        "section": "Section 1",
+        "path": "file.md"
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "add",
+        "hasRename": false,
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "333ea270-494e-428a-a972-224892653b0e",
+      "location": {
+        "start": {
+          "offset": 40,
+          "line": 1,
+          "column": 41
+        },
+        "end": {
+          "offset": 41,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "6373cef0-54b0-46ec-94c0-139a1c7255d7",
+      "location": {
+        "start": {
+          "offset": 41,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 52,
+          "line": 2,
+          "column": 12
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "44ee12f2-4de1-4ee0-a4ea-f5517eb1c23d",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "intro"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@intro"
+      },
+      "meta": {}
+    }
+  ]
+}

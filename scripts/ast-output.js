@@ -7,7 +7,7 @@
  */
 
 import fs from 'node:fs/promises';
-import { parse } from '../core/ast/grammar/parser.js';  // adjust path if needed
+import { parse } from '../grammar/parser/parser.js';  // adjust path if needed
 
 // ---------- CLI parsing ----------
 const argv = process.argv.slice(2);
