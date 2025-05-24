@@ -1,12 +1,14 @@
 import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
+import { parseDataValue, needsEvaluation, extractPlainValue } from './data-value-parser';
+import { createDataVariable, createComplexDataVariable } from '@core/types/variables';
 
 /**
  * Evaluate @data directives.
- * The simplest evaluator - data is already parsed in the AST.
+ * Now supports complex data with embedded directives, variable references, and templates.
  * 
- * Ported from DataDirectiveHandler.
+ * Ported from DataDirectiveHandler with complex data support.
  */
 export async function evaluateData(
   directive: DirectiveNode,
@@ -20,74 +22,46 @@ export async function evaluateData(
   
   // Data is already parsed in the AST!
   // Value can be either an array element or a direct object/array
-  let value = directive.values?.value;
-  if (Array.isArray(value)) {
-    value = value[0];
+  let rawValue = directive.values?.value;
+  if (Array.isArray(rawValue) && rawValue.length === 1) {
+    rawValue = rawValue[0];
   }
-  if (value === undefined) {
+  if (rawValue === undefined) {
     throw new Error('Data directive missing value');
   }
   
-  // Recursively handle parsed objects and arrays
-  function extractValue(val: any): any {
-    if (typeof val === 'object' && val !== null) {
-      if (val.type === 'object' && val.properties) {
-        // Extract nested objects
-        const result: any = {};
-        for (const [key, nestedVal] of Object.entries(val.properties)) {
-          result[key] = extractValue(nestedVal);
-        }
-        return result;
-      } else if (val.type === 'array' && (val.elements || val.items)) {
-        // Extract arrays
-        const items = val.elements || val.items;
-        return items.map((item: any) => extractValue(item));
-      }
-    }
-    return val;
-  }
+  // Parse the value into our DataValue structure
+  const dataValue = parseDataValue(rawValue);
   
-  value = extractValue(value);
+  // Check if this data contains any complex values that need evaluation
+  const isComplex = needsEvaluation(dataValue);
   
   // Handle field access in identifier (e.g., greeting.text)
   const parts = identifier.split('.');
   const varName = parts[0];
   
   if (parts.length === 1) {
-    // Simple variable
-    const variable = {
-      type: 'data' as const,
-      name: varName,
-      value: value
-    };
-    env.setVariable(varName, variable);
-  } else {
-    // Nested field access - need to build up the object structure
-    let obj: any = {};
-    let current = obj;
-    
-    for (let i = 1; i < parts.length - 1; i++) {
-      current[parts[i]] = {};
-      current = current[parts[i]];
-    }
-    current[parts[parts.length - 1]] = value;
-    
-    // Check if variable already exists
-    const existing = env.getVariable(varName);
-    if (existing && existing.type === 'data') {
-      // Merge with existing object
-      Object.assign(existing.value, obj);
+    // Simple variable assignment
+    if (isComplex) {
+      // Create a complex data variable that supports lazy evaluation
+      const variable = createComplexDataVariable(varName, dataValue);
+      env.setVariable(varName, variable);
     } else {
-      // Create new variable
-      const variable = {
-        type: 'data' as const,
-        name: varName,
-        value: obj
-      };
+      // Create a simple data variable for primitive/static values
+      // Extract the plain value for simple data
+      const plainValue = extractPlainValue(dataValue);
+      const variable = createDataVariable(varName, plainValue);
       env.setVariable(varName, variable);
     }
+  } else {
+    // Nested field access - need to build up the object structure
+    // For complex data, we need to handle this differently
+    throw new Error(
+      'Field access in @data identifier not yet supported with complex values. ' +
+      'Use a simple identifier and access fields when referencing the variable.'
+    );
   }
   
-  // Return the parsed value
-  return { value, env };
+  // Data directives produce no output
+  return { value: '', env };
 }

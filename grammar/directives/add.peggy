@@ -386,7 +386,7 @@ UnderHeader
 
 // Helper rule for the "as newTitle" part of the Section add directive
 AsNewTitle
-  = _ "as" _ title:QuotedContent {
+  = _ "as" _ title:QuotedSectionTitle {
       return title;
     }
 

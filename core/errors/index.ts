@@ -13,7 +13,8 @@ export { MeldFileNotFoundError } from './MeldFileNotFoundError';
 export { MeldOutputError } from './MeldOutputError';
 export { MeldDirectiveError } from './MeldDirectiveError';
 export { PathValidationError } from './PathValidationError';
-export { ServiceInitializationError } from './ServiceInitializationError'; 
+export { ServiceInitializationError } from './ServiceInitializationError';
+export { DataEvaluationError } from './DataEvaluationError';
 
 // Export error message collections
 export * from './messages/index'; 
@@ -24,6 +25,7 @@ export * from './VariableResolutionError';
 export * from './PathValidationError';
 export * from './MeldResolutionError';
 export * from './MeldFileNotFoundError';
+export * from './DataEvaluationError';
 // ... other specific errors 
 
 // Define and export shared error codes

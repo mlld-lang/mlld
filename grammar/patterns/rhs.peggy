@@ -41,6 +41,25 @@ TextRHS
       helpers.debug('TextRHS matched @add reference');
       return { type: 'directive', directive: 'add' };
     }
+  / section:SectionExtractionCore {
+      // Handle section extraction (e.g., "## Setup" from [file.md])
+      helpers.debug('TextRHS matched section extraction', { section });
+      return { 
+        type: 'section',
+        section: section.section,
+        path: section.path,
+        rename: section.rename,
+        meta: section.meta
+      };
+    }
+  / path:PathCore {
+      // Handle direct path content (e.g., [file.md])
+      helpers.debug('TextRHS matched path content', { path });
+      return { 
+        type: 'path',
+        path: path
+      };
+    }
   / content:WrappedTemplateContent {
       // Handle template content
       helpers.debug('TextRHS matched template content');

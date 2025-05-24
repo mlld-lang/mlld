@@ -5,6 +5,7 @@
 import type { SourceLocation, JsonValue } from './common';
 import type { IFilesystemPathState, IUrlPathState } from './paths';
 import type { ICommandDefinition } from './define';
+import type { DataValue } from './data';
 
 // Re-export path state types
 export type { IFilesystemPathState, IUrlPathState };
@@ -128,6 +129,19 @@ export interface DataVariable extends BaseVariable<JsonValue> {
 }
 
 /**
+ * Complex data variable - stores data that may contain embedded directives.
+ * This is used when @data directives contain @run, @add, or other directives as values.
+ * Referenced with {{varName}} or {{varName.field}} syntax.
+ */
+export interface ComplexDataVariable extends BaseVariable<DataValue> {
+  type: VariableType.DATA;
+  /** Tracks whether all embedded directives have been evaluated */
+  isFullyEvaluated: boolean;
+  /** Maps property paths to evaluation errors if any occurred */
+  evaluationErrors?: Record<string, Error>;
+}
+
+/**
  * Path variable - stores filesystem paths OR URL states with validation.
  * Referenced with $varName syntax.
  *
@@ -169,6 +183,7 @@ export interface ImportVariable extends BaseVariable<unknown> {
 export type MeldVariable =
   | TextVariable
   | DataVariable
+  | ComplexDataVariable
   | IPathVariable // Use the revised path variable type
   | CommandVariable
   | ImportVariable; // Add import variable type
@@ -214,6 +229,24 @@ export const createDataVariable = (
   type: VariableType.DATA,
   name,
   value,
+  metadata: {
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    origin: VariableOrigin.DIRECT_DEFINITION,
+    ...metadata
+  }
+});
+
+export const createComplexDataVariable = (
+  name: string,
+  value: DataValue,
+  metadata?: Partial<VariableMetadata>
+): ComplexDataVariable => ({
+  type: VariableType.DATA,
+  name,
+  value,
+  isFullyEvaluated: false,
+  evaluationErrors: undefined,
   metadata: {
     createdAt: Date.now(),
     modifiedAt: Date.now(),

@@ -1,6 +1,8 @@
-import type { MeldNode, DirectiveNode, TextNode, MeldDocument } from '@core/types';
+import type { MeldNode, DirectiveNode, TextNode, MeldDocument, MeldVariable } from '@core/types';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
+import { evaluateDataValue } from '../eval/data-value-evaluator';
+import { isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 
 /**
  * Core evaluation result type
@@ -70,7 +72,10 @@ export async function evaluate(node: MeldNode | MeldNode[], env: Environment): P
       if (!variable) {
         throw new Error(`Variable not found: ${varRef.identifier}`);
       }
-      return { value: variable.value, env };
+      
+      // Handle complex data variables with lazy evaluation
+      const resolvedValue = await resolveVariableValue(variable, env);
+      return { value: resolvedValue, env };
       
     default:
       throw new Error(`Unknown node type: ${(node as any).type}`);
@@ -106,6 +111,45 @@ async function evaluateText(node: TextNode, env: Environment): Promise<EvalResul
 }
 
 /**
+ * Resolve variable value with lazy evaluation support for complex data
+ */
+export async function resolveVariableValue(variable: MeldVariable, env: Environment): Promise<any> {
+  // Check if this is a complex data variable that needs evaluation
+  if (variable.type === 'data' && 'isFullyEvaluated' in variable) {
+    const complexVar = variable as any; // ComplexDataVariable
+    
+    if (!complexVar.isFullyEvaluated) {
+      // Evaluate the complex data value
+      try {
+        const evaluatedValue = await evaluateDataValue(complexVar.value, env);
+        
+        // Update the variable with the evaluated value
+        complexVar.value = evaluatedValue;
+        complexVar.isFullyEvaluated = true;
+        
+        // Check for any evaluation errors
+        const errors = collectEvaluationErrors(evaluatedValue);
+        if (Object.keys(errors).length > 0) {
+          complexVar.evaluationErrors = errors;
+        }
+        
+        return evaluatedValue;
+      } catch (error) {
+        // Store the error but still mark as evaluated to prevent infinite loops
+        complexVar.isFullyEvaluated = true;
+        complexVar.evaluationErrors = { root: error as Error };
+        throw error;
+      }
+    }
+    
+    return complexVar.value;
+  }
+  
+  // For non-complex variables, return the value directly
+  return variable.value;
+}
+
+/**
  * String interpolation helper - resolves {{variables}} in content
  */
 export async function interpolate(
@@ -117,6 +161,8 @@ export async function interpolate(
   for (const node of nodes) {
     if (node.type === 'Text') {
       parts.push(node.content || '');
+    } else if (node.type === 'PathSeparator') {
+      parts.push(node.value || '/');
     } else if (node.type === 'VariableReference') {
       const varName = node.identifier || node.name;
       if (!varName) continue;
@@ -140,7 +186,8 @@ export async function interpolate(
           value = variable.value;
           break;
         case 'data':
-          value = variable.value;
+          // Handle both simple and complex data variables
+          value = await resolveVariableValue(variable, env);
           break;
         case 'path':
           value = variable.value.resolvedPath;

@@ -45,6 +45,15 @@ LiteralContent "Literal content without interpolation"
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
 
+// Quoted section title - same as LiteralContent but for clarity in section extraction
+QuotedSectionTitle "Quoted section title"
+  = '"' content:$(!'"' .)* '"' {
+      return [helpers.createNode(NodeType.Text, { content, location: location() })];
+    }
+  / "'" content:$(!"'" .)* "'" {
+      return [helpers.createNode(NodeType.Text, { content, location: location() })];
+    }
+
 // Content inside single brackets with @var interpolation
 BracketContent "Content with @var interpolation"
   = '[' parts:(BracketVar / PathTextSegment / PathSeparator)* ']' {

@@ -3,8 +3,57 @@
 
 // Primary @text directive
 AtText
+  // Section extraction - must come first to avoid quoted string being matched as template
+  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ section:SectionExtractionCore {
+      helpers.debug('AtText matched section extraction', { id, section });
+      
+      const subtype = section.rename ? 'textPathSection' : 'textPathSection';
+      const sourceType = 'section';
+      
+      // Create values object with section and path
+      const values = {
+        identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+        section: section.section,
+        path: section.path
+      };
+      
+      // Add rename if present
+      if (section.rename) {
+        values.rename = section.rename;
+      }
+      
+      // Create raw object
+      const raw = {
+        identifier: id,
+        section: helpers.reconstructRawString(section.section),
+        path: helpers.reconstructRawString(section.path)
+      };
+      
+      if (section.rename) {
+        raw.rename = helpers.reconstructRawString(section.rename);
+      }
+      
+      // Create meta object
+      const meta = { 
+        sourceType: sourceType,
+        hasRename: !!section.rename,
+        hasVariables: section.path.some(part => 
+          part && part.type === NodeType.VariableReference
+        )
+      };
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        values,
+        raw,
+        meta,
+        location(),
+        sourceType
+      );
+    }
   // Parameterized template definition - must come before regular template to match params
-  = DirectiveContext "@text" _ id:BaseIdentifier _ "(" _ params:TextParamsList? _ ")" _ "=" _ "@add" _ template:TemplateCore {
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "(" _ params:TextParamsList? _ ")" _ "=" _ "@add" _ template:TemplateCore {
       helpers.debug('AtText matched parameterized template definition', { id, params, template });
       
       // Process parameters
@@ -75,8 +124,93 @@ AtText
         sourceType
       );
     }
-  // Command reference - @text id = @cmdRef(args) - but not @run
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@" !("run" _) commandRef:CommandReference {
+  // @add directive with section extraction - must come before path to avoid quoted strings being matched as paths
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ section:SectionExtractionCore {
+      helpers.debug('AtText matched @add with section extraction', { id, section });
+      
+      const subtype = 'textPathSection';
+      const sourceType = 'directive';
+      
+      // Create values object with section and path
+      const values = {
+        identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+        section: section.section,
+        path: section.path
+      };
+      
+      // Add rename if present
+      if (section.rename) {
+        values.rename = section.rename;
+      }
+      
+      // Create raw object
+      const raw = {
+        identifier: id,
+        section: helpers.reconstructRawString(section.section),
+        path: helpers.reconstructRawString(section.path)
+      };
+      
+      if (section.rename) {
+        raw.rename = helpers.reconstructRawString(section.rename);
+      }
+      
+      // Create meta object
+      const meta = { 
+        sourceType: sourceType,
+        directive: 'add',
+        hasRename: !!section.rename,
+        hasVariables: section.path.some(part => 
+          part && part.type === NodeType.VariableReference
+        )
+      };
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        values,
+        raw,
+        meta,
+        location(),
+        sourceType
+      );
+    }
+  // @add directive reference - for backward compatibility
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ path:PathCore {
+      helpers.debug('AtText matched @add with path', { id, path });
+      
+      const subtype = 'textPath';
+      const sourceType = 'directive';
+      
+      // Check if the path contains variables
+      const hasVariables = path.values.path.some(part => 
+        part && part.type === NodeType.VariableReference
+      );
+      
+      // Create meta object
+      const meta = { 
+        sourceType: sourceType,
+        directive: 'add',
+        hasVariables: hasVariables
+      };
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          path: path.values.path
+        },
+        {
+          identifier: id,
+          path: path.raw.path
+        },
+        meta,
+        location(),
+        sourceType
+      );
+    }
+  // Command reference - @text id = @cmdRef(args) - but not @run or @add
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@" !("run" _ / "add" _) commandRef:CommandReference {
       helpers.debug('AtText matched command reference', { id, commandRef });
       
       const subtype = 'textAssignment';
@@ -225,6 +359,40 @@ AtText
         meta,
         location(),
         'run'
+      );
+    }
+  // Direct path content - @text content = [file.md]
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ path:PathCore {
+      helpers.debug('AtText matched direct path content', { id, path });
+      
+      const subtype = 'textPath';
+      const sourceType = 'path';
+      
+      // Check if the path contains variables
+      const hasVariables = path.values.path.some(part => 
+        part && part.type === NodeType.VariableReference
+      );
+      
+      // Create meta object
+      const meta = { 
+        sourceType: sourceType,
+        hasVariables: hasVariables
+      };
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          path: path.values.path
+        },
+        {
+          identifier: id,
+          path: path.raw.path
+        },
+        meta,
+        location(),
+        sourceType
       );
     }
   // Path content with single brackets - interpolates @var (no @add needed!)

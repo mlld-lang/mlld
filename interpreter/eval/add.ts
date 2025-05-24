@@ -109,6 +109,9 @@ export async function evaluateAdd(
     
     // Resolve the path
     const resolvedPath = await interpolate(pathNodes, env);
+    if (!resolvedPath) {
+      throw new Error('Add path directive resolved to empty path');
+    }
     
     // Read the entire file content
     content = await env.readFile(resolvedPath);

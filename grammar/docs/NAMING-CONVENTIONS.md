@@ -73,6 +73,22 @@ Level 8: RHS Patterns         - Right-hand side patterns
 - `AtRun` - Run directive implementation
 - `AtText` - Text directive implementation
 
+## Subtype Naming Conventions
+
+When naming directive subtypes, follow these patterns:
+
+### Composition Pattern: Operation + ContentType
+For operations that work on specific content types:
+- `textPath` - Text directive operating on path content
+- `textPathSection` - Text directive extracting section from path
+- `addPath` - Add directive including path content  
+- `addPathSection` - Add directive extracting section from path
+
+**Not**: `textSection` or `addSection` (unclear what the section is from)
+
+### Rationale
+Section extraction is meaningless without a path - it's always a section OF a path. The naming should reflect this relationship.
+
 ### Level 8: RHS Patterns
 - `RunRHS` - Run directive on right-hand side
 - `TextRHS` - Text directive on right-hand side
