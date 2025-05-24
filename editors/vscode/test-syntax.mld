@@ -1,0 +1,38 @@
+>> This is a comment
+
+# Test Meld Syntax Highlighting
+
+@text greeting = "Hello, World!"
+@text name = [[Welcome {{user}}!]]
+
+@data config = {
+  "name": "MyApp",
+  "version": "1.0.0",
+  "debug": true,
+  "count": 42
+}
+
+@path projectRoot = @PROJECTPATH
+@path dataFile = ./data/config.json
+
+@run buildOutput = ```bash
+npm run build
+```
+
+@exec result = ```javascript
+const sum = 1 + 2;
+return sum;
+```
+
+@add template greet(name)
+Hello {{name}}! How are you today?
+
+@add greet(Alice)
+
+@add "Introduction" from [docs/intro.md]
+@add [examples/demo.mld]
+
+@import * from [config.mld]
+@import {apiKey, dbUrl} from [secrets.mld]
+
+This is regular markdown content with **bold** and *italic* text.

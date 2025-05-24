@@ -1,0 +1,97 @@
+{
+  "name": "meld-vscode",
+  "displayName": "Meld",
+  "description": "Language support for Meld - A powerful markdown composition language",
+  "version": "0.1.0",
+  "publisher": "meld-lang",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Formatters"
+  ],
+  "keywords": [
+    "meld",
+    "markdown",
+    "composition",
+    "template"
+  ],
+  "icon": "images/icon.png",
+  "activationEvents": [
+    "onLanguage:meld"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "meld",
+        "aliases": [
+          "Meld",
+          "meld"
+        ],
+        "extensions": [
+          ".mld",
+          ".meld"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "meld",
+        "scopeName": "source.meld",
+        "path": "./syntaxes/meld.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "meld",
+        "path": "./snippets/meld.json"
+      }
+    ],
+    "configuration": {
+      "title": "Meld",
+      "properties": {
+        "meld.enableAutocomplete": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable autocomplete features"
+        },
+        "meld.projectPath": {
+          "type": "string",
+          "default": null,
+          "description": "Override @PROJECTPATH detection"
+        },
+        "meld.includePaths": {
+          "type": "array",
+          "default": [],
+          "description": "Additional paths for import resolution"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "meld.setMeldMode",
+        "title": "Meld: Set Language Mode to Meld",
+        "when": "resourceExtname == .md"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "^18.0.0",
+    "@types/jest": "^29.0.0",
+    "typescript": "^5.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0"
+  },
+  "dependencies": {}
+}

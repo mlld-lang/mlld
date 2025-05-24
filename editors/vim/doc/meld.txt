@@ -1,0 +1,65 @@
+*meld.txt*  Meld syntax highlighting and filetype plugin
+
+CONTENTS                                        *meld-contents*
+
+1. Introduction ................. |meld-intro|
+2. Syntax ....................... |meld-syntax|
+3. Configuration ................ |meld-config|
+4. Commands ..................... |meld-commands|
+
+==============================================================================
+1. INTRODUCTION                                 *meld-intro*
+
+Meld is a powerful markdown composition language. This plugin provides syntax
+highlighting and filetype support for Meld files (.mld, .meld).
+
+==============================================================================
+2. SYNTAX                                       *meld-syntax*
+
+The following elements are highlighted:
+
+Directives~
+    @text       Text variable assignment
+    @data       Data structure assignment (JSON)
+    @path       Path variable assignment
+    @run        Run command and capture output
+    @exec       Execute code and capture return value
+    @add        Add content or template
+    @import     Import variables from file
+
+Variables~
+    name        Variable declaration (after directive)
+    @name       Variable reference
+    {{name}}    Template interpolation
+
+Special~
+    [[...]]     Template block
+    [...]       Path reference
+    >>          Comment line
+    ```lang     Code block
+
+==============================================================================
+3. CONFIGURATION                                *meld-config*
+
+Options that can be set in your vimrc:
+
+                                                *g:meld_fold_enable*
+g:meld_fold_enable      Enable folding for code blocks and data structures
+                        Default: 1
+
+Example: >
+    let g:meld_fold_enable = 0
+<
+
+==============================================================================
+4. COMMANDS                                     *meld-commands*
+
+This plugin provides no special commands. Use standard Vim commands:
+
+    za          Toggle fold
+    zc          Close fold
+    zo          Open fold
+    gcc         Comment line (requires vim-commentary)
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
