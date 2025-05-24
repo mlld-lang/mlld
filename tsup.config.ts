@@ -8,7 +8,6 @@ const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'ut
 const externalDependencies = [
   // Core libraries 
   // Note: meld-ast is now consolidated into @core/ast and should be bundled, not external
-  'meld-spec',
   'llmxml',
   'marked',
   'minimatch',
