@@ -393,7 +393,7 @@ DataPrimitiveValue
   / value:BooleanLiteral { return value; }
   / NullLiteral { 
       // Return a proper node instead of raw null to avoid AST processing errors
-      return helpers.createNode(NodeType.Null, { value: null }, location());
+      return helpers.createNode('Null', { value: null }, location());
     }
   / varRef:Variable { return varRef; }
 

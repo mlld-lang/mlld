@@ -2195,7 +2195,7 @@ function peg$parse(input, options) {
   var peg$f191 = function(value) { return value; };
   var peg$f192 = function() { 
       // Return a proper node instead of raw null to avoid AST processing errors
-      return helpers.createNode(NodeType.Null, { value: null }, location());
+      return helpers.createNode('Null', { value: null }, location());
     };
   var peg$f193 = function(varRef) { return varRef; };
   var peg$f194 = function(id, meta, params, runCode) {
