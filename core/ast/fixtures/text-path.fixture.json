@@ -1,15 +1,15 @@
 {
   "name": "text-path",
-  "input": "@text content = \"file.md\"\n@add @content",
+  "input": "@text content = file.md\n@add @content",
   "expected": "Content from file",
   "directives": [
-    "@text content = \"file.md\"",
+    "@text content = file.md",
     "@add @content"
   ],
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "b857a7dc-ca97-48ac-b18e-1e8ec7cce9d8",
+      "nodeId": "2ea35045-d35a-4ce0-9aae-cd67fe824e1d",
       "location": {
         "start": {
           "offset": 0,
@@ -17,19 +17,19 @@
           "column": 1
         },
         "end": {
-          "offset": 25,
+          "offset": 23,
           "line": 1,
-          "column": 26
+          "column": 24
         }
       },
       "kind": "text",
-      "subtype": "textAssignment",
-      "source": "literal",
+      "subtype": "textPath",
+      "source": "path",
       "values": {
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "dbff5b1d-d3dd-4627-ab49-c6e209624912",
+            "nodeId": "8f7f5a8a-4780-4d78-996f-ef34ef7e299c",
             "location": {
               "start": {
                 "offset": 0,
@@ -47,10 +47,10 @@
             "identifier": "content"
           }
         ],
-        "content": [
+        "path": [
           {
             "type": "Text",
-            "nodeId": "f37a3544-4e1e-48da-9f8a-4c946d35a561",
+            "nodeId": "36ab9292-1ac4-43fa-ad09-de3364482015",
             "location": {
               "start": {
                 "offset": 16,
@@ -58,9 +58,9 @@
                 "column": 17
               },
               "end": {
-                "offset": 25,
+                "offset": 23,
                 "line": 1,
-                "column": 26
+                "column": 24
               }
             },
             "content": "file.md"
@@ -69,25 +69,24 @@
       },
       "raw": {
         "identifier": "content",
-        "content": "file.md"
+        "path": "file.md"
       },
       "meta": {
-        "sourceType": "literal",
-        "hasVariables": false,
-        "isTemplateContent": false
+        "sourceType": "path",
+        "hasVariables": false
       }
     },
     {
       "type": "Newline",
-      "nodeId": "e01b4307-8019-4f00-9ca1-11153fb7f4e3",
+      "nodeId": "2bf4028c-7f4f-4a1c-a0d1-1252aecebcf5",
       "location": {
         "start": {
-          "offset": 25,
+          "offset": 23,
           "line": 1,
-          "column": 26
+          "column": 24
         },
         "end": {
-          "offset": 26,
+          "offset": 24,
           "line": 2,
           "column": 1
         }
@@ -96,15 +95,15 @@
     },
     {
       "type": "Directive",
-      "nodeId": "8379f501-a638-451a-b82f-2fcd5977384a",
+      "nodeId": "952f48bd-ab00-4299-a56e-f21a976021af",
       "location": {
         "start": {
-          "offset": 26,
+          "offset": 24,
           "line": 2,
           "column": 1
         },
         "end": {
-          "offset": 39,
+          "offset": 37,
           "line": 2,
           "column": 14
         }
@@ -116,7 +115,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "1a263318-c9f9-46ed-bcd6-3d1ac180eb4f",
+            "nodeId": "b2ab635d-1a6d-4a77-84b9-226d30378f92",
             "location": {
               "start": {
                 "offset": 0,

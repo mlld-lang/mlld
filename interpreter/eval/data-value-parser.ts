@@ -95,6 +95,11 @@ export function extractPlainValue(value: DataValue): any {
     return value;
   }
   
+  // Handle Text nodes (from string values in data assignments)
+  if (value?.type === 'Text' && 'content' in value) {
+    return value.content;
+  }
+  
   if (value?.type === 'object') {
     const obj: any = {};
     for (const [key, val] of Object.entries(value.properties)) {

@@ -125,7 +125,7 @@ Import the module
     const directive: DirectiveNode = {
       type: 'directive',
       kind: 'add',
-      subtype: 'addSection',
+      subtype: 'addPathSection',
       raw: {
         section: 'Installation'
       },

@@ -1,0 +1,189 @@
+{
+  "name": "data-complex",
+  "input": "@data results = {\n  greeting: @run [echo \"Hello from embedded command\"],\n  value: 42\n}\n@add @results.greeting",
+  "expected": "Hello from embedded command",
+  "directives": [
+    "@data results = {\n  greeting: @run [echo \"Hello from embedded command\"],\n  value: 42\n}",
+    "@add @results.greeting"
+  ],
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "4f14ff67-88f4-4d1b-ba29-3354b1bf24e8",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 86,
+          "line": 4,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "d66867a3-19f2-42b8-8611-38f3469f19c7",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "isVariableReference": true,
+            "identifier": "results"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "greeting": {
+              "type": "Directive",
+              "nodeId": "6766820d-0293-4547-8e03-2d1169b8b0fb",
+              "location": {
+                "start": {
+                  "offset": 30,
+                  "line": 2,
+                  "column": 13
+                },
+                "end": {
+                  "offset": 71,
+                  "line": 2,
+                  "column": 54
+                }
+              },
+              "kind": "run",
+              "subtype": "runCommand",
+              "source": null,
+              "values": {
+                "command": [
+                  {
+                    "type": "Text",
+                    "nodeId": "d7afc433-cada-4e4e-9263-d87380d22c78",
+                    "location": {
+                      "start": {
+                        "offset": 36,
+                        "line": 2,
+                        "column": 19
+                      },
+                      "end": {
+                        "offset": 70,
+                        "line": 2,
+                        "column": 53
+                      }
+                    },
+                    "content": "echo \"Hello from embedded command\""
+                  }
+                ]
+              },
+              "raw": {
+                "command": "echo \"Hello from embedded command\""
+              },
+              "meta": {
+                "hasVariables": false,
+                "isDataValue": true,
+                "isMultiLine": false
+              }
+            },
+            "value": 42
+          }
+        }
+      },
+      "raw": {
+        "identifier": "results",
+        "value": "{\n  \"greeting\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"6766820d-0293-4547-8e03-2d1169b8b0fb\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 30,\n        \"line\": 2,\n        \"column\": 13\n      },\n      \"end\": {\n        \"offset\": 71,\n        \"line\": 2,\n        \"column\": 54\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runCommand\",\n    \"source\": null,\n    \"values\": {\n      \"command\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"d7afc433-cada-4e4e-9263-d87380d22c78\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 36,\n              \"line\": 2,\n              \"column\": 19\n            },\n            \"end\": {\n              \"offset\": 70,\n              \"line\": 2,\n              \"column\": 53\n            }\n          },\n          \"content\": \"echo \\\"Hello from embedded command\\\"\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"command\": \"echo \\\"Hello from embedded command\\\"\"\n    },\n    \"meta\": {\n      \"hasVariables\": false,\n      \"isDataValue\": true,\n      \"isMultiLine\": false\n    }\n  },\n  \"value\": 42\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 2
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "36b988b2-4a08-44e3-9b6c-334d9261fdcd",
+      "location": {
+        "start": {
+          "offset": 86,
+          "line": 4,
+          "column": 2
+        },
+        "end": {
+          "offset": 87,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "888a5b14-3ec7-4267-b73e-8d4614c40fc2",
+      "location": {
+        "start": {
+          "offset": 87,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 109,
+          "line": 5,
+          "column": 23
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "abaa7a45-9764-4418-a3ae-5a22839573cc",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "isVariableReference": true,
+            "identifier": "results",
+            "fields": [
+              {
+                "type": "field",
+                "name": "greeting"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@results"
+      },
+      "meta": {}
+    }
+  ],
+  "metadata": {
+    "kind": "data",
+    "subtype": "complex"
+  }
+}

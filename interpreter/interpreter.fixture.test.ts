@@ -14,6 +14,62 @@ describe('Meld Interpreter - Fixture Tests', () => {
     pathService = new PathService();
   });
   
+  // Helper function to copy example files to virtual filesystem
+  async function setupExampleFiles(fixtureName: string) {
+    // Extract the base name without 'fixture.json' extension
+    const baseName = fixtureName.replace('.fixture.json', '');
+    
+    // Map fixture names to example directory paths
+    const exampleDirMappings: Record<string, string> = {
+      'text-assignment-add': 'text/assignment-add',
+      'text-assignment-path': 'text/assignment-path',
+      'text-assignment-run': 'text/assignment-run',
+      'text-path': 'text/path',
+      'add-path': 'add/path',
+      'add-path-section': 'add/path',
+      'add-section': 'add/section',
+      'add-section-rename': 'add/section',
+      'import-all': 'import/all',
+      'import-all-variable': 'import/all-variable',
+      'import-selected': 'import/selected',
+      'path-assignment': 'path/assignment',
+      'path-assignment-absolute': 'path/assignment',
+      'path-assignment-project': 'path/assignment',
+      'path-assignment-special': 'path/assignment',
+      'path-assignment-variable': 'path/assignment',
+    };
+    
+    // Check if we have a mapping for this fixture
+    const exampleSubPath = exampleDirMappings[baseName];
+    if (exampleSubPath) {
+      const exampleDir = path.join(__dirname, '../core/examples', exampleSubPath);
+      
+      // Check if the directory exists
+      if (fs.existsSync(exampleDir)) {
+        // Read all files in the example directory
+        const files = fs.readdirSync(exampleDir);
+        
+        for (const file of files) {
+          // Skip example.md and expected.md files (these are the test definitions)
+          if (file.startsWith('example') || file.startsWith('expected')) {
+            continue;
+          }
+          
+          // Copy other files to the virtual filesystem
+          const filePath = path.join(exampleDir, file);
+          const stat = fs.statSync(filePath);
+          
+          if (stat.isFile()) {
+            const content = fs.readFileSync(filePath, 'utf8');
+            // Place files at root of virtual filesystem
+            await fileSystem.writeFile(`/${file}`, content);
+            console.log(`Copied ${file} to virtual filesystem for ${baseName}`);
+          }
+        }
+      }
+    }
+  }
+  
   // Load all fixtures
   const fixturesDir = path.join(__dirname, '../core/ast/fixtures');
   const fixtureFiles = fs.readdirSync(fixturesDir)
@@ -33,11 +89,34 @@ describe('Meld Interpreter - Fixture Tests', () => {
     }
     
     it(`should handle ${fixture.name}`, async () => {
-      // Set up any required files in the memory filesystem
+      // First, set up any files from the examples directory
+      await setupExampleFiles(fixtureFile);
+      
+      // Then, set up any required files specified in the fixture
       if (fixture.files) {
         for (const [filePath, content] of Object.entries(fixture.files)) {
           await fileSystem.writeFile(filePath, content as string);
         }
+      }
+      
+      // Always copy shared files from the files directory
+      try {
+        const sharedFilesPath = path.join(__dirname, '../core/examples/files');
+        if (fs.existsSync(sharedFilesPath)) {
+          const sharedFiles = fs.readdirSync(sharedFilesPath);
+          
+          for (const file of sharedFiles) {
+            const filePath = path.join(sharedFilesPath, file);
+            const stat = fs.statSync(filePath);
+            
+            if (stat.isFile() && !await fileSystem.exists(`/${file}`)) {
+              const content = fs.readFileSync(filePath, 'utf8');
+              await fileSystem.writeFile(`/${file}`, content);
+            }
+          }
+        }
+      } catch (error) {
+        // Ignore if shared files directory doesn't exist
       }
       
       // Set up package.json for project path resolution
@@ -51,19 +130,15 @@ describe('Meld Interpreter - Fixture Tests', () => {
         await fileSystem.mkdir('/Users/adam/dev/meld/src');
       }
       
-      // Set up default test files for common fixtures
-      if (fixture.name === 'path-assignment') {
-        await fileSystem.writeFile('/file.md', 'Contents of file.md');
-      } else if (fixture.name === 'add-path') {
-        await fileSystem.writeFile('/file.md', '# Title\n## Section 1\n### Subsection 1.1\nContent from file\n## Section 2');
-      } else if (fixture.name === 'add-path-section' || 
-                 fixture.name === 'add-section' || 
-                 fixture.name === 'add-section-rename') {
-        await fileSystem.writeFile('/file.md', '# Title\n## Section 1\n### Subsection 1.1\nContent from file\n## Section 2\n\n# Section Title\nContent under this section\n\n# Original Title\nContent under this section');
-      } else if (fixture.name.startsWith('import-')) {
-        // Set up import test files
-        await fileSystem.writeFile('/config.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text author = "Meld Test Suite"');
-        await fileSystem.writeFile('/utils.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text version = "1.0.0"\n@path docs = "./docs"');
+      // Set up specific test files that aren't in the examples directory
+      if (fixture.name.startsWith('import-')) {
+        // Set up import test files if they don't exist
+        if (!await fileSystem.exists('/config.mld')) {
+          await fileSystem.writeFile('/config.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text author = "Meld Test Suite"');
+        }
+        if (!await fileSystem.exists('/utils.mld')) {
+          await fileSystem.writeFile('/utils.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text version = "1.0.0"\n@path docs = "./docs"');
+        }
       } else if (fixture.name === 'data-directive') {
         // This fixture seems to be missing context - create the expected variable
         // TODO: This fixture may be incorrectly named or incomplete
@@ -73,9 +148,6 @@ describe('Meld Interpreter - Fixture Tests', () => {
         // This test expects a 'variable' to exist with value 'value'
         // But the fixture doesn't define it - skip for now
         // TODO: File issue for incomplete fixture
-      } else if (fixture.name === 'text-path') {
-        // Set up the file that the text content refers to
-        await fileSystem.writeFile('/file.md', 'Content from file');
       }
       
       try {

@@ -45,7 +45,7 @@ export interface AddVariableRaw extends AddRaw {
   underHeader?: string;
 }
 
-export interface AddSectionRaw extends AddRaw {
+export interface AddPathSectionRaw extends AddRaw {
   sectionTitle: string;
   path: string;
   newTitle?: string;
@@ -87,7 +87,7 @@ export interface AddVariableValues extends AddValues {
   underHeader?: TextNodeArray;
 }
 
-export interface AddSectionValues extends AddValues {
+export interface AddPathSectionValues extends AddValues {
   sectionTitle: TextNodeArray;
   path: PathNodeArray;
   newTitle?: TextNodeArray;
@@ -117,7 +117,7 @@ export interface AddTemplateMeta extends AddMeta {
   wrapperType: string;
 }
 
-export interface AddSectionMeta extends AddMeta {
+export interface AddPathSectionMeta extends AddMeta {
   path: {
     hasVariables: boolean;
   };
@@ -128,7 +128,7 @@ export interface AddSectionMeta extends AddMeta {
 // ====================
 
 export interface AddDirectiveNode extends TypedDirectiveNode<'add', 
-  'addPath' | 'addTemplate' | 'addVariable' | 'addSection'> {
+  'addPath' | 'addTemplate' | 'addVariable' | 'addPathSection'> {
   values: AddValues;
   raw: AddRaw;
   meta: AddMeta;
@@ -155,11 +155,11 @@ export interface AddVariableDirectiveNode extends AddDirectiveNode {
   meta: AddMeta;
 }
 
-export interface AddSectionDirectiveNode extends AddDirectiveNode {
-  subtype: 'addSection';
-  values: AddSectionValues;
-  raw: AddSectionRaw;
-  meta: AddSectionMeta;
+export interface AddPathSectionDirectiveNode extends AddDirectiveNode {
+  subtype: 'addPathSection';
+  values: AddPathSectionValues;
+  raw: AddPathSectionRaw;
+  meta: AddPathSectionMeta;
 }
 
 
@@ -183,7 +183,7 @@ export function isAddVariableDirectiveNode(node: DirectiveNode): node is AddVari
   return isAddDirectiveNode(node) && node.subtype === 'addVariable';
 }
 
-export function isAddSectionDirectiveNode(node: DirectiveNode): node is AddSectionDirectiveNode {
-  return isAddDirectiveNode(node) && node.subtype === 'addSection';
+export function isAddPathSectionDirectiveNode(node: DirectiveNode): node is AddPathSectionDirectiveNode {
+  return isAddDirectiveNode(node) && node.subtype === 'addPathSection';
 }
 

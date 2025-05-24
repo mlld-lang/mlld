@@ -96,7 +96,7 @@ export class AddDirectiveHandler implements IDirectiveHandler {
       // Read the file content
       content = await this.fileSystem.readFile(resolvedPath);
       
-    } else if (subtype === 'addSection') {
+    } else if (subtype === 'addPathSection') {
       // Handle section extraction (e.g., @add ./file.md#section)
       const pathNodes = directive.values?.path;
       const section = directive.raw?.section;

@@ -92,7 +92,7 @@ export async function evaluateData(
     const lastField = parts[parts.length - 1];
     
     // Determine if this contains lazy-evaluated content
-    if (hasLazyContent(dataValue)) {
+    if (needsEvaluation(dataValue)) {
       // Store as ComplexDataVariable for lazy evaluation
       const complexVariable = createComplexDataVariable(identifier, dataValue);
       current[lastField] = dataValue; // Store the raw DataValue

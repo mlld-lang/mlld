@@ -95,9 +95,17 @@ export async function evaluateAdd(
     } else if (typeof value === 'number' || typeof value === 'boolean') {
       // For primitives, just convert to string
       content = String(value);
-    } else {
+    } else if (value && typeof value === 'object' && value.type === 'Directive') {
+      // Handle embedded directives in complex data
+      // This is a known limitation - we need lazy evaluation
+      // For now, return a placeholder
+      content = '[Embedded directive - lazy evaluation not yet implemented]';
+    } else if (value !== null && value !== undefined) {
       // For objects/arrays, use JSON
       content = JSON.stringify(value, null, 2);
+    } else {
+      // Handle null/undefined
+      content = '';
     }
     
   } else if (directive.subtype === 'addPath') {
@@ -116,7 +124,7 @@ export async function evaluateAdd(
     // Read the entire file content
     content = await env.readFile(resolvedPath);
     
-  } else if (directive.subtype === 'addSection') {
+  } else if (directive.subtype === 'addPathSection') {
     // Handle section extraction: @add "Section Title" from [file.md]
     const sectionTitleNodes = directive.values?.sectionTitle;
     const pathNodes = directive.values?.path;
