@@ -54,12 +54,59 @@ export async function evaluateData(
       env.setVariable(varName, variable);
     }
   } else {
-    // Nested field access - need to build up the object structure
-    // For complex data, we need to handle this differently
-    throw new Error(
-      'Field access in @data identifier not yet supported with complex values. ' +
-      'Use a simple identifier and access fields when referencing the variable.'
-    );
+    // Nested field access - build up the object structure
+    // For example: @data greeting.text = "Hello"
+    const parts = identifier.split('.');
+    const rootName = parts[0];
+    
+    // Get or create the root object
+    let rootVar = env.getVariable(rootName);
+    let rootValue: any;
+    
+    if (!rootVar) {
+      // Create new root object
+      rootValue = {};
+      rootVar = createDataVariable(rootName, rootValue);
+      env.setVariable(rootName, rootVar);
+    } else if (rootVar.type !== 'data') {
+      throw new Error(`Variable ${rootName} is not a data variable, cannot assign field`);
+    } else {
+      // Get existing value and ensure it's an object
+      rootValue = rootVar.value;
+      if (typeof rootValue !== 'object' || rootValue === null) {
+        throw new Error(`Variable ${rootName} is not an object, cannot assign field`);
+      }
+    }
+    
+    // Navigate to the nested field and create objects as needed
+    let current = rootValue;
+    for (let i = 1; i < parts.length - 1; i++) {
+      const part = parts[i];
+      if (!current[part] || typeof current[part] !== 'object') {
+        current[part] = {};
+      }
+      current = current[part];
+    }
+    
+    // Set the final field value
+    const lastField = parts[parts.length - 1];
+    
+    // Determine if this contains lazy-evaluated content
+    if (hasLazyContent(dataValue)) {
+      // Store as ComplexDataVariable for lazy evaluation
+      const complexVariable = createComplexDataVariable(identifier, dataValue);
+      current[lastField] = dataValue; // Store the raw DataValue
+      
+      // Update the root variable
+      env.setVariable(rootName, createDataVariable(rootName, rootValue));
+    } else {
+      // Simple value - extract and store directly
+      const plainValue = extractPlainValue(dataValue);
+      current[lastField] = plainValue;
+      
+      // Update the root variable
+      env.setVariable(rootName, createDataVariable(rootName, rootValue));
+    }
   }
   
   // Data directives produce no output

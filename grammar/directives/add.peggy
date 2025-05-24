@@ -62,7 +62,7 @@ AtAdd
       
       return helpers.createStructuredDirective(
         'add', 
-        'addSection', 
+        'addPathSection', 
         values, 
         raw, 
         meta, 

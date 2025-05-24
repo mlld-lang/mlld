@@ -209,6 +209,40 @@ AtText
         sourceType
       );
     }
+  // Path starting with @variable - must come before command reference
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ PathStartingWithVariableContext path:PathCore {
+      helpers.debug('AtText matched path starting with @variable', { id, path });
+      
+      const subtype = 'textPath';
+      const sourceType = 'path';
+      
+      // Check if the path contains variables
+      const hasVariables = path.values.path.some(part => 
+        part && part.type === NodeType.VariableReference
+      );
+      
+      // Create meta object
+      const meta = { 
+        sourceType: sourceType,
+        hasVariables: hasVariables
+      };
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          path: path.values.path
+        },
+        {
+          identifier: id,
+          path: path.raw.path
+        },
+        meta,
+        location(),
+        sourceType
+      );
+    }
   // Command reference - @text id = @cmdRef(args) - but not @run or @add
   / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@" !("run" _ / "add" _) commandRef:CommandReference {
       helpers.debug('AtText matched command reference', { id, commandRef });
