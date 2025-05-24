@@ -1,6 +1,6 @@
 import { MeldError, ErrorSeverity } from './MeldError';
 import { ResolutionErrorCode } from './index';
-import type { Field as AstField } from '@core/ast/types/common';
+import type { Field as AstField } from '@core/types/common';
 
 /**
  * Details specific to field access errors.
