@@ -21,27 +21,49 @@ export async function evaluateImport(
     throw new Error('Import directive missing path');
   }
   
-  // Resolve the import path
+  // Check if this is a URL path based on the path node structure
+  const pathNode = pathNodes[0]; // Assuming single path node for imports
+  const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
+  
+  // Resolve the import path (handles both file paths and URLs)
   const importPath = await interpolate(pathNodes, env);
-  const resolvedPath = await env.resolvePath(importPath);
+  let resolvedPath: string;
   
-  // Read the file
-  const content = await env.readFile(resolvedPath);
-  
-  // Handle section extraction if specified
-  let processedContent = content;
-  const section = directive.raw?.section;
-  if (section) {
-    processedContent = extractSection(content, section);
+  if (isURL || env.isURL(importPath)) {
+    // For URLs, use the URL as-is (no path resolution needed)
+    resolvedPath = importPath;
+    
+    // Check for circular imports
+    if (env.isImporting(resolvedPath)) {
+      throw new Error(`Circular import detected: ${resolvedPath}`);
+    }
+    
+    // Mark that we're importing this URL
+    env.beginImport(resolvedPath);
+  } else {
+    // For file paths, resolve relative to current basePath
+    resolvedPath = await env.resolvePath(importPath);
   }
   
-  // Parse the imported content
-  const parseResult = await parse(processedContent);
-  const ast = parseResult.ast;
-  
-  // Create a child environment for the imported file
-  const importDir = path.dirname(resolvedPath);
-  const childEnv = env.createChild(importDir);
+  try {
+    // Read the file or fetch the URL
+    const content = await env.readFile(resolvedPath);
+    
+    // Handle section extraction if specified
+    let processedContent = content;
+    const section = directive.raw?.section || pathNode?.values?.section;
+    if (section) {
+      processedContent = extractSection(content, section);
+    }
+    
+    // Parse the imported content
+    const parseResult = await parse(processedContent);
+    const ast = parseResult.ast;
+    
+    // Create a child environment for the imported file
+    // For URLs, use the current directory as basePath since URLs don't have directories
+    const importDir = isURL ? env.basePath : path.dirname(resolvedPath);
+    const childEnv = env.createChildEnvironment();
   
   // Evaluate the imported file
   const result = await evaluate(ast, childEnv);
@@ -78,6 +100,12 @@ export async function evaluateImport(
   
   // Return success
   return { value: undefined, env };
+  } finally {
+    // Clean up import tracking for URLs
+    if (isURL || env.isURL(importPath)) {
+      env.endImport(resolvedPath);
+    }
+  }
 }
 
 /**

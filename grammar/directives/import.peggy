@@ -19,7 +19,7 @@ It can be used in these forms:
 
 // Primary @import directive
 AtImport
-  = DirectiveContext "@import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:PathCore {
+  = DirectiveContext "@import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:PathExpression {
       helpers.debug('AtImport matched', { imports, path });
       
       // Get the raw imports text
@@ -34,22 +34,21 @@ AtImport
         imports: imports.map(item => helpers.createVariableReferenceNode('import', { 
           identifier: item
         })),
-        path: path.values.path
+        path: path.values.path || path.values.url // Handle both file and URL paths
       };
       
       // Create raw object with text segments
       const raw = {
         imports: imports.length === 1 && imports[0] === '*' ? '*' : importsRaw,
-        path: path.raw.path
+        path: path.raw.path || path.raw.url // Handle both file and URL paths
       };
       
       // Create meta object with path metadata
       const meta = {
         path: {
-          hasVariables: path.meta.hasVariables,
-          isAbsolute: path.meta.isAbsolute,
-          hasExtension: path.meta.hasExtension,
-          extension: path.meta.extension
+          // Include all relevant path metadata
+          ...path.meta,
+          pathSubtype: path.subtype // Preserve the specific path type
         }
       };
       

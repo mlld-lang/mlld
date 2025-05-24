@@ -102,11 +102,11 @@ AtPath
         'path'  // Source parameter
       );
     }
-  / DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ path:PathCore {
+  / DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ path:PathExpression {
       helpers.debug('AtPath matched normal path', { id, path });
       
       // ProcessedPath might need @~ and @. transformed like we did above
-      let processedPath = path.raw.path;
+      let processedPath = path.raw.path || path.raw.url;
       if (processedPath.includes('@~') || processedPath.includes('@.')) {
         processedPath = processedPath
           .replace(/@~/g, '@HOMEPATH')
@@ -117,7 +117,7 @@ AtPath
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
       
       // We need to also process the path parts if they contain special variables
-      const processedPathParts = [...path.values.path];
+      const processedPathParts = [...(path.values.path || path.values.parts || [])];
       for (let i = 0; i < processedPathParts.length; i++) {
         const part = processedPathParts[i];
         if (part.type === NodeType.VariableReference && 
@@ -142,10 +142,8 @@ AtPath
         },
         {
           path: {
-            hasVariables: path.meta.hasVariables,
-            isAbsolute: path.meta.isAbsolute,
-            hasExtension: path.meta.hasExtension,
-            extension: path.meta.extension
+            ...path.meta,
+            pathSubtype: path.subtype // Preserve the specific path type
           }
         },
         location(),

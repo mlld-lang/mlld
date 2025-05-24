@@ -12,6 +12,18 @@ export class Environment {
   private variables = new Map<string, MeldVariable>();
   private nodes: MeldNode[] = [];
   private parent?: Environment;
+  private urlCache: Map<string, { content: string; timestamp: number }> = new Map();
+  private urlCacheMaxAge = 5 * 60 * 1000; // 5 minutes
+  private importStack: Set<string> = new Set(); // Track imports to prevent circular dependencies
+  
+  // URL validation options
+  private urlOptions = {
+    allowedProtocols: ['http', 'https'],
+    allowedDomains: [] as string[],
+    blockedDomains: [] as string[],
+    maxResponseSize: 5 * 1024 * 1024, // 5MB
+    timeout: 30000 // 30 seconds
+  };
   
   constructor(
     private fileSystem: IFileSystemService,
@@ -20,6 +32,12 @@ export class Environment {
     parent?: Environment
   ) {
     this.parent = parent;
+  }
+  
+  // --- Property Accessors ---
+  
+  getBasePath(): string {
+    return this.basePath;
   }
   
   // --- Variable Management ---
@@ -53,8 +71,11 @@ export class Environment {
   
   // --- Capabilities ---
   
-  async readFile(filePath: string): Promise<string> {
-    const resolvedPath = await this.resolvePath(filePath);
+  async readFile(pathOrUrl: string): Promise<string> {
+    if (this.isURL(pathOrUrl)) {
+      return this.fetchURL(pathOrUrl);
+    }
+    const resolvedPath = await this.resolvePath(pathOrUrl);
     return this.fileSystem.readFile(resolvedPath);
   }
   
@@ -232,5 +253,113 @@ export class Environment {
     }
     
     return allVars;
+  }
+  
+  // --- URL Support Methods ---
+  
+  isURL(path: string): boolean {
+    try {
+      const url = new URL(path);
+      return ['http:', 'https:'].includes(url.protocol);
+    } catch {
+      return false;
+    }
+  }
+  
+  async validateURL(url: string): Promise<void> {
+    const parsed = new URL(url);
+    
+    // Check protocol
+    if (!this.urlOptions.allowedProtocols.includes(parsed.protocol.slice(0, -1))) {
+      throw new Error(`Protocol not allowed: ${parsed.protocol}`);
+    }
+    
+    // Check domain allowlist if configured
+    if (this.urlOptions.allowedDomains.length > 0) {
+      const allowed = this.urlOptions.allowedDomains.some(
+        domain => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
+      );
+      if (!allowed) {
+        throw new Error(`Domain not allowed: ${parsed.hostname}`);
+      }
+    }
+    
+    // Check domain blocklist
+    const blocked = this.urlOptions.blockedDomains.some(
+      domain => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
+    );
+    if (blocked) {
+      throw new Error(`Domain blocked: ${parsed.hostname}`);
+    }
+  }
+  
+  async fetchURL(url: string): Promise<string> {
+    // Check cache first
+    const cached = this.urlCache.get(url);
+    if (cached && Date.now() - cached.timestamp < this.urlCacheMaxAge) {
+      return cached.content;
+    }
+    
+    // Validate URL
+    await this.validateURL(url);
+    
+    // Fetch with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.urlOptions.timeout);
+    
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+      
+      // Check content size
+      const content = await response.text();
+      if (content.length > this.urlOptions.maxResponseSize) {
+        throw new Error(`Response too large: ${content.length} bytes`);
+      }
+      
+      // Cache the response
+      this.urlCache.set(url, { content, timestamp: Date.now() });
+      
+      return content;
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timed out after ${this.urlOptions.timeout}ms`);
+      }
+      throw error;
+    }
+  }
+  
+  setURLOptions(options: Partial<typeof this.urlOptions>): void {
+    Object.assign(this.urlOptions, options);
+  }
+  
+  // --- Import Tracking (for circular import detection) ---
+  
+  isImporting(path: string): boolean {
+    return this.importStack.has(path) || (this.parent?.isImporting(path) ?? false);
+  }
+  
+  beginImport(path: string): void {
+    this.importStack.add(path);
+  }
+  
+  endImport(path: string): void {
+    this.importStack.delete(path);
+  }
+  
+  createChildEnvironment(): Environment {
+    const child = new Environment(
+      this.fileSystem,
+      this.pathService,
+      this.basePath,
+      this
+    );
+    // Share import stack with parent to detect circular imports across scopes
+    child.importStack = this.importStack;
+    return child;
   }
 }

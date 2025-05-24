@@ -52,8 +52,8 @@ TextRHS
         meta: section.meta
       };
     }
-  / path:PathCore {
-      // Handle direct path content (e.g., [file.md])
+  / path:PathExpression {
+      // Handle direct path content (e.g., [file.md] or https://example.com/file.md)
       helpers.debug('TextRHS matched path content', { path });
       return { 
         type: 'path',
