@@ -9,6 +9,7 @@ import { version } from '@core/version';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { OutputPathService } from '@services/fs/OutputPathService';
 import { interpret } from '@interpreter/index';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
@@ -329,14 +330,10 @@ async function confirmOverwrite(filePath: string): Promise<{ outputPath: string;
   // Get the current CLI options from the outer scope
   const cliOptions = getCurrentCLIOptions();
   
-  // For .md files, auto-redirect to .o.md unless explicitly set with -o
-  if (filePath.endsWith('.md') && !cliOptions.output) {
-    console.log('Auto-redirecting .md file to prevent overwrite');
-    const baseName = filePath.slice(0, -3); // Remove .md extension
-    const newOutputPath = `${baseName}.o.md`;
-    if (!(await fs.access(newOutputPath).then(() => true).catch(() => false))) {
-      return { outputPath: newOutputPath, shouldOverwrite: true };
-    }
+  // If output path was not explicitly set, we're using the safe path from OutputPathService
+  // so we can just return it
+  if (!cliOptions.output) {
+    return { outputPath: filePath, shouldOverwrite: true };
   }
   
   // Check if we can use raw mode (might not be available in all environments)
@@ -494,7 +491,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
 
 
   if (!stdout && !outputPath) {
-    outputPath = input.replace(/\.mld$/, '.' + getOutputExtension(normalizedFormat));
+    const outputPathService = new OutputPathService();
+    outputPath = await outputPathService.getSafeOutputPath(input, normalizedFormat, output);
   }
 
   if (outputPath && outputPath === input) {
