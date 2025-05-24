@@ -9,8 +9,9 @@ import { main } from './index';
 export { main };
 
 // Run main if this is the entry point
-// In ESM, we check if this file was run directly by looking at import.meta.url
-const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+// In ESM, we check if this file was run directly
+// Note: This is a workaround since we're compiling to CJS
+const isMainModule = true; // Always run when this file is executed
 
 if (isMainModule) {
   // Parse arguments

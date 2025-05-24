@@ -3,6 +3,7 @@
     "target": "ES2020",
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "ES2022.Error"],
+    "types": ["node"],
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "allowJs": true,
