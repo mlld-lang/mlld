@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parse } from '@core/ast/parser';
+import { parse } from '@grammar/parser';
 
 describe('Path Separator in Brackets - Regression Test for Issue #53', () => {
   it('should parse paths in brackets with PathSeparator nodes', async () => {

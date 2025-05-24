@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { parse } from '@core/ast/parser';
-import { isRunCommandDirective, isRunCodeDirective, isRunExecDirective } from '../../core/ast/types/run';
-import { VariableValueType } from '../../core/ast/types/variables';
+import { parse } from '@grammar/parser';
+import { isRunCommandDirective, isRunCodeDirective, isRunExecDirective } from '@core/types/run';
+import { VariableValueType } from '@core/types/variables';
 
 describe('Run directive', () => {
   describe('runCommand subtype', () => {

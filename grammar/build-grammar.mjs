@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 // ---------- paths ----------
 const ROOT_GRAMMAR = path.join(__dirname, 'meld.peggy');
-const DIST_DIR = path.join(__dirname, '../core/ast/grammar');
+const DIST_DIR = path.join(__dirname, './parser');
 const DIST_PARSER_TS = path.join(DIST_DIR, 'parser.ts');
 const DIST_PARSER_JS = path.join(DIST_DIR, 'parser.js');
 
@@ -132,7 +132,7 @@ const peggyOptsTS = {
   allowedStartRules: ['Start'],
   // Native TypeScript type file!
   dts: true,
-  returnTypes: { Start: 'import("@core/syntax").MeldNode[]' },
+  returnTypes: { Start: 'import("@core/types").MeldNode[]' },
   dependencies: {
     NodeType: './deps/node-type.ts',
     DirectiveKind: './deps/directive-kind.ts',

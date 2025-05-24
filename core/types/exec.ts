@@ -1,112 +1,115 @@
 /**
- * Types related to command definitions (@define directive).
+ * Exec directive type definitions
  */
-
-// Placeholders for service interfaces - assumed defined elsewhere
-import type { IStateService } from './state';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
-import type { IPathService } from '@services/fs/PathService/IPathService';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
-import type { SourceLocation } from './common';
+import { DirectiveNode, TypedDirectiveNode } from './base';
+import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
 
 /**
- * Parameter metadata for command definitions
+ * Exec directive raw values
  */
-export interface ICommandParameterMetadata {
-  name: string;
-  position: number;
-  required?: boolean;
-  defaultValue?: string;
-  validationStatus?: 'valid' | 'invalid' | 'warning';
+export interface ExecRaw {
+  identifier: string;
+  params: string[];
+  metadata?: string;
+  command?: string;
+  lang?: string;
+  code?: string;
 }
 
 /**
- * Base interface for all command definitions
+ * Exec directive metadata
  */
-export interface ICommandDefinitionBase {
-  name: string;
-  type: 'basic' | 'language';
-  parameters: ICommandParameterMetadata[];
-  originalText?: string;
-  sourceLocation?: SourceLocation;
-  visibility?: 'public' | 'private';
-  riskLevel?: 'low' | 'medium' | 'high';
-  description?: string;
-  definedAt?: number;
-  resolutionTracking?: {
-    resolvedVariables: string[];
-    unresolvedReferences: string[];
+export interface ExecMeta {
+  parameterCount: number;
+  argumentCount?: number;
+  hasVariables?: boolean;
+  language?: string;
+  isMultiLine?: boolean;
+  metadata?: {
+    type?: string;
+    [key: string]: unknown;
   };
 }
 
 /**
- * Definition for basic shell commands
+ * Base Exec directive node
  */
-export interface IBasicCommandDefinition extends ICommandDefinitionBase {
-  type: 'basic';
-  commandTemplate: string;
-  isMultiline: boolean;
-  variableResolutionMode?: 'immediate' | 'deferred' | 'none';
+export interface ExecDirectiveNode extends TypedDirectiveNode<'exec', ExecSubtype> {
+  values: ExecValues;
+  raw: ExecRaw;
+  meta: ExecMeta;
 }
 
 /**
- * Definition for language-specific script commands
+ * Exec subtypes
  */
-export interface ILanguageCommandDefinition extends ICommandDefinitionBase {
-  type: 'language';
-  language: string;
-  codeBlock: string;
-  languageParameters?: string[];
-  executionMode?: 'script' | 'interpreter' | 'embedded';
+export type ExecSubtype = 'execCommand' | 'execCode';
+
+/**
+ * Exec directive values - different structures based on subtype
+ */
+export interface ExecValues {
+  identifier: TextNodeArray;
+  params: VariableNodeArray[];
+  metadata?: TextNodeArray;
+  command?: ContentNodeArray;
+  lang?: TextNodeArray;
+  code?: ContentNodeArray;
 }
 
 /**
- * Union type for all command definition types
+ * Exec Command directive - @exec commandName (params) = @run [command]
  */
-export type ICommandDefinition = IBasicCommandDefinition | ILanguageCommandDefinition;
-
-/**
- * Command execution function type.
- * @remarks Define specific types for params and return value if possible.
- *          This might be deprecated if execution is handled internally.
- */
-export type CommandExecuteFunction = (
-  params: Record<string, any>,
-  context: CommandExecutionContext
-) => Promise<any>;
-
-/**
- * Context provided during command execution.
- * @remarks This seems similar to ICommandExecutionContext from the spec,
- *          let's keep it for now but might consolidate later.
- */
-export interface CommandExecutionContext {
-  /** Current state service */
-  state: IStateService;
-  
-  /** File system service */
-  fileSystem: IFileSystemService;
-  
-  /** Path service */
-  pathService: IPathService;
-  
-  /** Resolution service */
-  resolutionService: IResolutionService;
-  
-  /** Source location of command invocation */
-  location?: SourceLocation;
+export interface ExecCommandDirectiveNode extends ExecDirectiveNode {
+  subtype: 'execCommand';
+  values: {
+    identifier: TextNodeArray;
+    params: VariableNodeArray[];
+    metadata?: TextNodeArray;
+    command: ContentNodeArray;
+  };
+  raw: {
+    identifier: string;
+    params: string[];
+    metadata?: string;
+    command: string;
+  };
+  meta: ExecMeta;
 }
 
 /**
- * Type guard for checking if a command definition is a basic command
+ * Exec Code directive - @exec commandName (params) = @run language [code]
  */
-export function isBasicCommand(definition: ICommandDefinition): definition is IBasicCommandDefinition {
-  return definition.type === 'basic';
+export interface ExecCodeDirectiveNode extends ExecDirectiveNode {
+  subtype: 'execCode';
+  values: {
+    identifier: TextNodeArray;
+    params: VariableNodeArray[];
+    metadata?: TextNodeArray;
+    lang: TextNodeArray;
+    code: ContentNodeArray;
+  };
+  raw: {
+    identifier: string;
+    params: string[];
+    metadata?: string;
+    lang: string;
+    code: string;
+  };
+  meta: ExecMeta;
 }
 
 /**
- * Type guard for checking if a command definition is a language command
+ * Type guards to check the type of an exec directive
  */
-export function isLanguageCommand(definition: ICommandDefinition): definition is ILanguageCommandDefinition {
-  return definition.type === 'language';
-} 
+export function isExecDirectiveNode(node: DirectiveNode): node is ExecDirectiveNode {
+  return node.kind === 'exec';
+}
+
+export function isExecCommandDirective(node: ExecDirectiveNode): node is ExecCommandDirectiveNode {
+  return node.subtype === 'execCommand';
+}
+
+export function isExecCodeDirective(node: ExecDirectiveNode): node is ExecCodeDirectiveNode {
+  return node.subtype === 'execCode';
+}

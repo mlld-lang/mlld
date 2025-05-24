@@ -2,7 +2,7 @@
  * Path directive tests - Verifies AST structure for path directives
  */
 import { describe, expect, test } from 'vitest';
-import { parse } from '@core/ast/parser';
+import { parse } from '@grammar/parser';
 
 describe('Path Directive', () => {
   test('Basic path with special variable', async () => {

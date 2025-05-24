@@ -2,7 +2,7 @@ import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate, evaluate } from '../core/interpreter';
-import { parse } from '@core/ast/parser';
+import { parse } from '@grammar/parser';
 import * as path from 'path';
 
 /**

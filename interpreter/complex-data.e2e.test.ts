@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Environment } from '@interpreter/env/Environment';
 import { evaluate } from '@interpreter/core/interpreter';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
-import { parse } from '@core/ast/parser';
+import { parse } from '@grammar/parser';
 import { PathService } from '@services/fs/PathService';
 
 describe('Complex Data Assignment', () => {

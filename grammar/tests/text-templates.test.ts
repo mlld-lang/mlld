@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parse } from '@core/ast/parser';
+import { parse } from '@grammar/parser';
 
 describe('Parameterized Text Templates', () => {
   describe('Template Definition', () => {

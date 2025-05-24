@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { parse } from '@core/ast/parser';
+import { parse } from '@grammar/parser';
 
 // Helper function to log all keys and check if values are arrays
 function checkValuesAreArrays(directive) {

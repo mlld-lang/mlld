@@ -42,7 +42,7 @@ describe('Meld Interpreter - Fixture Tests', () => {
     // Check if we have a mapping for this fixture
     const exampleSubPath = exampleDirMappings[baseName];
     if (exampleSubPath) {
-      const exampleDir = path.join(__dirname, '../core/examples', exampleSubPath);
+      const exampleDir = path.join(__dirname, '../tests/cases', exampleSubPath);
       
       // Check if the directory exists
       if (fs.existsSync(exampleDir)) {
@@ -71,7 +71,7 @@ describe('Meld Interpreter - Fixture Tests', () => {
   }
   
   // Load all fixtures
-  const fixturesDir = path.join(__dirname, '../core/ast/fixtures');
+  const fixturesDir = path.join(__dirname, '../tests/fixtures');
   const fixtureFiles = fs.readdirSync(fixturesDir)
     .filter(f => f.endsWith('.fixture.json'))
     // Skip numbered fixtures as they are partial and expect full output
@@ -101,7 +101,7 @@ describe('Meld Interpreter - Fixture Tests', () => {
       
       // Always copy shared files from the files directory
       try {
-        const sharedFilesPath = path.join(__dirname, '../core/examples/files');
+        const sharedFilesPath = path.join(__dirname, '../tests/cases/files');
         if (fs.existsSync(sharedFilesPath)) {
           const sharedFiles = fs.readdirSync(sharedFilesPath);
           

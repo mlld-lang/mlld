@@ -1,66 +1,114 @@
-import type { DirectiveNode, VariableReferenceNode, ASTNode, TextNode } from './ast-nodes';
+/**
+ * Data directive type definitions
+ */
+import { DirectiveNode, TypedDirectiveNode } from './base';
+import { ContentNodeArray, VariableNodeArray } from './values';
 
-// Since the AST uses actual nodes rather than wrapper types, we work with those directly
+/**
+ * Data directive raw values
+ */
+export interface DataRaw {
+  identifier: string;
+  value: string;
+}
+
+/**
+ * Data directive metadata
+ */
+export interface DataMeta {
+  [key: string]: unknown;
+}
+
+/**
+ * Base Data directive node
+ */
+export interface DataDirectiveNode extends TypedDirectiveNode<'data', 'dataAssignment'> {
+  values: DataValues;
+  raw: DataRaw;
+  meta: DataMeta;
+}
+
+/**
+ * Data values can be complex with nested structures
+ */
+export interface DataValues {
+  identifier: VariableNodeArray;
+  value: DataValue;
+}
+
+/**
+ * Recursive type for data values - can be primitives, objects, arrays, or directives
+ */
 export type DataValue = 
-  | string
-  | number 
-  | boolean
-  | null
-  | DirectiveNode     // Has meta.isDataValue = true
-  | VariableReferenceNode  // Has valueType: 'varIdentifier'
-  | TemplateArray     // Array of Text/VariableReference nodes
-  | DataObject
-  | DataArray;
+  | ContentNodeArray // String literals, numbers, booleans represented as content nodes
+  | DataObjectValue
+  | DataArrayValue
+  | DirectiveNode; // Nested directive
 
-// Template content is represented as an array of nodes
-export type TemplateArray = Array<TextNode | VariableReferenceNode>;
-
-export interface DataObject {
+/**
+ * An object value in a data structure
+ */
+export interface DataObjectValue {
   type: 'object';
-  properties: Record<string, DataValue>;
+  properties: {
+    [key: string]: DataValue; // Each property can be any data value including nested objects/arrays/directives
+  };
 }
 
-export interface DataArray {
+/**
+ * An array value in a data structure
+ */
+export interface DataArrayValue {
   type: 'array';
-  elements: DataValue[];
+  items: DataValue[]; // Each item can be any data value including nested objects/arrays/directives
 }
 
-// Helper type guards based on actual AST structure
-export function isDirectiveValue(value: any): value is DirectiveNode {
-  return value?.type === 'Directive' && value?.meta?.isDataValue === true;
+/**
+ * Data Assignment directive - @data var = value
+ * Where value can be a primitive, object, array, or directive
+ */
+export interface DataAssignmentDirectiveNode extends DataDirectiveNode {
+  subtype: 'dataAssignment';
+  values: {
+    identifier: VariableNodeArray;
+    value: DataValue;
+  };
+  raw: {
+    identifier: string;
+    value: string;
+  };
 }
 
-export function isVariableReferenceValue(value: any): value is VariableReferenceNode {
-  return value?.type === 'VariableReference' && value?.valueType === 'varIdentifier';
+/**
+ * Type guards to check the type of a data value
+ */
+export function isDataObjectValue(value: DataValue): value is DataObjectValue {
+  return typeof value === 'object' && !Array.isArray(value) && 'type' in value && value.type === 'object';
 }
 
-export function isTemplateValue(value: any): value is TemplateArray {
-  return Array.isArray(value) && value.some(node => 
-    node?.type === 'VariableReference' && node?.valueType === 'varInterpolation'
-  );
+export function isDataArrayValue(value: DataValue): value is DataArrayValue {
+  return typeof value === 'object' && !Array.isArray(value) && 'type' in value && value.type === 'array';
 }
 
-export function isDataObject(value: any): value is DataObject {
-  return value?.type === 'object';
+export function isDirectiveValue(value: DataValue): value is DirectiveNode {
+  return typeof value === 'object' && !Array.isArray(value) && 'kind' in value;
 }
 
-export function isDataArray(value: any): value is DataArray {
-  return value?.type === 'array';
+export function isContentNodeArray(value: DataValue): value is ContentNodeArray {
+  return Array.isArray(value) && (value.length === 0 || 'type' in value[0]);
 }
 
-export function isPrimitiveValue(value: any): boolean {
-  return typeof value === 'string' || 
-         typeof value === 'number' || 
-         typeof value === 'boolean' || 
-         value === null;
+/**
+ * Type guards for specific directive types
+ */
+export function isEmbedDirectiveValue(value: DataValue): value is DirectiveNode {
+  return isDirectiveValue(value) && value.kind === 'embed';
 }
 
-// For tracking evaluation state of embedded directives
-export interface EvaluationState {
-  evaluated: boolean;
-  result?: any;
-  error?: Error;
+export function isRunDirectiveValue(value: DataValue): value is DirectiveNode {
+  return isDirectiveValue(value) && value.kind === 'run';
 }
 
-// Track evaluation state separately from AST nodes
-export const evaluationCache = new WeakMap<DirectiveNode, EvaluationState>();
+export function isTextDirectiveValue(value: DataValue): value is DirectiveNode {
+  return isDirectiveValue(value) && value.kind === 'text';
+}

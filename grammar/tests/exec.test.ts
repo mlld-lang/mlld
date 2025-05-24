@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { parse } from '@core/ast/parser';
-import { isExecCommandDirective, isExecCodeDirective } from '../../core/ast/types/exec';
+import { parse } from '@grammar/parser';
+import { isExecCommandDirective, isExecCodeDirective } from '@core/types/exec';
 
 describe('Exec directive', () => {
   describe('execCommand subtype', () => {

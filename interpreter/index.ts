@@ -1,4 +1,4 @@
-import { parse } from '@core/ast/parser';
+import { parse } from '@grammar/parser';
 import { Environment } from './env/Environment';
 import { evaluate } from './core/interpreter';
 import { formatOutput } from './output/formatter';

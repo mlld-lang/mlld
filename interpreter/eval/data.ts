@@ -2,7 +2,7 @@ import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { parseDataValue, needsEvaluation, extractPlainValue } from './data-value-parser';
-import { createDataVariable, createComplexDataVariable } from '@core/types/variables';
+import { createDataVariable, createComplexDataVariable } from '@core/types';
 
 /**
  * Evaluate @data directives.
