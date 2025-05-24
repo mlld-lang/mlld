@@ -77,7 +77,7 @@ export default defineConfig([
       index: 'api/index.ts',
     },
     format: ['esm'],
-    dts: true,
+    dts: false, // Temporarily disable DTS due to tsup issue with process global
     clean: true,
     sourcemap: true,
     splitting: true,
@@ -154,7 +154,7 @@ export default defineConfig([
       cli: 'cli/cli-entry.ts',
     },
     format: 'cjs',
-    dts: true,
+    dts: false, // Temporarily disable DTS due to tsup issue with process global
     clean: false,
     sourcemap: true,
     treeshake: {

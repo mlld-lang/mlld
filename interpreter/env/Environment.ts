@@ -85,22 +85,22 @@ export class Environment {
           output += args.map(arg => String(arg)).join(' ') + '\n';
         };
         
-        // If params provided, inject them as variables
-        let fullCode = code;
-        if (params) {
-          const paramDeclarations = Object.entries(params)
-            .map(([key, value]) => `const ${key} = ${JSON.stringify(value)};`)
-            .join('\n');
-          fullCode = paramDeclarations + '\n' + code;
+        // Create a function with parameters if provided
+        const paramNames = params ? Object.keys(params) : [];
+        const paramValues = params ? Object.values(params) : [];
+        
+        // Build the function body
+        let functionBody = code;
+        
+        // Handle return statements properly
+        if (!code.includes('return') && !code.includes(';')) {
+          // Single expression without semicolon - return it
+          functionBody = `return ${code}`;
         }
         
-        // If code contains return statement, wrap in IIFE
-        if (fullCode.includes('return')) {
-          fullCode = `(function() { ${fullCode} })()`;
-        }
-        
-        // Execute the code
-        const result = eval(fullCode);
+        // Create and execute the function
+        const fn = new Function(...paramNames, functionBody);
+        const result = fn(...paramValues);
         
         // Restore console.log
         console.log = originalLog;

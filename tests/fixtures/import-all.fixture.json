@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "c1c7e33d-213d-4ddb-ac8e-2c036565be15",
+      "nodeId": "15183b8f-3ee6-4fea-966a-16526bcec892",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "imports": [
           {
             "type": "VariableReference",
-            "nodeId": "71b181f0-e3fc-4827-aff7-edadafd7c11a",
+            "nodeId": "80d558de-0a50-47d0-a2bc-11b336d975a2",
             "location": {
               "start": {
                 "offset": 0,
@@ -49,7 +49,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "dc8264db-1932-419b-af10-e9d2efe210f4",
+            "nodeId": "83127113-6621-4702-910a-c9b26955590d",
             "location": {
               "start": {
                 "offset": 18,
@@ -81,7 +81,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "7b620d8f-9686-4a6d-ac43-2eb78e69dd94",
+      "nodeId": "9499dc7d-c2e3-49d3-9ecb-f30c98a8092d",
       "location": {
         "start": {
           "offset": 29,
@@ -98,7 +98,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "87405dc0-5937-4d9c-bb6d-a429b416c481",
+      "nodeId": "3c7f6b15-b12a-4754-b56c-54bca41eb409",
       "location": {
         "start": {
           "offset": 30,
@@ -118,7 +118,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "5d7bf91f-4843-443a-a238-676f48ca7d6b",
+            "nodeId": "bc821c96-02d1-4fb3-9951-f695f9376699",
             "location": {
               "start": {
                 "offset": 0,
@@ -144,7 +144,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "4d2d6c77-e87c-4149-ad4b-6599e19631e1",
+      "nodeId": "0b33ef23-12cd-4585-aa82-762819854952",
       "location": {
         "start": {
           "offset": 45,
@@ -164,7 +164,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "d9d446df-a08c-463d-8ec9-bee8ca30c9d8",
+            "nodeId": "9e36c50a-1ad4-4e76-a8ef-3df56ebc42f1",
             "location": {
               "start": {
                 "offset": 0,
