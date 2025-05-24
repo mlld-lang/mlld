@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "@11ty/eleventy": "^3.0.0",
+    "js-yaml": "^4.1.0",
     "markdown-it": "^13.0.2",
-    "markdown-it-anchor": "^8.6.7"
+    "markdown-it-anchor": "^8.6.7",
+    "markdown-it-prism": "^3.0.0",
+    "prismjs": "^1.30.0"
   }
 }

@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
@@ -86,6 +87,20 @@
         
           
         
+          
+        
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
           
@@ -175,6 +190,21 @@
             
               
             
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
           </ul>
         </li>
       </ul>
@@ -185,9 +215,9 @@
     <h1 id="%40run-directive" tabindex="-1">@run Directive</h1>
 <p>The <code>@run</code> directive executes shell commands and includes their output in your Meld document.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
-<pre><code class="language-meld">@run [command_text]
-@run [command_text] under header_text
-@run [$command({{textvar1}}, {{textvar2}})]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>command_text<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>command_text<span class="token punctuation">]</span></span> under header_text
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>$command({{textvar1}}, {{textvar2}})<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Where:</p>
 <ul>
@@ -220,7 +250,7 @@
 </ul>
 <h2 id="adding-headers" tabindex="-1">Adding Headers</h2>
 <p>You can add a header to command output using the <code>under</code> keyword:</p>
-<pre><code class="language-meld">@run [date] under Current Date
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>date<span class="token punctuation">]</span></span> under Current Date
 </code></pre>
 <p>This will add a header &quot;Current Date&quot; above the command output.</p>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
@@ -232,26 +262,26 @@
 </ul>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic command execution:</p>
-<pre><code class="language-meld">@run [echo &quot;Hello, World!&quot;]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hello, World!"<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using variables in commands:</p>
-<pre><code class="language-meld">@text name = &quot;Alice&quot;
-@run [echo &quot;Hello, {{name}}!&quot;]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"Alice"</span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hello, {{name}}!"<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using path variables:</p>
-<pre><code class="language-meld">@path src = &quot;$PROJECTPATH/src&quot;
-@run [ls -la $src]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la $src<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using command output in variables:</p>
-<pre><code class="language-meld">@text date = @run [date +&quot;%Y-%m-%d&quot;]
-@data files = @run [ls -la | jq -R -s -c 'split(&quot;\n&quot;)[:-1]']
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> date <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>date +"%Y-%m-%d"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@data</span> files <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la | jq -R -s -c 'split("\n")<span class="token punctuation">[</span>:-1<span class="token punctuation">]</span></span>']
 </code></pre>
 <p>Adding headers to output:</p>
-<pre><code class="language-meld">@run [git status] under Repository Status
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>git status<span class="token punctuation">]</span></span> under Repository Status
 </code></pre>
 <p>Using defined commands:</p>
-<pre><code class="language-meld">@define listFiles(dir) = @run [ls -la {{dir}}]
-@run [$listFiles($PROJECTPATH)]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@define</span> listFiles<span class="token punctuation">(</span>dir<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la {{dir}}<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>$listFiles($PROJECTPATH)<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="environment-%26-working-directory" tabindex="-1">Environment &amp; Working Directory</h2>
 <ul>

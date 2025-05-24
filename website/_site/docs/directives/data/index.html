@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
@@ -86,6 +87,20 @@
         
           
         
+          
+        
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
           
@@ -175,6 +190,21 @@
             
               
             
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
           </ul>
         </li>
       </ul>
@@ -185,7 +215,7 @@
     <h1 id="%40data-directive" tabindex="-1">@data Directive</h1>
 <p>The <code>@data</code> directive defines a structured data variable that can store objects, arrays, or other complex data types.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
-<pre><code class="language-meld">@data identifier = value
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> identifier <span class="token operator">=</span> value
 </code></pre>
 <p>Where:</p>
 <ul>
@@ -211,73 +241,73 @@
 </ul>
 <h2 id="object-and-array-literals" tabindex="-1">Object and Array Literals</h2>
 <p>Data objects can be defined using object literal syntax:</p>
-<pre><code class="language-meld">@data config = {{ name: &quot;test&quot;, version: 1 }}
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> name: <span class="token string">"test"</span><span class="token punctuation">,</span> version: <span class="token number">1</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>For multi-line objects:</p>
-<pre><code class="language-meld">@data user = {{
-  name: &quot;Alice&quot;,
-  id: 123,
-  roles: [&quot;admin&quot;, &quot;editor&quot;],
-  settings: {
-    theme: &quot;dark&quot;,
-    notifications: true
-  }
-}}
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> user <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>
+  name: <span class="token string">"Alice"</span><span class="token punctuation">,</span>
+  id: <span class="token number">123</span><span class="token punctuation">,</span>
+  roles: <span class="token path"><span class="token punctuation">[</span>"admin", "editor"<span class="token punctuation">]</span></span><span class="token punctuation">,</span>
+  settings: <span class="token punctuation">{</span>
+    theme: <span class="token string">"dark"</span><span class="token punctuation">,</span>
+    notifications: <span class="token boolean">true</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>Arrays can be defined as well:</p>
-<pre><code class="language-meld">@data colors = [&quot;red&quot;, &quot;green&quot;, &quot;blue&quot;]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> colors <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>"red", "green", "blue"<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="variable-interpolation-in-data" tabindex="-1">Variable Interpolation in Data</h2>
 <p>Data structures can contain variable references in both keys and values:</p>
-<pre><code class="language-meld">@text name = &quot;John&quot;
-@text keyName = &quot;username&quot;
-@data user = {{
-  {{keyName}}: {{name}},    # Dynamic key name
-  id: 123,
-  active: true
-}}
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"John"</span>
+<span class="token directive keyword">@text</span> keyName <span class="token operator">=</span> <span class="token string">"username"</span>
+<span class="token directive keyword">@data</span> user <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>
+  <span class="token punctuation">{</span><span class="token punctuation">{</span>keyName<span class="token punctuation">}</span><span class="token punctuation">}</span>: <span class="token punctuation">{</span><span class="token punctuation">{</span>name<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span>    # Dynamic key name
+  id: <span class="token number">123</span><span class="token punctuation">,</span>
+  active: <span class="token boolean">true</span>
+<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <h2 id="referencing-data-variables" tabindex="-1">Referencing Data Variables</h2>
 <p>Data variables are referenced using the <code>{{identifier}}</code> syntax:</p>
-<pre><code class="language-meld">@data user = {{ name: &quot;Alice&quot;, id: 123 }}
-@text greeting = `Hello, {{user.name}}!`
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> user <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> name: <span class="token string">"Alice"</span><span class="token punctuation">,</span> id: <span class="token number">123</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> `Hello<span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>user.name<span class="token punctuation">}</span><span class="token punctuation">}</span>!`
 </code></pre>
 <p>You can access nested fields using dot notation:</p>
-<pre><code class="language-meld">@data config = {{ 
-  app: { 
-    name: &quot;MyApp&quot;,
-    version: &quot;1.0.0&quot;
-  }
-}}
-@text appInfo = `App: {{config.app.name}} v{{config.app.version}}`
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> 
+  app: <span class="token punctuation">{</span> 
+    name: <span class="token string">"MyApp"</span><span class="token punctuation">,</span>
+    version: <span class="token string">"1.0.0"</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token directive keyword">@text</span> appInfo <span class="token operator">=</span> `App: <span class="token punctuation">{</span><span class="token punctuation">{</span>config.app.name<span class="token punctuation">}</span><span class="token punctuation">}</span> v<span class="token punctuation">{</span><span class="token punctuation">{</span>config.app.version<span class="token punctuation">}</span><span class="token punctuation">}</span>`
 </code></pre>
 <h3 id="accessing-array-elements" tabindex="-1">Accessing Array Elements</h3>
 <p>Use dot notation to access array elements:</p>
-<pre><code class="language-meld">@data fruits = [&quot;apple&quot;, &quot;banana&quot;, &quot;cherry&quot;]
-@text favorite = `My favorite fruit is {{fruits.0}}`
-@text list = `Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}`
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> fruits <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>"apple", "banana", "cherry"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> favorite <span class="token operator">=</span> `My favorite fruit is <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits.<span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">}</span>`
+<span class="token directive keyword">@text</span> list <span class="token operator">=</span> `Items: <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits.<span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits.<span class="token number">1</span><span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span> and <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits.<span class="token number">2</span><span class="token punctuation">}</span><span class="token punctuation">}</span>`
 </code></pre>
 <p>Note: Currently, only dot notation is supported for array access. Bracket notation (<code>fruits[0]</code>) is not supported.</p>
 <h2 id="json-string-format" tabindex="-1">JSON String Format</h2>
 <p>Values can also be provided as JSON strings which are parsed:</p>
-<pre><code class="language-meld">@data config = '{&quot;key&quot;: &quot;value&quot;}'
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> '<span class="token punctuation">{</span><span class="token string">"key"</span>: <span class="token string">"value"</span><span class="token punctuation">}</span>'
 </code></pre>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic data variable:</p>
-<pre><code class="language-meld">@data settings = {{ 
-  darkMode: true,
-  fontSize: 16
-}}
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> settings <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> 
+  darkMode: <span class="token boolean">true</span><span class="token punctuation">,</span>
+  fontSize: <span class="token number">16</span>
+<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>Using variables in data:</p>
-<pre><code class="language-meld">@text name = &quot;John&quot;
-@data user = {{ 
-  username: {{name}},
-  active: true 
-}}
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"John"</span>
+<span class="token directive keyword">@data</span> user <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> 
+  username: <span class="token punctuation">{</span><span class="token punctuation">{</span>name<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+  active: <span class="token boolean">true</span> 
+<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>Using command output as data:</p>
-<pre><code class="language-meld">@data gitInfo = @run [git log -1 --format=&quot;%H,%an,%ae,%s&quot;]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> gitInfo <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>git log -1 --format="%H,%an,%ae,%s"<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The following errors are possible with data directives:</p>

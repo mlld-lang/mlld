@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
@@ -86,6 +87,20 @@
         
           
         
+          
+        
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
           
@@ -175,6 +190,21 @@
             
               
             
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
           </ul>
         </li>
       </ul>
@@ -197,9 +227,9 @@
 </code></pre>
 <h3 id="comments" tabindex="-1">Comments</h3>
 <p>Lines that begin with <code>&gt;&gt; </code> (two greater-than signs followed by a space) are treated as comments:</p>
-<pre><code class="language-meld">&gt;&gt; This is a comment
-&gt;&gt; Comments must start at beginning of line (no indentation)
-@text message = &quot;Hello&quot;  &gt;&gt; Invalid - comments must be on their own line
+<pre class="language-meld"><code class="language-meld">>> This is a comment
+>> Comments must start at beginning of line <span class="token punctuation">(</span>no indentation<span class="token punctuation">)</span>
+<span class="token directive keyword">@text</span> message <span class="token operator">=</span> <span class="token string">"Hello"</span>  >> Invalid - comments must be on their own line
 </code></pre>
 <ul>
 <li>Must appear at start of line (no indentation)</li>
@@ -240,21 +270,21 @@
 <h2 id="variable-types" tabindex="-1">Variable Types</h2>
 <h3 id="path-variables" tabindex="-1">Path Variables</h3>
 <p>Syntax: <code>$identifier</code></p>
-<pre><code class="language-meld">$path                # Reference a path variable
+<pre class="language-meld"><code class="language-meld">$path                # Reference a path variable
 $HOMEPATH or $~      # Special path variable for home directory
 $PROJECTPATH or $.   # Special path variable for project root
 </code></pre>
 <h3 id="text-variables" tabindex="-1">Text Variables</h3>
 <p>Syntax: <code>{{identifier}}</code></p>
-<pre><code class="language-meld">{{textvar}}                    # Text variable reference
-{{textvar&gt;&gt;(format)}}         # Formatted text variable
+<pre class="language-meld"><code class="language-meld"><span class="token punctuation">{</span><span class="token punctuation">{</span>textvar<span class="token punctuation">}</span><span class="token punctuation">}</span>                    # Text variable reference
+<span class="token punctuation">{</span><span class="token punctuation">{</span>textvar>><span class="token punctuation">(</span>format<span class="token punctuation">)</span><span class="token punctuation">}</span><span class="token punctuation">}</span>         # Formatted text variable
 </code></pre>
 <h3 id="data-variables" tabindex="-1">Data Variables</h3>
 <p>Syntax: <code>{{identifier}}</code></p>
-<pre><code class="language-meld">{{datavar}}                    # Data variable reference
-{{datavar.field}}             # Data variable field access
-{{datavar.0}}                 # Array element access (use dot notation)
-{{datavar.field&gt;&gt;(format)}}   # Formatted data field access
+<pre class="language-meld"><code class="language-meld"><span class="token punctuation">{</span><span class="token punctuation">{</span>datavar<span class="token punctuation">}</span><span class="token punctuation">}</span>                    # Data variable reference
+<span class="token punctuation">{</span><span class="token punctuation">{</span>datavar.field<span class="token punctuation">}</span><span class="token punctuation">}</span>             # Data variable field access
+<span class="token punctuation">{</span><span class="token punctuation">{</span>datavar.<span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">}</span>                 # Array element access <span class="token punctuation">(</span>use dot notation<span class="token punctuation">)</span>
+<span class="token punctuation">{</span><span class="token punctuation">{</span>datavar.field>><span class="token punctuation">(</span>format<span class="token punctuation">)</span><span class="token punctuation">}</span><span class="token punctuation">}</span>   # Formatted data field access
 </code></pre>
 <h2 id="code-fences" tabindex="-1">Code Fences</h2>
 <p>Triple backticks that:</p>
@@ -266,69 +296,69 @@ $PROJECTPATH or $.   # Special path variable for project root
 <li>Support nesting with different numbers of backticks</li>
 </ul>
 <p>Example:</p>
-<pre><code class="language-meld">​```python
-def hello():
-    print(&quot;Hi&quot;)  # @text directives here are preserved as-is
+<pre class="language-meld"><code class="language-meld">​```python
+def hello<span class="token punctuation">(</span><span class="token punctuation">)</span>:
+    print<span class="token punctuation">(</span><span class="token string">"Hi"</span><span class="token punctuation">)</span>  # <span class="token directive keyword">@text</span> directives here are preserved <span class="token operator">as</span>-is
 ​```
 </code></pre>
 <h2 id="directive-patterns" tabindex="-1">Directive Patterns</h2>
 <h3 id="%40embed" tabindex="-1">@embed</h3>
-<pre><code class="language-meld">@embed [path]
-@embed [path # section_text]
-@embed [path] as ###                    # ### parsed as count of # chars
-@embed [path # section_text] as ###
-@embed [path] under header_text
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>path # section_text<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span> <span class="token operator">as</span> ###                    # ### parsed <span class="token operator">as</span> count of # chars
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>path # section_text<span class="token punctuation">]</span></span> <span class="token operator">as</span> ###
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span> under header_text
 </code></pre>
 <h3 id="%40run" tabindex="-1">@run</h3>
-<pre><code class="language-meld">@run [command_text]
-@run [command_text] under header_text
-@run [$command({{textvar1}}, {{textvar2}})]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>command_text<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>command_text<span class="token punctuation">]</span></span> under header_text
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>$command({{textvar1}}, {{textvar2}})<span class="token punctuation">]</span></span>
 </code></pre>
 <h3 id="%40import" tabindex="-1">@import</h3>
-<pre><code class="language-meld">@import [path]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span>
 </code></pre>
 <h3 id="%40define" tabindex="-1">@define</h3>
-<pre><code class="language-meld">@define identifier = @run [content]
-@define command(param1, param2) = @run [content {{param1}} {{param2}}]
-@define command.risk = &quot;description&quot;
-@define command.about = &quot;description&quot;
-@define command.meta = &quot;description&quot;
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@define</span> identifier <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>content<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@define</span> command<span class="token punctuation">(</span>param1<span class="token punctuation">,</span> param2<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>content {{param1}} {{param2}}<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@define</span> command.risk <span class="token operator">=</span> <span class="token string">"description"</span>
+<span class="token directive keyword">@define</span> command.about <span class="token operator">=</span> <span class="token string">"description"</span>
+<span class="token directive keyword">@define</span> command.meta <span class="token operator">=</span> <span class="token string">"description"</span>
 </code></pre>
 <h3 id="%40text" tabindex="-1">@text</h3>
-<pre><code class="language-meld">@text identifier = &quot;value&quot;
-@text identifier = @embed [content]
-@text identifier = @run [command]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> identifier <span class="token operator">=</span> <span class="token string">"value"</span>
+<span class="token directive keyword">@text</span> identifier <span class="token operator">=</span> <span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>content<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> identifier <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>command<span class="token punctuation">]</span></span>
 </code></pre>
 <h3 id="%40path" tabindex="-1">@path</h3>
-<pre><code class="language-meld">@path identifier = &quot;$HOMEPATH/path&quot;
-@path identifier = &quot;$~/path&quot;
-@path identifier = &quot;$PROJECTPATH/path&quot;
-@path identifier = &quot;$./path&quot;
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$HOMEPATH/path"</span>
+<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$~/path"</span>
+<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/path"</span>
+<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$./path"</span>
 </code></pre>
 <h3 id="%40data" tabindex="-1">@data</h3>
-<pre><code class="language-meld">@data identifier = value
-@data identifier : schema = value
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> identifier <span class="token operator">=</span> value
+<span class="token directive keyword">@data</span> identifier : schema <span class="token operator">=</span> value
 </code></pre>
 <h2 id="string-concatenation" tabindex="-1">String Concatenation</h2>
 <p>Uses the <code>++</code> operator with required spaces on both sides:</p>
-<pre><code class="language-meld">@text greeting = &quot;Hello&quot; ++ &quot; &quot; ++ &quot;World&quot;
-@text message = {{intro}} ++ {{body}}
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> <span class="token string">"Hello"</span> ++ <span class="token string">" "</span> ++ <span class="token string">"World"</span>
+<span class="token directive keyword">@text</span> message <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>intro<span class="token punctuation">}</span><span class="token punctuation">}</span> ++ <span class="token punctuation">{</span><span class="token punctuation">{</span>body<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <h2 id="template-literals" tabindex="-1">Template Literals</h2>
 <p>Delimited by backticks (`):</p>
-<pre><code class="language-meld">`Hello {{name}}!`                        # Text variable
-`Config: {{config.name}}`                # Data variable with field
-`{{greeting}}, your ID is {{user.id}}`    # Mixed variables
+<pre class="language-meld"><code class="language-meld">`Hello <span class="token punctuation">{</span><span class="token punctuation">{</span>name<span class="token punctuation">}</span><span class="token punctuation">}</span>!`                        # Text variable
+`Config: <span class="token punctuation">{</span><span class="token punctuation">{</span>config.name<span class="token punctuation">}</span><span class="token punctuation">}</span>`                # Data variable with field
+`<span class="token punctuation">{</span><span class="token punctuation">{</span>greeting<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span> your ID is <span class="token punctuation">{</span><span class="token punctuation">{</span>user.id<span class="token punctuation">}</span><span class="token punctuation">}</span>`    # Mixed variables
 </code></pre>
 <p>Multi-line template literals:</p>
-<pre><code class="language-meld">@text prompt = [[`
-  System: {{role}}
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> prompt <span class="token operator">=</span> <span class="token template-block"><span class="token punctuation">[[</span>`
+  System: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">role</span><span class="token punctuation">}}</span></span>
   
   Context:
-  {{context.data}}
+  <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">context.data</span><span class="token punctuation">}}</span></span>
   
-  User: {{username}}
-`]]
+  User: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">username</span><span class="token punctuation">}}</span></span>
+`<span class="token punctuation">]]</span></span>
 </code></pre>
 <h2 id="variable-interpolation-rules" tabindex="-1">Variable Interpolation Rules</h2>
 <p>Variable references are allowed in:</p>

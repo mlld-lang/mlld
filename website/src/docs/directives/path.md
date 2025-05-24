@@ -14,11 +14,14 @@ The `@path` directive defines filesystem path variables that can be used in `@em
 @path identifier = "$~/path"
 @path identifier = "$PROJECTPATH/path"
 @path identifier = "$./path"
+@path identifier = "/absolute/path"
+@path identifier = "relative/path"
+@path identifier = "../parent/path"
+@path identifier = "./current/path"
 ```
 
 Where:
 - `identifier` is the variable name (must be a valid identifier)
-- Path must start with either `$HOMEPATH`, `$~`, `$PROJECTPATH`, or `$.`
 - Path segments are separated by forward slashes
 - Path must be quoted (single, double, or backtick quotes)
 
@@ -33,18 +36,20 @@ Where:
 
 - Must not be empty
 - Cannot contain null bytes
-- Cannot contain `.` or `..` directory segments (use `$.` or `$~` instead)
-- Raw absolute paths (e.g., `/usr/local/bin`) are not allowed
-- Simple filenames with no slashes are allowed without special prefixes
+- Any standard path format is allowed:
+  - Absolute paths (e.g., `/usr/local/bin`) 
+  - Relative paths (e.g., `path/to/file`)
+  - Paths with dot segments (e.g., `./current` or `../parent`)
+  - Paths with special variables (e.g., `$HOMEPATH/path`)
 
-## Special Path Variables
+## Special Path Variables (Optional)
 
-Meld provides two special path variables:
+Meld provides special path variables for enhanced cross-platform portability:
 
 - `$HOMEPATH` or `$~`: Refers to the user's home directory
 - `$PROJECTPATH` or `$.`: Refers to the current project root directory
 
-All paths with slashes must be rooted in a $path variable (including global $HOMEPATH and $PROJECTPATH path variables).
+Using special path variables is recommended (but not required) for best cross-platform portability.
 
 ## Referencing Path Variables
 
@@ -90,11 +95,8 @@ Using path segments:
 ## Error Handling
 
 The following errors are possible with path directives:
-- `INVALID_PATH_FORMAT`: Path with slashes that doesn't use `$.` or `$~`
-- `CONTAINS_DOT_SEGMENTS`: Path contains `.` or `..` segments
-- `RAW_ABSOLUTE_PATH`: Path is absolute but doesn't use `$.` or `$~`
 - `INVALID_PATH`: Path is empty or malformed
-- `NULL_BYTE`: Path contains null bytes
+- `NULL_BYTE`: Path contains null bytes (security restriction)
 
 ## Variables in Paths
 
@@ -105,10 +107,15 @@ Paths can include variables, which are resolved during execution:
 @path docs = "$PROJECTPATH/{{dir}}"
 ```
 
+## Path Best Practices
+
+- For cross-platform compatibility, use special path variables `$PROJECTPATH` and `$HOMEPATH`
+- Use forward slashes for path separators (even on Windows)
+- Be cautious when using absolute paths or parent directory references (`..`), as they may make your Meld files less portable
+- Consider using path variables to encapsulate filesystem paths for better maintainability
+
 ## Notes
 
 - Path variables cannot use field access or formatting
-- All paths with slashes must be rooted in a $path variable (including global $HOMEPATH and $PROJECTPATH path variables)
-- Relative paths are not allowed for security reasons
 - Path variables are distinct from text and data variables
 - In test mode, existence checks can be bypassed

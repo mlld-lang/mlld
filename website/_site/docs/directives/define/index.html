@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
@@ -86,6 +87,20 @@
         
           
         
+          
+        
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
           
@@ -175,6 +190,21 @@
             
               
             
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
           </ul>
         </li>
       </ul>
@@ -185,11 +215,11 @@
     <h1 id="%40define-directive" tabindex="-1">@define Directive</h1>
 <p>The <code>@define</code> directive creates reusable commands that can be referenced in <code>@run</code> directives.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
-<pre><code class="language-meld">@define command = @run [content]
-@define command(param1, param2) = @run [content {{param1}} {{param2}}]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@define</span> command <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>content<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@define</span> command<span class="token punctuation">(</span>param1<span class="token punctuation">,</span> param2<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>content {{param1}} {{param2}}<span class="token punctuation">]</span></span>
 
-@define command.about = &quot;description&quot;
-@define command.meta = &quot;description&quot;
+<span class="token directive keyword">@define</span> command.about <span class="token operator">=</span> <span class="token string">"description"</span>
+<span class="token directive keyword">@define</span> command.meta <span class="token operator">=</span> <span class="token string">"description"</span>
 </code></pre>
 <p>Where:</p>
 <ul>
@@ -207,7 +237,7 @@
 </ul>
 <h2 id="command-parameters" tabindex="-1">Command Parameters</h2>
 <p>Parameters are defined in parentheses and must be referenced in the command body:</p>
-<pre><code class="language-meld">@define greet(name) = @run [echo &quot;Hello, {{name}}!&quot;]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@define</span> greet<span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hello, {{name}}!"<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Parameter rules:</p>
 <ul>
@@ -218,8 +248,8 @@
 <li>Parameters are referenced using <code>{{paramName}}</code> syntax</li>
 <li>Parameters are required when calling the command</li>
 </ul>
-<pre><code class="language-meld">@text user = &quot;Alice&quot;
-@run [$greet({{user}})]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> user <span class="token operator">=</span> <span class="token string">"Alice"</span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>$greet({{user}})<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="command-body-requirements" tabindex="-1">Command Body Requirements</h2>
 <ul>
@@ -229,8 +259,8 @@
 </ul>
 <h2 id="command-metadata" tabindex="-1">Command Metadata</h2>
 <p>You can add metadata to commands using the field syntax:</p>
-<pre><code class="language-meld">@define listFiles(dir) = @run [ls -la {{dir}}]
-@define listFiles.about = &quot;Lists all files in the specified directory&quot;
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@define</span> listFiles<span class="token punctuation">(</span>dir<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la {{dir}}<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@define</span> listFiles.about <span class="token operator">=</span> <span class="token string">"Lists all files in the specified directory"</span>
 </code></pre>
 <p>Supported metadata fields:</p>
 <ul>
@@ -239,22 +269,22 @@
 </ul>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic command definition:</p>
-<pre><code class="language-meld">@define sayHello = @run [echo &quot;Hello, World!&quot;]
-@run [$sayHello]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@define</span> sayHello <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hello, World!"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>$sayHello<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Command with parameters:</p>
-<pre><code class="language-meld">@define greet(name, greeting) = @run [echo &quot;{{greeting}}, {{name}}!&quot;]
-@text user = &quot;Alice&quot;
-@run [$greet({{user}}, &quot;Hi&quot;)]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@define</span> greet<span class="token punctuation">(</span>name<span class="token punctuation">,</span> greeting<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "{{greeting}}, {{name}}!"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> user <span class="token operator">=</span> <span class="token string">"Alice"</span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>$greet({{user}}, "Hi")<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Command with path variables:</p>
-<pre><code class="language-meld">@define listDir(dir) = @run [ls -la {{dir}}]
-@path src = &quot;$PROJECTPATH/src&quot;
-@run [$listDir($src)]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@define</span> listDir<span class="token punctuation">(</span>dir<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la {{dir}}<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>$listDir($src)<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Command with metadata:</p>
-<pre><code class="language-meld">@define runScript(script) = @run [bash {{script}}]
-@define runScript.about = &quot;Executes a bash script&quot;
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@define</span> runScript<span class="token punctuation">(</span>script<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>bash {{script}}<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@define</span> runScript.about <span class="token operator">=</span> <span class="token string">"Executes a bash script"</span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The implementation handles these error scenarios:</p>

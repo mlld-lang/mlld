@@ -1,0 +1,68 @@
+{
+  "scopeName": "markdown.meld.injection",
+  "injectionSelector": "text.html.markdown, text.html.markdown.source",
+  "patterns": [
+    {
+      "begin": "^(@(text|data|run|add|path|import|exec|define|embed|url)\\b)",
+      "end": "$",
+      "name": "meta.embedded.block.meld",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.directive.meld"
+        }
+      },
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.meld",
+          "match": ">>.*$"
+        },
+        {
+          "name": "string.template.meld",
+          "begin": "\\[\\[",
+          "end": "\\]\\]",
+          "patterns": [
+            {
+              "name": "variable.template.meld",
+              "match": "\\{\\{[^}]+\\}\\}"
+            }
+          ]
+        },
+        {
+          "name": "meta.path.meld",
+          "begin": "\\[",
+          "end": "\\]",
+          "patterns": [
+            {
+              "name": "markup.underline.link.meld",
+              "match": "https?://[^\\]]+"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.meld",
+          "match": "\"[^\"]*\""
+        },
+        {
+          "name": "variable.other.meld",
+          "match": "@\\w+"
+        },
+        {
+          "name": "keyword.operator.meld",
+          "match": "\\b(from|as)\\b|="
+        },
+        {
+          "name": "constant.numeric.meld",
+          "match": "\\b\\d+(\\.\\d+)?\\b"
+        },
+        {
+          "name": "constant.language.boolean.meld",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.meld",
+          "match": "\\bnull\\b"
+        }
+      ]
+    }
+  ]
+}

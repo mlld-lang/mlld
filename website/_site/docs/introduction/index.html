@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
@@ -86,6 +87,20 @@
         
           
         
+          
+        
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
           
@@ -175,6 +190,21 @@
             
               
             
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
           </ul>
         </li>
       </ul>
@@ -194,10 +224,10 @@
 <li>Preserves existing content structure</li>
 </ul>
 <h2 id="basic-example" tabindex="-1">Basic Example</h2>
-<pre><code class="language-meld">@text name = &quot;World&quot;
-@path docs = &quot;$./docs&quot;
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"World"</span>
+<span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$./docs"</span>
 
-This line will be interpreted as plain text.
+This line will be interpreted <span class="token operator">as</span> plain text.
 
 </code></pre>
 <p>This will remain a codefence.</p>

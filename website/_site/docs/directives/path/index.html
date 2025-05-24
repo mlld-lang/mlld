@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
@@ -86,6 +87,20 @@
         
           
         
+          
+        
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
           
@@ -175,6 +190,21 @@
             
               
             
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
           </ul>
         </li>
       </ul>
@@ -185,15 +215,18 @@
     <h1 id="%40path-directive" tabindex="-1">@path Directive</h1>
 <p>The <code>@path</code> directive defines filesystem path variables that can be used in <code>@embed</code> and <code>@run</code> commands.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
-<pre><code class="language-meld">@path identifier = &quot;$HOMEPATH/path&quot;
-@path identifier = &quot;$~/path&quot;
-@path identifier = &quot;$PROJECTPATH/path&quot;
-@path identifier = &quot;$./path&quot;
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$HOMEPATH/path"</span>
+<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$~/path"</span>
+<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/path"</span>
+<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$./path"</span>
+<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"/absolute/path"</span>
+<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"relative/path"</span>
+<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"../parent/path"</span>
+<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"./current/path"</span>
 </code></pre>
 <p>Where:</p>
 <ul>
 <li><code>identifier</code> is the variable name (must be a valid identifier)</li>
-<li>Path must start with either <code>$HOMEPATH</code>, <code>$~</code>, <code>$PROJECTPATH</code>, or <code>$.</code></li>
 <li>Path segments are separated by forward slashes</li>
 <li>Path must be quoted (single, double, or backtick quotes)</li>
 </ul>
@@ -208,21 +241,26 @@
 <ul>
 <li>Must not be empty</li>
 <li>Cannot contain null bytes</li>
-<li>Cannot contain <code>.</code> or <code>..</code> directory segments (use <code>$.</code> or <code>$~</code> instead)</li>
-<li>Raw absolute paths (e.g., <code>/usr/local/bin</code>) are not allowed</li>
-<li>Simple filenames with no slashes are allowed without special prefixes</li>
+<li>Any standard path format is allowed:
+<ul>
+<li>Absolute paths (e.g., <code>/usr/local/bin</code>)</li>
+<li>Relative paths (e.g., <code>path/to/file</code>)</li>
+<li>Paths with dot segments (e.g., <code>./current</code> or <code>../parent</code>)</li>
+<li>Paths with special variables (e.g., <code>$HOMEPATH/path</code>)</li>
 </ul>
-<h2 id="special-path-variables" tabindex="-1">Special Path Variables</h2>
-<p>Meld provides two special path variables:</p>
+</li>
+</ul>
+<h2 id="special-path-variables-(optional)" tabindex="-1">Special Path Variables (Optional)</h2>
+<p>Meld provides special path variables for enhanced cross-platform portability:</p>
 <ul>
 <li><code>$HOMEPATH</code> or <code>$~</code>: Refers to the user's home directory</li>
 <li><code>$PROJECTPATH</code> or <code>$.</code>: Refers to the current project root directory</li>
 </ul>
-<p>All paths with slashes must be rooted in a $path variable (including global $HOMEPATH and $PROJECTPATH path variables).</p>
+<p>Using special path variables is recommended (but not required) for best cross-platform portability.</p>
 <h2 id="referencing-path-variables" tabindex="-1">Referencing Path Variables</h2>
 <p>Path variables are referenced using the <code>$identifier</code> syntax:</p>
-<pre><code class="language-meld">@path docs = &quot;$PROJECTPATH/docs&quot;
-@embed [$docs/guide.md]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>$docs/guide.md<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Path variables can be used:</p>
 <ul>
@@ -232,41 +270,43 @@
 </ul>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic path variables:</p>
-<pre><code class="language-meld">@path docs = &quot;$PROJECTPATH/docs&quot;
-@path configs = &quot;$PROJECTPATH/configs&quot;
-@path home = &quot;$HOMEPATH/meld&quot;
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
+<span class="token directive keyword">@path</span> configs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/configs"</span>
+<span class="token directive keyword">@path</span> home <span class="token operator">=</span> <span class="token string">"$HOMEPATH/meld"</span>
 </code></pre>
 <p>Using path variables in commands:</p>
-<pre><code class="language-meld">@path src = &quot;$PROJECTPATH/src&quot;
-@run [ls -la $src]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la $src<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Embedding files with path variables:</p>
-<pre><code class="language-meld">@path templates = &quot;$PROJECTPATH/templates&quot;
-@embed [$templates/header.md]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> templates <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/templates"</span>
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>$templates/header.md<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using path segments:</p>
-<pre><code class="language-meld">@path src = &quot;$PROJECTPATH/src&quot;
-@embed [$src/components/button.js]
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>$src/components/button.js<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The following errors are possible with path directives:</p>
 <ul>
-<li><code>INVALID_PATH_FORMAT</code>: Path with slashes that doesn't use <code>$.</code> or <code>$~</code></li>
-<li><code>CONTAINS_DOT_SEGMENTS</code>: Path contains <code>.</code> or <code>..</code> segments</li>
-<li><code>RAW_ABSOLUTE_PATH</code>: Path is absolute but doesn't use <code>$.</code> or <code>$~</code></li>
 <li><code>INVALID_PATH</code>: Path is empty or malformed</li>
-<li><code>NULL_BYTE</code>: Path contains null bytes</li>
+<li><code>NULL_BYTE</code>: Path contains null bytes (security restriction)</li>
 </ul>
 <h2 id="variables-in-paths" tabindex="-1">Variables in Paths</h2>
 <p>Paths can include variables, which are resolved during execution:</p>
-<pre><code class="language-meld">@text dir = &quot;docs&quot;
-@path docs = &quot;$PROJECTPATH/{{dir}}&quot;
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> dir <span class="token operator">=</span> <span class="token string">"docs"</span>
+<span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/{{dir}}"</span>
 </code></pre>
+<h2 id="path-best-practices" tabindex="-1">Path Best Practices</h2>
+<ul>
+<li>For cross-platform compatibility, use special path variables <code>$PROJECTPATH</code> and <code>$HOMEPATH</code></li>
+<li>Use forward slashes for path separators (even on Windows)</li>
+<li>Be cautious when using absolute paths or parent directory references (<code>..</code>), as they may make your Meld files less portable</li>
+<li>Consider using path variables to encapsulate filesystem paths for better maintainability</li>
+</ul>
 <h2 id="notes" tabindex="-1">Notes</h2>
 <ul>
 <li>Path variables cannot use field access or formatting</li>
-<li>All paths with slashes must be rooted in a $path variable (including global $HOMEPATH and $PROJECTPATH path variables)</li>
-<li>Relative paths are not allowed for security reasons</li>
 <li>Path variables are distinct from text and data variables</li>
 <li>In test mode, existence checks can be bypassed</li>
 </ul>

@@ -1,0 +1,4 @@
+filename: test-plan.mld
+className: possibility-example
+heading: "Chain requests like shell commands"
+output: "Here's a plan to fix the failing tests."

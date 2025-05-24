@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Standards and Best Practices - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">modular prompt scripting</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/syntax-reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/variables/" >Variables</a></li>
+          
+        
+          
+            <li><a href="/docs/error-handling/" >Error Handling</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" aria-current=&quot;page&quot;>Test Standards and Best Practices</a></li>
+          
+        
+          
+        
+        
+        <li>
+          <h4>Directives</h4>
+          <ul class="nav-list">
+            <li><a href="/docs/directives/" >Overview</a></li>
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/data/" >
+                  
+                    @data
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/define/" >
+                  
+                    @define
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/embed/" >
+                  
+                    @embed
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/import/" >
+                  
+                    @import
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/path/" >
+                  
+                    @path
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/run/" >
+                  
+                    @run
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/text/" >
+                  
+                    @text
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
+          </ul>
+        </li>
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1 id="test-standards-and-best-practices" tabindex="-1">Test Standards and Best Practices</h1>
+<p>This document outlines the standard patterns and best practices for testing in the Meld codebase.</p>
+<h2 id="core-principles" tabindex="-1">Core Principles</h2>
+<ol>
+<li><strong>Isolation</strong>: Each test should run in isolation with its own container</li>
+<li><strong>Async Resolution</strong>: Always use async/await for service resolution</li>
+<li><strong>Proper Cleanup</strong>: Always clean up resources after each test</li>
+<li><strong>Mock Registration</strong>: Register mocks before resolving dependent services</li>
+<li><strong>Error Validation</strong>: Use standard error testing utilities</li>
+</ol>
+<h2 id="test-setup" tabindex="-1">Test Setup</h2>
+<h3 id="basic-test-structure" tabindex="-1">Basic Test Structure</h3>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> TestContextDI <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'@tests/utils/di'</span><span class="token punctuation">;</span>
+
+<span class="token function">describe</span><span class="token punctuation">(</span><span class="token string">'MyService'</span><span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+  <span class="token keyword">let</span> context<span class="token operator">:</span> TestContextDI<span class="token punctuation">;</span>
+  
+  <span class="token function">beforeEach</span><span class="token punctuation">(</span><span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+    <span class="token comment">// Create an isolated test context</span>
+    context <span class="token operator">=</span> TestContextDI<span class="token punctuation">.</span><span class="token function">createIsolated</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token function">afterEach</span><span class="token punctuation">(</span><span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+    <span class="token comment">// Clean up resources</span>
+    <span class="token keyword">await</span> context<span class="token operator">?.</span><span class="token function">cleanup</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token function">it</span><span class="token punctuation">(</span><span class="token string">'should do something'</span><span class="token punctuation">,</span> <span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+    <span class="token comment">// Register mocks</span>
+    context<span class="token punctuation">.</span><span class="token function">registerMock</span><span class="token punctuation">(</span><span class="token string">'IDependency'</span><span class="token punctuation">,</span> mockDependency<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    
+    <span class="token comment">// Resolve service</span>
+    <span class="token keyword">const</span> service <span class="token operator">=</span> <span class="token keyword">await</span> context<span class="token punctuation">.</span><span class="token generic-function"><span class="token function">resolve</span><span class="token generic class-name"><span class="token operator">&lt;</span>IMyService<span class="token operator">></span></span></span><span class="token punctuation">(</span><span class="token string">'IMyService'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    
+    <span class="token comment">// Test implementation</span>
+    <span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> service<span class="token punctuation">.</span><span class="token function">doSomething</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token function">expect</span><span class="token punctuation">(</span>result<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toBe</span><span class="token punctuation">(</span><span class="token string">'expected'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h3 id="service-resolution" tabindex="-1">Service Resolution</h3>
+<p>Always use async resolution:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token comment">// CORRECT</span>
+<span class="token keyword">const</span> service <span class="token operator">=</span> <span class="token keyword">await</span> context<span class="token punctuation">.</span><span class="token generic-function"><span class="token function">resolve</span><span class="token generic class-name"><span class="token operator">&lt;</span>IMyService<span class="token operator">></span></span></span><span class="token punctuation">(</span><span class="token string">'IMyService'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// INCORRECT - Don't use synchronous resolution</span>
+<span class="token keyword">const</span> service <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token generic-function"><span class="token function">resolveSync</span><span class="token generic class-name"><span class="token operator">&lt;</span>IMyService<span class="token operator">></span></span></span><span class="token punctuation">(</span><span class="token string">'IMyService'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h3 id="mock-registration" tabindex="-1">Mock Registration</h3>
+<p>Register mocks using the test context:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token comment">// Register a mock implementation</span>
+context<span class="token punctuation">.</span><span class="token function">registerMock</span><span class="token punctuation">(</span><span class="token string">'IMyService'</span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  doSomething<span class="token operator">:</span> vi<span class="token punctuation">.</span><span class="token function">fn</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">mockReturnValue</span><span class="token punctuation">(</span><span class="token string">'mocked result'</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Or use the mock helpers</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> createServiceMock <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'@tests/utils/di'</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> mockService <span class="token operator">=</span> <span class="token function">createServiceMock</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+context<span class="token punctuation">.</span><span class="token function">registerMock</span><span class="token punctuation">(</span><span class="token string">'IMyService'</span><span class="token punctuation">,</span> mockService<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h3 id="error-testing" tabindex="-1">Error Testing</h3>
+<p>Use the error testing utilities:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> expectToThrowWithConfig <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'@tests/utils/errorTestUtils'</span><span class="token punctuation">;</span>
+
+<span class="token function">it</span><span class="token punctuation">(</span><span class="token string">'should handle errors'</span><span class="token punctuation">,</span> <span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+  <span class="token keyword">await</span> <span class="token function">expectToThrowWithConfig</span><span class="token punctuation">(</span><span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+    <span class="token keyword">await</span> service<span class="token punctuation">.</span><span class="token function">methodThatThrows</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
+    errorType<span class="token operator">:</span> MeldError<span class="token punctuation">,</span>
+    code<span class="token operator">:</span> ErrorCode<span class="token punctuation">.</span><span class="token constant">VALIDATION_ERROR</span><span class="token punctuation">,</span>
+    message<span class="token operator">:</span> <span class="token string">'Expected error message'</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h2 id="common-patterns" tabindex="-1">Common Patterns</h2>
+<h3 id="directive-handler-testing" tabindex="-1">Directive Handler Testing</h3>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> TestHelpers <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'@tests/utils/di'</span><span class="token punctuation">;</span>
+
+<span class="token function">describe</span><span class="token punctuation">(</span><span class="token string">'MyDirectiveHandler'</span><span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> <span class="token punctuation">{</span> context<span class="token punctuation">,</span> handler<span class="token punctuation">,</span> stateService <span class="token punctuation">}</span> <span class="token operator">=</span> TestHelpers<span class="token punctuation">.</span><span class="token function">setupDirectiveTest</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
+    execute<span class="token operator">:</span> vi<span class="token punctuation">.</span><span class="token function">fn</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token function">afterEach</span><span class="token punctuation">(</span><span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+    <span class="token keyword">await</span> context<span class="token operator">?.</span><span class="token function">cleanup</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token function">it</span><span class="token punctuation">(</span><span class="token string">'should handle directive'</span><span class="token punctuation">,</span> <span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+    <span class="token keyword">const</span> node <span class="token operator">=</span> <span class="token punctuation">{</span> type<span class="token operator">:</span> <span class="token string">'directive'</span><span class="token punctuation">,</span> value<span class="token operator">:</span> <span class="token string">'test'</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+    <span class="token keyword">await</span> handler<span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span>node<span class="token punctuation">,</span> stateService<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// Test assertions...</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h3 id="service-testing" tabindex="-1">Service Testing</h3>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> TestHelpers <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'@tests/utils/di'</span><span class="token punctuation">;</span>
+
+<span class="token function">describe</span><span class="token punctuation">(</span><span class="token string">'MyService'</span><span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> testSetup <span class="token operator">=</span> TestHelpers<span class="token punctuation">.</span><span class="token function">createTestSetup</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
+    isolatedContainer<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+    mocks<span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token string-property property">'IDependency'</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+        method<span class="token operator">:</span> vi<span class="token punctuation">.</span><span class="token function">fn</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+      <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token keyword">let</span> context<span class="token operator">:</span> TestContextDI<span class="token punctuation">;</span>
+  
+  <span class="token function">beforeEach</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+    context <span class="token operator">=</span> testSetup<span class="token punctuation">.</span><span class="token function">setup</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token function">afterEach</span><span class="token punctuation">(</span><span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+    <span class="token keyword">await</span> testSetup<span class="token punctuation">.</span><span class="token function">cleanup</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token function">it</span><span class="token punctuation">(</span><span class="token string">'should work with dependencies'</span><span class="token punctuation">,</span> <span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+    <span class="token keyword">const</span> service <span class="token operator">=</span> <span class="token keyword">await</span> context<span class="token punctuation">.</span><span class="token generic-function"><span class="token function">resolve</span><span class="token generic class-name"><span class="token operator">&lt;</span>IMyService<span class="token operator">></span></span></span><span class="token punctuation">(</span><span class="token string">'IMyService'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// Test implementation...</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h3 id="container-leak-detection" tabindex="-1">Container Leak Detection</h3>
+<p>Enable leak detection in tests that create many services:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> context <span class="token operator">=</span> TestContextDI<span class="token punctuation">.</span><span class="token function">create</span><span class="token punctuation">(</span><span class="token punctuation">{</span> leakDetection<span class="token operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Get diagnostic information</span>
+<span class="token keyword">const</span> report <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">createDiagnosticReport</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token function">expect</span><span class="token punctuation">(</span>report<span class="token punctuation">.</span>leakDetection<span class="token punctuation">.</span>enabled<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toBe</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h2 id="best-practices" tabindex="-1">Best Practices</h2>
+<ol>
+<li>
+<p><strong>Use Isolated Containers</strong>: Always use <code>TestContextDI.createIsolated()</code> for test setup to prevent test interference.</p>
+</li>
+<li>
+<p><strong>Proper Cleanup</strong>: Always clean up test contexts in <code>afterEach</code> blocks:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token function">afterEach</span><span class="token punctuation">(</span><span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+  <span class="token keyword">await</span> context<span class="token operator">?.</span><span class="token function">cleanup</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+</li>
+<li>
+<p><strong>Async Resolution</strong>: Always use async/await with <code>context.resolve()</code>:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">const</span> service <span class="token operator">=</span> <span class="token keyword">await</span> context<span class="token punctuation">.</span><span class="token generic-function"><span class="token function">resolve</span><span class="token generic class-name"><span class="token operator">&lt;</span>IMyService<span class="token operator">></span></span></span><span class="token punctuation">(</span><span class="token string">'IMyService'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+</li>
+<li>
+<p><strong>Mock Registration</strong>: Register mocks before resolving services that depend on them:</p>
+<pre class="language-typescript"><code class="language-typescript">context<span class="token punctuation">.</span><span class="token function">registerMock</span><span class="token punctuation">(</span><span class="token string">'IDependency'</span><span class="token punctuation">,</span> mockDependency<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> service <span class="token operator">=</span> <span class="token keyword">await</span> context<span class="token punctuation">.</span><span class="token function">resolve</span><span class="token punctuation">(</span><span class="token string">'IService'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+</li>
+<li>
+<p><strong>Error Handling</strong>: Use the error testing utilities for consistent error validation:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">await</span> <span class="token function">expectToThrowWithConfig</span><span class="token punctuation">(</span><span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
+  <span class="token keyword">await</span> service<span class="token punctuation">.</span><span class="token function">method</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">,</span> expectedError<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+</li>
+</ol>
+<h2 id="migration-checklist" tabindex="-1">Migration Checklist</h2>
+<p>When migrating existing tests:</p>
+<ol>
+<li>✅ Replace <code>new TestContext()</code> with <code>TestContextDI.createIsolated()</code></li>
+<li>✅ Update imports to use <code>@tests/utils/di</code></li>
+<li>✅ Replace direct service creation with container resolution</li>
+<li>✅ Add proper async/await for service resolution</li>
+<li>✅ Add proper cleanup in afterEach blocks</li>
+<li>✅ Update error testing to use <code>expectToThrowWithConfig</code></li>
+<li>✅ Replace manual mocking with <code>registerMock</code></li>
+</ol>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>
