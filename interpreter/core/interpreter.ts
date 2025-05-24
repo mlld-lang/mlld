@@ -115,34 +115,46 @@ async function evaluateText(node: TextNode, env: Environment): Promise<EvalResul
  */
 export async function resolveVariableValue(variable: MeldVariable, env: Environment): Promise<any> {
   // Check if this is a complex data variable that needs evaluation
-  if (variable.type === 'data' && 'isFullyEvaluated' in variable) {
-    const complexVar = variable as any; // ComplexDataVariable
+  if (variable.type === 'data') {
+    // For data variables, check if the value needs evaluation
+    const dataValue = variable.value;
     
-    if (!complexVar.isFullyEvaluated) {
-      // Evaluate the complex data value
-      try {
-        const evaluatedValue = await evaluateDataValue(complexVar.value, env);
-        
-        // Update the variable with the evaluated value
-        complexVar.value = evaluatedValue;
-        complexVar.isFullyEvaluated = true;
-        
-        // Check for any evaluation errors
-        const errors = collectEvaluationErrors(evaluatedValue);
-        if (Object.keys(errors).length > 0) {
-          complexVar.evaluationErrors = errors;
-        }
-        
-        return evaluatedValue;
-      } catch (error) {
-        // Store the error but still mark as evaluated to prevent infinite loops
-        complexVar.isFullyEvaluated = true;
-        complexVar.evaluationErrors = { root: error as Error };
-        throw error;
-      }
+    // If it's an AST structure (has type property), evaluate it
+    if (dataValue && typeof dataValue === 'object' && 'type' in dataValue) {
+      const evaluatedValue = await evaluateDataValue(dataValue, env);
+      return evaluatedValue;
     }
     
-    return complexVar.value;
+    // Check legacy complex data variable format
+    if ('isFullyEvaluated' in variable) {
+      const complexVar = variable as any; // ComplexDataVariable
+      
+      if (!complexVar.isFullyEvaluated) {
+        // Evaluate the complex data value
+        try {
+          const evaluatedValue = await evaluateDataValue(complexVar.value, env);
+          
+          // Update the variable with the evaluated value
+          complexVar.value = evaluatedValue;
+          complexVar.isFullyEvaluated = true;
+          
+          // Check for any evaluation errors
+          const errors = collectEvaluationErrors(evaluatedValue);
+          if (Object.keys(errors).length > 0) {
+            complexVar.evaluationErrors = errors;
+          }
+          
+          return evaluatedValue;
+        } catch (error) {
+          // Store the error but still mark as evaluated to prevent infinite loops
+          complexVar.isFullyEvaluated = true;
+          complexVar.evaluationErrors = { root: error as Error };
+          throw error;
+        }
+      }
+      
+      return complexVar.value;
+    }
   }
   
   // For non-complex variables, return the value directly

@@ -214,4 +214,15 @@ export interface Location {
 // =========================================================================
 
 // Export any additional utilities from sub-modules
-export { isDirective, isText, isComment, isCodeFence } from './guards';
+export { 
+  isDirectiveNode as isDirective,
+  isTextNode as isText, 
+  isCommentNode as isComment, 
+  isCodeFenceNode as isCodeFence,
+  isTextNode,
+  isDirectiveNode,
+  isCommentNode,
+  isCodeFenceNode,
+  isVariableReferenceNode,
+  isLiteralNode
+} from './guards';

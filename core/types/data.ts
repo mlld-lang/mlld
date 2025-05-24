@@ -99,10 +99,31 @@ export function isContentNodeArray(value: DataValue): value is ContentNodeArray 
 }
 
 /**
- * Type guards for specific directive types
+ * Additional type guards used by the interpreter
+ */
+export function isVariableReferenceValue(value: any): value is VariableNodeArray {
+  return value?.type === 'VariableReference';
+}
+
+export function isTemplateValue(value: any): value is ContentNodeArray {
+  return Array.isArray(value) && value.some(item => 
+    item?.type === 'Text' || 
+    (item?.type === 'VariableReference' && item?.valueType === 'varInterpolation')
+  );
+}
+
+export function isPrimitiveValue(value: any): value is string | number | boolean | null {
+  return typeof value === 'string' || 
+         typeof value === 'number' || 
+         typeof value === 'boolean' || 
+         value === null;
+}
+
+/**
+ * Special data directive type guards
  */
 export function isEmbedDirectiveValue(value: DataValue): value is DirectiveNode {
-  return isDirectiveValue(value) && value.kind === 'embed';
+  return isDirectiveValue(value) && value.kind === 'add';
 }
 
 export function isRunDirectiveValue(value: DataValue): value is DirectiveNode {
@@ -111,4 +132,13 @@ export function isRunDirectiveValue(value: DataValue): value is DirectiveNode {
 
 export function isTextDirectiveValue(value: DataValue): value is DirectiveNode {
   return isDirectiveValue(value) && value.kind === 'text';
+}
+
+/**
+ * Evaluation state for caching
+ */
+export interface EvaluationState {
+  evaluated: boolean;
+  result?: any;
+  error?: Error;
 }

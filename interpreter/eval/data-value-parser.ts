@@ -1,4 +1,4 @@
-import type { ASTNode } from '@core/types/ast-nodes';
+// ASTNode type no longer needed - using MeldNode from core/types
 import type { 
   DataValue, 
   DataObject, 
@@ -53,7 +53,7 @@ export function parseDataValue(node: any): DataValue {
     // Otherwise it's a regular data array
     return {
       type: 'array',
-      elements: node.map(parseDataValue)
+      items: node.map(parseDataValue)
     };
   }
   
@@ -61,7 +61,7 @@ export function parseDataValue(node: any): DataValue {
   if (node?.type === 'array' && node.items) {
     return {
       type: 'array',
-      elements: node.items.map(parseDataValue)
+      items: node.items.map(parseDataValue)
     };
   }
   
@@ -109,7 +109,7 @@ export function extractPlainValue(value: DataValue): any {
   }
   
   if (value?.type === 'array') {
-    return value.elements.map(extractPlainValue);
+    return value.items?.map(extractPlainValue) || [];
   }
   
   // For other types, return as-is
@@ -141,7 +141,7 @@ export function needsEvaluation(value: DataValue): boolean {
   }
   
   if (value?.type === 'array') {
-    return value.elements.some(needsEvaluation);
+    return value.items?.some(needsEvaluation) || false;
   }
   
   return false;

@@ -9,11 +9,15 @@ import {
   isDirectiveValue,
   isVariableReferenceValue,
   isTemplateValue,
-  isPrimitiveValue,
-  evaluationCache
+  isPrimitiveValue
 } from '@core/types/data';
 import { evaluate, interpolate } from '../core/interpreter';
 import { accessField } from '../utils/field-access';
+
+/**
+ * Cache for evaluated directives to avoid re-evaluation
+ */
+const evaluationCache = new Map<any, EvaluationState>();
 
 /**
  * Evaluates a DataValue, recursively evaluating any embedded directives,
@@ -120,9 +124,9 @@ export async function evaluateDataValue(
   if (value?.type === 'array') {
     const evaluatedElements: any[] = [];
     
-    for (let i = 0; i < value.elements.length; i++) {
+    for (let i = 0; i < value.items.length; i++) {
       try {
-        evaluatedElements.push(await evaluateDataValue(value.elements[i], env));
+        evaluatedElements.push(await evaluateDataValue(value.items[i], env));
       } catch (error) {
         // Store error information but continue evaluating other elements
         evaluatedElements.push({

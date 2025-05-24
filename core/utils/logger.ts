@@ -1,8 +1,7 @@
 import winston from 'winston';
 import path from 'path';
 import { loggingConfig } from '@core/config/logging';
-import { injectable, singleton } from 'tsyringe';
-import { Service } from '@core/ServiceProvider';
+// Removed tsyringe imports - no longer using dependency injection
 import fs from 'fs';
 
 /**
