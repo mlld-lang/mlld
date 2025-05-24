@@ -19,8 +19,12 @@
     }
   },
   "bin": {
-    "meld": "./bin/meld-wrapper.js"
+    "meld": "./bin/meld-wrapper.cjs"
   },
+  "files": [
+    "dist/",
+    "bin/"
+  ],
   "scripts": {
     "build:grammar:core": "npx tsc -p grammar/tsconfig.grammar.json",
     "build:grammar": "npm run build:grammar:core && node grammar/build-grammar.mjs && npm run ast:fixtures",
@@ -74,8 +78,6 @@
     "pathe": "1.1.2",
     "peggy": "^4.2.0",
     "prettier": "^3.5.3",
-    "reflect-metadata": "^0.2.2",
-    "tsyringe": "^4.10.0",
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "xmldom": "^0.6.0",

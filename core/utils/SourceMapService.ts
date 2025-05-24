@@ -6,8 +6,6 @@
  */
 
 import { logger } from '@core/utils/logger';
-import { injectable, singleton } from 'tsyringe';
-import { Service } from '@core/ServiceProvider';
 
 export interface SourceLocation {
   filePath: string;
@@ -30,11 +28,6 @@ export interface ISourceMapService {
 /**
  * Service for tracking and resolving source maps between original and combined files
  */
-@injectable()
-@singleton()
-@Service({
-  providedIn: 'root'
-})
 export class SourceMapService implements ISourceMapService {
   private sources = new Map<string, string[]>();
   private mappings: Array<{

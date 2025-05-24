@@ -13,8 +13,6 @@ const externalDependencies = [
   'minimatch',
   'winston',
   'yargs',
-  'tsyringe',
-  'reflect-metadata',
   
   // Node.js built-ins
   'fs',

@@ -79,11 +79,6 @@ const getLogLevel = () => {
 /**
  * Factory service for creating Winston loggers
  */
-@injectable()
-@singleton()
-@Service({
-  providedIn: 'root'
-})
 export class LoggerFactory implements ILoggerFactory {
   /**
    * Create a service-specific logger
