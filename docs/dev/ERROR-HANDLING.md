@@ -1,3 +1,5 @@
+// TODO: UPDATE
+
 # Error Handling in Meld
 
 This document describes the error handling architecture in Meld, including how errors are classified, how they're handled in different modes, and how to work with the error system as a developer.

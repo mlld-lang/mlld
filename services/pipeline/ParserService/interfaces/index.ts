@@ -1,1 +1,0 @@
-export type { IParserServiceClient } from './IParserServiceClient'; 

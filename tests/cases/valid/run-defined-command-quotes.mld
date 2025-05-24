@@ -1,6 +1,0 @@
-@define runthis(x, y) = @run [echo {{x}} {{y}}]
-@text hello = "howdy"
-@text world = "planet"
-
-@run $runthis({{hello}}, {{world}})
-@run $runthis("hello","world")

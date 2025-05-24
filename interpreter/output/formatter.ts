@@ -1,4 +1,5 @@
 import type { MeldNode, MeldVariable } from '@core/types';
+import { createLLMXML } from 'llmxml';
 
 /**
  * Output formatting options
@@ -12,17 +13,29 @@ export interface FormatOptions {
  * Format nodes into final output.
  * This is a simplified version - we can reuse the existing OutputService later.
  */
-export function formatOutput(nodes: MeldNode[], options: FormatOptions): string {
+export async function formatOutput(nodes: MeldNode[], options: FormatOptions): Promise<string> {
   if (options.format === 'xml') {
-    return formatXml(nodes, options);
+    // Build structured markdown for llmxml
+    const structuredMarkdown = buildStructuredMarkdown(nodes, options);
+    
+    // Use llmxml to convert markdown to XML
+    const llmxml = createLLMXML({
+      includeTitle: false,  // No redundant title attributes
+      includeHlevel: false, // No need for heading levels either
+      tagFormat: 'SCREAMING_SNAKE', // Maximum clarity!
+      verbose: false,
+      warningLevel: 'none' // Suppress llmxml logging
+    });
+    
+    return await llmxml.toXML(structuredMarkdown);
   }
   
-  // Default to markdown
+  // Default to plain markdown (just the content)
   return formatMarkdown(nodes, options);
 }
 
 /**
- * Format as markdown (concatenate text nodes and preserve directives)
+ * Format as markdown (concatenate text nodes)
  */
 function formatMarkdown(nodes: MeldNode[], options: FormatOptions): string {
   const parts: string[] = [];
@@ -30,103 +43,47 @@ function formatMarkdown(nodes: MeldNode[], options: FormatOptions): string {
   for (const node of nodes) {
     if (node.type === 'Text') {
       parts.push(node.content);
-    } else if (node.type === 'Directive') {
-      // Reconstruct the directive syntax
-      parts.push(reconstructDirective(node));
     }
+    // Directives should have already been evaluated and replaced with their output
+    // We only output Text nodes in the final result
   }
   
   return parts.join('');
 }
 
 /**
- * Reconstruct directive syntax from AST node
+ * Build structured markdown for XML conversion
  */
-function reconstructDirective(directive: any): string {
-  // For exec directives, reconstruct the original syntax
-  if (directive.kind === 'exec') {
-    const identifier = directive.raw?.identifier || '';
-    
-    if (directive.subtype === 'execCommand') {
-      // Get parameter list
-      const params = directive.values?.params || [];
-      const paramList = params
-        .map((p: any) => p.identifier || '')
-        .filter(Boolean)
-        .join(', ');
-      
-      // Get command
-      const command = directive.values?.command
-        ?.map((n: any) => {
-          if (n.type === 'Text') {
-            return n.content || '';
-          } else if (n.type === 'VariableReference') {
-            return `@${n.identifier}`;
-          }
-          return '';
-        })
-        .join('');
-      
-      if (paramList) {
-        return `@exec ${identifier} (${paramList}) = @run [${command}]`;
-      } else {
-        return `@exec ${identifier} = ${command}`;
-      }
-    } else if (directive.subtype === 'execCode') {
-      // Get parameter list
-      const params = directive.values?.params || [];
-      const paramList = params
-        .map((p: any) => p.identifier || '')
-        .filter(Boolean)
-        .join(', ');
-      
-      const language = directive.raw?.language || 'javascript';
-      const code = directive.values?.code
-        ?.map((n: any) => n.content || '')
-        .join('');
-      
-      if (paramList) {
-        return `@exec ${identifier} (${paramList}) = @run ${language} [${code}]`;
-      } else {
-        return `@exec ${identifier} = @run ${language} [${code}]`;
-      }
-    }
-  }
+function buildStructuredMarkdown(nodes: MeldNode[], options: FormatOptions): string {
+  const parts: string[] = [];
   
-  // For other directives, return empty for now
-  return '';
-}
-
-/**
- * Format as XML
- */
-function formatXml(nodes: MeldNode[], options: FormatOptions): string {
-  const parts: string[] = ['<?xml version="1.0" encoding="UTF-8"?>'];
-  parts.push('<meld>');
+  // Add document header
+  parts.push('# Meld Output');
+  parts.push('');
   
   // Add variables section if we have any
   if (options.variables && options.variables.size > 0) {
-    parts.push('  <variables>');
+    parts.push('## Variables');
+    parts.push('');
+    
     for (const [name, variable] of options.variables) {
-      parts.push(`    <variable name="${escapeXml(name)}" type="${variable.type}">`);
-      parts.push(`      ${escapeXml(getVariableValue(variable))}`);
-      parts.push('    </variable>');
-    }
-    parts.push('  </variables>');
-  }
-  
-  // Add content
-  parts.push('  <content>');
-  for (const node of nodes) {
-    if (node.type === 'Text') {
-      parts.push(`    ${escapeXml(node.content)}`);
+      const value = getVariableValue(variable);
+      parts.push(`### ${name}`);
+      parts.push(`- **Type**: ${variable.type}`);
+      parts.push(`- **Value**: ${value}`);
+      parts.push('');
     }
   }
-  parts.push('  </content>');
   
-  parts.push('</meld>');
+  // Add content section
+  const content = formatMarkdown(nodes, options);
+  if (content.trim()) {
+    parts.push('## Content');
+    parts.push('');
+    parts.push(content);
+  }
   
-  return parts.join('\\n');
+  return parts.join('\n');
 }
 
 /**
@@ -137,7 +94,7 @@ function getVariableValue(variable: MeldVariable): string {
     case 'text':
       return variable.value;
     case 'data':
-      return JSON.stringify(variable.value);
+      return JSON.stringify(variable.value, null, 2);
     case 'path':
       return variable.value.resolvedPath;
     case 'command':
@@ -147,14 +104,3 @@ function getVariableValue(variable: MeldVariable): string {
   }
 }
 
-/**
- * Escape XML special characters
- */
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}

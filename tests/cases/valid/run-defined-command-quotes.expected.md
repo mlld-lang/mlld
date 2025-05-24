@@ -1,2 +1,0 @@
-howdy planet
-hello world

@@ -42,7 +42,7 @@ export async function interpret(
   const nodes = env.getNodes();
   
   // Format the output
-  return formatOutput(nodes, {
+  return await formatOutput(nodes, {
     format: options.format || 'markdown',
     variables: env.getAllVariables()
   });

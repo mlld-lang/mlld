@@ -9,7 +9,10 @@ import { main } from './index';
 export { main };
 
 // Run main if this is the entry point
-if (require.main === module) {
+// In ESM, we check if this file was run directly by looking at import.meta.url
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+
+if (isMainModule) {
   // Parse arguments
   const args = process.argv.slice(2);
 
