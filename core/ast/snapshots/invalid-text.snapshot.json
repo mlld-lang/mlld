@@ -1,0 +1,107 @@
+[
+  {
+    "type": "Directive",
+    "nodeId": "4379e2fe-5607-4fbd-a5f8-ea8a3497f7d4",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 25,
+        "line": 1,
+        "column": 26
+      }
+    },
+    "kind": "text",
+    "subtype": "textPath",
+    "source": "path",
+    "values": {
+      "identifier": [
+        {
+          "type": "VariableReference",
+          "nodeId": "ff4f9dc7-c678-49b0-9e24-f9a2a7442a33",
+          "location": {
+            "start": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "offset": 0,
+              "line": 1,
+              "column": 1
+            }
+          },
+          "valueType": "identifier",
+          "isVariableReference": true,
+          "identifier": "greeting"
+        }
+      ],
+      "path": [
+        {
+          "type": "Text",
+          "nodeId": "7162edec-2ad1-4e10-951f-d112db3f41ed",
+          "location": {
+            "start": {
+              "offset": 17,
+              "line": 1,
+              "column": 18
+            },
+            "end": {
+              "offset": 25,
+              "line": 1,
+              "column": 26
+            }
+          },
+          "content": "[[Hello,"
+        }
+      ]
+    },
+    "raw": {
+      "identifier": "greeting",
+      "path": "[[Hello,"
+    },
+    "meta": {
+      "sourceType": "path",
+      "hasVariables": false
+    }
+  },
+  {
+    "type": "Text",
+    "nodeId": "a1ca3469-7b43-4e19-8251-f1139d2e2e97",
+    "location": {
+      "start": {
+        "offset": 25,
+        "line": 1,
+        "column": 26
+      },
+      "end": {
+        "offset": 26,
+        "line": 1,
+        "column": 27
+      }
+    },
+    "content": " "
+  },
+  {
+    "type": "VariableReference",
+    "nodeId": "75f7f747-c114-461c-a303-811beeac80c7",
+    "location": {
+      "start": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      },
+      "end": {
+        "offset": 0,
+        "line": 1,
+        "column": 1
+      }
+    },
+    "valueType": "varInterpolation",
+    "isVariableReference": true,
+    "identifier": "name"
+  }
+]
