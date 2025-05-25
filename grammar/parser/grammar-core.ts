@@ -334,4 +334,23 @@ export const helpers = {
         }
         return raw;
     },
+    createPathMetadata(rawPath, parts) {
+        return {
+            hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
+            isAbsolute: rawPath.startsWith('/'),
+            hasExtension: /\.[a-zA-Z0-9]+$/.test(rawPath),
+            extension: rawPath.match(/\.([a-zA-Z0-9]+)$/)?.[1] || null
+        };
+    },
+    createCommandMetadata(parts) {
+        return {
+            hasVariables: parts.some(p => p && p.type === NodeType.VariableReference)
+        };
+    },
+    createTemplateMetadata(parts, wrapperType) {
+        return {
+            hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
+            isTemplateContent: wrapperType === 'doubleBracket'
+        };
+    },
 };

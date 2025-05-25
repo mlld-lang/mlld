@@ -359,4 +359,26 @@ export const helpers = {
     }
     return raw;
   },
+
+  createPathMetadata(rawPath: string, parts: any[]) {
+    return {
+      hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
+      isAbsolute: rawPath.startsWith('/'),
+      hasExtension: /\.[a-zA-Z0-9]+$/.test(rawPath),
+      extension: rawPath.match(/\.([a-zA-Z0-9]+)$/)?.[1] || null
+    };
+  },
+
+  createCommandMetadata(parts: any[]) {
+    return {
+      hasVariables: parts.some(p => p && p.type === NodeType.VariableReference)
+    };
+  },
+
+  createTemplateMetadata(parts: any[], wrapperType: string) {
+    return {
+      hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
+      isTemplateContent: wrapperType === 'doubleBracket'
+    };
+  },
 };

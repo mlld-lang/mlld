@@ -7,7 +7,6 @@
 // Matches: commandName(arg1, arg2, @var)
 CommandReference "command reference"
   = name:BaseIdentifier _ args:CommandArgs? {
-      const { helpers, NodeType } = peg$imports;
       helpers.debug('CommandReference matched', { name, args });
       return {
         name,

@@ -957,7 +957,6 @@ function peg$parse(input, options) {
       };
     };
   var peg$f81 = function(name, args) {
-      const { helpers, NodeType } = peg$imports;
       helpers.debug('CommandReference matched', { name, args });
       return {
         name,
@@ -1389,10 +1388,7 @@ function peg$parse(input, options) {
           section
         },
         meta: {
-          isAbsolute: path.meta.isAbsolute,
-          hasExtension: path.meta.hasExtension,
-          extension: path.meta.extension,
-          hasVariables: path.meta.hasVariables,
+          ...path.meta,
           hasSection: true
         }
       };
@@ -1406,12 +1402,6 @@ function peg$parse(input, options) {
   var peg$f131 = function(path) {
       helpers.debug('FilePath matched', { path });
       
-      // Examine path for special attributes
-      const isAbsolute = path.raw.startsWith('/');
-      const hasExtension = /\.[a-zA-Z0-9]+$/.test(path.raw);
-      const extension = hasExtension ? 
-        path.raw.substring(path.raw.lastIndexOf('.') + 1) : null;
-      
       return {
         type: 'path',
         subtype: 'filePath',
@@ -1421,14 +1411,7 @@ function peg$parse(input, options) {
         raw: { 
           path: path.raw 
         },
-        meta: {
-          isAbsolute,
-          hasExtension,
-          extension,
-          hasVariables: path.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createPathMetadata(path.raw, path.parts)
       };
     };
   var peg$f132 = function(path, section) {
@@ -2139,12 +2122,6 @@ function peg$parse(input, options) {
   var peg$f204 = function(path) {
       helpers.debug('PathCore matched path', { path });
     
-      // Examine path for special attributes (absolute vs relative)
-      const isAbsolute = path.raw.startsWith('/');
-      const hasExtension = /\.[a-zA-Z0-9]+$/.test(path.raw);
-      const extension = hasExtension ? 
-        path.raw.substring(path.raw.lastIndexOf('.') + 1) : null;
-    
       // Structure for outputting a filesystem path
       return {
         type: 'path',
@@ -2155,14 +2132,7 @@ function peg$parse(input, options) {
         raw: { 
           path: path.raw 
         },
-        meta: {
-          isAbsolute,
-          hasExtension,
-          extension,
-          hasVariables: path.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createPathMetadata(path.raw, path.parts)
       };
     };
   var peg$f205 = function(path, section) {
@@ -2181,11 +2151,8 @@ function peg$parse(input, options) {
           section
         },
         meta: {
-          isAbsolute: path.raw.startsWith('/'),
-          hasSection: true,
-          hasVariables: path.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
+          ...helpers.createPathMetadata(path.raw, path.parts),
+          hasSection: true
         }
       };
     };
@@ -2358,12 +2325,7 @@ function peg$parse(input, options) {
       
       // Create meta object with path metadata
       const meta = {
-        path: {
-          hasVariables: false, // Simplified for now
-          isAbsolute: rawPath.startsWith('/'),
-          hasExtension: /\.[a-zA-Z0-9]+$/.test(rawPath),
-          extension: rawPath.match(/\.([a-zA-Z0-9]+)$/)?.[1] || null
-        }
+        path: helpers.createPathMetadata(rawPath, pathParts)
       };
       
       return helpers.createStructuredDirective(
@@ -3309,15 +3271,6 @@ function peg$parse(input, options) {
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
       
-      // Check for variables
-      const hasVariables = pathParts.some(part => part.type === NodeType.VariableReference);
-      
-      // Other path metadata
-      const isAbsolute = processedContent.startsWith('/');
-      const hasExtension = /\.[a-zA-Z0-9]+$/.test(processedContent);
-      const extension = hasExtension ? 
-        processedContent.substring(processedContent.lastIndexOf('.') + 1) : null;
-      
       return helpers.createStructuredDirective(
         'path',
         'pathAssignment',
@@ -3330,12 +3283,7 @@ function peg$parse(input, options) {
           path: processedContent
         },
         {
-          path: {
-            hasVariables,
-            isAbsolute,
-            hasExtension,
-            extension
-          }
+          path: helpers.createPathMetadata(processedContent, pathParts)
         },
         location(),
         'path'  // Source parameter

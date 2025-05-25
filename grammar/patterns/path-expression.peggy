@@ -297,10 +297,7 @@ FileSectionPath "File path with section marker"
           section
         },
         meta: {
-          isAbsolute: path.meta.isAbsolute,
-          hasExtension: path.meta.hasExtension,
-          extension: path.meta.extension,
-          hasVariables: path.meta.hasVariables,
+          ...path.meta,
           hasSection: true
         }
       };
@@ -315,12 +312,6 @@ FilePath "File path"
     } {
       helpers.debug('FilePath matched', { path });
       
-      // Examine path for special attributes
-      const isAbsolute = path.raw.startsWith('/');
-      const hasExtension = /\.[a-zA-Z0-9]+$/.test(path.raw);
-      const extension = hasExtension ? 
-        path.raw.substring(path.raw.lastIndexOf('.') + 1) : null;
-      
       return {
         type: 'path',
         subtype: 'filePath',
@@ -330,13 +321,6 @@ FilePath "File path"
         raw: { 
           path: path.raw 
         },
-        meta: {
-          isAbsolute,
-          hasExtension,
-          extension,
-          hasVariables: path.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createPathMetadata(path.raw, path.parts)
       };
     }

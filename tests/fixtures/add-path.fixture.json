@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "9e437de6-6d81-405e-a185-8accc9256fb3",
+      "nodeId": "4ee583a5-19b1-4fa7-92eb-ac50ba836142",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "9ead5065-9e94-4c21-830d-b5042fb72fb1",
+            "nodeId": "6f80e1e6-2153-46cc-b2b2-3608dd7471fe",
             "location": {
               "start": {
                 "offset": 6,
@@ -50,10 +50,10 @@
       },
       "meta": {
         "path": {
+          "hasVariables": false,
           "isAbsolute": false,
           "hasExtension": true,
           "extension": "md",
-          "hasVariables": false,
           "pathSubtype": "filePath"
         }
       }

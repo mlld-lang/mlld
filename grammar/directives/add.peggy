@@ -55,12 +55,7 @@ AtAdd
       
       // Create meta object with path metadata
       const meta = {
-        path: {
-          hasVariables: false, // Simplified for now
-          isAbsolute: rawPath.startsWith('/'),
-          hasExtension: /\.[a-zA-Z0-9]+$/.test(rawPath),
-          extension: rawPath.match(/\.([a-zA-Z0-9]+)$/)?.[1] || null
-        }
+        path: helpers.createPathMetadata(rawPath, pathParts)
       };
       
       return helpers.createStructuredDirective(

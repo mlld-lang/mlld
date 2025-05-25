@@ -70,15 +70,6 @@ AtPath
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
       
-      // Check for variables
-      const hasVariables = pathParts.some(part => part.type === NodeType.VariableReference);
-      
-      // Other path metadata
-      const isAbsolute = processedContent.startsWith('/');
-      const hasExtension = /\.[a-zA-Z0-9]+$/.test(processedContent);
-      const extension = hasExtension ? 
-        processedContent.substring(processedContent.lastIndexOf('.') + 1) : null;
-      
       return helpers.createStructuredDirective(
         'path',
         'pathAssignment',
@@ -91,12 +82,7 @@ AtPath
           path: processedContent
         },
         {
-          path: {
-            hasVariables,
-            isAbsolute,
-            hasExtension,
-            extension
-          }
+          path: helpers.createPathMetadata(processedContent, pathParts)
         },
         location(),
         'path'  // Source parameter

@@ -4,6 +4,76 @@ This guide explains the principles, patterns, and practices for developing and m
 
 > **For Grammar Consumers**: Use `npm run ast -- '<meld syntax>'` to explore the AST output and refer to [AST-CONTEXT-GUIDE.md](./AST-CONTEXT-GUIDE.md) for understanding the AST structure.
 
+## Critical: How the Grammar Build System Works
+
+**IMPORTANT**: Understanding the build process is essential before making any changes.
+
+### Build Process Overview
+
+The grammar build system (`grammar/build-grammar.mjs`) works as follows:
+
+1. **File Concatenation**: All `.peggy` files are concatenated in this order:
+   - `meld.peggy` (root file with initialization block)
+   - `base/*.peggy` (core primitives)
+   - `patterns/*.peggy` (reusable patterns)
+   - `core/*.peggy` (directive cores)
+   - `directives/*.peggy` (directive implementations)
+
+2. **Parser Generation**: Peggy generates parser files with these dependencies:
+   - `NodeType` imported from `./deps/node-type.js`
+   - `DirectiveKind` imported from `./deps/directive-kind.js`
+   - `helpers` imported from `./deps/helpers.js`
+
+3. **Helper System**: 
+   - `helpers.js` imports from `grammar-core.js`
+   - These are available globally in all grammar rules
+   - **NEVER modify the generated files in `parser/`**
+   - **ONLY modify source files in `deps/`**
+
+### Critical Rules for Modifications
+
+1. **Never use `peg$imports`**: The helpers, NodeType, and DirectiveKind are available globally, not through `peg$imports`.
+
+2. **Modify TypeScript sources only**: When adding helper functions:
+   - Edit `grammar/deps/grammar-core.ts` (this is the TypeScript source)
+   - The build process compiles it to `grammar-core.js`
+   - Never edit `.js` files or files in `parser/` directly
+
+3. **No initialization blocks in pattern files**: Only `meld.peggy` can have the `{...}` initialization block at the top.
+
+4. **After changes, always rebuild**:
+   ```bash
+   npm run build:grammar
+   npm test grammar/
+   ```
+
+### Example: Adding a Helper Function
+
+```typescript
+// ✅ CORRECT: Edit grammar/deps/grammar-core.ts
+export const helpers = {
+  // ... existing helpers ...
+  myNewHelper(param: any) {
+    return /* implementation */;
+  }
+};
+```
+
+```peggy
+// Then use in any .peggy file:
+MyRule = value:Something {
+  return helpers.myNewHelper(value);
+}
+```
+
+```javascript
+// ❌ WRONG: Don't use peg$imports
+MyRule = value:Something {
+  const { helpers } = peg$imports; // This doesn't exist!
+  return helpers.myNewHelper(value);
+}
+```
+
 ## Critical: Grammar-Type Synchronization
 
 **The grammar and TypeScript types in `core/types/` must remain 100% synchronized.**

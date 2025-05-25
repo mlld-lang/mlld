@@ -1,7 +1,7 @@
 " Vim syntax file for Meld
 " Language: Meld
 " Maintainer: Auto-generated
-" Latest Revision: 2025-05-25T12:27:36.487Z
+" Latest Revision: 2025-05-25T15:01:58.764Z
 
 if exists("b:current_syntax")
   finish

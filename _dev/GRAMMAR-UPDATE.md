@@ -349,6 +349,33 @@ If any phase causes significant test failures:
 - Shared rules need initialization blocks only in the main grammar file
 - AsNewTitle rule is shared between add.peggy and text.peggy
 
+### Phase 4: COMPLETED ✅
+**Completed in 0.5 hours** - Core patterns were already in use
+
+#### What was accomplished:
+1. **Template Handling Review**
+   - Confirmed text.peggy already uses TemplateCore (line 143)
+   - Confirmed add.peggy already uses TemplateCore (line 123)
+   - Both directives properly leverage template metadata and values
+
+2. **Command Handling Review**
+   - Confirmed run.peggy already uses CommandCore (line 59)
+   - Confirmed run.peggy uses RunLanguageCodeCore (line 45)
+   - Confirmed exec.peggy already uses CommandCore (line 70)
+   - Confirmed exec.peggy uses RunLanguageCodeCore (line 24)
+   - All command directives properly use core abstractions
+
+3. **Section Extraction Review**
+   - Confirmed add.peggy uses SectionExtractionCore (line 76)
+   - Confirmed text.peggy uses SectionExtractionCore (lines 60 and 235)
+   - Both directives handle section extraction consistently
+
+#### Key learnings:
+- The core patterns (TemplateCore, CommandCore, SectionExtractionCore) were already properly integrated
+- The previous work had already achieved the goals of Phase 4
+- This phase served as validation that the architecture is correctly layered
+
 ### Current State
-- All tests passing (except pre-existing text-url-section issue)
-- Ready to proceed with Phase 4: Leverage Core Patterns
+- All 89 tests passing
+- All directives using appropriate core patterns
+- Ready to proceed with Phase 5: Metadata Standardization
