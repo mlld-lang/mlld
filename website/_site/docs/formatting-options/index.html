@@ -127,6 +127,15 @@
             
               
                 
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
                 <li><a href="/docs/directives/data/" >
                   
                     @data
@@ -136,18 +145,9 @@
             
               
                 
-                <li><a href="/docs/directives/define/" >
+                <li><a href="/docs/directives/exec/" >
                   
-                    @define
-                  
-                </a></li>
-              
-            
-              
-                
-                <li><a href="/docs/directives/embed/" >
-                  
-                    @embed
+                    @exec
                   
                 </a></li>
               
@@ -212,7 +212,10 @@
   </aside>
   
   <div class="docs-content">
-    <h1 id="meld-output-formatting-guide" tabindex="-1">Meld Output Formatting Guide</h1>
+    <hr>
+<h2 id="layout%3A-docs.njktitle%3A-%22meld-output-formatting-guide%22" tabindex="-1">layout: docs.njk<br>
+title: &quot;Meld Output Formatting Guide&quot;</h2>
+<h1 id="meld-output-formatting-guide" tabindex="-1">Meld Output Formatting Guide</h1>
 <p>This guide explains how output formatting works in Meld and how to control it using the available options.</p>
 <h2 id="default-output-behavior" tabindex="-1">Default Output Behavior</h2>
 <p>By default, Meld preserves the exact formatting of your document, including:</p>
@@ -228,7 +231,7 @@
 <span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> <span class="token string">"Hello"</span>
 <span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"World"</span>
 
-$<span class="token punctuation">{</span>greeting<span class="token punctuation">}</span><span class="token punctuation">,</span> $<span class="token punctuation">{</span>name<span class="token punctuation">}</span>!
+<span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span><span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">greeting</span><span class="token punctuation">}}</span></span>, <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">name</span><span class="token punctuation">}}</span></span>!<span class="token punctuation">]]</span></span>
 
 Another paragraph.
 </code></pre>
@@ -324,7 +327,7 @@ Line 2
 Line 3"</span>
 
 The text is:
-$<span class="token punctuation">{</span>multiline<span class="token punctuation">}</span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@multiline</span>
 End of text.
 </code></pre>
 <p>Output:</p>
@@ -356,7 +359,7 @@ End of text.
 
 My configuration is:
 \`\`\`json
-$<span class="token punctuation">{</span>config<span class="token punctuation">}</span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@config</span>
 \`\`\`
 </code></pre>
 

@@ -62,7 +62,7 @@
    Here's your task: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">tasks.codereview</span><span class="token punctuation">}}</span></span>
 <span class="token punctuation">]]</span></span>
 
-<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot "{{prompt}}" --system "{{roles.architect}}"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot @prompt --system @roles.architect<span class="token punctuation">]</span></span>
 <span class="space"></span>
 <span class="token operator">---</span>
 <span class="animated-line" data-text="Looking at the TypeBlorp updates, the new unidirectional flow implementation correctly separates concerns between state mutations and subscriptions. The observer pattern implementation is clean but has potential race conditions in the notification queue that should be addressed with a proper message ordering mechanism. I recommend adding tests for concurrent updates."></span>
@@ -166,9 +166,9 @@ Here's the structure of the codeb<span class="token operator">as</span>e:
   </div>
   <div class="terminal-content"><span class="token directive keyword">@text</span> tests <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>npm test<span class="token punctuation">]</span></span>
 
-<span class="token directive keyword">@text</span> res <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot "What's broken here? {{tests}}"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> res <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot "What's broken here? @tests"<span class="token punctuation">]</span></span>
 
-<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot "Make a plan to fix {{res}}"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot "Make a plan to fix @res"<span class="token punctuation">]</span></span>
 <span class="space"></span>
 <span class="token operator">---</span>
 <span class="animated-line" data-text="Here&#39;s a plan to fix the failing tests."></span>
@@ -209,10 +209,10 @@ Here's the structure of the codeb<span class="token operator">as</span>e:
     <span class="token string">"roadmap"</span>: <span class="token string">"Create a roadmap based on highest priority"</span>
 <span class="token punctuation">}</span>
 
-# recursively concatenate paths wrapped in xml tags
-<span class="token directive keyword">@exec</span> codecat<span class="token punctuation">(</span>dir<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>find {{dir}} -type f -exec sh -c 'echo "&lt;$(realpath --relative-to={{dir}} {})>"; cat {}; echo "&lt;/$(realpath --relative-to={{dir}} {})>"' \;<span class="token punctuation">]</span></span>
+# command creation examples
+<span class="token directive keyword">@exec</span> codecat<span class="token punctuation">(</span>dir<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>find @dir -type f -name "*.mld" | head -5<span class="token punctuation">]</span></span>
 
-<span class="token directive keyword">@exec</span> <span class="token operator">as</span>k<span class="token punctuation">(</span>context<span class="token punctuation">,</span> role<span class="token punctuation">,</span> t<span class="token operator">as</span>k<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot --context "{{context}}" --instructions "{{task}}" --system "{{role}}"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> <span class="token operator">as</span>k<span class="token punctuation">(</span>context<span class="token punctuation">,</span> role<span class="token punctuation">,</span> t<span class="token operator">as</span>k<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot --context @context --instructions @task --system @role<span class="token punctuation">]</span></span>
   </div>
 </div>
           

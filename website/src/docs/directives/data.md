@@ -3,6 +3,11 @@ layout: docs.njk
 title: "@data Directive"
 ---
 
+---
+layout: docs.njk
+title: "@data Directive"
+---
+
 # @data Directive
 
 The `@data` directive defines a structured data variable that can store objects, arrays, or other complex data types.

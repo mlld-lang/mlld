@@ -3,6 +3,11 @@ layout: docs.njk
 title: "@path Directive"
 ---
 
+---
+layout: docs.njk
+title: "@path Directive"
+---
+
 # @path Directive
 
 The `@path` directive defines filesystem path variables that can be used in `@add` and `@run` commands.

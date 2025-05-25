@@ -127,6 +127,15 @@
             
               
                 
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
                 <li><a href="/docs/directives/data/" >
                   
                     @data
@@ -136,18 +145,9 @@
             
               
                 
-                <li><a href="/docs/directives/define/" >
+                <li><a href="/docs/directives/exec/" >
                   
-                    @define
-                  
-                </a></li>
-              
-            
-              
-                
-                <li><a href="/docs/directives/embed/" >
-                  
-                    @embed
+                    @exec
                   
                 </a></li>
               
@@ -212,7 +212,10 @@
   </aside>
   
   <div class="docs-content">
-    <h1 id="variables" tabindex="-1">Variables</h1>
+    <hr>
+<h2 id="layout%3A-docs.njktitle%3A-%22variables%22" tabindex="-1">layout: docs.njk<br>
+title: &quot;Variables&quot;</h2>
+<h1 id="variables" tabindex="-1">Variables</h1>
 <p>Meld has three distinct types of variables, each with its own syntax and usage patterns.</p>
 <h2 id="variable-types" tabindex="-1">Variable Types</h2>
 <h3 id="path-variables" tabindex="-1">Path Variables</h3>
@@ -230,7 +233,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 </ul>
 <p>Example:</p>
 <pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
-<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>$docs/guide.md<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>$docs/guide.md<span class="token punctuation">]</span></span>
 </code></pre>
 <h3 id="text-variables" tabindex="-1">Text Variables</h3>
 <p>Text variables store unstructured text:</p>
@@ -296,12 +299,12 @@ $PROJECTPATH or $.   # Special path variable for project root
 </li>
 <li>
 <p><strong>Block context</strong> (in embed directives, standalone references):</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@embed</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits<span class="token punctuation">}</span><span class="token punctuation">}</span>
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@add</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>Simple arrays (of strings, numbers) use comma-separated values with spaces.</p>
 <p>Arrays of objects are formatted as properly indented JSON:</p>
 <pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> people <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>{ "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }<span class="token punctuation">]</span></span>
-<span class="token directive keyword">@embed</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>people<span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token directive keyword">@add</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>people<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>This outputs the array as properly indented JSON:</p>
 <pre class="language-json"><code class="language-json"><span class="token punctuation">[</span>
@@ -330,7 +333,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 </li>
 <li>
 <p><strong>Block context</strong> (in embed directives, standalone references):</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@embed</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>config<span class="token punctuation">}</span><span class="token punctuation">}</span>
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@add</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>config<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>Objects are formatted as properly indented JSON:</p>
 <pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>

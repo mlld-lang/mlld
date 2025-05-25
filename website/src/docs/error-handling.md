@@ -3,6 +3,11 @@ layout: docs.njk
 title: "Error Handling"
 ---
 
+---
+layout: docs.njk
+title: "Error Handling"
+---
+
 # Error Handling
 
 Meld has a structured approach to error handling, categorizing errors into different severity levels.

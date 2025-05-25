@@ -127,6 +127,15 @@
             
               
                 
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
                 <li><a href="/docs/directives/data/" >
                   
                     @data
@@ -136,18 +145,9 @@
             
               
                 
-                <li><a href="/docs/directives/define/" >
+                <li><a href="/docs/directives/exec/" >
                   
-                    @define
-                  
-                </a></li>
-              
-            
-              
-                
-                <li><a href="/docs/directives/embed/" >
-                  
-                    @embed
+                    @exec
                   
                 </a></li>
               
@@ -212,7 +212,10 @@
   </aside>
   
   <div class="docs-content">
-    <h1 id="introduction-to-meld" tabindex="-1">Introduction to Meld</h1>
+    <hr>
+<h2 id="layout%3A-docs.njktitle%3A-%22introduction-to-meld%22" tabindex="-1">layout: docs.njk<br>
+title: &quot;Introduction to Meld&quot;</h2>
+<h1 id="introduction-to-meld" tabindex="-1">Introduction to Meld</h1>
 <p>Meld is a simple and constrained scripting language designed for use within markdown-like documents. It allows you to create dynamic content by interpreting special directive lines while preserving all other content as-is.</p>
 <h2 id="core-concepts" tabindex="-1">Core Concepts</h2>
 <p>Meld works by processing only lines that begin with directives (like <code>@text</code>, <code>@run</code>, etc.) while treating all other content as literal text. This makes it ideal for creating dynamic, templated documents.</p>
@@ -232,11 +235,11 @@ This line will be interpreted <span class="token operator">as</span> plain text.
 </code></pre>
 <p>This will remain a codefence.</p>
 <pre><code>
-@embed [[
+@add [[
     Hello, {{name}}!
 ]]
 
-@embed [$docs/example.md]
+@add [$docs/example.md]
 
 @run [echo &quot;Current time: $(date)&quot;]
 </code></pre>

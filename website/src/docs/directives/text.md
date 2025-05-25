@@ -3,6 +3,11 @@ layout: docs.njk
 title: "@text Directive"
 ---
 
+---
+layout: docs.njk
+title: "@text Directive"
+---
+
 # @text Directive
 
 The `@text` directive defines a text variable that can store string values.

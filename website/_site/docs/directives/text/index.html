@@ -127,6 +127,15 @@
             
               
                 
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
                 <li><a href="/docs/directives/data/" >
                   
                     @data
@@ -136,18 +145,9 @@
             
               
                 
-                <li><a href="/docs/directives/define/" >
+                <li><a href="/docs/directives/exec/" >
                   
-                    @define
-                  
-                </a></li>
-              
-            
-              
-                
-                <li><a href="/docs/directives/embed/" >
-                  
-                    @embed
+                    @exec
                   
                 </a></li>
               
@@ -212,17 +212,20 @@
   </aside>
   
   <div class="docs-content">
-    <h1 id="%40text-directive" tabindex="-1">@text Directive</h1>
+    <hr>
+<h2 id="layout%3A-docs.njktitle%3A-%22%40text-directive%22" tabindex="-1">layout: docs.njk<br>
+title: &quot;@text Directive&quot;</h2>
+<h1 id="%40text-directive" tabindex="-1">@text Directive</h1>
 <p>The <code>@text</code> directive defines a text variable that can store string values.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
 <pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> identifier <span class="token operator">=</span> <span class="token string">"value"</span>
-<span class="token directive keyword">@text</span> identifier <span class="token operator">=</span> <span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>content<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> identifier <span class="token operator">=</span> <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>content<span class="token punctuation">]</span></span>
 <span class="token directive keyword">@text</span> identifier <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>command<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Where:</p>
 <ul>
 <li><code>identifier</code> is the variable name (must be a valid identifier)</li>
-<li><code>value</code> can be a quoted string, the result of an <code>@embed</code> directive, or the result of an <code>@run</code> directive</li>
+<li><code>value</code> can be a quoted string, the result of an <code>@add</code> directive, or the result of an <code>@run</code> directive</li>
 </ul>
 <h2 id="identifier-requirements" tabindex="-1">Identifier Requirements</h2>
 <ul>
@@ -274,7 +277,7 @@
 <pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> date <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>date +"%Y-%m-%d"<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Embedding file content:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> header <span class="token operator">=</span> <span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>header.md<span class="token punctuation">]</span></span>
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> header <span class="token operator">=</span> <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>header.md<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <ul>

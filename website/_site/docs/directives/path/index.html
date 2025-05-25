@@ -127,6 +127,15 @@
             
               
                 
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
                 <li><a href="/docs/directives/data/" >
                   
                     @data
@@ -136,18 +145,9 @@
             
               
                 
-                <li><a href="/docs/directives/define/" >
+                <li><a href="/docs/directives/exec/" >
                   
-                    @define
-                  
-                </a></li>
-              
-            
-              
-                
-                <li><a href="/docs/directives/embed/" >
-                  
-                    @embed
+                    @exec
                   
                 </a></li>
               
@@ -212,8 +212,11 @@
   </aside>
   
   <div class="docs-content">
-    <h1 id="%40path-directive" tabindex="-1">@path Directive</h1>
-<p>The <code>@path</code> directive defines filesystem path variables that can be used in <code>@embed</code> and <code>@run</code> commands.</p>
+    <hr>
+<h2 id="layout%3A-docs.njktitle%3A-%22%40path-directive%22" tabindex="-1">layout: docs.njk<br>
+title: &quot;@path Directive&quot;</h2>
+<h1 id="%40path-directive" tabindex="-1">@path Directive</h1>
+<p>The <code>@path</code> directive defines filesystem path variables that can be used in <code>@add</code> and <code>@run</code> commands.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
 <pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$HOMEPATH/path"</span>
 <span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$~/path"</span>
@@ -260,7 +263,7 @@
 <h2 id="referencing-path-variables" tabindex="-1">Referencing Path Variables</h2>
 <p>Path variables are referenced using the <code>$identifier</code> syntax:</p>
 <pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
-<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>$docs/guide.md<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>$docs/guide.md<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Path variables can be used:</p>
 <ul>
@@ -280,11 +283,11 @@
 </code></pre>
 <p>Embedding files with path variables:</p>
 <pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> templates <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/templates"</span>
-<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>$templates/header.md<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>$templates/header.md<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using path segments:</p>
 <pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
-<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>$src/components/button.js<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>$src/components/button.js<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The following errors are possible with path directives:</p>

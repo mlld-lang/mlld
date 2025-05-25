@@ -3,6 +3,11 @@ layout: docs.njk
 title: "@exec Directive"
 ---
 
+---
+layout: docs.njk
+title: "@exec Directive"
+---
+
 # @exec Directive
 
 The `@exec` directive creates reusable commands that can be invoked with `@run`.

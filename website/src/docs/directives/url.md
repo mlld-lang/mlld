@@ -3,6 +3,11 @@ layout: docs.njk
 title: "URL Support in Meld"
 ---
 
+---
+layout: docs.njk
+title: "URL Support in Meld"
+---
+
 # URL Support in Meld
 
 Meld supports fetching content from remote URLs using the `@add` and `@import` directives. This allows you to incorporate external resources into your Meld documents without needing to download them first.

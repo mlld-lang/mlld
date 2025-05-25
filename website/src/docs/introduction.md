@@ -3,6 +3,11 @@ layout: docs.njk
 title: "Introduction to Meld"
 ---
 
+---
+layout: docs.njk
+title: "Introduction to Meld"
+---
+
 # Introduction to Meld
 
 Meld is a simple and constrained scripting language designed for use within markdown-like documents. It allows you to create dynamic content by interpreting special directive lines while preserving all other content as-is.

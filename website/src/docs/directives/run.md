@@ -3,6 +3,11 @@ layout: docs.njk
 title: "@run Directive"
 ---
 
+---
+layout: docs.njk
+title: "@run Directive"
+---
+
 # @run Directive
 
 The `@run` directive executes shell commands and includes their output in your Meld document.

@@ -127,6 +127,15 @@
             
               
                 
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
                 <li><a href="/docs/directives/data/" aria-current=&quot;page&quot;>
                   
                     @data
@@ -136,18 +145,9 @@
             
               
                 
-                <li><a href="/docs/directives/define/" >
+                <li><a href="/docs/directives/exec/" >
                   
-                    @define
-                  
-                </a></li>
-              
-            
-              
-                
-                <li><a href="/docs/directives/embed/" >
-                  
-                    @embed
+                    @exec
                   
                 </a></li>
               
@@ -212,7 +212,10 @@
   </aside>
   
   <div class="docs-content">
-    <h1 id="%40data-directive" tabindex="-1">@data Directive</h1>
+    <hr>
+<h2 id="layout%3A-docs.njktitle%3A-%22%40data-directive%22" tabindex="-1">layout: docs.njk<br>
+title: &quot;@data Directive&quot;</h2>
+<h1 id="%40data-directive" tabindex="-1">@data Directive</h1>
 <p>The <code>@data</code> directive defines a structured data variable that can store objects, arrays, or other complex data types.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
 <pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> identifier <span class="token operator">=</span> value
@@ -220,7 +223,7 @@
 <p>Where:</p>
 <ul>
 <li><code>identifier</code> is the variable name (must be a valid identifier)</li>
-<li><code>value</code> can be an object literal, array literal, string literal, or the result of an <code>@embed</code>, <code>@run</code>, or <code>@call</code> directive</li>
+<li><code>value</code> can be an object literal, array literal, string literal, or the result of an <code>@add</code>, <code>@run</code>, or <code>@call</code> directive</li>
 </ul>
 <h2 id="identifier-requirements" tabindex="-1">Identifier Requirements</h2>
 <ul>
@@ -314,7 +317,7 @@
 <ul>
 <li>JSON parsing errors (if value is invalid JSON)</li>
 <li>Variable resolution errors</li>
-<li>Execution errors when using @run or @embed as sources</li>
+<li>Execution errors when using @run or @add as sources</li>
 </ul>
 <h2 id="notes" tabindex="-1">Notes</h2>
 <ul>

@@ -127,6 +127,15 @@
             
               
                 
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
                 <li><a href="/docs/directives/data/" >
                   
                     @data
@@ -136,18 +145,9 @@
             
               
                 
-                <li><a href="/docs/directives/define/" >
+                <li><a href="/docs/directives/exec/" >
                   
-                    @define
-                  
-                </a></li>
-              
-            
-              
-                
-                <li><a href="/docs/directives/embed/" >
-                  
-                    @embed
+                    @exec
                   
                 </a></li>
               
@@ -212,8 +212,11 @@
   </aside>
   
   <div class="docs-content">
-    <h1 id="url-support-in-meld" tabindex="-1">URL Support in Meld</h1>
-<p>Meld supports fetching content from remote URLs using the <code>@embed</code> and <code>@import</code> directives. This allows you to incorporate external resources into your Meld documents without needing to download them first.</p>
+    <hr>
+<h2 id="layout%3A-docs.njktitle%3A-%22url-support-in-meld%22" tabindex="-1">layout: docs.njk<br>
+title: &quot;URL Support in Meld&quot;</h2>
+<h1 id="url-support-in-meld" tabindex="-1">URL Support in Meld</h1>
+<p>Meld supports fetching content from remote URLs using the <code>@add</code> and <code>@import</code> directives. This allows you to incorporate external resources into your Meld documents without needing to download them first.</p>
 <h2 id="url-functionality-overview" tabindex="-1">URL Functionality Overview</h2>
 <ul>
 <li><strong>URL Embedding</strong>: Embed content from remote URLs directly into your Meld documents</li>
@@ -224,11 +227,11 @@
 </ul>
 <h2 id="enabling-url-support" tabindex="-1">Enabling URL Support</h2>
 <p>URL support is disabled by default and must be explicitly enabled using the <code>allowURLs=true</code> parameter:</p>
-<pre><code>@embed(url=&quot;https://example.com/content.md&quot;, allowURLs=true)
+<pre><code>@add(url=&quot;https://example.com/content.md&quot;, allowURLs=true)
 @import(url=&quot;https://example.com/variables.mld&quot;, allowURLs=true)
 </code></pre>
 <h2 id="url-parameters" tabindex="-1">URL Parameters</h2>
-<p>Both <code>@embed</code> and <code>@import</code> directives support the following URL-specific parameters:</p>
+<p>Both <code>@add</code> and <code>@import</code> directives support the following URL-specific parameters:</p>
 <table>
 <thead>
 <tr>
@@ -301,10 +304,10 @@
 </table>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <h3 id="basic-url-embedding" tabindex="-1">Basic URL Embedding</h3>
-<pre><code>@embed(url=&quot;https://raw.githubusercontent.com/example/repo/main/README.md&quot;, allowURLs=true)
+<pre><code>@add(url=&quot;https://raw.githubusercontent.com/example/repo/main/README.md&quot;, allowURLs=true)
 </code></pre>
 <h3 id="url-embedding-with-security-options" tabindex="-1">URL Embedding with Security Options</h3>
-<pre><code>@embed(
+<pre><code>@add(
   url=&quot;https://raw.githubusercontent.com/example/repo/main/README.md&quot;, 
   allowURLs=true, 
   urlOptions={
@@ -316,7 +319,7 @@
 )
 </code></pre>
 <h3 id="embedding-a-specific-section-from-a-url" tabindex="-1">Embedding a Specific Section from a URL</h3>
-<pre><code>@embed(
+<pre><code>@add(
   url=&quot;https://raw.githubusercontent.com/example/repo/main/README.md&quot;, 
   allowURLs=true, 
   section=&quot;Getting Started&quot;
@@ -327,7 +330,7 @@
 </code></pre>
 <h3 id="using-path-parameter-with-urls" tabindex="-1">Using Path Parameter with URLs</h3>
 <p>For backward compatibility, you can also use the <code>path</code> parameter with URLs:</p>
-<pre><code>@embed(path=&quot;https://example.com/content.md&quot;, allowURLs=true)
+<pre><code>@add(path=&quot;https://example.com/content.md&quot;, allowURLs=true)
 </code></pre>
 <h2 id="security-considerations" tabindex="-1">Security Considerations</h2>
 <ul>
@@ -341,7 +344,7 @@
 <h2 id="caching" tabindex="-1">Caching</h2>
 <p>URL responses are automatically cached to improve performance and reduce network traffic. The cache uses an LRU (Least Recently Used) strategy with a default capacity of 100 entries.</p>
 <p>To bypass the cache for a specific request, use:</p>
-<pre><code>@embed(
+<pre><code>@add(
   url=&quot;https://example.com/content.md&quot;, 
   allowURLs=true, 
   urlOptions={

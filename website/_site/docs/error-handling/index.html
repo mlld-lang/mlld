@@ -127,6 +127,15 @@
             
               
                 
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
                 <li><a href="/docs/directives/data/" >
                   
                     @data
@@ -136,18 +145,9 @@
             
               
                 
-                <li><a href="/docs/directives/define/" >
+                <li><a href="/docs/directives/exec/" >
                   
-                    @define
-                  
-                </a></li>
-              
-            
-              
-                
-                <li><a href="/docs/directives/embed/" >
-                  
-                    @embed
+                    @exec
                   
                 </a></li>
               
@@ -212,7 +212,10 @@
   </aside>
   
   <div class="docs-content">
-    <h1 id="error-handling" tabindex="-1">Error Handling</h1>
+    <hr>
+<h2 id="layout%3A-docs.njktitle%3A-%22error-handling%22" tabindex="-1">layout: docs.njk<br>
+title: &quot;Error Handling&quot;</h2>
+<h1 id="error-handling" tabindex="-1">Error Handling</h1>
 <p>Meld has a structured approach to error handling, categorizing errors into different severity levels.</p>
 <h2 id="error-categories" tabindex="-1">Error Categories</h2>
 <h3 id="fatal-errors-(halt-execution)" tabindex="-1">Fatal Errors (Halt Execution)</h3>
@@ -245,7 +248,7 @@
 <h2 id="common-error-scenarios" tabindex="-1">Common Error Scenarios</h2>
 <h3 id="file-system-errors" tabindex="-1">File System Errors</h3>
 <ul>
-<li><strong>Missing Files</strong>: When an <code>@embed</code> or <code>@import</code> directive references a non-existent file</li>
+<li><strong>Missing Files</strong>: When an <code>@add</code> or <code>@import</code> directive references a non-existent file</li>
 <li><strong>Path Validation</strong>: When paths don't use <code>$HOMEPATH</code> or <code>$PROJECTPATH</code></li>
 <li><strong>File Permission Issues</strong>: When Meld can't read a referenced file</li>
 </ul>

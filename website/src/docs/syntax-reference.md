@@ -3,6 +3,11 @@ layout: docs.njk
 title: "Syntax Reference"
 ---
 
+---
+layout: docs.njk
+title: "Syntax Reference"
+---
+
 # Syntax Reference
 
 This document provides a comprehensive reference for the Meld syntax.

@@ -3,6 +3,11 @@ layout: docs.njk
 title: "Meld Output Formatting Guide"
 ---
 
+---
+layout: docs.njk
+title: "Meld Output Formatting Guide"
+---
+
 # Meld Output Formatting Guide
 
 This guide explains how output formatting works in Meld and how to control it using the available options.

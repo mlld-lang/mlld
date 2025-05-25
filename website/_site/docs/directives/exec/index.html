@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@exec Directive - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">modular prompt scripting</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/syntax-reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/variables/" >Variables</a></li>
+          
+        
+          
+            <li><a href="/docs/error-handling/" >Error Handling</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
+          
+        
+          
+        
+        
+        <li>
+          <h4>Directives</h4>
+          <ul class="nav-list">
+            <li><a href="/docs/directives/" aria-current=&quot;page&quot;>Overview</a></li>
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/data/" >
+                  
+                    @data
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/exec/" aria-current=&quot;page&quot;>
+                  
+                    @exec
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/import/" >
+                  
+                    @import
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/path/" >
+                  
+                    @path
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/run/" >
+                  
+                    @run
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/text/" >
+                  
+                    @text
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
+          </ul>
+        </li>
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <hr>
+<h2 id="layout%3A-docs.njktitle%3A-%22%40exec-directive%22" tabindex="-1">layout: docs.njk<br>
+title: &quot;@exec Directive&quot;</h2>
+<h1 id="%40exec-directive" tabindex="-1">@exec Directive</h1>
+<p>The <code>@exec</code> directive creates reusable commands that can be invoked with <code>@run</code>.</p>
+<h2 id="syntax" tabindex="-1">Syntax</h2>
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@exec</span> commandName <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>shell command<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> commandName<span class="token punctuation">(</span>param1<span class="token punctuation">,</span> param2<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>command with @param1 and @param2<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> functionName<span class="token punctuation">(</span>param<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> jav<span class="token operator">as</span>cript <span class="token path"><span class="token punctuation">[</span>code using param<span class="token punctuation">]</span></span>
+</code></pre>
+<p>Where:</p>
+<ul>
+<li><code>commandName</code> is the name of the command (must be a valid identifier)</li>
+<li><code>param1</code>, <code>param2</code>, etc. are parameter names</li>
+<li>Parameters are referenced as <code>@param</code> inside the command</li>
+</ul>
+<h2 id="basic-commands" tabindex="-1">Basic Commands</h2>
+<p>Define a simple command without parameters:</p>
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@exec</span> buildProject <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>npm run build<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> listFiles <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la<span class="token punctuation">]</span></span>
+
+# Execute the command
+<span class="token directive keyword">@run</span> <span class="token variable variable">@buildProject</span>
+<span class="token directive keyword">@run</span> <span class="token variable variable">@listFiles</span>
+</code></pre>
+<h2 id="commands-with-parameters" tabindex="-1">Commands with Parameters</h2>
+<p>Define commands that accept parameters:</p>
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@exec</span> greet<span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hello, @name!"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> makeDir<span class="token punctuation">(</span>dirname<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>mkdir -p @dirname<span class="token punctuation">]</span></span>
+
+# Execute with arguments
+<span class="token directive keyword">@run</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span><span class="token string">"World"</span><span class="token punctuation">)</span>
+<span class="token directive keyword">@run</span> <span class="token variable variable">@makeDir</span><span class="token punctuation">(</span><span class="token string">"new-folder"</span><span class="token punctuation">)</span>
+</code></pre>
+<h2 id="javascript-functions" tabindex="-1">JavaScript Functions</h2>
+<p>Define JavaScript code blocks:</p>
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@exec</span> sum<span class="token punctuation">(</span>a<span class="token punctuation">,</span> b<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> jav<span class="token operator">as</span>cript <span class="token path"><span class="token punctuation">[</span>
+  console.log(Number(a) + Number(b));
+<span class="token punctuation">]</span></span>
+
+<span class="token directive keyword">@exec</span> format<span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> jav<span class="token operator">as</span>cript <span class="token path"><span class="token punctuation">[</span>
+  const words = name.split(' ');
+  const titled = words.map(word => {
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+  return titled.join(' ');
+<span class="token punctuation">]</span></span>
+
+# Execute JavaScript functions
+<span class="token directive keyword">@run</span> <span class="token variable variable">@sum</span><span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span>
+<span class="token directive keyword">@run</span> <span class="token variable variable">@format</span><span class="token punctuation">(</span><span class="token string">"john doe"</span><span class="token punctuation">)</span>
+</code></pre>
+<h2 id="parameter-rules" tabindex="-1">Parameter Rules</h2>
+<ul>
+<li>Parameters use <code>@param</code> syntax inside commands</li>
+<li>In shell commands, parameters are interpolated directly</li>
+<li>In JavaScript code, parameters are available as variables</li>
+<li>Parameter names must be valid identifiers</li>
+</ul>
+<h2 id="examples" tabindex="-1">Examples</h2>
+<p>System information commands:</p>
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@exec</span> getDate <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>date +"%Y-%m-%d"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> getUser <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>whoami<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> getPath <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>pwd<span class="token punctuation">]</span></span>
+
+<span class="token directive keyword">@text</span> today <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token variable variable">@getDate</span>
+<span class="token directive keyword">@text</span> currentUser <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token variable variable">@getUser</span>
+</code></pre>
+<p>File operations:</p>
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@exec</span> backup<span class="token punctuation">(</span>file<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>cp @file @file.bak<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> count<span class="token punctuation">(</span>pattern<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>grep -c "@pattern" *.txt<span class="token punctuation">]</span></span>
+
+<span class="token directive keyword">@run</span> <span class="token variable variable">@backup</span><span class="token punctuation">(</span><span class="token string">"important.txt"</span><span class="token punctuation">)</span>
+<span class="token directive keyword">@text</span> matches <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token variable variable">@count</span><span class="token punctuation">(</span><span class="token string">"TODO"</span><span class="token punctuation">)</span>
+</code></pre>
+<p>Complex operations:</p>
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@exec</span> analyze<span class="token punctuation">(</span>file<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>wc -l @file | awk '{print $1 " lines"}'<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> process<span class="token punctuation">(</span>input<span class="token punctuation">,</span> output<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>
+  cat @input | 
+  tr '<span class="token punctuation">[</span>:lower:<span class="token punctuation">]</span></span>' '<span class="token path"><span class="token punctuation">[</span>:upper:<span class="token punctuation">]</span></span>' | 
+  sort | 
+  uniq > <span class="token variable variable">@output</span>
+]
+
+<span class="token directive keyword">@run</span> <span class="token variable variable">@analyze</span><span class="token punctuation">(</span><span class="token string">"data.txt"</span><span class="token punctuation">)</span>
+<span class="token directive keyword">@run</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span><span class="token string">"input.txt"</span><span class="token punctuation">,</span> <span class="token string">"output.txt"</span><span class="token punctuation">)</span>
+</code></pre>
+<h2 id="using-with-data-structures" tabindex="-1">Using with Data Structures</h2>
+<p>Commands can be used within data structures:</p>
+<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@exec</span> getStatus <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "active"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> getVersion <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "1.0.0"<span class="token punctuation">]</span></span>
+
+<span class="token directive keyword">@data</span> systemInfo <span class="token operator">=</span> <span class="token punctuation">{</span>
+  status: <span class="token directive keyword">@run</span> <span class="token variable variable">@getStatus</span><span class="token punctuation">,</span>
+  version: <span class="token directive keyword">@run</span> <span class="token variable variable">@getVersion</span><span class="token punctuation">,</span>
+  timestamp: <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>date -u +"%Y-%m-%dT%H:%M:%SZ"<span class="token punctuation">]</span></span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h2 id="notes" tabindex="-1">Notes</h2>
+<ul>
+<li>Command names must be unique</li>
+<li>Parameters are passed as-is without shell escaping</li>
+<li>Be cautious with user input in commands</li>
+<li>JavaScript code has access to Node.js APIs</li>
+<li>Commands are evaluated when called with @run, not when defined</li>
+</ul>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>
