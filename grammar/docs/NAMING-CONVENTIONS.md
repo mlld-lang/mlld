@@ -121,4 +121,32 @@ For consistency, grammar rules should follow these patterns:
 4. Use structured debug output with rule name and relevant details
 5. Follow the abstraction hierarchy for rule dependencies
 
+## Avoiding Duplicate Patterns
+
+### Single Source of Truth
+Each pattern should be defined exactly once:
+
+- **Variable patterns**: Only use `AtVar` and `InterpolationVar` from `patterns/variables.peggy`
+- **List patterns**: Use generic list patterns from `patterns/lists.peggy` (when created)
+- **Content patterns**: Use wrapped patterns from `patterns/content.peggy`
+
+### Pattern Variants vs New Patterns
+When a pattern needs context-specific behavior:
+
+```peggy
+// ❌ BAD: Creating new pattern
+BracketVar = "@" id:BaseIdentifier { /* duplicate logic */ }
+
+// ✅ GOOD: Using existing pattern with context
+BracketContent = '[' parts:(AtVar / TextSegment)* ']'
+```
+
+### Deprecation and Removal
+Legacy patterns should be:
+1. Marked with a comment: `// DEPRECATED: Use AtVar instead`
+2. Removed in the next major refactor
+3. Never used in new code
+
+Example: `PathVar` is deprecated in favor of `AtVar`
+
 This standard naming convention improves readability, maintainability, and ensures new grammar rules integrate seamlessly with the existing system.
