@@ -27,10 +27,10 @@
   ],
   "scripts": {
     "build:grammar:core": "npx tsc -p grammar/tsconfig.grammar.json",
-    "build:grammar": "npm run build:grammar:core && node grammar/build-grammar.mjs && npm run build:fixtures",
+    "build:grammar": "npm run build:grammar:core && node grammar/build-grammar.mjs && npm run build:fixtures && npm run build:syntax",
     "build:fixtures": "node ./tests/utils/ast-fixtures.js process-examples ./tests/cases ./tests",
     "build:syntax": "node grammar/syntax-generator/build-syntax.js",
-    "build": "npm run build:grammar && npm run build:syntax && tsup",
+    "build": "npm run build:grammar && tsup",
     "ast": "npm run build:grammar && node ./scripts/ast-output.js",
     "ast:debug": "DEBUG_MELD_GRAMMAR=1 npm run ast --",
     "reinstall": "npm run build && npm uninstall meld && npm install -g .",
