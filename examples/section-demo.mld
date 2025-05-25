@@ -1,0 +1,29 @@
+# Section Extraction Demo
+
+This example demonstrates the new bracketed section syntax for extracting
+sections from markdown files.
+
+## Old Syntax vs New Syntax
+
+### Traditional syntax:
+@text intro = "# Introduction" from [docs/guide.md]
+
+### New bracketed syntax:  
+@text intro = [docs/guide.md # Introduction]
+
+## Renaming sections
+
+### Traditional syntax:
+@add "# Original Title" from [docs/api.md] as "# API Reference"
+
+### New bracketed syntax:
+@add [docs/api.md # Original Title] as "# API Reference"
+
+## Using with @add directive
+
+### Extract and rename a section:
+@text docs = @add [README.md # Installation] as "# Getting Started"
+@add @docs
+
+### Direct section inclusion:
+@add [CHANGELOG.md # Version 2.0]
