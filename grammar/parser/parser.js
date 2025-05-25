@@ -967,12 +967,12 @@ function peg$parse(input, options) {
       // Return only the content within brackets, not the brackets themselves
       return parts;
     };
-  var peg$f87 = function(id, accessElements) { 
+  var peg$f87 = function(id, fields) { 
       const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
-        ...(accessElements.length > 0 ? { fields: accessElements } : {})
+        ...(fields.length > 0 ? { fields: fields } : {})
       }, location());
-      helpers.debug('CreateVAR in BracketContent', { id, node, fields: accessElements });
+      helpers.debug('CreateVAR in BracketContent', { id, node, fields: fields });
       return node;
     };
   var peg$f88 = function(parts) {
@@ -997,13 +997,13 @@ function peg$parse(input, options) {
   var peg$f90 = function(parts) {
       return parts;
     };
-  var peg$f91 = function(id, accessElements) {
+  var peg$f91 = function(id, fields) {
       const normalizedId = helpers.normalizePathVar(id);
       const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
-        ...(accessElements.length > 0 ? { fields: accessElements } : {})
+        ...(fields.length > 0 ? { fields: fields } : {})
       }, location());
-      helpers.debug('CreateVAR in UnquotedPath', { id: normalizedId, node, fields: accessElements });
+      helpers.debug('CreateVAR in UnquotedPath', { id: normalizedId, node, fields: fields });
       return node;
     };
   var peg$f92 = function(chars) {
@@ -1649,22 +1649,22 @@ function peg$parse(input, options) {
     };
   var peg$f162 = function(chars) { return { content: chars }; };
   var peg$f163 = function(chars) { return chars; };
-  var peg$f164 = function(id, accessElements) {
+  var peg$f164 = function(id, fields) {
       const normalizedId = helpers.normalizePathVar(id);
       const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
-        ...(accessElements.length > 0 ? { fields: accessElements } : {})
+        ...(fields.length > 0 ? { fields: fields } : {})
       }, location());
-      helpers.debug('CreateVAR', { rule: 'AtVar', node, fields: accessElements });
+      helpers.debug('CreateVAR', { rule: 'AtVar', node, fields: fields });
       return node;
     };
-  var peg$f165 = function(id, accessElements) {
+  var peg$f165 = function(id, fields) {
       const normalizedId = helpers.normalizePathVar(id);
       const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
-        fields: accessElements
+        fields: fields
       }, location());
-      helpers.debug('CreateVAR', { rule: 'AtVar with bracket', node, fields: accessElements });
+      helpers.debug('CreateVAR', { rule: 'AtVar with bracket', node, fields: fields });
       return node;
     };
   var peg$f166 = function(id, format) {
@@ -1675,10 +1675,10 @@ function peg$parse(input, options) {
       helpers.debug('CreateVAR', { rule: 'InterpolationSimpleVar', node });
       return node;
     };
-  var peg$f167 = function(id, accessElements, format) {
+  var peg$f167 = function(id, fields, format) {
       const node = helpers.createVariableReferenceNode('varInterpolation', {
         identifier: id,
-        fields: accessElements || [],
+        fields: fields || [],
         ...(format ? { format } : {})
       }, location());
       helpers.debug('CreateVAR', { rule: 'InterpolationDataVar', node });

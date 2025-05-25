@@ -235,7 +235,7 @@ export const helpers = {
   },
 
   createVariableReferenceNode(valueType: string, data: any) {
-    return this.createNode(NodeType.VariableReference, { valueType, isVariableReference: true, ...data });
+    return this.createNode(NodeType.VariableReference, { valueType, ...data });
   },
 
   normalizePathVar(id: string) {

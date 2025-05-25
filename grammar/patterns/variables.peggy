@@ -13,24 +13,24 @@ Variable
 // AtVar for direct variable references (using context detection)
 // Used in paths, commands, and single bracket contexts
 AtVar
-  = "@" VariableContext id:BaseIdentifier accessElements:AnyFieldAccess* {
+  = "@" VariableContext id:BaseIdentifier fields:AnyFieldAccess* {
       const normalizedId = helpers.normalizePathVar(id);
       const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
-        ...(accessElements.length > 0 ? { fields: accessElements } : {})
+        ...(fields.length > 0 ? { fields: fields } : {})
       }, location());
-      helpers.debug('CreateVAR', { rule: 'AtVar', node, fields: accessElements });
+      helpers.debug('CreateVAR', { rule: 'AtVar', node, fields: fields });
       return node;
     }
   // Special case for top-level @var[...] without VariableContext check
   // This ensures we capture the full expression when it appears at the start
-  / "@" id:BaseIdentifier &"[" accessElements:AnyFieldAccess+ {
+  / "@" id:BaseIdentifier &"[" fields:AnyFieldAccess+ {
       const normalizedId = helpers.normalizePathVar(id);
       const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
-        fields: accessElements
+        fields: fields
       }, location());
-      helpers.debug('CreateVAR', { rule: 'AtVar with bracket', node, fields: accessElements });
+      helpers.debug('CreateVAR', { rule: 'AtVar with bracket', node, fields: fields });
       return node;
     }
 
@@ -52,10 +52,10 @@ InterpolationSimpleVar
 
 // {{var.field}} or {{var[index]}} for data field/array access
 InterpolationDataVar
-  = "{{" _ id:BaseIdentifier accessElements:AnyFieldAccess* format:VarFormat? _ "}}" {
+  = "{{" _ id:BaseIdentifier fields:AnyFieldAccess* format:VarFormat? _ "}}" {
       const node = helpers.createVariableReferenceNode('varInterpolation', {
         identifier: id,
-        fields: accessElements || [],
+        fields: fields || [],
         ...(format ? { format } : {})
       }, location());
       helpers.debug('CreateVAR', { rule: 'InterpolationDataVar', node });

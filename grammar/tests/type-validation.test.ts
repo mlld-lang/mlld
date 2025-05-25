@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parse } from '../parser';
+import { parseSync } from '@grammar/parser';
 import { 
   isDirectiveNode,
   isTextDirective,
@@ -10,9 +10,9 @@ import {
   isPathDirective,
   isImportDirective,
   isVariableReferenceNode,
-  DirectiveSubtype,
-  NodeType
+  DirectiveSubtype
 } from '@core/types';
+import { NodeType } from '@core/shared/types';
 
 /**
  * Type validation tests for grammar output
@@ -26,14 +26,20 @@ describe('Grammar-Type System Alignment', () => {
   describe('Text Directive Type Validation', () => {
     it('should produce valid textAssignment nodes', () => {
       const input = '@text greeting = "Hello World"';
-      const ast = parse(input);
+      const ast = parseSync(input);
       
       const directive = ast[0];
       expect(isDirectiveNode(directive)).toBe(true);
       expect(isTextDirective(directive)).toBe(true);
       
       // Check subtype is valid
-      const validTextSubtypes: DirectiveSubtype[] = ['textAssignment', 'textTemplate'];
+      const validTextSubtypes: DirectiveSubtype[] = [
+        'textAssignment', 
+        'textTemplate',
+        'textPath',
+        'textPathSection',
+        'textTemplateDefinition'
+      ];
       expect(validTextSubtypes).toContain(directive.subtype);
       
       // Check required properties exist
@@ -49,7 +55,7 @@ describe('Grammar-Type System Alignment', () => {
 
     it('should produce valid textTemplate nodes', () => {
       const input = '@text message = [[Hello {{name}}!]]';
-      const ast = parse(input);
+      const ast = parseSync(input);
       
       const directive = ast[0];
       expect(directive.subtype).toBe('textTemplate');
@@ -60,12 +66,18 @@ describe('Grammar-Type System Alignment', () => {
       // This test would fail currently because grammar produces
       // subtypes like 'textPath' that don't exist in types
       const input = '@text content = [file.md]';
-      const ast = parse(input);
+      const ast = parseSync(input);
       
       const directive = ast[0];
-      const validTextSubtypes: DirectiveSubtype[] = ['textAssignment', 'textTemplate'];
+      const validTextSubtypes: DirectiveSubtype[] = [
+        'textAssignment', 
+        'textTemplate',
+        'textPath',
+        'textPathSection',
+        'textTemplateDefinition'
+      ];
       
-      // This should pass but currently fails
+      // This should now pass
       expect(validTextSubtypes).toContain(directive.subtype);
     });
   });
@@ -73,7 +85,7 @@ describe('Grammar-Type System Alignment', () => {
   describe('Data Directive Type Validation', () => {
     it('should produce dataAssignment not dataDirective', () => {
       const input = '@data config = { "key": "value" }';
-      const ast = parse(input);
+      const ast = parseSync(input);
       
       const directive = ast[0];
       expect(directive.subtype).toBe('dataAssignment'); // Currently fails
@@ -83,7 +95,7 @@ describe('Grammar-Type System Alignment', () => {
   describe('Variable Reference Type Validation', () => {
     it('should produce valid VariableReferenceNode structure', () => {
       const input = '@text message = [[Hello {{user.name}}!]]';
-      const ast = parse(input);
+      const ast = parseSync(input);
       
       const directive = ast[0];
       const content = directive.values.content;
@@ -111,7 +123,7 @@ describe('Grammar-Type System Alignment', () => {
       const validNodeTypes = Object.values(NodeType);
       
       inputs.forEach(input => {
-        const ast = parse(input);
+        const ast = parseSync(input);
         // Walk the AST and check all node types
         walkAst(ast, (node) => {
           if (node.type) {
@@ -125,7 +137,7 @@ describe('Grammar-Type System Alignment', () => {
   describe('Directive Property Placement', () => {
     it('should place source at root level when present', () => {
       const input = '@add [[template content]]';
-      const ast = parse(input);
+      const ast = parseSync(input);
       
       const directive = ast[0];
       

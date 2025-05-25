@@ -34,7 +34,6 @@ export interface VariableReferenceNode extends BaseMeldNode {
   type: 'VariableReference';
   identifier: string;
   valueType: string;
-  isVariableReference: boolean;
   fields?: Array<{ type: 'field' | 'index'; value: string | number }>;
   format?: string;
 }
@@ -100,12 +99,12 @@ export type DirectiveKind =
 
 export type DirectiveSubtype = 
   | 'importAll' | 'importSelected'
-  | 'addPath' | 'addVariable' | 'addTemplate'
-  | 'textAssignment' | 'textTemplate'  // Updated to match new names
-  | 'dataDirective'
+  | 'addPath' | 'addVariable' | 'addTemplate' | 'addPathSection' | 'addTemplateInvocation'
+  | 'textAssignment' | 'textTemplate' | 'textPath' | 'textPathSection' | 'textTemplateDefinition'
+  | 'dataAssignment'
   | 'pathAssignment'
-  | 'runCommand' | 'runExec' | 'runCode'  // Updated to match new names
-  | 'execCode' | 'execCommand';  // Updated to match new names
+  | 'runCommand' | 'runExec' | 'runCode'
+  | 'execCode' | 'execCommand';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

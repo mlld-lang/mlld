@@ -209,7 +209,7 @@ export const helpers = {
         });
     },
     createVariableReferenceNode(valueType, data) {
-        return this.createNode(NodeType.VariableReference, { valueType, isVariableReference: true, ...data });
+        return this.createNode(NodeType.VariableReference, { valueType, ...data });
     },
     normalizePathVar(id) {
         if (id === '~')

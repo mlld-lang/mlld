@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "2f7fc04c-0062-4acb-9d62-85947afb37d3",
+      "nodeId": "ea526300-a78e-4ed0-a330-450ba045eb1d",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "8a7b0ad9-78e5-4e9e-befd-1f38f79d8958",
+            "nodeId": "979bc79b-55f6-4b6a-bdf6-81da02db7161",
             "location": {
               "start": {
                 "offset": 0,
@@ -42,7 +42,6 @@
               }
             },
             "valueType": "identifier",
-            "isVariableReference": true,
             "identifier": "user"
           }
         ],
@@ -52,7 +51,7 @@
             "name": [
               {
                 "type": "Text",
-                "nodeId": "71b79d35-53dc-484f-84c7-f1517d1bc75c",
+                "nodeId": "298e71c9-3cf6-4989-b1e4-4d7a1cc38377",
                 "location": {
                   "start": {
                     "offset": 23,
@@ -74,7 +73,7 @@
       },
       "raw": {
         "identifier": "user",
-        "value": "{\n  \"name\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"71b79d35-53dc-484f-84c7-f1517d1bc75c\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 23,\n          \"line\": 1,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 29,\n          \"line\": 1,\n          \"column\": 30\n        }\n      },\n      \"content\": \"John\"\n    }\n  ],\n  \"age\": 30\n}"
+        "value": "{\n  \"name\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"298e71c9-3cf6-4989-b1e4-4d7a1cc38377\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 23,\n          \"line\": 1,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 29,\n          \"line\": 1,\n          \"column\": 30\n        }\n      },\n      \"content\": \"John\"\n    }\n  ],\n  \"age\": 30\n}"
       },
       "meta": {
         "objectData": {
@@ -84,7 +83,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "58ea15d2-b4fe-4c91-a6b0-2918958a06e9",
+      "nodeId": "881524a8-cc6d-4689-a6f1-c2942e6a0f9d",
       "location": {
         "start": {
           "offset": 42,
@@ -101,7 +100,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "d6c04ee8-534f-47da-9ed6-3a3c70113d33",
+      "nodeId": "fff44c24-c49a-48e4-8e5a-78aa1be61d6b",
       "location": {
         "start": {
           "offset": 43,
@@ -121,7 +120,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "efbf5957-1947-4572-9f7a-7e65673064bc",
+            "nodeId": "09489cd2-ec37-4fe8-bf98-3b99938f013a",
             "location": {
               "start": {
                 "offset": 50,
@@ -138,7 +137,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "2d9e584f-aa36-4716-bc5e-801a10121262",
+            "nodeId": "a0fc3143-79dd-4e65-8a76-2da9a23f3d2c",
             "location": {
               "start": {
                 "offset": 0,
@@ -152,7 +151,6 @@
               }
             },
             "valueType": "varInterpolation",
-            "isVariableReference": true,
             "identifier": "user",
             "fields": [
               {
@@ -163,7 +161,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "839c7ce6-f9e2-44bb-801f-9a9f6a408bab",
+            "nodeId": "4ff1806a-4b4c-482b-b97d-ae248a4a19ba",
             "location": {
               "start": {
                 "offset": 64,
@@ -180,7 +178,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "ab62edf6-6351-4077-bd70-c6bb231d9d9f",
+            "nodeId": "cd998cea-4fd1-41bc-8694-f3389bc5eb5b",
             "location": {
               "start": {
                 "offset": 0,
@@ -194,7 +192,6 @@
               }
             },
             "valueType": "varInterpolation",
-            "isVariableReference": true,
             "identifier": "user",
             "fields": [
               {
@@ -205,7 +202,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "e779b072-1b02-4831-80c3-6ad3d003158f",
+            "nodeId": "b76b6486-0caf-4166-92e7-508095133c3d",
             "location": {
               "start": {
                 "offset": 80,

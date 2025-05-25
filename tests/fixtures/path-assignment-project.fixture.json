@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "8cfa1057-f281-40f2-8f4e-f0ef915206ae",
+      "nodeId": "6cb0469f-8f44-4920-9791-66570352ad2d",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "7460f84b-9035-4ccd-b28b-5fb988d77e73",
+            "nodeId": "c9ec17be-627e-435a-8958-c4284b6cd848",
             "location": {
               "start": {
                 "offset": 0,
@@ -42,14 +42,13 @@
               }
             },
             "valueType": "identifier",
-            "isVariableReference": true,
             "identifier": "projectSrc"
           }
         ],
         "path": [
           {
             "type": "VariableReference",
-            "nodeId": "cb0517aa-ce4c-4728-92c9-bb8bd21573b9",
+            "nodeId": "43a2770a-8db9-44ae-86e8-6be883400373",
             "location": {
               "start": {
                 "offset": 0,
@@ -63,12 +62,11 @@
               }
             },
             "valueType": "varIdentifier",
-            "isVariableReference": true,
             "identifier": "PROJECTPATH"
           },
           {
             "type": "Text",
-            "nodeId": "4bde4854-8027-4c26-b285-386c4c4ad18a",
+            "nodeId": "4e7a6430-ee2d-41de-8ab4-1f5557f1c5b9",
             "location": {
               "start": {
                 "offset": 0,
@@ -100,7 +98,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "ed71e5fb-e1e0-4c9e-baf7-73f38c839bef",
+      "nodeId": "df1db944-ec05-420b-91e6-246484b04c7c",
       "location": {
         "start": {
           "offset": 27,
@@ -117,7 +115,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "c3447e74-3bc5-43a9-832a-fba270af1a57",
+      "nodeId": "3ef4963c-a05a-49f7-8580-f50679fc99af",
       "location": {
         "start": {
           "offset": 28,
@@ -137,7 +135,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "bd30e003-fb99-4dc5-a3ec-fa81e4421ca4",
+            "nodeId": "5bb2c7b3-86cd-415a-8c5b-5e041a31a279",
             "location": {
               "start": {
                 "offset": 35,
@@ -154,7 +152,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "07c39e6c-f013-4ab1-b770-cf9d09a399ed",
+            "nodeId": "9cbca7cd-a2e9-4c4c-b381-ba0e62b5cb9d",
             "location": {
               "start": {
                 "offset": 0,
@@ -168,7 +166,6 @@
               }
             },
             "valueType": "varInterpolation",
-            "isVariableReference": true,
             "identifier": "projectSrc"
           }
         ]

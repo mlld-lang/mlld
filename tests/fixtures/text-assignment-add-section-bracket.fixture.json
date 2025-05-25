@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "ffd55bd3-e767-4148-8f6d-c27b53562ba3",
+      "nodeId": "187ae007-11ef-4b57-8cee-b16dfcfc5d15",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "32cdbf73-79e8-4cfd-9f21-64e3ab9c4e9a",
+            "nodeId": "30dbef11-aba7-464e-8bcb-31acc21d53eb",
             "location": {
               "start": {
                 "offset": 0,
@@ -42,14 +42,13 @@
               }
             },
             "valueType": "identifier",
-            "isVariableReference": true,
             "identifier": "intro"
           }
         ],
         "section": [
           {
             "type": "Text",
-            "nodeId": "29c812e3-61cd-492b-869e-877f95fe7343",
+            "nodeId": "ad4366ae-e6c4-434d-ac44-4eb2de955395",
             "location": {
               "start": {
                 "offset": 0,
@@ -68,7 +67,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "a38cf07d-bd3b-4987-bb18-713e11a35b4e",
+            "nodeId": "58608bd8-a057-4ddb-9b45-91bba0c9d88e",
             "location": {
               "start": {
                 "offset": 0,
@@ -99,7 +98,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "ad1639a2-dc3b-413b-add9-0e817f752832",
+      "nodeId": "482bee8c-e666-4da8-9e95-9fc29521da14",
       "location": {
         "start": {
           "offset": 40,
@@ -116,7 +115,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "af3b0284-0041-4367-a826-8945e2b2e96d",
+      "nodeId": "029d2439-9d14-4ac5-9aba-a1f53635a501",
       "location": {
         "start": {
           "offset": 41,
@@ -136,7 +135,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "a585562c-741b-4115-8b57-b02c39931158",
+            "nodeId": "ff938ab2-1505-4dcb-bac7-cf8785d9bc63",
             "location": {
               "start": {
                 "offset": 0,
@@ -150,7 +149,6 @@
               }
             },
             "valueType": "varIdentifier",
-            "isVariableReference": true,
             "identifier": "intro"
           }
         ]

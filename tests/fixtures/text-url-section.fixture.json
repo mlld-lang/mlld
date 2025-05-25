@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Text",
-      "nodeId": "b6581f2c-ac6f-4bc2-adae-262d90a6d6a2",
+      "nodeId": "3020aade-aee5-4ae7-9718-602a343fdf25",
       "location": {
         "start": {
           "offset": 0,
@@ -25,7 +25,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "399e11c6-5521-4c65-a187-83a664b89129",
+      "nodeId": "4b184c2f-7747-4ae2-8e0c-3d890167aa44",
       "location": {
         "start": {
           "offset": 100,
@@ -45,7 +45,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "ff5a494b-4aad-4a5c-ac8d-22a45a4f96a0",
+            "nodeId": "80d45ae3-773f-4219-b3ad-bf1e9da622cc",
             "location": {
               "start": {
                 "offset": 0,
@@ -59,14 +59,13 @@
               }
             },
             "valueType": "identifier",
-            "isVariableReference": true,
             "identifier": "installation"
           }
         ],
         "content": [
           {
             "type": "Text",
-            "nodeId": "ee62e4fc-a876-42c4-8304-ca727a9b9d16",
+            "nodeId": "ba39c3a7-50d5-44d8-8b92-c45b504405bc",
             "location": {
               "start": {
                 "offset": 121,
@@ -95,7 +94,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "1476b3f6-ccee-4fdf-ae42-ae454721e2b0",
+      "nodeId": "a7cc49c5-770f-497c-b2ca-ef3cd82430b6",
       "location": {
         "start": {
           "offset": 138,
@@ -112,7 +111,7 @@
     },
     {
       "type": "VariableReference",
-      "nodeId": "adc01751-f93e-4047-a31b-b3e98deb28b5",
+      "nodeId": "250bb781-5a6f-4b31-991f-bc43a179d78a",
       "location": {
         "start": {
           "offset": 0,
@@ -126,7 +125,6 @@
         }
       },
       "valueType": "varInterpolation",
-      "isVariableReference": true,
       "identifier": "installation"
     }
   ]

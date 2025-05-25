@@ -63,12 +63,12 @@ BracketContent "Content with @var interpolation"
 
 // Variable reference within bracketed content
 BracketVar
-  = "@" id:BaseIdentifier accessElements:AnyFieldAccess* { 
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* { 
       const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
-        ...(accessElements.length > 0 ? { fields: accessElements } : {})
+        ...(fields.length > 0 ? { fields: fields } : {})
       }, location());
-      helpers.debug('CreateVAR in BracketContent', { id, node, fields: accessElements });
+      helpers.debug('CreateVAR in BracketContent', { id, node, fields: fields });
       return node;
     }
 
@@ -110,13 +110,13 @@ UnquotedPathPart
 
 // Variable reference in unquoted paths - without VariableContext check
 UnquotedPathVar
-  = "@" id:BaseIdentifier accessElements:AnyFieldAccess* {
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
       const normalizedId = helpers.normalizePathVar(id);
       const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
-        ...(accessElements.length > 0 ? { fields: accessElements } : {})
+        ...(fields.length > 0 ? { fields: fields } : {})
       }, location());
-      helpers.debug('CreateVAR in UnquotedPath', { id: normalizedId, node, fields: accessElements });
+      helpers.debug('CreateVAR in UnquotedPath', { id: normalizedId, node, fields: fields });
       return node;
     }
 
