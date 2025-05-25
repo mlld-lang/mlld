@@ -353,4 +353,12 @@ export const helpers = {
             isTemplateContent: wrapperType === 'doubleBracket'
         };
     },
+    createUrlMetadata(protocol, parts, hasSection = false) {
+        return {
+            isUrl: true,
+            protocol,
+            hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
+            hasSection
+        };
+    },
 };

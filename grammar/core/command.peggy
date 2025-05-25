@@ -115,9 +115,7 @@ CommandCore
           commandBases: rawBases
         },
         meta: {
-          hasVariables: command.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          ),
+          ...helpers.createCommandMetadata(command.parts),
           commandCount: commandBases.length,
           hasScriptRunner: hasScriptRunner
         }
@@ -164,9 +162,7 @@ ParameterizedCommandCore
           ...(params ? { params: params.raw } : {})
         },
         meta: {
-          hasVariables: command.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          ),
+          ...helpers.createCommandMetadata(command.parts),
           commandCount: commandBases.length,
           hasScriptRunner: hasScriptRunner,
           hasParams: !!params

@@ -85,9 +85,7 @@ AtData
         metaObj = { arrayData: { itemCount: value.value.length } };
       } else if (value.type === "template") {
         source = 'template';
-        metaObj = { templateData: { hasVariables: value.value.some(part => 
-          part && part.type === NodeType.VariableReference
-        ) } };
+        metaObj = { templateData: helpers.createTemplateMetadata(value.value, 'quote') };
       } else if (value.type === "variableReference") {
         source = 'variable';
         metaObj = { variableData: { 

@@ -1168,14 +1168,7 @@ function peg$parse(input, options) {
           protocol,
           section
         },
-        meta: {
-          isUrl: true,
-          protocol,
-          hasVariables: rest.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          ),
-          hasSection: true
-        }
+        meta: helpers.createUrlMetadata(protocol, rest.parts, true)
       };
     };
   var peg$f116 = function(url, section) {
@@ -1195,12 +1188,7 @@ function peg$parse(input, options) {
           protocol: url.raw.protocol,
           section
         },
-        meta: {
-          isUrl: true,
-          protocol: url.values.protocol,
-          hasVariables: url.meta.hasVariables,
-          hasSection: true
-        }
+        meta: helpers.createUrlMetadata(url.values.protocol, url.values.parts, true)
       };
     };
   var peg$f117 = function(protocol, rest) {
@@ -1220,13 +1208,7 @@ function peg$parse(input, options) {
           url: fullUrl,
           protocol
         },
-        meta: {
-          isUrl: true,
-          protocol,
-          hasVariables: rest.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createUrlMetadata(protocol, rest.parts)
       };
     };
   var peg$f118 = function(protocol, rest) {
@@ -1246,13 +1228,7 @@ function peg$parse(input, options) {
           url: fullUrl,
           protocol
         },
-        meta: {
-          isUrl: true,
-          protocol,
-          hasVariables: rest.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createUrlMetadata(protocol, rest.parts)
       };
     };
   var peg$f119 = function(protocol, rest) {
@@ -1272,13 +1248,7 @@ function peg$parse(input, options) {
           url: fullUrl,
           protocol
         },
-        meta: {
-          isUrl: true,
-          protocol,
-          hasVariables: rest.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createUrlMetadata(protocol, rest.parts)
       };
     };
   var peg$f120 = function(protocol, rest) {
@@ -1298,13 +1268,7 @@ function peg$parse(input, options) {
           url: fullUrl,
           protocol
         },
-        meta: {
-          isUrl: true,
-          protocol,
-          hasVariables: rest.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createUrlMetadata(protocol, rest.parts)
       };
     };
   var peg$f121 = function(protocol, rest) {
@@ -1324,13 +1288,7 @@ function peg$parse(input, options) {
           url: fullUrl,
           protocol
         },
-        meta: {
-          isUrl: true,
-          protocol,
-          hasVariables: rest.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createUrlMetadata(protocol, rest.parts)
       };
     };
   var peg$f122 = function(proto) {
@@ -2044,9 +2002,7 @@ function peg$parse(input, options) {
           commandBases: rawBases
         },
         meta: {
-          hasVariables: command.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          ),
+          ...helpers.createCommandMetadata(command.parts),
           commandCount: commandBases.length,
           hasScriptRunner: hasScriptRunner
         }
@@ -2087,9 +2043,7 @@ function peg$parse(input, options) {
           ...(params ? { params: params.raw } : {})
         },
         meta: {
-          hasVariables: command.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          ),
+          ...helpers.createCommandMetadata(command.parts),
           commandCount: commandBases.length,
           hasScriptRunner: hasScriptRunner,
           hasParams: !!params
@@ -2244,8 +2198,7 @@ function peg$parse(input, options) {
           content: template.raw 
         },
         meta: {
-          hasVariables: hasVariables,
-          isTemplateContent: isTemplateContent,
+          ...helpers.createTemplateMetadata(template.parts, template.wrapperType),
           wrapperType: template.wrapperType
         }
       };
@@ -2266,9 +2219,7 @@ function peg$parse(input, options) {
           ...(options ? { options: options.raw } : {})
         },
         meta: {
-          hasVariables: template.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          ),
+          ...helpers.createTemplateMetadata(template.parts, template.wrapperType),
           hasOptions: !!options
         }
       };
@@ -2638,9 +2589,7 @@ function peg$parse(input, options) {
         values: { path: path.parts },
         raw: { path: path.raw },
         meta: { 
-          path: {
-            hasVariables: path.parts.some(part => part && part.type === NodeType.VariableReference)
-          }
+          path: helpers.createPathMetadata(path.raw, path.parts)
         }
       };
     };
@@ -2752,9 +2701,7 @@ function peg$parse(input, options) {
         metaObj = { arrayData: { itemCount: value.value.length } };
       } else if (value.type === "template") {
         source = 'template';
-        metaObj = { templateData: { hasVariables: value.value.some(part => 
-          part && part.type === NodeType.VariableReference
-        ) } };
+        metaObj = { templateData: helpers.createTemplateMetadata(value.value, 'quote') };
       } else if (value.type === "variableReference") {
         source = 'variable';
         metaObj = { variableData: { 

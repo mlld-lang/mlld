@@ -375,7 +375,39 @@ If any phase causes significant test failures:
 - The previous work had already achieved the goals of Phase 4
 - This phase served as validation that the architecture is correctly layered
 
+### Phase 5: COMPLETED ✅
+**Completed in 0.5 hours** - Efficient implementation using helper functions
+
+#### What was accomplished:
+1. **Helper Function Creation**
+   - Added createPathMetadata() to grammar-core.ts
+   - Added createCommandMetadata() to grammar-core.ts  
+   - Added createTemplateMetadata() to grammar-core.ts
+   - Added createUrlMetadata() for URL-specific metadata
+
+2. **Path Metadata Updates**
+   - Updated patterns/path-expression.peggy to use helpers.createUrlMetadata()
+   - Updated directives/add.peggy AddDirectiveRef to use helpers.createPathMetadata()
+   - All path metadata now standardized
+
+3. **Command Metadata Updates**
+   - Updated core/command.peggy CommandCore to use helpers.createCommandMetadata()
+   - Updated core/command.peggy ParameterizedCommandCore to use helpers.createCommandMetadata()
+   - All command metadata now standardized
+
+4. **Template Metadata Updates**
+   - Updated core/template.peggy TemplateCore to use helpers.createTemplateMetadata()
+   - Updated core/template.peggy RichTemplateCore to use helpers.createTemplateMetadata()
+   - Updated directives/data.peggy template metadata to use helper
+   - All template metadata now standardized
+
+#### Key learnings:
+- Helper functions successfully abstract metadata creation logic
+- Spread operator (...) allows extending metadata with additional properties
+- All 89 tests remain passing after standardization
+
 ### Current State
 - All 89 tests passing
 - All directives using appropriate core patterns
-- Ready to proceed with Phase 5: Metadata Standardization
+- All metadata creation standardized with helper functions
+- Ready to proceed with Phase 6: Final Cleanup

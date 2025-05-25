@@ -48,14 +48,7 @@ URLSectionPath "URL with section marker"
           protocol,
           section
         },
-        meta: {
-          isUrl: true,
-          protocol,
-          hasVariables: rest.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          ),
-          hasSection: true
-        }
+        meta: helpers.createUrlMetadata(protocol, rest.parts, true)
       };
     }
   / url:URLPath _ "#" _ section:BaseIdentifier {
@@ -75,12 +68,7 @@ URLSectionPath "URL with section marker"
           protocol: url.raw.protocol,
           section
         },
-        meta: {
-          isUrl: true,
-          protocol: url.values.protocol,
-          hasVariables: url.meta.hasVariables,
-          hasSection: true
-        }
+        meta: helpers.createUrlMetadata(url.values.protocol, url.values.parts, true)
       };
     }
 
@@ -102,13 +90,7 @@ URLPath "URL path"
           url: fullUrl,
           protocol
         },
-        meta: {
-          isUrl: true,
-          protocol,
-          hasVariables: rest.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createUrlMetadata(protocol, rest.parts)
       };
     }
   / "'" protocol:URLProtocolType ":" rest:URLRest "'" {
@@ -128,13 +110,7 @@ URLPath "URL path"
           url: fullUrl,
           protocol
         },
-        meta: {
-          isUrl: true,
-          protocol,
-          hasVariables: rest.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createUrlMetadata(protocol, rest.parts)
       };
     }
   / "`" protocol:URLProtocolType ":" rest:URLRest "`" {
@@ -154,13 +130,7 @@ URLPath "URL path"
           url: fullUrl,
           protocol
         },
-        meta: {
-          isUrl: true,
-          protocol,
-          hasVariables: rest.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createUrlMetadata(protocol, rest.parts)
       };
     }
   / "[" protocol:URLProtocolType ":" rest:URLRest "]" {
@@ -180,13 +150,7 @@ URLPath "URL path"
           url: fullUrl,
           protocol
         },
-        meta: {
-          isUrl: true,
-          protocol,
-          hasVariables: rest.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createUrlMetadata(protocol, rest.parts)
       };
     }
   / protocol:URLProtocolType ":" rest:URLRest {
@@ -206,13 +170,7 @@ URLPath "URL path"
           url: fullUrl,
           protocol
         },
-        meta: {
-          isUrl: true,
-          protocol,
-          hasVariables: rest.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createUrlMetadata(protocol, rest.parts)
       };
     }
 

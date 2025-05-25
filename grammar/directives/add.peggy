@@ -376,9 +376,7 @@ AddDirectiveRef
         values: { path: path.parts },
         raw: { path: path.raw },
         meta: { 
-          path: {
-            hasVariables: path.parts.some(part => part && part.type === NodeType.VariableReference)
-          }
+          path: helpers.createPathMetadata(path.raw, path.parts)
         }
       };
     }
