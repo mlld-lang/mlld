@@ -3,12 +3,12 @@
   "description": "Test fixture for run/command-bases",
   "category": "run",
   "subcategory": "command-bases",
-  "input": "# Test special command patterns\n\n@run [npx prettier --write .]\n\n@run [python -m http.server 8000]\n\n@run [node -e \"console.log('Hello')\"]\n\n@run [deno run --allow-net server.ts]",
-  "expected": "# Test special command patterns\n\n@run [npx prettier --write .]\n\n@run [python -m http.server 8000]\n\n@run [node -e \"console.log('Hello')\"]\n\n@run [deno run --allow-net server.ts]",
+  "input": "# Test special command patterns\n\n@run [echo \"npx prettier --write .\"]\n\n@run [echo \"python -m http.server 8000\"]\n\n@run [node -e \"console.log('Hello')\"]\n\n@run [echo \"deno run --allow-net server.ts\"]",
+  "expected": "# Test special command patterns\n\nnpx prettier --write .\n\npython -m http.server 8000\n\nHello\n\ndeno run --allow-net server.ts",
   "ast": [
     {
       "type": "Text",
-      "nodeId": "141bbce3-246c-4cab-85ef-ab05476f8013",
+      "nodeId": "c0a2ed79-9713-4eba-89b6-f46e3d3d1509",
       "location": {
         "start": {
           "offset": 0,
@@ -25,7 +25,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "dd63fecb-8126-42d2-8b3d-f0b6db8dc60d",
+      "nodeId": "064270bc-f9ce-46f1-a38f-65bd391d5389",
       "location": {
         "start": {
           "offset": 33,
@@ -33,9 +33,9 @@
           "column": 1
         },
         "end": {
-          "offset": 62,
+          "offset": 69,
           "line": 3,
-          "column": 30
+          "column": 37
         }
       },
       "kind": "run",
@@ -45,7 +45,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "cefe42f1-428a-44c7-8f4c-f5801b34aa8b",
+            "nodeId": "38d1f662-ecc1-4085-8d2b-3c3ac5116802",
             "location": {
               "start": {
                 "offset": 39,
@@ -53,17 +53,17 @@
                 "column": 7
               },
               "end": {
-                "offset": 61,
+                "offset": 68,
                 "line": 3,
-                "column": 29
+                "column": 36
               }
             },
-            "content": "npx prettier --write ."
+            "content": "echo \"npx prettier --write .\""
           }
         ],
         "commandBases": [
           {
-            "nodeId": "2ec140cc-a60d-40b6-b986-c65b95a4d465",
+            "nodeId": "a61e6218-58e3-4df2-8190-0cc715658872",
             "location": {
               "start": {
                 "offset": 38,
@@ -71,109 +71,19 @@
                 "column": 6
               },
               "end": {
-                "offset": 62,
-                "line": 3,
-                "column": 30
-              }
-            },
-            "command": "npx",
-            "package": "prettier",
-            "isPackageRunner": true
-          }
-        ]
-      },
-      "raw": {
-        "command": "npx prettier --write .",
-        "commandBases": [
-          "npx"
-        ]
-      },
-      "meta": {
-        "hasVariables": false,
-        "commandCount": 1,
-        "hasScriptRunner": true,
-        "isMultiLine": false
-      }
-    },
-    {
-      "type": "Text",
-      "nodeId": "9f97e26f-afe6-4a7f-b473-fcb2a6a25574",
-      "location": {
-        "start": {
-          "offset": 62,
-          "line": 3,
-          "column": 30
-        },
-        "end": {
-          "offset": 64,
-          "line": 5,
-          "column": 1
-        }
-      },
-      "content": "\n\n"
-    },
-    {
-      "type": "Directive",
-      "nodeId": "a3d02d38-6c26-45a8-b0f9-4f51625f03f8",
-      "location": {
-        "start": {
-          "offset": 64,
-          "line": 5,
-          "column": 1
-        },
-        "end": {
-          "offset": 97,
-          "line": 5,
-          "column": 34
-        }
-      },
-      "kind": "run",
-      "subtype": "runCommand",
-      "source": "command",
-      "values": {
-        "command": [
-          {
-            "type": "Text",
-            "nodeId": "c078ec1b-46e8-4c58-8da3-1aafb2808ae4",
-            "location": {
-              "start": {
-                "offset": 70,
-                "line": 5,
-                "column": 7
-              },
-              "end": {
-                "offset": 96,
-                "line": 5,
-                "column": 33
-              }
-            },
-            "content": "python -m http.server 8000"
-          }
-        ],
-        "commandBases": [
-          {
-            "nodeId": "e4fbed14-01e9-4906-a34e-aeaf49a4fcd4",
-            "location": {
-              "start": {
                 "offset": 69,
-                "line": 5,
-                "column": 6
-              },
-              "end": {
-                "offset": 97,
-                "line": 5,
-                "column": 34
+                "line": 3,
+                "column": 37
               }
             },
-            "command": "python -m",
-            "module": "http.server"
+            "command": "echo"
           }
         ]
       },
       "raw": {
-        "command": "python -m http.server 8000",
+        "command": "echo \"npx prettier --write .\"",
         "commandBases": [
-          "python -m"
+          "echo"
         ]
       },
       "meta": {
@@ -185,15 +95,102 @@
     },
     {
       "type": "Text",
-      "nodeId": "6d98ac4c-a12a-4da4-8e19-5cac60551536",
+      "nodeId": "7d2ef860-2989-4ead-ac1c-cf860b716bd0",
       "location": {
         "start": {
-          "offset": 97,
-          "line": 5,
-          "column": 34
+          "offset": 69,
+          "line": 3,
+          "column": 37
         },
         "end": {
-          "offset": 99,
+          "offset": 71,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "ad598802-610d-4ad2-9e2b-235b813a025e",
+      "location": {
+        "start": {
+          "offset": 71,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 111,
+          "line": 5,
+          "column": 41
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "a56056f4-0eae-4038-97ee-e811c16e7fb9",
+            "location": {
+              "start": {
+                "offset": 77,
+                "line": 5,
+                "column": 7
+              },
+              "end": {
+                "offset": 110,
+                "line": 5,
+                "column": 40
+              }
+            },
+            "content": "echo \"python -m http.server 8000\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "0be8c582-e0a0-4220-ad37-8d92cc618353",
+            "location": {
+              "start": {
+                "offset": 76,
+                "line": 5,
+                "column": 6
+              },
+              "end": {
+                "offset": 111,
+                "line": 5,
+                "column": 41
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"python -m http.server 8000\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "cbef20bf-af66-4d88-a905-6aedbba73657",
+      "location": {
+        "start": {
+          "offset": 111,
+          "line": 5,
+          "column": 41
+        },
+        "end": {
+          "offset": 113,
           "line": 7,
           "column": 1
         }
@@ -202,15 +199,15 @@
     },
     {
       "type": "Directive",
-      "nodeId": "3b033a5a-b95a-43f6-bf8f-a57d6630f818",
+      "nodeId": "c3d21434-e43f-4617-b91b-3efb1156d7a3",
       "location": {
         "start": {
-          "offset": 99,
+          "offset": 113,
           "line": 7,
           "column": 1
         },
         "end": {
-          "offset": 136,
+          "offset": 150,
           "line": 7,
           "column": 38
         }
@@ -222,15 +219,15 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "4e0747e6-85d2-41af-9037-b944a5b4639f",
+            "nodeId": "fe5455ff-fe65-4904-8edd-fda550f9cd18",
             "location": {
               "start": {
-                "offset": 105,
+                "offset": 119,
                 "line": 7,
                 "column": 7
               },
               "end": {
-                "offset": 135,
+                "offset": 149,
                 "line": 7,
                 "column": 37
               }
@@ -240,15 +237,15 @@
         ],
         "commandBases": [
           {
-            "nodeId": "77adb957-1a19-43a5-b219-a6d8e075296c",
+            "nodeId": "abd44ab2-9bee-4b49-a3c2-66f3342aa028",
             "location": {
               "start": {
-                "offset": 104,
+                "offset": 118,
                 "line": 7,
                 "column": 6
               },
               "end": {
-                "offset": 136,
+                "offset": 150,
                 "line": 7,
                 "column": 38
               }
@@ -272,15 +269,15 @@
     },
     {
       "type": "Text",
-      "nodeId": "26e34223-7c67-488d-bcf5-e2bba03ea8eb",
+      "nodeId": "4e528d75-fd5a-4907-b3c6-7c22a2d91104",
       "location": {
         "start": {
-          "offset": 136,
+          "offset": 150,
           "line": 7,
           "column": 38
         },
         "end": {
-          "offset": 138,
+          "offset": 152,
           "line": 9,
           "column": 1
         }
@@ -289,17 +286,17 @@
     },
     {
       "type": "Directive",
-      "nodeId": "be4045f0-244a-4056-a82c-f7bb5d3ea384",
+      "nodeId": "b579d046-8df1-4491-8187-b22d1819dcd2",
       "location": {
         "start": {
-          "offset": 138,
+          "offset": 152,
           "line": 9,
           "column": 1
         },
         "end": {
-          "offset": 175,
+          "offset": 196,
           "line": 9,
-          "column": 38
+          "column": 45
         }
       },
       "kind": "run",
@@ -309,45 +306,45 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "38bb8795-7b1c-4ee3-90e0-9191156e3243",
+            "nodeId": "4b5042ee-e7ed-48ee-996d-5b9ba1f2a276",
             "location": {
               "start": {
-                "offset": 144,
+                "offset": 158,
                 "line": 9,
                 "column": 7
               },
               "end": {
-                "offset": 174,
+                "offset": 195,
                 "line": 9,
-                "column": 37
+                "column": 44
               }
             },
-            "content": "deno run --allow-net server.ts"
+            "content": "echo \"deno run --allow-net server.ts\""
           }
         ],
         "commandBases": [
           {
-            "nodeId": "b7083376-cefb-4e87-80e3-4d64f2dc18eb",
+            "nodeId": "6f2e9cbe-a128-4998-959f-ebb360801bf5",
             "location": {
               "start": {
-                "offset": 143,
+                "offset": 157,
                 "line": 9,
                 "column": 6
               },
               "end": {
-                "offset": 175,
+                "offset": 196,
                 "line": 9,
-                "column": 38
+                "column": 45
               }
             },
-            "command": "deno"
+            "command": "echo"
           }
         ]
       },
       "raw": {
-        "command": "deno run --allow-net server.ts",
+        "command": "echo \"deno run --allow-net server.ts\"",
         "commandBases": [
-          "deno"
+          "echo"
         ]
       },
       "meta": {

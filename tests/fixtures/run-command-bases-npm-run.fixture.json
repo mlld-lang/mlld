@@ -3,12 +3,12 @@
   "description": "Test fixture for run/command-bases",
   "category": "run",
   "subcategory": "command-bases",
-  "input": "# Test npm run script detection\n\n@run [npm run build]\n\n@run [yarn run test]\n\n@run [pnpm run dev]\n\n@run [npm run build:prod]",
-  "expected": "# Test npm run script detection\n\n@run [npm run build]\n\n@run [yarn run test]\n\n@run [pnpm run dev]\n\n@run [npm run build:prod]",
+  "input": "# Test npm run script detection\n\n@run [npm run -s testecho -- \"npm run build output\"]\n\n@run [npm run -s testecho -- \"npm run test output\"]\n\n@run [npm run -s testecho -- \"npm run dev output\"]\n\n@run [npm run -s testecho -- \"npm run build:prod output\"]",
+  "expected": "# Test npm run script detection\n\nnpm run build output\n\nnpm run test output\n\nnpm run dev output\n\nnpm run build:prod output",
   "ast": [
     {
       "type": "Text",
-      "nodeId": "dda4e8ea-51b5-47d7-b786-0709e798b655",
+      "nodeId": "5bf6c4d4-a75b-4ffc-803b-9da5f77010a4",
       "location": {
         "start": {
           "offset": 0,
@@ -25,7 +25,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "cfbda162-9f92-4dd0-a06a-b4a6d717b4cc",
+      "nodeId": "6c7e8090-550b-4e54-8dec-507a87b1e288",
       "location": {
         "start": {
           "offset": 33,
@@ -33,9 +33,9 @@
           "column": 1
         },
         "end": {
-          "offset": 53,
+          "offset": 85,
           "line": 3,
-          "column": 21
+          "column": 53
         }
       },
       "kind": "run",
@@ -45,7 +45,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "e990d11a-70e9-47da-b8cb-3ecaf6ca3ae2",
+            "nodeId": "6a1e6cbc-4241-4a59-a661-ab941e7ebb03",
             "location": {
               "start": {
                 "offset": 39,
@@ -53,17 +53,17 @@
                 "column": 7
               },
               "end": {
-                "offset": 52,
+                "offset": 84,
                 "line": 3,
-                "column": 20
+                "column": 52
               }
             },
-            "content": "npm run build"
+            "content": "npm run -s testecho -- \"npm run build output\""
           }
         ],
         "commandBases": [
           {
-            "nodeId": "d04d4945-a63f-4859-b1e6-8cb9b062c25b",
+            "nodeId": "5d6f0f26-892c-4e23-a63b-565166d1974a",
             "location": {
               "start": {
                 "offset": 38,
@@ -71,19 +71,19 @@
                 "column": 6
               },
               "end": {
-                "offset": 53,
+                "offset": 85,
                 "line": 3,
-                "column": 21
+                "column": 53
               }
             },
             "command": "npm run",
-            "script": "build",
+            "script": "-s",
             "isScriptRunner": true
           }
         ]
       },
       "raw": {
-        "command": "npm run build",
+        "command": "npm run -s testecho -- \"npm run build output\"",
         "commandBases": [
           "npm run"
         ]
@@ -97,15 +97,15 @@
     },
     {
       "type": "Text",
-      "nodeId": "9adc51dd-8585-41ca-ad89-a83f10e39257",
+      "nodeId": "d93bddf9-601e-4ebe-8119-7ed409fdd75b",
       "location": {
         "start": {
-          "offset": 53,
+          "offset": 85,
           "line": 3,
-          "column": 21
+          "column": 53
         },
         "end": {
-          "offset": 55,
+          "offset": 87,
           "line": 5,
           "column": 1
         }
@@ -114,17 +114,17 @@
     },
     {
       "type": "Directive",
-      "nodeId": "1059caaa-baf5-4370-96d1-3f41f15e86ee",
+      "nodeId": "de46e84f-7f21-47a7-a85d-2070124a64db",
       "location": {
         "start": {
-          "offset": 55,
+          "offset": 87,
           "line": 5,
           "column": 1
         },
         "end": {
-          "offset": 75,
+          "offset": 138,
           "line": 5,
-          "column": 21
+          "column": 52
         }
       },
       "kind": "run",
@@ -134,223 +134,223 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "2fca4dcf-680a-4454-813e-090c8e41e0e7",
+            "nodeId": "cb0b49fa-2546-4e12-a63e-e256a5f3e221",
             "location": {
               "start": {
-                "offset": 61,
+                "offset": 93,
                 "line": 5,
                 "column": 7
               },
               "end": {
-                "offset": 74,
+                "offset": 137,
                 "line": 5,
-                "column": 20
+                "column": 51
               }
             },
-            "content": "yarn run test"
+            "content": "npm run -s testecho -- \"npm run test output\""
           }
         ],
         "commandBases": [
           {
-            "nodeId": "37bccc25-ce9c-426a-8015-17d075473de3",
+            "nodeId": "0bbb4282-70a1-4a57-908d-fb510f63edb1",
             "location": {
               "start": {
-                "offset": 60,
+                "offset": 92,
                 "line": 5,
                 "column": 6
               },
               "end": {
-                "offset": 75,
+                "offset": 138,
                 "line": 5,
-                "column": 21
-              }
-            },
-            "command": "yarn run",
-            "script": "test",
-            "isScriptRunner": true
-          }
-        ]
-      },
-      "raw": {
-        "command": "yarn run test",
-        "commandBases": [
-          "yarn run"
-        ]
-      },
-      "meta": {
-        "hasVariables": false,
-        "commandCount": 1,
-        "hasScriptRunner": true,
-        "isMultiLine": false
-      }
-    },
-    {
-      "type": "Text",
-      "nodeId": "08f00c5b-b586-4c66-90de-c5ef30f16140",
-      "location": {
-        "start": {
-          "offset": 75,
-          "line": 5,
-          "column": 21
-        },
-        "end": {
-          "offset": 77,
-          "line": 7,
-          "column": 1
-        }
-      },
-      "content": "\n\n"
-    },
-    {
-      "type": "Directive",
-      "nodeId": "689213d0-dcb4-4869-afb0-404700f1d072",
-      "location": {
-        "start": {
-          "offset": 77,
-          "line": 7,
-          "column": 1
-        },
-        "end": {
-          "offset": 96,
-          "line": 7,
-          "column": 20
-        }
-      },
-      "kind": "run",
-      "subtype": "runCommand",
-      "source": "command",
-      "values": {
-        "command": [
-          {
-            "type": "Text",
-            "nodeId": "9cc71f34-6c0a-4522-907f-cbadffb0d313",
-            "location": {
-              "start": {
-                "offset": 83,
-                "line": 7,
-                "column": 7
-              },
-              "end": {
-                "offset": 95,
-                "line": 7,
-                "column": 19
-              }
-            },
-            "content": "pnpm run dev"
-          }
-        ],
-        "commandBases": [
-          {
-            "nodeId": "fd89c8a6-db6e-49fb-9a8d-7027ca2a1b7f",
-            "location": {
-              "start": {
-                "offset": 82,
-                "line": 7,
-                "column": 6
-              },
-              "end": {
-                "offset": 96,
-                "line": 7,
-                "column": 20
-              }
-            },
-            "command": "pnpm run",
-            "script": "dev",
-            "isScriptRunner": true
-          }
-        ]
-      },
-      "raw": {
-        "command": "pnpm run dev",
-        "commandBases": [
-          "pnpm run"
-        ]
-      },
-      "meta": {
-        "hasVariables": false,
-        "commandCount": 1,
-        "hasScriptRunner": true,
-        "isMultiLine": false
-      }
-    },
-    {
-      "type": "Text",
-      "nodeId": "d3ee956e-611c-4cde-8cf0-1bca050aeae0",
-      "location": {
-        "start": {
-          "offset": 96,
-          "line": 7,
-          "column": 20
-        },
-        "end": {
-          "offset": 98,
-          "line": 9,
-          "column": 1
-        }
-      },
-      "content": "\n\n"
-    },
-    {
-      "type": "Directive",
-      "nodeId": "5c00dccb-5542-48de-8edb-bfb2a304eae7",
-      "location": {
-        "start": {
-          "offset": 98,
-          "line": 9,
-          "column": 1
-        },
-        "end": {
-          "offset": 123,
-          "line": 9,
-          "column": 26
-        }
-      },
-      "kind": "run",
-      "subtype": "runCommand",
-      "source": "command",
-      "values": {
-        "command": [
-          {
-            "type": "Text",
-            "nodeId": "31232d94-591f-4361-94dc-14cd0f527f7a",
-            "location": {
-              "start": {
-                "offset": 104,
-                "line": 9,
-                "column": 7
-              },
-              "end": {
-                "offset": 122,
-                "line": 9,
-                "column": 25
-              }
-            },
-            "content": "npm run build:prod"
-          }
-        ],
-        "commandBases": [
-          {
-            "nodeId": "c296f136-95d0-48c2-ab14-a24c7507276c",
-            "location": {
-              "start": {
-                "offset": 103,
-                "line": 9,
-                "column": 6
-              },
-              "end": {
-                "offset": 123,
-                "line": 9,
-                "column": 26
+                "column": 52
               }
             },
             "command": "npm run",
-            "script": "build:prod",
+            "script": "-s",
             "isScriptRunner": true
           }
         ]
       },
       "raw": {
-        "command": "npm run build:prod",
+        "command": "npm run -s testecho -- \"npm run test output\"",
+        "commandBases": [
+          "npm run"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": true,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "a1b543b1-5f58-440f-b00d-fd3261cb6a59",
+      "location": {
+        "start": {
+          "offset": 138,
+          "line": 5,
+          "column": 52
+        },
+        "end": {
+          "offset": 140,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "20f5b7f6-ed23-49a2-8f7b-3065f219c7e5",
+      "location": {
+        "start": {
+          "offset": 140,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 190,
+          "line": 7,
+          "column": 51
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "9ab31e09-4dea-4790-bb1b-b0a319d8b18b",
+            "location": {
+              "start": {
+                "offset": 146,
+                "line": 7,
+                "column": 7
+              },
+              "end": {
+                "offset": 189,
+                "line": 7,
+                "column": 50
+              }
+            },
+            "content": "npm run -s testecho -- \"npm run dev output\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "3c39f00b-535f-44e8-ba5b-339f4f9ed958",
+            "location": {
+              "start": {
+                "offset": 145,
+                "line": 7,
+                "column": 6
+              },
+              "end": {
+                "offset": 190,
+                "line": 7,
+                "column": 51
+              }
+            },
+            "command": "npm run",
+            "script": "-s",
+            "isScriptRunner": true
+          }
+        ]
+      },
+      "raw": {
+        "command": "npm run -s testecho -- \"npm run dev output\"",
+        "commandBases": [
+          "npm run"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": true,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "e79686fa-7d46-4ad4-a19f-8f578a7a3ec0",
+      "location": {
+        "start": {
+          "offset": 190,
+          "line": 7,
+          "column": 51
+        },
+        "end": {
+          "offset": 192,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "099161ca-cbf2-44c4-921d-686ebf9722b9",
+      "location": {
+        "start": {
+          "offset": 192,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 249,
+          "line": 9,
+          "column": 58
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "a6b23f57-af14-48eb-8f86-73c90cafe8bf",
+            "location": {
+              "start": {
+                "offset": 198,
+                "line": 9,
+                "column": 7
+              },
+              "end": {
+                "offset": 248,
+                "line": 9,
+                "column": 57
+              }
+            },
+            "content": "npm run -s testecho -- \"npm run build:prod output\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "cdfefecb-e7fb-4e28-afa6-fe10fa407ba0",
+            "location": {
+              "start": {
+                "offset": 197,
+                "line": 9,
+                "column": 6
+              },
+              "end": {
+                "offset": 249,
+                "line": 9,
+                "column": 58
+              }
+            },
+            "command": "npm run",
+            "script": "-s",
+            "isScriptRunner": true
+          }
+        ]
+      },
+      "raw": {
+        "command": "npm run -s testecho -- \"npm run build:prod output\"",
         "commandBases": [
           "npm run"
         ]

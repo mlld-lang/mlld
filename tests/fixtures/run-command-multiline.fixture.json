@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "e47f0375-0972-48e9-b6c2-ad344c3f08ed",
+      "nodeId": "30abf4bc-c5a2-49dc-b4b6-b03886dc7e9a",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "27c5ec4e-1ba8-4119-9abf-b28d7f5f806a",
+            "nodeId": "8286f10b-0488-4ece-9f31-017d5c757769",
             "location": {
               "start": {
                 "offset": 6,
@@ -46,7 +46,7 @@
         ],
         "commandBases": [
           {
-            "nodeId": "4e1da9c9-249b-435a-8465-a936f0fbd4cc",
+            "nodeId": "6a8e22c9-0731-4753-9146-7ee79b5979c2",
             "location": {
               "start": {
                 "offset": 5,
@@ -62,7 +62,7 @@
             "command": "bash"
           },
           {
-            "nodeId": "f87b69ba-2259-403c-84f4-d973c3af1bd5",
+            "nodeId": "3dd867ba-1e16-454d-8211-8843fda0e527",
             "location": {
               "start": {
                 "offset": 5,

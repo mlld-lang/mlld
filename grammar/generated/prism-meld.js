@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Meld
-// Generated from grammar at 2025-05-24T19:55:11.636Z
+// Generated from grammar at 2025-05-24T22:51:44.624Z
 
 Prism.languages.meld = {
   'comment': {

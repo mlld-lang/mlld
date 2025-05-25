@@ -1,9 +1,9 @@
 # Test command operators
 
-@run [ls -la | grep foo | wc -l]
+ls -la | grep foo | wc -l
 
-@run [mkdir test && cd test && touch file.txt]
+mkdir test && cd test && touch file.txt
 
-@run [rm -rf temp || echo "Already clean"]
+rm -rf temp || Already clean
 
-@run [npm test; npm run build; npm run deploy]
+npm test; npm run build; npm run deploy

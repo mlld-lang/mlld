@@ -8,82 +8,12 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "e3618e9c-62ab-4f39-af35-a51747dd1e91",
+      "nodeId": "d39fd4bf-68fb-4f6b-a7e5-5c2431346a51",
       "location": {
         "start": {
-          "offset": 0,
+          "offset": 5,
           "line": 1,
-          "column": 1
-        },
-        "end": {
-          "offset": 15,
-          "line": 1,
-          "column": 16
-        }
-      },
-      "kind": "run",
-      "subtype": "runCommand",
-      "source": "command",
-      "values": {
-        "command": [
-          {
-            "type": "Text",
-            "nodeId": "22b415a4-3cb4-4d82-a9c2-6b28836817bc",
-            "location": {
-              "start": {
-                "offset": 5,
-                "line": 1,
-                "column": 6
-              },
-              "end": {
-                "offset": 15,
-                "line": 1,
-                "column": 16
-              }
-            },
-            "content": "javascript"
-          }
-        ],
-        "commandBases": [
-          {
-            "nodeId": "9db3a271-c9cd-4d1f-9b77-f9fddc607026",
-            "location": {
-              "start": {
-                "offset": 5,
-                "line": 1,
-                "column": 6
-              },
-              "end": {
-                "offset": 15,
-                "line": 1,
-                "column": 16
-              }
-            },
-            "command": "javascript"
-          }
-        ]
-      },
-      "raw": {
-        "command": "javascript",
-        "commandBases": [
-          "javascript"
-        ]
-      },
-      "meta": {
-        "hasVariables": false,
-        "commandCount": 1,
-        "hasScriptRunner": false,
-        "isMultiLine": false
-      }
-    },
-    {
-      "type": "Text",
-      "nodeId": "7afb42a7-8a80-45c3-aae5-225d4e0e993c",
-      "location": {
-        "start": {
-          "offset": 15,
-          "line": 1,
-          "column": 16
+          "column": 6
         },
         "end": {
           "offset": 48,
@@ -91,7 +21,60 @@
           "column": 49
         }
       },
-      "content": " [console.log(\"Hello from code\")]"
+      "kind": "run",
+      "subtype": "runCode",
+      "source": "code",
+      "values": {
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "d5cc86c1-74b3-4d48-9538-2c8285542169",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 48,
+                "line": 1,
+                "column": 49
+              }
+            },
+            "content": "javascript"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "4fb68b3b-9a28-4b03-9e90-5305b36bd47c",
+            "location": {
+              "start": {
+                "offset": 16,
+                "line": 1,
+                "column": 17
+              },
+              "end": {
+                "offset": 48,
+                "line": 1,
+                "column": 49
+              }
+            },
+            "content": "console.log(\"Hello from code\")"
+          }
+        ]
+      },
+      "raw": {
+        "lang": "javascript",
+        "args": [],
+        "code": "console.log(\"Hello from code\")"
+      },
+      "meta": {
+        "isMultiLine": false,
+        "language": "javascript",
+        "hasVariables": false
+      }
     }
   ]
 }

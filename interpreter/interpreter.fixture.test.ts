@@ -148,6 +148,17 @@ describe('Meld Interpreter - Fixture Tests', () => {
         // This test expects a 'variable' to exist with value 'value'
         // But the fixture doesn't define it - skip for now
         // TODO: File issue for incomplete fixture
+      } else if (fixture.name === 'text-url' || fixture.name === 'text-url-section') {
+        // Mock fetch for URL tests
+        global.fetch = async (url: string) => {
+          if (url === 'https://raw.githubusercontent.com/example/repo/main/README.md') {
+            return {
+              ok: true,
+              text: async () => '# Example Project\n\nThis is the README content fetched from the URL.'
+            } as any;
+          }
+          throw new Error(`Unexpected URL in test: ${url}`);
+        };
       }
       
       try {
@@ -156,12 +167,33 @@ describe('Meld Interpreter - Fixture Tests', () => {
         if (fixture.name === 'path-assignment-project') {
           basePath = '/Users/adam/dev/meld';
         }
+        // For npm run tests, we need to be in the project directory
+        if (fixture.name.includes('run-command-bases-npm-run')) {
+          basePath = process.cwd(); // Use current working directory which has package.json
+        }
+        
+        // Enable URL support for URL tests
+        const urlConfig = (fixture.name === 'text-url' || fixture.name === 'text-url-section') ? {
+          enabled: true,
+          allowedProtocols: ['https'],
+          allowedDomains: [],
+          blockedDomains: [],
+          timeout: 30000,
+          maxResponseSize: 10485760,
+          cache: {
+            enabled: false,
+            ttl: 0,
+            maxEntries: 0,
+            rules: []
+          }
+        } : undefined;
         
         const result = await interpret(fixture.input, {
           fileSystem,
           pathService,
           format: 'markdown',
-          basePath
+          basePath,
+          urlConfig
         });
         
         // Normalize output (trim trailing whitespace/newlines)

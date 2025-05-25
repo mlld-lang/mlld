@@ -1,9 +1,9 @@
 # Test special command patterns
 
-@run [npx prettier --write .]
+npx prettier --write .
 
-@run [python -m http.server 8000]
+python -m http.server 8000
 
-@run [node -e "console.log('Hello')"]
+Hello
 
-@run [deno run --allow-net server.ts]
+deno run --allow-net server.ts

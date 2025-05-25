@@ -1,9 +1,9 @@
 # Test npm run script detection
 
-@run [npm run build]
+npm run build output
 
-@run [yarn run test]
+npm run test output
 
-@run [pnpm run dev]
+npm run dev output
 
-@run [npm run build:prod]
+npm run build:prod output

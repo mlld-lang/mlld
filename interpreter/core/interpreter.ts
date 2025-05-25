@@ -62,19 +62,32 @@ export async function evaluate(node: MeldNode | MeldNode[], env: Environment): P
       // The grammar incorrectly creates top-level VariableReference nodes
       // for parameters in exec directives. These have location offset 0,0
       // which is impossible for real variable references.
+      // However, variable interpolation nodes also have offset 0,0 but
+      // they have valueType: 'varInterpolation'
       if (varRef.location?.start?.offset === 0 && 
-          varRef.location?.end?.offset === 0) {
+          varRef.location?.end?.offset === 0 &&
+          varRef.valueType !== 'varInterpolation') {
         // Skip orphaned parameter references from grammar bug
         return { value: '', env };
       }
       
       const variable = env.getVariable(varRef.identifier);
       if (!variable) {
+        // For interpolation variables, return empty if not found
+        if (varRef.valueType === 'varInterpolation') {
+          return { value: `{{${varRef.identifier}}}`, env };
+        }
         throw new Error(`Variable not found: ${varRef.identifier}`);
       }
       
       // Handle complex data variables with lazy evaluation
       const resolvedValue = await resolveVariableValue(variable, env);
+      
+      // For interpolation variables, we need to add the resolved text to output
+      if (varRef.valueType === 'varInterpolation') {
+        env.addNode({ type: 'Text', content: String(resolvedValue) } as any);
+      }
+      
       return { value: resolvedValue, env };
       
     default:
@@ -97,6 +110,7 @@ async function evaluateDocument(doc: MeldDocument, env: Environment): Promise<Ev
     if (child.type === 'Text') {
       env.addNode(child);
     }
+    // VariableReference nodes with varInterpolation are now handled in evaluate()
   }
   
   return { value: lastValue, env };

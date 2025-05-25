@@ -3386,7 +3386,21 @@ function peg$parse(input, options) {
         'exec'  // Source parameter
       );
     };
-  var peg$f276 = function(command) {
+  var peg$f276 = function(runCode) {
+      helpers.debug('AtRun matched language code block using shared abstraction', runCode);
+      
+      // Since we're using the shared abstraction, we just need to format it for this context
+      return helpers.createStructuredDirective(
+        'run',
+        'runCode',
+        runCode.values,
+        runCode.raw,
+        runCode.meta,
+        runCode.location,
+        'code'  // Source parameter
+      );
+    };
+  var peg$f277 = function(command) {
       helpers.debug('AtRun matched shell command', { command });
       
       return helpers.createStructuredDirective(
@@ -3400,20 +3414,6 @@ function peg$parse(input, options) {
         },
         location(),
         'command'  // Source parameter
-      );
-    };
-  var peg$f277 = function(runCode) {
-      helpers.debug('AtRun matched language code block using shared abstraction', runCode);
-      
-      // Since we're using the shared abstraction, we just need to format it for this context
-      return helpers.createStructuredDirective(
-        'run',
-        'runCode',
-        runCode.values,
-        runCode.raw,
-        runCode.meta,
-        runCode.location,
-        'code'  // Source parameter
       );
     };
   var peg$f278 = function(runCode) {
@@ -15037,7 +15037,7 @@ function peg$parse(input, options) {
         }
         if (s2 !== peg$FAILED) {
           s3 = peg$parse_();
-          s4 = peg$parseCommandCore();
+          s4 = peg$parseRunLanguageCodeCore();
           if (s4 !== peg$FAILED) {
             peg$savedPos = s0;
             s0 = peg$f276(s4);
@@ -15066,7 +15066,7 @@ function peg$parse(input, options) {
           }
           if (s2 !== peg$FAILED) {
             s3 = peg$parse_();
-            s4 = peg$parseRunLanguageCodeCore();
+            s4 = peg$parseCommandCore();
             if (s4 !== peg$FAILED) {
               peg$savedPos = s0;
               s0 = peg$f277(s4);

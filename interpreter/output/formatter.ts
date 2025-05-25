@@ -48,7 +48,11 @@ function formatMarkdown(nodes: MeldNode[], options: FormatOptions): string {
     // We only output Text nodes in the final result
   }
   
-  return parts.join('');
+  const result = parts.join('');
+  
+  // Clean up excessive blank lines (more than 2 consecutive newlines)
+  // This happens when directives are removed but their surrounding newlines remain
+  return result.replace(/\n{3,}/g, '\n\n');
 }
 
 /**

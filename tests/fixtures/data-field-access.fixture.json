@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "a182ae21-02a4-4efc-a3a5-e26fc8b183b4",
+      "nodeId": "f7571298-88cc-449f-a304-e0d415a06a14",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "b352280f-c415-499e-8900-c2a32b3d7c93",
+            "nodeId": "a6ef2831-4632-4b61-ab3a-d3cadb511602",
             "location": {
               "start": {
                 "offset": 0,
@@ -55,7 +55,7 @@
                 "name": [
                   {
                     "type": "Text",
-                    "nodeId": "ea87feff-c744-41cf-b73e-25aa7f692cdc",
+                    "nodeId": "ede34d59-2f2e-4747-a2a5-1e225b941088",
                     "location": {
                       "start": {
                         "offset": 25,
@@ -77,7 +77,7 @@
                     "title": [
                       {
                         "type": "Text",
-                        "nodeId": "5b721172-f0b8-4891-bc27-8835b1edee3c",
+                        "nodeId": "cea36f44-84e5-41d6-8c67-e0ccef48efa6",
                         "location": {
                           "start": {
                             "offset": 48,
@@ -104,7 +104,7 @@
                 "name": [
                   {
                     "type": "Text",
-                    "nodeId": "5e2cbbff-20fd-4291-9f30-ecdeb16a0e24",
+                    "nodeId": "11ac11e5-a620-44bd-80a5-bba3da279dc3",
                     "location": {
                       "start": {
                         "offset": 78,
@@ -126,7 +126,7 @@
                     "title": [
                       {
                         "type": "Text",
-                        "nodeId": "319ec320-5257-4ffa-9666-b0581b56b866",
+                        "nodeId": "930e10ed-0ada-41c4-821e-08fb98d8ec1d",
                         "location": {
                           "start": {
                             "offset": 99,
@@ -152,7 +152,7 @@
       },
       "raw": {
         "identifier": "users",
-        "value": "[\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"ea87feff-c744-41cf-b73e-25aa7f692cdc\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 25,\n              \"line\": 2,\n              \"column\": 10\n            },\n            \"end\": {\n              \"offset\": 32,\n              \"line\": 2,\n              \"column\": 17\n            }\n          },\n          \"content\": \"Alice\"\n        }\n      ],\n      \"role\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"title\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"5b721172-f0b8-4891-bc27-8835b1edee3c\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 48,\n                  \"line\": 2,\n                  \"column\": 33\n                },\n                \"end\": {\n                  \"offset\": 55,\n                  \"line\": 2,\n                  \"column\": 40\n                }\n              },\n              \"content\": \"Admin\"\n            }\n          ],\n          \"level\": 5\n        }\n      }\n    }\n  },\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"5e2cbbff-20fd-4291-9f30-ecdeb16a0e24\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 78,\n              \"line\": 3,\n              \"column\": 10\n            },\n            \"end\": {\n              \"offset\": 83,\n              \"line\": 3,\n              \"column\": 15\n            }\n          },\n          \"content\": \"Bob\"\n        }\n      ],\n      \"role\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"title\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"319ec320-5257-4ffa-9666-b0581b56b866\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 99,\n                  \"line\": 3,\n                  \"column\": 31\n                },\n                \"end\": {\n                  \"offset\": 105,\n                  \"line\": 3,\n                  \"column\": 37\n                }\n              },\n              \"content\": \"User\"\n            }\n          ],\n          \"level\": 1\n        }\n      }\n    }\n  }\n]"
+        "value": "[\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"ede34d59-2f2e-4747-a2a5-1e225b941088\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 25,\n              \"line\": 2,\n              \"column\": 10\n            },\n            \"end\": {\n              \"offset\": 32,\n              \"line\": 2,\n              \"column\": 17\n            }\n          },\n          \"content\": \"Alice\"\n        }\n      ],\n      \"role\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"title\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"cea36f44-84e5-41d6-8c67-e0ccef48efa6\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 48,\n                  \"line\": 2,\n                  \"column\": 33\n                },\n                \"end\": {\n                  \"offset\": 55,\n                  \"line\": 2,\n                  \"column\": 40\n                }\n              },\n              \"content\": \"Admin\"\n            }\n          ],\n          \"level\": 5\n        }\n      }\n    }\n  },\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"11ac11e5-a620-44bd-80a5-bba3da279dc3\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 78,\n              \"line\": 3,\n              \"column\": 10\n            },\n            \"end\": {\n              \"offset\": 83,\n              \"line\": 3,\n              \"column\": 15\n            }\n          },\n          \"content\": \"Bob\"\n        }\n      ],\n      \"role\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"title\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"930e10ed-0ada-41c4-821e-08fb98d8ec1d\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 99,\n                  \"line\": 3,\n                  \"column\": 31\n                },\n                \"end\": {\n                  \"offset\": 105,\n                  \"line\": 3,\n                  \"column\": 37\n                }\n              },\n              \"content\": \"User\"\n            }\n          ],\n          \"level\": 1\n        }\n      }\n    }\n  }\n]"
       },
       "meta": {
         "arrayData": {
@@ -162,7 +162,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "79cd19c7-19c7-463d-b473-c4d6334068e0",
+      "nodeId": "283150c7-7a52-4643-8fee-34425f80a12e",
       "location": {
         "start": {
           "offset": 119,
@@ -179,7 +179,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "aa6a250a-ba4f-4869-bebf-88051a063dc8",
+      "nodeId": "24fb3a0b-b6e6-4313-b6a2-b71c2af63702",
       "location": {
         "start": {
           "offset": 120,
@@ -199,7 +199,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "3554f8c8-7dba-422e-b8e6-cabff59f44a3",
+            "nodeId": "346ad863-017b-4903-a0fc-3a6361e8e176",
             "location": {
               "start": {
                 "offset": 0,
@@ -222,7 +222,7 @@
           "properties": {
             "adminName": {
               "type": "VariableReference",
-              "nodeId": "a1c44ec1-9f7d-4c70-91f9-2857fd151e27",
+              "nodeId": "4b185fda-2dae-4b11-b60f-22e4ef3791f4",
               "location": {
                 "start": {
                   "offset": 0,
@@ -251,7 +251,7 @@
             },
             "adminLevel": {
               "type": "VariableReference",
-              "nodeId": "a16b9b05-d6dd-4573-9def-8dcdb1613e5d",
+              "nodeId": "39fed4fa-60ee-45af-862d-75c21d876236",
               "location": {
                 "start": {
                   "offset": 0,
@@ -288,7 +288,7 @@
       },
       "raw": {
         "identifier": "permissions",
-        "value": "{\n  \"adminName\": {\n    \"type\": \"VariableReference\",\n    \"nodeId\": \"a1c44ec1-9f7d-4c70-91f9-2857fd151e27\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      },\n      \"end\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      }\n    },\n    \"valueType\": \"varIdentifier\",\n    \"isVariableReference\": true,\n    \"identifier\": \"users\",\n    \"fields\": [\n      {\n        \"type\": \"arrayIndex\",\n        \"index\": 0\n      },\n      {\n        \"type\": \"field\",\n        \"name\": \"name\"\n      }\n    ]\n  },\n  \"adminLevel\": {\n    \"type\": \"VariableReference\",\n    \"nodeId\": \"a16b9b05-d6dd-4573-9def-8dcdb1613e5d\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      },\n      \"end\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      }\n    },\n    \"valueType\": \"varIdentifier\",\n    \"isVariableReference\": true,\n    \"identifier\": \"users\",\n    \"fields\": [\n      {\n        \"type\": \"arrayIndex\",\n        \"index\": 0\n      },\n      {\n        \"type\": \"field\",\n        \"name\": \"role\"\n      },\n      {\n        \"type\": \"field\",\n        \"name\": \"level\"\n      }\n    ]\n  },\n  \"userCount\": 2\n}"
+        "value": "{\n  \"adminName\": {\n    \"type\": \"VariableReference\",\n    \"nodeId\": \"4b185fda-2dae-4b11-b60f-22e4ef3791f4\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      },\n      \"end\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      }\n    },\n    \"valueType\": \"varIdentifier\",\n    \"isVariableReference\": true,\n    \"identifier\": \"users\",\n    \"fields\": [\n      {\n        \"type\": \"arrayIndex\",\n        \"index\": 0\n      },\n      {\n        \"type\": \"field\",\n        \"name\": \"name\"\n      }\n    ]\n  },\n  \"adminLevel\": {\n    \"type\": \"VariableReference\",\n    \"nodeId\": \"39fed4fa-60ee-45af-862d-75c21d876236\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      },\n      \"end\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      }\n    },\n    \"valueType\": \"varIdentifier\",\n    \"isVariableReference\": true,\n    \"identifier\": \"users\",\n    \"fields\": [\n      {\n        \"type\": \"arrayIndex\",\n        \"index\": 0\n      },\n      {\n        \"type\": \"field\",\n        \"name\": \"role\"\n      },\n      {\n        \"type\": \"field\",\n        \"name\": \"level\"\n      }\n    ]\n  },\n  \"userCount\": 2\n}"
       },
       "meta": {
         "objectData": {
@@ -298,7 +298,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "f1c4aaf9-4ab2-4746-b409-e2f2c01535b3",
+      "nodeId": "f35b7bc3-ef90-4d80-afea-52437b32ce0f",
       "location": {
         "start": {
           "offset": 223,
@@ -315,7 +315,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "62453687-2abf-46ec-9fce-fb2fd548002a",
+      "nodeId": "19caf102-adda-4a07-8608-15d5a9671865",
       "location": {
         "start": {
           "offset": 224,
@@ -335,7 +335,7 @@
         "content": [
           {
             "type": "VariableReference",
-            "nodeId": "75b0bd85-a607-4fa4-b5b1-cfdf9bf406c2",
+            "nodeId": "461f2c4f-300a-4772-9bf3-61a459200c59",
             "location": {
               "start": {
                 "offset": 0,
@@ -360,7 +360,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "466c5765-de73-48ee-9aa1-020141ee445c",
+            "nodeId": "87cbbaaa-e6c9-4e2f-8891-9533e09bee16",
             "location": {
               "start": {
                 "offset": 256,
@@ -377,7 +377,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "378c97be-1ad5-42e4-b4bd-9ba4f43f7437",
+            "nodeId": "dfc0a06e-f35b-4ad5-8993-5e132e7e7318",
             "location": {
               "start": {
                 "offset": 0,
@@ -402,7 +402,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "dcd5e57d-45b1-440b-8dc0-9ea9bde20979",
+            "nodeId": "f443cef7-9842-40d0-9b8e-d3d36e599831",
             "location": {
               "start": {
                 "offset": 293,

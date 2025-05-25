@@ -8,82 +8,12 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "f2748482-afad-4fb4-86e1-da275869c1aa",
+      "nodeId": "a190da19-c6cf-4999-906d-4b8e9e3ea897",
       "location": {
         "start": {
-          "offset": 0,
+          "offset": 5,
           "line": 1,
-          "column": 1
-        },
-        "end": {
-          "offset": 15,
-          "line": 1,
-          "column": 16
-        }
-      },
-      "kind": "run",
-      "subtype": "runCommand",
-      "source": "command",
-      "values": {
-        "command": [
-          {
-            "type": "Text",
-            "nodeId": "26fc32ad-226b-4f86-b98f-edec29b0b12f",
-            "location": {
-              "start": {
-                "offset": 5,
-                "line": 1,
-                "column": 6
-              },
-              "end": {
-                "offset": 15,
-                "line": 1,
-                "column": 16
-              }
-            },
-            "content": "javascript"
-          }
-        ],
-        "commandBases": [
-          {
-            "nodeId": "5a2039e4-6e8a-42ce-8dd0-d1e542c964ab",
-            "location": {
-              "start": {
-                "offset": 5,
-                "line": 1,
-                "column": 6
-              },
-              "end": {
-                "offset": 15,
-                "line": 1,
-                "column": 16
-              }
-            },
-            "command": "javascript"
-          }
-        ]
-      },
-      "raw": {
-        "command": "javascript",
-        "commandBases": [
-          "javascript"
-        ]
-      },
-      "meta": {
-        "hasVariables": false,
-        "commandCount": 1,
-        "hasScriptRunner": false,
-        "isMultiLine": false
-      }
-    },
-    {
-      "type": "Text",
-      "nodeId": "ac2f8035-dc45-48a1-8de8-027d2265c76b",
-      "location": {
-        "start": {
-          "offset": 15,
-          "line": 1,
-          "column": 16
+          "column": 6
         },
         "end": {
           "offset": 100,
@@ -91,7 +21,60 @@
           "column": 2
         }
       },
-      "content": " [\nfunction greet() {\n  return \"Hello from multiline code\";\n}\nconsole.log(greet());\n]"
+      "kind": "run",
+      "subtype": "runCode",
+      "source": "code",
+      "values": {
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "aa1147fc-e21f-4a1e-8320-dbdf9b0d3b3c",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 100,
+                "line": 6,
+                "column": 2
+              }
+            },
+            "content": "javascript"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "fbbd5276-c365-402d-a241-ba92ecbdd57d",
+            "location": {
+              "start": {
+                "offset": 16,
+                "line": 1,
+                "column": 17
+              },
+              "end": {
+                "offset": 100,
+                "line": 6,
+                "column": 2
+              }
+            },
+            "content": "\nfunction greet() {\n  return \"Hello from multiline code\";\n}\nconsole.log(greet());\n"
+          }
+        ]
+      },
+      "raw": {
+        "lang": "javascript",
+        "args": [],
+        "code": "\nfunction greet() {\n  return \"Hello from multiline code\";\n}\nconsole.log(greet());\n"
+      },
+      "meta": {
+        "isMultiLine": true,
+        "language": "javascript",
+        "hasVariables": false
+      }
     }
   ]
 }

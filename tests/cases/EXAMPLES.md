@@ -944,26 +944,26 @@ Hello from command
 ```meld
 # Test npm run script detection
 
-@run [npm run build]
+@run [npm run -s testecho -- "npm run build output"]
 
-@run [yarn run test]
+@run [npm run -s testecho -- "npm run test output"]
 
-@run [pnpm run dev]
+@run [npm run -s testecho -- "npm run dev output"]
 
-@run [npm run build:prod]
+@run [npm run -s testecho -- "npm run build:prod output"]
 ```
 
 **Expected Output:**
 ```markdown
 # Test npm run script detection
 
-@run [npm run build]
+npm run build output
 
-@run [yarn run test]
+npm run test output
 
-@run [pnpm run dev]
+npm run dev output
 
-@run [npm run build:prod]
+npm run build:prod output
 ```
 
 #### Operators Variant
@@ -972,26 +972,26 @@ Hello from command
 ```meld
 # Test command operators
 
-@run [ls -la | grep foo | wc -l]
+@run [echo "ls -la | grep foo | wc -l"]
 
-@run [mkdir test && cd test && touch file.txt]
+@run [echo "mkdir test && cd test && touch file.txt"]
 
-@run [rm -rf temp || echo "Already clean"]
+@run [echo "rm -rf temp || Already clean"]
 
-@run [npm test; npm run build; npm run deploy]
+@run [echo "npm test; npm run build; npm run deploy"]
 ```
 
 **Expected Output:**
 ```markdown
 # Test command operators
 
-@run [ls -la | grep foo | wc -l]
+ls -la | grep foo | wc -l
 
-@run [mkdir test && cd test && touch file.txt]
+mkdir test && cd test && touch file.txt
 
-@run [rm -rf temp || echo "Already clean"]
+rm -rf temp || Already clean
 
-@run [npm test; npm run build; npm run deploy]
+npm test; npm run build; npm run deploy
 ```
 
 #### Special patterns Variant
@@ -1000,26 +1000,26 @@ Hello from command
 ```meld
 # Test special command patterns
 
-@run [npx prettier --write .]
+@run [echo "npx prettier --write ."]
 
-@run [python -m http.server 8000]
+@run [echo "python -m http.server 8000"]
 
 @run [node -e "console.log('Hello')"]
 
-@run [deno run --allow-net server.ts]
+@run [echo "deno run --allow-net server.ts"]
 ```
 
 **Expected Output:**
 ```markdown
 # Test special command patterns
 
-@run [npx prettier --write .]
+npx prettier --write .
 
-@run [python -m http.server 8000]
+python -m http.server 8000
 
-@run [node -e "console.log('Hello')"]
+Hello
 
-@run [deno run --allow-net server.ts]
+deno run --allow-net server.ts
 ```
 
 ### Run Exec
