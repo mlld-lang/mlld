@@ -40,6 +40,7 @@ Level 8: RHS Patterns         - Right-hand side patterns
 - `*Assignment` - Assignment operations (TextAssignment)
 - `*Reference` - Reference operations (VariableReference)
 - `*Token` - Atomic lexical elements (PathSeparatorToken)
+- `*List` - Comma-separated lists (ParameterList, not ParametersList)
 
 ## Examples
 
