@@ -13,10 +13,10 @@ This document provides a comprehensive reference for the Meld syntax.
 
 Directives must appear at start of line (no indentation):
 ```
-@embed    - Include content from files
+@add      - Include content from files
 @run      - Execute shell commands
 @import   - Import variables and commands from other Meld files
-@define   - Create reusable commands
+@exec     - Create reusable commands
 @text     - Define text variables
 @path     - Define filesystem path variables
 @data     - Define structured data variables
@@ -73,29 +73,29 @@ Lines that begin with `>> ` (two greater-than signs followed by a space) are tre
 
 ### Path Variables
 
-Syntax: `$identifier`
+Syntax: `@identifier`
 ```meld
-$path                # Reference a path variable
-$HOMEPATH or $~      # Special path variable for home directory
-$PROJECTPATH or $.   # Special path variable for project root
+@path                # Reference a path variable
+[@~/path]           # Home directory path
+[@./path]           # Project root path
 ```
 
 ### Text Variables
 
-Syntax: `{{identifier}}`
+Syntax: `@identifier` in regular text, `{{identifier}}` in templates
 ```meld
-{{textvar}}                    # Text variable reference
-{{textvar>>(format)}}         # Formatted text variable
+@textvar                       # Text variable reference
+[[Content with {{textvar}}]]   # Variable in template
 ```
 
 ### Data Variables
 
-Syntax: `{{identifier}}`
+Syntax: `@identifier` in regular text, `{{identifier}}` in templates
 ```meld
-{{datavar}}                    # Data variable reference
-{{datavar.field}}             # Data variable field access
-{{datavar.0}}                 # Array element access (use dot notation)
-{{datavar.field>>(format)}}   # Formatted data field access
+@datavar                       # Data variable reference
+@datavar.field                 # Data variable field access
+@datavar[0]                    # Array element access
+[[Content: {{datavar.field}}]] # Variable in template
 ```
 
 ## Code Fences
@@ -117,14 +117,14 @@ def hello():
 
 ## Directive Patterns
 
-### @embed
+### @add
 
 ```meld
-@embed [path]
-@embed [path # section_text]
-@embed [path] as ###                    # ### parsed as count of # chars
-@embed [path # section_text] as ###
-@embed [path] under header_text
+@add [path]
+@add [path # section_text]
+@add [path] as "# New Title"           # Rename section
+@add "Section" from [path]
+@add "Section" from [path] as "# New Title"
 ```
 
 ### @run
@@ -132,7 +132,7 @@ def hello():
 ```meld
 @run [command_text]
 @run [command_text] under header_text
-@run [$command({{textvar1}}, {{textvar2}})]
+@run @command(@textvar1, @textvar2)
 ```
 
 ### @import
@@ -141,31 +141,29 @@ def hello():
 @import [path]
 ```
 
-### @define
+### @exec
 
 ```meld
-@define identifier = @run [content]
-@define command(param1, param2) = @run [content {{param1}} {{param2}}]
-@define command.risk = "description"
-@define command.about = "description"
-@define command.meta = "description"
+@exec identifier = @run [content]
+@exec command(param1, param2) = @run [content @param1 @param2]
+@exec command = @run javascript [code]
 ```
 
 ### @text
 
 ```meld
 @text identifier = "value"
-@text identifier = @embed [content]
+@text identifier = @add [content]
 @text identifier = @run [command]
 ```
 
 ### @path
 
 ```meld
-@path identifier = "$HOMEPATH/path"
-@path identifier = "$~/path"
-@path identifier = "$PROJECTPATH/path"
-@path identifier = "$./path"
+@path identifier = [@~/path]
+@path identifier = [@./path]
+@path identifier = [/absolute/path]
+@path identifier = [relative/path]
 ```
 
 ### @data 
@@ -181,7 +179,7 @@ Uses the `++` operator with required spaces on both sides:
 
 ```meld
 @text greeting = "Hello" ++ " " ++ "World"
-@text message = {{intro}} ++ {{body}}
+@text message = @intro ++ @body
 ```
 
 ## Template Literals

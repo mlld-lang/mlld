@@ -24,7 +24,7 @@ This is a paragraph.
 @text greeting = "Hello"
 @text name = "World"
 
-${greeting}, ${name}!
+@add [[{{greeting}}, {{name}}!]]
 
 Another paragraph.
 ```
@@ -156,7 +156,7 @@ Line 2
 Line 3"
 
 The text is:
-${multiline}
+@add @multiline
 End of text.
 ```
 
@@ -186,6 +186,6 @@ End of text.
 
 My configuration is:
 \`\`\`json
-${config}
+@add @config
 \`\`\`
 ```

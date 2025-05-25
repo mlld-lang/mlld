@@ -5,7 +5,7 @@ title: "URL Support in Meld"
 
 # URL Support in Meld
 
-Meld supports fetching content from remote URLs using the `@embed` and `@import` directives. This allows you to incorporate external resources into your Meld documents without needing to download them first.
+Meld supports fetching content from remote URLs using the `@add` and `@import` directives. This allows you to incorporate external resources into your Meld documents without needing to download them first.
 
 ## URL Functionality Overview
 
@@ -20,13 +20,13 @@ Meld supports fetching content from remote URLs using the `@embed` and `@import`
 URL support is disabled by default and must be explicitly enabled using the `allowURLs=true` parameter:
 
 ```
-@embed(url="https://example.com/content.md", allowURLs=true)
+@add(url="https://example.com/content.md", allowURLs=true)
 @import(url="https://example.com/variables.mld", allowURLs=true)
 ```
 
 ## URL Parameters
 
-Both `@embed` and `@import` directives support the following URL-specific parameters:
+Both `@add` and `@import` directives support the following URL-specific parameters:
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -51,13 +51,13 @@ The `urlOptions` parameter accepts an object with the following properties:
 ### Basic URL Embedding
 
 ```
-@embed(url="https://raw.githubusercontent.com/example/repo/main/README.md", allowURLs=true)
+@add(url="https://raw.githubusercontent.com/example/repo/main/README.md", allowURLs=true)
 ```
 
 ### URL Embedding with Security Options
 
 ```
-@embed(
+@add(
   url="https://raw.githubusercontent.com/example/repo/main/README.md", 
   allowURLs=true, 
   urlOptions={
@@ -72,7 +72,7 @@ The `urlOptions` parameter accepts an object with the following properties:
 ### Embedding a Specific Section from a URL
 
 ```
-@embed(
+@add(
   url="https://raw.githubusercontent.com/example/repo/main/README.md", 
   allowURLs=true, 
   section="Getting Started"
@@ -90,7 +90,7 @@ The `urlOptions` parameter accepts an object with the following properties:
 For backward compatibility, you can also use the `path` parameter with URLs:
 
 ```
-@embed(path="https://example.com/content.md", allowURLs=true)
+@add(path="https://example.com/content.md", allowURLs=true)
 ```
 
 ## Security Considerations
@@ -109,7 +109,7 @@ URL responses are automatically cached to improve performance and reduce network
 To bypass the cache for a specific request, use:
 
 ```
-@embed(
+@add(
   url="https://example.com/content.md", 
   allowURLs=true, 
   urlOptions={

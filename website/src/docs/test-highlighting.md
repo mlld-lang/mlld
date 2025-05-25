@@ -31,8 +31,8 @@ This page tests the new Prism.js syntax highlighting for Meld.
 @path docs = [./docs]
 @import {config} from [settings.mld]
 @exec greet(name) = @run [echo "Hi @name"]
-@define template = [[Custom {{message}}]]
-@embed [docs/guide.md # Section]
+@exec template = [[Custom {{message}}]]
+@add [docs/guide.md # Section]
 @url api = [https://api.example.com]
 ```
 

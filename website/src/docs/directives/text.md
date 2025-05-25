@@ -11,13 +11,13 @@ The `@text` directive defines a text variable that can store string values.
 
 ```meld
 @text identifier = "value"
-@text identifier = @embed [content]
+@text identifier = @add [content]
 @text identifier = @run [command]
 ```
 
 Where:
 - `identifier` is the variable name (must be a valid identifier)
-- `value` can be a quoted string, the result of an `@embed` directive, or the result of an `@run` directive
+- `value` can be a quoted string, the result of an `@add` directive, or the result of an `@run` directive
 
 ## Identifier Requirements
 
@@ -89,7 +89,7 @@ Using the result of a command:
 
 Embedding file content:
 ```meld
-@text header = @embed [header.md]
+@text header = @add [header.md]
 ```
 
 ## Error Handling

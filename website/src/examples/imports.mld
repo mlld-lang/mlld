@@ -14,7 +14,7 @@
     "roadmap": "Create a roadmap based on highest priority"
 }
 
-# recursively concatenate paths wrapped in xml tags
-@exec codecat(dir) = @run [find {{dir}} -type f -exec sh -c 'echo "<$(realpath --relative-to={{dir}} {})>"; cat {}; echo "</$(realpath --relative-to={{dir}} {})>"' \;]
+# command creation examples
+@exec codecat(dir) = @run [find @dir -type f -name "*.mld" | head -5]
 
-@exec ask(context, role, task) = @run [oneshot --context "{{context}}" --instructions "{{task}}" --system "{{role}}"]
+@exec ask(context, role, task) = @run [oneshot --context @context --instructions @task --system @role]

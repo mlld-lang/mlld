@@ -30,11 +30,11 @@ This line will be interpreted as plain text.
 This will remain a codefence.
 ```
 
-@embed [[
+@add [[
     Hello, {{name}}!
 ]]
 
-@embed [$docs/example.md]
+@add [$docs/example.md]
 
 @run [echo "Current time: $(date)"]
 ```
