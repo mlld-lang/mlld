@@ -1,3 +1,8 @@
+---
+layout: docs.njk
+title: "Variables"
+---
+
 # Variables
 
 Meld has three distinct types of variables, each with its own syntax and usage patterns.
@@ -23,7 +28,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 Example:
 ```meld
 @path docs = "$PROJECTPATH/docs"
-@embed [$docs/guide.md]
+@add [$docs/guide.md]
 ```
 
 ### Text Variables
@@ -114,14 +119,14 @@ When referencing an entire array:
 
 - **Block context** (in embed directives, standalone references):
   ```meld
-  @embed {{fruits}}
+  @add {{fruits}}
   ```
   Simple arrays (of strings, numbers) use comma-separated values with spaces.
   
   Arrays of objects are formatted as properly indented JSON:
   ```meld
   @data people = [{ "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }]
-  @embed {{people}}
+  @add {{people}}
   ```
   This outputs the array as properly indented JSON:
   ```json
@@ -153,7 +158,7 @@ When referencing an entire object:
 
 - **Block context** (in embed directives, standalone references):
   ```meld
-  @embed {{config}}
+  @add {{config}}
   ```
   Objects are formatted as properly indented JSON:
   ```json

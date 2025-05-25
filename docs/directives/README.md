@@ -1,3 +1,8 @@
+---
+layout: docs.njk
+title: "Meld Directives"
+---
+
 # Meld Directives
 
 Directives are the core building blocks of Meld. They always start with an `@` symbol and must appear at the beginning of a line (no indentation). Each directive has a specific purpose and syntax.
@@ -7,10 +12,11 @@ Directives are the core building blocks of Meld. They always start with an `@` s
 - [@text](./text.md) - Define text variables
 - [@data](./data.md) - Define structured data variables
 - [@path](./path.md) - Define filesystem path variables
-- [@embed](./embed.md) - Include content from other files
+- [@add](./add.md) - Include content from files, variables, or templates
 - [@run](./run.md) - Execute shell commands and include output
-- [@import](./import.md) - Import variables and commands from other Meld files
-- [@define](./define.md) - Create reusable commands
+- [@import](./import.md) - Import variables from other Meld files
+- [@url](./url.md) - Reference remote URLs
+- [@exec](./exec.md) - Create reusable commands
 
 ## Directive Placement Rules
 
