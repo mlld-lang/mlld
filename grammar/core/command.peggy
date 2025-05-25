@@ -127,7 +127,7 @@ CommandCore
 // -------------------------------------------------------------
 
 ParameterizedCommandCore
-  = command:WrappedCommandContent params:CommandParams? {
+  = command:WrappedCommandContent params:CommandParameters? {
       helpers.debug('ParameterizedCommandCore matched', { command, params });
       
       // Use the same command base detection logic
@@ -174,13 +174,13 @@ ParameterizedCommandCore
 // COMMAND PARAMETERS - Explicit key-value parameters for commands
 // -------------------------------------------------------------
 
-CommandParams
-  = ":" _ params:CommandParamsList {
+CommandParameters
+  = ":" _ params:CommandParameterList {
       return params;
     }
 
-CommandParamsList
-  = first:CommandParam rest:(_ "," _ param:CommandParam { return param; })* {
+CommandParameterList
+  = first:CommandParameter rest:(_ "," _ param:CommandParameter { return param; })* {
       const allParams = [first, ...rest];
       
       // Extract values and raw representation
@@ -197,7 +197,7 @@ CommandParamsList
       return { values, raw };
     }
 
-CommandParam
+CommandParameter
   = key:BaseIdentifier _ "=" _ value:(StringLiteral / NumberLiteral / BooleanLiteral) {
       return { key, value };
     }

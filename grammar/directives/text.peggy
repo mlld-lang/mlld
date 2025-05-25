@@ -106,7 +106,7 @@ AtText
       );
     }
   // Parameterized template definition - must come before regular template to match params
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "(" _ params:TextParamsList? _ ")" _ "=" _ "@add" _ template:TemplateCore {
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "(" _ params:TextParameterList? _ ")" _ "=" _ "@add" _ template:TemplateCore {
       helpers.debug('AtText matched parameterized template definition', { id, params, template });
       
       // Process parameters
@@ -577,12 +577,12 @@ AtText
 
 // Helper rules for text template parameters
 // Using standard list pattern from patterns/lists.peggy
-TextParamsList
-  = first:TextParam rest:(CommaSpace param:TextParam { return param; })* {
+TextParameterList
+  = first:TextParameter rest:(CommaSpace param:TextParameter { return param; })* {
       return [first, ...rest];
     }
 
-TextParam
+TextParameter
   = paramName:BaseIdentifier {
       return paramName; // Just return the parameter name as a string
     }

@@ -175,7 +175,7 @@ AtAdd
       );
     }
   // Template invocation - @add @templateName(args)
-  / DirectiveContext "@add" _ "@" id:BaseIdentifier _ "(" _ args:TemplateArgsList? _ ")" _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "@add" _ "@" id:BaseIdentifier _ "(" _ args:TemplateArgumentList? _ ")" _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched template invocation', { id, args, headerLevel, underHeader });
       
       // Process arguments
@@ -435,12 +435,12 @@ AsNewTitle
 
 // Helper rule for template invocation arguments
 // Using standard list pattern from patterns/lists.peggy
-TemplateArgsList
-  = first:TemplateArg rest:(CommaSpace arg:TemplateArg { return arg; })* {
+TemplateArgumentList
+  = first:TemplateArgument rest:(CommaSpace arg:TemplateArgument { return arg; })* {
       return [first, ...rest];
     }
 
-TemplateArg
+TemplateArgument
   = str:QuotedStringContent {
       return { type: 'string', value: str };
     }

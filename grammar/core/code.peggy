@@ -95,7 +95,7 @@ LanguageCodeCore
 // This is the key abstraction that can be used by both run.peggy and exec.peggy
 // for consistent handling of language + code block patterns in different contexts
 RunLanguageCodeCore
-  = language:RunCodeLanguage _ args:RunCodeArgs? _ code:DirectCodeContent {
+  = language:RunCodeLanguage _ args:RunCodeArguments? _ code:DirectCodeContent {
       helpers.debug('RunLanguageCodeCore matched', { language, args, code });
       
       // Create language node
@@ -151,17 +151,17 @@ RunCodeLanguage
     }
 
 // Optional arguments for code blocks
-RunCodeArgs
-  = "(" _ args:RunArgsList? _ ")" {
+RunCodeArguments
+  = "(" _ args:RunArgumentList? _ ")" {
       return args || [];
     }
 
-RunArgsList
-  = first:RunArg rest:(_ "," _ arg:RunArg { return arg; })* {
+RunArgumentList
+  = first:RunArgument rest:(_ "," _ arg:RunArgument { return arg; })* {
       return [first, ...rest];
     }
 
-RunArg
+RunArgument
   = varName:BaseIdentifier {
       return helpers.createVariableReferenceNode('varInterpolation', { identifier: varName }, location());
     }

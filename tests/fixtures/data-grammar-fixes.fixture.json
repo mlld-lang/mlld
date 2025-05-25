@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "45e3ba7b-ab5d-4e04-8c8e-530a268e8a83",
+      "nodeId": "648be4a7-e9ab-4cec-bdfa-804e08a87d86",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "e4753cf3-91c7-4751-854f-bd9f09990155",
+            "nodeId": "31d44fe5-49e2-45ab-990d-810c80485124",
             "location": {
               "start": {
                 "offset": 0,
@@ -52,7 +52,7 @@
         "content": [
           {
             "type": "VariableReference",
-            "nodeId": "ea05c304-f5a0-4fdd-aa25-a4989a132794",
+            "nodeId": "57b1a446-19b5-4011-b89e-62cef6a2b028",
             "location": {
               "start": {
                 "offset": 0,
@@ -70,7 +70,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "a7cf7091-da20-49c5-b15a-253b8d8f0c32",
+            "nodeId": "147e494f-5706-4df6-9c39-205a8b0cd784",
             "location": {
               "start": {
                 "offset": 53,
@@ -87,7 +87,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "b45292c0-2eb6-4684-a61f-900a714a5ac3",
+            "nodeId": "eab787cc-6d24-49dd-b47c-3f2bf4b2c81c",
             "location": {
               "start": {
                 "offset": 0,
@@ -105,7 +105,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "409e7689-347e-47a2-955e-d3ae2b40ee6b",
+            "nodeId": "ce2e518a-4969-46c8-ba2f-ba29e8302ee1",
             "location": {
               "start": {
                 "offset": 64,
@@ -140,7 +140,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "7293d348-c937-41fc-9d62-f32dadeae479",
+      "nodeId": "737ee076-f6e2-4df9-a1d2-e63a65629fb2",
       "location": {
         "start": {
           "offset": 80,
@@ -157,7 +157,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "4542b95d-da63-4243-a828-abc30a2d6fa0",
+      "nodeId": "88f94bbb-dcf9-47bd-9456-92e75c0b1802",
       "location": {
         "start": {
           "offset": 81,
@@ -177,7 +177,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "165e3072-a7bb-4d10-a6a2-844a461167da",
+            "nodeId": "ff4a7b27-b439-4bdb-8e94-ea2ce7d4e541",
             "location": {
               "start": {
                 "offset": 81,
@@ -197,7 +197,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "6410bb60-6892-437c-b17c-5124c0ce80c4",
+            "nodeId": "4bd9e423-ae76-4d00-8c91-5dcfd303074d",
             "location": {
               "start": {
                 "offset": 106,
@@ -215,7 +215,7 @@
         ],
         "commandBases": [
           {
-            "nodeId": "b29823f6-08e4-41a7-a0a3-f8f99eb774a9",
+            "nodeId": "5c361caa-7c83-419e-9cdc-27154f4c5e4e",
             "location": {
               "start": {
                 "offset": 105,
@@ -249,7 +249,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "3e1245ab-0545-4c80-b775-bfda5d6c1d74",
+      "nodeId": "0c84cd4a-1826-4c0f-b9c9-e75b9a31bbd9",
       "location": {
         "start": {
           "offset": 120,
@@ -266,7 +266,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "7180f933-ae46-490f-ad80-531691999db5",
+      "nodeId": "8dca2cfb-62bd-4051-9779-0d5206da87ee",
       "location": {
         "start": {
           "offset": 122,
@@ -286,7 +286,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "9298fe3b-9d9a-43f9-afad-1593682acdae",
+            "nodeId": "4062ace7-8b16-4a23-8985-01a1331a445d",
             "location": {
               "start": {
                 "offset": 0,
@@ -308,7 +308,7 @@
           "properties": {
             "message": {
               "type": "Directive",
-              "nodeId": "30df9a07-65ca-49bc-b442-e03e105009a9",
+              "nodeId": "83b03e1d-a3fd-4f5a-aa2e-a170b4e094dc",
               "location": {
                 "start": {
                   "offset": 156,
@@ -328,7 +328,7 @@
                 "templateName": [
                   {
                     "type": "Text",
-                    "nodeId": "ce27ac53-6688-42ad-8c9f-313843d50921",
+                    "nodeId": "4be3e348-2297-4c19-bdf4-b36fc91590d6",
                     "location": {
                       "start": {
                         "offset": 161,
@@ -369,7 +369,7 @@
             },
             "version": {
               "type": "Directive",
-              "nodeId": "886c0804-2c5b-4aac-8194-5a31f61054cf",
+              "nodeId": "ea909248-0af6-4755-b787-c287f355efae",
               "location": {
                 "start": {
                   "offset": 212,
@@ -389,7 +389,7 @@
                 "identifier": [
                   {
                     "type": "Text",
-                    "nodeId": "99004db4-c35d-47fa-a263-87aacdb40a98",
+                    "nodeId": "37baed9d-b16b-4ede-bac9-cc3917a61234",
                     "location": {
                       "start": {
                         "offset": 218,
@@ -418,7 +418,7 @@
             },
             "nullable": {
               "type": "Null",
-              "nodeId": "9c2b4618-e02e-4cbb-9ea0-b3368f1cde0a",
+              "nodeId": "c46d16af-e410-41f4-bade-a5bb6731a828",
               "location": {
                 "start": {
                   "offset": 0,
@@ -438,7 +438,7 @@
               "properties": {
                 "greeting": {
                   "type": "Directive",
-                  "nodeId": "fe86de32-41b1-48bc-ba5a-47ac4ab48cea",
+                  "nodeId": "71d004c7-dab3-47c5-bd8a-1012cec26596",
                   "location": {
                     "start": {
                       "offset": 275,
@@ -458,7 +458,7 @@
                     "templateName": [
                       {
                         "type": "Text",
-                        "nodeId": "c5067a1a-b2de-42df-8c0c-422b28ee7cc7",
+                        "nodeId": "dd335d73-46ae-4c7a-bee8-ec4bf53d4c2c",
                         "location": {
                           "start": {
                             "offset": 280,
@@ -499,7 +499,7 @@
                 },
                 "build": {
                   "type": "Directive",
-                  "nodeId": "fca36232-3ac0-480d-9ede-cd8897d7707f",
+                  "nodeId": "41b2b361-a467-4a2d-b011-f9830d6abc36",
                   "location": {
                     "start": {
                       "offset": 329,
@@ -519,7 +519,7 @@
                     "identifier": [
                       {
                         "type": "Text",
-                        "nodeId": "c8ccd1ac-6ff5-427a-b33d-b29add33f979",
+                        "nodeId": "7b3052f7-8f98-4c56-ab80-5f64ea3aba50",
                         "location": {
                           "start": {
                             "offset": 335,
@@ -548,7 +548,7 @@
                 },
                 "empty": {
                   "type": "Null",
-                  "nodeId": "4e830dc3-ea8f-44a5-921c-5ab364389e67",
+                  "nodeId": "730b45ca-e654-4f41-afda-21d0b19ffb83",
                   "location": {
                     "start": {
                       "offset": 0,
@@ -571,7 +571,7 @@
       },
       "raw": {
         "identifier": "testAllFixes",
-        "value": "{\n  \"message\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"30df9a07-65ca-49bc-b442-e03e105009a9\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 156,\n        \"line\": 5,\n        \"column\": 12\n      },\n      \"end\": {\n        \"offset\": 199,\n        \"line\": 5,\n        \"column\": 55\n      }\n    },\n    \"kind\": \"add\",\n    \"subtype\": \"addTemplateInvocation\",\n    \"source\": \"templateInvocation\",\n    \"values\": {\n      \"templateName\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"ce27ac53-6688-42ad-8c9f-313843d50921\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 161,\n              \"line\": 5,\n              \"column\": 17\n            },\n            \"end\": {\n              \"offset\": 199,\n              \"line\": 5,\n              \"column\": 55\n            }\n          },\n          \"content\": \"messageTemplate\"\n        }\n      ],\n      \"arguments\": [\n        {\n          \"type\": \"string\",\n          \"value\": \"Alice\"\n        },\n        {\n          \"type\": \"string\",\n          \"value\": \"logged in\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"templateName\": \"messageTemplate\",\n      \"arguments\": [\n        \"\\\"Alice\\\"\",\n        \"\\\"logged in\\\"\"\n      ]\n    },\n    \"meta\": {\n      \"argumentCount\": 2,\n      \"isDataValue\": true\n    }\n  },\n  \"version\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"886c0804-2c5b-4aac-8194-5a31f61054cf\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 212,\n        \"line\": 6,\n        \"column\": 12\n      },\n      \"end\": {\n        \"offset\": 228,\n        \"line\": 6,\n        \"column\": 28\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runExec\",\n    \"source\": \"exec\",\n    \"values\": {\n      \"identifier\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"99004db4-c35d-47fa-a263-87aacdb40a98\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 218,\n              \"line\": 6,\n              \"column\": 18\n            },\n            \"end\": {\n              \"offset\": 228,\n              \"line\": 6,\n              \"column\": 28\n            }\n          },\n          \"content\": \"getVersion\"\n        }\n      ],\n      \"args\": []\n    },\n    \"raw\": {\n      \"identifier\": \"getVersion\",\n      \"args\": []\n    },\n    \"meta\": {\n      \"argumentCount\": 0,\n      \"isDataValue\": true\n    }\n  },\n  \"nullable\": {\n    \"type\": \"Null\",\n    \"nodeId\": \"9c2b4618-e02e-4cbb-9ea0-b3368f1cde0a\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      },\n      \"end\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      }\n    },\n    \"value\": null\n  },\n  \"complex\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"greeting\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"fe86de32-41b1-48bc-ba5a-47ac4ab48cea\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 275,\n            \"line\": 9,\n            \"column\": 15\n          },\n          \"end\": {\n            \"offset\": 316,\n            \"line\": 9,\n            \"column\": 56\n          }\n        },\n        \"kind\": \"add\",\n        \"subtype\": \"addTemplateInvocation\",\n        \"source\": \"templateInvocation\",\n        \"values\": {\n          \"templateName\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"c5067a1a-b2de-42df-8c0c-422b28ee7cc7\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 280,\n                  \"line\": 9,\n                  \"column\": 20\n                },\n                \"end\": {\n                  \"offset\": 316,\n                  \"line\": 9,\n                  \"column\": 56\n                }\n              },\n              \"content\": \"messageTemplate\"\n            }\n          ],\n          \"arguments\": [\n            {\n              \"type\": \"string\",\n              \"value\": \"Bob\"\n            },\n            {\n              \"type\": \"string\",\n              \"value\": \"signed up\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"templateName\": \"messageTemplate\",\n          \"arguments\": [\n            \"\\\"Bob\\\"\",\n            \"\\\"signed up\\\"\"\n          ]\n        },\n        \"meta\": {\n          \"argumentCount\": 2,\n          \"isDataValue\": true\n        }\n      },\n      \"build\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"fca36232-3ac0-480d-9ede-cd8897d7707f\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 329,\n            \"line\": 10,\n            \"column\": 12\n          },\n          \"end\": {\n            \"offset\": 345,\n            \"line\": 10,\n            \"column\": 28\n          }\n        },\n        \"kind\": \"run\",\n        \"subtype\": \"runExec\",\n        \"source\": \"exec\",\n        \"values\": {\n          \"identifier\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"c8ccd1ac-6ff5-427a-b33d-b29add33f979\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 335,\n                  \"line\": 10,\n                  \"column\": 18\n                },\n                \"end\": {\n                  \"offset\": 345,\n                  \"line\": 10,\n                  \"column\": 28\n                }\n              },\n              \"content\": \"getVersion\"\n            }\n          ],\n          \"args\": []\n        },\n        \"raw\": {\n          \"identifier\": \"getVersion\",\n          \"args\": []\n        },\n        \"meta\": {\n          \"argumentCount\": 0,\n          \"isDataValue\": true\n        }\n      },\n      \"empty\": {\n        \"type\": \"Null\",\n        \"nodeId\": \"4e830dc3-ea8f-44a5-921c-5ab364389e67\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 0,\n            \"line\": 1,\n            \"column\": 1\n          },\n          \"end\": {\n            \"offset\": 0,\n            \"line\": 1,\n            \"column\": 1\n          }\n        },\n        \"value\": null\n      },\n      \"flag\": true\n    }\n  }\n}"
+        "value": "{\n  \"message\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"83b03e1d-a3fd-4f5a-aa2e-a170b4e094dc\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 156,\n        \"line\": 5,\n        \"column\": 12\n      },\n      \"end\": {\n        \"offset\": 199,\n        \"line\": 5,\n        \"column\": 55\n      }\n    },\n    \"kind\": \"add\",\n    \"subtype\": \"addTemplateInvocation\",\n    \"source\": \"templateInvocation\",\n    \"values\": {\n      \"templateName\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"4be3e348-2297-4c19-bdf4-b36fc91590d6\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 161,\n              \"line\": 5,\n              \"column\": 17\n            },\n            \"end\": {\n              \"offset\": 199,\n              \"line\": 5,\n              \"column\": 55\n            }\n          },\n          \"content\": \"messageTemplate\"\n        }\n      ],\n      \"arguments\": [\n        {\n          \"type\": \"string\",\n          \"value\": \"Alice\"\n        },\n        {\n          \"type\": \"string\",\n          \"value\": \"logged in\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"templateName\": \"messageTemplate\",\n      \"arguments\": [\n        \"\\\"Alice\\\"\",\n        \"\\\"logged in\\\"\"\n      ]\n    },\n    \"meta\": {\n      \"argumentCount\": 2,\n      \"isDataValue\": true\n    }\n  },\n  \"version\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"ea909248-0af6-4755-b787-c287f355efae\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 212,\n        \"line\": 6,\n        \"column\": 12\n      },\n      \"end\": {\n        \"offset\": 228,\n        \"line\": 6,\n        \"column\": 28\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runExec\",\n    \"source\": \"exec\",\n    \"values\": {\n      \"identifier\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"37baed9d-b16b-4ede-bac9-cc3917a61234\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 218,\n              \"line\": 6,\n              \"column\": 18\n            },\n            \"end\": {\n              \"offset\": 228,\n              \"line\": 6,\n              \"column\": 28\n            }\n          },\n          \"content\": \"getVersion\"\n        }\n      ],\n      \"args\": []\n    },\n    \"raw\": {\n      \"identifier\": \"getVersion\",\n      \"args\": []\n    },\n    \"meta\": {\n      \"argumentCount\": 0,\n      \"isDataValue\": true\n    }\n  },\n  \"nullable\": {\n    \"type\": \"Null\",\n    \"nodeId\": \"c46d16af-e410-41f4-bade-a5bb6731a828\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      },\n      \"end\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      }\n    },\n    \"value\": null\n  },\n  \"complex\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"greeting\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"71d004c7-dab3-47c5-bd8a-1012cec26596\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 275,\n            \"line\": 9,\n            \"column\": 15\n          },\n          \"end\": {\n            \"offset\": 316,\n            \"line\": 9,\n            \"column\": 56\n          }\n        },\n        \"kind\": \"add\",\n        \"subtype\": \"addTemplateInvocation\",\n        \"source\": \"templateInvocation\",\n        \"values\": {\n          \"templateName\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"dd335d73-46ae-4c7a-bee8-ec4bf53d4c2c\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 280,\n                  \"line\": 9,\n                  \"column\": 20\n                },\n                \"end\": {\n                  \"offset\": 316,\n                  \"line\": 9,\n                  \"column\": 56\n                }\n              },\n              \"content\": \"messageTemplate\"\n            }\n          ],\n          \"arguments\": [\n            {\n              \"type\": \"string\",\n              \"value\": \"Bob\"\n            },\n            {\n              \"type\": \"string\",\n              \"value\": \"signed up\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"templateName\": \"messageTemplate\",\n          \"arguments\": [\n            \"\\\"Bob\\\"\",\n            \"\\\"signed up\\\"\"\n          ]\n        },\n        \"meta\": {\n          \"argumentCount\": 2,\n          \"isDataValue\": true\n        }\n      },\n      \"build\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"41b2b361-a467-4a2d-b011-f9830d6abc36\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 329,\n            \"line\": 10,\n            \"column\": 12\n          },\n          \"end\": {\n            \"offset\": 345,\n            \"line\": 10,\n            \"column\": 28\n          }\n        },\n        \"kind\": \"run\",\n        \"subtype\": \"runExec\",\n        \"source\": \"exec\",\n        \"values\": {\n          \"identifier\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"7b3052f7-8f98-4c56-ab80-5f64ea3aba50\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 335,\n                  \"line\": 10,\n                  \"column\": 18\n                },\n                \"end\": {\n                  \"offset\": 345,\n                  \"line\": 10,\n                  \"column\": 28\n                }\n              },\n              \"content\": \"getVersion\"\n            }\n          ],\n          \"args\": []\n        },\n        \"raw\": {\n          \"identifier\": \"getVersion\",\n          \"args\": []\n        },\n        \"meta\": {\n          \"argumentCount\": 0,\n          \"isDataValue\": true\n        }\n      },\n      \"empty\": {\n        \"type\": \"Null\",\n        \"nodeId\": \"730b45ca-e654-4f41-afda-21d0b19ffb83\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 0,\n            \"line\": 1,\n            \"column\": 1\n          },\n          \"end\": {\n            \"offset\": 0,\n            \"line\": 1,\n            \"column\": 1\n          }\n        },\n        \"value\": null\n      },\n      \"flag\": true\n    }\n  }\n}"
       },
       "meta": {
         "objectData": {

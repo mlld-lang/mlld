@@ -118,7 +118,7 @@ RunDirectiveRef
 
 // Command reference structure (for @run @command)
 RunCommandReference
-  = identifier:BaseIdentifier _ args:RunCommandArgs? {
+  = identifier:BaseIdentifier _ args:RunCommandArguments? {
       // Process arguments if present
       const processedArgs = args || [];
       const rawArgs = processedArgs.map(arg => {
@@ -136,18 +136,18 @@ RunCommandReference
     }
 
 // Arguments for command references
-RunCommandArgs
-  = "(" _ args:RunCommandArgsList? _ ")" {
+RunCommandArguments
+  = "(" _ args:RunCommandArgumentList? _ ")" {
       return args || [];
     }
 
 // Using standard list pattern from patterns/lists.peggy
-RunCommandArgsList
-  = first:RunCommandArg rest:(CommaSpace arg:RunCommandArg { return arg; })* {
+RunCommandArgumentList
+  = first:RunCommandArgument rest:(CommaSpace arg:RunCommandArgument { return arg; })* {
       return [first, ...rest];
     }
 
-RunCommandArg
+RunCommandArgument
   = str:StringLiteral {
       return helpers.createNode(NodeType.Text, { content: str, location: location() });
     }

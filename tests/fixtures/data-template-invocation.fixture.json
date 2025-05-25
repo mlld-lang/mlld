@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "615baa58-0d72-4772-af2f-12489484beb3",
+      "nodeId": "880ef5d2-70a6-41a2-8d65-620754dc7874",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "ce6fa9ae-9204-4241-94d3-2891f65485b5",
+            "nodeId": "7d65cb0c-b346-46b5-acac-193cdcc5cd6e",
             "location": {
               "start": {
                 "offset": 0,
@@ -51,7 +51,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "ff679733-1116-426e-bfbf-e256250b0dd4",
+            "nodeId": "dbe78b36-b53c-411b-b1e4-498c697b742f",
             "location": {
               "start": {
                 "offset": 30,
@@ -68,7 +68,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "aa7626a8-f6d7-4662-a4bc-12775bd50d63",
+            "nodeId": "6d476658-d8e9-4682-a114-bd507492c698",
             "location": {
               "start": {
                 "offset": 0,
@@ -86,7 +86,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "dab17fe6-8b84-4c3c-94d3-80ee13a5154a",
+            "nodeId": "c61521d0-586e-4d72-90ea-5c127fd7955f",
             "location": {
               "start": {
                 "offset": 45,
@@ -120,7 +120,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "dd6be8a2-4509-4ed7-94fe-bc2115024cf7",
+      "nodeId": "d6e5eeaf-db7f-434f-a196-324660142c20",
       "location": {
         "start": {
           "offset": 48,
@@ -137,7 +137,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "9bfbddce-5395-44c3-ada0-b591d3a76867",
+      "nodeId": "74c11e87-473f-4b7c-bdc0-c34e56e7a13e",
       "location": {
         "start": {
           "offset": 49,
@@ -157,7 +157,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "9ae35616-5f8d-4160-a22b-7393e6073a49",
+            "nodeId": "a09bf98a-eb66-4cb5-b2be-e87e8893949c",
             "location": {
               "start": {
                 "offset": 0,
@@ -181,7 +181,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "60104cfe-ed36-410b-968a-bbaeb20722c4",
+            "nodeId": "9afd1f61-4ff0-48ec-8039-4d4f0e6c505f",
             "location": {
               "start": {
                 "offset": 85,
@@ -198,7 +198,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "28d3409d-24ec-4665-8f57-28ab35d28468",
+            "nodeId": "29430a67-c981-4930-9fc6-6cbcc2abedfd",
             "location": {
               "start": {
                 "offset": 0,
@@ -216,7 +216,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "d5a1b855-402a-4d25-8c3e-5e6f0687e888",
+            "nodeId": "594963f8-4004-400b-9243-e91c89b60687",
             "location": {
               "start": {
                 "offset": 101,
@@ -233,7 +233,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "845b9711-a2e1-434b-8ad0-15f5b52c5244",
+            "nodeId": "d81793ab-d315-4ec2-8129-137279059dab",
             "location": {
               "start": {
                 "offset": 0,
@@ -251,7 +251,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "e9422a7c-300e-4c7f-b7d4-5f61b385967f",
+            "nodeId": "89ba6c17-1868-4703-b80b-530e8107f205",
             "location": {
               "start": {
                 "offset": 119,
@@ -286,7 +286,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "b64173a5-ea08-479e-8f89-56965c71e020",
+      "nodeId": "b694c476-f354-4409-b512-833fb3edbb89",
       "location": {
         "start": {
           "offset": 122,
@@ -303,7 +303,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "60938e5e-3618-4d8d-bf55-42a9bfb9b602",
+      "nodeId": "782ef229-cbd7-468b-a18d-56514175bceb",
       "location": {
         "start": {
           "offset": 124,
@@ -323,7 +323,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "dae076a0-55a3-4eb6-8253-669e917e8900",
+            "nodeId": "21178e24-1f0d-4e30-b5ec-91645fc33d90",
             "location": {
               "start": {
                 "offset": 0,
@@ -345,7 +345,7 @@
           "properties": {
             "welcome": {
               "type": "Directive",
-              "nodeId": "b8d7cea4-9979-49e0-bfa4-c3fd832e62b9",
+              "nodeId": "33f4c901-a986-43ee-a3ed-c28bad1c952d",
               "location": {
                 "start": {
                   "offset": 154,
@@ -365,7 +365,7 @@
                 "templateName": [
                   {
                     "type": "Text",
-                    "nodeId": "e48cc4aa-b11b-4386-aceb-ed448dd09bcf",
+                    "nodeId": "2c6de939-7e40-4b75-a854-5c7dac5a5e87",
                     "location": {
                       "start": {
                         "offset": 159,
@@ -401,7 +401,7 @@
             },
             "goodbye": {
               "type": "Directive",
-              "nodeId": "bd262551-46e7-4c4d-9622-0fff87235559",
+              "nodeId": "ccc64840-3695-4f6b-96c6-164124978464",
               "location": {
                 "start": {
                   "offset": 190,
@@ -421,7 +421,7 @@
                 "templateName": [
                   {
                     "type": "Text",
-                    "nodeId": "0e342120-f20d-46c1-8e72-ae46b908e55e",
+                    "nodeId": "7b4f636d-80ee-4dc1-98aa-0ef2e265ef8e",
                     "location": {
                       "start": {
                         "offset": 195,
@@ -465,7 +465,7 @@
               "properties": {
                 "morning": {
                   "type": "Directive",
-                  "nodeId": "1ee9e4e7-b490-4e75-b54f-2a379f81f622",
+                  "nodeId": "fa0f35b0-8eb2-46a7-a84a-53cc9bfae651",
                   "location": {
                     "start": {
                       "offset": 250,
@@ -485,7 +485,7 @@
                     "templateName": [
                       {
                         "type": "Text",
-                        "nodeId": "0a6e3467-1b60-499e-a908-285a1643fb21",
+                        "nodeId": "4896f68f-3d87-47cc-b9f5-d42518a9c345",
                         "location": {
                           "start": {
                             "offset": 255,
@@ -521,7 +521,7 @@
                 },
                 "evening": {
                   "type": "Directive",
-                  "nodeId": "92c249d0-e0cf-4a97-8cc3-42dd284383f3",
+                  "nodeId": "04cb7142-eca0-4cfc-a092-11ea1bb16b37",
                   "location": {
                     "start": {
                       "offset": 290,
@@ -541,7 +541,7 @@
                     "templateName": [
                       {
                         "type": "Text",
-                        "nodeId": "0c1825a2-c2f2-4f7c-8510-dd01ed5d46dc",
+                        "nodeId": "56c27cf9-5aec-4f85-8ca2-41c1654c1422",
                         "location": {
                           "start": {
                             "offset": 295,
@@ -587,7 +587,7 @@
       },
       "raw": {
         "identifier": "messages",
-        "value": "{\n  \"welcome\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"b8d7cea4-9979-49e0-bfa4-c3fd832e62b9\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 154,\n        \"line\": 5,\n        \"column\": 12\n      },\n      \"end\": {\n        \"offset\": 177,\n        \"line\": 5,\n        \"column\": 35\n      }\n    },\n    \"kind\": \"add\",\n    \"subtype\": \"addTemplateInvocation\",\n    \"source\": \"templateInvocation\",\n    \"values\": {\n      \"templateName\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"e48cc4aa-b11b-4386-aceb-ed448dd09bcf\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 159,\n              \"line\": 5,\n              \"column\": 17\n            },\n            \"end\": {\n              \"offset\": 177,\n              \"line\": 5,\n              \"column\": 35\n            }\n          },\n          \"content\": \"greeting\"\n        }\n      ],\n      \"arguments\": [\n        {\n          \"type\": \"string\",\n          \"value\": \"Alice\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"templateName\": \"greeting\",\n      \"arguments\": [\n        \"\\\"Alice\\\"\"\n      ]\n    },\n    \"meta\": {\n      \"argumentCount\": 1,\n      \"isDataValue\": true\n    }\n  },\n  \"goodbye\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"bd262551-46e7-4c4d-9622-0fff87235559\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 190,\n        \"line\": 6,\n        \"column\": 12\n      },\n      \"end\": {\n        \"offset\": 223,\n        \"line\": 6,\n        \"column\": 45\n      }\n    },\n    \"kind\": \"add\",\n    \"subtype\": \"addTemplateInvocation\",\n    \"source\": \"templateInvocation\",\n    \"values\": {\n      \"templateName\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"0e342120-f20d-46c1-8e72-ae46b908e55e\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 195,\n              \"line\": 6,\n              \"column\": 17\n            },\n            \"end\": {\n              \"offset\": 223,\n              \"line\": 6,\n              \"column\": 45\n            }\n          },\n          \"content\": \"farewell\"\n        }\n      ],\n      \"arguments\": [\n        {\n          \"type\": \"string\",\n          \"value\": \"Bob\"\n        },\n        {\n          \"type\": \"string\",\n          \"value\": \"tomorrow\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"templateName\": \"farewell\",\n      \"arguments\": [\n        \"\\\"Bob\\\"\",\n        \"\\\"tomorrow\\\"\"\n      ]\n    },\n    \"meta\": {\n      \"argumentCount\": 2,\n      \"isDataValue\": true\n    }\n  },\n  \"nested\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"morning\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"1ee9e4e7-b490-4e75-b54f-2a379f81f622\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 250,\n            \"line\": 8,\n            \"column\": 14\n          },\n          \"end\": {\n            \"offset\": 275,\n            \"line\": 8,\n            \"column\": 39\n          }\n        },\n        \"kind\": \"add\",\n        \"subtype\": \"addTemplateInvocation\",\n        \"source\": \"templateInvocation\",\n        \"values\": {\n          \"templateName\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"0a6e3467-1b60-499e-a908-285a1643fb21\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 255,\n                  \"line\": 8,\n                  \"column\": 19\n                },\n                \"end\": {\n                  \"offset\": 275,\n                  \"line\": 8,\n                  \"column\": 39\n                }\n              },\n              \"content\": \"greeting\"\n            }\n          ],\n          \"arguments\": [\n            {\n              \"type\": \"string\",\n              \"value\": \"Charlie\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"templateName\": \"greeting\",\n          \"arguments\": [\n            \"\\\"Charlie\\\"\"\n          ]\n        },\n        \"meta\": {\n          \"argumentCount\": 1,\n          \"isDataValue\": true\n        }\n      },\n      \"evening\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"92c249d0-e0cf-4a97-8cc3-42dd284383f3\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 290,\n            \"line\": 9,\n            \"column\": 14\n          },\n          \"end\": {\n            \"offset\": 326,\n            \"line\": 9,\n            \"column\": 50\n          }\n        },\n        \"kind\": \"add\",\n        \"subtype\": \"addTemplateInvocation\",\n        \"source\": \"templateInvocation\",\n        \"values\": {\n          \"templateName\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"0c1825a2-c2f2-4f7c-8510-dd01ed5d46dc\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 295,\n                  \"line\": 9,\n                  \"column\": 19\n                },\n                \"end\": {\n                  \"offset\": 326,\n                  \"line\": 9,\n                  \"column\": 50\n                }\n              },\n              \"content\": \"farewell\"\n            }\n          ],\n          \"arguments\": [\n            {\n              \"type\": \"string\",\n              \"value\": \"David\"\n            },\n            {\n              \"type\": \"string\",\n              \"value\": \"next week\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"templateName\": \"farewell\",\n          \"arguments\": [\n            \"\\\"David\\\"\",\n            \"\\\"next week\\\"\"\n          ]\n        },\n        \"meta\": {\n          \"argumentCount\": 2,\n          \"isDataValue\": true\n        }\n      }\n    }\n  }\n}"
+        "value": "{\n  \"welcome\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"33f4c901-a986-43ee-a3ed-c28bad1c952d\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 154,\n        \"line\": 5,\n        \"column\": 12\n      },\n      \"end\": {\n        \"offset\": 177,\n        \"line\": 5,\n        \"column\": 35\n      }\n    },\n    \"kind\": \"add\",\n    \"subtype\": \"addTemplateInvocation\",\n    \"source\": \"templateInvocation\",\n    \"values\": {\n      \"templateName\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"2c6de939-7e40-4b75-a854-5c7dac5a5e87\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 159,\n              \"line\": 5,\n              \"column\": 17\n            },\n            \"end\": {\n              \"offset\": 177,\n              \"line\": 5,\n              \"column\": 35\n            }\n          },\n          \"content\": \"greeting\"\n        }\n      ],\n      \"arguments\": [\n        {\n          \"type\": \"string\",\n          \"value\": \"Alice\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"templateName\": \"greeting\",\n      \"arguments\": [\n        \"\\\"Alice\\\"\"\n      ]\n    },\n    \"meta\": {\n      \"argumentCount\": 1,\n      \"isDataValue\": true\n    }\n  },\n  \"goodbye\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"ccc64840-3695-4f6b-96c6-164124978464\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 190,\n        \"line\": 6,\n        \"column\": 12\n      },\n      \"end\": {\n        \"offset\": 223,\n        \"line\": 6,\n        \"column\": 45\n      }\n    },\n    \"kind\": \"add\",\n    \"subtype\": \"addTemplateInvocation\",\n    \"source\": \"templateInvocation\",\n    \"values\": {\n      \"templateName\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"7b4f636d-80ee-4dc1-98aa-0ef2e265ef8e\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 195,\n              \"line\": 6,\n              \"column\": 17\n            },\n            \"end\": {\n              \"offset\": 223,\n              \"line\": 6,\n              \"column\": 45\n            }\n          },\n          \"content\": \"farewell\"\n        }\n      ],\n      \"arguments\": [\n        {\n          \"type\": \"string\",\n          \"value\": \"Bob\"\n        },\n        {\n          \"type\": \"string\",\n          \"value\": \"tomorrow\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"templateName\": \"farewell\",\n      \"arguments\": [\n        \"\\\"Bob\\\"\",\n        \"\\\"tomorrow\\\"\"\n      ]\n    },\n    \"meta\": {\n      \"argumentCount\": 2,\n      \"isDataValue\": true\n    }\n  },\n  \"nested\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"morning\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"fa0f35b0-8eb2-46a7-a84a-53cc9bfae651\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 250,\n            \"line\": 8,\n            \"column\": 14\n          },\n          \"end\": {\n            \"offset\": 275,\n            \"line\": 8,\n            \"column\": 39\n          }\n        },\n        \"kind\": \"add\",\n        \"subtype\": \"addTemplateInvocation\",\n        \"source\": \"templateInvocation\",\n        \"values\": {\n          \"templateName\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"4896f68f-3d87-47cc-b9f5-d42518a9c345\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 255,\n                  \"line\": 8,\n                  \"column\": 19\n                },\n                \"end\": {\n                  \"offset\": 275,\n                  \"line\": 8,\n                  \"column\": 39\n                }\n              },\n              \"content\": \"greeting\"\n            }\n          ],\n          \"arguments\": [\n            {\n              \"type\": \"string\",\n              \"value\": \"Charlie\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"templateName\": \"greeting\",\n          \"arguments\": [\n            \"\\\"Charlie\\\"\"\n          ]\n        },\n        \"meta\": {\n          \"argumentCount\": 1,\n          \"isDataValue\": true\n        }\n      },\n      \"evening\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"04cb7142-eca0-4cfc-a092-11ea1bb16b37\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 290,\n            \"line\": 9,\n            \"column\": 14\n          },\n          \"end\": {\n            \"offset\": 326,\n            \"line\": 9,\n            \"column\": 50\n          }\n        },\n        \"kind\": \"add\",\n        \"subtype\": \"addTemplateInvocation\",\n        \"source\": \"templateInvocation\",\n        \"values\": {\n          \"templateName\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"56c27cf9-5aec-4f85-8ca2-41c1654c1422\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 295,\n                  \"line\": 9,\n                  \"column\": 19\n                },\n                \"end\": {\n                  \"offset\": 326,\n                  \"line\": 9,\n                  \"column\": 50\n                }\n              },\n              \"content\": \"farewell\"\n            }\n          ],\n          \"arguments\": [\n            {\n              \"type\": \"string\",\n              \"value\": \"David\"\n            },\n            {\n              \"type\": \"string\",\n              \"value\": \"next week\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"templateName\": \"farewell\",\n          \"arguments\": [\n            \"\\\"David\\\"\",\n            \"\\\"next week\\\"\"\n          ]\n        },\n        \"meta\": {\n          \"argumentCount\": 2,\n          \"isDataValue\": true\n        }\n      }\n    }\n  }\n}"
       },
       "meta": {
         "objectData": {
@@ -597,7 +597,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "ca731e1c-d9bb-47bf-926c-266f90c0bea3",
+      "nodeId": "2aa8c22d-b221-4944-b7c5-ba08bb976bcb",
       "location": {
         "start": {
           "offset": 332,
@@ -614,7 +614,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "7b93a9e6-3a2a-4c32-a010-10f58b768c52",
+      "nodeId": "83396840-9382-48fe-8a78-4f5bf9f1d4b7",
       "location": {
         "start": {
           "offset": 334,
@@ -634,7 +634,7 @@
         "content": [
           {
             "type": "VariableReference",
-            "nodeId": "e9697a30-bed8-4bf3-8c05-6f63a74f1086",
+            "nodeId": "d5ead61b-1d10-409b-8cf6-88ab2cf629d6",
             "location": {
               "start": {
                 "offset": 0,
@@ -658,7 +658,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "a99303dc-95d1-47e4-84bd-256c8be9e0ff",
+            "nodeId": "3a18ae87-a91a-4496-b3dc-fe1d4f393e22",
             "location": {
               "start": {
                 "offset": 361,
@@ -675,7 +675,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "d3c0c8b2-506e-4c67-8100-edb41d93478f",
+            "nodeId": "fa526b89-c25f-4089-8871-7242d903a9fe",
             "location": {
               "start": {
                 "offset": 0,
@@ -699,7 +699,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "15aadea4-9029-47a3-b4f5-68a6371bf3f0",
+            "nodeId": "f8f362b8-af61-4bfe-840d-d37b72695417",
             "location": {
               "start": {
                 "offset": 382,
@@ -716,7 +716,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "a3fa5676-2cfe-467d-9535-1340ece330dc",
+            "nodeId": "578bbeb6-3965-457b-8734-51476c5f89c4",
             "location": {
               "start": {
                 "offset": 0,
@@ -744,7 +744,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "651c2135-276d-43ce-bd9f-737fbbd96627",
+            "nodeId": "2f3b6857-dca7-4d62-85c1-e3d0cc8b3b6d",
             "location": {
               "start": {
                 "offset": 410,
@@ -761,7 +761,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "17adab15-33d6-4df8-b886-442596338991",
+            "nodeId": "17d026f3-f579-44f8-9673-4da03173c0ee",
             "location": {
               "start": {
                 "offset": 0,

@@ -18,16 +18,16 @@ CommandReference "command reference"
 
 // Arguments for command references
 CommandArgs "command arguments"
-  = "(" _ args:CommandArgsList? _ ")" {
+  = "(" _ args:CommandArgumentList? _ ")" {
       return args || [];
     }
 
-CommandArgsList "command arguments list"
-  = first:CommandArg rest:(_ "," _ arg:CommandArg { return arg; })* {
+CommandArgumentList "command arguments list"
+  = first:CommandArgument rest:(_ "," _ arg:CommandArgument { return arg; })* {
       return [first, ...rest];
     }
 
-CommandArg "command argument"
+CommandArgument "command argument"
   = str:StringLiteral {
       return { type: 'string', value: str };
     }

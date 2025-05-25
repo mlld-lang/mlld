@@ -21,7 +21,7 @@ by the @run directive. It can be used in these forms:
 // Primary @exec directive - all variants
 AtExec
   // This pattern must be first because of "first match wins" in PEG.js
-  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ runCode:RunLanguageCodeCore {
+  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ runCode:RunLanguageCodeCore {
       helpers.debug('AtExec matched code definition using RunLanguageCodeCore abstraction', { id, params, runCode });
       
       // Create identifier node
@@ -67,7 +67,7 @@ AtExec
         'code'  // Source parameter
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ command:CommandCore {
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ command:CommandCore {
       helpers.debug('AtExec matched command definition', { id, params, command });
       
       // Create identifier node
@@ -113,7 +113,7 @@ AtExec
         'command'  // Added source parameter
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ "@" commandRef:CommandReference {
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ "@" commandRef:CommandReference {
       helpers.debug('AtExec matched command reference', { id, params, commandRef });
       
       // Create identifier node
@@ -182,17 +182,17 @@ ExecMetadata
   }
 
 // Helper rules for exec parameters
-ExecParams
-  = _ "(" _ params:ExecParamsList? _ ")" {
+ExecParameters
+  = _ "(" _ params:ExecParameterList? _ ")" {
       return params || [];
     }
 
-ExecParamsList
-  = first:ExecParam rest:(_ "," _ param:ExecParam { return param; })* {
+ExecParameterList
+  = first:ExecParameter rest:(_ "," _ param:ExecParameter { return param; })* {
       return [first, ...rest];
     }
 
-ExecParam
+ExecParameter
   = paramName:BaseIdentifier {
       return paramName; // Just return the parameter name as a string
     }

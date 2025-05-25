@@ -62,17 +62,6 @@ InterpolationDataVar
       return node;
     }
 
-// Legacy PathVar for backward compatibility during transition
-// This will be removed after full implementation of AtVar
-PathVar
-  = "$" id:BaseIdentifier {
-      const normalizedId = helpers.normalizePathVar(id);
-      const node = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-      }, location());
-      helpers.debug('CreateVAR', { rule: 'PathVar', node });
-      return node;
-    }
 
 // Format specifiers for variables
 VarFormat

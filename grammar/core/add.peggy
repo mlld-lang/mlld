@@ -71,7 +71,7 @@ AddVariableCore
 // -------------------------------------------------------------
 
 AddTemplateInvocationCore
-  = "@" id:BaseIdentifier _ "(" _ args:TemplateArgsList? _ ")" {
+  = "@" id:BaseIdentifier _ "(" _ args:TemplateArgumentList? _ ")" {
       helpers.debug('AddTemplateInvocationCore matched', { id, args });
       
       const processedArgs = args || [];
@@ -168,8 +168,8 @@ AddCore
 // These rules are defined in other files and will be available
 // during the build process:
 // - VariableReference (from add.peggy)
-// - TemplateArgsList (from add.peggy)
-// - TemplateArg (from add.peggy) 
+// - TemplateArgumentList (from add.peggy)
+// - TemplateArgument (from add.peggy) 
 // - QuotedStringContent (from add.peggy)
 // - QuotedContent (from add.peggy)
 // - AsNewTitle (from add.peggy)

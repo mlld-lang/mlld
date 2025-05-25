@@ -45,14 +45,6 @@ LiteralContent "Literal content without interpolation"
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
 
-// Quoted section title - with escape sequence support
-QuotedSectionTitle "Quoted section title"
-  = '"' content:EscapedStringContent '"' {
-      return [helpers.createNode(NodeType.Text, { content, location: location() })];
-    }
-  / "'" content:EscapedSingleStringContent "'" {
-      return [helpers.createNode(NodeType.Text, { content, location: location() })];
-    }
 
 // Content inside single brackets with @var interpolation
 BracketContent "Content with @var interpolation"

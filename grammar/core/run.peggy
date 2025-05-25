@@ -43,6 +43,6 @@ RunExecCore
 // These rules are defined in run.peggy and will be available
 // during the build process:
 // - RunCommandReference
-// - RunCommandArgs
-// - RunCommandArgsList
-// - RunCommandArg
+// - RunCommandArguments
+// - RunCommandArgumentList
+// - RunCommandArgument
