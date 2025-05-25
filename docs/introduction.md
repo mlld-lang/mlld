@@ -1,3 +1,8 @@
+---
+layout: docs.njk
+title: "Introduction to Meld"
+---
+
 # Introduction to Meld
 
 Meld is a simple and constrained scripting language designed for use within markdown-like documents. It allows you to create dynamic content by interpreting special directive lines while preserving all other content as-is.
@@ -25,11 +30,11 @@ This line will be interpreted as plain text.
 This will remain a codefence.
 ```
 
-@embed [[
+@add [[
     Hello, {{name}}!
 ]]
 
-@embed [$docs/example.md]
+@add [$docs/example.md]
 
 @run [echo "Current time: $(date)"]
 ```

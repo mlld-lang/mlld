@@ -1,3 +1,8 @@
+---
+layout: docs.njk
+title: "Error Handling"
+---
+
 # Error Handling
 
 Meld has a structured approach to error handling, categorizing errors into different severity levels.
@@ -38,7 +43,7 @@ These situations don't generate errors or warnings:
 
 ### File System Errors
 
-- **Missing Files**: When an `@embed` or `@import` directive references a non-existent file
+- **Missing Files**: When an `@add` or `@import` directive references a non-existent file
 - **Path Validation**: When paths don't use `$HOMEPATH` or `$PROJECTPATH`
 - **File Permission Issues**: When Meld can't read a referenced file
 

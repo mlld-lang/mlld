@@ -1,6 +1,11 @@
+---
+layout: docs.njk
+title: "@path Directive"
+---
+
 # @path Directive
 
-The `@path` directive defines filesystem path variables that can be used in `@embed` and `@run` commands.
+The `@path` directive defines filesystem path variables that can be used in `@add` and `@run` commands.
 
 ## Syntax
 
@@ -52,7 +57,7 @@ Path variables are referenced using the `$identifier` syntax:
 
 ```meld
 @path docs = "$PROJECTPATH/docs"
-@embed [$docs/guide.md]
+@add [$docs/guide.md]
 ```
 
 Path variables can be used:
@@ -78,13 +83,13 @@ Using path variables in commands:
 Embedding files with path variables:
 ```meld
 @path templates = "$PROJECTPATH/templates"
-@embed [$templates/header.md]
+@add [$templates/header.md]
 ```
 
 Using path segments:
 ```meld
 @path src = "$PROJECTPATH/src"
-@embed [$src/components/button.js]
+@add [$src/components/button.js]
 ```
 
 ## Error Handling

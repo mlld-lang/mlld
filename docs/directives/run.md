@@ -1,3 +1,8 @@
+---
+layout: docs.njk
+title: "@run Directive"
+---
+
 # @run Directive
 
 The `@run` directive executes shell commands and includes their output in your Meld document.
@@ -7,13 +12,13 @@ The `@run` directive executes shell commands and includes their output in your M
 ```meld
 @run [command_text]
 @run [command_text] under header_text
-@run [$command({{textvar1}}, {{textvar2}})]
+@run [$command(@textvar1, @textvar2)]
 ```
 
 Where:
 - `command_text` is the shell command to execute
 - `header_text` is optional text to use as a header for the command output
-- `$command` refers to a command defined with `@define`
+- `$command` refers to a command defined with `@exec`
 
 ## Command Specification
 
@@ -29,7 +34,7 @@ You can use different types of variables in commands:
 - Text variables: `{{textvar}}`
 - Path variables: `$path`
 - Special path variables: `$HOMEPATH`, `$~`, `$PROJECTPATH`, `$.`
-- Command references: `$command({{param1}}, {{param2}})`
+- Command references: `$command(@param1, @param2)`
 
 ## Output Handling
 
@@ -88,7 +93,7 @@ Adding headers to output:
 
 Using defined commands:
 ```meld
-@define listFiles(dir) = @run [ls -la {{dir}}]
+@exec listFiles(dir) = @run [ls -la @dir]
 @run [$listFiles($PROJECTPATH)]
 ```
 

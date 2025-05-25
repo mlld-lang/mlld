@@ -1,3 +1,8 @@
+---
+layout: docs.njk
+title: "@data Directive"
+---
+
 # @data Directive
 
 The `@data` directive defines a structured data variable that can store objects, arrays, or other complex data types.
@@ -10,7 +15,7 @@ The `@data` directive defines a structured data variable that can store objects,
 
 Where:
 - `identifier` is the variable name (must be a valid identifier)
-- `value` can be an object literal, array literal, string literal, or the result of an `@embed`, `@run`, or `@call` directive
+- `value` can be an object literal, array literal, string literal, or the result of an `@add`, `@run`, or `@call` directive
 
 ## Identifier Requirements
 
@@ -141,7 +146,7 @@ Using command output as data:
 The following errors are possible with data directives:
 - JSON parsing errors (if value is invalid JSON)
 - Variable resolution errors
-- Execution errors when using @run or @embed as sources
+- Execution errors when using @run or @add as sources
 
 ## Notes
 
