@@ -141,8 +141,9 @@ RunCommandArgs
       return args || [];
     }
 
+// Using standard list pattern from patterns/lists.peggy
 RunCommandArgsList
-  = first:RunCommandArg rest:(_ "," _ arg:RunCommandArg { return arg; })* {
+  = first:RunCommandArg rest:(CommaSpace arg:RunCommandArg { return arg; })* {
       return [first, ...rest];
     }
 

@@ -286,10 +286,69 @@ If any phase causes significant test failures:
 ## Timeline Estimate
 
 - Phase 1: 2-3 hours (creating new files)
-- Phase 2: 1-2 hours (simple replacements)
-- Phase 3: 3-4 hours (updating directives)
+- Phase 2: 1-2 hours (simple replacements) ✅ COMPLETED (0.5 hours)
+- Phase 3: 3-4 hours (updating directives) ✅ COMPLETED (0.5 hours)
 - Phase 4: 4-5 hours (core pattern adoption)
 - Phase 5: 1-2 hours (metadata updates)
 - Phase 6: 1-2 hours (final cleanup)
 
 **Total: 12-18 hours of focused work**
+
+## Implementation Status
+
+### Phase 2: COMPLETED ✅
+**Completed in 0.5 hours** - Faster than expected due to clear pattern identification
+
+#### What was accomplished:
+1. **Variable Pattern Consolidation**
+   - Marked PathVar as deprecated
+   - Removed BracketVar but created BracketAtVar for context-free parsing in brackets
+   - Removed UnquotedPathVar
+   - Updated all references to use AtVar where appropriate
+
+2. **Content Pattern Updates**
+   - Removed QuotedSectionTitle from patterns/content.peggy
+   - Updated add.peggy AsNewTitle to use LiteralContent
+   - Updated core/section.peggy SectionExtractionCore to use LiteralContent
+
+#### Key learnings:
+- AtVar requires VariableContext predicate which doesn't work inside brackets
+- Created BracketAtVar specifically for bracket contexts without context check
+- Field access property renamed from accessElements to fields consistently
+
+### Phase 3: COMPLETED ✅
+**Completed in 0.5 hours** - Efficient implementation using shared patterns
+
+#### What was accomplished:
+1. **Pattern File Creation**
+   - Created patterns/lists.peggy with CommaSpace separator
+   - Created patterns/command-reference.peggy with shared CommandReference
+   - Created patterns/path-section.peggy with BracketedPathSection
+
+2. **List Pattern Updates**
+   - Updated TextParamsList to use CommaSpace pattern
+   - Updated ImportsList to use CommaSpace pattern
+   - Updated RunCommandArgsList to use CommaSpace pattern
+   - Updated DataObjectProperties to use CommaSpace pattern
+   - Updated DataArrayItems to use CommaSpace pattern
+   - Updated TemplateArgsList to use CommaSpace pattern
+
+3. **Command Reference Consolidation**
+   - Removed CommandReference from exec.peggy
+   - Created shared pattern that matches exec.peggy's expected structure
+   - Pattern includes identifier nodes and isCommandReference flag
+
+4. **Path Section Pattern Updates**
+   - Replaced inline [path # section] parsing in add.peggy with BracketedPathSection
+   - Replaced two instances in text.peggy with BracketedPathSection
+   - Removed BracketWithSection helper from add.peggy
+
+#### Key learnings:
+- Peggy.js doesn't support parametric rules, so we can't literally use CommaList(Item)
+- Instead, we standardized on the CommaSpace separator pattern
+- Shared rules need initialization blocks only in the main grammar file
+- AsNewTitle rule is shared between add.peggy and text.peggy
+
+### Current State
+- All tests passing (except pre-existing text-url-section issue)
+- Ready to proceed with Phase 4: Leverage Core Patterns

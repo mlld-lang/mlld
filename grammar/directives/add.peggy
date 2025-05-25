@@ -22,17 +22,18 @@ It can be used in these forms:
 // Primary @add directive with all variants
 AtAdd
   // Bracketed path with section: [path/to/file.md # Section] - must come first for precedence  
-  = DirectiveContext "@add" _ !'[[' '[' pathText:$([^#\]]+) '#' _ sectionText:$([^\]]+) ']' rename:AsNewTitle? {
-      helpers.debug('AtAdd matched bracketed path section', { pathText, sectionText, rename });
+  = DirectiveContext "@add" _ !'[[' section:BracketedPathSection rename:AsNewTitle? {
+      helpers.debug('AtAdd matched bracketed path section', { section, rename });
       
-      const rawPath = pathText.trim();
+      const rawPath = section.path;
+      const sectionText = section.section;
       
       // Parse the path text into parts (this is simplified - in real implementation you'd want proper parsing)
       const pathParts = [helpers.createNode(NodeType.Text, { content: rawPath, location: location() })];
       
       // Create values object
       const values = {
-        sectionTitle: [helpers.createNode(NodeType.Text, { content: sectionText.trim(), location: location() })],
+        sectionTitle: [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })],
         path: pathParts
       };
       
@@ -43,7 +44,7 @@ AtAdd
       
       // Create raw object
       const raw = {
-        sectionTitle: sectionText.trim(),
+        sectionTitle: sectionText,
         path: rawPath
       };
       
@@ -306,7 +307,7 @@ AtAdd
         'variable'  // Added source parameter
       );
     }
-  / DirectiveContext "@add" _ !("[[") !(BracketWithSection) path:PathExpression _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "@add" _ !("[[") !('[' [^#\]]* '#') path:PathExpression _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched path', { path, headerLevel, underHeader });
       
       // Extract header level and under header if provided
@@ -433,17 +434,16 @@ UnderHeader
 
 // Helper rule for the "as newTitle" part of the Section add directive
 AsNewTitle
-  = _ "as" _ title:QuotedSectionTitle {
+  = _ "as" _ title:LiteralContent {
       return title;
     }
 
-// Helper to check if we have a bracketed path with section
-BracketWithSection
-  = '[' [^\]]* '#' [^\]]* ']'
+// BracketWithSection helper removed - using BracketedPathSection from patterns/path-section.peggy
 
 // Helper rule for template invocation arguments
+// Using standard list pattern from patterns/lists.peggy
 TemplateArgsList
-  = first:TemplateArg rest:(_ "," _ arg:TemplateArg { return arg; })* {
+  = first:TemplateArg rest:(CommaSpace arg:TemplateArg { return arg; })* {
       return [first, ...rest];
     }
 

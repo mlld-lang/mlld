@@ -166,43 +166,7 @@ AtExec
 // -------------------------------------------------------------
 // HELPER RULES
 // -------------------------------------------------------------
-
-
-// Helper rule for command reference
-CommandReference
-  = name:BaseIdentifier _ args:CommandArgs? {
-      return {
-        name,
-        identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
-        args: args || [],
-        isCommandReference: true
-      };
-    }
-
-// Arguments for command references
-CommandArgs
-  = "(" _ args:CommandArgsList? _ ")" {
-      return args || [];
-    }
-
-CommandArgsList
-  = first:CommandArg rest:(_ "," _ arg:CommandArg { return arg; })* {
-      return [first, ...rest];
-    }
-
-CommandArg
-  = str:StringLiteral {
-      return { type: 'string', value: str };
-    }
-  / varRef:Variable {
-      return { type: 'variable', value: varRef };
-    }
-  / chars:RawArgChar+ {
-      return { type: 'raw', value: chars.join('').trim() };
-    }
-
-RawArgChar
-  = !("," / ")") char:. { return char; }
+// CommandReference and related rules have been moved to patterns/command-reference.peggy
 
 // Helper rules for exec metadata (.risk.high, .meta, etc.)
 ExecMetadata

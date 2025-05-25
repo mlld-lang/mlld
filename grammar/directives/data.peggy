@@ -323,8 +323,9 @@ DataObjectLiteral
     }
 
 // Object properties list
+// Using standard list pattern from patterns/lists.peggy
 DataObjectProperties
-  = first:DataObjectProperty rest:(_ "," _ p:DataObjectProperty { return p; })* {
+  = first:DataObjectProperty rest:(CommaSpace p:DataObjectProperty { return p; })* {
       return [first, ...rest];
     }
 
@@ -377,8 +378,9 @@ DataArrayLiteral
     }
 
 // Array items list
+// Using standard list pattern from patterns/lists.peggy
 DataArrayItems
-  = first:DataPropertyValue rest:(_ "," _ v:DataPropertyValue { return v; })* trailingComma:(_ ",")? {
+  = first:DataPropertyValue rest:(CommaSpace v:DataPropertyValue { return v; })* trailingComma:(_ ",")? {
       return [first, ...rest];
     }
 

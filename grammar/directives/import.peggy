@@ -67,11 +67,12 @@ AtImport
 // HELPER RULES
 // -------------------------------------------------------------
 
+// Using standard list pattern from patterns/lists.peggy
 ImportsList
   = "*" {
       return ["*"];
     }
-  / first:ImportItem rest:(_ "," _ item:ImportItem { return item; })* {
+  / first:ImportItem rest:(CommaSpace item:ImportItem { return item; })* {
       return [first, ...rest];
     }
   / _ {

@@ -4,13 +4,14 @@
 // Primary @text directive
 AtText
   // Bracketed path with section: [path/to/file.md # Section] - must come first for precedence
-  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ '[' pathText:$([^#\]]+) '#' _ sectionText:$([^\]]+) ']' rename:AsNewTitle? {
-      helpers.debug('AtText matched bracketed path section', { id, pathText, sectionText, rename });
+  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ section:BracketedPathSection rename:AsNewTitle? {
+      helpers.debug('AtText matched bracketed path section', { id, section, rename });
       
       const subtype = 'textPathSection';
       const sourceType = 'section';
       
-      const rawPath = pathText.trim();
+      const rawPath = section.path;
+      const sectionText = section.section;
       
       // Parse the path text into parts (simplified)
       const pathParts = [helpers.createNode(NodeType.Text, { content: rawPath, location: location() })];
@@ -18,7 +19,7 @@ AtText
       // Create values object with section and path
       const values = {
         identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-        section: [helpers.createNode(NodeType.Text, { content: sectionText.trim(), location: location() })],
+        section: [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })],
         path: pathParts
       };
       
@@ -30,7 +31,7 @@ AtText
       // Create raw object
       const raw = {
         identifier: id,
-        section: sectionText.trim(),
+        section: sectionText,
         path: rawPath
       };
       
@@ -177,13 +178,14 @@ AtText
       );
     }
   // @add directive with bracketed path section: @text var = @add [path/to/file.md # Section]
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ '[' pathText:$([^#\]]+) '#' _ sectionText:$([^\]]+) ']' rename:AsNewTitle? {
-      helpers.debug('AtText matched @add with bracketed path section', { id, pathText, sectionText, rename });
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ section:BracketedPathSection rename:AsNewTitle? {
+      helpers.debug('AtText matched @add with bracketed path section', { id, section, rename });
       
       const subtype = 'textPathSection';
       const sourceType = 'directive';
       
-      const rawPath = pathText.trim();
+      const rawPath = section.path;
+      const sectionText = section.section;
       
       // Parse the path text into parts (simplified)
       const pathParts = [helpers.createNode(NodeType.Text, { content: rawPath, location: location() })];
@@ -191,7 +193,7 @@ AtText
       // Create values object with section and path
       const values = {
         identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-        section: [helpers.createNode(NodeType.Text, { content: sectionText.trim(), location: location() })],
+        section: [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })],
         path: pathParts
       };
       
@@ -203,7 +205,7 @@ AtText
       // Create raw object
       const raw = {
         identifier: id,
-        section: sectionText.trim(),
+        section: sectionText,
         path: rawPath
       };
       
@@ -574,8 +576,9 @@ AtText
 // -------------------------------------------------------------
 
 // Helper rules for text template parameters
+// Using standard list pattern from patterns/lists.peggy
 TextParamsList
-  = first:TextParam rest:(_ "," _ param:TextParam { return param; })* {
+  = first:TextParam rest:(CommaSpace param:TextParam { return param; })* {
       return [first, ...rest];
     }
 
@@ -583,3 +586,5 @@ TextParam
   = paramName:BaseIdentifier {
       return paramName; // Just return the parameter name as a string
     }
+
+// AsNewTitle is imported from add.peggy
