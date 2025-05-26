@@ -77,6 +77,7 @@ export async function evaluateImport(
     // Use getCurrentVariables() to only get variables defined in the imported file
     // getAllVariables() would include parent variables, causing false positives
     const childVars = childEnv.getCurrentVariables();
+    
     for (const [name, variable] of childVars) {
       env.setVariable(name, variable);
     }

@@ -195,9 +195,7 @@ export class Environment {
       inputPath = inputPath.replace('$PROJECTPATH', await this.getProjectPath());
     }
     
-    // Use the path module directly for now
-    // TODO: Use PathService properly once types are imported
-    const path = require('path');
+    // Use the path module that's already imported
     if (path.isAbsolute(inputPath)) {
       return inputPath;
     }

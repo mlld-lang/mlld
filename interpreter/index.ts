@@ -41,8 +41,22 @@ export async function interpret(
     const location = (parseError as any).location;
     const position = location?.start || location || undefined;
     
+    // Enhance error message for common mistakes
+    let enhancedMessage = parseError.message;
+    
+    // Detect common syntax errors and provide helpful guidance
+    if (parseError.message.includes('Expected "@add" or whitespace but "@" found') && 
+        source.includes('@text') && source.includes('(') && source.includes('@run')) {
+      enhancedMessage = `${parseError.message}\n\n` +
+        `Hint: For parameterized commands that execute shell commands, use @exec instead of @text:\n` +
+        `  ❌ @text name(param) = @run [command]\n` +
+        `  ✅ @exec name(param) = @run [command]\n\n` +
+        `For parameterized text templates, use @add with template syntax:\n` +
+        `  ✅ @text name(param) = @add [[template with {{param}}]]`;
+    }
+    
     throw new MlldParseError(
-      parseError.message,
+      enhancedMessage,
       position,
       {
         severity: ErrorSeverity.Fatal,

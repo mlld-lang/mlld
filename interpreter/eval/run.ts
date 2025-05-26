@@ -39,7 +39,7 @@ export async function evaluateRun(
     const code = await interpolate(codeNodes, env);
     
     // Execute the code (default to JavaScript)
-    const language = directive.raw?.language || 'javascript';
+    const language = directive.raw?.lang || directive.meta?.language || 'javascript';
     output = await env.executeCode(code, language);
     
   } else if (directive.subtype === 'runExec') {
