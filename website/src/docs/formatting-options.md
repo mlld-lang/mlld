@@ -1,20 +1,20 @@
 ---
 layout: docs.njk
-title: "Meld Output Formatting Guide"
+title: "Mlld Output Formatting Guide"
 ---
 
 ---
 layout: docs.njk
-title: "Meld Output Formatting Guide"
+title: "Mlld Output Formatting Guide"
 ---
 
-# Meld Output Formatting Guide
+# Mlld Output Formatting Guide
 
-This guide explains how output formatting works in Meld and how to control it using the available options.
+This guide explains how output formatting works in Mlld and how to control it using the available options.
 
 ## Default Output Behavior
 
-By default, Meld preserves the exact formatting of your document, including:
+By default, Mlld preserves the exact formatting of your document, including:
 
 - Whitespace and indentation
 - Newlines between paragraphs
@@ -23,7 +23,7 @@ By default, Meld preserves the exact formatting of your document, including:
 
 When directives are processed, they are replaced with their output while maintaining the surrounding document structure.
 
-```meld
+```mlld
 This is a paragraph.
 
 @text greeting = "Hello"
@@ -51,25 +51,25 @@ If you want more consistent markdown formatting, you can use the `--pretty` flag
 
 ```bash
 # Standard output (preserves exact formatting)
-meld input.meld
+mlld input.mlld
 
 # Pretty formatting with Prettier
-meld --pretty input.meld
+mlld --pretty input.mlld
 ```
 
 ### API Usage
 
 ```typescript
 // Standard output (preserves exact formatting)
-const result = await runMeld(content);
+const result = await runMlld(content);
 
 // Pretty formatting with Prettier
-const prettyResult = await runMeld(content, { pretty: true });
+const prettyResult = await runMlld(content, { pretty: true });
 ```
 
 ## How Prettier Formatting Works
 
-When you enable the `pretty` option, Meld applies Prettier formatting to the output after all directives have been processed. This provides:
+When you enable the `pretty` option, Mlld applies Prettier formatting to the output after all directives have been processed. This provides:
 
 - Consistent spacing
 - Standardized indentation
@@ -80,7 +80,7 @@ When you enable the `pretty` option, Meld applies Prettier formatting to the out
 
 ### Prettier Configuration
 
-Meld uses a standard Prettier configuration for markdown:
+Mlld uses a standard Prettier configuration for markdown:
 
 - `proseWrap: 'preserve'` - Preserves existing line wraps
 - `printWidth: 80` - Sets the line width to 80 characters
@@ -93,33 +93,33 @@ Meld uses a standard Prettier configuration for markdown:
 
 ## Output Format Options
 
-Meld supports multiple output formats:
+Mlld supports multiple output formats:
 
 ```bash
 # Markdown output (default)
-meld -f markdown input.meld
+mlld -f markdown input.mlld
 
 # XML output
-meld -f xml input.meld
+mlld -f xml input.mlld
 ```
 
 In the API:
 
 ```typescript
 // Markdown output
-const markdownResult = await runMeld(content, { format: 'markdown' });
+const markdownResult = await runMlld(content, { format: 'markdown' });
 
 // XML output
-const xmlResult = await runMeld(content, { format: 'xml' });
+const xmlResult = await runMlld(content, { format: 'xml' });
 ```
 
 ## How Newlines Are Handled
 
 ### Within Text Content
 
-Meld preserves newlines exactly as they appear in the source content:
+Mlld preserves newlines exactly as they appear in the source content:
 
-```meld
+```mlld
 This is a paragraph
 with a line break.
 
@@ -138,7 +138,7 @@ This is another paragraph.
 
 When directives are processed, their output replaces the directive while maintaining proper context:
 
-```meld
+```mlld
 Before directive.
 @run[echo "Command output"]
 After directive.
@@ -155,7 +155,7 @@ After directive.
 
 Variables maintain their format when substituted:
 
-```meld
+```mlld
 @text multiline = "Line 1
 Line 2
 Line 3"
@@ -186,7 +186,7 @@ End of text.
 
 5. **For JSON or code**, use code fences to ensure proper formatting is preserved:
 
-```meld
+```mlld
 @data config = { "key": "value", "nested": { "prop": 1 } }
 
 My configuration is:

@@ -4,7 +4,7 @@ The `addVariable` subtype of the `@add` directive is used to add content from a 
 
 ## Syntax
 
-```meld
+```mlld
 @add {{variable}}
 @add {{variable}} as ###
 @add {{variable}} under header_text

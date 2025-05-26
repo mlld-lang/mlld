@@ -24,7 +24,7 @@ This plan translates the URL support concepts from the old service-oriented arch
    - Request timeouts
 
 ### Usage Example
-```meld
+```mlld
 // Import from URL
 @import "https://example.com/data.mld"
 
@@ -346,7 +346,7 @@ The key differences from the old service-oriented approach:
 
 ## Example Usage
 
-```meld
+```mlld
 // Basic URL import
 @import "https://raw.githubusercontent.com/user/repo/main/config.mld"
 

@@ -1,10 +1,10 @@
-# Meld Grammar Types Audit Summary
+# Mlld Grammar Types Audit Summary
 
 This document summarizes the results of the grammar types audit, examining the type definitions and their alignment with the actual grammar implementation.
 
 ## Audit Process
 
-We performed a comprehensive audit of the Meld grammar's type system by:
+We performed a comprehensive audit of the Mlld grammar's type system by:
 1. Examining each directive's grammar implementation in `/grammar/directives/*.peggy`
 2. Comparing the implementation with corresponding type definitions in `/grammar/types/*.ts`
 3. Analyzing the core type definitions in `/core/syntax/types/`
@@ -111,7 +111,7 @@ The add directive had the most comprehensive types but still showed issues:
 
 ## Recommendations for Type System Improvements
 
-Based on our detailed audits, we recommend the following improvements to the Meld grammar type system:
+Based on our detailed audits, we recommend the following improvements to the Mlld grammar type system:
 
 ### 1. Standardize Core Types
 
@@ -174,6 +174,6 @@ We recommend implementing these improvements in the following phases:
 
 ## Conclusion
 
-The Meld grammar type system is generally well-structured but has several areas where implementation and type definitions are not fully aligned. Addressing these issues will improve type safety, documentation, and developer experience when working with the Meld AST.
+The Mlld grammar type system is generally well-structured but has several areas where implementation and type definitions are not fully aligned. Addressing these issues will improve type safety, documentation, and developer experience when working with the Mlld AST.
 
 By implementing the recommended changes, we can create a more consistent, reliable, and self-documenting type system that accurately reflects the actual structure of the parsed AST nodes.

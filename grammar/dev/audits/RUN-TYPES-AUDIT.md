@@ -1,10 +1,10 @@
 # Run Directive Types Audit
 
-This document contains the results of auditing the run directive implementation and types in the Meld grammar.
+This document contains the results of auditing the run directive implementation and types in the Mlld grammar.
 
 ## Current Implementation
 
-The run directive is implemented in `/Users/adam/dev/meld/grammar/directives/run.peggy` with three main variants:
+The run directive is implemented in `/Users/adam/dev/mlld/grammar/directives/run.peggy` with three main variants:
 
 1. Run Code: `@run language [code]` - Executes a code block in a specific language
 2. Run Command: `@run command` - Executes a shell command
@@ -14,7 +14,7 @@ It also includes a `RunDirectiveRef` rule for embedding run directives within ot
 
 ## Current Type Definitions
 
-The run directive is typed in `/Users/adam/dev/meld/grammar/types/run.ts` with these interfaces:
+The run directive is typed in `/Users/adam/dev/mlld/grammar/types/run.ts` with these interfaces:
 
 1. `RunDirectiveNode`: Base interface with kind 'run' and subtypes 'runCommand', 'runCode', or 'runExec'
 2. `RunCommandDirectiveNode`: For shell commands with subtype 'runCommand'

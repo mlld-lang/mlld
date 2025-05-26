@@ -1,10 +1,10 @@
 # Grammar Tests Audit
 
-This document contains the results of our grammar tests audit, examining the test coverage, organization, and potential improvements for the Meld grammar implementation.
+This document contains the results of our grammar tests audit, examining the test coverage, organization, and potential improvements for the Mlld grammar implementation.
 
 ## Current Test Architecture
 
-The Meld grammar testing is organized in several locations:
+The Mlld grammar testing is organized in several locations:
 
 1. **Directive Tests** (`grammar/tests/`): Tests for specific directives
 2. **General Grammar Tests**: Tests for overall grammar functionality

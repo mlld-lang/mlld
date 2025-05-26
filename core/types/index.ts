@@ -1,5 +1,5 @@
 /**
- * Meld Core Types
+ * Mlld Core Types
  * 
  * Clean export of all types used by the interpreter and API.
  * This is the single source of truth for type definitions.
@@ -27,7 +27,7 @@ export * from './path';
 export * from './data';
 export * from './run';
 
-// Import node types for the MeldNode union
+// Import node types for the MlldNode union
 import {
   TextNode,
   DirectiveNode,
@@ -41,13 +41,13 @@ import {
 } from './nodes';
 
 /**
- * Unified AST node type - MeldNode
+ * Unified AST node type - MlldNode
  * 
  * This discriminated union encompasses all possible nodes
- * in the Meld AST. Each node type has a unique 'type' field
+ * in the Mlld AST. Each node type has a unique 'type' field
  * that allows TypeScript to narrow types during processing.
  */
-export type MeldNode =
+export type MlldNode =
   | TextNode 
   | DirectiveNode 
   | CodeFenceNode
@@ -75,7 +75,7 @@ export enum VariableType {
 }
 
 // Base variable interface
-export interface MeldVariable {
+export interface MlldVariable {
   type: VariableType;
   name: string;
   value: any;
@@ -97,7 +97,7 @@ export function createTextVariable(
   name: string,
   value: string,
   metadata?: any
-): MeldVariable {
+): MlldVariable {
   return {
     type: VariableType.TEXT,
     name,
@@ -117,7 +117,7 @@ export function createDataVariable(
   name: string,
   value: any,
   metadata?: any
-): MeldVariable {
+): MlldVariable {
   return {
     type: VariableType.DATA,
     name,
@@ -137,7 +137,7 @@ export function createComplexDataVariable(
   name: string,
   value: any,
   metadata?: any
-): MeldVariable {
+): MlldVariable {
   return {
     type: VariableType.DATA,
     name,
@@ -158,7 +158,7 @@ export function createPathVariable(
   name: string,
   value: any, // Can be string or path state object
   metadata?: any
-): MeldVariable {
+): MlldVariable {
   return {
     type: VariableType.PATH,
     name,
@@ -178,7 +178,7 @@ export function createCommandVariable(
   name: string,
   value: any, // Command definition
   metadata?: any
-): MeldVariable {
+): MlldVariable {
   return {
     type: VariableType.COMMAND,
     name,

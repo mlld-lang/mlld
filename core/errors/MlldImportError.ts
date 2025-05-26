@@ -1,4 +1,4 @@
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
 
 export interface ImportErrorDetails {
   importChain?: string[];
@@ -11,7 +11,7 @@ export interface ImportErrorDetails {
   count?: number;
 }
 
-export interface MeldImportErrorOptions {
+export interface MlldImportErrorOptions {
   code?: string;
   details?: ImportErrorDetails;
   cause?: Error;
@@ -22,12 +22,12 @@ export interface MeldImportErrorOptions {
 /**
  * Error thrown when import operations fail
  */
-export class MeldImportError extends MeldError {
+export class MlldImportError extends MlldError {
   public readonly details?: ImportErrorDetails;
 
   constructor(
     message: string,
-    options: MeldImportErrorOptions = {}
+    options: MlldImportErrorOptions = {}
   ) {
     const importChainStr = options.details?.importChain 
       ? ` (chain: ${options.details.importChain.join(' → ')})`
@@ -49,10 +49,10 @@ export class MeldImportError extends MeldError {
       }
     });
     
-    this.name = 'MeldImportError';
+    this.name = 'MlldImportError';
     this.details = options.details;
     
     // Ensure proper prototype chain for instanceof checks
-    Object.setPrototypeOf(this, MeldImportError.prototype);
+    Object.setPrototypeOf(this, MlldImportError.prototype);
   }
 } 

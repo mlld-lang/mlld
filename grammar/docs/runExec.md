@@ -1,10 +1,10 @@
 # Run Exec Subtype
 
-The `runExec` subtype of the `@run` directive executes predefined commands that have been defined using the `@exec` directive. It provides a way to reuse and parameterize commands across Meld documents.
+The `runExec` subtype of the `@run` directive executes predefined commands that have been defined using the `@exec` directive. It provides a way to reuse and parameterize commands across Mlld documents.
 
 ## Syntax
 
-```meld
+```mlld
 @run $commandName
 @run $commandName (arg1, arg2)
 ```
@@ -44,7 +44,7 @@ The `runExec` subtype nodes have this structure:
 
 ### Basic Command Execution
 
-```meld
+```mlld
 @run $listFiles
 ```
 
@@ -70,7 +70,7 @@ AST:
 
 ### Command with Arguments
 
-```meld
+```mlld
 @run $formatData ("large_file.json", "pretty")
 ```
 
@@ -99,7 +99,7 @@ AST:
 
 ### Command with Variable Arguments
 
-```meld
+```mlld
 @run $processFile ({{filename}}, {{options}})
 ```
 

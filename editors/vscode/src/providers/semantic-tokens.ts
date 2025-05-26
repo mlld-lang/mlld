@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { DocumentAnalyzer } from '../utils/document-analyzer';
 
-export class MeldSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
+export class MlldSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
   private legend: vscode.SemanticTokensLegend;
   
   constructor(private analyzer: DocumentAnalyzer) {

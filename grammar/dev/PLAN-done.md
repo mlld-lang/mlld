@@ -20,7 +20,7 @@ This document outlines the process for refactoring the `DirectiveNode` structure
 
 ## Goal
 
-Create a robust, strongly-typed AST structure for Meld directives that:
+Create a robust, strongly-typed AST structure for Mlld directives that:
 
 1. Provides clear semantic grouping of related nodes
 2. Preserves raw text for each semantic group
@@ -486,7 +486,7 @@ Both subtypes will support parameters using the same structure.
 
 ## Universal @variable Syntax Implementation Plan - Updated
 
-As part of our syntax simplification strategy, we're adopting a universal `@variable` syntax across all directives. This will make `@` the central signifier for variable usage throughout Meld.
+As part of our syntax simplification strategy, we're adopting a universal `@variable` syntax across all directives. This will make `@` the central signifier for variable usage throughout Mlld.
 
 ### Key Changes
 

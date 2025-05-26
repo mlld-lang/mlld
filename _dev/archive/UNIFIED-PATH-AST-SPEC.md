@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the unified path handling system that allows users to seamlessly use both local filesystem paths and URLs in any path context within Meld directives. The grammar automatically detects and categorizes path types, producing consistent AST structures for interpreter consumption.
+This document describes the unified path handling system that allows users to seamlessly use both local filesystem paths and URLs in any path context within Mlld directives. The grammar automatically detects and categorizes path types, producing consistent AST structures for interpreter consumption.
 
 ## Grammar Entry Point
 
@@ -173,7 +173,7 @@ The `parts` array in the AST preserves these variable references for resolution 
 ## Usage Examples
 
 ### Import Directive
-```meld
+```mlld
 @import {*} from "https://example.com/config.mld"
 @import {*} from "./local/config.mld"
 @import {auth} from "https://@apiDomain/auth.mld"
@@ -182,14 +182,14 @@ The `parts` array in the AST preserves these variable references for resolution 
 All produce consistent AST with `path.subtype` indicating the path type.
 
 ### Path Assignment
-```meld
+```mlld
 @path config = "https://api.example.com/v1/config"
 @path local = "./data/config.json"
 @path docs = "https://docs.example.com/api.md#authentication"
 ```
 
 ### Text/Add Directives
-```meld
+```mlld
 @text readme = [https://raw.githubusercontent.com/user/repo/main/README.md]
 @add [./templates/header.md]
 @text section = [https://example.com/docs.md#installation]

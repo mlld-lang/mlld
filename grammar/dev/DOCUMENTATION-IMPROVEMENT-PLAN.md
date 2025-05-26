@@ -1,6 +1,6 @@
-# Meld Grammar Documentation Improvement Plan
+# Mlld Grammar Documentation Improvement Plan
 
-This plan outlines a comprehensive approach to improving, standardizing, and maintaining the Meld grammar documentation, based on an extensive audit of the current state. The goal is to ensure complete, accurate, and user-friendly documentation that properly reflects the actual implementation.
+This plan outlines a comprehensive approach to improving, standardizing, and maintaining the Mlld grammar documentation, based on an extensive audit of the current state. The goal is to ensure complete, accurate, and user-friendly documentation that properly reflects the actual implementation.
 
 ## 1. Documentation Structure and Organization
 
@@ -44,7 +44,7 @@ This plan outlines a comprehensive approach to improving, standardizing, and mai
    [Brief overview of what this directive does and when to use it]
    
    ## Syntax Patterns
-   ```meld
+   ```mlld
    @directive pattern1
    @directive pattern2
    ```
@@ -276,4 +276,4 @@ The documentation improvement effort will be considered successful when:
 6. Documentation is verified by tests
 7. A maintenance process is established
 
-This plan provides a comprehensive roadmap for systematically improving the Meld grammar documentation, ensuring it accurately reflects the implementation and provides clear guidance for both users and developers.
+This plan provides a comprehensive roadmap for systematically improving the Mlld grammar documentation, ensuring it accurately reflects the implementation and provides clear guidance for both users and developers.

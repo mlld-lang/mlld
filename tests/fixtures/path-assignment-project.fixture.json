@@ -4,11 +4,11 @@
   "category": "path",
   "subcategory": "assignment",
   "input": "@path projectSrc = [@./src]\n@add [[The project source is {{projectSrc}}]]",
-  "expected": "The project source is /Users/adam/dev/meld/src",
+  "expected": "The project source is /Users/adam/dev/mlld/src",
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "83c7e563-0481-4d5f-95dc-eda32cada2fe",
+      "nodeId": "2e0ad9bf-d1bb-445a-a77e-05d4ace6569d",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "961bcba8-5f75-42bc-b8a0-6c736ffaef40",
+            "nodeId": "4e9d7055-169c-4335-b4b2-5d322b805cdc",
             "location": {
               "start": {
                 "offset": 0,
@@ -48,7 +48,7 @@
         "path": [
           {
             "type": "VariableReference",
-            "nodeId": "8f873544-7973-41b5-bff4-32d845c4392e",
+            "nodeId": "79132f55-4477-48ec-bedb-c6d60a3d2a05",
             "location": {
               "start": {
                 "offset": 0,
@@ -66,7 +66,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "9db3c3b5-3325-4684-8ad7-5971e23292b5",
+            "nodeId": "43c4d2b8-2fff-4d39-aca2-8b8f7584ca3a",
             "location": {
               "start": {
                 "offset": 0,
@@ -98,7 +98,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "7a943a29-b8fa-4d72-9bc4-05ddba4e0d3a",
+      "nodeId": "061b4012-d403-46b9-871b-24174bd681e4",
       "location": {
         "start": {
           "offset": 27,
@@ -115,7 +115,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "330acf82-d327-4484-95df-d66104c889e2",
+      "nodeId": "41ca1d67-8081-46cc-a1f9-98c8d37c93f0",
       "location": {
         "start": {
           "offset": 28,
@@ -135,7 +135,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "67a7b785-1551-4101-b3c3-2506bb75f09b",
+            "nodeId": "fea7415f-91cc-4832-b322-cfc26712b734",
             "location": {
               "start": {
                 "offset": 35,
@@ -152,7 +152,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "7e0a8974-1e92-412f-ba03-9d8b8f73bdbb",
+            "nodeId": "f02eb5a5-0bce-4c1e-9972-b67a20051e05",
             "location": {
               "start": {
                 "offset": 0,

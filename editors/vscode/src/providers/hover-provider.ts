@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { DocumentAnalyzer } from '../utils/document-analyzer';
 
-export class MeldHoverProvider implements vscode.HoverProvider {
+export class MlldHoverProvider implements vscode.HoverProvider {
   constructor(private analyzer: DocumentAnalyzer) {}
 
   async provideHover(

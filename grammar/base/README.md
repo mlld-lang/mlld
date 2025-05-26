@@ -1,6 +1,6 @@
-# Meld Grammar Base Abstractions
+# Mlld Grammar Base Abstractions
 
-This directory contains the fundamental abstractions used throughout the Meld grammar system. These form the core building blocks for all higher-level grammar patterns.
+This directory contains the fundamental abstractions used throughout the Mlld grammar system. These form the core building blocks for all higher-level grammar patterns.
 
 ## Context Detection System
 

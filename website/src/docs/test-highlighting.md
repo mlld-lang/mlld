@@ -5,11 +5,11 @@ title: "Syntax Highlighting Test"
 
 # Syntax Highlighting Test
 
-This page tests the new Prism.js syntax highlighting for Meld.
+This page tests the new Prism.js syntax highlighting for Mlld.
 
 ## Basic Example
 
-```meld
+```mlld
 >> This is a comment
 @text greeting = "Hello, World!"
 @data config = {
@@ -23,7 +23,7 @@ This page tests the new Prism.js syntax highlighting for Meld.
 
 ## All Directives
 
-```meld
+```mlld
 @text message = "Test"
 @data settings = { debug: true }
 @run [echo "Hello"]
@@ -38,8 +38,8 @@ This page tests the new Prism.js syntax highlighting for Meld.
 
 ## Complex Example
 
-```meld
-@text projectName = "MeldProject"
+```mlld
+@text projectName = "MlldProject"
 @data buildInfo = {
   version: "1.0.0",
   status: @run [echo "SUCCESS"],

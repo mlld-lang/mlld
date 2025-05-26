@@ -1,20 +1,20 @@
 # Website Update Strategic Plan
 
 ## Overview
-This document outlines the remaining tasks and implementation strategy for updating the Meld website to use our new syntax highlighting system and modernized examples.
+This document outlines the remaining tasks and implementation strategy for updating the Mlld website to use our new syntax highlighting system and modernized examples.
 
 ## Completed Items ✅
-- **Prism.js Integration**: Integrated with auto-generated Meld syntax highlighting
-- **Eleventy Shortcodes**: Added `{% meld "code" %}` for inline highlighting and `{% meldBlock "code" %}` for blocks
+- **Prism.js Integration**: Integrated with auto-generated Mlld syntax highlighting
+- **Eleventy Shortcodes**: Added `{% mlld "code" %}` for inline highlighting and `{% mlldBlock "code" %}` for blocks
 - **Build Process**: Automated copying of generated syntax files to website via `npm run build:syntax`
-- **Markdown Support**: Code blocks with ` ```meld ` automatically highlighted
+- **Markdown Support**: Code blocks with ` ```mlld ` automatically highlighted
 
 ## Remaining Tasks 📋
 
 ### 1. Landing Page Examples as Components (Priority: High)
 
 #### Goal
-Replace hardcoded HTML examples with reusable Meld file components that are automatically highlighted.
+Replace hardcoded HTML examples with reusable Mlld file components that are automatically highlighted.
 
 #### Structure
 ```
@@ -23,9 +23,9 @@ website/src/
     examples.js          # Eleventy data file to load examples
   _includes/
     components/
-      meld-example.njk   # Reusable example component
+      mlld-example.njk   # Reusable example component
   examples/
-    code-review.mld      # Actual Meld example files
+    code-review.mld      # Actual Mlld example files
     code-review.meta.yml # Metadata (title, description, order)
     prompt-chain.mld
     prompt-chain.meta.yml
@@ -74,7 +74,7 @@ module.exports = async function() {
 };
 ```
 
-**Component** (`website/src/_includes/components/meld-example.njk`):
+**Component** (`website/src/_includes/components/mlld-example.njk`):
 ```njk
 <div class="example-container">
   {% if example.title %}
@@ -87,7 +87,7 @@ module.exports = async function() {
   {% endif %}
   
   <div class="example-code">
-    {% meldBlock example.code %}
+    {% mlldBlock example.code %}
   </div>
   
   {% if example.output %}
@@ -109,7 +109,7 @@ module.exports = async function() {
 ```njk
 <!-- In index.njk -->
 {% set codeReviewExample = examples['code-review'] %}
-{% include "components/meld-example.njk" with { example: codeReviewExample } %}
+{% include "components/mlld-example.njk" with { example: codeReviewExample } %}
 ```
 
 ### 2. Update Website Examples from Test Cases (Priority: High)
@@ -142,7 +142,7 @@ async function parseExamplesMarkdown() {
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].includes('**Input:**')) {
         // Extract code block
-        const codeStart = lines.findIndex((l, idx) => idx > i && l.startsWith('```meld'));
+        const codeStart = lines.findIndex((l, idx) => idx > i && l.startsWith('```mlld'));
         const codeEnd = lines.findIndex((l, idx) => idx > codeStart && l.startsWith('```'));
         currentExample.input = lines.slice(codeStart + 1, codeEnd).join('\n');
       }
@@ -218,7 +218,7 @@ if (require.main === module) {
 ### 3. Update Documentation Syntax (Priority: Medium)
 
 #### Goal
-Ensure all documentation files use current Meld syntax.
+Ensure all documentation files use current Mlld syntax.
 
 #### Checklist
 - [ ] Remove any `#{}` variable syntax (outdated)
@@ -284,7 +284,7 @@ graph LR
 const { execSync } = require('child_process');
 
 async function build() {
-  console.log('🔨 Building Meld syntax files...');
+  console.log('🔨 Building Mlld syntax files...');
   execSync('npm run build:syntax', { stdio: 'inherit', cwd: '..' });
   
   console.log('📚 Syncing examples...');
@@ -317,7 +317,7 @@ build().catch(console.error);
 
 ### Phase 2: Implement Example Components (1 hour)
 1. Create `_data/examples.js`
-2. Build `meld-example.njk` component
+2. Build `mlld-example.njk` component
 3. Convert landing page to use components
 4. Test with a few examples
 

@@ -218,7 +218,7 @@ interface SourceLocation {
 }
 
 /**
- * Node types in Meld AST
+ * Node types in Mlld AST
  */
 export enum NodeType {
   ROOT = 'Root',

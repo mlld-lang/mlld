@@ -1,10 +1,10 @@
-# Debugging the Meld Grammar
+# Debugging the Mlld Grammar
 
-This document provides guidance on how to debug the Meld grammar system, particularly when dealing with grammar build errors and test failures.
+This document provides guidance on how to debug the Mlld grammar system, particularly when dealing with grammar build errors and test failures.
 
 ## Build Process and Error Location
 
-The Meld grammar uses a modular approach with multiple `.peggy` files that are concatenated by the `build-grammar.mjs` script. This has important implications for error reporting:
+The Mlld grammar uses a modular approach with multiple `.peggy` files that are concatenated by the `build-grammar.mjs` script. This has important implications for error reporting:
 
 1. **Component vs. Concatenated Files**: When an error occurs, PEG.js reports line numbers in the concatenated file, not the original component file.
 
@@ -77,7 +77,7 @@ Use this decision tree to determine the best approach for your specific issue:
 
 2. **Debug the Grammar Implementation**
    - Add debugging using `helpers.debug`
-   - Run the script: `npm run ast -- "<meld syntax>"` 
+   - Run the script: `npm run ast -- "<mlld syntax>"` 
    - Look for debug logs and specific errors
    - Iterate and run tests again
 
@@ -104,7 +104,7 @@ When you encounter such issues, try this incremental approach:
 
 ## Using the Debug Script
 
-The repository includes a debug script at `scripts/ast-output.js` that lets you directly test Meld syntax:
+The repository includes a debug script at `scripts/ast-output.js` that lets you directly test Mlld syntax:
 
 ```bash
 # Quick parse with minimal quoting

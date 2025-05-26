@@ -5,11 +5,11 @@ title: "@add Directive"
 
 # @add Directive
 
-The `@add` directive includes content from external files, variables, or templates into your Meld document.
+The `@add` directive includes content from external files, variables, or templates into your Mlld document.
 
 ## Syntax
 
-```meld
+```mlld
 @add [path]
 @add [path # section]
 @add [path # section] as "# New Title"
@@ -30,7 +30,7 @@ Where:
 ## Including Files
 
 Basic file inclusion:
-```meld
+```mlld
 @add [README.md]
 @add [docs/guide.md]
 ```
@@ -39,7 +39,7 @@ Basic file inclusion:
 
 Extract specific sections from files:
 
-```meld
+```mlld
 # Extract a section keeping its original title
 @add [guide.md # Getting Started]
 
@@ -55,7 +55,7 @@ Extract specific sections from files:
 
 Add content from variables:
 
-```meld
+```mlld
 @text greeting = "Hello, world!"
 @add @greeting
 
@@ -67,7 +67,7 @@ Add content from variables:
 
 Add content with variable interpolation:
 
-```meld
+```mlld
 @text name = "Alice"
 @text role = "Admin"
 @add [[Welcome {{name}}! Your role is: {{role}}]]
@@ -77,7 +77,7 @@ Add content with variable interpolation:
 
 Use template functions defined with @text:
 
-```meld
+```mlld
 @text greet(name) = @add [[Hello, {{name}}!]]
 @add @greet("World")
 
@@ -106,25 +106,25 @@ The implementation handles these error scenarios:
 ## Examples
 
 Include entire file:
-```meld
+```mlld
 @add [README.md]
 @add [@./docs/architecture.md]
 ```
 
 Include specific sections:
-```meld
+```mlld
 @add [docs/api.md # Authentication]
 @add "## Installation" from [README.md]
 ```
 
 Include with renamed sections:
-```meld
+```mlld
 @add [guide.md # Getting Started] as "# Quick Start Guide"
 @add "Installation" from [README.md] as "## Setup Instructions"
 ```
 
 Include from URLs:
-```meld
+```mlld
 @add [https://raw.githubusercontent.com/example/repo/main/README.md]
 ```
 

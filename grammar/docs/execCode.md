@@ -1,10 +1,10 @@
 # Exec Code Subtype
 
-The `execCode` subtype of the `@exec` directive defines reusable code snippets in specific programming languages that can be executed using the `@run` directive. It provides a way to create code templates that can be parameterized and reused throughout a Meld document.
+The `execCode` subtype of the `@exec` directive defines reusable code snippets in specific programming languages that can be executed using the `@run` directive. It provides a way to create code templates that can be parameterized and reused throughout a Mlld document.
 
 ## Syntax
 
-```meld
+```mlld
 @exec commandName = @run language [code]
 @exec commandName (param1, param2) = @run language [code using param1 and param2]
 ```
@@ -53,7 +53,7 @@ The `execCode` subtype nodes have this structure:
 
 ### Basic Code Definition
 
-```meld
+```mlld
 @exec greet = @run javascript [
   console.log("Hello, world!");
 ]
@@ -85,7 +85,7 @@ AST:
 
 ### Parameterized Code Definition
 
-```meld
+```mlld
 @exec formatJson (data, style) = @run python [
   import json
   data_obj = json.loads(data)
@@ -125,7 +125,7 @@ AST:
 
 ### Code with Variable Interpolation
 
-```meld
+```mlld
 @exec processTemplate = @run javascript [
   const template = "{{template}}";
   console.log(`Processing template: ${template}`);

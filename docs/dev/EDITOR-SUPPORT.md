@@ -1,27 +1,27 @@
 # Editor Support and Syntax Highlighting
 
-This document describes how Meld's syntax highlighting is generated and maintained across different editors.
+This document describes how Mlld's syntax highlighting is generated and maintained across different editors.
 
 ## Overview
 
-Meld uses a **single source of truth** approach for syntax highlighting. All syntax definitions are automatically generated from the Peggy grammar files, ensuring consistency across all editors and the documentation website.
+Mlld uses a **single source of truth** approach for syntax highlighting. All syntax definitions are automatically generated from the Peggy grammar files, ensuring consistency across all editors and the documentation website.
 
 ## Architecture
 
 ```
 grammar/
-  meld.peggy                    # Main grammar (source of truth)
+  mlld.peggy                    # Main grammar (source of truth)
   directives/*.peggy            # Directive-specific grammars
   
   syntax-generator/
     build-syntax.js             # Generator script
     
   generated/                    # Output directory
-    prism-meld.js              # For website
-    meld.tmLanguage.json       # For VSCode/TextMate
-    meld.vim                   # For Vim
-    markdown-meld.vim          # For Vim (Markdown support)
-    meld-markdown.injection.json # For VSCode (Markdown support)
+    prism-mlld.js              # For website
+    mlld.tmLanguage.json       # For VSCode/TextMate
+    mlld.vim                   # For Vim
+    markdown-mlld.vim          # For Vim (Markdown support)
+    mlld-markdown.injection.json # For VSCode (Markdown support)
 ```
 
 ## How It Works
@@ -54,7 +54,7 @@ The script generates syntax files for each target:
 ### 4. Automatic Distribution
 
 Generated files are automatically copied to:
-- `website/src/prism-meld.js` - Website highlighting
+- `website/src/prism-mlld.js` - Website highlighting
 - `editors/vscode/syntaxes/` - VSCode extension
 - `editors/vim/syntax/` - Vim plugin
 
@@ -90,15 +90,15 @@ The generator will automatically:
 
 ### Token Mappings
 
-| Meld Token | Prism Class | VSCode Scope | Vim Group |
+| Mlld Token | Prism Class | VSCode Scope | Vim Group |
 |------------|-------------|--------------|-----------|
-| @directive | keyword | keyword.control.directive.meld | meldDirective |
-| @variable | variable | variable.other.meld | meldVariable |
-| [[...]] | template-block | string.template.meld | meldTemplate |
-| {{...}} | template-variable | variable.template.meld | meldTemplateVar |
-| [...] | path | string.path.meld | meldPath |
-| "..." | string | string.quoted.double.meld | meldString |
-| >> | comment | comment.line.double-angle.meld | meldComment |
+| @directive | keyword | keyword.control.directive.mlld | mlldDirective |
+| @variable | variable | variable.other.mlld | mlldVariable |
+| [[...]] | template-block | string.template.mlld | mlldTemplate |
+| {{...}} | template-variable | variable.template.mlld | mlldTemplateVar |
+| [...] | path | string.path.mlld | mlldPath |
+| "..." | string | string.quoted.double.mlld | mlldString |
+| >> | comment | comment.line.double-angle.mlld | mlldComment |
 
 ### Color Themes
 
@@ -155,14 +155,14 @@ EOF
 ### File Locations
 
 Generated syntax files:
-- `grammar/generated/prism-meld.js`
-- `grammar/generated/meld.tmLanguage.json`
-- `grammar/generated/meld.vim`
+- `grammar/generated/prism-mlld.js`
+- `grammar/generated/mlld.tmLanguage.json`
+- `grammar/generated/mlld.vim`
 
 Editor integration:
 - VSCode: `editors/vscode/syntaxes/`
 - Vim: `editors/vim/syntax/`
-- Website: `website/src/prism-meld.js`
+- Website: `website/src/prism-mlld.js`
 
 ## Future Improvements
 

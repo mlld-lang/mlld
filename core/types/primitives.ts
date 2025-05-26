@@ -1,5 +1,5 @@
 /**
- * Primitive node types for the Meld AST
+ * Primitive node types for the Mlld AST
  * These are the fundamental building blocks used by directive types
  */
 
@@ -16,21 +16,21 @@ export interface SourceLocation {
 }
 
 // Base interface for all nodes
-export interface BaseMeldNode {
+export interface BaseMlldNode {
   type: string;
   nodeId: string;
   location?: SourceLocation;
 }
 
 // Text content node - represents plain text
-export interface TextNode extends BaseMeldNode {
+export interface TextNode extends BaseMlldNode {
   type: 'Text';
   content: string;
   formattingMetadata?: FormattingMetadata;
 }
 
 // Variable reference node
-export interface VariableReferenceNode extends BaseMeldNode {
+export interface VariableReferenceNode extends BaseMlldNode {
   type: 'VariableReference';
   identifier: string;
   valueType: string;
@@ -39,38 +39,38 @@ export interface VariableReferenceNode extends BaseMeldNode {
 }
 
 // Literal value node
-export interface LiteralNode extends BaseMeldNode {
+export interface LiteralNode extends BaseMlldNode {
   type: 'Literal';
   value: any;
   valueType?: string;
 }
 
 // Separator nodes
-export interface DotSeparatorNode extends BaseMeldNode {
+export interface DotSeparatorNode extends BaseMlldNode {
   type: 'DotSeparator';
   value: '.';
 }
 
-export interface PathSeparatorNode extends BaseMeldNode {
+export interface PathSeparatorNode extends BaseMlldNode {
   type: 'PathSeparator';
   value: '/';
 }
 
 // Code fence node for code blocks
-export interface CodeFenceNode extends BaseMeldNode {
+export interface CodeFenceNode extends BaseMlldNode {
   type: 'CodeFence';
   language?: string;
   content: string;
 }
 
 // Comment node
-export interface CommentNode extends BaseMeldNode {
+export interface CommentNode extends BaseMlldNode {
   type: 'Comment';
   content: string;
 }
 
 // Error node for parse errors
-export interface ErrorNode extends BaseMeldNode {
+export interface ErrorNode extends BaseMlldNode {
   type: 'Error';
   error: string;
   debugDetails?: any;
@@ -109,12 +109,12 @@ export type DirectiveSubtype =
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 
 // Directive base node
-export interface DirectiveNode extends BaseMeldNode {
+export interface DirectiveNode extends BaseMlldNode {
   type: 'Directive';
   kind: DirectiveKind;
   subtype: DirectiveSubtype;
   source?: DirectiveSource;
-  values: { [key: string]: BaseMeldNode[] };
+  values: { [key: string]: BaseMlldNode[] };
   raw: { [key: string]: string };
   meta: { [key: string]: unknown };
 }

@@ -1,6 +1,6 @@
 # Unified AST Explorer and E2E Testing Framework
 
-This document outlines a comprehensive approach to unify Abstract Syntax Tree (AST) exploration and End-to-End (E2E) testing for the Meld grammar system. By adopting a convention-over-configuration approach, we can simplify the development workflow while ensuring complete test coverage and type accuracy.
+This document outlines a comprehensive approach to unify Abstract Syntax Tree (AST) exploration and End-to-End (E2E) testing for the Mlld grammar system. By adopting a convention-over-configuration approach, we can simplify the development workflow while ensuring complete test coverage and type accuracy.
 
 ## Core Concept
 
@@ -9,10 +9,10 @@ The unified framework leverages a single source of truth for test cases, using c
 ## Directory Structure
 
 ```
-meld/
+mlld/
 ├── grammar/
 │   ├── cases/                 # Source test cases using conventions
-│   │   ├── valid/             # Valid Meld documents
+│   │   ├── valid/             # Valid Mlld documents
 │   │   │   ├── text-variables/
 │   │   │   │   ├── example.md     # Input document with directives
 │   │   │   │   └── expected.md    # Expected output
@@ -54,7 +54,7 @@ meld/
 Test cases follow a simple convention:
 
 - **Directory Name**: Serves as the test case identifier (e.g., `text-variables`)
-- **`example.md`**: Input document containing Meld directives
+- **`example.md`**: Input document containing Mlld directives
 - **`expected.md`**: Expected output after processing
 - **`error.md`** (for invalid cases): Expected error information
 
@@ -231,13 +231,13 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import glob from 'glob';
-import { processMeldDocument } from '../../src/processor';
+import { processMlldDocument } from '../../src/processor';
 
 /**
  * Run E2E tests using generated fixtures
  */
 export function runE2ETests() {
-  describe('Meld E2E Processing', () => {
+  describe('Mlld E2E Processing', () => {
     // Valid test cases
     describe('Valid documents', () => {
       const fixtures = glob.sync('grammar/fixtures/*.json')
@@ -250,7 +250,7 @@ export function runE2ETests() {
       for (const fixture of fixtures) {
         it(`correctly processes ${fixture.name}`, async () => {
           // Process document
-          const result = await processMeldDocument(fixture.input);
+          const result = await processMlldDocument(fixture.input);
           
           // Compare with expected output
           expect(result.trim()).toEqual(fixture.expected.trim());
@@ -270,7 +270,7 @@ export function runE2ETests() {
       for (const fixture of fixtures) {
         it(`correctly handles errors in ${fixture.name}`, async () => {
           await expect(async () => {
-            await processMeldDocument(fixture.input);
+            await processMlldDocument(fixture.input);
           }).rejects.toThrow();
           
           // Could add more specific error assertions based on fixture.error

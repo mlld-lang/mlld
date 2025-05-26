@@ -6,8 +6,8 @@ export class ImmutableCache {
   private cacheDir: string;
   
   constructor(projectPath: string) {
-    // Store cache in .meld/cache directory
-    this.cacheDir = path.join(projectPath, '.meld', 'cache', 'imports');
+    // Store cache in .mlld/cache directory
+    this.cacheDir = path.join(projectPath, '.mlld', 'cache', 'imports');
   }
 
   /**

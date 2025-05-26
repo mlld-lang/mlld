@@ -1,6 +1,6 @@
 >> This is a comment
 
-# Test Meld Syntax Highlighting
+# Test Mlld Syntax Highlighting
 
 @text greeting = "Hello, World!"
 @text name = [[Welcome {{user}}!]]

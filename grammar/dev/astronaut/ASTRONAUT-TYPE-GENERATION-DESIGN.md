@@ -380,15 +380,15 @@ async function watchMode(config: WatchConfig): Promise<void> {
 function activateVSCodeExtension(context: vscode.ExtensionContext) {
   // Register commands
   context.subscriptions.push(
-    vscode.commands.registerCommand('meldGrammar.generateTypes', () => {
+    vscode.commands.registerCommand('mlldGrammar.generateTypes', () => {
       return generateTypes();
     })
   );
   
   // Add language server capabilities
   const client = new LanguageClient(
-    'meldGrammar',
-    'Meld Grammar Language Server',
+    'mlldGrammar',
+    'Mlld Grammar Language Server',
     serverOptions,
     clientOptions
   );

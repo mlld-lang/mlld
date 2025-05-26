@@ -1,19 +1,19 @@
-# Meld API Reference
+# Mlld API Reference
 
 ## Overview
 
-Meld provides a JavaScript/TypeScript API for processing Meld documents programmatically. This API allows you to:
+Mlld provides a JavaScript/TypeScript API for processing Mlld documents programmatically. This API allows you to:
 
-1. Parse Meld content into an AST
-2. Interpret Meld AST with custom state
-3. Process Meld files with various output formats
+1. Parse Mlld content into an AST
+2. Interpret Mlld AST with custom state
+3. Process Mlld files with various output formats
 4. Customize the processing pipeline with your own services
 
 ## Core Functions
 
 ### `main(filePath, options)`
 
-The primary entry point for processing Meld files.
+The primary entry point for processing Mlld files.
 
 ```typescript
 async function main(
@@ -23,7 +23,7 @@ async function main(
 ```
 
 **Parameters:**
-- `filePath` - Path to the Meld file to process
+- `filePath` - Path to the Mlld file to process
 - `options` - Optional processing options:
   - `fs` - Custom file system implementation
   - `services` - Custom service implementations
@@ -36,7 +36,7 @@ async function main(
 
 **Example:**
 ```typescript
-import { main } from 'meld';
+import { main } from 'mlld';
 
 // Basic usage
 const output = await main('path/to/file.mld');
@@ -49,15 +49,15 @@ const output = await main('path/to/file.mld', {
 ```
 
 **Throws:**
-- `MeldFileNotFoundError` - If the file doesn't exist
-- `MeldParseError` - If there's a syntax error in the Meld document
-- `MeldDirectiveError` - If there's an error in a directive
-- `MeldInterpreterError` - If there's an error during interpretation
+- `MlldFileNotFoundError` - If the file doesn't exist
+- `MlldParseError` - If there's a syntax error in the Mlld document
+- `MlldDirectiveError` - If there's an error in a directive
+- `MlldInterpreterError` - If there's an error during interpretation
 - Other errors depending on the specific operation
 
 ## Service Types
 
-Meld uses a service-based architecture that allows for customization and extension. The core services include:
+Mlld uses a service-based architecture that allows for customization and extension. The core services include:
 
 ### `FileSystemService`
 
@@ -69,7 +69,7 @@ Manages path resolution, validation, and special path variables.
 
 ### `ParserService`
 
-Parses Meld content into an abstract syntax tree (AST).
+Parses Mlld content into an abstract syntax tree (AST).
 
 ### `InterpreterService`
 
@@ -85,14 +85,14 @@ Manages the interpreter state, including variables and transformation.
 
 ### `OutputService`
 
-Converts processed Meld content to different output formats.
+Converts processed Mlld content to different output formats.
 
 ## Customization
 
-You can customize the Meld processing pipeline by providing your own service implementations:
+You can customize the Mlld processing pipeline by providing your own service implementations:
 
 ```typescript
-import { main, FileSystemService, PathService } from 'meld';
+import { main, FileSystemService, PathService } from 'mlld';
 
 // Create custom file system
 class MyFileSystem extends FileSystemService {
@@ -109,10 +109,10 @@ const output = await main('path/to/file.mld', {
 
 ## Debugging and Visualization
 
-Meld provides built-in debugging facilities:
+Mlld provides built-in debugging facilities:
 
 ```typescript
-import { main } from 'meld';
+import { main } from 'mlld';
 
 // Enable debug mode
 const output = await main('path/to/file.mld', {
@@ -140,17 +140,17 @@ const debugData = await context.endDebugSession(debugSessionId);
 
 ## Error Handling
 
-Meld provides specialized error classes for robust error handling:
+Mlld provides specialized error classes for robust error handling:
 
 ```typescript
-import { main, MeldParseError, MeldDirectiveError } from 'meld';
+import { main, MlldParseError, MlldDirectiveError } from 'mlld';
 
 try {
   const output = await main('path/to/file.mld');
 } catch (error) {
-  if (error instanceof MeldParseError) {
+  if (error instanceof MlldParseError) {
     console.error('Parse error:', error.message);
-  } else if (error instanceof MeldDirectiveError) {
+  } else if (error instanceof MlldDirectiveError) {
     console.error('Directive error:', error.message);
   } else {
     console.error('Other error:', error);
@@ -188,10 +188,10 @@ const xml = await main('path/to/file.mld', {
 
 ## Test Utilities
 
-When using Meld in tests, the `TestContext` class provides utilities:
+When using Mlld in tests, the `TestContext` class provides utilities:
 
 ```typescript
-import { TestContext } from 'meld/tests';
+import { TestContext } from 'mlld/tests';
 
 // Create test context
 const context = new TestContext();

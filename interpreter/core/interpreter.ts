@@ -1,4 +1,4 @@
-import type { MeldNode, DirectiveNode, TextNode, MeldDocument, MeldVariable } from '@core/types';
+import type { MlldNode, DirectiveNode, TextNode, MlldDocument, MlldVariable } from '@core/types';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
@@ -16,7 +16,7 @@ export interface EvalResult {
  * Main recursive evaluation function.
  * This is the heart of the interpreter - it walks the AST and evaluates each node.
  */
-export async function evaluate(node: MeldNode | MeldNode[], env: Environment): Promise<EvalResult> {
+export async function evaluate(node: MlldNode | MlldNode[], env: Environment): Promise<EvalResult> {
   // Handle array of nodes (from parser)
   if (Array.isArray(node)) {
     let lastValue: any = undefined;
@@ -35,7 +35,7 @@ export async function evaluate(node: MeldNode | MeldNode[], env: Environment): P
   // Handle single node
   switch (node.type) {
     case 'Document':
-      return evaluateDocument(node as MeldDocument, env);
+      return evaluateDocument(node as MlldDocument, env);
       
     case 'Directive':
       return evaluateDirective(node as DirectiveNode, env);
@@ -98,7 +98,7 @@ export async function evaluate(node: MeldNode | MeldNode[], env: Environment): P
 /**
  * Evaluate a document node (contains multiple child nodes)
  */
-async function evaluateDocument(doc: MeldDocument, env: Environment): Promise<EvalResult> {
+async function evaluateDocument(doc: MlldDocument, env: Environment): Promise<EvalResult> {
   let lastValue: any = undefined;
   
   // Evaluate each child node in sequence
@@ -127,7 +127,7 @@ async function evaluateText(node: TextNode, env: Environment): Promise<EvalResul
 /**
  * Resolve variable value with lazy evaluation support for complex data
  */
-export async function resolveVariableValue(variable: MeldVariable, env: Environment): Promise<any> {
+export async function resolveVariableValue(variable: MlldVariable, env: Environment): Promise<any> {
   // Check if this is a complex data variable that needs evaluation
   if (variable.type === 'data') {
     // For data variables, check if the value needs evaluation

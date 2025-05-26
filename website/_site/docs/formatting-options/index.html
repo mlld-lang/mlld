@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Meld Output Formatting Guide - mlld</title>
+  <title>Mlld Output Formatting Guide - mlld</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@
       <nav>
         <ul>
           <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
-          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+          <li><a href="https://github.com/mlldorg/mlld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -92,7 +92,7 @@
           
         
           
-            <li><a href="/docs/formatting-options/" aria-current=&quot;page&quot;>Meld Output Formatting Guide</a></li>
+            <li><a href="/docs/formatting-options/" aria-current=&quot;page&quot;>Mlld Output Formatting Guide</a></li>
           
         
           
@@ -213,12 +213,12 @@
   
   <div class="docs-content">
     <hr>
-<h2 id="layout%3A-docs.njktitle%3A-%22meld-output-formatting-guide%22" tabindex="-1">layout: docs.njk<br>
-title: &quot;Meld Output Formatting Guide&quot;</h2>
-<h1 id="meld-output-formatting-guide" tabindex="-1">Meld Output Formatting Guide</h1>
-<p>This guide explains how output formatting works in Meld and how to control it using the available options.</p>
+<h2 id="layout%3A-docs.njktitle%3A-%22mlld-output-formatting-guide%22" tabindex="-1">layout: docs.njk<br>
+title: &quot;Mlld Output Formatting Guide&quot;</h2>
+<h1 id="mlld-output-formatting-guide" tabindex="-1">Mlld Output Formatting Guide</h1>
+<p>This guide explains how output formatting works in Mlld and how to control it using the available options.</p>
 <h2 id="default-output-behavior" tabindex="-1">Default Output Behavior</h2>
-<p>By default, Meld preserves the exact formatting of your document, including:</p>
+<p>By default, Mlld preserves the exact formatting of your document, including:</p>
 <ul>
 <li>Whitespace and indentation</li>
 <li>Newlines between paragraphs</li>
@@ -226,7 +226,7 @@ title: &quot;Meld Output Formatting Guide&quot;</h2>
 <li>Spacing around elements</li>
 </ul>
 <p>When directives are processed, they are replaced with their output while maintaining the surrounding document structure.</p>
-<pre class="language-meld"><code class="language-meld">This is a paragraph.
+<pre class="language-mlld"><code class="language-mlld">This is a paragraph.
 
 <span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> <span class="token string">"Hello"</span>
 <span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"World"</span>
@@ -246,20 +246,20 @@ Another paragraph.
 <p>If you want more consistent markdown formatting, you can use the <code>--pretty</code> flag in the CLI or the <code>pretty</code> option in the API to apply Prettier formatting to the output.</p>
 <h3 id="cli-usage" tabindex="-1">CLI Usage</h3>
 <pre class="language-bash"><code class="language-bash"><span class="token comment"># Standard output (preserves exact formatting)</span>
-meld input.meld
+mlld input.mlld
 
 <span class="token comment"># Pretty formatting with Prettier</span>
-meld <span class="token parameter variable">--pretty</span> input.meld
+mlld <span class="token parameter variable">--pretty</span> input.mlld
 </code></pre>
 <h3 id="api-usage" tabindex="-1">API Usage</h3>
 <pre class="language-typescript"><code class="language-typescript"><span class="token comment">// Standard output (preserves exact formatting)</span>
-<span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMeld</span><span class="token punctuation">(</span>content<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMlld</span><span class="token punctuation">(</span>content<span class="token punctuation">)</span><span class="token punctuation">;</span>
 
 <span class="token comment">// Pretty formatting with Prettier</span>
-<span class="token keyword">const</span> prettyResult <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMeld</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> <span class="token punctuation">{</span> pretty<span class="token operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> prettyResult <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMlld</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> <span class="token punctuation">{</span> pretty<span class="token operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 </code></pre>
 <h2 id="how-prettier-formatting-works" tabindex="-1">How Prettier Formatting Works</h2>
-<p>When you enable the <code>pretty</code> option, Meld applies Prettier formatting to the output after all directives have been processed. This provides:</p>
+<p>When you enable the <code>pretty</code> option, Mlld applies Prettier formatting to the output after all directives have been processed. This provides:</p>
 <ul>
 <li>Consistent spacing</li>
 <li>Standardized indentation</li>
@@ -269,7 +269,7 @@ meld <span class="token parameter variable">--pretty</span> input.meld
 <li>And other markdown formatting improvements</li>
 </ul>
 <h3 id="prettier-configuration" tabindex="-1">Prettier Configuration</h3>
-<p>Meld uses a standard Prettier configuration for markdown:</p>
+<p>Mlld uses a standard Prettier configuration for markdown:</p>
 <ul>
 <li><code>proseWrap: 'preserve'</code> - Preserves existing line wraps</li>
 <li><code>printWidth: 80</code> - Sets the line width to 80 characters</li>
@@ -281,24 +281,24 @@ meld <span class="token parameter variable">--pretty</span> input.meld
 <li><code>bracketSpacing: true</code> - Adds spaces between brackets</li>
 </ul>
 <h2 id="output-format-options" tabindex="-1">Output Format Options</h2>
-<p>Meld supports multiple output formats:</p>
+<p>Mlld supports multiple output formats:</p>
 <pre class="language-bash"><code class="language-bash"><span class="token comment"># Markdown output (default)</span>
-meld <span class="token parameter variable">-f</span> markdown input.meld
+mlld <span class="token parameter variable">-f</span> markdown input.mlld
 
 <span class="token comment"># XML output</span>
-meld <span class="token parameter variable">-f</span> xml input.meld
+mlld <span class="token parameter variable">-f</span> xml input.mlld
 </code></pre>
 <p>In the API:</p>
 <pre class="language-typescript"><code class="language-typescript"><span class="token comment">// Markdown output</span>
-<span class="token keyword">const</span> markdownResult <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMeld</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> <span class="token punctuation">{</span> format<span class="token operator">:</span> <span class="token string">'markdown'</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> markdownResult <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMlld</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> <span class="token punctuation">{</span> format<span class="token operator">:</span> <span class="token string">'markdown'</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
 <span class="token comment">// XML output</span>
-<span class="token keyword">const</span> xmlResult <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMeld</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> <span class="token punctuation">{</span> format<span class="token operator">:</span> <span class="token string">'xml'</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> xmlResult <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMlld</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> <span class="token punctuation">{</span> format<span class="token operator">:</span> <span class="token string">'xml'</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 </code></pre>
 <h2 id="how-newlines-are-handled" tabindex="-1">How Newlines Are Handled</h2>
 <h3 id="within-text-content" tabindex="-1">Within Text Content</h3>
-<p>Meld preserves newlines exactly as they appear in the source content:</p>
-<pre class="language-meld"><code class="language-meld">This is a paragraph
+<p>Mlld preserves newlines exactly as they appear in the source content:</p>
+<pre class="language-mlld"><code class="language-mlld">This is a paragraph
 with a line break.
 
 This is another paragraph.
@@ -311,7 +311,7 @@ This is another paragraph.
 </code></pre>
 <h3 id="around-directives" tabindex="-1">Around Directives</h3>
 <p>When directives are processed, their output replaces the directive while maintaining proper context:</p>
-<pre class="language-meld"><code class="language-meld">Before directive.
+<pre class="language-mlld"><code class="language-mlld">Before directive.
 <span class="token directive keyword">@run</span><span class="token path"><span class="token punctuation">[</span>echo "Command output"<span class="token punctuation">]</span></span>
 After directive.
 </code></pre>
@@ -322,7 +322,7 @@ After directive.
 </code></pre>
 <h3 id="with-variables" tabindex="-1">With Variables</h3>
 <p>Variables maintain their format when substituted:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> multiline <span class="token operator">=</span> <span class="token string">"Line 1
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> multiline <span class="token operator">=</span> <span class="token string">"Line 1
 Line 2
 Line 3"</span>
 
@@ -355,7 +355,7 @@ End of text.
 <p><strong>For JSON or code</strong>, use code fences to ensure proper formatting is preserved:</p>
 </li>
 </ol>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> <span class="token punctuation">{</span> <span class="token string">"key"</span>: <span class="token string">"value"</span><span class="token punctuation">,</span> <span class="token string">"nested"</span>: <span class="token punctuation">{</span> <span class="token string">"prop"</span>: <span class="token number">1</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> <span class="token punctuation">{</span> <span class="token string">"key"</span>: <span class="token string">"value"</span><span class="token punctuation">,</span> <span class="token string">"nested"</span>: <span class="token punctuation">{</span> <span class="token string">"prop"</span>: <span class="token number">1</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
 
 My configuration is:
 \`\`\`json
@@ -423,7 +423,7 @@ My configuration is:
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlldorg/mlld">GitHub</a></p>
     </div>
   </footer>
 </body>

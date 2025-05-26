@@ -1,6 +1,6 @@
 # Strategic Type System Design Using the AST Explorer
 
-This document explains how to use the AST Explorer we've created to implement a clean-slate type system that perfectly aligns with the AST produced by the Meld grammar.
+This document explains how to use the AST Explorer we've created to implement a clean-slate type system that perfectly aligns with the AST produced by the Mlld grammar.
 
 ## Design Principles
 
@@ -18,7 +18,7 @@ First, create AST snapshots for all directive variants:
 
 ```bash
 # Navigate to the grammar directory
-cd /Users/adam/dev/meld/grammar
+cd /Users/adam/dev/mlld/grammar
 
 # Initialize an examples file if you don't have one
 ./explorer/src/command.ts init explorer/examples/all-directives.json

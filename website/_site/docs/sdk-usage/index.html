@@ -23,7 +23,7 @@
       <nav>
         <ul>
           <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
-          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+          <li><a href="https://github.com/mlldorg/mlld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -92,7 +92,7 @@
           
         
           
-            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+            <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
           
         
           
@@ -213,45 +213,45 @@
   
   <div class="docs-content">
     <h1 id="sdk-usage" tabindex="-1">SDK Usage</h1>
-<p>The Meld SDK allows you to integrate Meld processing into your JavaScript or TypeScript applications.</p>
+<p>The Mlld SDK allows you to integrate Mlld processing into your JavaScript or TypeScript applications.</p>
 <h2 id="installation" tabindex="-1">Installation</h2>
-<pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> <span class="token function">install</span> meld
+<pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> <span class="token function">install</span> mlld
 </code></pre>
 <h2 id="core-functions" tabindex="-1">Core Functions</h2>
-<p>The SDK provides three main functions for working with Meld content:</p>
-<h3 id="parse-meld-content" tabindex="-1">Parse Meld Content</h3>
-<p>Parse raw Meld content into an Abstract Syntax Tree (AST):</p>
-<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> parseMeld <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'meld'</span><span class="token punctuation">;</span>
+<p>The SDK provides three main functions for working with Mlld content:</p>
+<h3 id="parse-mlld-content" tabindex="-1">Parse Mlld Content</h3>
+<p>Parse raw Mlld content into an Abstract Syntax Tree (AST):</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> parseMlld <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
 
 <span class="token keyword">const</span> content <span class="token operator">=</span> <span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">
 @text name = "World"
 Hello, {{name}}!
 </span><span class="token template-punctuation string">`</span></span><span class="token punctuation">;</span>
 
-<span class="token keyword">const</span> nodes <span class="token operator">=</span> <span class="token function">parseMeld</span><span class="token punctuation">(</span>content<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> nodes <span class="token operator">=</span> <span class="token function">parseMlld</span><span class="token punctuation">(</span>content<span class="token punctuation">)</span><span class="token punctuation">;</span>
 </code></pre>
 <p>The parsed AST contains nodes representing directives and text content, which can be further processed or manipulated.</p>
-<h3 id="interpret-meld-ast" tabindex="-1">Interpret Meld AST</h3>
+<h3 id="interpret-mlld-ast" tabindex="-1">Interpret Mlld AST</h3>
 <p>Interpret parsed AST nodes with optional initial state:</p>
-<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> interpretMeld<span class="token punctuation">,</span> InterpreterState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'meld'</span><span class="token punctuation">;</span>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> interpretMlld<span class="token punctuation">,</span> InterpreterState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
 
 <span class="token comment">// Create initial state (optional)</span>
 <span class="token keyword">const</span> initialState <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">InterpreterState</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 initialState<span class="token punctuation">.</span><span class="token function">setText</span><span class="token punctuation">(</span><span class="token string">'greeting'</span><span class="token punctuation">,</span> <span class="token string">'Hi'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
 <span class="token comment">// Interpret the nodes</span>
-<span class="token keyword">const</span> finalState <span class="token operator">=</span> <span class="token function">interpretMeld</span><span class="token punctuation">(</span>nodes<span class="token punctuation">,</span> initialState<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> finalState <span class="token operator">=</span> <span class="token function">interpretMlld</span><span class="token punctuation">(</span>nodes<span class="token punctuation">,</span> initialState<span class="token punctuation">)</span><span class="token punctuation">;</span>
 </code></pre>
 <p>Interpretation executes directives, resolves variables, and produces a final state containing all defined variables and the processed content.</p>
-<h3 id="run-meld-files" tabindex="-1">Run Meld Files</h3>
-<p>Convenience function to read and interpret Meld files in one step:</p>
-<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> runMeld <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'meld'</span><span class="token punctuation">;</span>
+<h3 id="run-mlld-files" tabindex="-1">Run Mlld Files</h3>
+<p>Convenience function to read and interpret Mlld files in one step:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> runMlld <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
 
 <span class="token comment">// Run with default options (XML format)</span>
-<span class="token keyword">const</span> <span class="token punctuation">{</span> state<span class="token punctuation">,</span> output <span class="token punctuation">}</span> <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMeld</span><span class="token punctuation">(</span><span class="token string">'path/to/file.mld'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> <span class="token punctuation">{</span> state<span class="token punctuation">,</span> output <span class="token punctuation">}</span> <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMlld</span><span class="token punctuation">(</span><span class="token string">'path/to/file.mld'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
 <span class="token comment">// Run with custom options</span>
-<span class="token keyword">const</span> <span class="token punctuation">{</span> state<span class="token punctuation">,</span> output <span class="token punctuation">}</span> <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMeld</span><span class="token punctuation">(</span><span class="token string">'path/to/file.mld'</span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
+<span class="token keyword">const</span> <span class="token punctuation">{</span> state<span class="token punctuation">,</span> output <span class="token punctuation">}</span> <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMlld</span><span class="token punctuation">(</span><span class="token string">'path/to/file.mld'</span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
   format<span class="token operator">:</span> <span class="token string">'md'</span><span class="token punctuation">,</span>  <span class="token comment">// or 'xml'</span>
   initialState<span class="token operator">:</span> <span class="token keyword">new</span> <span class="token class-name">InterpreterState</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
 <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
@@ -264,7 +264,7 @@ initialState<span class="token punctuation">.</span><span class="token function"
 </code></pre>
 <h2 id="working-with-state" tabindex="-1">Working with State</h2>
 <p>The <code>InterpreterState</code> class manages variables, commands, and content during interpretation:</p>
-<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> InterpreterState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'meld'</span><span class="token punctuation">;</span>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> InterpreterState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
 
 <span class="token comment">// Create new state</span>
 <span class="token keyword">const</span> state <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">InterpreterState</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
@@ -287,26 +287,26 @@ state<span class="token punctuation">.</span><span class="token function">setPat
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The SDK provides specialized error types for robust error handling:</p>
 <pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> 
-  parseMeld<span class="token punctuation">,</span> 
-  MeldParseError<span class="token punctuation">,</span> 
-  MeldInterpreterError<span class="token punctuation">,</span>
-  MeldFileNotFoundError<span class="token punctuation">,</span>
-  MeldError
-<span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'meld'</span><span class="token punctuation">;</span>
+  parseMlld<span class="token punctuation">,</span> 
+  MlldParseError<span class="token punctuation">,</span> 
+  MlldInterpreterError<span class="token punctuation">,</span>
+  MlldFileNotFoundError<span class="token punctuation">,</span>
+  MlldError
+<span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
 
 <span class="token keyword">try</span> <span class="token punctuation">{</span>
-  <span class="token keyword">const</span> nodes <span class="token operator">=</span> <span class="token function">parseMeld</span><span class="token punctuation">(</span>invalidContent<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> nodes <span class="token operator">=</span> <span class="token function">parseMlld</span><span class="token punctuation">(</span>invalidContent<span class="token punctuation">)</span><span class="token punctuation">;</span>
 <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span>error<span class="token punctuation">)</span> <span class="token punctuation">{</span>
-  <span class="token keyword">if</span> <span class="token punctuation">(</span>error <span class="token keyword">instanceof</span> <span class="token class-name">MeldParseError</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span>error <span class="token keyword">instanceof</span> <span class="token class-name">MlldParseError</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
     <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'Parse error:'</span><span class="token punctuation">,</span> error<span class="token punctuation">.</span>message<span class="token punctuation">)</span><span class="token punctuation">;</span>
     <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'Line:'</span><span class="token punctuation">,</span> error<span class="token punctuation">.</span>line<span class="token punctuation">)</span><span class="token punctuation">;</span>
     <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'Column:'</span><span class="token punctuation">,</span> error<span class="token punctuation">.</span>column<span class="token punctuation">)</span><span class="token punctuation">;</span>
-  <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>error <span class="token keyword">instanceof</span> <span class="token class-name">MeldInterpreterError</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>error <span class="token keyword">instanceof</span> <span class="token class-name">MlldInterpreterError</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
     <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'Interpreter error:'</span><span class="token punctuation">,</span> error<span class="token punctuation">.</span>message<span class="token punctuation">)</span><span class="token punctuation">;</span>
-  <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>error <span class="token keyword">instanceof</span> <span class="token class-name">MeldFileNotFoundError</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>error <span class="token keyword">instanceof</span> <span class="token class-name">MlldFileNotFoundError</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
     <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'File not found:'</span><span class="token punctuation">,</span> error<span class="token punctuation">.</span>message<span class="token punctuation">)</span><span class="token punctuation">;</span>
-  <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>error <span class="token keyword">instanceof</span> <span class="token class-name">MeldError</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
-    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'General Meld error:'</span><span class="token punctuation">,</span> error<span class="token punctuation">.</span>message<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>error <span class="token keyword">instanceof</span> <span class="token class-name">MlldError</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'General Mlld error:'</span><span class="token punctuation">,</span> error<span class="token punctuation">.</span>message<span class="token punctuation">)</span><span class="token punctuation">;</span>
   <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
     <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'Unknown error:'</span><span class="token punctuation">,</span> error<span class="token punctuation">)</span><span class="token punctuation">;</span>
   <span class="token punctuation">}</span>
@@ -315,21 +315,21 @@ state<span class="token punctuation">.</span><span class="token function">setPat
 <h2 id="advanced-usage" tabindex="-1">Advanced Usage</h2>
 <h3 id="custom-format-handlers" tabindex="-1">Custom Format Handlers</h3>
 <p>You can register custom format handlers for variable formatting:</p>
-<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> registerFormatHandler <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'meld'</span><span class="token punctuation">;</span>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> registerFormatHandler <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
 
 <span class="token comment">// Register a custom format handler</span>
 <span class="token function">registerFormatHandler</span><span class="token punctuation">(</span><span class="token string">'uppercase'</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>value<span class="token punctuation">)</span> <span class="token operator">=></span> <span class="token punctuation">{</span>
   <span class="token keyword">return</span> <span class="token function">String</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toUpperCase</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
-<span class="token comment">// Now you can use it in Meld code</span>
+<span class="token comment">// Now you can use it in Mlld code</span>
 <span class="token comment">// @text name = "alice"</span>
 <span class="token comment">// @text greeting = `Hello, {{name>>(uppercase)}}!`</span>
 <span class="token comment">// Result: "Hello, ALICE!"</span>
 </code></pre>
 <h3 id="file-system-customization" tabindex="-1">File System Customization</h3>
 <p>You can provide custom file system handlers for testing or special environments:</p>
-<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> runMeld<span class="token punctuation">,</span> createMemoryFileSystem <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'meld'</span><span class="token punctuation">;</span>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> runMlld<span class="token punctuation">,</span> createMemoryFileSystem <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
 
 <span class="token comment">// Create an in-memory file system for testing</span>
 <span class="token keyword">const</span> memfs <span class="token operator">=</span> <span class="token function">createMemoryFileSystem</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
@@ -338,21 +338,21 @@ state<span class="token punctuation">.</span><span class="token function">setPat
 <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
 <span class="token comment">// Use the custom file system</span>
-<span class="token keyword">const</span> <span class="token punctuation">{</span> state<span class="token punctuation">,</span> output <span class="token punctuation">}</span> <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMeld</span><span class="token punctuation">(</span><span class="token string">'path/to/file.mld'</span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
+<span class="token keyword">const</span> <span class="token punctuation">{</span> state<span class="token punctuation">,</span> output <span class="token punctuation">}</span> <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMlld</span><span class="token punctuation">(</span><span class="token string">'path/to/file.mld'</span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
   fileSystem<span class="token operator">:</span> memfs
 <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 </code></pre>
 <h2 id="integration-example" tabindex="-1">Integration Example</h2>
-<p>Here's a complete example of integrating Meld into an application:</p>
-<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> parseMeld<span class="token punctuation">,</span> interpretMeld<span class="token punctuation">,</span> InterpreterState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'meld'</span><span class="token punctuation">;</span>
+<p>Here's a complete example of integrating Mlld into an application:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> parseMlld<span class="token punctuation">,</span> interpretMlld<span class="token punctuation">,</span> InterpreterState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
 <span class="token keyword">import</span> <span class="token operator">*</span> <span class="token keyword">as</span> fs <span class="token keyword">from</span> <span class="token string">'fs'</span><span class="token punctuation">;</span>
 
-<span class="token comment">// Read a Meld file</span>
+<span class="token comment">// Read a Mlld file</span>
 <span class="token keyword">const</span> content <span class="token operator">=</span> fs<span class="token punctuation">.</span><span class="token function">readFileSync</span><span class="token punctuation">(</span><span class="token string">'template.mld'</span><span class="token punctuation">,</span> <span class="token string">'utf-8'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
 <span class="token keyword">try</span> <span class="token punctuation">{</span>
   <span class="token comment">// Parse the content</span>
-  <span class="token keyword">const</span> nodes <span class="token operator">=</span> <span class="token function">parseMeld</span><span class="token punctuation">(</span>content<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> nodes <span class="token operator">=</span> <span class="token function">parseMlld</span><span class="token punctuation">(</span>content<span class="token punctuation">)</span><span class="token punctuation">;</span>
   
   <span class="token comment">// Create initial state with user data</span>
   <span class="token keyword">const</span> state <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">InterpreterState</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
@@ -364,7 +364,7 @@ state<span class="token punctuation">.</span><span class="token function">setPat
   <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
   
   <span class="token comment">// Interpret the nodes</span>
-  <span class="token keyword">const</span> finalState <span class="token operator">=</span> <span class="token function">interpretMeld</span><span class="token punctuation">(</span>nodes<span class="token punctuation">,</span> state<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> finalState <span class="token operator">=</span> <span class="token function">interpretMlld</span><span class="token punctuation">(</span>nodes<span class="token punctuation">,</span> state<span class="token punctuation">)</span><span class="token punctuation">;</span>
   
   <span class="token comment">// Get the processed content</span>
   <span class="token keyword">const</span> result <span class="token operator">=</span> finalState<span class="token punctuation">.</span><span class="token function">getContent</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
@@ -374,7 +374,7 @@ state<span class="token punctuation">.</span><span class="token function">setPat
   <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token string">'Processing complete!'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
   
 <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span>error<span class="token punctuation">)</span> <span class="token punctuation">{</span>
-  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'Error processing Meld file:'</span><span class="token punctuation">,</span> error<span class="token punctuation">.</span>message<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'Error processing Mlld file:'</span><span class="token punctuation">,</span> error<span class="token punctuation">.</span>message<span class="token punctuation">)</span><span class="token punctuation">;</span>
 <span class="token punctuation">}</span>
 </code></pre>
 
@@ -438,7 +438,7 @@ state<span class="token punctuation">.</span><span class="token function">setPat
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlldorg/mlld">GitHub</a></p>
     </div>
   </footer>
 </body>

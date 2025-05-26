@@ -288,7 +288,7 @@ export async function resolveVariable(
 **File**: `/core/errors/DataEvaluationError.ts` (new file)
 
 ```typescript
-export class DataEvaluationError extends MeldError {
+export class DataEvaluationError extends MlldError {
   constructor(
     public dataPath: string,
     public originalError: Error

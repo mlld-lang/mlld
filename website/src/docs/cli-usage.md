@@ -5,33 +5,33 @@ title: "CLI Usage"
 
 # CLI Usage
 
-The Meld CLI provides a simple way to process Meld files from the command line.
+The Mlld CLI provides a simple way to process Mlld files from the command line.
 
 ## Installation
 
 Install globally to use the CLI:
 
 ```bash
-npm install -g meld
+npm install -g mlld
 ```
 
 Or use it from a local installation:
 
 ```bash
-npm install meld
-npx meld <options>
+npm install mlld
+npx mlld <options>
 ```
 
 ## Basic Usage
 
-Process a Meld file with default options:
+Process a Mlld file with default options:
 
 ```bash
-meld input.mld
+mlld input.mld
 ```
 
 By default, this will:
-- Parse and interpret the Meld file
+- Parse and interpret the Mlld file
 - Generate output in XML format
 - Save to a file with the same name but extension changed to `.llm`
 
@@ -42,7 +42,7 @@ By default, this will:
 Specify the output format with the `--format` or `-f` option:
 
 ```bash
-meld input.mld --format md
+mlld input.mld --format md
 ```
 
 Supported formats:
@@ -54,7 +54,7 @@ Supported formats:
 Specify the output file with the `--output` or `-o` option:
 
 ```bash
-meld input.mld --output output.llm
+mlld input.mld --output output.llm
 ```
 
 By default, the output file uses the input filename with a new extension.
@@ -64,7 +64,7 @@ By default, the output file uses the input filename with a new extension.
 Print to stdout instead of writing to a file with the `--stdout` option:
 
 ```bash
-meld input.mld --stdout
+mlld input.mld --stdout
 ```
 
 ### Combined Options
@@ -72,59 +72,59 @@ meld input.mld --stdout
 You can combine multiple options:
 
 ```bash
-meld input.mld --format md --output custom.md --stdout
+mlld input.mld --format md --output custom.md --stdout
 ```
 
 ## File Extensions
 
-Meld supports several file extensions:
+Mlld supports several file extensions:
 
-- `.mld` - Standard Meld files
-- `.mld.md` - Meld files with Markdown content
-- `.mll` - Alternative extension for Meld files
-- `.mll.md` - Alternative extension for Meld Markdown files
+- `.mld` - Standard Mlld files
+- `.mld.md` - Mlld files with Markdown content
+- `.mll` - Alternative extension for Mlld files
+- `.mll.md` - Alternative extension for Mlld Markdown files
 
 ## Examples
 
-Process a Meld file with default options:
+Process a Mlld file with default options:
 ```bash
-meld document.mld
+mlld document.mld
 ```
 
-Process a Meld file and output as Markdown:
+Process a Mlld file and output as Markdown:
 ```bash
-meld document.mld --format md
+mlld document.mld --format md
 ```
 
-Process a Meld file and save with custom name:
+Process a Mlld file and save with custom name:
 ```bash
-meld document.mld --output result.llm
+mlld document.mld --output result.llm
 ```
 
-Process a Meld file and print to console:
+Process a Mlld file and print to console:
 ```bash
-meld document.mld --stdout
+mlld document.mld --stdout
 ```
 
-Process a Meld file with multiple options:
+Process a Mlld file with multiple options:
 ```bash
-meld document.mld --format md --output result.md --stdout
+mlld document.mld --format md --output result.md --stdout
 ```
 
 ## Environment Variables
 
-Meld scripts can access environment variables using the `{{ENV_NAME}}` syntax:
+Mlld scripts can access environment variables using the `{{ENV_NAME}}` syntax:
 
-```meld
+```mlld
 @text token = "{{ENV_TOKEN}}"
 ```
 
 You can set these when running the CLI:
 
 ```bash
-ENV_TOKEN=12345 meld script.mld
+ENV_TOKEN=12345 mlld script.mld
 ```
 
 ## Project Path
 
-The special `$PROJECTPATH` or `$.` variable refers to the directory where the Meld CLI is executed. All relative paths in Meld scripts are resolved relative to this directory.
+The special `$PROJECTPATH` or `$.` variable refers to the directory where the Mlld CLI is executed. All relative paths in Mlld scripts are resolved relative to this directory.

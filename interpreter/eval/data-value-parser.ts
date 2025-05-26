@@ -1,4 +1,4 @@
-// ASTNode type no longer needed - using MeldNode from core/types
+// ASTNode type no longer needed - using MlldNode from core/types
 import type { 
   DataValue, 
   DataObject, 

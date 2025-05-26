@@ -9,7 +9,7 @@ The `@text` directive defines a text variable that can store string values.
 
 ## Syntax
 
-```meld
+```mlld
 @text identifier = "value"
 @text identifier = @add [content]
 @text identifier = @run [command]
@@ -30,7 +30,7 @@ Where:
 
 Text values can be defined using different quote styles:
 
-```meld
+```mlld
 @text simple = "Plain string"       # Double quotes
 @text also_simple = 'Single quotes' # Single quotes
 @text template = `Hello {{name}}`    # Template literal with variable
@@ -38,7 +38,7 @@ Text values can be defined using different quote styles:
 
 For multi-line strings, use template literals with the `[[` and `]]` delimiters:
 
-```meld
+```mlld
 @text multiline = [[`
   This is a
   multi-line
@@ -50,7 +50,7 @@ For multi-line strings, use template literals with the `[[` and `]]` delimiters:
 
 Text variables are referenced using the `{{identifier}}` syntax:
 
-```meld
+```mlld
 @text name = "World"
 @text greeting = `Hello, {{name}}!`
 ```
@@ -64,7 +64,7 @@ Template literals (using backticks) support variable interpolation:
 
 ## String Concatenation
 
-```meld
+```mlld
 @text first = "Hello"
 @text second = "World"
 @text message = {{first}} ++ " " ++ {{second}}
@@ -77,18 +77,18 @@ Template literals (using backticks) support variable interpolation:
 ## Examples
 
 Basic text variable:
-```meld
+```mlld
 @text title = "My Document"
 @text author = "Jane Smith"
 ```
 
 Using the result of a command:
-```meld
+```mlld
 @text date = @run [date +"%Y-%m-%d"]
 ```
 
 Embedding file content:
-```meld
+```mlld
 @text header = @add [header.md]
 ```
 

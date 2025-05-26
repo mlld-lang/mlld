@@ -56,7 +56,7 @@ export function mockProcessExit(): MockProcessExitResult {
  *   const { mockExit, restore } = mockProcessExit();
  *   
  *   try {
- *     await cli.run(['--strict', 'non-existent-file.meld']);
+ *     await cli.run(['--strict', 'non-existent-file.mlld']);
  *     expect(mockExit).toHaveBeenCalledWith(1);
  *   } finally {
  *     restore(); // Always restore original process.exit

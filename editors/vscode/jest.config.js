@@ -3,8 +3,8 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: ['**/src/**/*.test.ts'],
   moduleNameMapper: {
-    '^@meld/parser$': '<rootDir>/../../grammar/parser/index.ts',
-    '^@meld/types$': '<rootDir>/../../core/types/index.ts'
+    '^@mlld/parser$': '<rootDir>/../../grammar/parser/index.ts',
+    '^@mlld/types$': '<rootDir>/../../core/types/index.ts'
   },
   transform: {
     '^.+\\.ts$': ['ts-jest', {

@@ -1,63 +1,63 @@
 {
-  "name": "Meld",
-  "scopeName": "source.meld",
+  "name": "Mlld",
+  "scopeName": "source.mlld",
   "fileTypes": [
-    "meld",
+    "mlld",
     "mld"
   ],
   "patterns": [
     {
-      "name": "keyword.control.directive.meld",
+      "name": "keyword.control.directive.mlld",
       "match": "@(text|data|run|add|path|import|exec|define|embed|url)\\b"
     },
     {
-      "name": "comment.line.double-slash.meld",
+      "name": "comment.line.double-slash.mlld",
       "match": ">>.*$"
     },
     {
-      "name": "string.template.meld",
+      "name": "string.template.mlld",
       "begin": "\\[\\[",
       "end": "\\]\\]",
       "patterns": [
         {
-          "name": "variable.template.meld",
+          "name": "variable.template.mlld",
           "match": "\\{\\{[^}]+\\}\\}"
         }
       ]
     },
     {
-      "name": "meta.path.meld",
+      "name": "meta.path.mlld",
       "begin": "\\[",
       "end": "\\]",
       "patterns": [
         {
-          "name": "markup.underline.link.meld",
+          "name": "markup.underline.link.mlld",
           "match": "https?://[^\\]]+"
         }
       ]
     },
     {
-      "name": "string.quoted.double.meld",
+      "name": "string.quoted.double.mlld",
       "match": "\"[^\"]*\""
     },
     {
-      "name": "variable.other.meld",
+      "name": "variable.other.mlld",
       "match": "@\\w+"
     },
     {
-      "name": "keyword.operator.meld",
+      "name": "keyword.operator.mlld",
       "match": "\\b(from|as)\\b|="
     },
     {
-      "name": "constant.numeric.meld",
+      "name": "constant.numeric.mlld",
       "match": "\\b\\d+(\\.\\d+)?\\b"
     },
     {
-      "name": "constant.language.boolean.meld",
+      "name": "constant.language.boolean.mlld",
       "match": "\\b(true|false)\\b"
     },
     {
-      "name": "constant.language.null.meld",
+      "name": "constant.language.null.mlld",
       "match": "\\bnull\\b"
     }
   ]

@@ -1,10 +1,10 @@
 # Run Code Subtype
 
-The `runCode` subtype of the `@run` directive executes code snippets in specific programming languages. It allows embedding and executing code directly within Meld documents, with optional arguments to parameterize the code execution.
+The `runCode` subtype of the `@run` directive executes code snippets in specific programming languages. It allows embedding and executing code directly within Mlld documents, with optional arguments to parameterize the code execution.
 
 ## Syntax
 
-```meld
+```mlld
 @run language [code]
 @run language (arg1, arg2) [code]
 ```
@@ -45,7 +45,7 @@ The `runCode` subtype nodes have this structure:
 
 ### Basic Code Execution
 
-```meld
+```mlld
 @run javascript [
 console.log("Hello, world!");
 ]
@@ -75,7 +75,7 @@ AST:
 
 ### Code with Arguments
 
-```meld
+```mlld
 @run python (data, format) [
 import json
 data_obj = json.loads(data)
@@ -113,7 +113,7 @@ AST:
 
 ### Code with Variable Interpolation
 
-```meld
+```mlld
 @run javascript [
 const greeting = "{{greeting}}";
 console.log(greeting);
@@ -153,7 +153,7 @@ The `runCode` subtype is used to:
 1. Execute code in various programming languages
 2. Pass arguments to parameterize code execution
 3. Capture and process code output
-4. Integrate variable values from the current Meld scope
+4. Integrate variable values from the current Mlld scope
 
 The code execution environment depends on the specified language and the available language runtime in the host environment. The implementation may use sandboxing or other security mechanisms to ensure safe execution.
 

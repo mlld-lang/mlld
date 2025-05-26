@@ -23,7 +23,7 @@
       <nav>
         <ul>
           <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
-          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+          <li><a href="https://github.com/mlldorg/mlld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -92,7 +92,7 @@
           
         
           
-            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+            <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
           
         
           
@@ -218,7 +218,7 @@ title: &quot;@path Directive&quot;</h2>
 <h1 id="%40path-directive" tabindex="-1">@path Directive</h1>
 <p>The <code>@path</code> directive defines filesystem path variables that can be used in <code>@add</code> and <code>@run</code> commands.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$HOMEPATH/path"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$HOMEPATH/path"</span>
 <span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$~/path"</span>
 <span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/path"</span>
 <span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$./path"</span>
@@ -254,7 +254,7 @@ title: &quot;@path Directive&quot;</h2>
 </li>
 </ul>
 <h2 id="special-path-variables-(optional)" tabindex="-1">Special Path Variables (Optional)</h2>
-<p>Meld provides special path variables for enhanced cross-platform portability:</p>
+<p>Mlld provides special path variables for enhanced cross-platform portability:</p>
 <ul>
 <li><code>$HOMEPATH</code> or <code>$~</code>: Refers to the user's home directory</li>
 <li><code>$PROJECTPATH</code> or <code>$.</code>: Refers to the current project root directory</li>
@@ -262,7 +262,7 @@ title: &quot;@path Directive&quot;</h2>
 <p>Using special path variables is recommended (but not required) for best cross-platform portability.</p>
 <h2 id="referencing-path-variables" tabindex="-1">Referencing Path Variables</h2>
 <p>Path variables are referenced using the <code>$identifier</code> syntax:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
 <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>$docs/guide.md<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Path variables can be used:</p>
@@ -273,20 +273,20 @@ title: &quot;@path Directive&quot;</h2>
 </ul>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic path variables:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
 <span class="token directive keyword">@path</span> configs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/configs"</span>
-<span class="token directive keyword">@path</span> home <span class="token operator">=</span> <span class="token string">"$HOMEPATH/meld"</span>
+<span class="token directive keyword">@path</span> home <span class="token operator">=</span> <span class="token string">"$HOMEPATH/mlld"</span>
 </code></pre>
 <p>Using path variables in commands:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
 <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la $src<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Embedding files with path variables:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> templates <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/templates"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> templates <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/templates"</span>
 <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>$templates/header.md<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using path segments:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
 <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>$src/components/button.js<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
@@ -297,14 +297,14 @@ title: &quot;@path Directive&quot;</h2>
 </ul>
 <h2 id="variables-in-paths" tabindex="-1">Variables in Paths</h2>
 <p>Paths can include variables, which are resolved during execution:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> dir <span class="token operator">=</span> <span class="token string">"docs"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> dir <span class="token operator">=</span> <span class="token string">"docs"</span>
 <span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/{{dir}}"</span>
 </code></pre>
 <h2 id="path-best-practices" tabindex="-1">Path Best Practices</h2>
 <ul>
 <li>For cross-platform compatibility, use special path variables <code>$PROJECTPATH</code> and <code>$HOMEPATH</code></li>
 <li>Use forward slashes for path separators (even on Windows)</li>
-<li>Be cautious when using absolute paths or parent directory references (<code>..</code>), as they may make your Meld files less portable</li>
+<li>Be cautious when using absolute paths or parent directory references (<code>..</code>), as they may make your Mlld files less portable</li>
 <li>Consider using path variables to encapsulate filesystem paths for better maintainability</li>
 </ul>
 <h2 id="notes" tabindex="-1">Notes</h2>
@@ -374,7 +374,7 @@ title: &quot;@path Directive&quot;</h2>
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlldorg/mlld">GitHub</a></p>
     </div>
   </footer>
 </body>

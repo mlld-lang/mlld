@@ -11,14 +11,14 @@ describe('Complex Data Assignment', () => {
     const pathService = new PathService();
     const env = new Environment(fs, pathService, process.cwd());
     
-    const meldContent = `
+    const mlldContent = `
 @data results = {
   echo: @run [echo "hello world"],
   date: @run [date]
 }
 `;
     
-    const parseResult = await parse(meldContent);
+    const parseResult = await parse(mlldContent);
     const ast = parseResult.ast;
     const result = await evaluate(ast, env);
     
@@ -44,13 +44,13 @@ describe('Complex Data Assignment', () => {
     const pathService = new PathService();
     const env = new Environment(fs, pathService, '/');
     
-    const meldContent = `
+    const mlldContent = `
 @data docs = {
   readme: @add [/test.txt]
 }
 `;
     
-    const parseResult = await parse(meldContent);
+    const parseResult = await parse(mlldContent);
     const ast = parseResult.ast;
     await evaluate(ast, env);
     
@@ -70,7 +70,7 @@ describe('Complex Data Assignment', () => {
     const pathService = new PathService();
     const env = new Environment(fs, pathService, process.cwd());
     
-    const meldContent = `
+    const mlldContent = `
 @data user = {
   name: "John",
   scores: [10, 20, 30]
@@ -82,7 +82,7 @@ describe('Complex Data Assignment', () => {
 }
 `;
     
-    const parseResult = await parse(meldContent);
+    const parseResult = await parse(mlldContent);
     const ast = parseResult.ast;
     await evaluate(ast, env);
     
@@ -102,7 +102,7 @@ describe('Complex Data Assignment', () => {
     const pathService = new PathService();
     const env = new Environment(fs, pathService, process.cwd());
     
-    const meldContent = `
+    const mlldContent = `
 @text name = "World"
 
 @data messages = {
@@ -111,7 +111,7 @@ describe('Complex Data Assignment', () => {
 }
 `;
     
-    const parseResult = await parse(meldContent);
+    const parseResult = await parse(mlldContent);
     const ast = parseResult.ast;
     await evaluate(ast, env);
     
@@ -131,7 +131,7 @@ describe('Complex Data Assignment', () => {
     const pathService = new PathService();
     const env = new Environment(fs, pathService, process.cwd());
     
-    const meldContent = `
+    const mlldContent = `
 @data config = {
   app: {
     name: "MyApp",
@@ -143,7 +143,7 @@ describe('Complex Data Assignment', () => {
 }
 `;
     
-    const parseResult = await parse(meldContent);
+    const parseResult = await parse(mlldContent);
     const ast = parseResult.ast;
     await evaluate(ast, env);
     
@@ -164,11 +164,11 @@ describe('Complex Data Assignment', () => {
     const pathService = new PathService();
     const env = new Environment(fs, pathService, process.cwd());
     
-    const meldContent = `
+    const mlldContent = `
 @data tests = [@run [echo "test1"], @run [echo "test2"], @run [echo "test3"]]
 `;
     
-    const parseResult = await parse(meldContent);
+    const parseResult = await parse(mlldContent);
     const ast = parseResult.ast;
     await evaluate(ast, env);
     
@@ -188,7 +188,7 @@ describe('Complex Data Assignment', () => {
     const pathService = new PathService();
     const env = new Environment(fs, pathService, process.cwd());
     
-    const meldContent = `
+    const mlldContent = `
 @data results = {
   success: @run [echo "ok"],
   failure: @run [nonexistent-command],
@@ -196,7 +196,7 @@ describe('Complex Data Assignment', () => {
 }
 `;
     
-    const parseResult = await parse(meldContent);
+    const parseResult = await parse(mlldContent);
     const ast = parseResult.ast;
     await evaluate(ast, env);
     

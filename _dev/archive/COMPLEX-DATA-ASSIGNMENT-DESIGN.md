@@ -13,7 +13,7 @@ Enable @data directives to contain embedded directives (@run, @add) and complex 
 ## Proposed Syntax
 
 ### Basic Examples
-```meld
+```mlld
 @data complexResults = {
   testresults: @run [npm test],
   readme: @add [@docs/README.md]
@@ -26,7 +26,7 @@ Enable @data directives to contain embedded directives (@run, @add) and complex 
 ```
 
 ### Full Feature Set
-```meld
+```mlld
 @data mycomplexResults = {
   # Direct variable reference
   "docspath": @docs,
@@ -342,7 +342,7 @@ ObjectProperty
 ## Example Use Cases
 
 ### Configuration with Dynamic Values
-```meld
+```mlld
 @data config = {
   version: @run [git describe --tags],
   buildTime: @run [date -u +"%Y-%m-%dT%H:%M:%SZ"],
@@ -354,7 +354,7 @@ ObjectProperty
 ```
 
 ### Document Assembly
-```meld
+```mlld
 @data document = {
   title: "Project Report",
   sections: {
@@ -369,7 +369,7 @@ This project achieved {{metrics.successRate}}% success rate.
 ```
 
 ### Test Results Collection
-```meld
+```mlld
 @data testResults = {
   unit: @run [npm run test:unit -- --json],
   integration: @run [npm run test:integration -- --json],

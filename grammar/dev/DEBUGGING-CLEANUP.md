@@ -1,10 +1,10 @@
-# Meld Grammar Debugging Cleanup
+# Mlld Grammar Debugging Cleanup
 
-This document outlines the plan for standardizing, cleaning up, and improving debugging approaches in the Meld grammar codebase.
+This document outlines the plan for standardizing, cleaning up, and improving debugging approaches in the Mlld grammar codebase.
 
 ## 1. Current State Assessment
 
-The Meld grammar currently uses various debugging approaches:
+The Mlld grammar currently uses various debugging approaches:
 
 1. **Explicit debug statements** using `helpers.debug()` scattered throughout the code
 2. **The debug.md guide** providing guidance on debugging techniques

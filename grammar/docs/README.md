@@ -1,8 +1,8 @@
-# Meld Grammar Developer Guide
+# Mlld Grammar Developer Guide
 
-This guide explains the principles, patterns, and practices for developing and maintaining the Meld grammar. It serves as the primary reference for developers working on the grammar system.
+This guide explains the principles, patterns, and practices for developing and maintaining the Mlld grammar. It serves as the primary reference for developers working on the grammar system.
 
-> **For Grammar Consumers**: Use `npm run ast -- '<meld syntax>'` to explore the AST output and refer to [AST-CONTEXT-GUIDE.md](./AST-CONTEXT-GUIDE.md) for understanding the AST structure.
+> **For Grammar Consumers**: Use `npm run ast -- '<mlld syntax>'` to explore the AST output and refer to [AST-CONTEXT-GUIDE.md](./AST-CONTEXT-GUIDE.md) for understanding the AST structure.
 
 ## Critical: How the Grammar Build System Works
 
@@ -13,7 +13,7 @@ This guide explains the principles, patterns, and practices for developing and m
 The grammar build system (`grammar/build-grammar.mjs`) works as follows:
 
 1. **File Concatenation**: All `.peggy` files are concatenated in this order:
-   - `meld.peggy` (root file with initialization block)
+   - `mlld.peggy` (root file with initialization block)
    - `base/*.peggy` (core primitives)
    - `patterns/*.peggy` (reusable patterns)
    - `core/*.peggy` (directive cores)
@@ -39,7 +39,7 @@ The grammar build system (`grammar/build-grammar.mjs`) works as follows:
    - The build process compiles it to `grammar-core.js`
    - Never edit `.js` files or files in `parser/` directly
 
-3. **No initialization blocks in pattern files**: Only `meld.peggy` can have the `{...}` initialization block at the top.
+3. **No initialization blocks in pattern files**: Only `mlld.peggy` can have the `{...}` initialization block at the top.
 
 4. **After changes, always rebuild**:
    ```bash
@@ -323,7 +323,7 @@ grammar/
 2. Identify required patterns (variable, content, list handling)
 3. Use existing patterns and cores
 4. Add to `directives/` with proper naming
-5. Update `meld.peggy` to include it
+5. Update `mlld.peggy` to include it
 
 ### Creating a Shared Pattern
 1. Identify duplication across files

@@ -41,7 +41,7 @@ grammar/
 
 ```typescript
 // explorer/src/parse.ts
-import { parse as meldParse } from '../../core/ast/grammar/parser';
+import { parse as mlldParse } from '../../core/ast/grammar/parser';
 import type { DirectiveNode } from '../../types/base';
 
 /**
@@ -50,7 +50,7 @@ import type { DirectiveNode } from '../../types/base';
 export function parseDirective(directive: string): DirectiveNode {
   try {
     // Parse and extract first node (assumed to be the directive)
-    const result = meldParse(directive);
+    const result = mlldParse(directive);
     return result[0] as DirectiveNode;
   } catch (error) {
     throw new Error(`Failed to parse directive: ${error.message}`);
@@ -82,8 +82,8 @@ import { parseDirective } from './parse';
 import * as fs from 'fs';
 
 program
-  .name('meld-ast-explorer')
-  .description('Explore and analyze Meld grammar AST')
+  .name('mlld-ast-explorer')
+  .description('Explore and analyze Mlld grammar AST')
   .version('0.1.0');
 
 program
@@ -524,7 +524,7 @@ export function generateDocumentation(
   
   // Generate an index file
   let indexContent = '# AST Documentation\n\n';
-  indexContent += 'Generated documentation for Meld directive AST structures.\n\n';
+  indexContent += 'Generated documentation for Mlld directive AST structures.\n\n';
   indexContent += '## Available Directives\n\n';
   
   // Group by directive kind
@@ -692,7 +692,7 @@ program
 ```typescript
 // explorer/src/index.ts
 /**
- * Meld AST Explorer - Grammar-driven development tools
+ * Mlld AST Explorer - Grammar-driven development tools
  */
 
 // Core parsing functionality
@@ -833,7 +833,7 @@ export class Explorer {
   /**
    * Process a directory of example files
    */
-  processDirectory(dir: string, pattern = '*.meld'): void {
+  processDirectory(dir: string, pattern = '*.mlld'): void {
     // Implementation to process all files in a directory
   }
   
@@ -946,9 +946,9 @@ describe('AST Explorer Integration', () => {
 
 ```json
 {
-  "name": "meld-ast-explorer",
+  "name": "mlld-ast-explorer",
   "version": "0.1.0",
-  "description": "AST explorer tools for Meld grammar",
+  "description": "AST explorer tools for Mlld grammar",
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -974,9 +974,9 @@ describe('AST Explorer Integration', () => {
 
 ```markdown
 // explorer/README.md
-# Meld AST Explorer
+# Mlld AST Explorer
 
-A tool for exploring and analyzing the Abstract Syntax Tree (AST) produced by Meld's grammar parser.
+A tool for exploring and analyzing the Abstract Syntax Tree (AST) produced by Mlld's grammar parser.
 
 ## Features
 
@@ -1007,7 +1007,7 @@ npm run cli -- batch examples.json -o ./generated
 ### Programmatic Usage
 
 ```typescript
-import { Explorer } from 'meld-ast-explorer';
+import { Explorer } from 'mlld-ast-explorer';
 
 // Create an explorer instance
 const explorer = new Explorer({
@@ -1043,7 +1043,7 @@ explorer.processBatch('./examples.json');
 
 ## Integration with Build Process
 
-To integrate the AST Explorer with the Meld build process, we can add a script to handle type generation as part of the build:
+To integrate the AST Explorer with the Mlld build process, we can add a script to handle type generation as part of the build:
 
 ```typescript
 // explorer/scripts/generate-types.ts

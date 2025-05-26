@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the Meld project will be documented in this file.
+All notable changes to the Mlld project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [10.3.0] - 2025-03-07
 
 ### Fixed
-- Fixed compatibility issues when using meld in ESM environments (projects with "type": "module")
+- Fixed compatibility issues when using mlld in ESM environments (projects with "type": "module")
 - Resolved "Dynamic require of 'fs' is not supported" error in ESM contexts
 - Updated module export configuration for proper TypeScript type resolution in both ESM and CommonJS environments
 

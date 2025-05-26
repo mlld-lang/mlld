@@ -1,10 +1,10 @@
-// MELD BASE TOKENS
+// MLLD BASE TOKENS
 // Core token abstractions used throughout the grammar
 
 /* 
 # Token Abstractions
 
-This file contains the most fundamental token patterns used by the Meld grammar,
+This file contains the most fundamental token patterns used by the Mlld grammar,
 including identifiers, separators, and special characters. These are the atomic
 building blocks for all higher-level grammar components.
 */

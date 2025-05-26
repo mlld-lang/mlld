@@ -1,21 +1,21 @@
 ---
 layout: docs.njk
-title: "URL Support in Meld"
+title: "URL Support in Mlld"
 ---
 
 ---
 layout: docs.njk
-title: "URL Support in Meld"
+title: "URL Support in Mlld"
 ---
 
-# URL Support in Meld
+# URL Support in Mlld
 
-Meld supports fetching content from remote URLs using the `@add` and `@import` directives. This allows you to incorporate external resources into your Meld documents without needing to download them first.
+Mlld supports fetching content from remote URLs using the `@add` and `@import` directives. This allows you to incorporate external resources into your Mlld documents without needing to download them first.
 
 ## URL Functionality Overview
 
-- **URL Embedding**: Embed content from remote URLs directly into your Meld documents
-- **URL Importing**: Import variables from remote Meld files hosted on servers
+- **URL Embedding**: Embed content from remote URLs directly into your Mlld documents
+- **URL Importing**: Import variables from remote Mlld files hosted on servers
 - **Security Controls**: Configure security policies to restrict which URLs can be accessed
 - **Caching**: Automatically cache URL responses for better performance
 - **Error Handling**: Robust error handling for network issues and invalid URLs

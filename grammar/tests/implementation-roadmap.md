@@ -15,11 +15,11 @@ type DirectiveSubtype =
   | 'runCommand' | 'runDefined' | 'runCode' | 'runCodeParams'
   | 'defineCommand';
 
-interface DirectiveNode extends MeldNode {
+interface DirectiveNode extends MlldNode {
   type: 'Directive';
   kind: DirectiveKind;  // Already exists: 'import', 'run', etc.
   subtype: DirectiveSubtype;
-  values: { [key: string]: MeldNode[] };
+  values: { [key: string]: MlldNode[] };
   raw: { [key: string]: string };
   meta: { [key: string]: unknown };
 }
@@ -80,7 +80,7 @@ language  - For language identifiers in @run
 ### 1. Types & Interfaces
 
 - Update the `DirectiveNode` interface in core/syntax/types/nodes.ts:
-  - Change `values` type from `Node[]` to `{ [key: string]: MeldNode[] }`
+  - Change `values` type from `Node[]` to `{ [key: string]: MlldNode[] }`
   - Add `raw: { [key: string]: string }` property for raw text segments
   - Add `meta: { [key: string]: unknown }` property for metadata
   - Define `DirectiveSubtype` union type for strong typing of subtypes

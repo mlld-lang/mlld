@@ -1,6 +1,6 @@
 # Exec Directive
 
-The `exec` directive (renamed from `define`) is used to define named commands that can be executed by the `@run` directive. It allows creating reusable command templates and code snippets that can be invoked throughout a Meld document.
+The `exec` directive (renamed from `define`) is used to define named commands that can be executed by the `@run` directive. It allows creating reusable command templates and code snippets that can be invoked throughout a Mlld document.
 
 ## Subtypes
 
@@ -11,7 +11,7 @@ The `exec` directive has two subtypes:
 
 ## Syntax
 
-```meld
+```mlld
 @exec commandName = @run [command]
 @exec commandName (param1, param2) = @run [command with $param1]
 @exec commandName = @run language [code]
@@ -70,13 +70,13 @@ The `exec` directive nodes follow this structure:
 
 Define a simple command:
 
-```meld
+```mlld
 @exec listFiles = @run [ls -la]
 ```
 
 Define a command with parameters:
 
-```meld
+```mlld
 @exec formatFile (file, type) = @run [fmt $file --type=$type]
 ```
 
@@ -84,7 +84,7 @@ Define a command with parameters:
 
 Define a JavaScript function:
 
-```meld
+```mlld
 @exec greet = @run javascript [
   console.log("Hello, world!");
 ]
@@ -92,7 +92,7 @@ Define a JavaScript function:
 
 Define a Python function with parameters:
 
-```meld
+```mlld
 @exec formatJson (data, style) = @run python [
   import json
   data_obj = json.loads(data)

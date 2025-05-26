@@ -1,9 +1,9 @@
-// Auto-generated Prism.js language definition for Meld
+// Auto-generated Prism.js language definition for Mlld
 // Generated from grammar at 2025-05-24T19:02:58.205Z
 
 const Prism = require('prismjs');
 
-Prism.languages.meld = {
+Prism.languages.mlld = {
   'comment': {
     pattern: />>.*$/,
     greedy: true
@@ -52,5 +52,5 @@ Prism.languages.meld = {
   'punctuation': /[{}(),]/
 };
 
-// Also highlight .meld and .mld files
-Prism.languages.mld = Prism.languages.meld;
+// Also highlight .mlld and .mld files
+Prism.languages.mld = Prism.languages.mlld;

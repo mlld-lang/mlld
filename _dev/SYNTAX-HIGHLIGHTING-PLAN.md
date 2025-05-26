@@ -1,7 +1,7 @@
-# Meld Syntax Highlighting Strategic Plan
+# Mlld Syntax Highlighting Strategic Plan
 
 ## Overview
-This document outlines a comprehensive strategy for implementing and maintaining syntax highlighting across the Meld project by leveraging our existing Peggy grammar as the single source of truth.
+This document outlines a comprehensive strategy for implementing and maintaining syntax highlighting across the Mlld project by leveraging our existing Peggy grammar as the single source of truth.
 
 ## Current State Analysis
 
@@ -22,7 +22,7 @@ This document outlines a comprehensive strategy for implementing and maintaining
 ## Strategic Plan: Grammar-Based Syntax Highlighting
 
 ### Core Concept
-Use the existing Peggy grammar (`grammar/meld.peggy` and related files) as the single source of truth to generate syntax highlighting for all targets.
+Use the existing Peggy grammar (`grammar/mlld.peggy` and related files) as the single source of truth to generate syntax highlighting for all targets.
 
 ### Phase 1: Grammar Analysis & Token Extraction
 
@@ -31,7 +31,7 @@ Use the existing Peggy grammar (`grammar/meld.peggy` and related files) as the s
 - **Implementation**:
   ```
   grammar/
-    meld.peggy              # Existing grammar (source of truth)
+    mlld.peggy              # Existing grammar (source of truth)
     directives/*.peggy      # Existing directive definitions
     
     syntax-generator/
@@ -41,8 +41,8 @@ Use the existing Peggy grammar (`grammar/meld.peggy` and related files) as the s
       
     generated/
       textmate.json         # For VSCode
-      prism-meld.js         # For website
-      vim-meld.vim          # For Vim
+      prism-mlld.js         # For website
+      vim-mlld.vim          # For Vim
   ```
 
 #### 1.2 Token Extraction Strategy
@@ -57,7 +57,7 @@ Extract from Peggy grammar:
 ### Phase 2: Simplified Syntax Generator
 
 #### 2.1 Simplified Token Rules
-Based on Meld's clean syntax design:
+Based on Mlld's clean syntax design:
 - **Directives**: Fixed set - `@text`, `@data`, `@run`, `@add`, `@path`, `@import`, `@exec`, `@define`, `@embed`, `@url`
 - **Variables**: Any `@identifier` that's not a directive
 - **Templates**: `[[...]]` with `{{variable}}` interpolation
@@ -70,7 +70,7 @@ Based on Meld's clean syntax design:
 // grammar/syntax-generator/build-syntax.js
 const fs = require('fs');
 
-class MeldSyntaxGenerator {
+class MlldSyntaxGenerator {
   constructor() {
     // Extract directives from grammar/base/tokens.peggy
     this.directives = this.extractDirectivesFromGrammar();
@@ -103,7 +103,7 @@ class MeldSyntaxGenerator {
   }
   
   generatePrism() {
-    return `Prism.languages.meld = {
+    return `Prism.languages.mlld = {
   'directive': {
     pattern: /${this.patterns.directive}/,
     alias: 'keyword'
@@ -137,7 +137,7 @@ class MeldSyntaxGenerator {
   - Build-time highlighting via markdown-it plugin
 - **Implementation**:
   - Add Prism.js as dependency
-  - Use generated `prism-meld.js`
+  - Use generated `prism-mlld.js`
   - Integrate with Eleventy build
 
 ### Phase 3: Example Management System
@@ -164,7 +164,7 @@ description: "Shows how to assign string values to variables"
 category: "directives"
 tags: ["text", "variables", "basics"]
 order: 1
-sidebar_note: "Text variables are the foundation of Meld scripting"
+sidebar_note: "Text variables are the foundation of Mlld scripting"
 ```
 
 #### 3.3 Build Process Integration
@@ -178,19 +178,19 @@ sidebar_note: "Text variables are the foundation of Meld scripting"
 
 #### 4.1 Eleventy Plugin for Examples
 ```javascript
-// eleventy-meld-examples.js
+// eleventy-mlld-examples.js
 module.exports = function(eleventyConfig) {
   // Register shortcode for embedding examples
-  eleventyConfig.addShortcode("meldExample", async function(examplePath) {
+  eleventyConfig.addShortcode("mlldExample", async function(examplePath) {
     const content = await fs.readFile(examplePath, 'utf8');
     const meta = await loadMetadata(examplePath);
-    const highlighted = await highlightMeld(content);
+    const highlighted = await highlightMlld(content);
     
     return `
       <div class="example-container">
         <h4>${meta.title}</h4>
         <p>${meta.description}</p>
-        <pre><code class="language-meld">${highlighted}</code></pre>
+        <pre><code class="language-mlld">${highlighted}</code></pre>
         ${meta.sidebar_note ? `<aside>${meta.sidebar_note}</aside>` : ''}
       </div>
     `;
@@ -202,8 +202,8 @@ module.exports = function(eleventyConfig) {
 The Prism language definition will be automatically generated from the grammar:
 
 ```javascript
-// generated/prism-meld.js (auto-generated)
-Prism.languages.meld = {
+// generated/prism-mlld.js (auto-generated)
+Prism.languages.mlld = {
   // Generated from grammar/directives/*.peggy
   'directive': {
     pattern: /@(text|data|path|run|exec|import|add|embed|define|url)\b/,
@@ -232,7 +232,7 @@ This ensures the website highlighting always matches the actual parser.
    ```javascript
    // .eleventy.js
    const markdownItPrism = require('markdown-it-prism');
-   require('./src/prism-meld'); // Custom language
+   require('./src/prism-mlld'); // Custom language
    
    const markdownLib = markdownIt({
      html: true,
@@ -245,7 +245,7 @@ This ensures the website highlighting always matches the actual parser.
 
 3. **Convert Existing Examples**:
    - Create migration script to extract hardcoded examples
-   - Convert to markdown code blocks with `meld` language
+   - Convert to markdown code blocks with `mlld` language
    - Preserve any sidebar notes or descriptions
 
 #### 5.2 Editor Updates
@@ -256,7 +256,7 @@ This ensures the website highlighting always matches the actual parser.
    - Test with example files
 
 2. **Update Vim Syntax**:
-   - Replace manual patterns with generated `vim-meld.vim`
+   - Replace manual patterns with generated `vim-mlld.vim`
    - Update file extension references
    - Test with example files
 
@@ -307,7 +307,7 @@ Update build documentation with:
 
 ### Day 2: Website Integration (~4 hours)
 - [ ] Set up Prism.js in website
-- [ ] Use generated `prism-meld.js`
+- [ ] Use generated `prism-mlld.js`
 - [ ] Update Eleventy configuration
 - [ ] Convert hardcoded examples
 
@@ -348,9 +348,9 @@ Update build documentation with:
 
 ## Future Enhancements
 
-1. **AST-based Highlighting**: Use actual Meld parser for semantic highlighting
+1. **AST-based Highlighting**: Use actual Mlld parser for semantic highlighting
 2. **Language Server Protocol**: Full IDE support with semantic tokens
-3. **Interactive Playground**: Live Meld editor with real-time highlighting
+3. **Interactive Playground**: Live Mlld editor with real-time highlighting
 4. **Theme Generator**: Create color schemes that work across all targets
 5. **Incremental Updates**: Watch grammar files and auto-regenerate
 
@@ -358,7 +358,7 @@ Update build documentation with:
 
 ### Implementation Simplifications
 
-With Meld's clean syntax design, we can simplify significantly:
+With Mlld's clean syntax design, we can simplify significantly:
 
 1. **No Complex Parsing Needed**: Just extract the directive list from `ReservedDirective` rule
 2. **Clear Token Boundaries**: `@` prefix and `[[...]]`/`[...]` brackets make tokenization trivial
@@ -373,9 +373,9 @@ grammar/
     package.json          # Just needs 'fs' and 'path'
   
   generated/              # Output directory
-    prism-meld.js         # For website
-    meld.tmLanguage.json  # For VSCode
-    meld.vim              # For Vim
+    prism-mlld.js         # For website
+    mlld.tmLanguage.json  # For VSCode
+    mlld.vim              # For Vim
     
 package.json scripts:
   "build:syntax": "node grammar/syntax-generator/build-syntax.js"

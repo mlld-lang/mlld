@@ -1,6 +1,6 @@
 # Error Testing Utilities Guide
 
-This document provides a guide on how to use Meld's error testing utilities to write effective tests for error handling in both strict and permissive modes.
+This document provides a guide on how to use Mlld's error testing utilities to write effective tests for error handling in both strict and permissive modes.
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@ This document provides a guide on how to use Meld's error testing utilities to w
 
 ## Introduction
 
-Meld's error handling system supports both strict and permissive modes. Testing both modes requires specialized utilities to ensure that errors are handled correctly in each mode. The error testing utilities provide a consistent way to test error handling across different components.
+Mlld's error handling system supports both strict and permissive modes. Testing both modes requires specialized utilities to ensure that errors are handled correctly in each mode. The error testing utilities provide a consistent way to test error handling across different components.
 
 ## Available Utilities
 
@@ -46,8 +46,8 @@ The `ErrorCollector` class is used to collect and categorize errors and warnings
 const collector = new ErrorCollector();
 
 // Handle errors
-collector.handleError(new MeldError('Test error', { severity: ErrorSeverity.Fatal }));
-collector.handleError(new MeldError('Test warning', { severity: ErrorSeverity.Warning }));
+collector.handleError(new MlldError('Test error', { severity: ErrorSeverity.Fatal }));
+collector.handleError(new MlldError('Test warning', { severity: ErrorSeverity.Warning }));
 
 // Check collected errors and warnings
 expect(collector.errors).toHaveLength(1);
@@ -58,7 +58,7 @@ const allErrors = collector.getAllErrors();
 expect(allErrors).toHaveLength(2);
 
 // Filter errors by type
-const resolutionErrors = collector.getErrorsOfType(MeldResolutionError);
+const resolutionErrors = collector.getErrorsOfType(MlldResolutionError);
 const directiveWarnings = collector.getWarningsOfType(DirectiveError);
 
 // Reset the collector
@@ -82,7 +82,7 @@ expect(permissiveOptions.strict).toBe(false);
 expect(permissiveOptions.errorHandler).toBeDefined();
 
 // Test the error handler
-permissiveOptions.errorHandler!(new MeldError('Test', { severity: ErrorSeverity.Recoverable }));
+permissiveOptions.errorHandler!(new MlldError('Test', { severity: ErrorSeverity.Recoverable }));
 expect(collector.warnings).toHaveLength(1);
 ```
 
@@ -92,12 +92,12 @@ The error testing utilities provide several assertion helpers for checking error
 
 ```typescript
 // Check error severity
-const error = new MeldError('Test', { severity: ErrorSeverity.Recoverable });
+const error = new MlldError('Test', { severity: ErrorSeverity.Recoverable });
 expectErrorSeverity(error, ErrorSeverity.Recoverable);
 
 // Check error type and severity
-const resolutionError = new MeldResolutionError('Test', { severity: ErrorSeverity.Recoverable });
-expectErrorTypeAndSeverity(resolutionError, MeldResolutionError, ErrorSeverity.Recoverable);
+const resolutionError = new MlldResolutionError('Test', { severity: ErrorSeverity.Recoverable });
+expectErrorTypeAndSeverity(resolutionError, MlldResolutionError, ErrorSeverity.Recoverable);
 
 // Check DirectiveError with specific code
 const directiveError = new DirectiveError(
@@ -107,8 +107,8 @@ const directiveError = new DirectiveError(
 );
 expectDirectiveErrorWithCode(directiveError, DirectiveErrorCode.VALIDATION_FAILED, ErrorSeverity.Recoverable);
 
-// Check MeldResolutionError with specific details
-const detailedError = new MeldResolutionError('Test', { 
+// Check MlldResolutionError with specific details
+const detailedError = new MlldResolutionError('Test', { 
   severity: ErrorSeverity.Recoverable,
   details: {
     variableName: 'test',
@@ -128,26 +128,26 @@ The error testing utilities provide async assertion helpers for testing function
 ```typescript
 // Test that a function throws with the correct severity
 const throwingFn = () => {
-  throw new MeldResolutionError('Test', { severity: ErrorSeverity.Fatal });
+  throw new MlldResolutionError('Test', { severity: ErrorSeverity.Fatal });
 };
 await expectThrowsWithSeverity(
   throwingFn,
-  MeldResolutionError,
+  MlldResolutionError,
   ErrorSeverity.Fatal
 );
 
 // Test that a function generates warnings in permissive mode
 const warningFn = (options: ErrorModeTestOptions) => {
   if (options.errorHandler) {
-    options.errorHandler(new MeldResolutionError('Test', { severity: ErrorSeverity.Recoverable }));
+    options.errorHandler(new MlldResolutionError('Test', { severity: ErrorSeverity.Recoverable }));
   } else if (options.strict) {
-    throw new MeldResolutionError('Test', { severity: ErrorSeverity.Recoverable });
+    throw new MlldResolutionError('Test', { severity: ErrorSeverity.Recoverable });
   }
 };
-await expectWarningsInPermissiveMode(warningFn, MeldResolutionError);
+await expectWarningsInPermissiveMode(warningFn, MlldResolutionError);
 
 // Test that a function throws in strict mode but only warns in permissive mode
-await expectThrowsInStrictButWarnsInPermissive(warningFn, MeldResolutionError);
+await expectThrowsInStrictButWarnsInPermissive(warningFn, MlldResolutionError);
 ```
 
 ## Testing Specific Error Types
@@ -175,17 +175,17 @@ it('should throw DirectiveError with correct code for invalid syntax', async () 
 });
 ```
 
-### Testing MeldResolutionError
+### Testing MlldResolutionError
 
 ```typescript
-it('should throw MeldResolutionError with correct details for undefined variable', async () => {
+it('should throw MlldResolutionError with correct details for undefined variable', async () => {
   // Arrange
   const resolver = new VariableReferenceResolver(/* dependencies */);
   
   // Act & Assert
   await expectThrowsWithSeverity(
     () => resolver.resolve('${undefined}', context),
-    MeldResolutionError,
+    MlldResolutionError,
     ErrorSeverity.Recoverable
   );
   
@@ -234,7 +234,7 @@ describe('VariableReferenceResolver', () => {
     // Act & Assert
     await expectThrowsWithSeverity(
       () => resolver.resolve('${undefined}', context, { strict: true }),
-      MeldResolutionError,
+      MlldResolutionError,
       ErrorSeverity.Recoverable
     );
   });
@@ -246,7 +246,7 @@ describe('VariableReferenceResolver', () => {
     // Act & Assert
     await expectWarningsInPermissiveMode(
       (options) => resolver.resolve('${undefined}', context, options),
-      MeldResolutionError
+      MlldResolutionError
     );
   });
   
@@ -257,7 +257,7 @@ describe('VariableReferenceResolver', () => {
     // Act & Assert
     await expectThrowsInStrictButWarnsInPermissive(
       (options) => resolver.resolve('${undefined}', context, options),
-      MeldResolutionError
+      MlldResolutionError
     );
   });
 });
@@ -293,7 +293,7 @@ describe('ImportDirectiveHandler', () => {
   
   it('should throw DirectiveError for missing file in strict mode', async () => {
     // Arrange
-    fileSystemService.readFile.mockRejectedValue(new MeldFileNotFoundError('File not found'));
+    fileSystemService.readFile.mockRejectedValue(new MlldFileNotFoundError('File not found'));
     resolutionService.resolveValue.mockResolvedValue('missing.mld');
     
     // Act & Assert
@@ -306,7 +306,7 @@ describe('ImportDirectiveHandler', () => {
   
   it('should warn for missing file in permissive mode', async () => {
     // Arrange
-    fileSystemService.readFile.mockRejectedValue(new MeldFileNotFoundError('File not found'));
+    fileSystemService.readFile.mockRejectedValue(new MlldFileNotFoundError('File not found'));
     resolutionService.resolveValue.mockResolvedValue('missing.mld');
     
     // Act & Assert

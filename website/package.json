@@ -1,7 +1,7 @@
 {
-  "name": "meld-docs",
+  "name": "mlld-docs",
   "version": "1.0.0",
-  "description": "Documentation site for Meld",
+  "description": "Documentation site for Mlld",
   "scripts": {
     "dev": "node src/convertDocs.js && eleventy --serve",
     "build": "node src/convertDocs.js && eleventy",

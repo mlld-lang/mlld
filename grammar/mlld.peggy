@@ -1,5 +1,5 @@
-// meld.pegjs
-// Meld grammar implementation - Refactored Version
+// mlld.pegjs
+// Mlld grammar implementation - Refactored Version
 
 {
   // NodeType, DirectiveKind, and helpers are injected via parser-dependencies
@@ -14,7 +14,7 @@
 // -------------------------------------------------------------------------
 // STRUCTURE NOTE: The build process concatenates files in this order:
 // -------------------------------------------------------------------------
-// 1. This root file (meld.peggy)
+// 1. This root file (mlld.peggy)
 // 2. Base components (context.peggy, tokens.peggy, etc.)
 // 3. Pattern abstractions (variables.peggy, content.peggy, etc.)
 // 4. Core content handlers (template.peggy, command.peggy, etc.)

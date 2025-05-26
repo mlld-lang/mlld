@@ -21,7 +21,7 @@
 ## Documentation
 ### Architecture
 @embed [$./docs/dev/ARCHITECTURE.md # TESTING INFRASTRUCTURE] 
-### Meld Processing Pipeline
+### Mlld Processing Pipeline
 @embed [$./docs/dev/PIPELINE.md]
 
 ## Test Results

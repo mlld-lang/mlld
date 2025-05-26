@@ -58,7 +58,7 @@ describe('Path Directive', () => {
   
   test('Path with home directory alias', async () => {
     // Using brackets for variable interpolation per new syntax rules
-    const content = `@path home = [@~/meld/files]`;
+    const content = `@path home = [@~/mlld/files]`;
     const parseResult = await parse(content);
     const directiveNode = parseResult.ast[0];
     
@@ -72,7 +72,7 @@ describe('Path Directive', () => {
     
     // Check raw values
     expect(directiveNode.raw.identifier).toBe('home');
-    expect(directiveNode.raw.path).toBe('@HOMEPATH/meld/files');
+    expect(directiveNode.raw.path).toBe('@HOMEPATH/mlld/files');
     
     // Check path values
     expect(Array.isArray(directiveNode.values.path)).toBe(true);

@@ -1,7 +1,7 @@
 # VSCode Extension Implementation Plan
 
 ## Overview
-This plan outlines the implementation of a modern VSCode extension for Meld that leverages the actual grammar parser and provides intelligent features like autocomplete, syntax highlighting, and semantic analysis.
+This plan outlines the implementation of a modern VSCode extension for Mlld that leverages the actual grammar parser and provides intelligent features like autocomplete, syntax highlighting, and semantic analysis.
 
 ## Key Features to Implement
 
@@ -18,7 +18,7 @@ This plan outlines the implementation of a modern VSCode extension for Meld that
 
 #### Path Autocomplete
 When user types `[` after a path-accepting directive:
-- Show files in project matching Meld path rules
+- Show files in project matching Mlld path rules
 - Support special variables: `@PROJECTPATH`, `@CWD`, etc.
 - Filter to show only `.md` and `.mld` files
 
@@ -43,7 +43,7 @@ When user types `@add "`:
 
 ### 3. Language Server Implementation
 
-Use the actual Meld parser for accurate analysis:
+Use the actual Mlld parser for accurate analysis:
 
 ```typescript
 // parser-bridge.ts
@@ -75,10 +75,10 @@ editors/vscode/
 ├── package.json                    # Extension manifest
 ├── language-configuration.json     # Brackets, comments config
 ├── syntaxes/
-│   └── meld.tmLanguage.json      # TextMate grammar
+│   └── mlld.tmLanguage.json      # TextMate grammar
 ├── src/
 │   ├── extension.ts               # Main extension entry
-│   ├── parser-bridge.ts           # Interface to Meld parser
+│   ├── parser-bridge.ts           # Interface to Mlld parser
 │   ├── providers/
 │   │   ├── completion-provider.ts # Autocomplete logic
 │   │   ├── hover-provider.ts      # Hover information
@@ -103,7 +103,7 @@ editors/vscode/
 3. Test with example files
 
 #### Phase 2: Parser Integration
-1. Create parser-bridge to use actual Meld parser
+1. Create parser-bridge to use actual Mlld parser
 2. Add syntax validation and error reporting
 3. Implement semantic token provider for enhanced highlighting
 
@@ -121,9 +121,9 @@ editors/vscode/
 ### 6. Configuration
 
 Add settings for:
-- `meld.enableAutocomplete`: Enable/disable autocomplete
-- `meld.projectPath`: Override `@PROJECTPATH` detection
-- `meld.includePaths`: Additional paths for import resolution
+- `mlld.enableAutocomplete`: Enable/disable autocomplete
+- `mlld.projectPath`: Override `@PROJECTPATH` detection
+- `mlld.includePaths`: Additional paths for import resolution
 
 ### 7. Key Implementation Details
 
@@ -174,13 +174,13 @@ class VariableTracker {
 ### 8. Testing Strategy
 
 - Unit tests for parsers and analyzers
-- Integration tests using real Meld files
+- Integration tests using real Mlld files
 - Manual testing with complex examples
 - Test autocomplete in various contexts
 
 ### 9. Future Enhancements
 
-- **Formatting**: Auto-format Meld files
+- **Formatting**: Auto-format Mlld files
 - **Refactoring**: Rename variables across files
 - **Code lens**: Show variable values inline
 - **Snippets**: Common patterns like `@text name = "value"`
@@ -195,4 +195,4 @@ class VariableTracker {
 5. Special path variables: `@PROJECTPATH`, `@CWD`
 6. Comments use `>>` prefix
 
-This extension will provide a superior editing experience by using the actual Meld parser, ensuring perfect consistency with the language implementation.
+This extension will provide a superior editing experience by using the actual Mlld parser, ensuring perfect consistency with the language implementation.

@@ -34,7 +34,7 @@ function installPackage(packageName) {
     const npmConfigOutput = execSync('npm config get prefix', { encoding: 'utf8' }).trim();
     
     // Try to write to a test file in the global node_modules directory
-    const testPath = path.join(npmConfigOutput, 'node_modules', '.meld-test');
+    const testPath = path.join(npmConfigOutput, 'node_modules', '.mlld-test');
     
     try {
       fs.writeFileSync(testPath, 'test');

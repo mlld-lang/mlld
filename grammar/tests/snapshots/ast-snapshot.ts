@@ -3,13 +3,13 @@
  * This helps ensure parsing is stable during refactoring
  */
 import { parse } from '../../../core/ast';
-import type { DirectiveNode, MeldNode } from '../../../core/ast/types';
+import type { DirectiveNode, MlldNode } from '../../../core/ast/types';
 
 /**
  * Captures an AST snapshot for later comparison
  */
 export async function captureASTSnapshot(input: string): Promise<{
-  ast: MeldNode[];
+  ast: MlldNode[];
   firstNode?: DirectiveNode;
 }> {
   const { ast } = await parse(input);
@@ -57,8 +57,8 @@ interface CompareOptions {
  * Used when refactoring to ensure behavior doesn't change
  */
 export function compareASTSnapshots(
-  oldSnapshot: { ast: MeldNode[]; firstNode?: DirectiveNode },
-  newSnapshot: { ast: MeldNode[]; firstNode?: DirectiveNode },
+  oldSnapshot: { ast: MlldNode[]; firstNode?: DirectiveNode },
+  newSnapshot: { ast: MlldNode[]; firstNode?: DirectiveNode },
   options: CompareOptions = {}
 ): {
   differences: string[];

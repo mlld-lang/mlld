@@ -23,7 +23,7 @@
       <nav>
         <ul>
           <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
-          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+          <li><a href="https://github.com/mlldorg/mlld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -92,7 +92,7 @@
           
         
           
-            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+            <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
           
         
           
@@ -216,11 +216,11 @@
 <h2 id="layout%3A-docs.njktitle%3A-%22variables%22" tabindex="-1">layout: docs.njk<br>
 title: &quot;Variables&quot;</h2>
 <h1 id="variables" tabindex="-1">Variables</h1>
-<p>Meld has three distinct types of variables, each with its own syntax and usage patterns.</p>
+<p>Mlld has three distinct types of variables, each with its own syntax and usage patterns.</p>
 <h2 id="variable-types" tabindex="-1">Variable Types</h2>
 <h3 id="path-variables" tabindex="-1">Path Variables</h3>
 <p>Path variables are used for filesystem paths and command arguments:</p>
-<pre class="language-meld"><code class="language-meld">$path                # Reference a path variable
+<pre class="language-mlld"><code class="language-mlld">$path                # Reference a path variable
 $HOMEPATH or $~      # Special path variable for home directory
 $PROJECTPATH or $.   # Special path variable for project root
 </code></pre>
@@ -232,12 +232,12 @@ $PROJECTPATH or $.   # Special path variable for project root
 <li>Path segments are separated by forward slashes</li>
 </ul>
 <p>Example:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
 <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>$docs/guide.md<span class="token punctuation">]</span></span>
 </code></pre>
 <h3 id="text-variables" tabindex="-1">Text Variables</h3>
 <p>Text variables store unstructured text:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token punctuation">{</span><span class="token punctuation">{</span>variable<span class="token punctuation">}</span><span class="token punctuation">}</span>            # Reference a text variable
+<pre class="language-mlld"><code class="language-mlld"><span class="token punctuation">{</span><span class="token punctuation">{</span>variable<span class="token punctuation">}</span><span class="token punctuation">}</span>            # Reference a text variable
 <span class="token punctuation">{</span><span class="token punctuation">{</span>variable>><span class="token punctuation">(</span>format<span class="token punctuation">)</span><span class="token punctuation">}</span><span class="token punctuation">}</span>  # Reference with formatting
 </code></pre>
 <ul>
@@ -246,13 +246,13 @@ $PROJECTPATH or $.   # Special path variable for project root
 <li>Environment variables ({{ENV_*}}) are a special case of text variables</li>
 </ul>
 <p>Example:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> <span class="token string">"Hello"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> <span class="token string">"Hello"</span>
 <span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"World"</span>
 <span class="token directive keyword">@text</span> message <span class="token operator">=</span> `<span class="token punctuation">{</span><span class="token punctuation">{</span>greeting<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>name<span class="token punctuation">}</span><span class="token punctuation">}</span>!`
 </code></pre>
 <h3 id="data-variables" tabindex="-1">Data Variables</h3>
 <p>Data variables store structured data:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token punctuation">{</span><span class="token punctuation">{</span>variable<span class="token punctuation">}</span><span class="token punctuation">}</span>                   # Reference a data variable
+<pre class="language-mlld"><code class="language-mlld"><span class="token punctuation">{</span><span class="token punctuation">{</span>variable<span class="token punctuation">}</span><span class="token punctuation">}</span>                   # Reference a data variable
 <span class="token punctuation">{</span><span class="token punctuation">{</span>variable.field<span class="token punctuation">}</span><span class="token punctuation">}</span>            # Access a field in a data variable
 <span class="token punctuation">{</span><span class="token punctuation">{</span>variable.field>><span class="token punctuation">(</span>format<span class="token punctuation">)</span><span class="token punctuation">}</span><span class="token punctuation">}</span>  # Reference with formatting
 </code></pre>
@@ -263,12 +263,12 @@ $PROJECTPATH or $.   # Special path variable for project root
 <li>Can be formatted with <code>&gt;&gt;</code></li>
 </ul>
 <p>Example:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> user <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> name: <span class="token string">"Alice"</span><span class="token punctuation">,</span> id: <span class="token number">123</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> user <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> name: <span class="token string">"Alice"</span><span class="token punctuation">,</span> id: <span class="token number">123</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
 <span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> `Hello<span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>user.name<span class="token punctuation">}</span><span class="token punctuation">}</span>! Your ID is <span class="token punctuation">{</span><span class="token punctuation">{</span>user.id<span class="token punctuation">}</span><span class="token punctuation">}</span>.`
 </code></pre>
 <h3 id="array-access" tabindex="-1">Array Access</h3>
 <p>When working with arrays, use dot notation to access array elements by index:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> items <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>"apple", "banana", "cherry"<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> items <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>"apple", "banana", "cherry"<span class="token punctuation">]</span></span>
 <span class="token directive keyword">@text</span> first <span class="token operator">=</span> `First item: <span class="token punctuation">{</span><span class="token punctuation">{</span>items.<span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">}</span>`
 <span class="token directive keyword">@text</span> second <span class="token operator">=</span> `Second item: <span class="token punctuation">{</span><span class="token punctuation">{</span>items.<span class="token number">1</span><span class="token punctuation">}</span><span class="token punctuation">}</span>`
 </code></pre>
@@ -280,30 +280,30 @@ $PROJECTPATH or $.   # Special path variable for project root
 <li>Simple values (strings, numbers) convert directly to text</li>
 <li>Objects and arrays convert to JSON string representation</li>
 </ul>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> name: <span class="token string">"test"</span><span class="token punctuation">,</span> version: <span class="token number">1</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> name: <span class="token string">"test"</span><span class="token punctuation">,</span> version: <span class="token number">1</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
 <span class="token directive keyword">@text</span> simple <span class="token operator">=</span> `Name: <span class="token punctuation">{</span><span class="token punctuation">{</span>config.name<span class="token punctuation">}</span><span class="token punctuation">}</span>`          # Outputs: Name: test
 <span class="token directive keyword">@text</span> object <span class="token operator">=</span> `Config: <span class="token punctuation">{</span><span class="token punctuation">{</span>config<span class="token punctuation">}</span><span class="token punctuation">}</span>`             # Outputs: Config: <span class="token punctuation">{</span><span class="token string">"name"</span>:<span class="token string">"test"</span><span class="token punctuation">,</span><span class="token string">"version"</span>:<span class="token number">1</span><span class="token punctuation">}</span>
 </code></pre>
 <h3 id="object-and-array-formatting" tabindex="-1">Object and Array Formatting</h3>
-<p>When referencing complete objects or arrays (rather than their individual fields), Meld formats them based on the context:</p>
+<p>When referencing complete objects or arrays (rather than their individual fields), Mlld formats them based on the context:</p>
 <h4 id="array-formatting" tabindex="-1">Array Formatting</h4>
 <p>When referencing an entire array:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> fruits <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>"apple", "banana", "orange"<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> fruits <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>"apple", "banana", "orange"<span class="token punctuation">]</span></span>
 </code></pre>
 <ul>
 <li>
 <p><strong>Inline context</strong> (within text, template literals):</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> list <span class="token operator">=</span> `My fruits: <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits<span class="token punctuation">}</span><span class="token punctuation">}</span>`  # Outputs: My fruits: apple<span class="token punctuation">,</span> banana<span class="token punctuation">,</span> orange
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> list <span class="token operator">=</span> `My fruits: <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits<span class="token punctuation">}</span><span class="token punctuation">}</span>`  # Outputs: My fruits: apple<span class="token punctuation">,</span> banana<span class="token punctuation">,</span> orange
 </code></pre>
 <p>Arrays are formatted as comma-separated values with spaces.</p>
 </li>
 <li>
 <p><strong>Block context</strong> (in embed directives, standalone references):</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@add</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits<span class="token punctuation">}</span><span class="token punctuation">}</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@add</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>Simple arrays (of strings, numbers) use comma-separated values with spaces.</p>
 <p>Arrays of objects are formatted as properly indented JSON:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> people <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>{ "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> people <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>{ "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }<span class="token punctuation">]</span></span>
 <span class="token directive keyword">@add</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>people<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>This outputs the array as properly indented JSON:</p>
@@ -322,18 +322,18 @@ $PROJECTPATH or $.   # Special path variable for project root
 </ul>
 <h4 id="object-formatting" tabindex="-1">Object Formatting</h4>
 <p>When referencing an entire object:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> <span class="token punctuation">{</span> <span class="token string">"host"</span>: <span class="token string">"localhost"</span><span class="token punctuation">,</span> <span class="token string">"port"</span>: <span class="token number">8080</span> <span class="token punctuation">}</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> <span class="token punctuation">{</span> <span class="token string">"host"</span>: <span class="token string">"localhost"</span><span class="token punctuation">,</span> <span class="token string">"port"</span>: <span class="token number">8080</span> <span class="token punctuation">}</span>
 </code></pre>
 <ul>
 <li>
 <p><strong>Inline context</strong>:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> settings <span class="token operator">=</span> `My config: <span class="token punctuation">{</span><span class="token punctuation">{</span>config<span class="token punctuation">}</span><span class="token punctuation">}</span>`  # Outputs: My config: <span class="token punctuation">{</span><span class="token string">"host"</span>:<span class="token string">"localhost"</span><span class="token punctuation">,</span><span class="token string">"port"</span>:<span class="token number">8080</span><span class="token punctuation">}</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> settings <span class="token operator">=</span> `My config: <span class="token punctuation">{</span><span class="token punctuation">{</span>config<span class="token punctuation">}</span><span class="token punctuation">}</span>`  # Outputs: My config: <span class="token punctuation">{</span><span class="token string">"host"</span>:<span class="token string">"localhost"</span><span class="token punctuation">,</span><span class="token string">"port"</span>:<span class="token number">8080</span><span class="token punctuation">}</span>
 </code></pre>
 <p>Objects are formatted as compact JSON without whitespace.</p>
 </li>
 <li>
 <p><strong>Block context</strong> (in embed directives, standalone references):</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@add</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>config<span class="token punctuation">}</span><span class="token punctuation">}</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@add</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>config<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>Objects are formatted as properly indented JSON:</p>
 <pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
@@ -348,7 +348,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 <li>Text variables can be used as values in data structures</li>
 <li>Text variables can also be used as object keys</li>
 </ul>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"Alice"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"Alice"</span>
 <span class="token directive keyword">@text</span> key <span class="token operator">=</span> <span class="token string">"username"</span>
 
 <span class="token directive keyword">@data</span> user <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>
@@ -375,7 +375,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 </ul>
 <h2 id="string-concatenation" tabindex="-1">String Concatenation</h2>
 <p>You can concatenate strings using the <code>++</code> operator:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> <span class="token string">"Hello"</span> ++ <span class="token string">" "</span> ++ <span class="token string">"World"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> <span class="token string">"Hello"</span> ++ <span class="token string">" "</span> ++ <span class="token string">"World"</span>
 <span class="token directive keyword">@text</span> message <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>intro<span class="token punctuation">}</span><span class="token punctuation">}</span> ++ <span class="token punctuation">{</span><span class="token punctuation">{</span>body<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <ul>
@@ -444,7 +444,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlldorg/mlld">GitHub</a></p>
     </div>
   </footer>
 </body>

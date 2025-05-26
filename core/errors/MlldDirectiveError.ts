@@ -1,4 +1,4 @@
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
 
 export interface DirectiveLocation {
   line: number;
@@ -6,7 +6,7 @@ export interface DirectiveLocation {
   filePath?: string;
 }
 
-export interface MeldDirectiveErrorOptions {
+export interface MlldDirectiveErrorOptions {
   location?: DirectiveLocation;
   code?: string;
   cause?: Error;
@@ -14,14 +14,14 @@ export interface MeldDirectiveErrorOptions {
   context?: any;
 }
 
-export class MeldDirectiveError extends MeldError {
+export class MlldDirectiveError extends MlldError {
   public readonly directiveKind: string;
   public readonly location?: DirectiveLocation;
 
   constructor(
     message: string,
     directiveKind: string,
-    options: MeldDirectiveErrorOptions = {}
+    options: MlldDirectiveErrorOptions = {}
   ) {
     const locationStr = options.location 
       ? ` at line ${options.location.line}, column ${options.location.column}${options.location.filePath ? ` in ${options.location.filePath}` : ''}`
@@ -43,11 +43,11 @@ export class MeldDirectiveError extends MeldError {
       sourceLocation: options.location 
     });
     
-    this.name = 'MeldDirectiveError';
+    this.name = 'MlldDirectiveError';
     this.directiveKind = directiveKind;
     this.location = options.location;
     
     // Ensure proper prototype chain for instanceof checks
-    Object.setPrototypeOf(this, MeldDirectiveError.prototype);
+    Object.setPrototypeOf(this, MlldDirectiveError.prototype);
   }
 } 

@@ -1,5 +1,5 @@
 /**
- * Types for variables in Meld grammar
+ * Types for variables in Mlld grammar
  */
 
 /**

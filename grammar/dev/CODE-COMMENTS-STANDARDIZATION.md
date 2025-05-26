@@ -1,6 +1,6 @@
-# Meld Grammar Code Comments Standardization
+# Mlld Grammar Code Comments Standardization
 
-This document defines standards for code comments throughout the Meld grammar system to ensure consistency, improve readability, and facilitate maintenance.
+This document defines standards for code comments throughout the Mlld grammar system to ensure consistency, improve readability, and facilitate maintenance.
 
 ## 1. Comment Purpose and Goals
 

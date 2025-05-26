@@ -5,7 +5,7 @@ import { PathService } from '@services/fs/PathService';
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('Meld Interpreter - Fixture Tests', () => {
+describe('Mlld Interpreter - Fixture Tests', () => {
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
   
@@ -122,19 +122,19 @@ describe('Meld Interpreter - Fixture Tests', () => {
       // Set up package.json for project path resolution
       if (fixture.name.includes('path-assignment-project')) {
         // Create the expected project structure
-        await fileSystem.mkdir('/Users/adam/dev/meld');
-        await fileSystem.writeFile('/Users/adam/dev/meld/package.json', JSON.stringify({
-          name: 'meld',
+        await fileSystem.mkdir('/Users/adam/dev/mlld');
+        await fileSystem.writeFile('/Users/adam/dev/mlld/package.json', JSON.stringify({
+          name: 'mlld',
           version: '1.0.0'
         }));
-        await fileSystem.mkdir('/Users/adam/dev/meld/src');
+        await fileSystem.mkdir('/Users/adam/dev/mlld/src');
       }
       
       // Set up specific test files that aren't in the examples directory
       if (fixture.name.startsWith('import-')) {
         // Set up import test files if they don't exist
         if (!await fileSystem.exists('/config.mld')) {
-          await fileSystem.writeFile('/config.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text author = "Meld Test Suite"');
+          await fileSystem.writeFile('/config.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text author = "Mlld Test Suite"');
         }
         if (!await fileSystem.exists('/utils.mld')) {
           await fileSystem.writeFile('/utils.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text version = "1.0.0"\n@path docs = "./docs"');
@@ -165,7 +165,7 @@ describe('Meld Interpreter - Fixture Tests', () => {
         // For path-assignment-project, we need to set the correct basePath
         let basePath = fixture.basePath || '/';
         if (fixture.name === 'path-assignment-project') {
-          basePath = '/Users/adam/dev/meld';
+          basePath = '/Users/adam/dev/mlld';
         }
         // For npm run tests, we need to be in the project directory
         if (fixture.name.includes('run-command-bases-npm-run')) {

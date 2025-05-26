@@ -6,13 +6,13 @@ This document outlines the process for maintaining the separation between develo
 
 The repository is organized to allow developers to work with additional files and directories without polluting the public branch:
 
-- **Development branches**: Contains working directories like `_meld/`, `dev/`, and temporary files
+- **Development branches**: Contains working directories like `_mlld/`, `dev/`, and temporary files
 - **Public branch**: Clean version of the codebase without development-only files
 
 ## Working with Development Files
 
 Feel free to create working files in:
-- `_meld/` - For collaborative work, analysis, and documentation
+- `_mlld/` - For collaborative work, analysis, and documentation
 - `dev/` - For development notes and planning
 - `tmp/` - For temporary files
 
@@ -30,7 +30,7 @@ When you're ready to contribute code that will be included in a public release:
 2. Review the clean branch to ensure it contains only what should be public:
    ```bash
    git checkout public
-   git ls-files | grep -E "^(_meld|dev|tmp)/"  # Should return nothing
+   git ls-files | grep -E "^(_mlld|dev|tmp)/"  # Should return nothing
    ```
 
 3. Create your pull request from the clean branch, not your development branch.

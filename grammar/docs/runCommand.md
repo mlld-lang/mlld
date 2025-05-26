@@ -4,7 +4,7 @@ The `runCommand` subtype of the `@run` directive executes shell commands and cap
 
 ## Syntax
 
-```meld
+```mlld
 @run [command arguments]
 ```
 
@@ -14,7 +14,7 @@ Where:
 
 Multi-line commands are supported using the same bracket syntax:
 
-```meld
+```mlld
 @run [
   command arg1 \
   | pipe-to-another-command arg2
@@ -48,7 +48,7 @@ The `runCommand` subtype nodes have this structure:
 
 ### Basic Command
 
-```meld
+```mlld
 @run [ls -la]
 ```
 
@@ -72,7 +72,7 @@ AST:
 
 ### Multi-line Command
 
-```meld
+```mlld
 @run [
   find . -name "*.js" | 
   xargs grep "TODO"
@@ -102,7 +102,7 @@ AST:
 
 ### Command with Variable Interpolation
 
-```meld
+```mlld
 @run [ls -la {{directory}}]
 ```
 

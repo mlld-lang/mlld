@@ -4,7 +4,7 @@
 
 ## Core Concept: Creating Reusable Command Templates
 
-The `@exec` directive allows you to create named, reusable templates for runnable commands (both shell commands and language scripts). These templates can accept parameters, making them function like simple macros or functions within Meld.
+The `@exec` directive allows you to create named, reusable templates for runnable commands (both shell commands and language scripts). These templates can accept parameters, making them function like simple macros or functions within Mlld.
 
 Defined commands are invoked using the `@run $commandName(...)` syntax.
 
@@ -14,7 +14,7 @@ There are two primary forms:
 
 **1. Defining Basic Commands (Shell Commands):**
 
-```meld
+```mlld
 @exec commandName(param1, param2) = @run [command template with {{param1}} and {{param2}}]
 
 // Or for multiline commands:
@@ -31,7 +31,7 @@ There are two primary forms:
 
 **2. Defining Language Commands (JS, Python, Bash):**
 
-```meld
+```mlld
 @exec jsCommand(name, value) = @run js(name, value) [[
   // Raw JavaScript code using parameters name & value
   console.log(`Processing ${name}: ${value}`);
@@ -57,7 +57,7 @@ When defining a Basic Command template (`@run [...]` or `@run [[...]]`):
 
 - **Shell Command**: It should be a valid shell command string.
 - **Parameter Placeholders**: It can contain `{{param1}}`, `{{param2}}`, etc., corresponding to the parameters defined in the parentheses `(...)`. These will be replaced by the arguments provided when the command is invoked via `@run $commandName(...)`.
-- **Other Variables**: It can also contain standard Meld variable references (`{{globalVar}}`, `$pathVar`). These are *not* resolved when `@exec` is processed; they are resolved *at the time the command is executed* via `@run`.
+- **Other Variables**: It can also contain standard Mlld variable references (`{{globalVar}}`, `$pathVar`). These are *not* resolved when `@exec` is processed; they are resolved *at the time the command is executed* via `@run`.
 - **Multiline Syntax (`[[...]]`)**: If using double brackets, the first newline immediately following `[[` is ignored.
 
 ## Language Code Block (for Language Commands)

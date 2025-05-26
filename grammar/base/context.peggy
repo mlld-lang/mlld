@@ -1,10 +1,10 @@
-// MELD GRAMMAR CONTEXT DETECTION
+// MLLD GRAMMAR CONTEXT DETECTION
 // A comprehensive system for disambiguating different code contexts
 
 /* 
 # Context Detection System
 
-This file provides a core abstraction for detecting different contexts in Meld grammar,
+This file provides a core abstraction for detecting different contexts in Mlld grammar,
 with a particular focus on disambiguating @ symbol usage between:
 
 1. DirectiveContext   - Top-level directive start (e.g., @run, @text)

@@ -1,8 +1,8 @@
 "use strict";
 /**
- * Meld Parser Entry Point
+ * Mlld Parser Entry Point
  *
- * Provides the main parsing functionality for Meld documents.
+ * Provides the main parsing functionality for Mlld documents.
  * Re-exports the generated parser and related types.
  */
 var __importDefault = (this && this.__importDefault) || function (mod) {
@@ -16,9 +16,9 @@ exports.parseSync = parseSync;
 const parser_js_1 = __importDefault(require("./parser.js"));
 exports.parser = parser_js_1.default;
 /**
- * Parse Meld source code into an AST
+ * Parse Mlld source code into an AST
  *
- * @param source The Meld source code to parse
+ * @param source The Mlld source code to parse
  * @param options Parser options
  * @returns The parsed AST nodes
  * @throws {SyntaxError} If the source code is invalid

@@ -20,7 +20,7 @@ export interface InterpretOptions {
 }
 
 /**
- * Main entry point for the Meld interpreter.
+ * Main entry point for the Mlld interpreter.
  * This replaces the complex service orchestration with a simple function.
  */
 export async function interpret(

@@ -23,7 +23,7 @@
       <nav>
         <ul>
           <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
-          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+          <li><a href="https://github.com/mlldorg/mlld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -92,7 +92,7 @@
           
         
           
-            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+            <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
           
         
           
@@ -216,9 +216,9 @@
 <h2 id="layout%3A-docs.njktitle%3A-%22%40run-directive%22" tabindex="-1">layout: docs.njk<br>
 title: &quot;@run Directive&quot;</h2>
 <h1 id="%40run-directive" tabindex="-1">@run Directive</h1>
-<p>The <code>@run</code> directive executes shell commands and includes their output in your Meld document.</p>
+<p>The <code>@run</code> directive executes shell commands and includes their output in your Mlld document.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>command_text<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>command_text<span class="token punctuation">]</span></span>
 <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>command_text<span class="token punctuation">]</span></span> under header_text
 <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>$command(@textvar1, @textvar2)<span class="token punctuation">]</span></span>
 </code></pre>
@@ -253,7 +253,7 @@ title: &quot;@run Directive&quot;</h2>
 </ul>
 <h2 id="adding-headers" tabindex="-1">Adding Headers</h2>
 <p>You can add a header to command output using the <code>under</code> keyword:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>date<span class="token punctuation">]</span></span> under Current Date
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>date<span class="token punctuation">]</span></span> under Current Date
 </code></pre>
 <p>This will add a header &quot;Current Date&quot; above the command output.</p>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
@@ -265,30 +265,30 @@ title: &quot;@run Directive&quot;</h2>
 </ul>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic command execution:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hello, World!"<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hello, World!"<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using variables in commands:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"Alice"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"Alice"</span>
 <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hello, {{name}}!"<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using path variables:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
 <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la $src<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using command output in variables:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> date <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>date +"%Y-%m-%d"<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> date <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>date +"%Y-%m-%d"<span class="token punctuation">]</span></span>
 <span class="token directive keyword">@data</span> files <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la | jq -R -s -c 'split("\n")<span class="token punctuation">[</span>:-1<span class="token punctuation">]</span></span>']
 </code></pre>
 <p>Adding headers to output:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>git status<span class="token punctuation">]</span></span> under Repository Status
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>git status<span class="token punctuation">]</span></span> under Repository Status
 </code></pre>
 <p>Using defined commands:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@exec</span> listFiles<span class="token punctuation">(</span>dir<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la @dir<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@exec</span> listFiles<span class="token punctuation">(</span>dir<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la @dir<span class="token punctuation">]</span></span>
 <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>$listFiles($PROJECTPATH)<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="environment-%26-working-directory" tabindex="-1">Environment &amp; Working Directory</h2>
 <ul>
-<li>Commands execute in the environment of the Meld process</li>
+<li>Commands execute in the environment of the Mlld process</li>
 <li>The working directory defaults to the current working directory</li>
 <li>Environment variables are available to the command</li>
 </ul>
@@ -361,7 +361,7 @@ title: &quot;@run Directive&quot;</h2>
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlldorg/mlld">GitHub</a></p>
     </div>
   </footer>
 </body>

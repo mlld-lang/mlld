@@ -66,7 +66,7 @@ TypeScript interfaces will have comprehensive JSDoc comments:
  * or the result of another directive.
  * 
  * @example
- * ```meld
+ * ```mlld
  * @text greeting = "Hello, world!"
  * @text template = [[Value with {{variables}}]]
  * @text command = @run echo "Hello"
@@ -696,7 +696,7 @@ jobs:
 function registerDocumentationCommands(context: vscode.ExtensionContext) {
   // Generate documentation for current file
   context.subscriptions.push(
-    vscode.commands.registerCommand('meldGrammar.generateDocsForCurrentFile', () => {
+    vscode.commands.registerCommand('mlldGrammar.generateDocsForCurrentFile', () => {
       const currentFile = vscode.window.activeTextEditor?.document.uri.fsPath;
       
       if (currentFile) {
@@ -707,7 +707,7 @@ function registerDocumentationCommands(context: vscode.ExtensionContext) {
   
   // Preview documentation
   context.subscriptions.push(
-    vscode.commands.registerCommand('meldGrammar.previewDocs', () => {
+    vscode.commands.registerCommand('mlldGrammar.previewDocs', () => {
       return previewDocumentation();
     })
   );

@@ -1,7 +1,7 @@
 # Shared Types Pattern for Breaking Circular Dependencies
 
 ## Overview
-This document describes the shared-types pattern implemented to break circular dependencies in the Meld codebase. The pattern centralizes core type definitions that have no dependencies but are depended upon by many other modules.
+This document describes the shared-types pattern implemented to break circular dependencies in the Mlld codebase. The pattern centralizes core type definitions that have no dependencies but are depended upon by many other modules.
 
 ## Problem
 Circular dependencies in TypeScript occur when:

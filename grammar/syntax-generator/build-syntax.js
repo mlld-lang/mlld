@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-class MeldSyntaxGenerator {
+class MlldSyntaxGenerator {
   constructor() {
     // Extract directives from grammar
     this.directives = this.extractDirectivesFromGrammar();
@@ -51,10 +51,10 @@ class MeldSyntaxGenerator {
   }
 
   generatePrism() {
-    const prismLang = `// Auto-generated Prism.js language definition for Meld
+    const prismLang = `// Auto-generated Prism.js language definition for Mlld
 // Generated from grammar at ${new Date().toISOString()}
 
-Prism.languages.meld = {
+Prism.languages.mlld = {
   'comment': {
     pattern: /${this.patterns.comment}/,
     greedy: true
@@ -103,8 +103,8 @@ Prism.languages.meld = {
   'punctuation': /[{}(),]/
 };
 
-// Also highlight .meld and .mld files
-Prism.languages.mld = Prism.languages.meld;
+// Also highlight .mlld and .mld files
+Prism.languages.mld = Prism.languages.mlld;
 `;
     
     return prismLang;
@@ -112,12 +112,12 @@ Prism.languages.mld = Prism.languages.meld;
 
   generateTextMate() {
     const textmate = {
-      name: 'Meld',
-      scopeName: 'source.meld',
-      fileTypes: ['meld', 'mld'],
+      name: 'Mlld',
+      scopeName: 'source.mlld',
+      fileTypes: ['mlld', 'mld'],
       patterns: [
         {
-          name: 'keyword.control.directive.meld',
+          name: 'keyword.control.directive.mlld',
           match: this.patterns.directive
         },
         ...this.generateTextMatePatterns()
@@ -128,22 +128,22 @@ Prism.languages.mld = Prism.languages.meld;
   }
 
   generateMarkdownInjection() {
-    // This creates an injection grammar that adds Meld highlighting to Markdown files
-    // It only activates on lines starting with Meld directives
+    // This creates an injection grammar that adds Mlld highlighting to Markdown files
+    // It only activates on lines starting with Mlld directives
     const injection = {
-      scopeName: 'markdown.meld.injection',
+      scopeName: 'markdown.mlld.injection',
       injectionSelector: 'text.html.markdown, text.html.markdown.source',
       patterns: [
         {
-          // Match any line starting with a Meld directive
+          // Match any line starting with a Mlld directive
           begin: `^(${this.patterns.directive})`,
           end: '$',
-          name: 'meta.embedded.block.meld',
+          name: 'meta.embedded.block.mlld',
           beginCaptures: {
-            1: { name: 'keyword.control.directive.meld' }
+            1: { name: 'keyword.control.directive.mlld' }
           },
           patterns: [
-            // Apply all Meld patterns to the rest of the line
+            // Apply all Mlld patterns to the rest of the line
             ...this.generateTextMatePatterns()
           ]
         }
@@ -157,61 +157,61 @@ Prism.languages.mld = Prism.languages.meld;
     // Extract just the patterns array for reuse
     return [
       {
-        name: 'comment.line.double-slash.meld',
+        name: 'comment.line.double-slash.mlld',
         match: this.patterns.comment
       },
       {
-        name: 'string.template.meld',
+        name: 'string.template.mlld',
         begin: '\\[\\[',
         end: '\\]\\]',
         patterns: [
           {
-            name: 'variable.template.meld',
+            name: 'variable.template.mlld',
             match: this.patterns.templateVar
           }
         ]
       },
       {
-        name: 'meta.path.meld',
+        name: 'meta.path.mlld',
         begin: '\\[',
         end: '\\]',
         patterns: [
           {
-            name: 'markup.underline.link.meld',
+            name: 'markup.underline.link.mlld',
             match: 'https?://[^\\]]+'
           }
         ]
       },
       {
-        name: 'string.quoted.double.meld',
+        name: 'string.quoted.double.mlld',
         match: this.patterns.string
       },
       {
-        name: 'variable.other.meld',
+        name: 'variable.other.mlld',
         match: this.patterns.variable
       },
       {
-        name: 'keyword.operator.meld',
+        name: 'keyword.operator.mlld',
         match: this.patterns.operators
       },
       {
-        name: 'constant.numeric.meld',
+        name: 'constant.numeric.mlld',
         match: this.patterns.number
       },
       {
-        name: 'constant.language.boolean.meld',
+        name: 'constant.language.boolean.mlld',
         match: this.patterns.boolean
       },
       {
-        name: 'constant.language.null.meld',
+        name: 'constant.language.null.mlld',
         match: this.patterns.null
       }
     ];
   }
 
   generateVim() {
-    const vim = `" Vim syntax file for Meld
-" Language: Meld
+    const vim = `" Vim syntax file for Mlld
+" Language: Mlld
 " Maintainer: Auto-generated
 " Latest Revision: ${new Date().toISOString()}
 
@@ -220,68 +220,68 @@ if exists("b:current_syntax")
 endif
 
 " Keywords (directives)
-syn keyword meldDirective ${this.directives.map(d => '@' + d).join(' ')}
+syn keyword mlldDirective ${this.directives.map(d => '@' + d).join(' ')}
 
 " Comments
-syn match meldComment ">>.*$"
+syn match mlldComment ">>.*$"
 
 " Variables
-syn match meldVariable "@\\w\\+"
+syn match mlldVariable "@\\w\\+"
 
 " Template blocks
-syn region meldTemplate start="\\[\\[" end="\\]\\]" contains=meldTemplateVar
-syn match meldTemplateVar "{{[^}]\\+}}" contained
+syn region mlldTemplate start="\\[\\[" end="\\]\\]" contains=mlldTemplateVar
+syn match mlldTemplateVar "{{[^}]\\+}}" contained
 
 " Paths/URLs
-syn region meldPath start="\\[" end="\\]" contains=meldURL
-syn match meldURL "https\\?://[^\\]]*" contained
+syn region mlldPath start="\\[" end="\\]" contains=mlldURL
+syn match mlldURL "https\\?://[^\\]]*" contained
 
 " Strings
-syn region meldString start='"' end='"'
+syn region mlldString start='"' end='"'
 
 " Operators
-syn match meldOperator "\\(=\\|from\\|as\\)"
+syn match mlldOperator "\\(=\\|from\\|as\\)"
 
 " Numbers
-syn match meldNumber "\\<\\d\\+\\(\\.\\d\\+\\)\\?\\>"
+syn match mlldNumber "\\<\\d\\+\\(\\.\\d\\+\\)\\?\\>"
 
 " Booleans
-syn keyword meldBoolean true false
+syn keyword mlldBoolean true false
 
 " Null
-syn keyword meldNull null
+syn keyword mlldNull null
 
 " Define highlighting
-hi def link meldDirective Keyword
-hi def link meldComment Comment
-hi def link meldVariable Identifier
-hi def link meldTemplate String
-hi def link meldTemplateVar Special
-hi def link meldPath String
-hi def link meldURL Underlined
-hi def link meldString String
-hi def link meldOperator Operator
-hi def link meldNumber Number
-hi def link meldBoolean Boolean
-hi def link meldNull Constant
+hi def link mlldDirective Keyword
+hi def link mlldComment Comment
+hi def link mlldVariable Identifier
+hi def link mlldTemplate String
+hi def link mlldTemplateVar Special
+hi def link mlldPath String
+hi def link mlldURL Underlined
+hi def link mlldString String
+hi def link mlldOperator Operator
+hi def link mlldNumber Number
+hi def link mlldBoolean Boolean
+hi def link mlldNull Constant
 
-let b:current_syntax = "meld"
+let b:current_syntax = "mlld"
 `;
     
     return vim;
   }
 
   generateVimMarkdown() {
-    // Vim after/syntax file to add Meld highlighting to Markdown
-    const vimAfter = `" Vim syntax additions for Meld in Markdown
+    // Vim after/syntax file to add Mlld highlighting to Markdown
+    const vimAfter = `" Vim syntax additions for Mlld in Markdown
 " Place in after/syntax/markdown.vim
 
-" Match Meld directives at start of line in Markdown
-syn match markdownMeldDirective "^@\\(${this.directives.join('\\|')}\\)\\>" nextgroup=markdownMeldLine
-syn region markdownMeldLine start="." end="$" contained contains=meldVariable,meldTemplate,meldPath,meldString,meldOperator,meldNumber,meldBoolean,meldNull
+" Match Mlld directives at start of line in Markdown
+syn match markdownMlldDirective "^@\\(${this.directives.join('\\|')}\\)\\>" nextgroup=markdownMlldLine
+syn region markdownMlldLine start="." end="$" contained contains=mlldVariable,mlldTemplate,mlldPath,mlldString,mlldOperator,mlldNumber,mlldBoolean,mlldNull
 
-" Link to Meld syntax groups
-hi def link markdownMeldDirective meldDirective
+" Link to Mlld syntax groups
+hi def link markdownMlldDirective mlldDirective
 `;
     
     return vimAfter;
@@ -292,29 +292,29 @@ hi def link markdownMeldDirective meldDirective
     const rootDir = path.join(__dirname, '../../..');
     
     // Generate Prism.js
-    const prismPath = path.join(outputDir, 'prism-meld.js');
+    const prismPath = path.join(outputDir, 'prism-mlld.js');
     fs.writeFileSync(prismPath, this.generatePrism());
     console.log(`Generated: ${prismPath}`);
     
     // Generate TextMate/VSCode
-    const textmatePath = path.join(outputDir, 'meld.tmLanguage.json');
+    const textmatePath = path.join(outputDir, 'mlld.tmLanguage.json');
     const textmateContent = this.generateTextMate();
     fs.writeFileSync(textmatePath, textmateContent);
     console.log(`Generated: ${textmatePath}`);
     
     // Generate Vim
-    const vimPath = path.join(outputDir, 'meld.vim');
+    const vimPath = path.join(outputDir, 'mlld.vim');
     const vimContent = this.generateVim();
     fs.writeFileSync(vimPath, vimContent);
     console.log(`Generated: ${vimPath}`);
     
     // Generate Markdown injection grammar for TextMate
-    const injectionPath = path.join(outputDir, 'meld-markdown.injection.json');
+    const injectionPath = path.join(outputDir, 'mlld-markdown.injection.json');
     fs.writeFileSync(injectionPath, this.generateMarkdownInjection());
     console.log(`Generated: ${injectionPath}`);
     
     // Generate Vim Markdown support
-    const vimMarkdownPath = path.join(outputDir, 'markdown-meld.vim');
+    const vimMarkdownPath = path.join(outputDir, 'markdown-mlld.vim');
     fs.writeFileSync(vimMarkdownPath, this.generateVimMarkdown());
     console.log(`Generated: ${vimMarkdownPath}`);
     
@@ -324,17 +324,17 @@ hi def link markdownMeldDirective meldDirective
     // Copy to VSCode
     const vscodeDir = path.join(rootDir, 'editors/vscode/syntaxes');
     if (fs.existsSync(vscodeDir)) {
-      fs.writeFileSync(path.join(vscodeDir, 'meld.tmLanguage.json'), textmateContent);
-      fs.writeFileSync(path.join(vscodeDir, 'meld-markdown.injection.json'), this.generateMarkdownInjection());
-      console.log(`Copied to: ${vscodeDir}/meld.tmLanguage.json`);
-      console.log(`Copied to: ${vscodeDir}/meld-markdown.injection.json`);
+      fs.writeFileSync(path.join(vscodeDir, 'mlld.tmLanguage.json'), textmateContent);
+      fs.writeFileSync(path.join(vscodeDir, 'mlld-markdown.injection.json'), this.generateMarkdownInjection());
+      console.log(`Copied to: ${vscodeDir}/mlld.tmLanguage.json`);
+      console.log(`Copied to: ${vscodeDir}/mlld-markdown.injection.json`);
     }
     
     // Copy to Vim
     const vimDir = path.join(rootDir, 'editors/vim/syntax');
     if (fs.existsSync(vimDir)) {
-      fs.writeFileSync(path.join(vimDir, 'meld.vim'), vimContent);
-      console.log(`Copied to: ${vimDir}/meld.vim`);
+      fs.writeFileSync(path.join(vimDir, 'mlld.vim'), vimContent);
+      console.log(`Copied to: ${vimDir}/mlld.vim`);
       
       // Create after/syntax directory for Markdown support
       const vimAfterDir = path.join(rootDir, 'editors/vim/after/syntax');
@@ -348,8 +348,8 @@ hi def link markdownMeldDirective meldDirective
     // Copy to website
     const websiteDir = path.join(rootDir, 'website/src');
     if (fs.existsSync(websiteDir)) {
-      fs.writeFileSync(path.join(websiteDir, 'prism-meld.js'), this.generatePrism());
-      console.log(`Copied to: ${websiteDir}/prism-meld.js`);
+      fs.writeFileSync(path.join(websiteDir, 'prism-mlld.js'), this.generatePrism());
+      console.log(`Copied to: ${websiteDir}/prism-mlld.js`);
     }
     
     // Create generic TextMate bundle for other editors
@@ -357,16 +357,16 @@ hi def link markdownMeldDirective meldDirective
     if (!fs.existsSync(textmateDir)) {
       fs.mkdirSync(textmateDir, { recursive: true });
     }
-    fs.writeFileSync(path.join(textmateDir, 'meld.tmLanguage.json'), textmateContent);
-    fs.writeFileSync(path.join(textmateDir, 'meld-markdown.injection.json'), this.generateMarkdownInjection());
-    fs.writeFileSync(path.join(textmateDir, 'README.md'), `# Meld TextMate Grammar
+    fs.writeFileSync(path.join(textmateDir, 'mlld.tmLanguage.json'), textmateContent);
+    fs.writeFileSync(path.join(textmateDir, 'mlld-markdown.injection.json'), this.generateMarkdownInjection());
+    fs.writeFileSync(path.join(textmateDir, 'README.md'), `# Mlld TextMate Grammar
 
-This directory contains TextMate grammar files for Meld syntax highlighting.
+This directory contains TextMate grammar files for Mlld syntax highlighting.
 
 ## Files
 
-- \`meld.tmLanguage.json\` - Main Meld syntax highlighting for \`.meld\` and \`.mld\` files
-- \`meld-markdown.injection.json\` - Injection grammar to highlight Meld directives in Markdown files
+- \`mlld.tmLanguage.json\` - Main Mlld syntax highlighting for \`.mlld\` and \`.mld\` files
+- \`mlld-markdown.injection.json\` - Injection grammar to highlight Mlld directives in Markdown files
 
 ## Compatible Editors
 
@@ -381,12 +381,12 @@ These grammar files can be used with:
 Copy these files to your editor's syntax directory. The exact location varies by editor.
 
 ### Sublime Text
-- macOS: \`~/Library/Application Support/Sublime Text/Packages/Meld/\`
-- Windows: \`%APPDATA%\\Sublime Text\\Packages\\Meld\\\`
-- Linux: \`~/.config/sublime-text/Packages/Meld/\`
+- macOS: \`~/Library/Application Support/Sublime Text/Packages/Mlld/\`
+- Windows: \`%APPDATA%\\Sublime Text\\Packages\\Mlld\\\`
+- Linux: \`~/.config/sublime-text/Packages/Mlld/\`
 
 ### TextMate
-- Create a bundle: \`~/Library/Application Support/TextMate/Bundles/Meld.tmbundle/Syntaxes/\`
+- Create a bundle: \`~/Library/Application Support/TextMate/Bundles/Mlld.tmbundle/Syntaxes/\`
 `);
     console.log(`Created TextMate bundle in: ${textmateDir}`);
     
@@ -395,7 +395,7 @@ Copy these files to your editor's syntax directory. The exact location varies by
 }
 
 // Run generator
-const generator = new MeldSyntaxGenerator();
+const generator = new MlldSyntaxGenerator();
 generator.generate();
 
-export default MeldSyntaxGenerator;
+export default MlldSyntaxGenerator;

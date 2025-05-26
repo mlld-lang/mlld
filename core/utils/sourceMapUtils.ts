@@ -5,7 +5,7 @@
  */
 
 import { sourceMapService, SourceLocation } from '@core/utils/SourceMapService';
-import { MeldError, MeldErrorOptions, ErrorSeverity } from '@core/errors/MeldError';
+import { MlldError, MlldErrorOptions, ErrorSeverity } from '@core/errors/MlldError';
 import { logger } from '@core/utils/logger';
 
 /**
@@ -74,7 +74,7 @@ export function extractErrorLocation(error: Error): { line: number; column: numb
 export function extractLocationFromErrorObject(error: any): { line: number; column: number } | null {
   // Check for standard location property patterns
   if (error.location) {
-    // Parse MeldParseError style location: { start: { line, column }, end: { line, column } }
+    // Parse MlldParseError style location: { start: { line, column }, end: { line, column } }
     if (error.location.start && typeof error.location.start.line === 'number' && typeof error.location.start.column === 'number') {
       logger.debug(`Extracted location from error.location.start: ${error.location.start.line}:${error.location.start.column}`);
       return { 
@@ -116,17 +116,17 @@ export function extractLocationFromErrorObject(error: any): { line: number; colu
 }
 
 /**
- * Enhance a MeldError with source location information
+ * Enhance a MlldError with source location information
  * @param error The error to enhance
  * @param options Options for enhancement
  * @returns Enhanced error with source location information
  */
-export function enhanceMeldErrorWithSourceInfo(
-  error: MeldError, 
+export function enhanceMlldErrorWithSourceInfo(
+  error: MlldError, 
   options?: { 
     preferExistingSourceInfo?: boolean 
   }
-): MeldError {
+): MlldError {
   // Extract location from error object or message
   const location = extractLocationFromErrorObject(error);
   
@@ -155,7 +155,7 @@ export function enhanceMeldErrorWithSourceInfo(
   }
   
   // Create new error options with source info
-  const newOptions: MeldErrorOptions = {
+  const newOptions: MlldErrorOptions = {
     code: error.code,
     severity: error.severity,
     // Pass original details if they exist

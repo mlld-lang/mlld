@@ -7,13 +7,13 @@ Small grammar fixes that should be made during the consolidation work or as a qu
 **Issue**: Whitespace is currently required between identifier and parameters in parameterized definitions.
 
 **Current**:
-```meld
+```mlld
 @text template (param1, param2) = ...
 @exec command (arg1, arg2) = ...
 ```
 
 **Should allow**:
-```meld
+```mlld
 @text template(param1, param2) = ...
 @exec command(arg1, arg2) = ...
 ```

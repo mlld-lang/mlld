@@ -6,7 +6,7 @@ import { createInterface } from 'readline';
 import { initCommand } from './commands/init';
 import chalk from 'chalk';
 import { version } from '@core/version';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { OutputPathService } from '@services/fs/OutputPathService';
@@ -280,9 +280,9 @@ function parseArgs(args: string[]): CLIOptions {
 function displayHelp(command?: string) {
   if (command === 'debug-resolution') {
     console.log(`
-Usage: meld debug-resolution [options] <input-file>
+Usage: mlld debug-resolution [options] <input-file>
 
-Debug variable resolution in a Meld file.
+Debug variable resolution in a Mlld file.
 
 Options:
   --var, --variable <n>     Filter to a specific variable
@@ -297,7 +297,7 @@ Options:
   
   if (command === 'debug-transform') {
     console.log(`
-Usage: meld debug-transform [options] <input-file>
+Usage: mlld debug-transform [options] <input-file>
 
 Debug node transformations through the pipeline.
 
@@ -313,11 +313,11 @@ Options:
   }
 
   console.log(`
-Usage: meld [command] [options] <input-file>
+Usage: mlld [command] [options] <input-file>
 
 Commands:
-  init                    Create a new Meld project
-  debug-resolution        Debug variable resolution in a Meld file
+  init                    Create a new Mlld project
+  debug-resolution        Debug variable resolution in a Mlld file
   debug-transform         Debug node transformations through the pipeline
 
 Options:
@@ -342,9 +342,9 @@ URL Support Options:
   --url-blocked-domains   Comma-separated list of blocked domains
 
 Configuration:
-  Meld looks for configuration in:
-  1. ~/.config/meld.json (global/user config)
-  2. meld.config.json (project config)
+  Mlld looks for configuration in:
+  1. ~/.config/mlld.json (global/user config)
+  2. mlld.config.json (project config)
   
   CLI options override configuration file settings.
   `);
@@ -511,8 +511,8 @@ async function watchFiles(options: CLIOptions): Promise<void> {
     const watcher = watch(watchDir, { recursive: true });
 
     for await (const event of watcher) {
-      // Only process .meld files or the specific input file
-      if (event.filename?.endsWith('.meld') || event.filename === path.basename(inputPath)) {
+      // Only process .mlld files or the specific input file
+      if (event.filename?.endsWith('.mlld') || event.filename === path.basename(inputPath)) {
         console.log(`Change detected in ${event.filename}, reprocessing...`);
         await processFile(options);
       }
@@ -662,7 +662,7 @@ const seenErrors = new Set<string>();
 let bypassDeduplication = false;
 
 // Check if error deduplication should be completely disabled
-const disableDeduplication = !!(global as any).MELD_DISABLE_ERROR_DEDUPLICATION;
+const disableDeduplication = !!(global as any).MLLD_DISABLE_ERROR_DEDUPLICATION;
 
 // Store the original console.error
 const originalConsoleError = console.error;
@@ -699,10 +699,10 @@ console.error = function(...args: any[]) {
 
 // Moved handleError definition before main
 async function handleError(error: any, options: CLIOptions): Promise<void> {
-  const isMeldError = error instanceof MeldError; // Ensure MeldError is used as value
-  const severity = isMeldError ? error.severity : ErrorSeverity.Fatal;
+  const isMlldError = error instanceof MlldError; // Ensure MlldError is used as value
+  const severity = isMlldError ? error.severity : ErrorSeverity.Fatal;
 
-  const displayErrorWithSourceContext = async (error: MeldError) => {
+  const displayErrorWithSourceContext = async (error: MlldError) => {
     // Dynamically load ErrorDisplayService
     try {
       const { ErrorDisplayService } = await import('@services/display/ErrorDisplayService/ErrorDisplayService');
@@ -725,7 +725,7 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
           endLine: loc.end?.line 
         };
         
-        // Check if error.details exists and has path property (MeldError uses details)
+        // Check if error.details exists and has path property (MlldError uses details)
         if (error.details && 'path' in error.details) {
           displayContext.path = error.details.path as string;
         }
@@ -762,7 +762,7 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
   // Ensure the logger configuration matches CLI options
   logger.level = options.debug ? 'debug' : (options.verbose ? 'info' : 'warn');
 
-  if (isMeldError) {
+  if (isMlldError) {
     await displayErrorWithSourceContext(error);
   } else if (error instanceof Error) {
     logger.error('An unexpected error occurred:', error);
@@ -790,7 +790,7 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
  * Allows injecting a filesystem adapter for testing.
  */
 export async function main(customArgs?: string[]): Promise<void> {
-  process.title = 'meld';
+  process.title = 'mlld';
   let cliOptions: CLIOptions = { input: '' }; // Initialize with default
 
   try {
@@ -811,7 +811,7 @@ export async function main(customArgs?: string[]): Promise<void> {
     
     // Handle version flag
     if (cliOptions.version) {
-      console.log(`meld version ${version}`);
+      console.log(`mlld version ${version}`);
       return;
     }
 

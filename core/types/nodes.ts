@@ -1,5 +1,5 @@
 /**
- * Unified node types for the Meld AST
+ * Unified node types for the Mlld AST
  * This file defines all the base node interfaces used by the parser
  */
 

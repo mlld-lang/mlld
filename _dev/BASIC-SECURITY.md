@@ -1,8 +1,8 @@
-# Basic Security Model for Meld
+# Basic Security Model for Mlld
 
 ## Overview
 
-This document outlines a pragmatic, user-friendly security model for Meld that focuses on real risks while maintaining usability. The model prioritizes securing imports and command execution through progressive trust and informed consent.
+This document outlines a pragmatic, user-friendly security model for Mlld that focuses on real risks while maintaining usability. The model prioritizes securing imports and command execution through progressive trust and informed consent.
 
 ## Core Principles
 
@@ -23,7 +23,7 @@ When importing from URLs, users are trusting:
 ### Interactive Import Flow
 
 ```bash
-$ meld my-script.mld
+$ mlld my-script.mld
 
 ⚠️  Import requires approval:
    https://gist.github.com/someuser/abc123...
@@ -52,7 +52,7 @@ $ meld my-script.mld
 
 ### Configuration Storage
 
-After approval, the decision is stored in the project's `meld.config.json`:
+After approval, the decision is stored in the project's `mlld.config.json`:
 
 ```json
 {
@@ -92,7 +92,7 @@ Output: https://gist.githubusercontent.com/adamavenir/abc123/raw/[commit_sha]/fi
 Once command detection (see COMMAND-BASE-DETECTION-SPEC.md) is implemented:
 
 ```bash
-$ meld my-script.mld
+$ mlld my-script.mld
 
 Pre-flight check:
 
@@ -129,7 +129,7 @@ Continue? [y/N]
 ### Audit Command
 
 ```bash
-$ meld audit *.mld
+$ mlld audit *.mld
 
 Security audit for project:
 
@@ -150,7 +150,7 @@ Review details? [y/N]
 
 ### Global User Configuration
 
-In `~/.config/meld.json`:
+In `~/.config/mlld.json`:
 
 ```json
 {

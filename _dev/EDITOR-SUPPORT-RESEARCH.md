@@ -45,8 +45,8 @@
 
 For `.md` files, we need different approaches:
 
-1. **VSCode**: Use injection grammar to highlight Meld directives in Markdown
-2. **Vim**: Use `after/syntax/markdown.vim` to add Meld highlighting
+1. **VSCode**: Use injection grammar to highlight Mlld directives in Markdown
+2. **Vim**: Use `after/syntax/markdown.vim` to add Mlld highlighting
 3. **Sublime**: Use scope injection in .sublime-syntax
 
-The key is that Meld syntax should only activate when a line starts with a Meld directive (`@text`, `@run`, etc.)
+The key is that Mlld syntax should only activate when a line starts with a Mlld directive (`@text`, `@run`, etc.)

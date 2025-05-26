@@ -9,7 +9,7 @@ The `@exec` directive creates reusable commands that can be invoked with `@run`.
 
 ## Syntax
 
-```meld
+```mlld
 @exec commandName = @run [shell command]
 @exec commandName(param1, param2) = @run [command with @param1 and @param2]
 @exec functionName(param) = @run javascript [code using param]
@@ -23,7 +23,7 @@ Where:
 ## Basic Commands
 
 Define a simple command without parameters:
-```meld
+```mlld
 @exec buildProject = @run [npm run build]
 @exec listFiles = @run [ls -la]
 
@@ -35,7 +35,7 @@ Define a simple command without parameters:
 ## Commands with Parameters
 
 Define commands that accept parameters:
-```meld
+```mlld
 @exec greet(name) = @run [echo "Hello, @name!"]
 @exec makeDir(dirname) = @run [mkdir -p @dirname]
 
@@ -47,7 +47,7 @@ Define commands that accept parameters:
 ## JavaScript Functions
 
 Define JavaScript code blocks:
-```meld
+```mlld
 @exec sum(a, b) = @run javascript [
   console.log(Number(a) + Number(b));
 ]
@@ -75,7 +75,7 @@ Define JavaScript code blocks:
 ## Examples
 
 System information commands:
-```meld
+```mlld
 @exec getDate = @run [date +"%Y-%m-%d"]
 @exec getUser = @run [whoami]
 @exec getPath = @run [pwd]
@@ -85,7 +85,7 @@ System information commands:
 ```
 
 File operations:
-```meld
+```mlld
 @exec backup(file) = @run [cp @file @file.bak]
 @exec count(pattern) = @run [grep -c "@pattern" *.txt]
 
@@ -94,7 +94,7 @@ File operations:
 ```
 
 Complex operations:
-```meld
+```mlld
 @exec analyze(file) = @run [wc -l @file | awk '{print $1 " lines"}']
 @exec process(input, output) = @run [
   cat @input | 
@@ -110,7 +110,7 @@ Complex operations:
 ## Using with Data Structures
 
 Commands can be used within data structures:
-```meld
+```mlld
 @exec getStatus = @run [echo "active"]
 @exec getVersion = @run [echo "1.0.0"]
 

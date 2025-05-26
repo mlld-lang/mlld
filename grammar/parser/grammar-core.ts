@@ -24,7 +24,7 @@ export const DirectiveKind = {
 };
 export const helpers = {
     debug(msg, ...args) {
-        if (process.env.DEBUG_MELD_GRAMMAR)
+        if (process.env.DEBUG_MLLD_GRAMMAR)
             console.log('[DEBUG GRAMMAR]', msg, ...args);
     },
     isLogicalLineStart(input, pos) {

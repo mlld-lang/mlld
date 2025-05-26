@@ -10,11 +10,11 @@ title: "@run Directive"
 
 # @run Directive
 
-The `@run` directive executes shell commands and includes their output in your Meld document.
+The `@run` directive executes shell commands and includes their output in your Mlld document.
 
 ## Syntax
 
-```meld
+```mlld
 @run [command_text]
 @run [command_text] under header_text
 @run [$command(@textvar1, @textvar2)]
@@ -53,7 +53,7 @@ By default, the command's standard output (stdout) is captured and included in y
 
 You can add a header to command output using the `under` keyword:
 
-```meld
+```mlld
 @run [date] under Current Date
 ```
 
@@ -69,42 +69,42 @@ The implementation handles these error scenarios:
 ## Examples
 
 Basic command execution:
-```meld
+```mlld
 @run [echo "Hello, World!"]
 ```
 
 Using variables in commands:
-```meld
+```mlld
 @text name = "Alice"
 @run [echo "Hello, {{name}}!"]
 ```
 
 Using path variables:
-```meld
+```mlld
 @path src = "$PROJECTPATH/src"
 @run [ls -la $src]
 ```
 
 Using command output in variables:
-```meld
+```mlld
 @text date = @run [date +"%Y-%m-%d"]
 @data files = @run [ls -la | jq -R -s -c 'split("\n")[:-1]']
 ```
 
 Adding headers to output:
-```meld
+```mlld
 @run [git status] under Repository Status
 ```
 
 Using defined commands:
-```meld
+```mlld
 @exec listFiles(dir) = @run [ls -la @dir]
 @run [$listFiles($PROJECTPATH)]
 ```
 
 ## Environment & Working Directory
 
-- Commands execute in the environment of the Meld process
+- Commands execute in the environment of the Mlld process
 - The working directory defaults to the current working directory
 - Environment variables are available to the command
 

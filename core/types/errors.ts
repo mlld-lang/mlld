@@ -16,14 +16,14 @@ export enum ParseErrorCode {
 /**
  * AST parsing error
  */
-export class MeldAstError extends Error {
+export class MlldAstError extends Error {
   constructor(
     message: string,
     public code: ParseErrorCode,
     public location?: { start: { line: number; column: number }; end: { line: number; column: number } }
   ) {
     super(message);
-    this.name = 'MeldAstError';
+    this.name = 'MlldAstError';
   }
 }
 

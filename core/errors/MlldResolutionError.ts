@@ -1,10 +1,10 @@
-import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError';
+import { MlldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MlldError';
 import { Location } from '@core/types/index';
 
 /**
  * Represents details specific to general resolution errors.
  */
-export interface MeldResolutionErrorDetails extends BaseErrorDetails {
+export interface MlldResolutionErrorDetails extends BaseErrorDetails {
   value?: any; // The value being resolved
   context?: any; // The resolution context or relevant parts
 }
@@ -29,7 +29,7 @@ export interface ResolutionErrorDetails {
   type?: string;
 }
 
-export interface MeldResolutionErrorOptions {
+export interface MlldResolutionErrorOptions {
   details?: ResolutionErrorDetails;
   code?: string;
   cause?: Error;
@@ -41,12 +41,12 @@ export interface MeldResolutionErrorOptions {
  * General error thrown during the resolution process for various reasons
  * not covered by more specific error types (like VariableResolutionError or PathValidationError).
  */
-export class MeldResolutionError extends MeldError {
+export class MlldResolutionError extends MlldError {
   constructor(
     message: string,
     options: {
       code: string; // e.g., E_RESOLVE_FAIL, E_INVALID_CONTEXT, E_TYPE_NOT_ALLOWED
-      details?: MeldResolutionErrorDetails;
+      details?: MlldResolutionErrorDetails;
       severity?: ErrorSeverity;
       sourceLocation?: ErrorSourceLocation;
       cause?: unknown;

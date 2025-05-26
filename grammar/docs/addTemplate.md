@@ -4,7 +4,7 @@ The `addTemplate` subtype of the `@add` directive is used to add content from a 
 
 ## Syntax
 
-```meld
+```mlld
 @add [template_content]
 @add [
   multiline
@@ -47,7 +47,7 @@ The `addTemplate` subtype produces an AST node with the following structure:
 ## Example AST
 
 For the directive:
-```meld
+```mlld
 @add [
   # Example 
   This is a {{type}} template.

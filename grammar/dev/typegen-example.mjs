@@ -2,7 +2,7 @@
 
 /**
  * This script is a prototype for testing how peggy-to-ts type generation could work
- * with our Meld grammar files.
+ * with our Mlld grammar files.
  */
 
 import fs from 'fs';
@@ -13,9 +13,9 @@ import { execSync } from 'child_process';
 const REPO_URL = 'https://github.com/siefkenj/peggy-to-ts.git';
 const REPO_DIR = path.resolve(process.cwd(), 'peggy-to-ts-repo');
 
-// Paths to Meld grammar files
-const MELD_DIR = path.resolve(process.cwd(), '..'); 
-const GRAMMAR_DIR = path.resolve(MELD_DIR, 'directives');
+// Paths to Mlld grammar files
+const MLLD_DIR = path.resolve(process.cwd(), '..'); 
+const GRAMMAR_DIR = path.resolve(MLLD_DIR, 'directives');
 const TEXT_GRAMMAR = path.resolve(GRAMMAR_DIR, 'text.peggy');
 
 function cloneRepo() {

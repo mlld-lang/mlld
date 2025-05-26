@@ -1,10 +1,10 @@
-import { MeldError, type MeldErrorOptions, ErrorSeverity, type BaseErrorDetails, type ErrorSourceLocation } from '@core/errors/MeldError';
+import { MlldError, type MlldErrorOptions, ErrorSeverity, type BaseErrorDetails, type ErrorSourceLocation } from '@core/errors/MlldError';
 
-// Define options specific to FileSystemError, without extending MeldErrorOptions
-export interface MeldFileSystemErrorOptions { 
+// Define options specific to FileSystemError, without extending MlldErrorOptions
+export interface MlldFileSystemErrorOptions { 
   command?: string;
   cwd?: string;
-  // Include optional properties handled by MeldError constructor logic
+  // Include optional properties handled by MlldError constructor logic
   severity?: ErrorSeverity; 
   code?: string; 
   details?: BaseErrorDetails;
@@ -15,12 +15,12 @@ export interface MeldFileSystemErrorOptions {
 /**
  * Error thrown when file system operations fail
  */
-export class MeldFileSystemError extends MeldError {
+export class MlldFileSystemError extends MlldError {
   public readonly command?: string;
   public readonly cwd?: string;
   public readonly cause?: unknown;
 
-  constructor(message: string, options: MeldFileSystemErrorOptions = {}) {
+  constructor(message: string, options: MlldFileSystemErrorOptions = {}) {
     // File system errors are typically fatal by default
     const severity = options.severity || ErrorSeverity.Fatal;
     const code = options.code || 'FILE_SYSTEM_ERROR';
@@ -33,13 +33,13 @@ export class MeldFileSystemError extends MeldError {
       cause: options.cause
     });
     
-    this.name = 'MeldFileSystemError';
+    this.name = 'MlldFileSystemError';
     this.command = options.command;
     this.cwd = options.cwd;
     this.cause = options.cause;
     
     // Ensure proper prototype chain for instanceof checks
-    Object.setPrototypeOf(this, MeldFileSystemError.prototype);
+    Object.setPrototypeOf(this, MlldFileSystemError.prototype);
   }
 
   toJSON() {

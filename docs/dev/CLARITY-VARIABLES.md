@@ -1,10 +1,10 @@
 // TODO: UPDATE
 
-# Variable Handling in Meld: Understanding and Implementation
+# Variable Handling in Mlld: Understanding and Implementation
 
 ## Core Concepts: The Three Variable Types
 
-Meld utilizes three distinct variable types, each identified by its reference syntax and intended purpose:
+Mlld utilizes three distinct variable types, each identified by its reference syntax and intended purpose:
 
 1.  **Path Variables (`$var`)**:
     *   **Definition**: `@path identifier = "$PROJECTPATH/..."` or `@path other = $anotherPath/...`

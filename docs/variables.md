@@ -5,7 +5,7 @@ title: "Variables"
 
 # Variables
 
-Meld has three distinct types of variables, each with its own syntax and usage patterns.
+Mlld has three distinct types of variables, each with its own syntax and usage patterns.
 
 ## Variable Types
 
@@ -13,7 +13,7 @@ Meld has three distinct types of variables, each with its own syntax and usage p
 
 Path variables are used for filesystem paths and command arguments:
 
-```meld
+```mlld
 $path                # Reference a path variable
 $HOMEPATH or $~      # Special path variable for home directory
 $PROJECTPATH or $.   # Special path variable for project root
@@ -26,7 +26,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 - Path segments are separated by forward slashes
 
 Example:
-```meld
+```mlld
 @path docs = "$PROJECTPATH/docs"
 @add [$docs/guide.md]
 ```
@@ -35,7 +35,7 @@ Example:
 
 Text variables store unstructured text:
 
-```meld
+```mlld
 {{variable}}            # Reference a text variable
 {{variable>>(format)}}  # Reference with formatting
 ```
@@ -45,7 +45,7 @@ Text variables store unstructured text:
 - Environment variables ({{ENV_*}}) are a special case of text variables
 
 Example:
-```meld
+```mlld
 @text greeting = "Hello"
 @text name = "World"
 @text message = `{{greeting}}, {{name}}!`
@@ -55,7 +55,7 @@ Example:
 
 Data variables store structured data:
 
-```meld
+```mlld
 {{variable}}                   # Reference a data variable
 {{variable.field}}            # Access a field in a data variable
 {{variable.field>>(format)}}  # Reference with formatting
@@ -67,7 +67,7 @@ Data variables store structured data:
 - Can be formatted with `>>`
 
 Example:
-```meld
+```mlld
 @data user = {{ name: "Alice", id: 123 }}
 @text greeting = `Hello, {{user.name}}! Your ID is {{user.id}}.`
 ```
@@ -76,7 +76,7 @@ Example:
 
 When working with arrays, use dot notation to access array elements by index:
 
-```meld
+```mlld
 @data items = ["apple", "banana", "cherry"]
 @text first = `First item: {{items.0}}`
 @text second = `Second item: {{items.1}}`
@@ -93,7 +93,7 @@ Variables can be converted between types automatically in many contexts:
 - Simple values (strings, numbers) convert directly to text
 - Objects and arrays convert to JSON string representation
 
-```meld
+```mlld
 @data config = {{ name: "test", version: 1 }}
 @text simple = `Name: {{config.name}}`          # Outputs: Name: test
 @text object = `Config: {{config}}`             # Outputs: Config: {"name":"test","version":1}
@@ -101,30 +101,30 @@ Variables can be converted between types automatically in many contexts:
 
 ### Object and Array Formatting
 
-When referencing complete objects or arrays (rather than their individual fields), Meld formats them based on the context:
+When referencing complete objects or arrays (rather than their individual fields), Mlld formats them based on the context:
 
 #### Array Formatting
 
 When referencing an entire array:
 
-```meld
+```mlld
 @data fruits = ["apple", "banana", "orange"]
 ```
 
 - **Inline context** (within text, template literals):
-  ```meld
+  ```mlld
   @text list = `My fruits: {{fruits}}`  # Outputs: My fruits: apple, banana, orange
   ```
   Arrays are formatted as comma-separated values with spaces.
 
 - **Block context** (in embed directives, standalone references):
-  ```meld
+  ```mlld
   @add {{fruits}}
   ```
   Simple arrays (of strings, numbers) use comma-separated values with spaces.
   
   Arrays of objects are formatted as properly indented JSON:
-  ```meld
+  ```mlld
   @data people = [{ "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }]
   @add {{people}}
   ```
@@ -146,18 +146,18 @@ When referencing an entire array:
 
 When referencing an entire object:
 
-```meld
+```mlld
 @data config = { "host": "localhost", "port": 8080 }
 ```
 
 - **Inline context**:
-  ```meld
+  ```mlld
   @text settings = `My config: {{config}}`  # Outputs: My config: {"host":"localhost","port":8080}
   ```
   Objects are formatted as compact JSON without whitespace.
 
 - **Block context** (in embed directives, standalone references):
-  ```meld
+  ```mlld
   @add {{config}}
   ```
   Objects are formatted as properly indented JSON:
@@ -173,7 +173,7 @@ When referencing an entire object:
 - Text variables can be used as values in data structures
 - Text variables can also be used as object keys
 
-```meld
+```mlld
 @text name = "Alice"
 @text key = "username"
 
@@ -203,7 +203,7 @@ They are NOT allowed in:
 
 You can concatenate strings using the `++` operator:
 
-```meld
+```mlld
 @text greeting = "Hello" ++ " " ++ "World"
 @text message = {{intro}} ++ {{body}}
 ```

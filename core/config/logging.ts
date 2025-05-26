@@ -10,7 +10,7 @@ export const loggingConfig = {
   // File configuration
   files: {
     directory: 'logs',
-    mainLog: 'meld.log',
+    mainLog: 'mlld.log',
     errorLog: 'error.log',
     maxSize: 5242880, // 5MB
     maxFiles: 5,

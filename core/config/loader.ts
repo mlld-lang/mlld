@@ -1,31 +1,31 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import type { MeldConfig, ResolvedURLConfig } from './types';
+import type { MlldConfig, ResolvedURLConfig } from './types';
 import { parseDuration, parseSize } from './utils';
 
 /**
- * Load Meld configuration from both global and project locations
+ * Load Mlld configuration from both global and project locations
  */
 export class ConfigLoader {
   private globalConfigPath: string;
   private projectConfigPath: string;
-  private cachedConfig?: MeldConfig;
+  private cachedConfig?: MlldConfig;
 
   constructor(projectPath?: string) {
-    // Global config location: ~/.config/meld.json
-    this.globalConfigPath = path.join(os.homedir(), '.config', 'meld.json');
+    // Global config location: ~/.config/mlld.json
+    this.globalConfigPath = path.join(os.homedir(), '.config', 'mlld.json');
     
-    // Project config location: <project>/meld.config.json
+    // Project config location: <project>/mlld.config.json
     this.projectConfigPath = projectPath 
-      ? path.join(projectPath, 'meld.config.json')
-      : path.join(process.cwd(), 'meld.config.json');
+      ? path.join(projectPath, 'mlld.config.json')
+      : path.join(process.cwd(), 'mlld.config.json');
   }
 
   /**
    * Load and merge configurations
    */
-  load(): MeldConfig {
+  load(): MlldConfig {
     if (this.cachedConfig) {
       return this.cachedConfig;
     }
@@ -45,7 +45,7 @@ export class ConfigLoader {
   /**
    * Load a single config file
    */
-  private loadConfigFile(filePath: string): MeldConfig {
+  private loadConfigFile(filePath: string): MlldConfig {
     try {
       if (fs.existsSync(filePath)) {
         const content = fs.readFileSync(filePath, 'utf8');
@@ -61,8 +61,8 @@ export class ConfigLoader {
   /**
    * Deep merge two config objects
    */
-  private mergeConfigs(global: MeldConfig, project: MeldConfig): MeldConfig {
-    const merged: MeldConfig = {};
+  private mergeConfigs(global: MlldConfig, project: MlldConfig): MlldConfig {
+    const merged: MlldConfig = {};
 
     // Merge security config
     if (global.security || project.security) {
@@ -153,7 +153,7 @@ export class ConfigLoader {
   /**
    * Resolve configuration to runtime values
    */
-  resolveURLConfig(config: MeldConfig): ResolvedURLConfig | undefined {
+  resolveURLConfig(config: MlldConfig): ResolvedURLConfig | undefined {
     const urlConfig = config.security?.urls;
     if (!urlConfig) return undefined;
 

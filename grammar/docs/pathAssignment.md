@@ -4,7 +4,7 @@ The Path Assignment form of the `@path` directive is used to define path variabl
 
 ## Syntax
 
-```meld
+```mlld
 @path identifier = "path_value"
 ```
 
@@ -14,11 +14,11 @@ Where:
 
 ## Examples
 
-```meld
+```mlld
 @path docs = "$PROJECTPATH/documentation"
-@path config = "$HOMEPATH/config/meld"
+@path config = "$HOMEPATH/config/mlld"
 @path templates = "$./templates"
-@path userFiles = "$~/documents/meld/files"
+@path userFiles = "$~/documents/mlld/files"
 ```
 
 ## AST Structure
@@ -49,17 +49,17 @@ interface PathAssignmentNode extends DirectiveNode {
 The Path directive's `path` value can contain:
 
 1. `StringLiteralNode` - A simple string path:
-   ```meld
+   ```mlld
    @path docs = "/absolute/path"
    ```
 
 2. `InterpolatedStringNode` - A path with variable interpolation:
-   ```meld
+   ```mlld
    @path docs = "$PROJECTPATH/${folder}/docs"
    ```
 
 3. `VariableReferenceNode` - A reference to another path variable:
-   ```meld
+   ```mlld
    @path backup = "$mainPath/backup"
    ```
 
@@ -73,9 +73,9 @@ Path values are validated to ensure they follow security rules:
 
 ## Example AST Output
 
-For the following Meld code:
+For the following Mlld code:
 
-```meld
+```mlld
 @path docs = "$PROJECTPATH/documentation"
 ```
 
@@ -117,7 +117,7 @@ The AST output would be:
 
 For a path with variable interpolation:
 
-```meld
+```mlld
 @path config = "$HOMEPATH/${configDir}/settings"
 ```
 

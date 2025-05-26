@@ -1,5 +1,5 @@
 /**
- * Metadata type definitions for Meld directives
+ * Metadata type definitions for Mlld directives
  */
 
 /**

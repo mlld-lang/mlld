@@ -2,7 +2,7 @@
 
 ## Current Status: Traditional Interpreter Implementation (Day 1 Complete)
 
-We've successfully built a clean, traditional interpreter for Meld to replace the over-engineered service architecture. This document captures all key decisions and current state for continuation.
+We've successfully built a clean, traditional interpreter for Mlld to replace the over-engineered service architecture. This document captures all key decisions and current state for continuation.
 
 ## What We Built
 
@@ -44,7 +44,7 @@ if (Array.isArray(node)) {
 ```
 
 ### 2. Newlines Are Nodes
-Newlines are preserved as nodes because Meld operates within markdown files where whitespace matters. We handle `Newline` nodes by returning empty string.
+Newlines are preserved as nodes because Mlld operates within markdown files where whitespace matters. We handle `Newline` nodes by returning empty string.
 
 ### 3. Direct Execution
 Handlers execute commands and read files directly instead of delegating to services. This aligns with "AST Knows All" - handlers are smart.
@@ -143,7 +143,7 @@ The service architecture created artificial boundaries:
 
 ## Important Context
 
-### Meld is Weird (But in a Good Way)
+### Mlld is Weird (But in a Good Way)
 - It's a prompt scripting language embedded in markdown
 - Everything is content (including newlines)
 - Uses `@var` syntax outside templates, `{{var}}` inside templates

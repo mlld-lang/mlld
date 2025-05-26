@@ -1,6 +1,6 @@
-# Meld Grammar Audit and Refinement Plan
+# Mlld Grammar Audit and Refinement Plan
 
-This document outlines our plan for auditing, refining, and improving the Meld grammar implementation. The primary focus is on ensuring code quality, consistency, and maintainability across the grammar codebase.
+This document outlines our plan for auditing, refining, and improving the Mlld grammar implementation. The primary focus is on ensuring code quality, consistency, and maintainability across the grammar codebase.
 
 ## Current Status
 

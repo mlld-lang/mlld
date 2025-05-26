@@ -1,6 +1,6 @@
-# Meld Grammar Audit Report
+# Mlld Grammar Audit Report
 
-This document identifies specific duplication, abstraction violations, and consolidation opportunities in the Meld grammar system.
+This document identifies specific duplication, abstraction violations, and consolidation opportunities in the Mlld grammar system.
 
 ## 1. Duplicate CommandReference Pattern
 

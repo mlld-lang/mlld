@@ -1,4 +1,4 @@
-# Meld Grammar Update Plan
+# Mlld Grammar Update Plan
 
 This document outlines a phased approach to addressing grammar duplication and consolidation issues while keeping tests green throughout the process.
 

@@ -1,11 +1,11 @@
-import { MeldError } from './MeldError';
+import { MlldError } from './MlldError';
 
 /**
  * Error thrown when evaluating complex data values fails.
  * This can happen when embedded directives, variable references, or templates
  * within @data directives fail to evaluate.
  */
-export class DataEvaluationError extends MeldError {
+export class DataEvaluationError extends MlldError {
   constructor(
     public dataPath: string,
     public originalError: Error

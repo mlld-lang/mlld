@@ -1,6 +1,6 @@
 # AST Explorer
 
-The AST Explorer is a tool for working with and analyzing Meld's Abstract Syntax Tree. It's designed to help developers understand the structure of the AST, generate TypeScript types from examples, and create test fixtures. It provides a convention-based system for organizing directive examples and generating comprehensive discriminated union types.
+The AST Explorer is a tool for working with and analyzing Mlld's Abstract Syntax Tree. It's designed to help developers understand the structure of the AST, generate TypeScript types from examples, and create test fixtures. It provides a convention-based system for organizing directive examples and generating comprehensive discriminated union types.
 
 ## Overview
 
@@ -10,7 +10,7 @@ The AST Explorer is structured as a standalone module in `lib/ast-explorer`, wit
 - Tests
 - Documentation
 
-It's integrated with the main Meld codebase through npm scripts in the root `package.json`.
+It's integrated with the main Mlld codebase through npm scripts in the root `package.json`.
 
 ## Using the AST Explorer
 
@@ -22,8 +22,8 @@ The most common way to use the AST Explorer is through the npm scripts defined i
 # View the AST for a directive
 npm run ast:explore -- '@text greeting = "Hello, world!"'
 
-# Extract directives from a Meld file
-npm run ast:extract -- ./examples/example.meld
+# Extract directives from a Mlld file
+npm run ast:extract -- ./examples/example.mlld
 
 # Generate TypeScript types from a directive
 npm run ast:types -- '@text greeting = "Hello, world!"' -n text-greeting
@@ -220,7 +220,7 @@ lib/ast-explorer/
 
 3. **Configuration System**: A unified configuration approach that supports both CLI options and configuration files.
 
-4. **AST Parser Integration**: The explorer connects with the Meld grammar parser to generate AST nodes.
+4. **AST Parser Integration**: The explorer connects with the Mlld grammar parser to generate AST nodes.
 
 5. **Discriminated Union Type Generation**: When using the convention-based approach, the explorer generates comprehensive type definitions with discriminated unions based on directive kind.
 
@@ -401,7 +401,7 @@ This will check that all types were correctly generated and follow the expected 
 You can also use the AST Explorer programmatically in your tests or scripts:
 
 ```typescript
-import { Explorer } from 'meld-ast-explorer';
+import { Explorer } from 'mlld-ast-explorer';
 
 // Create explorer with default config
 const explorer = new Explorer();

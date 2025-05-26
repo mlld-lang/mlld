@@ -1,17 +1,17 @@
 # Import Directive Types Audit
 
-This document contains the results of auditing the import directive implementation and types in the Meld grammar.
+This document contains the results of auditing the import directive implementation and types in the Mlld grammar.
 
 ## Current Implementation
 
-The import directive is implemented in `/Users/adam/dev/meld/grammar/directives/import.peggy` with two variants:
+The import directive is implemented in `/Users/adam/dev/mlld/grammar/directives/import.peggy` with two variants:
 
 1. Import All: `@import {*} from "path/to/file"` - Imports all variables from a file
 2. Import Selected: `@import {var1, var2 as alias} from "path/to/file"` - Imports specific variables with optional aliases
 
 ## Current Type Definitions
 
-The import directive is typed in `/Users/adam/dev/meld/grammar/types/import.ts` with these interfaces:
+The import directive is typed in `/Users/adam/dev/mlld/grammar/types/import.ts` with these interfaces:
 
 1. `ImportDirectiveNode`: Base interface with kind 'import' and subtype 'importAll' or 'importSelected'
 2. `ImportAllDirectiveNode`: For wildcard imports with subtype 'importAll'

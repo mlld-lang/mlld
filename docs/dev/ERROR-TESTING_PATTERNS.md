@@ -1,6 +1,6 @@
 # Error Testing Patterns
 
-This guide documents the recommended patterns for testing error handling in the Meld API and CLI. It focuses on comprehensive testing techniques to ensure robust error handling across the codebase.
+This guide documents the recommended patterns for testing error handling in the Mlld API and CLI. It focuses on comprehensive testing techniques to ensure robust error handling across the codebase.
 
 ## Table of Contents
 
@@ -16,25 +16,25 @@ This guide documents the recommended patterns for testing error handling in the 
 
 ## Introduction
 
-Error handling is a critical aspect of the Meld language interpreter. The Meld API provides specialized error classes to make debugging easier and error handling more precise. This guide documents best practices for testing these error scenarios.
+Error handling is a critical aspect of the Mlld language interpreter. The Mlld API provides specialized error classes to make debugging easier and error handling more precise. This guide documents best practices for testing these error scenarios.
 
-The Meld error handling system is built around:
-- **Error Hierarchies**: Specialized error classes extending from `MeldError`
+The Mlld error handling system is built around:
+- **Error Hierarchies**: Specialized error classes extending from `MlldError`
 - **Error Context**: Additional information about where and why errors occurred
 - **Error Recovery**: Options for strict vs. permissive error handling
 
 ## Error Types and Hierarchies
 
-Meld has a hierarchy of error classes:
+Mlld has a hierarchy of error classes:
 
 ```
-MeldError (base class)
-├── MeldDirectiveError - For directive syntax/validation errors
-├── MeldParseError - For parsing failures
-├── MeldInterpreterError - For interpretation failures
-├── MeldFileNotFoundError - For file access issues
-├── MeldResolutionError - For variable/reference resolution issues
-├── MeldImportError - For import-related issues
+MlldError (base class)
+├── MlldDirectiveError - For directive syntax/validation errors
+├── MlldParseError - For parsing failures
+├── MlldInterpreterError - For interpretation failures
+├── MlldFileNotFoundError - For file access issues
+├── MlldResolutionError - For variable/reference resolution issues
+├── MlldImportError - For import-related issues
 ├── PathValidationError - For path-related issues
 └── ServiceInitializationError - For service initialization failures
 ```
@@ -48,7 +48,7 @@ When testing, always verify that the specific error type is thrown, not just tha
 The `TestContext` class provides utilities for testing error handling:
 
 ```typescript
-it('should throw MeldFileNotFoundError for missing files', async () => {
+it('should throw MlldFileNotFoundError for missing files', async () => {
   // Arrange
   const context = new TestContext();
   await context.initialize();
@@ -57,7 +57,7 @@ it('should throw MeldFileNotFoundError for missing files', async () => {
   await expect(main('non-existent.mld', {
     fs: context.fs,
     services: context.services
-  })).rejects.toThrow(MeldFileNotFoundError);
+  })).rejects.toThrow(MlldFileNotFoundError);
   
   // Cleanup
   await context.cleanup();
@@ -69,7 +69,7 @@ it('should throw MeldFileNotFoundError for missing files', async () => {
 When testing specialized error types, verify not just the error type but also essential properties:
 
 ```typescript
-it('should throw MeldDirectiveError with directive details', async () => {
+it('should throw MlldDirectiveError with directive details', async () => {
   // Arrange
   const context = new TestContext();
   await context.initialize();
@@ -83,11 +83,11 @@ it('should throw MeldDirectiveError with directive details', async () => {
     });
     
     // If we reach here, the test should fail
-    fail('Expected MeldDirectiveError was not thrown');
+    fail('Expected MlldDirectiveError was not thrown');
   } catch (error) {
     // Assert
-    expect(error).toBeInstanceOf(MeldDirectiveError);
-    if (error instanceof MeldDirectiveError) {
+    expect(error).toBeInstanceOf(MlldDirectiveError);
+    if (error instanceof MlldDirectiveError) {
       expect(error.directiveKind).toBe('text');
       expect(error.message).toContain('missing identifier');
       expect(error.location).toBeDefined();
@@ -122,7 +122,7 @@ it('should recover from variable resolution errors in permissive mode', async ()
     services: context.services,
     transformation: true,
     // Future: Add strict mode option
-  })).rejects.toThrow(MeldResolutionError);
+  })).rejects.toThrow(MlldResolutionError);
   
   // Todo: Test permissive mode when implemented
   // Act & Assert - With permissive mode (should continue)
@@ -177,7 +177,7 @@ Here are common patterns for testing errors:
 
 ```typescript
 // Testing that a specific error type is thrown
-await expect(main('test.mld', options)).rejects.toThrow(MeldDirectiveError);
+await expect(main('test.mld', options)).rejects.toThrow(MlldDirectiveError);
 
 // Testing with more specific error message matching
 await expect(main('test.mld', options)).rejects.toThrow(/missing identifier/);
@@ -190,7 +190,7 @@ try {
   await main('test.mld', options);
   fail('Expected error was not thrown');
 } catch (error) {
-  expect(error).toBeInstanceOf(MeldDirectiveError);
+  expect(error).toBeInstanceOf(MlldDirectiveError);
   expect(error.message).toContain('Expected error details');
 }
 ```
@@ -201,7 +201,7 @@ try {
 try {
   await main('test.mld', options);
 } catch (error) {
-  if (error instanceof MeldDirectiveError) {
+  if (error instanceof MlldDirectiveError) {
     expect(error.location).toBeDefined();
     expect(error.location.start.line).toBe(1);
     expect(error.location.start.column).toBe(1);
@@ -211,7 +211,7 @@ try {
 
 ## Test Helpers and Utilities
 
-The Meld testing infrastructure provides several helpers for error testing:
+The Mlld testing infrastructure provides several helpers for error testing:
 
 ### TestContext Utilities
 
@@ -255,4 +255,4 @@ try {
 }
 ```
 
-By following these patterns, you can create comprehensive tests that verify error handling throughout the Meld API and CLI.
+By following these patterns, you can create comprehensive tests that verify error handling throughout the Mlld API and CLI.

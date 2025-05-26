@@ -1,8 +1,8 @@
 /**
- * Configuration types for Meld
+ * Configuration types for Mlld
  */
 
-export interface MeldConfig {
+export interface MlldConfig {
   security?: SecurityConfig;
   cache?: CacheConfig;
 }

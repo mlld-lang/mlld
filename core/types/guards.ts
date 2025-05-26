@@ -1,5 +1,5 @@
 /**
- * Type guards for Meld AST nodes using discriminated unions
+ * Type guards for Mlld AST nodes using discriminated unions
  */
 
 // Import node types for type guards
@@ -15,7 +15,7 @@ import type {
 } from './primitives';
 
 // Import the union type
-import type { MeldNode } from './index';
+import type { MlldNode } from './index';
 
 // Import existing directive types
 import { ImportDirectiveNode, ImportAllDirectiveNode, ImportSelectedDirectiveNode } from './import';
@@ -58,35 +58,35 @@ export function isInterpolatableValueArray(value: unknown): value is Interpolata
  * Base node type guards using discriminated unions
  */
 
-export function isTextNode(node: MeldNode): node is TextNode {
+export function isTextNode(node: MlldNode): node is TextNode {
   return node.type === 'Text';
 }
 
-export function isDirectiveNode(node: MeldNode): node is DirectiveNode {
+export function isDirectiveNode(node: MlldNode): node is DirectiveNode {
   return node.type === 'Directive';
 }
 
-export function isCodeFenceNode(node: MeldNode): node is CodeFenceNode {
+export function isCodeFenceNode(node: MlldNode): node is CodeFenceNode {
   return node.type === 'CodeFence';
 }
 
-export function isCommentNode(node: MeldNode): node is CommentNode {
+export function isCommentNode(node: MlldNode): node is CommentNode {
   return node.type === 'Comment';
 }
 
-export function isVariableReferenceNode(node: MeldNode): node is VariableReferenceNode {
+export function isVariableReferenceNode(node: MlldNode): node is VariableReferenceNode {
   return node.type === 'VariableReference';
 }
 
-export function isLiteralNode(node: MeldNode): node is LiteralNode {
+export function isLiteralNode(node: MlldNode): node is LiteralNode {
   return node.type === 'Literal';
 }
 
-export function isDotSeparatorNode(node: MeldNode): node is DotSeparatorNode {
+export function isDotSeparatorNode(node: MlldNode): node is DotSeparatorNode {
   return node.type === 'DotSeparator';
 }
 
-export function isPathSeparatorNode(node: MeldNode): node is PathSeparatorNode {
+export function isPathSeparatorNode(node: MlldNode): node is PathSeparatorNode {
   return node.type === 'PathSeparator';
 }
 

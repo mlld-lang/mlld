@@ -11,7 +11,7 @@ This is a simplified shell command parser that handles:
 - Quoted strings
 - Variable references (@var)
 
-This is NOT a full shell parser - just enough for Meld's needs.
+This is NOT a full shell parser - just enough for Mlld's needs.
 */
 
 // -------------------------------------------------------------

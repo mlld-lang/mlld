@@ -17,7 +17,7 @@ The `@data` directive now has full URL support through its embedded directives (
 
 When using URLs in `@data` directives:
 
-```meld
+```mlld
 @data config = {
   "localFile": @add ./config.json,
   "remoteFile": @add https://example.com/config.json,
@@ -61,7 +61,7 @@ The implementation aligns with the Complex Data Assignment Design document:
 
 ### Example Use Cases
 
-```meld
+```mlld
 # Configuration with Remote Resources
 @data config = {
   "docs": @add https://docs.example.com/latest/config.md,

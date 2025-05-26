@@ -1,5 +1,5 @@
 /**
- * Defines the severity levels for Meld errors.
+ * Defines the severity levels for Mlld errors.
  */
 export enum ErrorSeverity {
   /** The operation can potentially continue */
@@ -23,7 +23,7 @@ export interface ErrorSourceLocation {
 }
 
 /**
- * Base interface for Meld error details.
+ * Base interface for Mlld error details.
  * Specific error types should extend this.
  */
 export interface BaseErrorDetails {
@@ -31,9 +31,9 @@ export interface BaseErrorDetails {
 }
 
 /**
- * Options for creating a MeldError instance.
+ * Options for creating a MlldError instance.
  */
-export interface MeldErrorOptions {
+export interface MlldErrorOptions {
   code: string;
   severity: ErrorSeverity;
   details?: BaseErrorDetails;
@@ -42,10 +42,10 @@ export interface MeldErrorOptions {
 }
 
 /**
- * Base class for all custom Meld errors.
+ * Base class for all custom Mlld errors.
  * Provides structure for error codes, severity, details, and source location.
  */
-export class MeldError extends Error {
+export class MlldError extends Error {
   /** A unique code identifying the type of error */
   public readonly code: string;
   /** The severity level of the error */

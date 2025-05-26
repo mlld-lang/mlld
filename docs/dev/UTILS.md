@@ -1,6 +1,6 @@
-# Meld Utility Infrastructure
+# Mlld Utility Infrastructure
 
-This document provides an overview of the utility infrastructure available in the Meld codebase for both production and testing environments.
+This document provides an overview of the utility infrastructure available in the Mlld codebase for both production and testing environments.
 
 ## Production Utilities
 
@@ -20,16 +20,16 @@ This document provides an overview of the utility infrastructure available in th
 
 ### Error Handling
 
-#### MeldError (`core/errors/MeldError.ts`)
-- Base error class for all Meld-specific errors
+#### MlldError (`core/errors/MlldError.ts`)
+- Base error class for all Mlld-specific errors
 - Supports error codes and severity levels
 - Structured error information for better debugging
 
 #### Specialized Errors
-- `MeldDirectiveError`: For directive-specific errors
-- `MeldParseError`: For parsing errors
-- `MeldInterpreterError`: For interpretation errors
-- `MeldResolutionError`: For variable resolution errors
+- `MlldDirectiveError`: For directive-specific errors
+- `MlldParseError`: For parsing errors
+- `MlldInterpreterError`: For interpretation errors
+- `MlldResolutionError`: For variable resolution errors
 - `PathValidationError`: For path validation errors
 - `ServiceInitializationError`: For service initialization errors
 
@@ -243,7 +243,7 @@ describe('CLI Test', () => {
     });
     
     // Run CLI command
-    process.argv = ['node', 'meld', '$./test.mld', '--stdout'];
+    process.argv = ['node', 'mlld', '$./test.mld', '--stdout'];
     await cli.main();
     
     // Verify results

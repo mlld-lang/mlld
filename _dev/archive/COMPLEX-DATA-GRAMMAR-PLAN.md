@@ -10,7 +10,7 @@ Currently, the data directive grammar only supports literal values (strings, num
 
 ## Goal State
 Enable the following syntax:
-```meld
+```mlld
 @data results = {
   test: @run [npm test],
   docs: @add [@README.md],

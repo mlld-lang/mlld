@@ -1,4 +1,4 @@
-# Meld Error System Implementation Plan
+# Mlld Error System Implementation Plan
 
 ## Overview
 
@@ -17,22 +17,22 @@ This plan outlines a comprehensive error system for mlld that prioritizes develo
 ### Error Class Hierarchy (Already Defined)
 
 ```
-MeldError (base)
-├── MeldParseError (syntax errors)
+MlldError (base)
+├── MlldParseError (syntax errors)
 │   ├── location info (line, column, file)
 │   ├── expected vs found tokens
 │   └── suggestion/fix hints
-├── MeldInterpreterError (runtime)
+├── MlldInterpreterError (runtime)
 │   ├── VariableResolutionError
 │   ├── FileNotFoundError  
 │   ├── CommandExecutionError
 │   ├── CircularDependencyError
 │   └── FieldAccessError
-├── MeldValidationError (semantic)
+├── MlldValidationError (semantic)
 │   ├── InvalidDirectiveError
 │   ├── TypeMismatchError
 │   └── MissingRequiredFieldError
-└── MeldWarning (non-fatal issues)
+└── MlldWarning (non-fatal issues)
     ├── DeprecationWarning
     └── PerformanceWarning
 ```
@@ -50,7 +50,7 @@ interface EvaluationContext {
 }
 
 // Errors will capture full context
-class MeldInterpreterError extends MeldError {
+class MlldInterpreterError extends MlldError {
   constructor(
     message: string,
     context: {
@@ -136,7 +136,7 @@ tests/cases/
    if (fixture.expectedError) {
      await expect(async () => {
        await interpret(fixture.input, options);
-     }).rejects.toThrow(MeldError);
+     }).rejects.toThrow(MlldError);
      
      // Verify error matches expected output
      const error = await getError();
@@ -214,7 +214,7 @@ Error 3 of 3: Circular variable reference detected
 ## Implementation Phases
 
 ### Phase 1: Core Error Infrastructure (Week 1)
-- [ ] Update interpreter to use MeldError classes
+- [ ] Update interpreter to use MlldError classes
 - [ ] Add context preservation to evaluate functions
 - [ ] Implement error collection in Environment
 - [ ] Create ErrorFormatter for pretty display
@@ -320,7 +320,7 @@ Warnings are shown by default. Users can control via:
 
 ## Future Enhancements
 
-- Error suppression directives (e.g., `@meld:ignore-next-line`)
+- Error suppression directives (e.g., `@mlld:ignore-next-line`)
 - Structured error output formats (JSON, SARIF)
 - IDE integration with error positions
 - Error fix suggestions with auto-apply

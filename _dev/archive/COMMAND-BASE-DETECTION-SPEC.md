@@ -2,7 +2,7 @@
 
 ## Overview
 
-This specification defines how the Meld parser detects and extracts command bases from `@run` and `@exec` directives for security authorization purposes. Command bases are the actual executables being invoked, separate from their arguments.
+This specification defines how the Mlld parser detects and extracts command bases from `@run` and `@exec` directives for security authorization purposes. Command bases are the actual executables being invoked, separate from their arguments.
 
 ## Node Type
 
@@ -26,7 +26,7 @@ interface CommandBase {
 
 ### 1. Simple Commands
 The first word of a command is the command base:
-```meld
+```mlld
 @run ls -la              # CommandBase: { command: "ls" }
 @run git status          # CommandBase: { command: "git" }
 @run echo "hello"        # CommandBase: { command: "echo" }
@@ -34,7 +34,7 @@ The first word of a command is the command base:
 
 ### 2. Piped and Chained Commands
 Commands separated by operators each have their own command base:
-```meld
+```mlld
 @run ls | grep foo       # CommandBases: [{ command: "ls" }, { command: "grep" }]
 @run cd src && npm test  # CommandBases: [{ command: "cd" }, { command: "npm" }]
 @run mkdir tmp; cd tmp   # CommandBases: [{ command: "mkdir" }, { command: "cd" }]
@@ -47,7 +47,7 @@ Operators recognized: `|`, `&&`, `||`, `;`
 Special handling for common script execution patterns:
 
 #### npm/yarn/pnpm/bun run
-```meld
+```mlld
 @run npm run build       # CommandBase: { command: "npm run", script: "build", isScriptRunner: true }
 @run yarn run test       # CommandBase: { command: "yarn run", script: "test", isScriptRunner: true }
 @run pnpm run dev        # CommandBase: { command: "pnpm run", script: "dev", isScriptRunner: true }
@@ -55,7 +55,7 @@ Special handling for common script execution patterns:
 ```
 
 #### npx (package execution)
-```meld
+```mlld
 @run npx eslint .        # CommandBase: { command: "npx", package: "eslint", isPackageRunner: true }
 @run npx prettier --write # CommandBase: { command: "npx", package: "prettier", isPackageRunner: true }
 ```
@@ -63,20 +63,20 @@ Special handling for common script execution patterns:
 ### 4. Special Command Patterns
 
 #### Python module execution
-```meld
+```mlld
 @run python -m venv      # CommandBase: { command: "python -m", module: "venv" }
 @run python3 -m pip      # CommandBase: { command: "python3 -m", module: "pip" }
 ```
 
 #### Inline code execution
-```meld
+```mlld
 @run node -e "code"      # CommandBase: { command: "node -e", isInlineCode: true }
 @run sh -c "command"     # CommandBase: { command: "sh -c", isInlineCode: true }
 @run bash -c "script"    # CommandBase: { command: "bash -c", isInlineCode: true }
 ```
 
 #### Build tools with targets
-```meld
+```mlld
 @run make install        # CommandBase: { command: "make" }
 @run cargo run --bin app # CommandBase: { command: "cargo" }
 @run go run main.go      # CommandBase: { command: "go" }
@@ -144,7 +144,7 @@ Note: For now, we treat build tool targets as regular arguments, not part of the
 ## Variable Interpolation
 
 Command bases should be detected even when variables are present:
-```meld
+```mlld
 @run @cmd --flag         # If @cmd = "git", CommandBase: { command: "git" }
 @run npm run @script     # CommandBase: { command: "npm run", script: "@script" }
 ```

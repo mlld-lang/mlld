@@ -1,10 +1,10 @@
 // IMPORT DIRECTIVE
-// Implementation of the @import directive for importing values from other Meld files
+// Implementation of the @import directive for importing values from other Mlld files
 
 /* 
 # Import Directive
 
-The import directive brings in variables from other Meld files.
+The import directive brings in variables from other Mlld files.
 It can be used in these forms:
 1. @import {var1, var2} from "path/to/file"  - Import specific variables
 2. @import {*} from "path/to/file"          - Import all variables

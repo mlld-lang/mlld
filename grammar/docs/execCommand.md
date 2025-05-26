@@ -1,10 +1,10 @@
 # Exec Command Subtype
 
-The `execCommand` subtype of the `@exec` directive defines reusable shell commands that can be executed using the `@run` directive. It provides a way to create command templates that can be parameterized and reused throughout a Meld document.
+The `execCommand` subtype of the `@exec` directive defines reusable shell commands that can be executed using the `@run` directive. It provides a way to create command templates that can be parameterized and reused throughout a Mlld document.
 
 ## Syntax
 
-```meld
+```mlld
 @exec commandName = @run [command]
 @exec commandName (param1, param2) = @run [command with $param1 and $param2]
 ```
@@ -50,7 +50,7 @@ The `execCommand` subtype nodes have this structure:
 
 ### Basic Command
 
-```meld
+```mlld
 @exec listFiles = @run [ls -la]
 ```
 
@@ -78,7 +78,7 @@ AST:
 
 ### Parameterized Command
 
-```meld
+```mlld
 @exec formatFile (path, type) = @run [fmt $path --type=$type]
 ```
 
@@ -109,7 +109,7 @@ AST:
 
 ### Command with Metadata (Future Implementation)
 
-```meld
+```mlld
 @exec cleanDirectory.risk.high = @run [rm -rf $dir]
 ```
 

@@ -1,4 +1,4 @@
-import type { MeldNode, MeldVariable } from '@core/types';
+import type { MlldNode, MlldVariable } from '@core/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import type { ResolvedURLConfig } from '@core/config/types';
@@ -13,8 +13,8 @@ import { GistTransformer } from '@core/security/GistTransformer';
  * This replaces StateService, ResolutionService, and capability injection.
  */
 export class Environment {
-  private variables = new Map<string, MeldVariable>();
-  private nodes: MeldNode[] = [];
+  private variables = new Map<string, MlldVariable>();
+  private nodes: MlldNode[] = [];
   private parent?: Environment;
   private urlCache: Map<string, { content: string; timestamp: number; ttl?: number }> = new Map();
   private importStack: Set<string> = new Set(); // Track imports to prevent circular dependencies
@@ -54,11 +54,11 @@ export class Environment {
   
   // --- Variable Management ---
   
-  setVariable(name: string, variable: MeldVariable): void {
+  setVariable(name: string, variable: MlldVariable): void {
     this.variables.set(name, variable);
   }
   
-  getVariable(name: string): MeldVariable | undefined {
+  getVariable(name: string): MlldVariable | undefined {
     // Check this scope first
     const variable = this.variables.get(name);
     if (variable) return variable;
@@ -73,11 +73,11 @@ export class Environment {
   
   // --- Node Management ---
   
-  addNode(node: MeldNode): void {
+  addNode(node: MlldNode): void {
     this.nodes.push(node);
   }
   
-  getNodes(): MeldNode[] {
+  getNodes(): MlldNode[] {
     return this.nodes;
   }
   
@@ -154,7 +154,7 @@ export class Environment {
         const os = require('os');
         const path = require('path');
         const tmpDir = os.tmpdir();
-        const tmpFile = path.join(tmpDir, `meld_exec_${Date.now()}.py`);
+        const tmpFile = path.join(tmpDir, `mlld_exec_${Date.now()}.py`);
         
         // Build Python code with parameters
         let pythonCode = '';
@@ -248,8 +248,8 @@ export class Environment {
   
   // --- Utility Methods ---
   
-  getAllVariables(): Map<string, MeldVariable> {
-    const allVars = new Map<string, MeldVariable>();
+  getAllVariables(): Map<string, MlldVariable> {
+    const allVars = new Map<string, MlldVariable>();
     
     // Add parent variables first (so child can override)
     if (this.parent) {

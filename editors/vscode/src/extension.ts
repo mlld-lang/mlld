@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import { DocumentAnalyzer } from './utils/document-analyzer';
-import { MeldSemanticTokensProvider } from './providers/semantic-tokens';
-import { MeldHoverProvider } from './providers/hover-provider';
-import { MeldDefinitionProvider } from './providers/definition-provider';
-import { MeldCompletionProvider } from './providers/completion-provider';
+import { MlldSemanticTokensProvider } from './providers/semantic-tokens';
+import { MlldHoverProvider } from './providers/hover-provider';
+import { MlldDefinitionProvider } from './providers/definition-provider';
+import { MlldCompletionProvider } from './providers/completion-provider';
 
 let analyzer: DocumentAnalyzer;
 
@@ -24,7 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(analyzer);
 
   // Register semantic tokens provider
-  const semanticTokensProvider = new MeldSemanticTokensProvider(analyzer);
+  const semanticTokensProvider = new MlldSemanticTokensProvider(analyzer);
   const semanticTokensRegistration = vscode.languages.registerDocumentSemanticTokensProvider(
     { language: 'mlld' },
     semanticTokensProvider,
@@ -33,7 +33,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(semanticTokensRegistration);
 
   // Register hover provider
-  const hoverProvider = new MeldHoverProvider(analyzer);
+  const hoverProvider = new MlldHoverProvider(analyzer);
   const hoverRegistration = vscode.languages.registerHoverProvider(
     { language: 'mlld' },
     hoverProvider
@@ -41,7 +41,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(hoverRegistration);
 
   // Register definition provider
-  const definitionProvider = new MeldDefinitionProvider(analyzer);
+  const definitionProvider = new MlldDefinitionProvider(analyzer);
   const definitionRegistration = vscode.languages.registerDefinitionProvider(
     { language: 'mlld' },
     definitionProvider
@@ -49,7 +49,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(definitionRegistration);
 
   // Register completion provider
-  const completionProvider = new MeldCompletionProvider(analyzer);
+  const completionProvider = new MlldCompletionProvider(analyzer);
   const completionRegistration = vscode.languages.registerCompletionItemProvider(
     { language: 'mlld' },
     completionProvider,

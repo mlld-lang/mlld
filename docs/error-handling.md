@@ -5,16 +5,16 @@ title: "Error Handling"
 
 # Error Handling
 
-Meld has a structured approach to error handling, categorizing errors into different severity levels.
+Mlld has a structured approach to error handling, categorizing errors into different severity levels.
 
 ## Error Categories
 
 ### Fatal Errors (Halt Execution)
 
-These errors stop Meld execution immediately:
+These errors stop Mlld execution immediately:
 
 - Missing or inaccessible referenced files
-- Invalid syntax in Meld files
+- Invalid syntax in Mlld files
 - Invalid file extensions
 - Circular imports
 - Type mismatches (using wrong variable type)
@@ -45,7 +45,7 @@ These situations don't generate errors or warnings:
 
 - **Missing Files**: When an `@add` or `@import` directive references a non-existent file
 - **Path Validation**: When paths don't use `$HOMEPATH` or `$PROJECTPATH`
-- **File Permission Issues**: When Meld can't read a referenced file
+- **File Permission Issues**: When Mlld can't read a referenced file
 
 ### Syntax Errors
 
@@ -56,12 +56,12 @@ These situations don't generate errors or warnings:
 ### Execution Errors
 
 - **Command Failures**: When an `@run` command exits with a non-zero status
-- **Circular Imports**: When Meld detects circular file imports
+- **Circular Imports**: When Mlld detects circular file imports
 - **Type Mismatches**: Using the wrong variable type in a context
 
 ## Error Recovery
 
-Meld attempts to recover from non-fatal errors by:
+Mlld attempts to recover from non-fatal errors by:
 
 - Substituting empty strings for missing data fields
 - Continuing past warnings when possible
@@ -74,4 +74,4 @@ Meld attempts to recover from non-fatal errors by:
 - Validate command exit codes
 - Handle optional data fields gracefully
 - Check for environment variables before using them
-- Test Meld scripts with error cases to ensure proper handling
+- Test Mlld scripts with error cases to ensure proper handling

@@ -2,13 +2,13 @@
 
 ## Overview
 
-The `import` directive allows importing content from external files or from variables containing file paths. It's primarily used to include content from other Meld documents or to reference external resources.
+The `import` directive allows importing content from external files or from variables containing file paths. It's primarily used to include content from other Mlld documents or to reference external resources.
 
 ## Syntax
 
 ```
-@import { var1, var2 } from "path/to/file.meld"
-@import { * } from "path/to/file.meld"
+@import { var1, var2 } from "path/to/file.mlld"
+@import { * } from "path/to/file.mlld"
 @import { var1 as alias1 } from "$pathVariable"
 ```
 
@@ -30,7 +30,7 @@ All import directives share this basic structure in the AST:
   subtype: 'importAll' | 'importSelected',
   values: {
     imports: VariableReferenceNode[],  // What is being imported
-    path: MeldNode[]                   // Where it's being imported from
+    path: MlldNode[]                   // Where it's being imported from
   },
   raw: {
     imports: string,  // Raw text of imports

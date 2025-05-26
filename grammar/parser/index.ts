@@ -1,7 +1,7 @@
 /**
- * Meld Parser Entry Point
+ * Mlld Parser Entry Point
  * 
- * Provides the main parsing functionality for Meld documents.
+ * Provides the main parsing functionality for Mlld documents.
  * Re-exports the generated parser and related types.
  */
 
@@ -9,7 +9,7 @@
 import parser from './parser.js';
 
 // Import types
-import type { MeldNode } from '@core/types';
+import type { MlldNode } from '@core/types';
 
 /**
  * Parser options
@@ -26,7 +26,7 @@ export interface ParserOptions {
  */
 export interface ParseResult {
   /** The parsed AST */
-  ast: MeldNode[];
+  ast: MlldNode[];
   /** Whether parsing succeeded */
   success: boolean;
   /** Error if parsing failed */
@@ -34,9 +34,9 @@ export interface ParseResult {
 }
 
 /**
- * Parse Meld source code into an AST
+ * Parse Mlld source code into an AST
  * 
- * @param source The Meld source code to parse
+ * @param source The Mlld source code to parse
  * @param options Parser options
  * @returns The parsed AST nodes
  * @throws {SyntaxError} If the source code is invalid
@@ -64,7 +64,7 @@ export async function parse(source: string, options?: ParserOptions): Promise<Pa
 /**
  * Synchronous parse function for compatibility
  */
-export function parseSync(source: string, options?: ParserOptions): MeldNode[] {
+export function parseSync(source: string, options?: ParserOptions): MlldNode[] {
   return parser.parse(source, {
     startRule: 'Start',
     ...options
@@ -76,4 +76,4 @@ export { parser };
 export const SyntaxError = parser.SyntaxError;
 
 // Export types
-export type { MeldNode } from '@core/types';
+export type { MlldNode } from '@core/types';

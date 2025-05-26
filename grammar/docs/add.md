@@ -1,12 +1,12 @@
 # Add Directive
 
-The `@add` directive is used to include content from external files or variables into a Meld document. It supports multiple subtypes for different inclusion patterns, each with their own parsing rules and AST structure.
+The `@add` directive is used to include content from external files or variables into a Mlld document. It supports multiple subtypes for different inclusion patterns, each with their own parsing rules and AST structure.
 
 ## Syntax Variations
 
 ### Path Inclusion
 
-```meld
+```mlld
 @add "path"
 @add "path # section_text"
 @add "path" as ###
@@ -16,7 +16,7 @@ The `@add` directive is used to include content from external files or variables
 
 ### Template Inclusion
 
-```meld
+```mlld
 @add [template_content]
 @add [
   multiline
@@ -27,13 +27,13 @@ The `@add` directive is used to include content from external files or variables
 
 ### Variable Inclusion
 
-```meld
+```mlld
 @add {{variable}}
 ```
 
 ### Named Exports Inclusion
 
-```meld
+```mlld
 @add {name1, name2} from "path"
 ```
 
@@ -90,27 +90,27 @@ Each add directive creates a node with the following structure:
 ## Examples
 
 1. Basic file inclusion:
-   ```meld
+   ```mlld
    @add "$PROJECTPATH/README.md"
    ```
 
 2. Including with section extraction:
-   ```meld
+   ```mlld
    @add "guide.md # Getting Started"
    ```
 
 3. Heading level adjustment:
-   ```meld
+   ```mlld
    @add "api.md" as ###
    ```
 
 4. Adding headers:
-   ```meld
+   ```mlld
    @add "example.js" under Code Example
    ```
 
 5. Variable inclusion:
-   ```meld
+   ```mlld
    @add {{content}}
    ```
 

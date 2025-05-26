@@ -8,7 +8,7 @@ export class DocumentAnalyzer {
   private diagnosticCollection: vscode.DiagnosticCollection;
 
   constructor() {
-    this.diagnosticCollection = vscode.languages.createDiagnosticCollection('meld');
+    this.diagnosticCollection = vscode.languages.createDiagnosticCollection('mlld');
   }
 
   /**

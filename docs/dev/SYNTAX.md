@@ -1,6 +1,6 @@
-# Meld Syntax Guide
+# Mlld Syntax Guide
 
-Meld is a modular prompt scripting language designed for dynamic prompt creation by integrating content from files, command outputs, and other Meld scripts. It reads scripts synchronously from top to bottom.
+Mlld is a modular prompt scripting language designed for dynamic prompt creation by integrating content from files, command outputs, and other Mlld scripts. It reads scripts synchronously from top to bottom.
 
 ### Directives and variable types reference
 
@@ -29,19 +29,19 @@ Variables have a VariableType of `text`, `data`, `path`, and `command`.
 
 ## Key Concepts & Common Gotchas
 
-Understanding these two points is crucial for working effectively with Meld:
+Understanding these two points is crucial for working effectively with Mlld:
 
 1.  **Variable Interpolation Scope:** Variables (e.g., `{{my_var}}`) are **only** interpolated *within* the arguments of `@directive` lines. They are **not** automatically substituted in plain text outside of directives.
 
     *   **Incorrect:**
-        ```meld
+        ```mlld
         @text greeting = "Hello"
         {{greeting}} World! 
         ```
         Output: `{{greeting}} World!`
 
     *   **Correct:** Use `@add` for templating plain text:
-        ```meld
+        ```mlld
         @text greeting = "Hello"
         @add [[
         {{greeting}} World!
@@ -57,7 +57,7 @@ Understanding these two points is crucial for working effectively with Meld:
 
 These define variables of different types.
 
-```meld
+```mlld
 @text message = "Some text"
 @path config_file = "./config.json"
 @data user = {"name": "Alex", "id": 123}
@@ -71,21 +71,21 @@ These define variables of different types.
 Used to bring external content or template strings into your script.
 
 *   **`@add [path/to/file]`**: Embeds the entire content of a file.
-    ```meld
+    ```mlld
     @add [./README.md]
     ```
 *   **`@add [path/to/file # Section Header]`**: Embeds a specific section from a Markdown file.
-    ```meld
+    ```mlld
     @add [./docs/ARCHITECTURE.md # Overview]
     ```
 *   **`@add {{variable}}`**: Embeds the content of a variable (which might hold file paths or text).
-    ```meld
+    ```mlld
     @path doc_path = "./README.md"
     @add {{doc_path}}
     ```
 *   **`@add [[Template with {{variables}}]]`**: Embeds a literal template string, interpolating any variables within it.
-    ```meld
-    @text name = "Meld"
+    ```mlld
+    @text name = "Mlld"
     @add [[Welcome to {{name}}!]]
     ```
 
@@ -94,34 +94,34 @@ Used to bring external content or template strings into your script.
 Used to execute shell commands, predefined commands, or code blocks.
 
 *   **`@run [command arg1 arg2]`**: Runs a shell command.
-    ```meld
+    ```mlld
     @run [ls -l]
     ```
 *   **`@run [command {{variable}}]`**: Runs a shell command, interpolating variables.
-    ```meld
+    ```mlld
     @path target_dir = "."
     @run [ls {{target_dir}}]
     ```
 *   **`@run $definedCommand(param1, {{var2}})`**: Runs a command previously defined with `@exec`.
-    ```meld
+    ```mlld
     @exec greet(name) = @run [echo "Hello, {{name}}!"]
-    @run $greet(MeldUser)
+    @run $greet(MlldUser)
     ```
 *   **`@run language [ code block ]`**: Executes a block of code in the specified language (e.g., `python`, `bash`).
-    ```meld
+    ```mlld
     @run python [ print("Hello from Python!") ]
     ```
 *   **`@run language ({{var1}}, param2) [ code block using var1, param2 ]`**: Executes a code block, passing variables/parameters into the code's scope.
-    ```meld
+    ```mlld
     @text message = "dynamic message"
     @run python ({{message}}) [ print(message) ] 
     ```
 
 ### `@import`
 
-Imports variables and defined commands from other Meld files.
+Imports variables and defined commands from other Mlld files.
 
-```meld
+```mlld
 # utils.mld
 @text util_message = "Shared utility message"
 @exec util_command(arg) = @run [echo "Util: {{arg}}"]
@@ -136,7 +136,7 @@ Imports variables and defined commands from other Meld files.
 
 Creates reusable, parameterized commands.
 
-```meld
+```mlld
 @exec list_files(dir, pattern) = @run [find {{dir}} -name "{{pattern}}"]
 
 @run $list_files(".", "*.md") 

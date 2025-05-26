@@ -1,5 +1,5 @@
 /**
- * Main entry point for the Meld CLI application.
+ * Main entry point for the Mlld CLI application.
  */
 /// <reference types="node" />
 import { main } from './index';

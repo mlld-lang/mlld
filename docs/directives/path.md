@@ -9,7 +9,7 @@ The `@path` directive defines filesystem path variables that can be used in `@ad
 
 ## Syntax
 
-```meld
+```mlld
 @path identifier = "$HOMEPATH/path"
 @path identifier = "$~/path"
 @path identifier = "$PROJECTPATH/path"
@@ -44,7 +44,7 @@ Where:
 
 ## Special Path Variables (Optional)
 
-Meld provides special path variables for enhanced cross-platform portability:
+Mlld provides special path variables for enhanced cross-platform portability:
 
 - `$HOMEPATH` or `$~`: Refers to the user's home directory
 - `$PROJECTPATH` or `$.`: Refers to the current project root directory
@@ -55,7 +55,7 @@ Using special path variables is recommended (but not required) for best cross-pl
 
 Path variables are referenced using the `$identifier` syntax:
 
-```meld
+```mlld
 @path docs = "$PROJECTPATH/docs"
 @add [$docs/guide.md]
 ```
@@ -68,26 +68,26 @@ Path variables can be used:
 ## Examples
 
 Basic path variables:
-```meld
+```mlld
 @path docs = "$PROJECTPATH/docs"
 @path configs = "$PROJECTPATH/configs"
-@path home = "$HOMEPATH/meld"
+@path home = "$HOMEPATH/mlld"
 ```
 
 Using path variables in commands:
-```meld
+```mlld
 @path src = "$PROJECTPATH/src"
 @run [ls -la $src]
 ```
 
 Embedding files with path variables:
-```meld
+```mlld
 @path templates = "$PROJECTPATH/templates"
 @add [$templates/header.md]
 ```
 
 Using path segments:
-```meld
+```mlld
 @path src = "$PROJECTPATH/src"
 @add [$src/components/button.js]
 ```
@@ -102,7 +102,7 @@ The following errors are possible with path directives:
 
 Paths can include variables, which are resolved during execution:
 
-```meld
+```mlld
 @text dir = "docs"
 @path docs = "$PROJECTPATH/{{dir}}"
 ```
@@ -111,7 +111,7 @@ Paths can include variables, which are resolved during execution:
 
 - For cross-platform compatibility, use special path variables `$PROJECTPATH` and `$HOMEPATH`
 - Use forward slashes for path separators (even on Windows)
-- Be cautious when using absolute paths or parent directory references (`..`), as they may make your Meld files less portable
+- Be cautious when using absolute paths or parent directory references (`..`), as they may make your Mlld files less portable
 - Consider using path variables to encapsulate filesystem paths for better maintainability
 
 ## Notes

@@ -1,6 +1,6 @@
-# Strategic Type System Design for Meld Grammar AST
+# Strategic Type System Design for Mlld Grammar AST
 
-This document outlines a comprehensive strategy for implementing a clean-slate type system that perfectly aligns with the AST produced by the Meld grammar.
+This document outlines a comprehensive strategy for implementing a clean-slate type system that perfectly aligns with the AST produced by the Mlld grammar.
 
 ## Design Principles
 

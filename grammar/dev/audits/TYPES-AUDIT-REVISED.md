@@ -1,4 +1,4 @@
-# Revised Meld Grammar Types Audit
+# Revised Mlld Grammar Types Audit
 
 ## Key Insight: New Type System Approach
 
@@ -129,4 +129,4 @@ Opportunities for improvement:
 
 The new type system in `grammar/types/` represents a significant improvement over the core types, with a much stronger focus on modularity, specificity, and alignment with the actual AST structure. The audit has identified several areas for enhancement, but these are refinements to an already well-designed system rather than fundamental structural changes.
 
-By completing and standardizing the new type system, Meld will have a much more robust, type-safe foundation for working with its AST, which will improve developer experience, reduce errors, and provide better documentation of the grammar's capabilities.
+By completing and standardizing the new type system, Mlld will have a much more robust, type-safe foundation for working with its AST, which will improve developer experience, reduce errors, and provide better documentation of the grammar's capabilities.

@@ -229,7 +229,7 @@ export class ImportApproval {
     }
     
     // Save config
-    const configPath = path.join(this.projectPath, 'meld.config.json');
+    const configPath = path.join(this.projectPath, 'mlld.config.json');
     await fs.writeFile(configPath, JSON.stringify(config, null, 2));
     
     // Reload config
@@ -250,7 +250,7 @@ export class ImportApproval {
         entry.allowedAt = new Date().toISOString();
         
         // Save config
-        const configPath = path.join(this.projectPath, 'meld.config.json');
+        const configPath = path.join(this.projectPath, 'mlld.config.json');
         await fs.writeFile(configPath, JSON.stringify(config, null, 2));
       }
     }

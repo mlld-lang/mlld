@@ -287,7 +287,7 @@ Using adapter pattern to maintain backward compatibility while incrementally mig
 - **Streaming Support**: Process large files incrementally
 - **Parallel Processing**: Handle independent directives concurrently
 - **Error Recovery**: Partial processing with error boundaries
-- **Type Generation**: Generate TypeScript types from Meld schemas
+- **Type Generation**: Generate TypeScript types from Mlld schemas
 
 ---
 

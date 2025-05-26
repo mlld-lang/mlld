@@ -10,7 +10,7 @@ title: "Syntax Reference"
 
 # Syntax Reference
 
-This document provides a comprehensive reference for the Meld syntax.
+This document provides a comprehensive reference for the Mlld syntax.
 
 ## Core Tokens
 
@@ -20,7 +20,7 @@ Directives must appear at start of line (no indentation):
 ```
 @add      - Include content from files
 @run      - Execute shell commands
-@import   - Import variables and commands from other Meld files
+@import   - Import variables and commands from other Mlld files
 @exec     - Create reusable commands
 @text     - Define text variables
 @path     - Define filesystem path variables
@@ -30,7 +30,7 @@ Directives must appear at start of line (no indentation):
 ### Comments
 
 Lines that begin with `>> ` (two greater-than signs followed by a space) are treated as comments:
-```meld
+```mlld
 >> This is a comment
 >> Comments must start at beginning of line (no indentation)
 @text message = "Hello"  >> Invalid - comments must be on their own line
@@ -79,7 +79,7 @@ Lines that begin with `>> ` (two greater-than signs followed by a space) are tre
 ### Path Variables
 
 Syntax: `@identifier`
-```meld
+```mlld
 @path                # Reference a path variable
 [@~/path]           # Home directory path
 [@./path]           # Project root path
@@ -88,7 +88,7 @@ Syntax: `@identifier`
 ### Text Variables
 
 Syntax: `@identifier` in regular text, `{{identifier}}` in templates
-```meld
+```mlld
 @textvar                       # Text variable reference
 [[Content with {{textvar}}]]   # Variable in template
 ```
@@ -96,7 +96,7 @@ Syntax: `@identifier` in regular text, `{{identifier}}` in templates
 ### Data Variables
 
 Syntax: `@identifier` in regular text, `{{identifier}}` in templates
-```meld
+```mlld
 @datavar                       # Data variable reference
 @datavar.field                 # Data variable field access
 @datavar[0]                    # Array element access
@@ -113,7 +113,7 @@ Triple backticks that:
 - Support nesting with different numbers of backticks
 
 Example:
-```meld
+```mlld
 ​```python
 def hello():
     print("Hi")  # @text directives here are preserved as-is
@@ -124,7 +124,7 @@ def hello():
 
 ### @add
 
-```meld
+```mlld
 @add [path]
 @add [path # section_text]
 @add [path] as "# New Title"           # Rename section
@@ -134,7 +134,7 @@ def hello():
 
 ### @run
 
-```meld
+```mlld
 @run [command_text]
 @run [command_text] under header_text
 @run @command(@textvar1, @textvar2)
@@ -142,13 +142,13 @@ def hello():
 
 ### @import
 
-```meld
+```mlld
 @import [path]
 ```
 
 ### @exec
 
-```meld
+```mlld
 @exec identifier = @run [content]
 @exec command(param1, param2) = @run [content @param1 @param2]
 @exec command = @run javascript [code]
@@ -156,7 +156,7 @@ def hello():
 
 ### @text
 
-```meld
+```mlld
 @text identifier = "value"
 @text identifier = @add [content]
 @text identifier = @run [command]
@@ -164,7 +164,7 @@ def hello():
 
 ### @path
 
-```meld
+```mlld
 @path identifier = [@~/path]
 @path identifier = [@./path]
 @path identifier = [/absolute/path]
@@ -173,7 +173,7 @@ def hello():
 
 ### @data 
 
-```meld
+```mlld
 @data identifier = value
 @data identifier : schema = value
 ```
@@ -182,7 +182,7 @@ def hello():
 
 Uses the `++` operator with required spaces on both sides:
 
-```meld
+```mlld
 @text greeting = "Hello" ++ " " ++ "World"
 @text message = @intro ++ @body
 ```
@@ -190,14 +190,14 @@ Uses the `++` operator with required spaces on both sides:
 ## Template Literals
 
 Delimited by backticks (`):
-```meld
+```mlld
 `Hello {{name}}!`                        # Text variable
 `Config: {{config.name}}`                # Data variable with field
 `{{greeting}}, your ID is {{user.id}}`    # Mixed variables
 ```
 
 Multi-line template literals:
-```meld
+```mlld
 @text prompt = [[`
   System: {{role}}
   

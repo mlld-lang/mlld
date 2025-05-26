@@ -4,7 +4,7 @@ The `addPath` subtype of the `@add` directive is used to include content from an
 
 ## Syntax
 
-```meld
+```mlld
 @add "path"
 @add "path # section_text"
 @add "path" as ###

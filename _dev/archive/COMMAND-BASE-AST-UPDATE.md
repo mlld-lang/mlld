@@ -64,35 +64,35 @@ Run and Exec directives now include `commandBases` array in their values:
 ## Detection Patterns
 
 ### 1. Simple Commands
-```meld
+```mlld
 @run [ls -la]
 ```
 - Detects: `ls`
 
 ### 2. Piped Commands
-```meld
+```mlld
 @run [ls | grep foo | wc -l]
 ```
 - Detects: `ls`, `grep`, `wc`
 
 ### 3. Chained Commands
-```meld
+```mlld
 @run [mkdir test && cd test && touch file.txt]
 ```
 - Detects: `mkdir`, `cd`, `touch`
 
-```meld
+```mlld
 @run [rm temp || echo "Already clean"]
 ```
 - Detects: `rm`, `echo`
 
-```meld
+```mlld
 @run [npm test; npm build; npm deploy]
 ```
 - Detects: `npm`, `npm`, `npm`
 
 ### 4. Script Runners
-```meld
+```mlld
 @run [npm run build]
 @run [yarn run test]
 @run [pnpm run dev]
@@ -101,13 +101,13 @@ Run and Exec directives now include `commandBases` array in their values:
 - Sets `isScriptRunner: true`
 
 ### 5. Special Patterns
-```meld
+```mlld
 @run [npx prettier --write .]
 ```
 - Detects: `command: "npx"` with `package: "prettier"`
 - Sets `isPackageRunner: true`
 
-```meld
+```mlld
 @run [python -m http.server]
 ```
 - Detects: `command: "python -m"` with `module: "http.server"`
@@ -116,7 +116,7 @@ Run and Exec directives now include `commandBases` array in their values:
 
 For proper command parsing and command base detection, commands should be enclosed in brackets:
 
-```meld
+```mlld
 @run [echo "Hello from command"]   # ✓ Correct - full command captured
 @run echo "Hello from command"     # ✗ Problematic - only "echo" captured
 ```
@@ -173,7 +173,7 @@ if (directive.meta.hasScriptRunner) {
 
 Command bases are detected on the raw command string AFTER variable interpolation. The parser handles:
 
-```meld
+```mlld
 @run [ls @dir | grep @pattern]
 ```
 
@@ -182,17 +182,17 @@ The `commandBases` will be `['ls', 'grep']` regardless of variable values.
 ## Edge Cases
 
 1. **Quoted Commands**: Commands in quotes are treated as literals but command bases are still detected
-   ```meld
+   ```mlld
    @run "ls | grep foo"  # Still detects: ls, grep
    ```
 
 2. **Complex Script Names**: Script names with colons are preserved
-   ```meld
+   ```mlld
    @run [npm run build:prod]  # script: "build:prod"
    ```
 
 3. **Multiple Operators**: All operators (|, &&, ||, ;) trigger command base detection
-   ```meld
+   ```mlld
    @run [a | b && c || d; e]  # Detects all 5 commands
    ```
 

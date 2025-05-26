@@ -1,6 +1,6 @@
-# Import Path Standards in Meld
+# Import Path Standards in Mlld
 
-This document outlines the standards for import paths in the Meld codebase to ensure consistency and compatibility with ES modules in Node.js.
+This document outlines the standards for import paths in the Mlld codebase to ensure consistency and compatibility with ES modules in Node.js.
 
 ## Key Standards
 
@@ -52,7 +52,7 @@ For external modules from `node_modules`, do not add `.js` extensions:
 // ✅ CORRECT: External modules without .js
 import { describe, it, expect } from 'vitest';
 import { mockDeep } from 'vitest-mock-extended';
-import type { MeldNode } from 'meld-spec';
+import type { MlldNode } from 'mlld-spec';
 ```
 
 ## Available Path Aliases
@@ -109,7 +109,7 @@ import type { IService } from '@services/shared/interfaces.js';
 
 ## ESM Compatibility
 
-The Meld codebase uses ES modules, which requires:
+The Mlld codebase uses ES modules, which requires:
 
 1. `.js` extensions in import paths
 2. Top-level `await` support

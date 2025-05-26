@@ -1,6 +1,6 @@
-# Newlines Handling in Meld Output
+# Newlines Handling in Mlld Output
 
-This document outlines the architecture and implementation details for newlines handling in Meld's output system following the standardization on transformation mode (output-literal mode) and the introduction of Prettier integration.
+This document outlines the architecture and implementation details for newlines handling in Mlld's output system following the standardization on transformation mode (output-literal mode) and the introduction of Prettier integration.
 
 ## Architecture Overview
 
@@ -12,7 +12,7 @@ This document outlines the architecture and implementation details for newlines 
 
 ### Implementation Components
 
-1. **OutputService**: The central service responsible for converting Meld AST nodes into different output formats. It now always uses transformation mode for consistent handling.
+1. **OutputService**: The central service responsible for converting Mlld AST nodes into different output formats. It now always uses transformation mode for consistent handling.
 
 2. **FormattingContext**: A context tracking object that preserves formatting information during content transformation:
    - `transformationMode`: Always true now (kept for backward compatibility)
@@ -48,20 +48,20 @@ This document outlines the architecture and implementation details for newlines 
 
 ```typescript
 // API usage
-const result = await runMeld(content);
+const result = await runMlld(content);
 
 // CLI usage
-meld input.meld
+mlld input.mlld
 ```
 
 ### Pretty Formatting with Prettier
 
 ```typescript
 // API usage
-const prettyResult = await runMeld(content, { pretty: true });
+const prettyResult = await runMlld(content, { pretty: true });
 
 // CLI usage
-meld --pretty input.meld
+mlld --pretty input.mlld
 ```
 
 ## Key Design Decisions

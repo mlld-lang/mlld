@@ -1,6 +1,6 @@
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
 
-export interface MeldOutputErrorOptions {
+export interface MlldOutputErrorOptions {
   cause?: Error;
   severity?: ErrorSeverity;
   context?: any;
@@ -9,13 +9,13 @@ export interface MeldOutputErrorOptions {
 /**
  * Error thrown when output generation fails
  */
-export class MeldOutputError extends MeldError {
+export class MlldOutputError extends MlldError {
   public readonly format: string;
 
   constructor(
     message: string,
     format: string,
-    options: MeldOutputErrorOptions = {}
+    options: MlldOutputErrorOptions = {}
   ) {
     // Output errors are typically recoverable by default
     const severity = options.severity || ErrorSeverity.Recoverable;
@@ -30,10 +30,10 @@ export class MeldOutputError extends MeldError {
       }
     });
     
-    this.name = 'MeldOutputError';
+    this.name = 'MlldOutputError';
     this.format = format;
     
     // Ensure proper prototype chain for instanceof checks
-    Object.setPrototypeOf(this, MeldOutputError.prototype);
+    Object.setPrototypeOf(this, MlldOutputError.prototype);
   }
 } 

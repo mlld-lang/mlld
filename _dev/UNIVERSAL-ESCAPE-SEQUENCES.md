@@ -2,7 +2,7 @@
 
 ## Summary
 
-Successfully implemented universal escape sequences across the entire Meld grammar, allowing users to escape special characters that would otherwise have syntactic meaning.
+Successfully implemented universal escape sequences across the entire Mlld grammar, allowing users to escape special characters that would otherwise have syntactic meaning.
 
 ## Supported Escape Sequences
 
@@ -44,7 +44,7 @@ Escape sequences work in all text contexts:
 
 ### Examples
 
-```meld
+```mlld
 # Basic string escapes
 @text email = "user\@example.com"
 @text path = "C:\\Users\\Documents"

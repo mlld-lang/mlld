@@ -3,7 +3,7 @@ import * as path from 'path';
 import { DocumentAnalyzer } from '../utils/document-analyzer';
 import { HeaderExtractor } from '../utils/header-extractor';
 
-export class MeldCompletionProvider implements vscode.CompletionItemProvider {
+export class MlldCompletionProvider implements vscode.CompletionItemProvider {
   constructor(private analyzer: DocumentAnalyzer) {}
 
   async provideCompletionItems(
@@ -113,7 +113,7 @@ export class MeldCompletionProvider implements vscode.CompletionItemProvider {
     cwd.documentation = 'Resolves to the current working directory';
     items.push(cwd);
 
-    // Add markdown/meld files from workspace
+    // Add markdown/mlld files from workspace
     const files = await vscode.workspace.findFiles('**/*.{md,mld}', '**/node_modules/**', 50);
     const currentDir = path.dirname(document.uri.fsPath);
 

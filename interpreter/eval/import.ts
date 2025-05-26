@@ -7,7 +7,7 @@ import * as path from 'path';
 
 /**
  * Evaluate @import directives.
- * Processes other Meld files recursively with proper scoping.
+ * Processes other Mlld files recursively with proper scoping.
  * 
  * Ported from ImportDirectiveHandler.
  */

@@ -1,10 +1,10 @@
 # Path Directive
 
-The `@path` directive in Meld is used to define filesystem path variables that can be referenced in other directives like `@add` and `@run`. It provides a way to encapsulate filesystem paths and enhance cross-platform portability through special path variables.
+The `@path` directive in Mlld is used to define filesystem path variables that can be referenced in other directives like `@add` and `@run`. It provides a way to encapsulate filesystem paths and enhance cross-platform portability through special path variables.
 
 ## Syntax
 
-```meld
+```mlld
 @path identifier = "path_value"
 ```
 
@@ -20,7 +20,7 @@ Where:
 
 ## Path Values
 
-Path values in Meld follow specific formatting rules:
+Path values in Mlld follow specific formatting rules:
 - Must be a quoted string (single, double, or backtick quotes)
 - Forward slashes (`/`) are used as separators
 - May include special variables like `$HOMEPATH`, `$~`, `$PROJECTPATH`, or `$.`
@@ -57,9 +57,9 @@ The `PathValueNode` can be one of:
 
 ## Example AST
 
-For the following Meld code:
+For the following Mlld code:
 
-```meld
+```mlld
 @path docs = "$PROJECTPATH/documentation"
 ```
 

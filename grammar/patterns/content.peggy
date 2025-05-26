@@ -1,4 +1,4 @@
-// MELD CONTENT PATTERNS
+// MLLD CONTENT PATTERNS
 // A comprehensive system for handling text segments and interpolation in different contexts
 
 /* 

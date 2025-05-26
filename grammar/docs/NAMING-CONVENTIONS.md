@@ -1,10 +1,10 @@
-# Meld Grammar Naming Conventions
+# Mlld Grammar Naming Conventions
 
-This document outlines the standardized naming conventions for the Meld grammar system, ensuring consistency and clarity across abstraction layers.
+This document outlines the standardized naming conventions for the Mlld grammar system, ensuring consistency and clarity across abstraction layers.
 
 ## Abstraction Hierarchy
 
-The Meld grammar uses a hierarchical abstraction system with distinct naming patterns for each level:
+The Mlld grammar uses a hierarchical abstraction system with distinct naming patterns for each level:
 
 ```
 Level 1: Core Primitives      - Foundational elements (tokens, segments)

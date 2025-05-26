@@ -6,7 +6,7 @@ import {
   VariableReferenceNode,
   DotSeparatorNode,
   PathSeparatorNode,
-  BaseMeldNode
+  BaseMlldNode
 } from './primitives';
 
 /**
@@ -65,7 +65,7 @@ export interface EmbedValues {
   variable?: VariableNodeArray;
   content?: ContentNodeArray;
   section?: TextNode[];
-  options?: BaseMeldNode[];
+  options?: BaseMlldNode[];
 }
 
 /**
@@ -82,7 +82,7 @@ export interface PathValues {
 export interface RunValues {
   command: ContentNodeArray;
   parameters?: ContentNodeArray;
-  options?: BaseMeldNode[];
+  options?: BaseMlldNode[];
 }
 
 /**

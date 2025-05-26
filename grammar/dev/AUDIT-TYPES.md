@@ -4,7 +4,7 @@ This document contains the results of our grammar types audit, examining the typ
 
 ## Current Types Architecture
 
-The Meld grammar uses TypeScript for type definitions, with types organized across several locations:
+The Mlld grammar uses TypeScript for type definitions, with types organized across several locations:
 
 1. **Core Types** (`grammar-core.ts`): NodeType and DirectiveKind enums
 2. **Grammar Types** (`grammar/types/`): Directive-specific type definitions

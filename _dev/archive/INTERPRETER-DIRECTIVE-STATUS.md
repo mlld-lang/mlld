@@ -1,7 +1,7 @@
 # Interpreter Directive Status Tree
 
 ```
-meld-directives/
+mlld-directives/
 ├── @text ✅
 │   ├── textAssignment ✅ (e.g., @text name = "Alice")
 │   ├── textTemplate ✅ (e.g., @text msg = [[Hello, {{name}}!]])

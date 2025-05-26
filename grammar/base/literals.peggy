@@ -1,11 +1,11 @@
-// MELD BASE LITERALS
+// MLLD BASE LITERALS
 // Literal value abstractions used throughout the grammar
 
 /* 
 # Literal Value Abstractions
 
 This file defines patterns for literal values (strings, numbers, booleans, etc.)
-used throughout the Meld grammar.
+used throughout the Mlld grammar.
 */
 
 // -------------------------------------------------------------

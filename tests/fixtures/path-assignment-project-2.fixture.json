@@ -1,7 +1,7 @@
 {
   "name": "path-assignment-project-2",
   "input": "@add [[The project source is {{projectSrc}}]]",
-  "expected": "The project source is /Users/adam/dev/meld/src",
+  "expected": "The project source is /Users/adam/dev/mlld/src",
   "ast": [
     {
       "type": "Directive",

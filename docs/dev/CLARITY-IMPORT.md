@@ -4,15 +4,15 @@
 
 ## Core Concept: Importing Definitions
 
-The primary purpose of the `@import` directive is to load definitions (Text, Data, Path variables, and Commands defined via `@exec`) from an external Meld file (`.mld`) into the current file's execution context (State).
+The primary purpose of the `@import` directive is to load definitions (Text, Data, Path variables, and Commands defined via `@exec`) from an external Mlld file (`.mld`) into the current file's execution context (State).
 
 **Crucially, `@import` does *not* embed the *content* of the imported file.** It only makes the *definitions* created within that file available to the importing file.
 
 ## Syntax
 
-Meld supports the following syntax:
+Mlld supports the following syntax:
 
-```meld
+```mlld
 @import [path/to/file.mld]                           // Import all definitions
 @import [*] from [path/to/file.mld]                  // Import all (equivalent)
 @import [var1, $pathVar] from [path/to/file.mld]        // Import specific definitions
@@ -32,7 +32,7 @@ The handler executes the following steps:
 3.  **Check Existence**: Verifies the target file exists (`FileSystemService`).
 4.  **Check Circularity**: Uses `CircularityService.beginImport()` with a *normalized* path (forward slashes) to register the start of the import and detect loops. Throws an error if a circular dependency is found.
 5.  **Read File**: Reads the content of the target `.mld` file (`FileSystemService`).
-6.  **Interpret Imported File**: This is a key step. The `ImportDirectiveHandler` obtains an `InterpreterServiceClient` and calls its `interpret` method on the *content* of the imported file. This runs the full Meld pipeline (parsing, directive handling) on the imported file in isolation, producing a new, temporary `IStateService` instance (`resultState`) containing all the definitions created by *that* file.
+6.  **Interpret Imported File**: This is a key step. The `ImportDirectiveHandler` obtains an `InterpreterServiceClient` and calls its `interpret` method on the *content* of the imported file. This runs the full Mlld pipeline (parsing, directive handling) on the imported file in isolation, producing a new, temporary `IStateService` instance (`resultState`) containing all the definitions created by *that* file.
 7.  **Merge State**: Definitions are copied from the `resultState` (imported file's state) into the `targetState` (the current file's state) using `StateVariableCopier`:
     *   If `*` or no specific imports are listed, `copyAllVariables` is used.
     *   If specific variables/aliases are listed, `copySpecificVariables` is used.

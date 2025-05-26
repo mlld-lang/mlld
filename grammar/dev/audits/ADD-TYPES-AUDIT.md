@@ -1,10 +1,10 @@
 # Add Directive Types Audit
 
-This document contains the results of auditing the add directive implementation and types in the Meld grammar.
+This document contains the results of auditing the add directive implementation and types in the Mlld grammar.
 
 ## Current Implementation
 
-The add directive is implemented in `/Users/adam/dev/meld/grammar/directives/add.peggy` with four main variants:
+The add directive is implemented in `/Users/adam/dev/mlld/grammar/directives/add.peggy` with four main variants:
 
 1. Add Section: `@add "# Header" from [path.md] as "# New"` - Extracts a section from a file with optional title renaming
 2. Add Template: `@add [[Template content]]` - Inlines template content
@@ -17,7 +17,7 @@ Each variant also supports optional modifiers:
 
 ## Current Type Definitions
 
-The add directive is typed in `/Users/adam/dev/meld/grammar/types/add.ts` with these interfaces:
+The add directive is typed in `/Users/adam/dev/mlld/grammar/types/add.ts` with these interfaces:
 
 1. `AddDirectiveNode`: Base interface with kind 'add' and subtypes 'addPath', 'addTemplate', 'addVariable', or 'addSection'
 2. `AddPathDirectiveNode`: For file path inclusion with subtype 'addPath'

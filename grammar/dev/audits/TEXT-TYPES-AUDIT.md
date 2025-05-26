@@ -1,10 +1,10 @@
 # Text Directive Types Audit
 
-This document contains the results of auditing the text directive implementation and types in the Meld grammar.
+This document contains the results of auditing the text directive implementation and types in the Mlld grammar.
 
 ## Current Implementation
 
-The text directive is implemented in `/Users/adam/dev/meld/grammar/directives/text.peggy` with several variants:
+The text directive is implemented in `/Users/adam/dev/mlld/grammar/directives/text.peggy` with several variants:
 
 1. Text Assignment with `@add` directive: `@text id = @add [path]`
 2. Text Assignment with template: `@text id = content` (can be a template or literal)
@@ -15,7 +15,7 @@ The text directive is implemented in `/Users/adam/dev/meld/grammar/directives/te
 
 ## Current Type Definitions
 
-The text directive is typed in `/Users/adam/dev/meld/grammar/types/text.ts` with these main interfaces:
+The text directive is typed in `/Users/adam/dev/mlld/grammar/types/text.ts` with these main interfaces:
 
 1. `TextDirectiveNode`: Base interface with kind 'text' and subtype 'textAssignment' or 'textTemplate'
 2. `TextAssignmentDirectiveNode`: Extending TextDirectiveNode with subtype 'textAssignment'

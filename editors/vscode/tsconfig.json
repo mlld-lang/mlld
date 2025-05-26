@@ -13,8 +13,8 @@
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
-      "@meld/parser": ["../../grammar/parser/index.ts"],
-      "@meld/types": ["../../core/types/index.ts"]
+      "@mlld/parser": ["../../grammar/parser/index.ts"],
+      "@mlld/types": ["../../core/types/index.ts"]
     }
   },
   "include": ["src/**/*"],

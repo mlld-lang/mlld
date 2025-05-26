@@ -1,8 +1,8 @@
 // TODO: UPDATE
 
-# Error Handling in Meld
+# Error Handling in Mlld
 
-This document describes the error handling architecture in Meld, including how errors are classified, how they're handled in different modes, and how to work with the error system as a developer.
+This document describes the error handling architecture in Mlld, including how errors are classified, how they're handled in different modes, and how to work with the error system as a developer.
 
 ## Table of Contents
 
@@ -20,16 +20,16 @@ This document describes the error handling architecture in Meld, including how e
 
 ## Overview
 
-Meld's error handling system is designed to support two different modes of operation:
+Mlld's error handling system is designed to support two different modes of operation:
 
 1. **Strict Mode**: All errors are thrown, providing immediate feedback during development and testing.
 2. **Permissive Mode**: Recoverable errors are converted to warnings, allowing processing to continue when possible.
 
-This dual-mode approach allows Meld to be both rigorous during development and forgiving during end-user usage, particularly in the CLI.
+This dual-mode approach allows Mlld to be both rigorous during development and forgiving during end-user usage, particularly in the CLI.
 
 ## Error Severity Levels
 
-All errors in Meld are classified with one of three severity levels:
+All errors in Mlld are classified with one of three severity levels:
 
 - **Fatal**: Errors that always halt execution, regardless of mode.
 - **Recoverable**: Errors that throw in strict mode but become warnings in permissive mode.
@@ -76,8 +76,8 @@ Permissive mode is used by the CLI and other user-facing interfaces. In permissi
 Example of enabling permissive mode with a custom error handler:
 
 ```typescript
-const warnings: MeldError[] = [];
-const errorHandler = (error: MeldError) => {
+const warnings: MlldError[] = [];
+const errorHandler = (error: MlldError) => {
   warnings.push(error);
   console.warn(`Warning: ${error.message}`);
 };
@@ -91,24 +91,24 @@ const result = await interpreterService.interpret(nodes, {
 
 ## Error Classification Guidelines
 
-Errors in Meld are classified according to these guidelines:
+Errors in Mlld are classified according to these guidelines:
 
 ### Fatal Errors (Always Throw)
-- Syntax errors (MeldParseError)
+- Syntax errors (MlldParseError)
 - Circular imports (DirectiveError with CIRCULAR_REFERENCE)
 - Invalid directive types (DirectiveError with HANDLER_NOT_FOUND)
 - Missing required fields in directives (DirectiveError with VALIDATION_FAILED)
 - Type validation failures (PathValidationError with INVALID_PATH)
-- File system access errors (MeldFileSystemError)
+- File system access errors (MlldFileSystemError)
 - Service initialization errors (ServiceInitializationError)
 
 ### Recoverable Errors (Warnings in Permissive Mode)
-- Missing data fields (MeldResolutionError)
-- Undefined variables (MeldResolutionError)
-- Missing environment variables (MeldResolutionError)
-- File not found for embed/import (MeldFileNotFoundError)
-- Invalid field access (MeldResolutionError)
-- Command execution failures (MeldInterpreterError)
+- Missing data fields (MlldResolutionError)
+- Undefined variables (MlldResolutionError)
+- Missing environment variables (MlldResolutionError)
+- File not found for embed/import (MlldFileNotFoundError)
+- Invalid field access (MlldResolutionError)
+- Command execution failures (MlldInterpreterError)
 
 ### Always Warnings (Never Throw)
 - Deprecated features
@@ -123,14 +123,14 @@ When creating errors, always specify the appropriate severity level:
 
 ```typescript
 // Creating a fatal error
-throw new MeldError('Critical failure', {
+throw new MlldError('Critical failure', {
   severity: ErrorSeverity.Fatal,
   code: 'CRITICAL_ERROR',
   context: { /* additional context */ }
 });
 
 // Creating a recoverable error
-throw new MeldResolutionError('Variable not found', {
+throw new MlldResolutionError('Variable not found', {
   severity: ErrorSeverity.Recoverable,
   details: {
     variableName: 'myVar',
@@ -139,7 +139,7 @@ throw new MeldResolutionError('Variable not found', {
 });
 
 // Creating a warning
-const warning = new MeldError('Performance suggestion', {
+const warning = new MlldError('Performance suggestion', {
   severity: ErrorSeverity.Warning,
   code: 'PERF_SUGGESTION'
 });
@@ -154,7 +154,7 @@ Services that need to handle errors should respect the strict/permissive mode:
 try {
   // Attempt operation
 } catch (error) {
-  if (error instanceof MeldError) {
+  if (error instanceof MlldError) {
     // Check if we're in permissive mode and the error is recoverable
     if (!options.strict && error.canBeWarning()) {
       // Handle as warning
@@ -174,7 +174,7 @@ try {
 
 ### Testing Errors
 
-Meld provides utilities for testing error handling in both strict and permissive modes:
+Mlld provides utilities for testing error handling in both strict and permissive modes:
 
 ```typescript
 import { 
@@ -188,31 +188,31 @@ import {
 // Test that a function throws with the correct severity
 await expectThrowsWithSeverity(
   () => resolver.resolve('${undefined}', context),
-  MeldResolutionError,
+  MlldResolutionError,
   ErrorSeverity.Recoverable
 );
 
 // Test behavior in both modes
 await expectThrowsInStrictButWarnsInPermissive(
   (options) => resolver.resolve('${undefined}', context, options),
-  MeldResolutionError
+  MlldResolutionError
 );
 ```
 
 ## Error Types Reference
 
-Meld has several specialized error types:
+Mlld has several specialized error types:
 
-- **MeldError**: Base class for all Meld errors
-- **MeldParseError**: Errors during parsing
-- **MeldDirectiveError**: Base class for directive-related errors
+- **MlldError**: Base class for all Mlld errors
+- **MlldParseError**: Errors during parsing
+- **MlldDirectiveError**: Base class for directive-related errors
 - **DirectiveError**: Specific directive processing errors
-- **MeldResolutionError**: Variable resolution errors
-- **MeldInterpreterError**: Errors during interpretation
-- **MeldFileSystemError**: File system access errors
-- **MeldFileNotFoundError**: File not found errors
-- **MeldImportError**: Import-related errors
-- **MeldOutputError**: Output generation errors
+- **MlldResolutionError**: Variable resolution errors
+- **MlldInterpreterError**: Errors during interpretation
+- **MlldFileSystemError**: File system access errors
+- **MlldFileNotFoundError**: File not found errors
+- **MlldImportError**: Import-related errors
+- **MlldOutputError**: Output generation errors
 - **PathValidationError**: Path validation errors
 
 Each error type includes:
@@ -224,7 +224,7 @@ Each error type includes:
 
 ## Source Mapping
 
-Meld includes source mapping to provide better error reporting by tracking the original file locations when content is imported or embedded from other files. This helps users identify the actual source of errors instead of seeing errors in the combined or transformed content.
+Mlld includes source mapping to provide better error reporting by tracking the original file locations when content is imported or embedded from other files. This helps users identify the actual source of errors instead of seeing errors in the combined or transformed content.
 
 ### How Source Mapping Works
 

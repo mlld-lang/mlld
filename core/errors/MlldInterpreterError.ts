@@ -1,4 +1,4 @@
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
 
 export interface InterpreterLocation {
   line: number;
@@ -35,7 +35,7 @@ export interface InterpreterErrorContext {
   };
 }
 
-export interface MeldInterpreterErrorOptions {
+export interface MlldInterpreterErrorOptions {
   cause?: Error;
   context?: InterpreterErrorContext;
   severity?: ErrorSeverity;
@@ -43,9 +43,9 @@ export interface MeldInterpreterErrorOptions {
 }
 
 /**
- * Error thrown during interpretation of Meld content
+ * Error thrown during interpretation of Mlld content
  */
-export class MeldInterpreterError extends MeldError {
+export class MlldInterpreterError extends MlldError {
   public readonly nodeType: string;
   public readonly location?: InterpreterLocation;
   public readonly context?: InterpreterErrorContext;
@@ -55,7 +55,7 @@ export class MeldInterpreterError extends MeldError {
     message: string,
     nodeType: string,
     location?: InterpreterLocation,
-    options: MeldInterpreterErrorOptions = {}
+    options: MlldInterpreterErrorOptions = {}
   ) {
     // Format message with location if available
     const locationStr = location 
@@ -78,14 +78,14 @@ export class MeldInterpreterError extends MeldError {
       sourceLocation: location
     });
     
-    this.name = 'MeldInterpreterError';
+    this.name = 'MlldInterpreterError';
     this.nodeType = nodeType;
     this.location = location;
     this.context = options.context;
     this.cause = options.cause;
     
     // Ensure proper prototype chain for instanceof checks
-    Object.setPrototypeOf(this, MeldInterpreterError.prototype);
+    Object.setPrototypeOf(this, MlldInterpreterError.prototype);
   }
 
   /**

@@ -1,6 +1,6 @@
 # Grammar Refactoring Plan
 
-This document outlines a comprehensive plan for refactoring the Meld grammar system to improve abstraction organization, standardize naming conventions, and create a more maintainable structure.
+This document outlines a comprehensive plan for refactoring the Mlld grammar system to improve abstraction organization, standardize naming conventions, and create a more maintainable structure.
 
 ## Status
 

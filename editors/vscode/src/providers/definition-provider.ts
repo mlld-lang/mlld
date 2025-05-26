@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { DocumentAnalyzer } from '../utils/document-analyzer';
 
-export class MeldDefinitionProvider implements vscode.DefinitionProvider {
+export class MlldDefinitionProvider implements vscode.DefinitionProvider {
   constructor(private analyzer: DocumentAnalyzer) {}
 
   async provideDefinition(

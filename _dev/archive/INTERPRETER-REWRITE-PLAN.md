@@ -1,4 +1,4 @@
-# Meld Interpreter Rewrite Plan
+# Mlld Interpreter Rewrite Plan
 
 ## Overview
 
@@ -24,7 +24,7 @@ A clean, traditional interpreter with:
 
 ```typescript
 // Core pattern
-function evaluate(node: MeldNode, env: Environment): EvalResult {
+function evaluate(node: MlldNode, env: Environment): EvalResult {
   switch (node.type) {
     case 'Directive': return evaluateDirective(node, env);
     case 'Text': return { value: node.content, env };
@@ -79,7 +79,7 @@ class Environment {
 ## Directory Structure
 
 ```
-meld/
+mlld/
 ├── interpreter/
 │   ├── README.md
 │   ├── core/
@@ -170,7 +170,7 @@ Key differences:
 ## Decision Points
 
 1. **Async vs Sync**: Keep async for file/command operations
-2. **Error handling**: Use existing MeldError types
+2. **Error handling**: Use existing MlldError types
 3. **Variable types**: Keep existing type system (text, data, path, etc.)
 4. **Output formats**: Reuse existing formatters
 

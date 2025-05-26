@@ -1,9 +1,9 @@
 import * as path from 'path';
 import { parse } from '../../../grammar/parser';
-import type { DirectiveNode, MeldNode } from '../../../core/types';
+import type { DirectiveNode, MlldNode } from '../../../core/types';
 
 export interface ParseResult {
-  ast: MeldNode[];
+  ast: MlldNode[];
   errors: ParseError[];
 }
 
@@ -15,7 +15,7 @@ export interface ParseError {
 }
 
 /**
- * Parse a Meld document using the actual Meld parser
+ * Parse a Mlld document using the actual Mlld parser
  */
 export async function parseDocument(text: string): Promise<ParseResult> {
   try {
@@ -38,7 +38,7 @@ export async function parseDocument(text: string): Promise<ParseResult> {
 /**
  * Extract all variable definitions from the AST
  */
-export function extractVariables(ast: MeldNode[]): VariableInfo[] {
+export function extractVariables(ast: MlldNode[]): VariableInfo[] {
   const variables: VariableInfo[] = [];
   
   for (const node of ast) {
@@ -76,7 +76,7 @@ export function extractVariables(ast: MeldNode[]): VariableInfo[] {
 /**
  * Extract imports from the AST
  */
-export function extractImports(ast: MeldNode[]): ImportInfo[] {
+export function extractImports(ast: MlldNode[]): ImportInfo[] {
   const imports: ImportInfo[] = [];
   
   for (const node of ast) {
@@ -104,7 +104,7 @@ export function extractImports(ast: MeldNode[]): ImportInfo[] {
 /**
  * Find all references to a variable in the AST
  */
-export function findVariableReferences(ast: MeldNode[], variableName: string): LocationInfo[] {
+export function findVariableReferences(ast: MlldNode[], variableName: string): LocationInfo[] {
   const references: LocationInfo[] = [];
   
   function visitNode(node: any) {

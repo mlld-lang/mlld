@@ -1,6 +1,6 @@
 # Text Directive
 
-The Text directive is used to define and manipulate text variables in Meld. It supports various ways to assign content to variables, including literal text, interpolation, embedding from files, running commands, and nested directives.
+The Text directive is used to define and manipulate text variables in Mlld. It supports various ways to assign content to variables, including literal text, interpolation, embedding from files, running commands, and nested directives.
 
 ## Syntax
 

@@ -1,6 +1,6 @@
 # Data Directive
 
-The Data directive is used to define and manage structured data in Meld. It supports various types of values including primitives, objects, arrays, and nested directives for complex data structures.
+The Data directive is used to define and manage structured data in Mlld. It supports various types of values including primitives, objects, arrays, and nested directives for complex data structures.
 
 ## Syntax
 

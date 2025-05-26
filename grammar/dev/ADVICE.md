@@ -110,7 +110,7 @@ Modifying PEG.js grammars requires extreme care, especially regarding the order 
 
 Peggy processes the grammar file top-down. While some forward references are allowed, relying on them heavily, especially across complex rule interactions (like lookaheads or within the initial code block), is fragile and a common source of build errors.
 
-**Recommended Stable Structure:** Adhere strictly to the following definition order within `meld.pegjs` to minimize "Rule not defined" errors:
+**Recommended Stable Structure:** Adhere strictly to the following definition order within `mlld.pegjs` to minimize "Rule not defined" errors:
 
 1.  **Initial `{...}` Block:** Contains *all* JavaScript helper functions (`debug`, `isLineStart`, `validatePath`, `combineAdjacentTextNodes`, etc.) and constants (`NodeType`, `DirectiveKind`). Do not define helpers later in the file.
 2.  **Core Data Structure / Complex Parsing Rules:** Define rules that parse significant, structured parts of the language first. This includes:
@@ -184,6 +184,6 @@ This document focuses on general principles and lessons learned when modifying P
 3. **Use the debug script** described in DEBUG.md to understand the exact differences between expected and actual output
 4. **Apply the principles from this document** when making your modifications
 
-Together, these documents provide a comprehensive approach to maintaining and extending the Meld parser grammar.
+Together, these documents provide a comprehensive approach to maintaining and extending the Mlld parser grammar.
 
 Following these principles will help make PEG.js grammar files more maintainable, reliable, and easier to extend over time.

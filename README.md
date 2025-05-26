@@ -1,35 +1,35 @@
-**NOTE:** If you're looking for [the old 'meld' package for aspect oriented programming](https://www.npmjs.com/package/meld/v/1.3.2), you'll want to pin your version to `<2.0.0`
+**NOTE:** If you're looking for [the old 'mlld' package for aspect oriented programming](https://www.npmjs.com/package/mlld/v/1.3.2), you'll want to pin your version to `<2.0.0`
 
 ---
 
-# meld (pre-release)
+# mlld (pre-release)
 
-meld is a prompt scripting language.
+mlld is a prompt scripting language.
 
 ## Installation
 
 ```bash
-npm install -g meld
+npm install -g mlld
 ```
 
-or just run it with `npx meld`
+or just run it with `npx mlld`
 
 ## CLI Usage
 
-Process meld files from the command line:
+Process mlld files from the command line:
 
 ```bash
 # Basic usage - outputs .xml file
-meld input.mld
+mlld input.mld
 
 # Specify output format
-meld input.mld --format md
+mlld input.mld --format md
 
 # Specify output file
-meld input.mld --output output.xml
+mlld input.mld --output output.xml
 
 # Print to stdout instead of file
-meld input.mld --stdout
+mlld input.mld --stdout
 ```
 
 ### Supported Options
@@ -42,18 +42,18 @@ meld input.mld --stdout
 ### Supported File Extensions
 
 - `.mld` is standard `.mld.md` is another option.
-- `.md`: Meld can just interpret regular old markdown files with added meld syntax, too.
+- `.md`: Mlld can just interpret regular old markdown files with added mlld syntax, too.
 
 ## JavaScript API
 
-Meld has a fairly extensive js API which give access to its AST, interpreted variables, etc., but it's not documented yet. However, here's meld's simple API for processing content directly:
+Mlld has a fairly extensive js API which give access to its AST, interpreted variables, etc., but it's not documented yet. However, here's mlld's simple API for processing content directly:
 
 ```javascript
 // ES Module import
-import runMeld from 'meld';
+import runMlld from 'mlld';
 
-// Process meld content
-const meldContent = `
+// Process mlld content
+const mlldContent = `
   @text greeting = "Hello"
   @text name = "World"
   
@@ -61,30 +61,30 @@ const meldContent = `
 `;
 
 // Simple usage
-const result = await runMeld(meldContent);
+const result = await runMlld(mlldContent);
 console.log(result); // "Hello, World!"
 
 // With options
-const xmlResult = await runMeld(meldContent, {
+const xmlResult = await runMlld(mlldContent, {
   format: 'xml',
   transformation: true
 });
 ```
 
-## Writing Meld Files
+## Writing Mlld Files
 
-Meld is a simple scripting language designed to work within markdown-like documents. It processes special `@directive` lines while preserving all other content as-is.
+Mlld is a simple scripting language designed to work within markdown-like documents. It processes special `@directive` lines while preserving all other content as-is.
 
 ### Core Directives
 
-```meld
+```mlld
 @text name = "value"              # Define a text variable
 @data config = { "key": "value" } # Define a structured data variable
 @path docs = "$PROJECTPATH/docs"  # Define a path (must use $PROJECTPATH or $HOMEPATH)
 @embed [file.md]                  # Embed content from another file
 @embed [file.md # section]        # Embed specific section from file
 @run [command]                    # Run a shell command
-@import [file.mld]               # Import another meld file
+@import [file.mld]               # Import another mlld file
 @define cmd = @run [echo "hi"]    # Define a reusable command
 ```
 
@@ -92,7 +92,7 @@ Meld is a simple scripting language designed to work within markdown-like docume
 
 Must be inside an @ directive to be interpolated
 
-```meld
+```mlld
 {{variable}}            # Reference a variable
 {{datavar.field}}       # Access data field
 $pathvar                # Reference a path variable
@@ -104,7 +104,7 @@ $pathvar                # Reference a path variable
 
 ### Comments & Code Fences
 
-```meld
+```mlld
 >> This is a comment
 >> Comments must start at line beginning
 
@@ -120,7 +120,7 @@ def hello():
 - Use single quotes, double quotes, or backticks
 - Quotes must match (no mixing)
 - Use backticks for template strings with variables:
-```meld
+```mlld
 @text simple = "Hello"
 @text template = `Hello {{name}}!`
 @text multiline = [[`
@@ -133,9 +133,9 @@ def hello():
 
 - Must use `$PROJECTPATH` (or `$.`) or `$HOMEPATH` (or `$~`)
 - Forward slashes as separators
-```meld
+```mlld
 @path docs = "$PROJECTPATH/docs"
-@path home = "$HOMEPATH/meld"
+@path home = "$HOMEPATH/mlld"
 # Example Usage:
 @embed [$docs/some_file.txt] 
 ```
@@ -144,7 +144,7 @@ def hello():
 
 - Store structured data (objects/arrays)
 - Support field access
-```meld
+```mlld
 @data user = { "name": "Alice", "id": 123 }
 @text name = "User: {{user.name}}"
 ```

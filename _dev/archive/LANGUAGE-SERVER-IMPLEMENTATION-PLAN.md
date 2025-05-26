@@ -1,20 +1,20 @@
-# Meld Language Server Implementation Plan
+# Mlld Language Server Implementation Plan
 
 ## Overview
-Implement a Language Server Protocol (LSP) server for Meld that provides intelligent code assistance by reusing the existing parser, interpreter, and error infrastructure.
+Implement a Language Server Protocol (LSP) server for Mlld that provides intelligent code assistance by reusing the existing parser, interpreter, and error infrastructure.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        Meld Language Server                   │
+│                        Mlld Language Server                   │
 ├─────────────────────────────────────────────────────────────┤
 │  DocumentManager    │  Analyzer         │  SymbolIndex       │
 │  - Track open docs  │  - Parse docs     │  - Variable defs   │
 │  - Handle changes   │  - Build AST      │  - Import graph    │
 │  - Cache ASTs       │  - Track vars     │  - Cross-file refs │
 ├─────────────────────────────────────────────────────────────┤
-│              Core Meld Infrastructure (Reused)               │
+│              Core Mlld Infrastructure (Reused)               │
 │  Parser │ Environment │ PathService │ Error System          │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -161,10 +161,10 @@ export class DocumentAnalyzer {
 ```typescript
 // DiagnosticEngine.ts
 import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver';
-import { MeldError } from '@core/errors';
+import { MlldError } from '@core/errors';
 
 export class DiagnosticEngine {
-  convertToDiagnostics(errors: MeldError[]): Diagnostic[] {
+  convertToDiagnostics(errors: MlldError[]): Diagnostic[] {
     return errors.map(error => ({
       severity: this.getSeverity(error.severity),
       range: {
@@ -179,7 +179,7 @@ export class DiagnosticEngine {
       },
       message: error.message,
       code: error.code,
-      source: 'meld'
+      source: 'mlld'
     }));
   }
   
@@ -345,7 +345,7 @@ export class HoverProvider {
             kind: MarkupKind.Markdown,
             value: [
               `**${info.name}** *(${info.type})*`,
-              '```meld',
+              '```mlld',
               info.definition,
               '```',
               '',
@@ -424,12 +424,12 @@ export class SymbolIndex {
   private importGraph: Map<string, Set<string>> = new Map();
   
   async indexWorkspace(workspaceFolder: string) {
-    const meldFiles = await this.findMeldFiles(workspaceFolder);
+    const mlldFiles = await this.findMlldFiles(workspaceFolder);
     
-    for (const file of meldFiles) {
+    for (const file of mlldFiles) {
       const content = await fs.readFile(file, 'utf8');
       const analyzer = new DocumentAnalyzer();
-      await analyzer.analyze(TextDocument.create(file, 'meld', 1, content));
+      await analyzer.analyze(TextDocument.create(file, 'mlld', 1, content));
       
       // Index symbols
       for (const [name, info] of analyzer.variables) {
@@ -545,17 +545,17 @@ export function activate(context: ExtensionContext) {
   
   const clientOptions: LanguageClientOptions = {
     documentSelector: [
-      { scheme: 'file', language: 'meld' },
+      { scheme: 'file', language: 'mlld' },
       { scheme: 'file', language: 'markdown', pattern: '**/*.md' }
     ],
     synchronize: {
-      fileEvents: workspace.createFileSystemWatcher('**/*.{meld,mld,md}')
+      fileEvents: workspace.createFileSystemWatcher('**/*.{mlld,mld,md}')
     }
   };
   
   const client = new LanguageClient(
-    'meldLanguageServer',
-    'Meld Language Server',
+    'mlldLanguageServer',
+    'Mlld Language Server',
     serverOptions,
     clientOptions
   );
@@ -569,35 +569,35 @@ export function activate(context: ExtensionContext) {
 ```json
 // client/vscode/package.json
 {
-  "name": "meld-lsp",
-  "displayName": "Meld Language Support",
-  "description": "Rich language support for Meld files",
+  "name": "mlld-lsp",
+  "displayName": "Mlld Language Support",
+  "description": "Rich language support for Mlld files",
   "version": "1.0.0",
   "engines": {
     "vscode": "^1.75.0"
   },
   "categories": ["Programming Languages"],
   "activationEvents": [
-    "onLanguage:meld",
+    "onLanguage:mlld",
     "onLanguage:markdown"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [{
-      "id": "meld",
-      "aliases": ["Meld", "meld"],
-      "extensions": [".meld", ".mld"],
+      "id": "mlld",
+      "aliases": ["Mlld", "mlld"],
+      "extensions": [".mlld", ".mld"],
       "configuration": "./language-configuration.json"
     }],
     "grammars": [{
-      "language": "meld",
-      "scopeName": "source.meld",
-      "path": "./syntaxes/meld.tmLanguage.json"
+      "language": "mlld",
+      "scopeName": "source.mlld",
+      "path": "./syntaxes/mlld.tmLanguage.json"
     }],
     "configuration": {
-      "title": "Meld",
+      "title": "Mlld",
       "properties": {
-        "meld.trace.server": {
+        "mlld.trace.server": {
           "scope": "window",
           "type": "string",
           "enum": ["off", "messages", "verbose"],
@@ -618,7 +618,7 @@ export function activate(context: ExtensionContext) {
 // test/analyzer.test.ts
 describe('DocumentAnalyzer', () => {
   it('should track variable definitions', async () => {
-    const doc = TextDocument.create('test.meld', 'meld', 1, `
+    const doc = TextDocument.create('test.mlld', 'mlld', 1, `
       @text greeting = "Hello"
       @data config = { name: "test" }
     `);
@@ -634,8 +634,8 @@ describe('DocumentAnalyzer', () => {
   });
   
   it('should track imports', async () => {
-    const doc = TextDocument.create('test.meld', 'meld', 1, `
-      @import {config, utils} from [shared.meld]
+    const doc = TextDocument.create('test.mlld', 'mlld', 1, `
+      @import {config, utils} from [shared.mlld]
     `);
     
     const analyzer = new DocumentAnalyzer();
@@ -717,6 +717,6 @@ export class DocumentCache {
 
 1. **Execution Preview**: Show what commands would output
 2. **Dependency Graph**: Visualize import relationships
-3. **Formatting**: Auto-format Meld files
+3. **Formatting**: Auto-format Mlld files
 4. **Snippets**: Smart templates for common patterns
-5. **Debug Adapter**: Step through Meld execution
+5. **Debug Adapter**: Step through Mlld execution

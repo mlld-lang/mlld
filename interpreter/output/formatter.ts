@@ -1,4 +1,4 @@
-import type { MeldNode, MeldVariable } from '@core/types';
+import type { MlldNode, MlldVariable } from '@core/types';
 import { createLLMXML } from 'llmxml';
 
 /**
@@ -6,14 +6,14 @@ import { createLLMXML } from 'llmxml';
  */
 export interface FormatOptions {
   format: 'markdown' | 'xml';
-  variables?: Map<string, MeldVariable>;
+  variables?: Map<string, MlldVariable>;
 }
 
 /**
  * Format nodes into final output.
  * This is a simplified version - we can reuse the existing OutputService later.
  */
-export async function formatOutput(nodes: MeldNode[], options: FormatOptions): Promise<string> {
+export async function formatOutput(nodes: MlldNode[], options: FormatOptions): Promise<string> {
   if (options.format === 'xml') {
     // Build structured markdown for llmxml
     const structuredMarkdown = buildStructuredMarkdown(nodes, options);
@@ -37,7 +37,7 @@ export async function formatOutput(nodes: MeldNode[], options: FormatOptions): P
 /**
  * Format as markdown (concatenate text nodes)
  */
-function formatMarkdown(nodes: MeldNode[], options: FormatOptions): string {
+function formatMarkdown(nodes: MlldNode[], options: FormatOptions): string {
   const parts: string[] = [];
   
   for (const node of nodes) {
@@ -58,11 +58,11 @@ function formatMarkdown(nodes: MeldNode[], options: FormatOptions): string {
 /**
  * Build structured markdown for XML conversion
  */
-function buildStructuredMarkdown(nodes: MeldNode[], options: FormatOptions): string {
+function buildStructuredMarkdown(nodes: MlldNode[], options: FormatOptions): string {
   const parts: string[] = [];
   
   // Add document header
-  parts.push('# Meld Output');
+  parts.push('# Mlld Output');
   parts.push('');
   
   // Add variables section if we have any
@@ -93,7 +93,7 @@ function buildStructuredMarkdown(nodes: MeldNode[], options: FormatOptions): str
 /**
  * Get string value from variable
  */
-function getVariableValue(variable: MeldVariable): string {
+function getVariableValue(variable: MlldVariable): string {
   switch (variable.type) {
     case 'text':
       return variable.value;

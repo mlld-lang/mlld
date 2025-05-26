@@ -1,6 +1,6 @@
-# Meld Grammar Core Abstractions
+# Mlld Grammar Core Abstractions
 
-This directory contains core content-type abstractions for Meld grammar. Unlike directive-based cores, these abstractions focus on the underlying content types that are reused across different directives.
+This directory contains core content-type abstractions for Mlld grammar. Unlike directive-based cores, these abstractions focus on the underlying content types that are reused across different directives.
 
 ## Purpose
 

@@ -15,7 +15,7 @@ export const PathErrorMessages = {
   NOT_A_FILE: 'Path is not a file: {path}',
   NOT_A_DIRECTORY: 'Path is not a directory: {path}',
   
-  // Meld-specific path rule errors
+  // Mlld-specific path rule errors
   CONTAINS_DOT_SEGMENTS: 'Path cannot contain . or .. segments',
   INVALID_PATH_FORMAT: 'Invalid path format - paths with slashes must use $. or $~',
   RAW_ABSOLUTE_PATH: 'Raw absolute paths are not allowed - use $. or $~ instead',

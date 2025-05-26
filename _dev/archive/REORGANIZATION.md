@@ -1,4 +1,4 @@
-# Meld Codebase Reorganization Plan
+# Mlld Codebase Reorganization Plan
 
 ## Overview
 
@@ -15,7 +15,7 @@ Following the successful migration from a service-oriented architecture to a tra
 ## Proposed Structure
 
 ```
-meld/
+mlld/
 ├── api/                        # Public API
 │   └── index.ts               # API entry point
 ├── cli/                        # CLI entry points
@@ -34,7 +34,7 @@ meld/
 │   ├── eval/                  # Directive evaluators
 │   └── output/                # Output formatting
 ├── grammar/                    # PEG grammar source
-│   ├── meld.peggy            # Main grammar
+│   ├── mlld.peggy            # Main grammar
 │   ├── base/                 # Base grammar rules
 │   ├── core/                 # Core grammar rules
 │   ├── directives/           # Directive grammars

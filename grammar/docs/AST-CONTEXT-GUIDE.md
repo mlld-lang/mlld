@@ -1,12 +1,12 @@
 # AST Context Guide
 
-This guide documents how to interpret Meld AST nodes based on their context. The Meld grammar reuses node types across different contexts for modularity and consistency, which means the same node type can have different meanings depending on where it appears in the AST.
+This guide documents how to interpret Mlld AST nodes based on their context. The Mlld grammar reuses node types across different contexts for modularity and consistency, which means the same node type can have different meanings depending on where it appears in the AST.
 
 ## Overview
 
 ### Philosophy of Context-Aware AST Design
 
-Meld's AST design prioritizes:
+Mlld's AST design prioritizes:
 1. **Grammar modularity** - Reusable patterns across different directives
 2. **Consistent node structures** - Same node types work in multiple contexts
 3. **Context-based interpretation** - Meaning derived from location and metadata
@@ -447,4 +447,4 @@ async function authorizeRunDirective(directive: RunDirective) {
 
 ## Conclusion
 
-Understanding context is crucial for correctly interpreting Meld's AST. While the reuse of node types provides consistency and modularity in the grammar, it requires AST consumers to be context-aware. This guide should serve as a reference for implementing robust AST processing that handles all the nuances of Meld's context-dependent node system.
+Understanding context is crucial for correctly interpreting Mlld's AST. While the reuse of node types provides consistency and modularity in the grammar, it requires AST consumers to be context-aware. This guide should serve as a reference for implementing robust AST processing that handles all the nuances of Mlld's context-dependent node system.

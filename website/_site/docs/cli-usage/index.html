@@ -23,7 +23,7 @@
       <nav>
         <ul>
           <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
-          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+          <li><a href="https://github.com/mlldorg/mlld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -92,7 +92,7 @@
           
         
           
-            <li><a href="/docs/formatting-options/" >Meld Output Formatting Guide</a></li>
+            <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
           
         
           
@@ -213,29 +213,29 @@
   
   <div class="docs-content">
     <h1 id="cli-usage" tabindex="-1">CLI Usage</h1>
-<p>The Meld CLI provides a simple way to process Meld files from the command line.</p>
+<p>The Mlld CLI provides a simple way to process Mlld files from the command line.</p>
 <h2 id="installation" tabindex="-1">Installation</h2>
 <p>Install globally to use the CLI:</p>
-<pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> <span class="token function">install</span> <span class="token parameter variable">-g</span> meld
+<pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> <span class="token function">install</span> <span class="token parameter variable">-g</span> mlld
 </code></pre>
 <p>Or use it from a local installation:</p>
-<pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> <span class="token function">install</span> meld
-npx meld <span class="token operator">&lt;</span>options<span class="token operator">></span>
+<pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> <span class="token function">install</span> mlld
+npx mlld <span class="token operator">&lt;</span>options<span class="token operator">></span>
 </code></pre>
 <h2 id="basic-usage" tabindex="-1">Basic Usage</h2>
-<p>Process a Meld file with default options:</p>
-<pre class="language-bash"><code class="language-bash">meld input.mld
+<p>Process a Mlld file with default options:</p>
+<pre class="language-bash"><code class="language-bash">mlld input.mld
 </code></pre>
 <p>By default, this will:</p>
 <ul>
-<li>Parse and interpret the Meld file</li>
+<li>Parse and interpret the Mlld file</li>
 <li>Generate output in XML format</li>
 <li>Save to a file with the same name but extension changed to <code>.llm</code></li>
 </ul>
 <h2 id="command-line-options" tabindex="-1">Command Line Options</h2>
 <h3 id="output-format" tabindex="-1">Output Format</h3>
 <p>Specify the output format with the <code>--format</code> or <code>-f</code> option:</p>
-<pre class="language-bash"><code class="language-bash">meld input.mld <span class="token parameter variable">--format</span> md
+<pre class="language-bash"><code class="language-bash">mlld input.mld <span class="token parameter variable">--format</span> md
 </code></pre>
 <p>Supported formats:</p>
 <ul>
@@ -244,50 +244,50 @@ npx meld <span class="token operator">&lt;</span>options<span class="token opera
 </ul>
 <h3 id="output-file" tabindex="-1">Output File</h3>
 <p>Specify the output file with the <code>--output</code> or <code>-o</code> option:</p>
-<pre class="language-bash"><code class="language-bash">meld input.mld <span class="token parameter variable">--output</span> output.llm
+<pre class="language-bash"><code class="language-bash">mlld input.mld <span class="token parameter variable">--output</span> output.llm
 </code></pre>
 <p>By default, the output file uses the input filename with a new extension.</p>
 <h3 id="output-to-console" tabindex="-1">Output to Console</h3>
 <p>Print to stdout instead of writing to a file with the <code>--stdout</code> option:</p>
-<pre class="language-bash"><code class="language-bash">meld input.mld <span class="token parameter variable">--stdout</span>
+<pre class="language-bash"><code class="language-bash">mlld input.mld <span class="token parameter variable">--stdout</span>
 </code></pre>
 <h3 id="combined-options" tabindex="-1">Combined Options</h3>
 <p>You can combine multiple options:</p>
-<pre class="language-bash"><code class="language-bash">meld input.mld <span class="token parameter variable">--format</span> md <span class="token parameter variable">--output</span> custom.md <span class="token parameter variable">--stdout</span>
+<pre class="language-bash"><code class="language-bash">mlld input.mld <span class="token parameter variable">--format</span> md <span class="token parameter variable">--output</span> custom.md <span class="token parameter variable">--stdout</span>
 </code></pre>
 <h2 id="file-extensions" tabindex="-1">File Extensions</h2>
-<p>Meld supports several file extensions:</p>
+<p>Mlld supports several file extensions:</p>
 <ul>
-<li><code>.mld</code> - Standard Meld files</li>
-<li><code>.mld.md</code> - Meld files with Markdown content</li>
-<li><code>.mll</code> - Alternative extension for Meld files</li>
-<li><code>.mll.md</code> - Alternative extension for Meld Markdown files</li>
+<li><code>.mld</code> - Standard Mlld files</li>
+<li><code>.mld.md</code> - Mlld files with Markdown content</li>
+<li><code>.mll</code> - Alternative extension for Mlld files</li>
+<li><code>.mll.md</code> - Alternative extension for Mlld Markdown files</li>
 </ul>
 <h2 id="examples" tabindex="-1">Examples</h2>
-<p>Process a Meld file with default options:</p>
-<pre class="language-bash"><code class="language-bash">meld document.mld
+<p>Process a Mlld file with default options:</p>
+<pre class="language-bash"><code class="language-bash">mlld document.mld
 </code></pre>
-<p>Process a Meld file and output as Markdown:</p>
-<pre class="language-bash"><code class="language-bash">meld document.mld <span class="token parameter variable">--format</span> md
+<p>Process a Mlld file and output as Markdown:</p>
+<pre class="language-bash"><code class="language-bash">mlld document.mld <span class="token parameter variable">--format</span> md
 </code></pre>
-<p>Process a Meld file and save with custom name:</p>
-<pre class="language-bash"><code class="language-bash">meld document.mld <span class="token parameter variable">--output</span> result.llm
+<p>Process a Mlld file and save with custom name:</p>
+<pre class="language-bash"><code class="language-bash">mlld document.mld <span class="token parameter variable">--output</span> result.llm
 </code></pre>
-<p>Process a Meld file and print to console:</p>
-<pre class="language-bash"><code class="language-bash">meld document.mld <span class="token parameter variable">--stdout</span>
+<p>Process a Mlld file and print to console:</p>
+<pre class="language-bash"><code class="language-bash">mlld document.mld <span class="token parameter variable">--stdout</span>
 </code></pre>
-<p>Process a Meld file with multiple options:</p>
-<pre class="language-bash"><code class="language-bash">meld document.mld <span class="token parameter variable">--format</span> md <span class="token parameter variable">--output</span> result.md <span class="token parameter variable">--stdout</span>
+<p>Process a Mlld file with multiple options:</p>
+<pre class="language-bash"><code class="language-bash">mlld document.mld <span class="token parameter variable">--format</span> md <span class="token parameter variable">--output</span> result.md <span class="token parameter variable">--stdout</span>
 </code></pre>
 <h2 id="environment-variables" tabindex="-1">Environment Variables</h2>
-<p>Meld scripts can access environment variables using the <code>{{ENV_NAME}}</code> syntax:</p>
-<pre class="language-meld"><code class="language-meld"><span class="token directive keyword">@text</span> token <span class="token operator">=</span> <span class="token string">"{{ENV_TOKEN}}"</span>
+<p>Mlld scripts can access environment variables using the <code>{{ENV_NAME}}</code> syntax:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> token <span class="token operator">=</span> <span class="token string">"{{ENV_TOKEN}}"</span>
 </code></pre>
 <p>You can set these when running the CLI:</p>
-<pre class="language-bash"><code class="language-bash"><span class="token assign-left variable">ENV_TOKEN</span><span class="token operator">=</span><span class="token number">12345</span> meld script.mld
+<pre class="language-bash"><code class="language-bash"><span class="token assign-left variable">ENV_TOKEN</span><span class="token operator">=</span><span class="token number">12345</span> mlld script.mld
 </code></pre>
 <h2 id="project-path" tabindex="-1">Project Path</h2>
-<p>The special <code>$PROJECTPATH</code> or <code>$.</code> variable refers to the directory where the Meld CLI is executed. All relative paths in Meld scripts are resolved relative to this directory.</p>
+<p>The special <code>$PROJECTPATH</code> or <code>$.</code> variable refers to the directory where the Mlld CLI is executed. All relative paths in Mlld scripts are resolved relative to this directory.</p>
 
   </div>
 </div>
@@ -349,7 +349,7 @@ npx meld <span class="token operator">&lt;</span>options<span class="token opera
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlldorg/mlld">GitHub</a></p>
     </div>
   </footer>
 </body>

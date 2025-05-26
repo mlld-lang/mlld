@@ -103,8 +103,8 @@ describe('Configuration System', () => {
 
   describe('ConfigLoader', () => {
     const testProjectPath = '/test/project';
-    const globalConfigPath = path.join(os.homedir(), '.config', 'meld.json');
-    const projectConfigPath = path.join(testProjectPath, 'meld.config.json');
+    const globalConfigPath = path.join(os.homedir(), '.config', 'mlld.json');
+    const projectConfigPath = path.join(testProjectPath, 'mlld.config.json');
     
     let mockFiles: Record<string, string> = {};
 

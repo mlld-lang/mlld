@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ---------- paths ----------
-const ROOT_GRAMMAR = path.join(__dirname, 'meld.peggy');
+const ROOT_GRAMMAR = path.join(__dirname, 'mlld.peggy');
 const DIST_DIR = path.join(__dirname, './parser');
 const DIST_PARSER_TS = path.join(DIST_DIR, 'parser.ts');
 const DIST_PARSER_JS = path.join(DIST_DIR, 'parser.js');
@@ -18,8 +18,8 @@ fs.mkdirSync(DIST_DIR, { recursive: true });
 
 // ---------- fold all grammar sources ----------
 // Use the new grammar file if available
-const grammarFile = fs.existsSync(path.join(__dirname, 'meld.peggy.new')) ? 
-                   'meld.peggy.new' : 'meld.peggy';
+const grammarFile = fs.existsSync(path.join(__dirname, 'mlld.peggy.new')) ? 
+                   'mlld.peggy.new' : 'mlld.peggy';
 
 console.log(`Using grammar file: ${grammarFile}`);
 
@@ -132,7 +132,7 @@ const peggyOptsTS = {
   allowedStartRules: ['Start'],
   // Native TypeScript type file!
   dts: true,
-  returnTypes: { Start: 'import("@core/types").MeldNode[]' },
+  returnTypes: { Start: 'import("@core/types").MlldNode[]' },
   dependencies: {
     NodeType: './deps/node-type.ts',
     DirectiveKind: './deps/directive-kind.ts',

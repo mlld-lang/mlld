@@ -17,7 +17,7 @@ The AST Explorer Utility would be a powerful development tool that serves multip
 ### Core Functionality
 
 ```typescript
-import { parse } from '@meld/grammar/parser';
+import { parse } from '@mlld/grammar/parser';
 import fs from 'fs';
 import path from 'path';
 import { generateTypeDefinition, generateSnapshot, generateTestFixture } from './generators';

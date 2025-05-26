@@ -1,5 +1,5 @@
 import type { Location, Position } from '@core/types/index';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError';
+import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
 
 interface SerializedParseError {
   name: string;
@@ -11,7 +11,7 @@ interface SerializedParseError {
   context?: any;
 }
 
-export interface MeldParseErrorOptions {
+export interface MlldParseErrorOptions {
   cause?: Error;
   severity?: ErrorSeverity;
   context?: any;
@@ -19,9 +19,9 @@ export interface MeldParseErrorOptions {
 }
 
 /**
- * Error thrown when parsing Meld content fails
+ * Error thrown when parsing Mlld content fails
  */
-export class MeldParseError extends MeldError {
+export class MlldParseError extends MlldError {
   /**
    * Location information for where the error occurred
    */
@@ -32,7 +32,7 @@ export class MeldParseError extends MeldError {
   constructor(
     message: string, 
     position?: Position | Location,
-    options: MeldParseErrorOptions = {}
+    options: MlldParseErrorOptions = {}
   ) {
     // Format message with location if available
     const locationStr = position ? 
@@ -77,19 +77,19 @@ export class MeldParseError extends MeldError {
       cause: options.cause
     });
     
-    this.name = 'MeldParseError';
+    this.name = 'MlldParseError';
     this.location = location; // Keep this for direct access if needed
     this.cause = options.cause; // Store the cause
 
     // Ensure proper prototype chain for instanceof checks
-    Object.setPrototypeOf(this, MeldParseError.prototype);
+    Object.setPrototypeOf(this, MlldParseError.prototype);
   }
 
   /**
    * Custom serialization to avoid circular references and include only essential info
    */
   toJSON(): SerializedParseError {
-    // Construct JSON directly, MeldError doesn't have toJSON
+    // Construct JSON directly, MlldError doesn't have toJSON
     // Access the stored 'cause' property
     const cause = this.cause;
     return {

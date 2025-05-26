@@ -1,4 +1,4 @@
-import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError';
+import { MlldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MlldError';
 import type { VariableType, ResolutionContext } from '@core/types/index';
 
 /**
@@ -15,7 +15,7 @@ export interface VariableResolutionErrorDetails extends BaseErrorDetails {
  * Error thrown when resolving a variable fails
  * (e.g., variable not found, type mismatch, circular reference).
  */
-export class VariableResolutionError extends MeldError {
+export class VariableResolutionError extends MlldError {
   constructor(
     message: string,
     options: {

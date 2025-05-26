@@ -88,7 +88,7 @@ describe('Output Format Tests', () => {
       });
       
       // llmxml converts markdown structure to XML with SCREAMING_SNAKE tags
-      expect(result).toContain('<MELD_OUTPUT>');
+      expect(result).toContain('<MLLD_OUTPUT>');
       expect(result).toContain('<VARIABLES>');
       expect(result).toContain('<MESSAGE>'); 
       expect(result).toContain('**Type**: text');

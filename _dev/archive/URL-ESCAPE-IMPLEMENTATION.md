@@ -2,7 +2,7 @@
 
 ## Summary
 
-We've implemented an escape mechanism for `@` symbols in URLs to prevent them from being interpreted as Meld variables.
+We've implemented an escape mechanism for `@` symbols in URLs to prevent them from being interpreted as Mlld variables.
 
 ## Escape Sequences
 
@@ -38,9 +38,9 @@ URLEscapedBackslash "Escaped backslash in URL"
 
 ## Usage Examples
 
-```meld
+```mlld
 # Social media handles
-@path twitter = https://twitter.com/\@meldproject
+@path twitter = https://twitter.com/\@mlldproject
 @path github = https://github.com/\@username
 
 # Email in query parameters  

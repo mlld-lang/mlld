@@ -75,12 +75,12 @@ Simple usage with direct output:
 With variable interpolation:
 ```
 @text name = "John"
-@text [Hello, {{name}}! Welcome to Meld.]
+@text [Hello, {{name}}! Welcome to Mlld.]
 ```
 
 Assigned to a variable:
 ```
-@text greeting = [Hello, {{name}}! Welcome to Meld.]
+@text greeting = [Hello, {{name}}! Welcome to Mlld.]
 ```
 
 Multi-line content:

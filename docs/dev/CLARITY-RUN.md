@@ -4,7 +4,7 @@
 
 ## Core Concepts
 
-The `@run` directive in Meld has three distinct syntaxes which serve different purposes:
+The `@run` directive in Mlld has three distinct syntaxes which serve different purposes:
 
 1. **BasicCommand**: 
    - Simple syntax: `@run [command with {{variable}} interpolation]`
@@ -97,7 +97,7 @@ private async handleBasicCommand(node, context) {
   
   // For multiline, we need a temporary script
   if (directive.isMultiLine) {
-    const tempScriptPath = `/tmp/meld-script-${Date.now()}.sh`;
+    const tempScriptPath = `/tmp/mlld-script-${Date.now()}.sh`;
     await this.fileSystemService.writeFile(tempScriptPath, `#!/bin/bash\n${command}`);
     await this.fileSystemService.executeCommand(`chmod +x ${tempScriptPath}`);
     return this.executeCommand(tempScriptPath, context);

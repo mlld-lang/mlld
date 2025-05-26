@@ -21,7 +21,7 @@ This plugin provides syntax highlighting and filetype support for mlld files in 
 Add this to your `.vimrc` or `init.vim`:
 
 ```vim
-Plug 'meld-lang/meld', { 'rtp': 'editors/vim' }
+Plug 'mlld-lang/mlld', { 'rtp': 'editors/vim' }
 ```
 
 Then run `:PlugInstall`
@@ -29,7 +29,7 @@ Then run `:PlugInstall`
 ### Using Vundle
 
 ```vim
-Plugin 'meld-lang/meld', { 'rtp': 'editors/vim' }
+Plugin 'mlld-lang/mlld', { 'rtp': 'editors/vim' }
 ```
 
 Then run `:PluginInstall`
@@ -38,7 +38,7 @@ Then run `:PluginInstall`
 
 ```lua
 use {
-  'meld-lang/meld',
+  'mlld-lang/mlld',
   rtp = 'editors/vim'
 }
 ```
@@ -47,10 +47,10 @@ use {
 
 ```lua
 {
-  'meld-lang/meld',
-  ft = { 'meld' },
+  'mlld-lang/mlld',
+  ft = { 'mlld' },
   config = function()
-    vim.opt.rtp:append(vim.fn.stdpath('data') .. '/lazy/meld/editors/vim')
+    vim.opt.rtp:append(vim.fn.stdpath('data') .. '/lazy/mlld/editors/vim')
   end
 }
 ```
@@ -114,13 +114,13 @@ You can customize the behavior in your `.vimrc`:
 
 ```vim
 " Change indent size
-autocmd FileType meld setlocal shiftwidth=4 tabstop=4
+autocmd FileType mlld setlocal shiftwidth=4 tabstop=4
 
 " Disable folding
-autocmd FileType meld setlocal nofoldenable
+autocmd FileType mlld setlocal nofoldenable
 
 " Change fold level
-autocmd FileType meld setlocal foldlevel=1
+autocmd FileType mlld setlocal foldlevel=1
 ```
 
 ## Color Scheme Support
@@ -137,7 +137,7 @@ The plugin uses standard highlight groups that work with any color scheme:
 
 ## Examples
 
-```meld
+```mlld
 >> This is a comment
 
 @text greeting = "Hello, World!"
@@ -176,10 +176,10 @@ Hello {{name}}!
 
 ### Syntax highlighting not working
 
-1. Ensure the file has a `.mld` or `.meld` extension
+1. Ensure the file has a `.mld` or `.mlld` extension
 2. Check that syntax is enabled: `:syntax on`
-3. Verify filetype is set: `:set filetype?` (should show `filetype=meld`)
-4. Try manually setting: `:set filetype=meld`
+3. Verify filetype is set: `:set filetype?` (should show `filetype=mlld`)
+4. Try manually setting: `:set filetype=mlld`
 
 ### Indentation issues
 

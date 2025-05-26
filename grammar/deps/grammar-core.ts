@@ -29,7 +29,7 @@ export type DirectiveKindKey = keyof typeof DirectiveKind;
 
 export const helpers = {
   debug(msg: string, ...args: unknown[]) {
-    if (process.env.DEBUG_MELD_GRAMMAR) console.log('[DEBUG GRAMMAR]', msg, ...args);
+    if (process.env.DEBUG_MLLD_GRAMMAR) console.log('[DEBUG GRAMMAR]', msg, ...args);
   },
 
   isLogicalLineStart(input: string, pos: number) {

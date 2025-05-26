@@ -1,4 +1,4 @@
-# Meld Error System Implementation Plan
+# Mlld Error System Implementation Plan
 
 ## Overview
 
@@ -6,27 +6,27 @@ A robust error system is crucial for good developer experience. This plan outlin
 
 ## Priority
 
-**TOP PRIORITY** after core features are stable. This is the bedrock of good DX for Meld.
+**TOP PRIORITY** after core features are stable. This is the bedrock of good DX for Mlld.
 
 ## Error Hierarchy
 
 ```
-MeldError (base)
-├── MeldParseError (syntax errors)
+MlldError (base)
+├── MlldParseError (syntax errors)
 │   ├── location info (line, column, file)
 │   ├── expected vs found tokens
 │   └── suggestion/fix hints
-├── MeldInterpreterError (runtime)
+├── MlldInterpreterError (runtime)
 │   ├── VariableResolutionError
 │   ├── FileNotFoundError  
 │   ├── CommandExecutionError
 │   ├── CircularDependencyError
 │   └── FieldAccessError
-├── MeldValidationError (semantic)
+├── MlldValidationError (semantic)
 │   ├── InvalidDirectiveError
 │   ├── TypeMismatchError
 │   └── MissingRequiredFieldError
-└── MeldWarning (non-fatal issues)
+└── MlldWarning (non-fatal issues)
     ├── DeprecationWarning
     └── PerformanceWarning
 ```
@@ -67,7 +67,7 @@ MeldError (base)
 
 ## Implementation Steps
 
-1. **Phase 1**: Update parser to use MeldParseError
+1. **Phase 1**: Update parser to use MlldParseError
    - Add location tracking to all parse errors
    - Implement error recovery in parser
    - Create pretty error formatter

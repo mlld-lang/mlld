@@ -1,6 +1,6 @@
 # Run Directive
 
-The `run` directive executes commands and scripts, allowing Meld documents to interact with external processes, run code in various languages, and execute predefined commands.
+The `run` directive executes commands and scripts, allowing Mlld documents to interact with external processes, run code in various languages, and execute predefined commands.
 
 ## Subtypes
 
@@ -12,7 +12,7 @@ The `run` directive has three subtypes:
 
 ## Syntax
 
-```meld
+```mlld
 @run [command argument1 argument2]
 @run language [code]
 @run language (arg1, arg2) [code]
@@ -67,13 +67,13 @@ The `run` directive nodes follow this structure:
 
 Simple shell command:
 
-```meld
+```mlld
 @run [ls -la]
 ```
 
 Multi-line command:
 
-```meld
+```mlld
 @run [
 find . -name "*.js" | 
 xargs grep "TODO"
@@ -84,7 +84,7 @@ xargs grep "TODO"
 
 Execute JavaScript code:
 
-```meld
+```mlld
 @run javascript [
 console.log("Hello, world!");
 ]
@@ -92,7 +92,7 @@ console.log("Hello, world!");
 
 Execute Python code with arguments:
 
-```meld
+```mlld
 @run python (data, format) [
 import json
 data_obj = json.loads(data)
@@ -104,13 +104,13 @@ print(json.dumps(data_obj, indent=4 if format == "pretty" else None))
 
 Execute a predefined command:
 
-```meld
+```mlld
 @run $listFiles
 ```
 
 Execute a predefined command with arguments:
 
-```meld
+```mlld
 @run $formatData ("large_file.json", "pretty")
 ```
 

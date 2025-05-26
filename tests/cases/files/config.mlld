@@ -1,3 +1,3 @@
 @text greeting = "Hello, world!"
 @data count = 42
-@text author = "Meld Test Suite"
+@text author = "Mlld Test Suite"

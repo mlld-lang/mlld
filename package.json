@@ -1,7 +1,7 @@
 {
-  "name": "meld",
+  "name": "mlld",
   "version": "11.0.0",
-  "description": "Meld: A template language for LLM prompts",
+  "description": "Mlld: A template language for LLM prompts",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
@@ -19,7 +19,7 @@
     }
   },
   "bin": {
-    "meld": "./bin/meld-wrapper.cjs"
+    "mlld": "./bin/mlld-wrapper.cjs"
   },
   "files": [
     "dist/",
@@ -32,8 +32,8 @@
     "build:syntax": "node grammar/syntax-generator/build-syntax.js",
     "build": "npm run build:grammar && tsup",
     "ast": "npm run build:grammar && node ./scripts/ast-output.js",
-    "ast:debug": "DEBUG_MELD_GRAMMAR=1 npm run ast --",
-    "reinstall": "npm run build && npm uninstall meld && npm install -g .",
+    "ast:debug": "DEBUG_MLLD_GRAMMAR=1 npm run ast --",
+    "reinstall": "npm run build && npm uninstall mlld && npm install -g .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -49,10 +49,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/adamavenir/meld.git"
+    "url": "git+https://github.com/adamavenir/mlld.git"
   },
   "keywords": [
-    "meld",
+    "mlld",
     "interpreter",
     "language",
     "llm",
@@ -62,9 +62,9 @@
   "author": "Adam Avenir",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/adamavenir/meld/issues"
+    "url": "https://github.com/adamavenir/mlld/issues"
   },
-  "homepage": "https://github.com/adamavenir/meld#readme",
+  "homepage": "https://github.com/adamavenir/mlld#readme",
   "dependencies": {
     "@types/lodash": "^4.17.16",
     "@types/uuid": "^10.0.0",
@@ -94,7 +94,7 @@
     "@typescript-eslint/eslint-plugin": "^8.26.1",
     "@typescript-eslint/parser": "^8.26.1",
     "eslint": "^9.18.0",
-    "meld-ast-explorer": "file:lib/ast-explorer",
+    "mlld-ast-explorer": "file:lib/ast-explorer",
     "memfs": "^4.7.0",
     "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",

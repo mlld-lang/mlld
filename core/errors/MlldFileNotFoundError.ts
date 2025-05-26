@@ -1,15 +1,15 @@
-import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError';
+import { MlldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MlldError';
 import { PathErrorMessages } from '@core/errors/messages/index';
 
 /**
  * Represents details specific to file not found errors.
  */
-export interface MeldFileNotFoundErrorDetails extends BaseErrorDetails {
+export interface MlldFileNotFoundErrorDetails extends BaseErrorDetails {
   filePath: string; // The path that was not found
   operation?: string; // e.g., 'read', 'write', 'import'
 }
 
-export interface MeldFileNotFoundErrorOptions {
+export interface MlldFileNotFoundErrorOptions {
   cause?: Error;
   severity?: ErrorSeverity;
   context?: any;
@@ -18,11 +18,11 @@ export interface MeldFileNotFoundErrorOptions {
 /**
  * Error thrown when a required file cannot be found.
  */
-export class MeldFileNotFoundError extends MeldError {
+export class MlldFileNotFoundError extends MlldError {
   constructor(
     message: string,
     options: {
-      details: MeldFileNotFoundErrorDetails;
+      details: MlldFileNotFoundErrorDetails;
       severity?: ErrorSeverity;
       sourceLocation?: ErrorSourceLocation;
       cause?: unknown; // Often wraps a system error like ENOENT

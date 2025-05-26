@@ -1,6 +1,6 @@
-# Contributing to Meld
+# Contributing to Mlld
 
-Thank you for your interest in contributing to Meld! We welcome contributions from the community to make this project better.
+Thank you for your interest in contributing to Mlld! We welcome contributions from the community to make this project better.
 
 ## Branch Structure
 
@@ -41,7 +41,7 @@ The repository is organized to separate development files from the public-facing
 
 - Development directories that are excluded from the public branch:
   - `_issues/`: Issue tracking and documentation
-  - `_meld/`: Development-specific Meld files
+  - `_mlld/`: Development-specific Mlld files
   - `dev/`: Development utilities and scripts
   - `logs/`: Log files
   - `tmp/`: Temporary files
@@ -98,4 +98,4 @@ All contributors are expected to adhere to the project's Code of Conduct. Please
 
 ## License
 
-By contributing to Meld, you agree that your contributions will be licensed under the project's MIT License.
+By contributing to Mlld, you agree that your contributions will be licensed under the project's MIT License.

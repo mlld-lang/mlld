@@ -1,9 +1,9 @@
 /**
- * Base type definitions for Meld AST nodes with structured directive objects
+ * Base type definitions for Mlld AST nodes with structured directive objects
  */
 import {
   SourceLocation,
-  BaseMeldNode,
+  BaseMlldNode,
   DirectiveNode,
   DirectiveSource,
   DirectiveKind,
