@@ -74,10 +74,10 @@ export async function evaluateImport(
   // Handle variable merging based on import type
   if (directive.subtype === 'importAll') {
     // Import all variables from child to parent
-    const childVars = childEnv.getAllVariables();
+    // Use getCurrentVariables() to only get variables defined in the imported file
+    // getAllVariables() would include parent variables, causing false positives
+    const childVars = childEnv.getCurrentVariables();
     for (const [name, variable] of childVars) {
-      // Skip if this is a parent variable (don't re-import)
-      if (env.hasVariable(name)) continue;
       env.setVariable(name, variable);
     }
     

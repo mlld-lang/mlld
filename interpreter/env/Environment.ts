@@ -266,6 +266,11 @@ export class Environment {
     
     return allVars;
   }
+
+  getCurrentVariables(): Map<string, MlldVariable> {
+    // Return only this environment's variables (not parent variables)
+    return new Map(this.variables);
+  }
   
   // --- URL Support Methods ---
   
