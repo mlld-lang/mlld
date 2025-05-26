@@ -49,7 +49,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/adamavenir/mlld.git"
+    "url": "git+https://github.com/mlld-lang/mlld.git"
   },
   "keywords": [
     "mlld",
@@ -62,9 +62,9 @@
   "author": "Adam Avenir",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/adamavenir/mlld/issues"
+    "url": "https://github.com/mlld-lang/mlld/issues"
   },
-  "homepage": "https://github.com/adamavenir/mlld#readme",
+  "homepage": "https://github.com/mlld-lang/mlld#readme",
   "dependencies": {
     "@types/lodash": "^4.17.16",
     "@types/uuid": "^10.0.0",
