@@ -13,10 +13,10 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 - **Structure**: Use interface-first design (I[Name]Service interfaces + implementation)
 - **Formatting**: 2-space indentation, single quotes, semicolons
 - **Types**: Strict type checking enabled, always provide explicit return types
-- **Error Handling**: Use specialized MlldError classes (MlldDirectiveError, MlldParseError, etc.)
 - **Naming**: PascalCase for classes/interfaces, camelCase for methods/variables
-- **Tests**: Test cases in tests/cases written in markdown --> tests/utils/ast-fixtures.js builds fixtures from these when running `npm run build:fixtures` or when running `build` or `build:grammar` --> tests/fixtures have complete AST and expected final output --> @interpreter/interpreter.fixture.test.ts runs the tests in our fixtures, effectively creating e2e tests. when individual tests/cases need to reference files, they go in tests/cases/files
-- **Grammar:** Our peggy.js grammar uses an abstraction-focused modular design for DRY code that makes peggy's hierarchical traversal clear. Look for patterns to consolidate and abstract where possible. Refer to grammar/docs/NAMING-CONVENTIONS.md for naming patterns.
+- **Tests**: Test cases in tests/cases written in markdown --> grammar/scripts/build-fixtures.js builds fixtures from these when running `npm run build:fixtures` or when running `build` or `build:grammar` --> tests/fixtures have complete AST and expected final output --> @interpreter/interpreter.fixture.test.ts runs the tests in our fixtures, effectively creating e2e tests. when individual tests/cases need to reference files, they go in tests/cases/files
+- **Error Handling**: Use specialized MlldError classes (MlldDirectiveError, MlldParseError, etc.) Many error conditions use the same method as tests to test our effectiveness at capturing error conditions and delivering consistent error messages. tests/cases/invalid (syntax errors), tests/cases/exceptions (runtime errors), tests/cases/warnings (plausibly valid syntax but common mistakes new mlld learners make), tests/cases/deprecated (deprecated examples - empty currently) 
+- **Grammar:** Our peggy.js grammar uses an abstraction-focused modular design for DRY code that makes peggy's hierarchical traversal clear. Look for patterns to consolidate and abstract where possible. Key grammar docs: grammar/docs/README.md grammar/docs/DEBUG.md Refer to grammar/docs/NAMING-CONVENTIONS.md for naming patterns.
 
 ## Architecture 
 - **Interpreter**: Single recursive `evaluate()` function
@@ -75,5 +75,13 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 - ❌ `Hello @name!` → ✅ `@text greeting = [[Hello {{name}}!]]` then `@add @greeting`
 - ❌ `{{@variable}}` → ✅ `{{variable}}`
 - ❌ `@path config = env.paths.dev` → ✅ `@path config = @env.paths.dev`
+
+## Key File Locations
+- **Grammar**: `grammar/mlld.peggy` (main), `grammar/directives/` (modular patterns)
+- **Interpreter**: `interpreter/core/interpreter.ts` (main), `interpreter/eval/` (directive evaluators)  
+- **Error Classes**: `core/errors/` (definitions), see `docs/dev/ERRORS.md` for system overview
+- **Tests**: `tests/cases/` (markdown examples), `tests/fixtures/` (generated), `interpreter/interpreter.fixture.test.ts` (runner)
+- **CLI**: `cli/index.ts` (entry point), `api/index.ts` (programmatic interface)
+- **Examples**: `examples/` (real-world usage patterns and integration tests)
 
 ## Coding Practices

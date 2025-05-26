@@ -37,7 +37,7 @@
 @text users = @run @count_by_role(user)
 @text active = @run @get_active_users
 
-@text user_counts [[
+@text user_counts = [[
 ## Computed Values
 Admin Count: {{role}}
 User Count: {{users}}

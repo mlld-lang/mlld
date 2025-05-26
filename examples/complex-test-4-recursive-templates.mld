@@ -16,7 +16,7 @@
 
 {{content}}
 
-Generated at: @run date +%Y-%m-%d
+Generated at: @run [date +%Y-%m-%d]
 ]]
 
 # Data with template references
@@ -37,9 +37,9 @@ Generated at: @run date +%Y-%m-%d
 
 # Documentation for {{name}}
 
-@exec section_template(@data doc_sections.intro.title, @data doc_sections.intro.content)
+@add @section_template(@doc_sections.intro.title, @doc_sections.intro.content)
 
-@exec section_template(@data doc_sections.features.title, @data doc_sections.features.content)
+@add @section_template(@doc_sections.features.title, @doc_sections.features.content)
 
 ## Summary
 
