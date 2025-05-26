@@ -13,6 +13,9 @@ build/
 # TypeScript
 *.tsbuildinfo
 
+# Generated files
+core/version.ts
+
 # Logs
 logs/
 *.log

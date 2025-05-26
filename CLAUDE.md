@@ -32,4 +32,48 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 - **XML via llmxml** - Uses SCREAMING_SNAKE format for maximum clarity
 - **AST Parsing**: ALWAYS use the AST -- never use regex
 
+## Meld Syntax Rules
+
+**Meld is a scripting language embedded in Markdown documents** - it enhances Markdown with dynamic content generation while preserving the readability of the source document.
+
+### Core Syntax Principles
+1. **Directives only at start of lines** - Meld directives (`@text`, `@data`, etc.) are ONLY interpreted when they begin a line
+   - Exception: `@run` can be used on RHS of `@text` and `@exec` definitions
+   - Exception: Directives can be used in RHS of `@data` object definitions
+2. **Variables are created without `@`** - `@text name = "value"` (not `@text @name`)
+3. **Variables are referenced with `@`** - Use `@name` in directives, `{{name}}` in templates
+4. **Commands require brackets** - `@run [echo "hello"]` not `@run echo "hello"`
+5. **Only `@run` and `@add` produce output** - Other directives define or assign but don't output
+6. **Markdown-first design** - Everything that isn't a directive line is treated as regular Markdown
+
+### Variable References
+- In directives: `@variable` or `@object.field.subfield`
+- In templates `[[...]]`: `{{variable}}` or `{{object.field.subfield}}`
+- No mixing: Can't do `{{variable.@other.field}}` or `@{{variable}}`
+- Plain text: `@variable` is literal text, not a reference
+
+### Templates and Interpolation
+- Templates use double brackets: `[[...]]`
+- Only `{{variable}}` syntax works inside templates
+- `@` symbols in templates are literal characters
+- Directives inside templates are NOT executed - they're literal text
+- Field access: `{{user.name}}` or `{{items.0.value}}`
+
+### Exec Commands
+- `@exec name(params) = @run [command]` - Defines a reusable command
+- `@run @name(args)` - Executes the defined command
+- Parameters are referenced with `@param` inside the command definition
+
+### Import Syntax
+- File imports: `@import { var1, var2 } from "path/to/file.mld"`
+- Import all: `@import { * } from "path/to/file.mld"`
+- Paths are relative to the importing file's directory
+
+### Common Mistakes to Avoid
+- ❌ `@run echo "hello"` → ✅ `@run [echo "hello"]`
+- ❌ `@text @myvar = "value"` → ✅ `@text myvar = "value"`
+- ❌ `Hello @name!` → ✅ `@text greeting = [[Hello {{name}}!]]` then `@add @greeting`
+- ❌ `{{@variable}}` → ✅ `{{variable}}`
+- ❌ `@path config = env.paths.dev` → ✅ `@path config = @env.paths.dev`
+
 ## Coding Practices

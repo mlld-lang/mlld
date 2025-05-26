@@ -3,8 +3,8 @@ const markdownItAnchor = require('markdown-it-anchor');
 const markdownItPrism = require('markdown-it-prism');
 
 // Load our custom Meld language
-require('./src/prism-meld.js');
-const highlightMeld = require('./src/eleventy-meld-highlight.js');
+require('./src/prism-mld.js');
+const highlightMeld = require('./src/eleventy-mld-highlight.js');
 
 module.exports = function(eleventyConfig) {
   // Configure Markdown

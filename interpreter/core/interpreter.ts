@@ -1,4 +1,4 @@
-import type { MlldNode, DirectiveNode, TextNode, MlldDocument, MlldVariable } from '@core/types';
+import type { MlldNode, DirectiveNode, TextNode, CommentNode, MlldDocument, MlldVariable } from '@core/types';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
@@ -52,6 +52,17 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       };
       env.addNode(newlineNode);
       return { value: '\n', env };
+      
+    case 'Comment':
+      // Comments are preserved in output but don't affect evaluation
+      const commentNode = node as CommentNode;
+      const commentTextNode: TextNode = {
+        type: 'Text',
+        nodeId: `${commentNode.nodeId || 'comment'}-text`,
+        content: commentNode.content
+      };
+      env.addNode(commentTextNode);
+      return { value: commentNode.content, env };
       
     case 'VariableReference':
       // Variable references are handled by interpolation in context

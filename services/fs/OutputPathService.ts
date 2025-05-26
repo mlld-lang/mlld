@@ -1,13 +1,12 @@
 import * as path from 'path';
-import * as fs from 'fs/promises';
 
 export interface IOutputPathService {
   /**
-   * Generate a safe output path that won't overwrite existing files
+   * Generate an output path with .o.ext suffix
    * @param inputPath The input file path
    * @param format The output format (md or xml)
    * @param explicitOutput Optional explicit output path from user
-   * @returns The safe output path
+   * @returns The output path
    */
   getSafeOutputPath(inputPath: string, format: 'md' | 'xml', explicitOutput?: string): Promise<string>;
 }
@@ -25,25 +24,8 @@ export class OutputPathService implements IOutputPathService {
     const nameWithoutExt = path.basename(inputPath, inputExt);
     const outputExt = format === 'xml' ? 'xml' : 'md';
     
-    // Start with .o.ext pattern
-    let counter = 0;
-    let outputPath = path.join(dir, `${nameWithoutExt}.o.${outputExt}`);
-    
-    // If that exists, try .o1.ext, .o2.ext, etc.
-    while (await this.fileExists(outputPath)) {
-      counter++;
-      outputPath = path.join(dir, `${nameWithoutExt}.o${counter}.${outputExt}`);
-    }
-    
+    // Always use .o.ext pattern and overwrite if it exists
+    const outputPath = path.join(dir, `${nameWithoutExt}.o.${outputExt}`);
     return outputPath;
-  }
-
-  private async fileExists(filePath: string): Promise<boolean> {
-    try {
-      await fs.access(filePath);
-      return true;
-    } catch {
-      return false;
-    }
   }
 }
