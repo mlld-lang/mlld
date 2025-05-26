@@ -38,16 +38,14 @@ export async function interpret(
     const { MlldParseError, ErrorSeverity } = await import('@core/errors');
     
     // Create a proper MlldParseError with location information
+    const location = (parseError as any).location;
+    const position = location?.start || location || undefined;
+    
     throw new MlldParseError(
       parseError.message,
+      position,
       {
-        code: 'E_PARSE_FAILED',
         severity: ErrorSeverity.Fatal,
-        sourceLocation: (parseError as any).location?.start ? {
-          line: (parseError as any).location.start.line,
-          column: (parseError as any).location.start.column,
-          offset: (parseError as any).location.start.offset
-        } : undefined,
         cause: parseError
       }
     );

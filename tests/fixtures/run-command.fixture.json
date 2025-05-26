@@ -8,7 +8,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "14b9c101-316e-4f44-ad65-de10d6dd435d",
+      "nodeId": "b5911d8e-3c13-4071-966e-460e658397b9",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "4177e1bb-6867-46a0-8bc3-1d54bda8e87c",
+            "nodeId": "10da1a2f-8aef-4b3f-87b3-819c183ea213",
             "location": {
               "start": {
                 "offset": 6,
@@ -46,7 +46,7 @@
         ],
         "commandBases": [
           {
-            "nodeId": "5ccd66c5-26bd-4c7f-8589-d5dacaf7be94",
+            "nodeId": "1c9cddfe-263d-4bfd-b652-f228ca4bc6ef",
             "location": {
               "start": {
                 "offset": 5,
