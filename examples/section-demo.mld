@@ -1,0 +1,26 @@
+# Section Extraction Demo
+
+This example demonstrates the section extraction syntax for extracting
+sections from markdown files.
+
+## Section extraction with @add
+
+### Extract a specific section:
+@add @path "docs/guide.md" # Introduction
+
+### Extract and rename a section:
+@add @path "docs/api.md" # Original Title as "# API Reference"
+
+## Section extraction with @text
+
+### Assign a section to a variable:
+@text intro = @path "docs/guide.md" # Introduction
+
+### Extract and rename:
+@text docs = @path "README.md" # Installation as "# Getting Started"
+@add @text docs
+
+## Direct section inclusion
+
+### Include a specific section:
+@add @path "CHANGELOG.md" # Version 2.0

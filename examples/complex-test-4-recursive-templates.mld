@@ -1,0 +1,52 @@
+# Complex Test 4: Recursive Templates and Variable References
+
+@text name = "Recursive Test"
+@text version = "1.0.0"
+
+# Template that references another template
+@text header_template = [[
+===================================
+{{name}} v{{version}}
+===================================]]
+
+@text section_template(title, content) = [[
+{{header_template}}
+
+## {{title}}
+
+{{content}}
+
+Generated at: @run date +%Y-%m-%d
+]]
+
+# Data with template references
+@data doc_sections = {
+  "intro": {
+    "title": "Introduction",
+    "content": "This tests recursive template expansion with {{name}}"
+  },
+  "features": {
+    "title": "Features",
+    "content": "Version {{version}} includes:\n- Nested templates\n- Variable interpolation\n- Data references"
+  }
+}
+
+# Complex nested template usage
+@text full_doc = [[
+{{header_template}}
+
+# Documentation for {{name}}
+
+@exec section_template(@data doc_sections.intro.title, @data doc_sections.intro.content)
+
+@exec section_template(@data doc_sections.features.title, @data doc_sections.features.content)
+
+## Summary
+
+This document demonstrates:
+- Header: Uses {{header_template}}
+- Sections: Generated with section_template
+- Data: Pulled from {{doc_sections}}
+]]
+
+@add @full_doc
