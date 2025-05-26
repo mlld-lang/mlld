@@ -29,6 +29,30 @@ export async function interpret(
 ): Promise<string> {
   // Parse the source into AST
   const parseResult = await parse(source);
+  
+  // Check if parsing was successful
+  if (!parseResult.success || parseResult.error) {
+    const parseError = parseResult.error || new Error('Unknown parse error');
+    
+    // Import MlldParseError for proper error handling
+    const { MlldParseError, ErrorSeverity } = await import('@core/errors');
+    
+    // Create a proper MlldParseError with location information
+    throw new MlldParseError(
+      parseError.message,
+      {
+        code: 'E_PARSE_FAILED',
+        severity: ErrorSeverity.Fatal,
+        sourceLocation: (parseError as any).location?.start ? {
+          line: (parseError as any).location.start.line,
+          column: (parseError as any).location.start.column,
+          offset: (parseError as any).location.start.offset
+        } : undefined,
+        cause: parseError
+      }
+    );
+  }
+  
   const ast = parseResult.ast;
   
   // Create the root environment

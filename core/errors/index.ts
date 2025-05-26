@@ -13,7 +13,6 @@ export { MlldFileNotFoundError } from './MlldFileNotFoundError';
 export { MlldOutputError } from './MlldOutputError';
 export { MlldDirectiveError } from './MlldDirectiveError';
 export { PathValidationError } from './PathValidationError';
-export { ServiceInitializationError } from './ServiceInitializationError';
 export { DataEvaluationError } from './DataEvaluationError';
 
 // Export error message collections

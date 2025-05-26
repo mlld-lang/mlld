@@ -702,60 +702,45 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
   const isMlldError = error instanceof MlldError; // Ensure MlldError is used as value
   const severity = isMlldError ? error.severity : ErrorSeverity.Fatal;
 
-  const displayErrorWithSourceContext = async (error: MlldError) => {
-    // Dynamically load ErrorDisplayService
-    try {
-      const { ErrorDisplayService } = await import('@services/display/ErrorDisplayService/ErrorDisplayService');
-      // Resolve FileSystemService (implementation) instead of IFileSystemService
-      const fsService = resolveService<FileSystemService>('FileSystemService'); 
-      const errorDisplayService = new ErrorDisplayService(fsService);
-
-      // Get source context if available
-      // Use sourceLocation property
-      if (error.sourceLocation) {
-        const { filePath } = error.sourceLocation;
-        // Explicitly cast to Location for DTS
-        const loc = error.sourceLocation as Location;
-        const displayContext: { message: string; code?: string; cause?: Error | unknown; path?: string; startLine?: number; endLine?: number } = {
-          message: error.message,
-          code: error.code,
-          cause: error.cause,
-          path: filePath,
-          startLine: loc.start?.line,
-          endLine: loc.end?.line 
-        };
-        
-        // Check if error.details exists and has path property (MlldError uses details)
-        if (error.details && 'path' in error.details) {
-          displayContext.path = error.details.path as string;
-        }
-
-        if (displayContext.path) {
-          console.error(chalk.red(`${error.name} in ${displayContext.path}:${displayContext.startLine}`));
-          console.error(chalk.red(`> ${error.message}`));
-        } else {
-          console.error(chalk.red(`Error: ${error.message}`));
-          // Check for cause on the base Error type
-          const cause = (error as Error).cause;
-          if (cause instanceof Error) {
-            console.error(chalk.red(`  Cause: ${cause.message}`));
-          }
-        }
-      } else {
-        console.error(chalk.red(`Error: ${error.message}`));
-        // Check for cause on the base Error type
-        const cause = (error as Error).cause;
-        if (cause instanceof Error) {
-          console.error(chalk.red(`  Cause: ${cause.message}`));
-        }
+  const displayErrorWithSourceContext = (error: MlldError) => {
+    // Display error with proper formatting and source context
+    const sourceLocation = error.sourceLocation;
+    
+    if (sourceLocation && sourceLocation.filePath) {
+      const location = sourceLocation.line ? `:${sourceLocation.line}` : '';
+      const columnInfo = sourceLocation.column ? `:${sourceLocation.column}` : '';
+      console.error(chalk.red(`\nError in ${sourceLocation.filePath}${location}${columnInfo}\n`));
+      
+      if (error.code) {
+        console.error(chalk.yellow(`  Code: ${error.code}`));
       }
-    } catch (displayError) {
-      console.error(chalk.red(`Original error: ${error.message}`));
-      if (displayError instanceof Error) {
-        console.error(chalk.yellow(`Failed to display error with source context: ${displayError.message}`));
-      } else {
-        console.error(chalk.yellow(`Failed to display error with source context: ${String(displayError)}`));
+      console.error(chalk.red(`  ${error.name}: ${error.message}\n`));
+    } else {
+      console.error(chalk.red(`\n${error.name}: ${error.message}`));
+      if (error.code) {
+        console.error(chalk.yellow(`  Code: ${error.code}`));
       }
+      console.error('');
+    }
+
+    // Show additional details if available
+    if (error.details && typeof error.details === 'object') {
+      const detailsStr = Object.entries(error.details)
+        .filter(([key, value]) => value !== undefined && value !== null)
+        .map(([key, value]) => `  ${key}: ${String(value)}`)
+        .join('\n');
+      
+      if (detailsStr) {
+        console.error(chalk.gray('Details:'));
+        console.error(chalk.gray(detailsStr));
+        console.error('');
+      }
+    }
+
+    // Show cause if available
+    if (error.cause instanceof Error) {
+      console.error(chalk.gray(`Caused by: ${error.cause.message}`));
+      console.error('');
     }
   };
 
@@ -763,7 +748,7 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
   logger.level = options.debug ? 'debug' : (options.verbose ? 'info' : 'warn');
 
   if (isMlldError) {
-    await displayErrorWithSourceContext(error);
+    displayErrorWithSourceContext(error);
   } else if (error instanceof Error) {
     logger.error('An unexpected error occurred:', error);
     console.error(chalk.red(`Unexpected Error: ${error.message}`));
