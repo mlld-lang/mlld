@@ -11,7 +11,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "e3ca9d94-08f1-450a-853a-d42234a11319",
+      "nodeId": "872fa0f3-a01d-4946-8747-012a761bc198",
       "location": {
         "start": {
           "offset": 0,
@@ -31,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "c7c00362-b2d5-49fb-ad55-fa8fe4619fa6",
+            "nodeId": "539a7cac-7cdd-477d-8153-05a193260654",
             "location": {
               "start": {
                 "offset": 0,
@@ -51,7 +51,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "5e9a4087-d194-45cd-a0c3-a8369aaf0900",
+            "nodeId": "dbec03f1-451d-48b2-a590-44f9bbb7b02e",
             "location": {
               "start": {
                 "offset": 23,
@@ -80,7 +80,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "16bbac68-f7b2-46ad-a507-1fadc034bbee",
+      "nodeId": "8dfcba3e-486d-480c-ab9d-7774b3a751cb",
       "location": {
         "start": {
           "offset": 41,
@@ -97,7 +97,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "bf0c62d7-350d-48b5-af54-b5651662b462",
+      "nodeId": "83308759-11d9-4395-be72-8bbbad5ed9fa",
       "location": {
         "start": {
           "offset": 43,
@@ -117,7 +117,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "af250fee-85fa-41e3-8858-f9810046d7cb",
+            "nodeId": "7a431f06-af40-46fe-bc74-2fd4df4a5f85",
             "location": {
               "start": {
                 "offset": 0,
@@ -140,7 +140,7 @@
             "architect": [
               {
                 "type": "Text",
-                "nodeId": "ace2d724-d66f-4fee-a311-1aacd75a7685",
+                "nodeId": "a669596b-1a90-484c-be13-965048548294",
                 "location": {
                   "start": {
                     "offset": 75,
@@ -159,7 +159,7 @@
             "ux": [
               {
                 "type": "Text",
-                "nodeId": "5744defb-c6a2-4eb6-a8ec-27f436cf5c78",
+                "nodeId": "0ec0b7ea-0388-441c-9549-dac87b809470",
                 "location": {
                   "start": {
                     "offset": 158,
@@ -178,7 +178,7 @@
             "security": [
               {
                 "type": "Text",
-                "nodeId": "6ec5d023-6a7f-4cdf-b8ce-5f9d39cd62fb",
+                "nodeId": "d6a896dc-0757-4035-b602-cb443fa49c42",
                 "location": {
                   "start": {
                     "offset": 244,
@@ -199,7 +199,7 @@
       },
       "raw": {
         "identifier": "role",
-        "value": "{\n  \"architect\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"ace2d724-d66f-4fee-a311-1aacd75a7685\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 75,\n          \"line\": 4,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 146,\n          \"line\": 4,\n          \"column\": 89\n        }\n      },\n      \"content\": \"You are a senior architect skilled in assessing TypeScript codebases.\"\n    }\n  ],\n  \"ux\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"5744defb-c6a2-4eb6-a8ec-27f436cf5c78\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 158,\n          \"line\": 5,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 226,\n          \"line\": 5,\n          \"column\": 79\n        }\n      },\n      \"content\": \"You are a senior ux designer skilled in assessing user experience.\"\n    }\n  ],\n  \"security\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"6ec5d023-6a7f-4cdf-b8ce-5f9d39cd62fb\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 244,\n          \"line\": 6,\n          \"column\": 17\n        },\n        \"end\": {\n          \"offset\": 323,\n          \"line\": 6,\n          \"column\": 96\n        }\n      },\n      \"content\": \"You are a senior security engineer skilled in assessing TypeScript codebases.\"\n    }\n  ]\n}"
+        "value": "{\n  \"architect\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"a669596b-1a90-484c-be13-965048548294\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 75,\n          \"line\": 4,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 146,\n          \"line\": 4,\n          \"column\": 89\n        }\n      },\n      \"content\": \"You are a senior architect skilled in assessing TypeScript codebases.\"\n    }\n  ],\n  \"ux\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"0ec0b7ea-0388-441c-9549-dac87b809470\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 158,\n          \"line\": 5,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 226,\n          \"line\": 5,\n          \"column\": 79\n        }\n      },\n      \"content\": \"You are a senior ux designer skilled in assessing user experience.\"\n    }\n  ],\n  \"security\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"d6a896dc-0757-4035-b602-cb443fa49c42\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 244,\n          \"line\": 6,\n          \"column\": 17\n        },\n        \"end\": {\n          \"offset\": 323,\n          \"line\": 6,\n          \"column\": 96\n        }\n      },\n      \"content\": \"You are a senior security engineer skilled in assessing TypeScript codebases.\"\n    }\n  ]\n}"
       },
       "meta": {
         "objectData": {
@@ -209,7 +209,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "206ed472-4279-4a0c-9842-4699be4135bc",
+      "nodeId": "f3443536-ec19-4d90-83a8-ad42bde745c1",
       "location": {
         "start": {
           "offset": 325,
@@ -226,7 +226,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "8c04962c-a2f1-4b75-878d-2320676f2776",
+      "nodeId": "b1976d10-63ab-4c0b-89ba-a3ce65eface2",
       "location": {
         "start": {
           "offset": 327,
@@ -246,7 +246,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "0ce1c89d-d051-44ea-b8c7-a15e12d0acb2",
+            "nodeId": "2d7b5964-643e-43f4-94a8-1bf12f91593d",
             "location": {
               "start": {
                 "offset": 0,
@@ -269,7 +269,7 @@
             "code_review": [
               {
                 "type": "Text",
-                "nodeId": "fa694a14-9001-464d-ae5e-36e8c3ebf942",
+                "nodeId": "c95e339f-f7d0-4129-9008-509b54165291",
                 "location": {
                   "start": {
                     "offset": 361,
@@ -288,7 +288,7 @@
             "ux_review": [
               {
                 "type": "Text",
-                "nodeId": "e6462127-f167-46b5-b3fd-a3b4a4d24ab2",
+                "nodeId": "03194b46-f913-45d7-b262-52c6ec0b94a6",
                 "location": {
                   "start": {
                     "offset": 488,
@@ -307,7 +307,7 @@
             "security_review": [
               {
                 "type": "Text",
-                "nodeId": "b1b06689-9833-4dcb-817c-55ce5b656381",
+                "nodeId": "5ffb5449-260b-460c-9511-b69c90722d3f",
                 "location": {
                   "start": {
                     "offset": 626,
@@ -328,7 +328,7 @@
       },
       "raw": {
         "identifier": "task",
-        "value": "{\n  \"code_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"fa694a14-9001-464d-ae5e-36e8c3ebf942\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 361,\n          \"line\": 10,\n          \"column\": 20\n        },\n        \"end\": {\n          \"offset\": 469,\n          \"line\": 10,\n          \"column\": 128\n        }\n      },\n      \"content\": \"Carefully review the code and test results and advise on the quality of the code and areas of improvement.\"\n    }\n  ],\n  \"ux_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"e6462127-f167-46b5-b3fd-a3b4a4d24ab2\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 488,\n          \"line\": 11,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 601,\n          \"line\": 11,\n          \"column\": 131\n        }\n      },\n      \"content\": \"Carefully review the user experience and advise on the quality of the user experience and areas of improvement.\"\n    }\n  ],\n  \"security_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"b1b06689-9833-4dcb-817c-55ce5b656381\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 626,\n          \"line\": 12,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 737,\n          \"line\": 12,\n          \"column\": 135\n        }\n      },\n      \"content\": \"Carefully review the security of the code and advise on the quality of the security and areas of improvement.\"\n    }\n  ]\n}"
+        "value": "{\n  \"code_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"c95e339f-f7d0-4129-9008-509b54165291\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 361,\n          \"line\": 10,\n          \"column\": 20\n        },\n        \"end\": {\n          \"offset\": 469,\n          \"line\": 10,\n          \"column\": 128\n        }\n      },\n      \"content\": \"Carefully review the code and test results and advise on the quality of the code and areas of improvement.\"\n    }\n  ],\n  \"ux_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"03194b46-f913-45d7-b262-52c6ec0b94a6\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 488,\n          \"line\": 11,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 601,\n          \"line\": 11,\n          \"column\": 131\n        }\n      },\n      \"content\": \"Carefully review the user experience and advise on the quality of the user experience and areas of improvement.\"\n    }\n  ],\n  \"security_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"5ffb5449-260b-460c-9511-b69c90722d3f\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 626,\n          \"line\": 12,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 737,\n          \"line\": 12,\n          \"column\": 135\n        }\n      },\n      \"content\": \"Carefully review the security of the code and advise on the quality of the security and areas of improvement.\"\n    }\n  ]\n}"
       },
       "meta": {
         "objectData": {
@@ -338,7 +338,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "43717da5-5b7f-422c-854a-c13cb8afaa7d",
+      "nodeId": "6773830c-5796-4b93-9547-879bf5961d43",
       "location": {
         "start": {
           "offset": 739,
@@ -355,7 +355,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "27464451-ab7d-4bc8-a3ad-5cc11dda5333",
+      "nodeId": "cdafcdac-8cd5-462a-9e71-c10ea1a4cbaa",
       "location": {
         "start": {
           "offset": 741,
@@ -375,7 +375,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "092f5c8a-980f-462d-b843-0c1e4745dee2",
+            "nodeId": "2925572e-8917-488b-8f8e-509b13adf243",
             "location": {
               "start": {
                 "offset": 741,
@@ -409,7 +409,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "4c83a1a6-9d1e-4e44-93f2-a139fd55dc5d",
+      "nodeId": "fc9d82e8-6289-4426-b863-3db2a7dbe9d0",
       "location": {
         "start": {
           "offset": 872,
@@ -426,7 +426,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "d417b3cd-df6d-49a8-9fbb-c5de250bd321",
+      "nodeId": "2fec801a-99a0-4baa-911e-a09e3881b394",
       "location": {
         "start": {
           "offset": 874,
@@ -446,7 +446,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "4f0a1478-aa1b-4e26-9c46-bd9293a2aeba",
+            "nodeId": "083924c8-e686-48d2-af5c-07cb7c495178",
             "location": {
               "start": {
                 "offset": 874,
@@ -468,7 +468,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "cb29db59-d866-4eb5-82af-a593f8a86a5f",
+            "nodeId": "472ea921-5458-48b5-8a84-78f23e774cd9",
             "location": {
               "start": {
                 "offset": 898,
@@ -485,7 +485,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "d9ed0ad0-05b5-46be-9bb4-56edc8468c75",
+            "nodeId": "19d8b4ca-11ad-45d2-812c-065a39c42eca",
             "location": {
               "start": {
                 "offset": 0,

@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2025-05-27T06:50:27.379Z
+// Generated from grammar at 2025-05-27T06:58:07.004Z
 
 Prism.languages.mlld = {
   'comment': {

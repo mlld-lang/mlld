@@ -72,11 +72,7 @@ export async function evaluateExec(
         throw new Error('Exec command directive missing command');
       }
       
-      // TODO: Remove this workaround when issue #51 is fixed
-      // The grammar incorrectly splits the command template across multiple top-level nodes
-      // For now, we'll just use what we have in the command field
-      // This means complex commands with variables won't work properly
-      console.warn('Exec command may be incomplete due to grammar bug #51');
+      // Command template is properly parsed with variable interpolation
       
       // Get parameter names if any
       const params = directive.values?.params || [];
