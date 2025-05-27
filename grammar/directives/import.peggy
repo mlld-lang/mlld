@@ -26,23 +26,15 @@ AtImport
       const importsRaw = imports.map(item => {
         if (typeof item === 'string') {
           return item;
-        } else if (item.type === 'namespace') {
-          return `* as ${item.alias}`;
         } else {
           return `${item.original} as ${item.alias}`;
         }
       }).join(", ");
       
-      // Determine subtype (importAll, importNamespace, or importSelected)
+      // Determine subtype (importAll or importSelected)
       let subtype;
-      if (imports.length === 1) {
-        if (imports[0] === '*') {
-          subtype = 'importAll';
-        } else if (imports[0].type === 'namespace') {
-          subtype = 'importNamespace';
-        } else {
-          subtype = 'importSelected';
-        }
+      if (imports.length === 1 && imports[0] === '*') {
+        subtype = 'importAll';
       } else {
         subtype = 'importSelected';
       }
@@ -53,11 +45,6 @@ AtImport
           if (typeof item === 'string') {
             return helpers.createVariableReferenceNode('import', { 
               identifier: item
-            });
-          } else if (item.type === 'namespace') {
-            return helpers.createVariableReferenceNode('import', { 
-              identifier: '*',
-              alias: item.alias
             });
           } else {
             return helpers.createVariableReferenceNode('import', { 
@@ -101,10 +88,8 @@ AtImport
 
 // Using standard list pattern from patterns/lists.peggy
 ImportsList
-  = "*" alias:(" as " aliasName:BaseIdentifier { return aliasName; })? {
-      if (alias) {
-        return [{ type: 'namespace', alias: alias }];
-      }
+  = "*" {
+      // * means import all variables with their original names - cannot be aliased
       return ["*"];
     }
   / first:ImportItem rest:(CommaSpace item:ImportItem { return item; })* {

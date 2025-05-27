@@ -11,7 +11,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "373a8cf9-8aad-45f3-a83b-332cfb8ea6ed",
+      "nodeId": "0234e9bc-5b14-4669-b2ea-30b351202d3d",
       "location": {
         "start": {
           "offset": 0,
@@ -31,7 +31,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "905c3b22-5cd8-4945-bc2b-425bbce4e3a8",
+            "nodeId": "77601b6b-33c4-44b5-a112-c7c5398794da",
             "location": {
               "start": {
                 "offset": 0,
@@ -53,7 +53,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "50f08383-a233-479f-ac47-6ca6f4fc5933",
+            "nodeId": "c4664da5-4283-415d-b050-1d8e1ce256b0",
             "location": {
               "start": {
                 "offset": 34,
@@ -70,7 +70,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "1a340ced-3722-40d1-ba18-9bced4cd1129",
+            "nodeId": "e7315728-02c9-490d-b5af-312d9e6373b1",
             "location": {
               "start": {
                 "offset": 0,
@@ -88,7 +88,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "95773079-5922-4519-b7ea-b9de72e7aff8",
+            "nodeId": "00fd7fa3-c7d7-424e-92cb-76e5b5e28bce",
             "location": {
               "start": {
                 "offset": 53,
@@ -119,7 +119,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "acafd747-1a10-43a3-b3e4-1e8213c32956",
+      "nodeId": "b9ff3d77-e816-4a2a-af2c-905e80f8ed1d",
       "location": {
         "start": {
           "offset": 56,
@@ -136,7 +136,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "8ce6af0c-325a-41ad-bbff-cfd543ab0f66",
+      "nodeId": "f3c1e34f-5b5a-46af-b86a-b6de469c24e5",
       "location": {
         "start": {
           "offset": 57,
@@ -156,7 +156,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "03079928-22f2-42f4-833b-067c82ed073f",
+            "nodeId": "397f6d23-7f02-42e6-b3db-35654f876dda",
             "location": {
               "start": {
                 "offset": 63,
@@ -175,7 +175,7 @@
         "args": [
           {
             "type": "Text",
-            "nodeId": "bb913650-8745-457a-8de9-524dcc8a7dc3",
+            "nodeId": "b40db2b3-71eb-4ffe-a7d2-5d4422d6650a",
             "location": {
               "start": {
                 "offset": 76,
