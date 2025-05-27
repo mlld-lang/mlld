@@ -103,19 +103,15 @@ export async function evaluateData(
       const complexVariable = createComplexDataVariable(identifier, dataValue);
       current[lastField] = dataValue; // Store the raw DataValue
       
-      // Update the root variable
-      env.setVariable(rootName, createDataVariable(rootName, rootValue, {
-        definedAt: sourceLocationToInterpreterLocation(directive.location)
-      }));
+      // Update the root variable in-place (don't redefine it)
+      rootVar.value = rootValue;
     } else {
       // Simple value - extract and store directly
       const plainValue = extractPlainValue(dataValue);
       current[lastField] = plainValue;
       
-      // Update the root variable
-      env.setVariable(rootName, createDataVariable(rootName, rootValue, {
-        definedAt: sourceLocationToInterpreterLocation(directive.location)
-      }));
+      // Update the root variable in-place (don't redefine it)
+      rootVar.value = rootValue;
     }
   }
   

@@ -91,14 +91,24 @@ export class VariableRedefinitionError extends MlldInterpreterError {
     variableName: string,
     existingLocation: InterpreterLocation,
     newLocation: InterpreterLocation,
-    importPath?: string
+    importPath?: string,
+    isExistingImported?: boolean
   ): VariableRedefinitionError {
-    const suggestion = importPath
-      ? `Consider using import aliases: @import { ${variableName} as ${variableName}Imported } from "${importPath}"`
-      : 'Consider using import aliases to avoid naming conflicts';
+    let message: string;
+    let suggestion: string;
+    
+    if (isExistingImported) {
+      message = `Variable '${variableName}' is already imported and cannot be redefined locally`;
+      suggestion = importPath
+        ? `Consider using import aliases: @import { ${variableName} as ${variableName}Imported } from "${importPath}"`
+        : 'Consider using import aliases or a different variable name';
+    } else {
+      message = `Variable '${variableName}' is already defined locally and cannot be imported`;
+      suggestion = `Consider using import aliases: @import { ${variableName} as ${variableName}Imported } from the import file`;
+    }
 
     return new VariableRedefinitionError(
-      `Variable '${variableName}' is already defined and cannot be redefined`,
+      message,
       {
         context: {
           variableName,

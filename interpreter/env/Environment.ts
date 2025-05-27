@@ -59,20 +59,43 @@ export class Environment {
     // Check if variable already exists in this scope
     if (this.variables.has(name)) {
       const existing = this.variables.get(name)!;
-      throw VariableRedefinitionError.forSameFile(
-        name,
-        existing.metadata?.definedAt || { line: 0, column: 0 },
-        variable.metadata?.definedAt || { line: 0, column: 0 }
-      );
+      
+      // Check if this is an import conflict (one imported, one local)
+      const existingIsImported = existing.metadata?.isImported || false;
+      const newIsImported = variable.metadata?.isImported || false;
+      
+      if (existingIsImported !== newIsImported) {
+        // Import vs local conflict
+        const importPath = existingIsImported ? existing.metadata?.importPath : variable.metadata?.importPath;
+        throw VariableRedefinitionError.forImportConflict(
+          name,
+          existing.metadata?.definedAt || { line: 0, column: 0 },
+          variable.metadata?.definedAt || { line: 0, column: 0 },
+          importPath,
+          existingIsImported
+        );
+      } else {
+        // Same-file redefinition
+        throw VariableRedefinitionError.forSameFile(
+          name,
+          existing.metadata?.definedAt || { line: 0, column: 0 },
+          variable.metadata?.definedAt || { line: 0, column: 0 }
+        );
+      }
     }
     
-    // Check if variable exists in parent scope (import conflict)
+    // Check if variable exists in parent scope (true parent-child import conflict)
     if (this.parent?.hasVariable(name)) {
       const existing = this.parent.getVariable(name)!;
+      const isExistingImported = existing.metadata?.isImported || false;
+      const importPath = existing.metadata?.importPath;
+      
       throw VariableRedefinitionError.forImportConflict(
         name,
         existing.metadata?.definedAt || { line: 0, column: 0 },
-        variable.metadata?.definedAt || { line: 0, column: 0 }
+        variable.metadata?.definedAt || { line: 0, column: 0 },
+        importPath,
+        isExistingImported
       );
     }
     
@@ -254,9 +277,11 @@ export class Environment {
   }
   
   mergeChild(child: Environment): void {
-    // Merge child variables into this environment
+    // Merge child variables into this environment without immutability checks
+    // This is used for internal operations like nested data assignments
     for (const [name, variable] of child.variables) {
-      this.setVariable(name, variable);
+      // Use direct assignment to bypass immutability checks
+      this.variables.set(name, variable);
     }
     
     // Merge child nodes

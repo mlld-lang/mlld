@@ -79,7 +79,16 @@ export async function evaluateImport(
     const childVars = childEnv.getCurrentVariables();
     
     for (const [name, variable] of childVars) {
-      env.setVariable(name, variable);
+      // Mark variable as imported
+      const importedVariable = {
+        ...variable,
+        metadata: {
+          ...variable.metadata,
+          isImported: true,
+          importPath: resolvedPath
+        }
+      };
+      env.setVariable(name, importedVariable);
     }
     
   } else if (directive.subtype === 'importSelected') {
@@ -91,7 +100,16 @@ export async function evaluateImport(
       if (variable) {
         // Use alias if provided, otherwise use original name
         const targetName = importNode.alias || varName;
-        env.setVariable(targetName, variable);
+        // Mark variable as imported
+        const importedVariable = {
+          ...variable,
+          metadata: {
+            ...variable.metadata,
+            isImported: true,
+            importPath: resolvedPath
+          }
+        };
+        env.setVariable(targetName, importedVariable);
       } else {
         // Variable not found in imported file
         throw new Error(`Variable '${varName}' not found in imported file: ${resolvedPath}`);

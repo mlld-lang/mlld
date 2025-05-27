@@ -101,8 +101,8 @@ describe('Output Format Tests', () => {
       const source = `
 @text message = "Hello"
 @data config = {"version": "1.0"}
-@path filePath = "./test.md"
-@exec cmd = @run echo "test"
+@path filePath = [./test.md]
+@exec cmd = @run [echo "test"]
 `;
       
       const result = await interpret(source, {

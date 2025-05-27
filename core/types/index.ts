@@ -84,6 +84,8 @@ export interface MlldVariable {
     createdAt?: number;
     modifiedAt?: number;
     definedAt?: any; // SourceLocation
+    isImported?: boolean;
+    importPath?: string;
   };
 }
 
