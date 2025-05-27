@@ -1,33 +1,23 @@
-# README
+# Meld Examples
 
-## Architecture
+This directory contains example Meld documents demonstrating various features and capabilities.
 
-We have some architecture.
+## Installation
 
-It's pretty simple.
+To get started with Meld:
 
-There is thing and that thing.
+1. Install the package: `npm install -g mlld`
+2. Create a `.mld` file with your content
+3. Run: `mlld your-file.mld`
 
-### Caveats
+## Features
 
-Some things work, some things don't.
+- Dynamic content generation
+- File imports and composition
+- Template interpolation
+- Command execution
+- Path resolution
 
-## Code Standards
+## Getting Started
 
-We like our code neat and tidy.
-
-Don't you?
-
-### Caveats
-
-It's not always neat and tidy.
-
-### Something else
-
-I have nothing else to say, but I wanted to say this.
-
-## Wow!
-
-Another section
-
-
+Check out the `simple.mld` example to see basic Meld syntax in action.

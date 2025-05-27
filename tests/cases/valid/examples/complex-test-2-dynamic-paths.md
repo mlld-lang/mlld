@@ -3,9 +3,9 @@
 @data env = {
   "mode": "development",
   "paths": {
-    "dev": "./dev-config",
-    "prod": "./prod-config",
-    "test": "./test-config"
+    "dev": "./files/dev-config",
+    "prod": "./files/prod-config",
+    "test": "./files/test-config"
   }
 }
 

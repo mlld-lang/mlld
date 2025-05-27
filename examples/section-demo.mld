@@ -17,7 +17,7 @@ sections from markdown files.
 @text intro = "Introduction" from [docs/guide.md]
 
 ### Extract and rename:
-@text docs = "Installation" from [README.md] as "# Getting Started"
+@text docs = "Installation" from [files/README.md] as "# Getting Started"
 @add @docs
 
 ## Direct section inclusion
