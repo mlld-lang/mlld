@@ -11,7 +11,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "e873f507-0c48-4e76-927a-77b81433c70f",
+      "nodeId": "00381f75-9182-4011-a6dc-3c571ad871a2",
       "location": {
         "start": {
           "offset": 0,
@@ -31,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "bd08aad3-f355-49d7-bbdd-2c4741075045",
+            "nodeId": "84a8caf8-adbf-4c0c-af12-cf636df5fef6",
             "location": {
               "start": {
                 "offset": 0,
@@ -51,7 +51,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "23013606-aa63-4f8e-8d2f-3fab517b0e46",
+            "nodeId": "e1819e5a-6be5-4a7f-ae13-dee09d0f7125",
             "location": {
               "start": {
                 "offset": 13,
@@ -80,7 +80,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "d62f6335-55d2-4dd8-bdd9-e8d04ea809d9",
+      "nodeId": "ff07a15f-c34e-4fec-b454-cbe6793473fa",
       "location": {
         "start": {
           "offset": 24,
@@ -97,7 +97,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "a6638054-dbc5-4d6b-9ea8-d6652b5e9bb4",
+      "nodeId": "e5b49b6d-dd99-4723-8a30-a5028aad918d",
       "location": {
         "start": {
           "offset": 25,
@@ -105,19 +105,19 @@
           "column": 1
         },
         "end": {
-          "offset": 277,
-          "line": 9,
-          "column": 2
+          "offset": 63,
+          "line": 2,
+          "column": 39
         }
       },
       "kind": "exec",
-      "subtype": "execCode",
-      "source": "code",
+      "subtype": "execCommand",
+      "source": "command",
       "values": {
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "08eb8484-2f5b-4248-bed8-93b04f0b9c19",
+            "nodeId": "78192ceb-f3c4-469d-a5e6-7be3bfc5fa68",
             "location": {
               "start": {
                 "offset": 25,
@@ -125,9 +125,9 @@
                 "column": 1
               },
               "end": {
-                "offset": 277,
-                "line": 9,
-                "column": 2
+                "offset": 63,
+                "line": 2,
+                "column": 39
               }
             },
             "content": "format"
@@ -135,45 +135,6 @@
         ],
         "params": [
           "name"
-        ],
-        "lang": [
-          {
-            "type": "Text",
-            "nodeId": "fcb59990-b1f1-4575-95d9-cf70b2abb4c3",
-            "location": {
-              "start": {
-                "offset": 52,
-                "line": 2,
-                "column": 28
-              },
-              "end": {
-                "offset": 277,
-                "line": 9,
-                "column": 2
-              }
-            },
-            "content": "javascript"
-          }
-        ],
-        "args": [],
-        "code": [
-          {
-            "type": "Text",
-            "nodeId": "ae0aabe5-efdf-4275-a564-ab2e6e860c0e",
-            "location": {
-              "start": {
-                "offset": 63,
-                "line": 2,
-                "column": 39
-              },
-              "end": {
-                "offset": 277,
-                "line": 9,
-                "column": 2
-              }
-            },
-            "content": "\n  // Format the name with title case\n  const words = name.split(' ');\n  const titled = words.map(word => {\n    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();\n  });\n  return titled.join(' ');\n"
-          }
         ]
       },
       "raw": {
@@ -181,25 +142,21 @@
         "params": [
           "name"
         ],
-        "lang": "javascript",
-        "args": [],
-        "code": "\n  // Format the name with title case\n  const words = name.split(' ');\n  const titled = words.map(word => {\n    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();\n  });\n  return titled.join(' ');\n"
+        "command": "javascript "
       },
       "meta": {
-        "isMultiLine": true,
-        "language": "javascript",
-        "hasVariables": false,
-        "parameterCount": 1
+        "parameterCount": 1,
+        "commandType": "code"
       }
     },
     {
-      "type": "Newline",
-      "nodeId": "d3302ae7-6ab1-4eb8-925a-4e626898bcae",
+      "type": "Text",
+      "nodeId": "551e220b-681a-4836-8f8b-f5b8d4d10ae2",
       "location": {
         "start": {
-          "offset": 277,
-          "line": 9,
-          "column": 2
+          "offset": 63,
+          "line": 2,
+          "column": 39
         },
         "end": {
           "offset": 278,
@@ -207,11 +164,11 @@
           "column": 1
         }
       },
-      "content": "\n"
+      "content": "[\n  // Format the name with title case\n  const words = name.split(' ');\n  const titled = words.map(word => {\n    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();\n  });\n  return titled.join(' ');\n]\n"
     },
     {
       "type": "Directive",
-      "nodeId": "2ef7b33a-3da5-496e-9133-508645822d66",
+      "nodeId": "a2abba6e-d91a-4b7c-9da5-4ec5d3bdc04d",
       "location": {
         "start": {
           "offset": 278,
@@ -231,7 +188,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "615f55b5-44a1-4dbb-bc2d-e2fbffffcb3a",
+            "nodeId": "33d22b33-d347-4734-9932-c91202f9222d",
             "location": {
               "start": {
                 "offset": 284,
@@ -250,7 +207,7 @@
         "args": [
           {
             "type": "Text",
-            "nodeId": "4b2c5088-db17-4d62-8edb-52425c61c6ad",
+            "nodeId": "63ee5470-bed1-4b81-b54f-58e9dc5211b6",
             "location": {
               "start": {
                 "offset": 291,
@@ -279,7 +236,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "3f724692-4631-46d1-978f-c9ad46371826",
+      "nodeId": "73cb16e6-7505-48ff-b1da-2951950229b4",
       "location": {
         "start": {
           "offset": 303,

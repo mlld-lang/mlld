@@ -21,7 +21,7 @@ by the @run directive. It can be used in these forms:
 // Primary @exec directive - all variants
 AtExec
   // CommandCore pattern must be first because it handles bracketed commands like [echo "hello"]
-  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ command:CommandCore {
+  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ command:ExecRHS {
       helpers.debug('AtExec matched command definition', { id, params, command });
       
       // Create identifier node
@@ -35,19 +35,19 @@ AtExec
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        ...command.values
+        command: command.command
       };
       
       const raw = {
         identifier: id,
         params: rawParams,
-        ...command.raw
+        command: command.raw
       };
       
       // Create meta object
       const metaObj = {
-        ...command.meta,
-        parameterCount: processedParams.length
+        parameterCount: processedParams.length,
+        commandType: command.type
       };
       
       // Add metadata if present

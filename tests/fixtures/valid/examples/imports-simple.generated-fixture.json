@@ -7,11 +7,11 @@
   "expected": null,
   "expectedError": null,
   "expectedWarning": null,
-  "actualOutput": "\n\n",
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "359e96b6-70fb-40b9-b8bc-5429b810d9fb",
+      "nodeId": "d4ae311f-f751-4def-8207-79ae36362b6c",
       "location": {
         "start": {
           "offset": 0,
@@ -31,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "ce77cff7-32de-4aa7-b697-477aef368ea4",
+            "nodeId": "ba5b8f8e-4c7f-4129-970e-76e14aea76b3",
             "location": {
               "start": {
                 "offset": 0,
@@ -51,7 +51,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "6ee29a34-d33e-4195-85fb-89b2a56caa30",
+            "nodeId": "4a07fd45-30c2-4c7c-8eda-fc12ada98711",
             "location": {
               "start": {
                 "offset": 23,
@@ -80,7 +80,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "45445d7b-2044-478c-82a5-e607502ad9ba",
+      "nodeId": "65611646-1af3-4888-bad6-1cdb15c67f01",
       "location": {
         "start": {
           "offset": 41,
@@ -97,7 +97,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "e8b67014-500e-48fa-981f-93018384522a",
+      "nodeId": "3df051be-dacd-4ebd-ac3b-8a83aa8a9224",
       "location": {
         "start": {
           "offset": 42,
@@ -117,7 +117,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "56108524-8a6d-4231-8729-7282d54cb8c4",
+            "nodeId": "bb939fd7-1870-4502-b8f9-74d8f9dc725b",
             "location": {
               "start": {
                 "offset": 0,
@@ -148,7 +148,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "4a8b35e2-f291-4ebe-b986-3c735de9f6f5",
+      "nodeId": "2c42de32-1f2f-415a-8b6e-33bb225f5be6",
       "location": {
         "start": {
           "offset": 58,
@@ -165,7 +165,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "1e33e1d5-a9e1-4afa-9ea9-6355df2ba81f",
+      "nodeId": "075a1df7-db50-473d-8a80-5b58c5a17ca8",
       "location": {
         "start": {
           "offset": 59,
@@ -185,7 +185,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "7c54516e-0eda-41e8-9526-4445309f0655",
+            "nodeId": "af7f3769-d7de-47e5-9370-fae29831b986",
             "location": {
               "start": {
                 "offset": 0,
@@ -205,7 +205,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "79b511c1-8ace-41f2-9ee5-d4108d7e9c4c",
+            "nodeId": "38020097-0517-419e-9b6c-90c4b0207ad8",
             "location": {
               "start": {
                 "offset": 74,
@@ -234,7 +234,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "7d1a4cd8-7f65-4d88-ab4e-2a322bc4e726",
+      "nodeId": "698884bd-dce0-444e-9759-9aa5e7fe3a8d",
       "location": {
         "start": {
           "offset": 86,

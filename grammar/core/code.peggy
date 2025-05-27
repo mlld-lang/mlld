@@ -95,7 +95,7 @@ LanguageCodeCore
 // This is the key abstraction that can be used by both run.peggy and exec.peggy
 // for consistent handling of language + code block patterns in different contexts
 RunLanguageCodeCore
-  = language:RunCodeLanguage _ args:RunCodeArguments? _ code:DirectCodeContent {
+  = &(RunCodeLanguage _) language:RunCodeLanguage _ args:RunCodeArguments? _ code:DirectCodeContent {
       helpers.debug('RunLanguageCodeCore matched', { language, args, code });
       
       // Create language node

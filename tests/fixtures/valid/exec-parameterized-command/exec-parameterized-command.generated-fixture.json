@@ -8,20 +8,163 @@
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": null,
-  "parseError": {
-    "message": "Expected \"@\", \"bash\", \"javascript\", \"js\", \"py\", \"python\", \"sh\", Wrapped command content, or whitespace but \"[\" found.",
-    "location": {
-      "start": {
-        "offset": 149,
-        "line": 5,
-        "column": 27
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "37983ca7-3839-4262-aa69-e6fd088a8a5f",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 123,
+          "line": 5,
+          "column": 1
+        }
       },
-      "end": {
-        "offset": 150,
-        "line": 5,
-        "column": 28
+      "content": "# Parameterized Exec Command (Valid)\n\nThis example shows the correct way to create a parameterized command using `@exec`.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "8cb57cfa-4cc2-439b-80bc-a55686d22155",
+      "location": {
+        "start": {
+          "offset": 123,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 197,
+          "line": 5,
+          "column": 75
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "5fbd623c-8587-4e95-af42-5657a1c7cc79",
+            "location": {
+              "start": {
+                "offset": 123,
+                "line": 5,
+                "column": 1
+              },
+              "end": {
+                "offset": 197,
+                "line": 5,
+                "column": 75
+              }
+            },
+            "content": "codecat"
+          }
+        ],
+        "params": [
+          "dir"
+        ]
+      },
+      "raw": {
+        "identifier": "codecat",
+        "params": [
+          "dir"
+        ],
+        "command": "find @dir -type f -name \"*.js\" -exec cat {} \\;"
+      },
+      "meta": {
+        "parameterCount": 1,
+        "commandType": "code"
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "d83eda62-9fe7-4da5-b28a-829b2fbc4cf9",
+      "location": {
+        "start": {
+          "offset": 197,
+          "line": 5,
+          "column": 75
+        },
+        "end": {
+          "offset": 199,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "35cb4c00-1b06-4bf3-93b8-c4769bc4d7eb",
+      "location": {
+        "start": {
+          "offset": 199,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 221,
+          "line": 7,
+          "column": 23
+        }
+      },
+      "kind": "run",
+      "subtype": "runExec",
+      "source": "exec",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "11382245-5555-4b81-a9c2-beeda5b74c2b",
+            "location": {
+              "start": {
+                "offset": 205,
+                "line": 7,
+                "column": 7
+              },
+              "end": {
+                "offset": 221,
+                "line": 7,
+                "column": 23
+              }
+            },
+            "content": "codecat"
+          }
+        ],
+        "args": [
+          {
+            "type": "Text",
+            "nodeId": "8890fc20-248c-4186-8650-4953d3530a85",
+            "location": {
+              "start": {
+                "offset": 213,
+                "line": 7,
+                "column": 15
+              },
+              "end": {
+                "offset": 220,
+                "line": 7,
+                "column": 22
+              }
+            },
+            "content": "./src"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "codecat",
+        "args": [
+          "./src"
+        ]
+      },
+      "meta": {
+        "argumentCount": 1
       }
     }
-  }
+  ],
+  "parseError": null
 }

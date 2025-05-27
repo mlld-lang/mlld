@@ -2946,19 +2946,19 @@ function peg$parse(input, options) {
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        ...command.values
+        command: command.command
       };
       
       const raw = {
         identifier: id,
         params: rawParams,
-        ...command.raw
+        command: command.raw
       };
       
       // Create meta object
       const metaObj = {
-        ...command.meta,
-        parameterCount: processedParams.length
+        parameterCount: processedParams.length,
+        commandType: command.type
       };
       
       // Add metadata if present
@@ -11400,21 +11400,45 @@ function peg$parse(input, options) {
   }
 
   function peg$parseRunLanguageCodeCore() {
-    var s0, s1, s2, s3, s4, s5;
+    var s0, s1, s2, s3, s4, s5, s6;
 
     s0 = peg$currPos;
-    s1 = peg$parseRunCodeLanguage();
-    if (s1 !== peg$FAILED) {
-      s2 = peg$parse_();
-      s3 = peg$parseRunCodeArguments();
-      if (s3 === peg$FAILED) {
-        s3 = null;
-      }
+    s1 = peg$currPos;
+    peg$silentFails++;
+    s2 = peg$currPos;
+    s3 = peg$parseRunCodeLanguage();
+    if (s3 !== peg$FAILED) {
       s4 = peg$parse_();
-      s5 = peg$parseDirectCodeContent();
-      if (s5 !== peg$FAILED) {
-        peg$savedPos = s0;
-        s0 = peg$f187(s1, s3, s5);
+      s3 = [s3, s4];
+      s2 = s3;
+    } else {
+      peg$currPos = s2;
+      s2 = peg$FAILED;
+    }
+    peg$silentFails--;
+    if (s2 !== peg$FAILED) {
+      peg$currPos = s1;
+      s1 = undefined;
+    } else {
+      s1 = peg$FAILED;
+    }
+    if (s1 !== peg$FAILED) {
+      s2 = peg$parseRunCodeLanguage();
+      if (s2 !== peg$FAILED) {
+        s3 = peg$parse_();
+        s4 = peg$parseRunCodeArguments();
+        if (s4 === peg$FAILED) {
+          s4 = null;
+        }
+        s5 = peg$parse_();
+        s6 = peg$parseDirectCodeContent();
+        if (s6 !== peg$FAILED) {
+          peg$savedPos = s0;
+          s0 = peg$f187(s2, s4, s6);
+        } else {
+          peg$currPos = s0;
+          s0 = peg$FAILED;
+        }
       } else {
         peg$currPos = s0;
         s0 = peg$FAILED;
@@ -14083,7 +14107,7 @@ function peg$parse(input, options) {
             }
             if (s10 !== peg$FAILED) {
               s11 = peg$parse_();
-              s12 = peg$parseCommandCore();
+              s12 = peg$parseExecRHS();
               if (s12 !== peg$FAILED) {
                 peg$savedPos = s0;
                 s0 = peg$f259(s4, s5, s6, s12);

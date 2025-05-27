@@ -8,20 +8,513 @@
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": null,
-  "parseError": {
-    "message": "Expected \"@\", \"bash\", \"javascript\", \"js\", \"py\", \"python\", \"sh\", Wrapped command content, or whitespace but \"[\" found.",
-    "location": {
-      "start": {
-        "offset": 767,
-        "line": 15,
-        "column": 27
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "e3ca9d94-08f1-450a-853a-d42234a11319",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 41,
+          "line": 1,
+          "column": 42
+        }
       },
-      "end": {
-        "offset": 768,
-        "line": 15,
-        "column": 28
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "c7c00362-b2d5-49fb-ad55-fa8fe4619fa6",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "imported_title"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "5e9a4087-d194-45cd-a0c3-a8369aaf0900",
+            "location": {
+              "start": {
+                "offset": 23,
+                "line": 1,
+                "column": 24
+              },
+              "end": {
+                "offset": 41,
+                "line": 1,
+                "column": 42
+              }
+            },
+            "content": "Imported Content"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "imported_title",
+        "content": "Imported Content"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "16bbac68-f7b2-46ad-a507-1fadc034bbee",
+      "location": {
+        "start": {
+          "offset": 41,
+          "line": 1,
+          "column": 42
+        },
+        "end": {
+          "offset": 43,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "bf0c62d7-350d-48b5-af54-b5651662b462",
+      "location": {
+        "start": {
+          "offset": 43,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 325,
+          "line": 7,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "af250fee-85fa-41e3-8858-f9810046d7cb",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "role"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "architect": [
+              {
+                "type": "Text",
+                "nodeId": "ace2d724-d66f-4fee-a311-1aacd75a7685",
+                "location": {
+                  "start": {
+                    "offset": 75,
+                    "line": 4,
+                    "column": 18
+                  },
+                  "end": {
+                    "offset": 146,
+                    "line": 4,
+                    "column": 89
+                  }
+                },
+                "content": "You are a senior architect skilled in assessing TypeScript codebases."
+              }
+            ],
+            "ux": [
+              {
+                "type": "Text",
+                "nodeId": "5744defb-c6a2-4eb6-a8ec-27f436cf5c78",
+                "location": {
+                  "start": {
+                    "offset": 158,
+                    "line": 5,
+                    "column": 11
+                  },
+                  "end": {
+                    "offset": 226,
+                    "line": 5,
+                    "column": 79
+                  }
+                },
+                "content": "You are a senior ux designer skilled in assessing user experience."
+              }
+            ],
+            "security": [
+              {
+                "type": "Text",
+                "nodeId": "6ec5d023-6a7f-4cdf-b8ce-5f9d39cd62fb",
+                "location": {
+                  "start": {
+                    "offset": 244,
+                    "line": 6,
+                    "column": 17
+                  },
+                  "end": {
+                    "offset": 323,
+                    "line": 6,
+                    "column": 96
+                  }
+                },
+                "content": "You are a senior security engineer skilled in assessing TypeScript codebases."
+              }
+            ]
+          }
+        }
+      },
+      "raw": {
+        "identifier": "role",
+        "value": "{\n  \"architect\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"ace2d724-d66f-4fee-a311-1aacd75a7685\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 75,\n          \"line\": 4,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 146,\n          \"line\": 4,\n          \"column\": 89\n        }\n      },\n      \"content\": \"You are a senior architect skilled in assessing TypeScript codebases.\"\n    }\n  ],\n  \"ux\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"5744defb-c6a2-4eb6-a8ec-27f436cf5c78\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 158,\n          \"line\": 5,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 226,\n          \"line\": 5,\n          \"column\": 79\n        }\n      },\n      \"content\": \"You are a senior ux designer skilled in assessing user experience.\"\n    }\n  ],\n  \"security\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"6ec5d023-6a7f-4cdf-b8ce-5f9d39cd62fb\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 244,\n          \"line\": 6,\n          \"column\": 17\n        },\n        \"end\": {\n          \"offset\": 323,\n          \"line\": 6,\n          \"column\": 96\n        }\n      },\n      \"content\": \"You are a senior security engineer skilled in assessing TypeScript codebases.\"\n    }\n  ]\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 3
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "206ed472-4279-4a0c-9842-4699be4135bc",
+      "location": {
+        "start": {
+          "offset": 325,
+          "line": 7,
+          "column": 2
+        },
+        "end": {
+          "offset": 327,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "8c04962c-a2f1-4b75-878d-2320676f2776",
+      "location": {
+        "start": {
+          "offset": 327,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 739,
+          "line": 13,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "0ce1c89d-d051-44ea-b8c7-a15e12d0acb2",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "task"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "code_review": [
+              {
+                "type": "Text",
+                "nodeId": "fa694a14-9001-464d-ae5e-36e8c3ebf942",
+                "location": {
+                  "start": {
+                    "offset": 361,
+                    "line": 10,
+                    "column": 20
+                  },
+                  "end": {
+                    "offset": 469,
+                    "line": 10,
+                    "column": 128
+                  }
+                },
+                "content": "Carefully review the code and test results and advise on the quality of the code and areas of improvement."
+              }
+            ],
+            "ux_review": [
+              {
+                "type": "Text",
+                "nodeId": "e6462127-f167-46b5-b3fd-a3b4a4d24ab2",
+                "location": {
+                  "start": {
+                    "offset": 488,
+                    "line": 11,
+                    "column": 18
+                  },
+                  "end": {
+                    "offset": 601,
+                    "line": 11,
+                    "column": 131
+                  }
+                },
+                "content": "Carefully review the user experience and advise on the quality of the user experience and areas of improvement."
+              }
+            ],
+            "security_review": [
+              {
+                "type": "Text",
+                "nodeId": "b1b06689-9833-4dcb-817c-55ce5b656381",
+                "location": {
+                  "start": {
+                    "offset": 626,
+                    "line": 12,
+                    "column": 24
+                  },
+                  "end": {
+                    "offset": 737,
+                    "line": 12,
+                    "column": 135
+                  }
+                },
+                "content": "Carefully review the security of the code and advise on the quality of the security and areas of improvement."
+              }
+            ]
+          }
+        }
+      },
+      "raw": {
+        "identifier": "task",
+        "value": "{\n  \"code_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"fa694a14-9001-464d-ae5e-36e8c3ebf942\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 361,\n          \"line\": 10,\n          \"column\": 20\n        },\n        \"end\": {\n          \"offset\": 469,\n          \"line\": 10,\n          \"column\": 128\n        }\n      },\n      \"content\": \"Carefully review the code and test results and advise on the quality of the code and areas of improvement.\"\n    }\n  ],\n  \"ux_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"e6462127-f167-46b5-b3fd-a3b4a4d24ab2\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 488,\n          \"line\": 11,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 601,\n          \"line\": 11,\n          \"column\": 131\n        }\n      },\n      \"content\": \"Carefully review the user experience and advise on the quality of the user experience and areas of improvement.\"\n    }\n  ],\n  \"security_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"b1b06689-9833-4dcb-817c-55ce5b656381\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 626,\n          \"line\": 12,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 737,\n          \"line\": 12,\n          \"column\": 135\n        }\n      },\n      \"content\": \"Carefully review the security of the code and advise on the quality of the security and areas of improvement.\"\n    }\n  ]\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 3
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "43717da5-5b7f-422c-854a-c13cb8afaa7d",
+      "location": {
+        "start": {
+          "offset": 739,
+          "line": 13,
+          "column": 2
+        },
+        "end": {
+          "offset": 741,
+          "line": 15,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "27464451-ab7d-4bc8-a3ad-5cc11dda5333",
+      "location": {
+        "start": {
+          "offset": 741,
+          "line": 15,
+          "column": 1
+        },
+        "end": {
+          "offset": 872,
+          "line": 15,
+          "column": 132
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "092f5c8a-980f-462d-b843-0c1e4745dee2",
+            "location": {
+              "start": {
+                "offset": 741,
+                "line": 15,
+                "column": 1
+              },
+              "end": {
+                "offset": 872,
+                "line": 15,
+                "column": 132
+              }
+            },
+            "content": "codecat"
+          }
+        ],
+        "params": [
+          "dir"
+        ]
+      },
+      "raw": {
+        "identifier": "codecat",
+        "params": [
+          "dir"
+        ],
+        "command": "find @dir -type f -exec sh -c 'echo \"<$(realpath --relative-to=@dir {})>\"; cat {}; echo \"@dir {})>\"' \\;"
+      },
+      "meta": {
+        "parameterCount": 1,
+        "commandType": "code"
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "4c83a1a6-9d1e-4e44-93f2-a139fd55dc5d",
+      "location": {
+        "start": {
+          "offset": 872,
+          "line": 15,
+          "column": 132
+        },
+        "end": {
+          "offset": 874,
+          "line": 17,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "d417b3cd-df6d-49a8-9fbb-c5de250bd321",
+      "location": {
+        "start": {
+          "offset": 874,
+          "line": 17,
+          "column": 1
+        },
+        "end": {
+          "offset": 908,
+          "line": 17,
+          "column": 35
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "4f0a1478-aa1b-4e26-9c46-bd9293a2aeba",
+            "location": {
+              "start": {
+                "offset": 874,
+                "line": 17,
+                "column": 1
+              },
+              "end": {
+                "offset": 908,
+                "line": 17,
+                "column": 35
+              }
+            },
+            "content": "echo"
+          }
+        ],
+        "params": [
+          "var"
+        ],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "cb29db59-d866-4eb5-82af-a593f8a86a5f",
+            "location": {
+              "start": {
+                "offset": 898,
+                "line": 17,
+                "column": 25
+              },
+              "end": {
+                "offset": 903,
+                "line": 17,
+                "column": 30
+              }
+            },
+            "content": "echo "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "d9ed0ad0-05b5-46be-9bb4-56edc8468c75",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "var"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "echo",
+        "params": [
+          "var"
+        ],
+        "command": "echo @var"
+      },
+      "meta": {
+        "parameterCount": 1,
+        "commandType": "command"
       }
     }
-  }
+  ],
+  "parseError": null
 }
