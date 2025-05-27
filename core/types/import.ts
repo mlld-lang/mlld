@@ -9,7 +9,7 @@ import { ImportMeta } from './meta';
 /**
  * Base Import directive node
  */
-export interface ImportDirectiveNode extends TypedDirectiveNode<'import', 'importAll' | 'importSelected'> {
+export interface ImportDirectiveNode extends TypedDirectiveNode<'import', 'importAll' | 'importSelected' | 'importNamespace'> {
   values: ImportValues;
   raw: ImportRaw;
   meta: ImportMeta;
@@ -33,6 +33,17 @@ export interface ImportSelectedDirectiveNode extends ImportDirectiveNode {
   subtype: 'importSelected';
   values: {
     imports: ImportReferenceNode[]; // One or more items
+    path: ImportValues['path'];
+  };
+}
+
+/**
+ * Import Namespace directive - wildcard imports with alias
+ */
+export interface ImportNamespaceDirectiveNode extends ImportDirectiveNode {
+  subtype: 'importNamespace';
+  values: {
+    imports: [ImportWildcardNode]; // Always a single-item array with '*' and alias
     path: ImportValues['path'];
   };
 }

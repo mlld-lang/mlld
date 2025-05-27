@@ -38,6 +38,11 @@ export function parseDataValue(node: any): DataValue {
     return node; // Return the variable reference node directly
   }
   
+  // Handle bare Text nodes (common in simple data values)
+  if (node?.type === 'Text') {
+    return node.content; // Extract the text content directly
+  }
+  
   // Handle template arrays (arrays containing Text/VariableReference nodes)
   if (Array.isArray(node)) {
     // Special case: single Text node arrays (common in data values)

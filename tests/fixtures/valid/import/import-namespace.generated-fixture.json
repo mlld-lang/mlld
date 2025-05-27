@@ -1,0 +1,318 @@
+{
+  "name": "import-namespace",
+  "description": "Test fixture for valid/import-namespace",
+  "category": "valid",
+  "subcategory": "import-namespace",
+  "input": "# Import Namespace Test\n\nTest namespace imports with aliases.\n\n@import { * as config } from [settings.mld]\n\n@text result = [[Config author: {{config.author}}, API URL: {{config.apiUrl}}]]\n@add @result",
+  "expected": "# Import Namespace Test\n\nTest namespace imports with aliases.\n\nConfig author: Settings Author, API URL: https://api.example.com",
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "44af5dba-107b-49fd-8ad2-f29db8c55ce6",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 63,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "# Import Namespace Test\n\nTest namespace imports with aliases.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "c30fee71-a646-4caf-a4d7-8c3ed81f7ea3",
+      "location": {
+        "start": {
+          "offset": 63,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 106,
+          "line": 5,
+          "column": 44
+        }
+      },
+      "kind": "import",
+      "subtype": "importNamespace",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "f2515c87-9fa8-4a07-9cf3-d3af51271b22",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "*",
+            "alias": "config"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "0d7384d4-1bbc-4a65-aee7-21835ded7d37",
+            "location": {
+              "start": {
+                "offset": 93,
+                "line": 5,
+                "column": 31
+              },
+              "end": {
+                "offset": 105,
+                "line": 5,
+                "column": 43
+              }
+            },
+            "content": "settings.mld"
+          }
+        ]
+      },
+      "raw": {
+        "imports": "* as config",
+        "path": "settings.mld"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "mld",
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "3db6e4d9-1fa6-4c64-84ae-2bb503469a7b",
+      "location": {
+        "start": {
+          "offset": 106,
+          "line": 5,
+          "column": 44
+        },
+        "end": {
+          "offset": 108,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "a1880d43-aea2-4189-99ea-92f0b8e2ce8c",
+      "location": {
+        "start": {
+          "offset": 108,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 187,
+          "line": 7,
+          "column": 80
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplate",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "aea36498-bfb6-47b5-863c-384dc422ca5d",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "result"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "466782f1-4ae5-419a-b74c-d41ba0113d2e",
+            "location": {
+              "start": {
+                "offset": 125,
+                "line": 7,
+                "column": 18
+              },
+              "end": {
+                "offset": 140,
+                "line": 7,
+                "column": 33
+              }
+            },
+            "content": "Config author: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "1aa6c867-c403-41c1-a46c-43ce89f8ad58",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "author"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "ebeafeb0-2b72-4154-b23a-0b0cf3d82710",
+            "location": {
+              "start": {
+                "offset": 157,
+                "line": 7,
+                "column": 50
+              },
+              "end": {
+                "offset": 168,
+                "line": 7,
+                "column": 61
+              }
+            },
+            "content": ", API URL: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "20783aff-669a-488b-9b66-7326489861cc",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "apiUrl"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "result",
+        "content": "Config author: {{config}}, API URL: {{config}}"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "9cb91f12-5d69-4b73-83a4-bd4dfdd10184",
+      "location": {
+        "start": {
+          "offset": 187,
+          "line": 7,
+          "column": 80
+        },
+        "end": {
+          "offset": 188,
+          "line": 8,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "157d164a-4fad-4de7-9de8-e07660a29115",
+      "location": {
+        "start": {
+          "offset": 188,
+          "line": 8,
+          "column": 1
+        },
+        "end": {
+          "offset": 200,
+          "line": 8,
+          "column": 13
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "d647c721-eac5-4808-a3d1-60292b04cc40",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "result"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@result"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

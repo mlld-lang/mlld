@@ -91,6 +91,40 @@ export async function evaluateImport(
       env.setVariable(name, importedVariable);
     }
     
+  } else if (directive.subtype === 'importNamespace') {
+    // Import all variables under a namespace alias
+    const imports = directive.values?.imports || [];
+    const importNode = imports[0]; // Should be single wildcard with alias
+    const alias = importNode?.alias;
+    
+    if (!alias) {
+      throw new Error('Namespace import missing alias');
+    }
+    
+    // Get all variables from child environment
+    const childVars = childEnv.getCurrentVariables();
+    
+    // Create namespace object containing all variables
+    const namespaceObject: Record<string, any> = {};
+    for (const [name, variable] of childVars) {
+      namespaceObject[name] = variable.value;
+    }
+    
+    // Create namespace variable
+    const namespaceVariable = {
+      type: 'data' as const,
+      value: namespaceObject,
+      nodeId: '',
+      location: { line: 0, column: 0 },
+      metadata: {
+        isImported: true,
+        importPath: resolvedPath,
+        isNamespace: true
+      }
+    };
+    
+    env.setVariable(alias, namespaceVariable);
+    
   } else if (directive.subtype === 'importSelected') {
     // Get selected variables from AST
     const imports = directive.values?.imports || [];

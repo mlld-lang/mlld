@@ -172,12 +172,25 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       
       // Set up specific test files that aren't in the examples directory
       if (fixture.name.startsWith('import-')) {
-        // Set up import test files if they don't exist
-        if (!await fileSystem.exists('/config.mld')) {
-          await fileSystem.writeFile('/config.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text author = "Mlld Test Suite"');
+        // Set up files for import alias tests
+        if (fixture.name === 'import-alias') {
+          await fileSystem.writeFile('/config.mld', '@text author = "Config Author"\n@text title = "My Project"');
+          await fileSystem.writeFile('/utils.mld', '@text author = "Utils Author"');
         }
-        if (!await fileSystem.exists('/utils.mld')) {
-          await fileSystem.writeFile('/utils.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text version = "1.0.0"\n@path docs = "./docs"');
+        
+        // Set up files for import namespace tests
+        else if (fixture.name === 'import-namespace') {
+          await fileSystem.writeFile('/settings.mld', '@text author = "Settings Author"\n@text apiUrl = "https://api.example.com"');
+        }
+        
+        // Set up import test files if they don't exist (for other import tests)
+        else {
+          if (!await fileSystem.exists('/config.mld')) {
+            await fileSystem.writeFile('/config.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text author = "Mlld Test Suite"');
+          }
+          if (!await fileSystem.exists('/utils.mld')) {
+            await fileSystem.writeFile('/utils.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text version = "1.0.0"\n@path docs = "./docs"');
+          }
         }
       } else if (fixture.name === 'data-directive') {
         // This fixture seems to be missing context - create the expected variable

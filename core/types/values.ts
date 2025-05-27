@@ -41,12 +41,14 @@ export type ImportNodeArray = Array<ImportReferenceNode | ImportWildcardNode>;
 export interface ImportWildcardNode extends VariableReferenceNode {
   identifier: '*';
   valueType: 'import';
+  alias?: string; // For namespace imports: @import { * as namespace } from "path"
 }
 
 // Type for specific imports
 export interface ImportReferenceNode extends VariableReferenceNode {
   identifier: string; // Any name except '*'
   valueType: 'import';
+  alias?: string; // For aliased imports: @import { name as alias } from "path"
 }
 
 /**

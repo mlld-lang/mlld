@@ -1,0 +1,450 @@
+{
+  "name": "import-alias",
+  "description": "Test fixture for valid/import-alias",
+  "category": "valid",
+  "subcategory": "import-alias",
+  "input": "# Import Alias Test\n\nTest import aliases to resolve naming conflicts.\n\n@import { author as primaryAuthor, title } from [config.mld]\n@import { author as secondaryAuthor } from [utils.mld]\n\n@text result = [[Primary: {{primaryAuthor}}, Secondary: {{secondaryAuthor}}, Title: {{title}}]]\n@add @result",
+  "expected": "# Import Alias Test\n\nTest import aliases to resolve naming conflicts.\n\nPrimary: Config Author, Secondary: Utils Author, Title: My Project",
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "0ccbe4c8-bb09-4187-9988-204f1f06ce08",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 71,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "# Import Alias Test\n\nTest import aliases to resolve naming conflicts.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "fb541f17-5180-4295-8af2-b8c42c2df44d",
+      "location": {
+        "start": {
+          "offset": 71,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 131,
+          "line": 5,
+          "column": 61
+        }
+      },
+      "kind": "import",
+      "subtype": "importSelected",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "5fbd5ec8-0d57-44e1-bff2-0a379ccc84fc",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "author",
+            "alias": "primaryAuthor"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "042e1683-7ab0-4c6f-a7fa-72964bf2a5e3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "title"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "9b2cba44-e52f-458e-8f0d-5a6edb5b4250",
+            "location": {
+              "start": {
+                "offset": 120,
+                "line": 5,
+                "column": 50
+              },
+              "end": {
+                "offset": 130,
+                "line": 5,
+                "column": 60
+              }
+            },
+            "content": "config.mld"
+          }
+        ]
+      },
+      "raw": {
+        "imports": "author as primaryAuthor, title",
+        "path": "config.mld"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "mld",
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "fe693cf2-3e4c-4846-8736-e04cd4ff7790",
+      "location": {
+        "start": {
+          "offset": 131,
+          "line": 5,
+          "column": 61
+        },
+        "end": {
+          "offset": 132,
+          "line": 6,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "7d3dc6d4-c9d1-4d7a-b631-2754e18d9f9d",
+      "location": {
+        "start": {
+          "offset": 132,
+          "line": 6,
+          "column": 1
+        },
+        "end": {
+          "offset": 186,
+          "line": 6,
+          "column": 55
+        }
+      },
+      "kind": "import",
+      "subtype": "importSelected",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "97d9c2f9-999d-486c-bad5-417b3f042cb6",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "author",
+            "alias": "secondaryAuthor"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "9768075d-8518-4e25-b00a-a63a6546ca4e",
+            "location": {
+              "start": {
+                "offset": 176,
+                "line": 6,
+                "column": 45
+              },
+              "end": {
+                "offset": 185,
+                "line": 6,
+                "column": 54
+              }
+            },
+            "content": "utils.mld"
+          }
+        ]
+      },
+      "raw": {
+        "imports": "author as secondaryAuthor",
+        "path": "utils.mld"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "mld",
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "ca4a01cd-01d1-4216-8b28-73fb1e5f655c",
+      "location": {
+        "start": {
+          "offset": 186,
+          "line": 6,
+          "column": 55
+        },
+        "end": {
+          "offset": 188,
+          "line": 8,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "0d2adffd-efba-4a58-9905-99e092c5ca23",
+      "location": {
+        "start": {
+          "offset": 188,
+          "line": 8,
+          "column": 1
+        },
+        "end": {
+          "offset": 283,
+          "line": 8,
+          "column": 96
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplate",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "bd1e3e3b-24a5-4e68-a732-19f0d1422886",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "result"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "c7c6093f-dd85-4ff9-b0f1-e4df4484f742",
+            "location": {
+              "start": {
+                "offset": 205,
+                "line": 8,
+                "column": 18
+              },
+              "end": {
+                "offset": 214,
+                "line": 8,
+                "column": 27
+              }
+            },
+            "content": "Primary: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "16bf984c-1a07-4a21-b150-e8f23bf838b9",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "primaryAuthor"
+          },
+          {
+            "type": "Text",
+            "nodeId": "a9ee9a93-3ee6-404a-b783-57860e3c8081",
+            "location": {
+              "start": {
+                "offset": 231,
+                "line": 8,
+                "column": 44
+              },
+              "end": {
+                "offset": 244,
+                "line": 8,
+                "column": 57
+              }
+            },
+            "content": ", Secondary: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "21444ba3-0841-4f3c-b378-d77edd627c17",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "secondaryAuthor"
+          },
+          {
+            "type": "Text",
+            "nodeId": "d5420cbe-c6a4-4423-8d5f-963be1dcf479",
+            "location": {
+              "start": {
+                "offset": 263,
+                "line": 8,
+                "column": 76
+              },
+              "end": {
+                "offset": 272,
+                "line": 8,
+                "column": 85
+              }
+            },
+            "content": ", Title: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "79091d48-37a1-455d-be8f-3ac61e02945a",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "title"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "result",
+        "content": "Primary: {{primaryAuthor}}, Secondary: {{secondaryAuthor}}, Title: {{title}}"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "67943dff-8785-45c5-a33c-d26b66179d94",
+      "location": {
+        "start": {
+          "offset": 283,
+          "line": 8,
+          "column": 96
+        },
+        "end": {
+          "offset": 284,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "af3a79e5-29bc-430d-aa31-c6065eebe92f",
+      "location": {
+        "start": {
+          "offset": 284,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 296,
+          "line": 9,
+          "column": 13
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "9b91e900-2af8-4666-b236-02ba6c9f624e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "result"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@result"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

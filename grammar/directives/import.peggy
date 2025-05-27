@@ -23,23 +23,55 @@ AtImport
       helpers.debug('AtImport matched', { imports, path });
       
       // Get the raw imports text
-      const importsRaw = imports.join(", ");
+      const importsRaw = imports.map(item => {
+        if (typeof item === 'string') {
+          return item;
+        } else if (item.type === 'namespace') {
+          return `* as ${item.alias}`;
+        } else {
+          return `${item.original} as ${item.alias}`;
+        }
+      }).join(", ");
       
-      // Determine subtype (importAll or importSelected)
-      const subtype = imports.length === 1 && imports[0] === '*' ? 
-                     'importAll' : 'importSelected';
+      // Determine subtype (importAll, importNamespace, or importSelected)
+      let subtype;
+      if (imports.length === 1) {
+        if (imports[0] === '*') {
+          subtype = 'importAll';
+        } else if (imports[0].type === 'namespace') {
+          subtype = 'importNamespace';
+        } else {
+          subtype = 'importSelected';
+        }
+      } else {
+        subtype = 'importSelected';
+      }
       
       // Create values object with variable references
       const values = {
-        imports: imports.map(item => helpers.createVariableReferenceNode('import', { 
-          identifier: item
-        })),
+        imports: imports.map(item => {
+          if (typeof item === 'string') {
+            return helpers.createVariableReferenceNode('import', { 
+              identifier: item
+            });
+          } else if (item.type === 'namespace') {
+            return helpers.createVariableReferenceNode('import', { 
+              identifier: '*',
+              alias: item.alias
+            });
+          } else {
+            return helpers.createVariableReferenceNode('import', { 
+              identifier: item.original,
+              alias: item.alias
+            });
+          }
+        }),
         path: path.values.path || path.values.url // Handle both file and URL paths
       };
       
       // Create raw object with text segments
       const raw = {
-        imports: imports.length === 1 && imports[0] === '*' ? '*' : importsRaw,
+        imports: importsRaw,
         path: path.raw.path || path.raw.url // Handle both file and URL paths
       };
       
@@ -69,7 +101,10 @@ AtImport
 
 // Using standard list pattern from patterns/lists.peggy
 ImportsList
-  = "*" {
+  = "*" alias:(" as " aliasName:BaseIdentifier { return aliasName; })? {
+      if (alias) {
+        return [{ type: 'namespace', alias: alias }];
+      }
       return ["*"];
     }
   / first:ImportItem rest:(CommaSpace item:ImportItem { return item; })* {
@@ -79,8 +114,11 @@ ImportsList
       return [];
     }
 
-// Individual import item
+// Individual import item with optional alias
 ImportItem
-  = name:BaseIdentifier { 
+  = name:BaseIdentifier alias:(" as " aliasName:BaseIdentifier { return aliasName; })? {
+      if (alias) {
+        return { original: name, alias: alias };
+      }
       return name;
     }
