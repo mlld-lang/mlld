@@ -61,8 +61,8 @@ export class Environment {
       const existing = this.variables.get(name)!;
       
       // Check if this is an import conflict (one imported, one local)
-      const existingIsImported = existing.metadata?.isImported || false;
-      const newIsImported = variable.metadata?.isImported || false;
+      const existingIsImported = Boolean(existing.metadata?.isImported);
+      const newIsImported = Boolean(variable.metadata?.isImported);
       
       if (existingIsImported !== newIsImported) {
         // Import vs local conflict

@@ -27,21 +27,18 @@ export class VariableRedefinitionError extends MlldInterpreterError {
     const location = context?.newLocation;
     
     // Build enhanced error message with locations
-    let enhancedMessage = message;
-    if (context?.variableName) {
-      enhancedMessage = `Variable '${context.variableName}' is already defined and cannot be redefined`;
-      
-      if (context.existingLocation) {
-        const existingLoc = context.existingLocation;
-        const locStr = existingLoc.filePath 
-          ? `${existingLoc.filePath}:${existingLoc.line}:${existingLoc.column}`
-          : `line ${existingLoc.line}, column ${existingLoc.column}`;
-        enhancedMessage += `. Originally defined at ${locStr}`;
-      }
-      
-      if (context.suggestion) {
-        enhancedMessage += `. ${context.suggestion}`;
-      }
+    let enhancedMessage = message; // Use the specific message passed to constructor
+    
+    if (context?.existingLocation) {
+      const existingLoc = context.existingLocation;
+      const locStr = existingLoc.filePath 
+        ? `${existingLoc.filePath}:${existingLoc.line}:${existingLoc.column}`
+        : `line ${existingLoc.line}, column ${existingLoc.column}`;
+      enhancedMessage += `. Originally defined at ${locStr}`;
+    }
+    
+    if (context?.suggestion) {
+      enhancedMessage += `. ${context.suggestion}`;
     }
 
     super(
