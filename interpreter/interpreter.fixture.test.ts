@@ -16,8 +16,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
   
   // Helper function to copy example files to virtual filesystem
   async function setupExampleFiles(fixtureName: string) {
-    // Extract the base name without 'fixture.json' extension
-    const baseName = fixtureName.replace('.fixture.json', '');
+    // Extract the base name from the fixture path
+    const baseName = path.basename(fixtureName, '.generated-fixture.json');
     
     // Map fixture names to example directory paths
     const exampleDirMappings: Record<string, string> = {
@@ -42,7 +42,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     // Check if we have a mapping for this fixture
     const exampleSubPath = exampleDirMappings[baseName];
     if (exampleSubPath) {
-      const exampleDir = path.join(__dirname, '../tests/cases', exampleSubPath);
+      const exampleDir = path.join(__dirname, '../tests/cases/valid', exampleSubPath);
       
       // Check if the directory exists
       if (fs.existsSync(exampleDir)) {
@@ -63,7 +63,6 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             const content = fs.readFileSync(filePath, 'utf8');
             // Place files at root of virtual filesystem
             await fileSystem.writeFile(`/${file}`, content);
-            console.log(`Copied ${file} to virtual filesystem for ${baseName}`);
           }
         }
       }

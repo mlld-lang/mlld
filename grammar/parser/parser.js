@@ -2932,53 +2932,7 @@ function peg$parse(input, options) {
       return helpers.createNode('Null', { value: null }, location());
     };
   var peg$f258 = function(varRef) { return varRef; };
-  var peg$f259 = function(id, meta, params, runCode) {
-      helpers.debug('AtExec matched code definition using RunLanguageCodeCore abstraction', { id, params, runCode });
-      
-      // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
-      
-      // Process parameters
-      const processedParams = params || [];
-      const rawParams = processedParams; // params are now strings
-      
-      // Build values and raw objects using the RunLanguageCodeCore values
-      const values = {
-        identifier: [identifierNode],
-        params: processedParams,
-        ...runCode.values // Use values from RunLanguageCodeCore abstraction
-      };
-      
-      const raw = {
-        identifier: id,
-        params: rawParams,
-        ...runCode.raw // Use raw from RunLanguageCodeCore abstraction
-      };
-      
-      // Create meta object using the RunLanguageCodeCore metadata
-      const metaObj = {
-        ...runCode.meta, // Use meta from RunLanguageCodeCore abstraction
-        parameterCount: processedParams.length
-      };
-      
-      // Add metadata if present
-      if (meta) {
-          values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
-        raw.metadata = meta;
-        metaObj.metadata = { type: meta };
-      }
-      
-      return helpers.createStructuredDirective(
-        'exec',
-        'execCode',
-        values,
-        raw,
-        metaObj,
-        location(),
-        'code'  // Source parameter
-      );
-    };
-  var peg$f260 = function(id, meta, params, command) {
+  var peg$f259 = function(id, meta, params, command) {
       helpers.debug('AtExec matched command definition', { id, params, command });
       
       // Create identifier node
@@ -3022,6 +2976,52 @@ function peg$parse(input, options) {
         metaObj,
         location(),
         'command'  // Added source parameter
+      );
+    };
+  var peg$f260 = function(id, meta, params, runCode) {
+      helpers.debug('AtExec matched code definition using RunLanguageCodeCore abstraction', { id, params, runCode });
+      
+      // Create identifier node
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      
+      // Process parameters
+      const processedParams = params || [];
+      const rawParams = processedParams; // params are now strings
+      
+      // Build values and raw objects using the RunLanguageCodeCore values
+      const values = {
+        identifier: [identifierNode],
+        params: processedParams,
+        ...runCode.values // Use values from RunLanguageCodeCore abstraction
+      };
+      
+      const raw = {
+        identifier: id,
+        params: rawParams,
+        ...runCode.raw // Use raw from RunLanguageCodeCore abstraction
+      };
+      
+      // Create meta object using the RunLanguageCodeCore metadata
+      const metaObj = {
+        ...runCode.meta, // Use meta from RunLanguageCodeCore abstraction
+        parameterCount: processedParams.length
+      };
+      
+      // Add metadata if present
+      if (meta) {
+          values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
+        raw.metadata = meta;
+        metaObj.metadata = { type: meta };
+      }
+      
+      return helpers.createStructuredDirective(
+        'exec',
+        'execCode',
+        values,
+        raw,
+        metaObj,
+        location(),
+        'code'  // Source parameter
       );
     };
   var peg$f261 = function(id, meta, params, commandRef) {
@@ -3284,21 +3284,7 @@ function peg$parse(input, options) {
         'exec'  // Source parameter
       );
     };
-  var peg$f277 = function(runCode) {
-      helpers.debug('AtRun matched language code block using shared abstraction', runCode);
-      
-      // Since we're using the shared abstraction, we just need to format it for this context
-      return helpers.createStructuredDirective(
-        'run',
-        'runCode',
-        runCode.values,
-        runCode.raw,
-        runCode.meta,
-        runCode.location,
-        'code'  // Source parameter
-      );
-    };
-  var peg$f278 = function(command) {
+  var peg$f277 = function(command) {
       helpers.debug('AtRun matched shell command', { command });
       
       return helpers.createStructuredDirective(
@@ -3312,6 +3298,20 @@ function peg$parse(input, options) {
         },
         location(),
         'command'  // Source parameter
+      );
+    };
+  var peg$f278 = function(runCode) {
+      helpers.debug('AtRun matched language code block using shared abstraction', runCode);
+      
+      // Since we're using the shared abstraction, we just need to format it for this context
+      return helpers.createStructuredDirective(
+        'run',
+        'runCode',
+        runCode.values,
+        runCode.raw,
+        runCode.meta,
+        runCode.location,
+        'code'  // Source parameter
       );
     };
   var peg$f279 = function(runCode) {
@@ -14083,7 +14083,7 @@ function peg$parse(input, options) {
             }
             if (s10 !== peg$FAILED) {
               s11 = peg$parse_();
-              s12 = peg$parseRunLanguageCodeCore();
+              s12 = peg$parseCommandCore();
               if (s12 !== peg$FAILED) {
                 peg$savedPos = s0;
                 s0 = peg$f259(s4, s5, s6, s12);
@@ -14153,7 +14153,7 @@ function peg$parse(input, options) {
               }
               if (s10 !== peg$FAILED) {
                 s11 = peg$parse_();
-                s12 = peg$parseCommandCore();
+                s12 = peg$parseRunLanguageCodeCore();
                 if (s12 !== peg$FAILED) {
                   peg$savedPos = s0;
                   s0 = peg$f260(s4, s5, s6, s12);
@@ -14940,7 +14940,7 @@ function peg$parse(input, options) {
         }
         if (s2 !== peg$FAILED) {
           s3 = peg$parse_();
-          s4 = peg$parseRunLanguageCodeCore();
+          s4 = peg$parseCommandCore();
           if (s4 !== peg$FAILED) {
             peg$savedPos = s0;
             s0 = peg$f277(s4);
@@ -14969,7 +14969,7 @@ function peg$parse(input, options) {
           }
           if (s2 !== peg$FAILED) {
             s3 = peg$parse_();
-            s4 = peg$parseCommandCore();
+            s4 = peg$parseRunLanguageCodeCore();
             if (s4 !== peg$FAILED) {
               peg$savedPos = s0;
               s0 = peg$f278(s4);

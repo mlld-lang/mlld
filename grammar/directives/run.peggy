@@ -42,20 +42,6 @@ AtRun
         'exec'  // Source parameter
       );
     }
-  / DirectiveContext "@run" _ runCode:RunLanguageCodeCore {
-      helpers.debug('AtRun matched language code block using shared abstraction', runCode);
-      
-      // Since we're using the shared abstraction, we just need to format it for this context
-      return helpers.createStructuredDirective(
-        'run',
-        'runCode',
-        runCode.values,
-        runCode.raw,
-        runCode.meta,
-        runCode.location,
-        'code'  // Source parameter
-      );
-    }
   / DirectiveContext "@run" _ command:CommandCore {
       helpers.debug('AtRun matched shell command', { command });
       
@@ -70,6 +56,20 @@ AtRun
         },
         location(),
         'command'  // Source parameter
+      );
+    }
+  / DirectiveContext "@run" _ runCode:RunLanguageCodeCore {
+      helpers.debug('AtRun matched language code block using shared abstraction', runCode);
+      
+      // Since we're using the shared abstraction, we just need to format it for this context
+      return helpers.createStructuredDirective(
+        'run',
+        'runCode',
+        runCode.values,
+        runCode.raw,
+        runCode.meta,
+        runCode.location,
+        'code'  // Source parameter
       );
     }
 

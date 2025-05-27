@@ -20,54 +20,8 @@ by the @run directive. It can be used in these forms:
 
 // Primary @exec directive - all variants
 AtExec
-  // This pattern must be first because of "first match wins" in PEG.js
-  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ runCode:RunLanguageCodeCore {
-      helpers.debug('AtExec matched code definition using RunLanguageCodeCore abstraction', { id, params, runCode });
-      
-      // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
-      
-      // Process parameters
-      const processedParams = params || [];
-      const rawParams = processedParams; // params are now strings
-      
-      // Build values and raw objects using the RunLanguageCodeCore values
-      const values = {
-        identifier: [identifierNode],
-        params: processedParams,
-        ...runCode.values // Use values from RunLanguageCodeCore abstraction
-      };
-      
-      const raw = {
-        identifier: id,
-        params: rawParams,
-        ...runCode.raw // Use raw from RunLanguageCodeCore abstraction
-      };
-      
-      // Create meta object using the RunLanguageCodeCore metadata
-      const metaObj = {
-        ...runCode.meta, // Use meta from RunLanguageCodeCore abstraction
-        parameterCount: processedParams.length
-      };
-      
-      // Add metadata if present
-      if (meta) {
-          values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
-        raw.metadata = meta;
-        metaObj.metadata = { type: meta };
-      }
-      
-      return helpers.createStructuredDirective(
-        'exec',
-        'execCode',
-        values,
-        raw,
-        metaObj,
-        location(),
-        'code'  // Source parameter
-      );
-    }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ command:CommandCore {
+  // CommandCore pattern must be first because it handles bracketed commands like [echo "hello"]
+  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ command:CommandCore {
       helpers.debug('AtExec matched command definition', { id, params, command });
       
       // Create identifier node
@@ -111,6 +65,52 @@ AtExec
         metaObj,
         location(),
         'command'  // Added source parameter
+      );
+    }
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ runCode:RunLanguageCodeCore {
+      helpers.debug('AtExec matched code definition using RunLanguageCodeCore abstraction', { id, params, runCode });
+      
+      // Create identifier node
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      
+      // Process parameters
+      const processedParams = params || [];
+      const rawParams = processedParams; // params are now strings
+      
+      // Build values and raw objects using the RunLanguageCodeCore values
+      const values = {
+        identifier: [identifierNode],
+        params: processedParams,
+        ...runCode.values // Use values from RunLanguageCodeCore abstraction
+      };
+      
+      const raw = {
+        identifier: id,
+        params: rawParams,
+        ...runCode.raw // Use raw from RunLanguageCodeCore abstraction
+      };
+      
+      // Create meta object using the RunLanguageCodeCore metadata
+      const metaObj = {
+        ...runCode.meta, // Use meta from RunLanguageCodeCore abstraction
+        parameterCount: processedParams.length
+      };
+      
+      // Add metadata if present
+      if (meta) {
+          values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
+        raw.metadata = meta;
+        metaObj.metadata = { type: meta };
+      }
+      
+      return helpers.createStructuredDirective(
+        'exec',
+        'execCode',
+        values,
+        raw,
+        metaObj,
+        location(),
+        'code'  // Source parameter
       );
     }
   / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ "@" commandRef:CommandReference {
