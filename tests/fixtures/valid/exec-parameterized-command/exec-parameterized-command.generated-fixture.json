@@ -8,163 +8,20 @@
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": [
-    {
-      "type": "Text",
-      "nodeId": "f024329e-a4f8-4596-b1d4-d7f718db3b0d",
-      "location": {
-        "start": {
-          "offset": 0,
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "offset": 123,
-          "line": 5,
-          "column": 1
-        }
+  "ast": null,
+  "parseError": {
+    "message": "Expected \"@\", Exec directive right-hand side content, or whitespace but \"[\" found.",
+    "location": {
+      "start": {
+        "offset": 149,
+        "line": 5,
+        "column": 27
       },
-      "content": "# Parameterized Exec Command (Valid)\n\nThis example shows the correct way to create a parameterized command using `@exec`.\n\n"
-    },
-    {
-      "type": "Directive",
-      "nodeId": "9b05fb59-7369-4122-967a-5da575be8618",
-      "location": {
-        "start": {
-          "offset": 123,
-          "line": 5,
-          "column": 1
-        },
-        "end": {
-          "offset": 197,
-          "line": 5,
-          "column": 75
-        }
-      },
-      "kind": "exec",
-      "subtype": "execCommand",
-      "source": "command",
-      "values": {
-        "identifier": [
-          {
-            "type": "Text",
-            "nodeId": "91ca49ec-27da-4a0b-8f49-573d7f185c97",
-            "location": {
-              "start": {
-                "offset": 123,
-                "line": 5,
-                "column": 1
-              },
-              "end": {
-                "offset": 197,
-                "line": 5,
-                "column": 75
-              }
-            },
-            "content": "codecat"
-          }
-        ],
-        "params": [
-          "dir"
-        ]
-      },
-      "raw": {
-        "identifier": "codecat",
-        "params": [
-          "dir"
-        ],
-        "command": "find @dir -type f -name \"*.js\" -exec cat {} \\;"
-      },
-      "meta": {
-        "parameterCount": 1,
-        "commandType": "code"
-      }
-    },
-    {
-      "type": "Text",
-      "nodeId": "50a95fe9-044b-4841-96c7-47350ff18d7c",
-      "location": {
-        "start": {
-          "offset": 197,
-          "line": 5,
-          "column": 75
-        },
-        "end": {
-          "offset": 199,
-          "line": 7,
-          "column": 1
-        }
-      },
-      "content": "\n\n"
-    },
-    {
-      "type": "Directive",
-      "nodeId": "ce0fef02-7792-4819-a28a-7a4abb8554c3",
-      "location": {
-        "start": {
-          "offset": 199,
-          "line": 7,
-          "column": 1
-        },
-        "end": {
-          "offset": 221,
-          "line": 7,
-          "column": 23
-        }
-      },
-      "kind": "run",
-      "subtype": "runExec",
-      "source": "exec",
-      "values": {
-        "identifier": [
-          {
-            "type": "Text",
-            "nodeId": "133eac3e-363e-4e9f-8c21-434cc0fadf3f",
-            "location": {
-              "start": {
-                "offset": 205,
-                "line": 7,
-                "column": 7
-              },
-              "end": {
-                "offset": 221,
-                "line": 7,
-                "column": 23
-              }
-            },
-            "content": "codecat"
-          }
-        ],
-        "args": [
-          {
-            "type": "Text",
-            "nodeId": "af142ead-77a8-474a-9837-7a79789753e3",
-            "location": {
-              "start": {
-                "offset": 213,
-                "line": 7,
-                "column": 15
-              },
-              "end": {
-                "offset": 220,
-                "line": 7,
-                "column": 22
-              }
-            },
-            "content": "./src"
-          }
-        ]
-      },
-      "raw": {
-        "identifier": "codecat",
-        "args": [
-          "./src"
-        ]
-      },
-      "meta": {
-        "argumentCount": 1
+      "end": {
+        "offset": 150,
+        "line": 5,
+        "column": 28
       }
     }
-  ],
-  "parseError": null
+  }
 }

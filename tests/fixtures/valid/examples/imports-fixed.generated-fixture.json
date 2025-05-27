@@ -10,17 +10,17 @@
   "actualOutput": null,
   "ast": null,
   "parseError": {
-    "message": "Expected \"@run\" or whitespace but \"@\" found.",
+    "message": "Expected \"@\", Exec directive right-hand side content, or whitespace but \"[\" found.",
     "location": {
       "start": {
-        "offset": 835,
-        "line": 17,
-        "column": 19
+        "offset": 767,
+        "line": 15,
+        "column": 27
       },
       "end": {
-        "offset": 836,
-        "line": 17,
-        "column": 20
+        "offset": 768,
+        "line": 15,
+        "column": 28
       }
     }
   }

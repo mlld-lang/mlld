@@ -156,20 +156,41 @@ RunRHS
 // EXEC RHS PATTERNS - Values for @exec assignments
 // -------------------------------------------------------------
 
-// RHS value for @exec directive
-ExecRHS
+// EXEC RHS PATTERN - RHS content disambiguation for @exec directives
+// Used by: AtExec directive (directives/exec.peggy)
+// Purpose: Distinguishes between command content (with variable interpolation) and 
+//          code content (language + code blob without interpolation) for exec assignments
+ExecRHS "Exec directive right-hand side content"
   = command:WrappedCommandContent {
+      // Bracket command pattern (e.g., "[find @dir -type f]") - must be first for precedence
+      // Produces execCommand subtype with variable interpolation support
+      helpers.debug('ExecRHS matched command pattern', { command });
+      
       return {
         type: 'command',
         command: command.parts,
         raw: command.raw
       };
     }
-  / code:WrappedCodeContent {
+  / language:RunCodeLanguage _ args:RunCodeArguments? _ code:DirectCodeContent {
+      // Language + code pattern (e.g., "javascript [code]")
+      // Produces execCode subtype with no variable interpolation (pure code blob)
+      helpers.debug('ExecRHS matched language code pattern', { language, args, code });
+      
+      // Create language node
+      const langNode = helpers.createNode(NodeType.Text, { content: language, location: location() });
+      
+      // Process code content - get from bracketed content
+      const codeContent = code[0].content;
+      
       return {
         type: 'code',
-        code: code.parts,
-        raw: code.raw
+        lang: [langNode],
+        args: args || [],
+        code: code,
+        rawLang: language,
+        rawArgs: args ? args.map(arg => arg.identifier || '') : [],
+        raw: codeContent
       };
     }
 
