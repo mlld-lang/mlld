@@ -3,7 +3,9 @@
 
 export * from './add';
 export * from './data';
+export * from './examples';
 export * from './exec';
+export * from './exec-parameterized-command';
 export * from './import';
 export * from './path';
 export * from './run';

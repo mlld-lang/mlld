@@ -1,0 +1,701 @@
+{
+  "name": "jokes",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "@text joke_1 = @run [oneshot \"Tell me a joke\"]\n\n@text joke_2 = @run [oneshot \"Tell me a joke\"]\n\n@text joke_3 = @run [oneshot \"Tell me a joke\"]\n\n@text joke_4 = @run [oneshot \"Tell me a joke\"]\n\n@text evaluation = [[\n    Which joke is the funniest?\n    {{joke_1}}\n    {{joke_2}}\n    {{joke_3}}\n    {{joke_4}}\n]]\n\n@run [oneshot \"@evaluation\"]",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "f931304d-9d47-4372-8ae7-d1bdcb63b001",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 46,
+          "line": 1,
+          "column": 47
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "run",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "f800d151-50cd-4697-a30b-acb9b8903bb4",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "joke_1"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "63e46cb2-6062-41aa-b73d-a214acad4fb6",
+            "location": {
+              "start": {
+                "offset": 21,
+                "line": 1,
+                "column": 22
+              },
+              "end": {
+                "offset": 45,
+                "line": 1,
+                "column": 46
+              }
+            },
+            "content": "oneshot \"Tell me a joke\""
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "joke_1",
+        "content": "@run oneshot \"Tell me a joke\""
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "run",
+        "hasVariables": false,
+        "run": {
+          "isCommand": true
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "7adb1502-7897-422a-a912-62d1a84140c0",
+      "location": {
+        "start": {
+          "offset": 46,
+          "line": 1,
+          "column": 47
+        },
+        "end": {
+          "offset": 48,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "993ff18b-536f-4600-ad6b-2d7e53d4cd21",
+      "location": {
+        "start": {
+          "offset": 48,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 94,
+          "line": 3,
+          "column": 47
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "run",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "cde2bac4-2d50-4805-9c09-f377d7ba6f71",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "joke_2"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "c300df51-f453-4a0b-ada5-880432b68ea0",
+            "location": {
+              "start": {
+                "offset": 69,
+                "line": 3,
+                "column": 22
+              },
+              "end": {
+                "offset": 93,
+                "line": 3,
+                "column": 46
+              }
+            },
+            "content": "oneshot \"Tell me a joke\""
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "joke_2",
+        "content": "@run oneshot \"Tell me a joke\""
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "run",
+        "hasVariables": false,
+        "run": {
+          "isCommand": true
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "fccc4532-fd60-4d2d-93fa-b1103d887ce7",
+      "location": {
+        "start": {
+          "offset": 94,
+          "line": 3,
+          "column": 47
+        },
+        "end": {
+          "offset": 96,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "363ac527-0acd-4a43-a690-099b9368ac08",
+      "location": {
+        "start": {
+          "offset": 96,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 142,
+          "line": 5,
+          "column": 47
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "run",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "55e37e10-02c2-445c-9da8-42f1ae37e831",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "joke_3"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "e0d853f4-b153-432f-9609-dabba46bfac5",
+            "location": {
+              "start": {
+                "offset": 117,
+                "line": 5,
+                "column": 22
+              },
+              "end": {
+                "offset": 141,
+                "line": 5,
+                "column": 46
+              }
+            },
+            "content": "oneshot \"Tell me a joke\""
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "joke_3",
+        "content": "@run oneshot \"Tell me a joke\""
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "run",
+        "hasVariables": false,
+        "run": {
+          "isCommand": true
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "7f81c2e4-cce0-4ff0-be4e-d09a8c6bee50",
+      "location": {
+        "start": {
+          "offset": 142,
+          "line": 5,
+          "column": 47
+        },
+        "end": {
+          "offset": 144,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "697eae9b-5fdf-4ad9-be23-83e06ea02855",
+      "location": {
+        "start": {
+          "offset": 144,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 190,
+          "line": 7,
+          "column": 47
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "run",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "08cfe3b0-0ea6-4781-9d19-1f05e7dd6a50",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "joke_4"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "44e8b6a8-bcb6-4494-8fc2-7a8e4f06bf13",
+            "location": {
+              "start": {
+                "offset": 165,
+                "line": 7,
+                "column": 22
+              },
+              "end": {
+                "offset": 189,
+                "line": 7,
+                "column": 46
+              }
+            },
+            "content": "oneshot \"Tell me a joke\""
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "joke_4",
+        "content": "@run oneshot \"Tell me a joke\""
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "run",
+        "hasVariables": false,
+        "run": {
+          "isCommand": true
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "62705e43-22bc-4bef-b968-b267144935b6",
+      "location": {
+        "start": {
+          "offset": 190,
+          "line": 7,
+          "column": 47
+        },
+        "end": {
+          "offset": 192,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "ed9d9b9b-6ccf-4e67-898a-853cbfbc93ce",
+      "location": {
+        "start": {
+          "offset": 192,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 308,
+          "line": 15,
+          "column": 3
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplate",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "bd75e168-7907-4e46-8881-63714552a4d5",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "evaluation"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "d0cdb0b2-6fc8-433a-afd3-37abaa4cdd5c",
+            "location": {
+              "start": {
+                "offset": 213,
+                "line": 9,
+                "column": 22
+              },
+              "end": {
+                "offset": 250,
+                "line": 11,
+                "column": 5
+              }
+            },
+            "content": "\n    Which joke is the funniest?\n    "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "5733da49-7286-451b-8858-4f038e461686",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "joke_1"
+          },
+          {
+            "type": "Text",
+            "nodeId": "44c552ef-bced-43fa-85f0-6379bfa7ae46",
+            "location": {
+              "start": {
+                "offset": 260,
+                "line": 11,
+                "column": 15
+              },
+              "end": {
+                "offset": 265,
+                "line": 12,
+                "column": 5
+              }
+            },
+            "content": "\n    "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "b268de7c-e73f-4142-9d7b-39aac97c7822",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "joke_2"
+          },
+          {
+            "type": "Text",
+            "nodeId": "3aca7650-158f-4bbe-afce-b7258e4f7e6b",
+            "location": {
+              "start": {
+                "offset": 275,
+                "line": 12,
+                "column": 15
+              },
+              "end": {
+                "offset": 280,
+                "line": 13,
+                "column": 5
+              }
+            },
+            "content": "\n    "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "75fa2c9d-9ea6-426c-bed1-dbf4f72e807e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "joke_3"
+          },
+          {
+            "type": "Text",
+            "nodeId": "6a03067a-ccd9-4499-98dc-7237aef0824c",
+            "location": {
+              "start": {
+                "offset": 290,
+                "line": 13,
+                "column": 15
+              },
+              "end": {
+                "offset": 295,
+                "line": 14,
+                "column": 5
+              }
+            },
+            "content": "\n    "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "150fd8f1-2a32-4054-9463-b73382b02359",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "joke_4"
+          },
+          {
+            "type": "Text",
+            "nodeId": "3c103a96-8a96-4a56-85e6-11e66c84e877",
+            "location": {
+              "start": {
+                "offset": 305,
+                "line": 14,
+                "column": 15
+              },
+              "end": {
+                "offset": 306,
+                "line": 15,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "evaluation",
+        "content": "\n    Which joke is the funniest?\n    {{joke_1}}\n    {{joke_2}}\n    {{joke_3}}\n    {{joke_4}}\n"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "57d3df2c-e6bb-4966-9bc3-31429b165f82",
+      "location": {
+        "start": {
+          "offset": 308,
+          "line": 15,
+          "column": 3
+        },
+        "end": {
+          "offset": 310,
+          "line": 17,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "6ed41c2c-79fa-459a-a052-c2a19bc7a019",
+      "location": {
+        "start": {
+          "offset": 310,
+          "line": 17,
+          "column": 1
+        },
+        "end": {
+          "offset": 338,
+          "line": 17,
+          "column": 29
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "bf01dc1e-fef8-4003-8ee1-7b9f9e1b6af0",
+            "location": {
+              "start": {
+                "offset": 316,
+                "line": 17,
+                "column": 7
+              },
+              "end": {
+                "offset": 325,
+                "line": 17,
+                "column": 16
+              }
+            },
+            "content": "oneshot \""
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "bf60437c-b5ca-4c06-9d8b-63432f95e941",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "evaluation"
+          },
+          {
+            "type": "Text",
+            "nodeId": "15107d4f-4701-4357-a001-06727fa818e4",
+            "location": {
+              "start": {
+                "offset": 336,
+                "line": 17,
+                "column": 27
+              },
+              "end": {
+                "offset": 337,
+                "line": 17,
+                "column": 28
+              }
+            },
+            "content": "\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "408a774a-d600-483a-9ae5-2c0bc87b8f2c",
+            "location": {
+              "start": {
+                "offset": 315,
+                "line": 17,
+                "column": 6
+              },
+              "end": {
+                "offset": 338,
+                "line": 17,
+                "column": 29
+              }
+            },
+            "command": "oneshot"
+          }
+        ]
+      },
+      "raw": {
+        "command": "oneshot \"@evaluation\"",
+        "commandBases": [
+          "oneshot"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    }
+  ],
+  "parseError": null
+}

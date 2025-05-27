@@ -7,10 +7,11 @@
   "expected": "# Section Title\nContent under this section",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "7d517b7a-5ab6-44f6-9e00-9f4accc679c2",
+      "nodeId": "88bccb09-c42d-488f-9262-ad15b54b22a9",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "sectionTitle": [
           {
             "type": "Text",
-            "nodeId": "0d47c36a-06f5-4192-85ae-163620438d7c",
+            "nodeId": "56641ffa-3066-493e-b743-5f10103d5ad5",
             "location": {
               "start": {
                 "offset": 0,
@@ -49,7 +50,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "e383dbdb-d4d8-4a6b-9325-6b30eaf90624",
+            "nodeId": "e76c8f61-78f3-46a4-8fad-ee8c76c34e18",
             "location": {
               "start": {
                 "offset": 0,

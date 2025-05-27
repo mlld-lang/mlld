@@ -7,10 +7,11 @@
   "expected": null,
   "expectedError": null,
   "expectedWarning": "**Warning: Template syntax in regular text**\n\nThe line `This line uses template syntax: {{myvar}}` contains template syntax outside of a template directive.\n\nTemplate syntax like `{{myvar}}` only works inside template content (within `[[...]]` brackets) in mlld directives.\n\n**To fix this:**\n```mlld\n@text greeting = [[This line uses template syntax: {{myvar}}]]\n@add @greeting\n```",
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "a432328c-955a-4ab6-bf06-626651ce6fe8",
+      "nodeId": "bfdec90f-0254-4529-be0c-8a1d5d97a179",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "c21e6f31-65ad-4c36-ad42-0764fffd3616",
+            "nodeId": "a28e0947-f7ea-4405-be7a-af543c333055",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +51,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "c49a2234-429e-47d3-a4ef-ea6a23ad25be",
+            "nodeId": "d8a1c323-4af5-4480-bfae-ae95938dc6de",
             "location": {
               "start": {
                 "offset": 14,
@@ -79,7 +80,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "f3edca6f-1c53-48a6-9819-ac9ca5c1314a",
+      "nodeId": "e248e6ec-6c70-412f-8a90-f20e0b6dc9d3",
       "location": {
         "start": {
           "offset": 27,
@@ -96,7 +97,7 @@
     },
     {
       "type": "VariableReference",
-      "nodeId": "ad3f8822-198e-45c5-9c50-276e95df4533",
+      "nodeId": "4a3b419f-447c-49be-a1dc-8e4f7e71811f",
       "location": {
         "start": {
           "offset": 0,

@@ -1,0 +1,59 @@
+{
+  "name": "test-direct",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "@add @imported_title\n",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "fd9cc4ca-6954-4c04-9066-7176e2c733fc",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 21,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "4e73e564-870e-4a24-8111-a2c96f50209a",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "imported_title"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@imported_title"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

@@ -1,0 +1,27 @@
+{
+  "name": "url-demo",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "# URL Support Demo\n\nThis example demonstrates how to use URLs in Meld directives.\n\n## Import from URL\n@import { * } from \"https://raw.githubusercontent.com/example/repo/main/config.mld\"\n\n## Text from URL\n@text readme = [https://raw.githubusercontent.com/example/repo/main/README.md]\n\n## Add content from URL\n@add [https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md]\n\n## Path assignment with URL\n@path apiEndpoint = \"https://api.example.com/v1\"\n\n## Complex data with URL-fetching directives\n@data projectInfo = {\n  \"readme\": [https://raw.githubusercontent.com/example/repo/main/README.md],\n  \"version\": @run [curl -s https://api.example.com/version],\n  \"apiBase\": @apiEndpoint\n}\n\n## Using the API endpoint\n@run [curl -s @apiEndpoint/users]\n\nNote: To enable URL support, you have two options:\n\n1. Use CLI flags:\n   meld url-demo.mld --allow-urls --url-allowed-domains github.com,githubusercontent.com,api.example.com\n\n2. Create a meld.config.json file in your project:\n   ```json\n   {\n     \"security\": {\n       \"urls\": {\n         \"enabled\": true,\n         \"allowedDomains\": [\"github.com\", \"raw.githubusercontent.com\", \"api.example.com\"],\n         \"timeout\": \"30s\",\n         \"maxSize\": \"10MB\"\n       }\n     },\n     \"cache\": {\n       \"urls\": {\n         \"enabled\": true,\n         \"defaultTTL\": \"5m\",\n         \"rules\": [\n           { \"pattern\": \"https://api.example.com/*\", \"ttl\": \"1m\" },\n           { \"pattern\": \"*.md\", \"ttl\": \"1h\" }\n         ]\n       }\n     }\n   }\n   ```",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": null,
+  "parseError": {
+    "message": "Expected Any path expression or whitespace but \"\\\"\" found.",
+    "location": {
+      "start": {
+        "offset": 121,
+        "line": 6,
+        "column": 20
+      },
+      "end": {
+        "offset": 122,
+        "line": 6,
+        "column": 21
+      }
+    }
+  }
+}

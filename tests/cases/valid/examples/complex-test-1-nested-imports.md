@@ -4,7 +4,7 @@
 
 # Create a library file that imports another file
 @text lib_content = [[
-@import { imported_title } from "imports.mld"
+@import { imported_title } from "files/imports.mld"
 @text lib_message = "Library says: {{imported_title}}"
 @data lib_config = {
   "name": "lib",

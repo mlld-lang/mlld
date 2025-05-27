@@ -7,10 +7,11 @@
   "expected": "This is template content",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "d96bd44f-02c5-45df-b3a6-0db074a76f30",
+      "nodeId": "13011058-42e4-48cb-9c47-5287fc048af1",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "f032b8c1-226c-4022-b386-98becae968a5",
+            "nodeId": "9ee42b19-3732-4abf-bd6d-38af64187187",
             "location": {
               "start": {
                 "offset": 7,

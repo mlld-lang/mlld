@@ -12,6 +12,6 @@
     "security_review": "Carefully review the security of the code and advise on the quality of the security and areas of improvement."
 }
 
-@text codecat(dir) = @run [find @dir -type f -exec sh -c 'echo "<$(realpath --relative-to=@dir {})>"; cat {}; echo "@dir {})>"' \;]
+@exec codecat(dir) = @run [find @dir -type f -exec sh -c 'echo "<$(realpath --relative-to=@dir {})>"; cat {}; echo "@dir {})>"' \;]
 
-@text echo(var) = @run [echo @var]
+@exec echo(var) = @run [echo @var]

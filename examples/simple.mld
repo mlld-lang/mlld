@@ -1,7 +1,7 @@
 >> This is a comment and should be ignored
 >> I can write a couple lines of them if I want and no one will ever know.
 
-@import { * } from "imports.mld"
+@import { * } from "files/imports.mld"
 
 @data role = {
     "architect": "You are a senior architect skilled in assessing TypeScript codebases.",

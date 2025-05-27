@@ -7,10 +7,11 @@
   "expected": "Hello from command",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "ca84c7e7-5bdd-4279-8ab6-4a2156373a59",
+      "nodeId": "57d3a8ad-90e7-4a00-8049-65132a627996",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "763fd265-ba6e-4d3d-a9bc-01eb5870f756",
+            "nodeId": "88213a68-5a46-4e89-806b-ecb502cfa1b5",
             "location": {
               "start": {
                 "offset": 6,
@@ -48,7 +49,7 @@
         ],
         "commandBases": [
           {
-            "nodeId": "3de30126-5d08-4f8b-862a-41fa647900cb",
+            "nodeId": "a1886c19-8df2-4257-9e91-66c1bd55e8fe",
             "location": {
               "start": {
                 "offset": 5,

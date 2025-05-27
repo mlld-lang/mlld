@@ -7,10 +7,11 @@
   "expected": "8080",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "1e3b52bf-3a2b-4d46-b018-bcff830b2db3",
+      "nodeId": "90b53965-e38a-47b9-bf1d-b176d8911b81",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "e812cbec-3ec5-4f74-ae68-ae67ed8962f4",
+            "nodeId": "cbde7063-a7d5-41f0-ba5f-53b74611f809",
             "location": {
               "start": {
                 "offset": 0,
@@ -57,7 +58,7 @@
                 "host": [
                   {
                     "type": "Text",
-                    "nodeId": "4b63e01d-f92c-4c30-834b-a592bdf08560",
+                    "nodeId": "ccb4c000-a022-440d-a386-3225fa6be725",
                     "location": {
                       "start": {
                         "offset": 55,
@@ -81,7 +82,7 @@
       },
       "raw": {
         "identifier": "config",
-        "value": "{\n  \"server\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"port\": 8080,\n      \"host\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"4b63e01d-f92c-4c30-834b-a592bdf08560\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 55,\n              \"line\": 4,\n              \"column\": 11\n            },\n            \"end\": {\n              \"offset\": 66,\n              \"line\": 4,\n              \"column\": 22\n            }\n          },\n          \"content\": \"localhost\"\n        }\n      ]\n    }\n  },\n  \"debug\": true\n}"
+        "value": "{\n  \"server\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"port\": 8080,\n      \"host\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"ccb4c000-a022-440d-a386-3225fa6be725\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 55,\n              \"line\": 4,\n              \"column\": 11\n            },\n            \"end\": {\n              \"offset\": 66,\n              \"line\": 4,\n              \"column\": 22\n            }\n          },\n          \"content\": \"localhost\"\n        }\n      ]\n    }\n  },\n  \"debug\": true\n}"
       },
       "meta": {
         "objectData": {
@@ -91,7 +92,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "ad749ad0-0dfb-448d-bb2f-0d21175306da",
+      "nodeId": "8de6b307-bfdc-4361-ae84-480fe00d73df",
       "location": {
         "start": {
           "offset": 87,
@@ -108,7 +109,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "5166fac6-6f48-4d4f-899f-e84ad17ae579",
+      "nodeId": "6f1f350a-b8ce-4882-96bc-e73ce29a31ee",
       "location": {
         "start": {
           "offset": 88,
@@ -128,7 +129,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "0e3182b2-9cce-4e7d-884b-8e1efe106db1",
+            "nodeId": "0de8ad87-d390-47e9-b2f8-b34d280b2dc6",
             "location": {
               "start": {
                 "offset": 0,

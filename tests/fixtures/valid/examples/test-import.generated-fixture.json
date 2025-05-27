@@ -1,0 +1,149 @@
+{
+  "name": "test-import",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "@import { * } from \"files/imports.mld\"\n@add @imported_title\n",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "adff3e08-0942-4bfb-a30e-1bde2b317fec",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 38,
+          "line": 1,
+          "column": 39
+        }
+      },
+      "kind": "import",
+      "subtype": "importAll",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "77d3cf20-7337-415a-8272-c2b22a26064a",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "*"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "ce4b627b-e08d-4204-81f7-35b08cd1bb4a",
+            "location": {
+              "start": {
+                "offset": 19,
+                "line": 1,
+                "column": 20
+              },
+              "end": {
+                "offset": 38,
+                "line": 1,
+                "column": 39
+              }
+            },
+            "content": "files/imports.mld"
+          }
+        ]
+      },
+      "raw": {
+        "imports": "*",
+        "path": "files/imports.mld"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "mld",
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "3b80d4a9-04e7-452e-a32c-2e2eee561f05",
+      "location": {
+        "start": {
+          "offset": 38,
+          "line": 1,
+          "column": 39
+        },
+        "end": {
+          "offset": 39,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "7d0d1180-b570-4116-9b6f-96d0f5d52479",
+      "location": {
+        "start": {
+          "offset": 39,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 60,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "6fb62be5-d8e5-4008-adb2-30e363c1e36b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "imported_title"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@imported_title"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

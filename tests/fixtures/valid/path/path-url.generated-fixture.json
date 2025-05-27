@@ -7,6 +7,7 @@
   "expected": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\nYou can now use the API endpoint: https://api.example.com/v1",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": null,
   "parseError": {
     "message": "Expected \"[\", Any path expression, or whitespace but \"\\\"\" found.",

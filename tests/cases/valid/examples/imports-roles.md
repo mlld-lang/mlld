@@ -1,4 +1,4 @@
-@text docs = @add [README.md]
+@text docs = @add [files/README.md]
               
 @data role = {
     "architect": "You are a software architect.",

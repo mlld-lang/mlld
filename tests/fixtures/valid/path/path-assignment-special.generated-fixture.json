@@ -7,10 +7,11 @@
   "expected": "The config is /Users/adam/config",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "8edc5e57-2a3f-4c88-8e98-809ec3dd9ef0",
+      "nodeId": "c660dd09-45d0-4f78-ace7-48b6e0d006fd",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "f4b033d6-ea24-4062-b960-60e4f5ee51a1",
+            "nodeId": "d8658603-6ede-4a26-9708-4383bc0fef0d",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +51,7 @@
         "path": [
           {
             "type": "VariableReference",
-            "nodeId": "7f74dcff-411e-4e2c-a752-b265625d0084",
+            "nodeId": "76f6470c-7138-45d2-8687-e213633881e9",
             "location": {
               "start": {
                 "offset": 0,
@@ -68,7 +69,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "e3b5b8a2-0b47-489f-b21b-0ebfa8985d44",
+            "nodeId": "6a10f474-442a-4bd2-91a6-43dea40ee9a0",
             "location": {
               "start": {
                 "offset": 0,
@@ -100,7 +101,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "803de0e5-dd52-49fc-9b04-f0f7b53d72d8",
+      "nodeId": "e32ca3f5-e401-417f-b69c-d0c3ccdd5d00",
       "location": {
         "start": {
           "offset": 30,
@@ -117,7 +118,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "80b88f24-9d63-452a-a935-2ee2d7c56874",
+      "nodeId": "e5b06967-3178-4148-bb58-3b1a7fc786a3",
       "location": {
         "start": {
           "offset": 31,
@@ -137,7 +138,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "773e31a2-9cc6-4557-b98d-e09ee3cf9288",
+            "nodeId": "2f50975e-5bf8-4195-9b8c-9b7c4f1a2c65",
             "location": {
               "start": {
                 "offset": 38,
@@ -154,7 +155,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "361d09b5-ce7d-4279-8b6f-26ead9e99ca7",
+            "nodeId": "bcb8a551-a211-4ab8-a7e9-06d7826c2036",
             "location": {
               "start": {
                 "offset": 0,

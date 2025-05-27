@@ -1,0 +1,784 @@
+{
+  "name": "imports-roles",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "@text docs = @add [files/README.md]\n              \n@data role = {\n    \"architect\": \"You are a software architect.\",\n    \"security\": \"You are a security engineer.\",\n    \"ux\": \"You are a ux designer.\",\n    \"pm\": \"You are a project manager.\"\n}\n\n@data task = {\n    \"archrev\": \"What's the architecture's biggest flaw?\",\n    \"uxrev\": \"Review the UX of this code\",\n    \"secrev\": \"Review this code for vulnerabilities\",\n    \"roadmap\": \"Create a roadmap based on highest priority\"\n}\n\n# command creation examples\n@exec codecat(dir) = @run [find @dir -type f -name \"*.mld\" | head -5]\n\n@exec ask(context, role, task) = @run [oneshot --context @context --instructions @task --system @role]",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "f835cebe-6910-4e99-8897-724dbbc4a5fd",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 35,
+          "line": 1,
+          "column": 36
+        }
+      },
+      "kind": "text",
+      "subtype": "textPath",
+      "source": "directive",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "cf449273-8800-44d3-b8fb-bf5c91db0def",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "docs"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "194350f1-60fb-492a-8ea8-8cc6733c85b0",
+            "location": {
+              "start": {
+                "offset": 19,
+                "line": 1,
+                "column": 20
+              },
+              "end": {
+                "offset": 24,
+                "line": 1,
+                "column": 25
+              }
+            },
+            "content": "files"
+          },
+          {
+            "type": "PathSeparator",
+            "nodeId": "68efb0fe-6fdc-4f70-bf96-0ccdf956cd9d",
+            "location": {
+              "start": {
+                "offset": 24,
+                "line": 1,
+                "column": 25
+              },
+              "end": {
+                "offset": 25,
+                "line": 1,
+                "column": 26
+              }
+            },
+            "value": "/"
+          },
+          {
+            "type": "Text",
+            "nodeId": "a9803e52-3363-4499-b23f-7b749f70a807",
+            "location": {
+              "start": {
+                "offset": 25,
+                "line": 1,
+                "column": 26
+              },
+              "end": {
+                "offset": 34,
+                "line": 1,
+                "column": 35
+              }
+            },
+            "content": "README.md"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "docs",
+        "path": "files/README.md"
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "add",
+        "hasVariables": false,
+        "pathSubtype": "filePath"
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "8da45a60-e5f4-4a99-8c4f-447b60f5836a",
+      "location": {
+        "start": {
+          "offset": 35,
+          "line": 1,
+          "column": 36
+        },
+        "end": {
+          "offset": 51,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n              \n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "ca13e6f1-b665-4fc0-80cb-86b53f4a059a",
+      "location": {
+        "start": {
+          "offset": 51,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 240,
+          "line": 8,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "99ea057f-0600-4e6b-a569-b68903cfcbcf",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "role"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "architect": [
+              {
+                "type": "Text",
+                "nodeId": "7d665d9e-5697-4e1b-ab42-946efcbb90e3",
+                "location": {
+                  "start": {
+                    "offset": 83,
+                    "line": 4,
+                    "column": 18
+                  },
+                  "end": {
+                    "offset": 114,
+                    "line": 4,
+                    "column": 49
+                  }
+                },
+                "content": "You are a software architect."
+              }
+            ],
+            "security": [
+              {
+                "type": "Text",
+                "nodeId": "3017913c-1129-430a-b485-0837f2d57b56",
+                "location": {
+                  "start": {
+                    "offset": 132,
+                    "line": 5,
+                    "column": 17
+                  },
+                  "end": {
+                    "offset": 162,
+                    "line": 5,
+                    "column": 47
+                  }
+                },
+                "content": "You are a security engineer."
+              }
+            ],
+            "ux": [
+              {
+                "type": "Text",
+                "nodeId": "92702819-ccf7-4a75-9abd-f341df829e72",
+                "location": {
+                  "start": {
+                    "offset": 174,
+                    "line": 6,
+                    "column": 11
+                  },
+                  "end": {
+                    "offset": 198,
+                    "line": 6,
+                    "column": 35
+                  }
+                },
+                "content": "You are a ux designer."
+              }
+            ],
+            "pm": [
+              {
+                "type": "Text",
+                "nodeId": "c954505c-a641-4f86-8b55-eae54f9b03db",
+                "location": {
+                  "start": {
+                    "offset": 210,
+                    "line": 7,
+                    "column": 11
+                  },
+                  "end": {
+                    "offset": 238,
+                    "line": 7,
+                    "column": 39
+                  }
+                },
+                "content": "You are a project manager."
+              }
+            ]
+          }
+        }
+      },
+      "raw": {
+        "identifier": "role",
+        "value": "{\n  \"architect\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"7d665d9e-5697-4e1b-ab42-946efcbb90e3\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 83,\n          \"line\": 4,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 114,\n          \"line\": 4,\n          \"column\": 49\n        }\n      },\n      \"content\": \"You are a software architect.\"\n    }\n  ],\n  \"security\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"3017913c-1129-430a-b485-0837f2d57b56\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 132,\n          \"line\": 5,\n          \"column\": 17\n        },\n        \"end\": {\n          \"offset\": 162,\n          \"line\": 5,\n          \"column\": 47\n        }\n      },\n      \"content\": \"You are a security engineer.\"\n    }\n  ],\n  \"ux\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"92702819-ccf7-4a75-9abd-f341df829e72\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 174,\n          \"line\": 6,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 198,\n          \"line\": 6,\n          \"column\": 35\n        }\n      },\n      \"content\": \"You are a ux designer.\"\n    }\n  ],\n  \"pm\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"c954505c-a641-4f86-8b55-eae54f9b03db\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 210,\n          \"line\": 7,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 238,\n          \"line\": 7,\n          \"column\": 39\n        }\n      },\n      \"content\": \"You are a project manager.\"\n    }\n  ]\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 4
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "1d8658b0-6b01-49dc-ac7a-3e2e1b202fd9",
+      "location": {
+        "start": {
+          "offset": 240,
+          "line": 8,
+          "column": 2
+        },
+        "end": {
+          "offset": 242,
+          "line": 10,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "f592996a-5699-4624-9cc1-650cae9dcecd",
+      "location": {
+        "start": {
+          "offset": 242,
+          "line": 10,
+          "column": 1
+        },
+        "end": {
+          "offset": 473,
+          "line": 15,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "ab81e4bd-ef97-43ca-bdb8-5eee00e24b22",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "task"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "archrev": [
+              {
+                "type": "Text",
+                "nodeId": "6569221f-2f0c-4598-a7e7-63c1cf9c1900",
+                "location": {
+                  "start": {
+                    "offset": 272,
+                    "line": 11,
+                    "column": 16
+                  },
+                  "end": {
+                    "offset": 313,
+                    "line": 11,
+                    "column": 57
+                  }
+                },
+                "content": "What's the architecture's biggest flaw?"
+              }
+            ],
+            "uxrev": [
+              {
+                "type": "Text",
+                "nodeId": "565e3c33-5bcb-43ab-9ae3-7d708f164dd9",
+                "location": {
+                  "start": {
+                    "offset": 328,
+                    "line": 12,
+                    "column": 14
+                  },
+                  "end": {
+                    "offset": 356,
+                    "line": 12,
+                    "column": 42
+                  }
+                },
+                "content": "Review the UX of this code"
+              }
+            ],
+            "secrev": [
+              {
+                "type": "Text",
+                "nodeId": "fe841b1b-4f42-45f2-8b92-7aa99a868934",
+                "location": {
+                  "start": {
+                    "offset": 372,
+                    "line": 13,
+                    "column": 15
+                  },
+                  "end": {
+                    "offset": 410,
+                    "line": 13,
+                    "column": 53
+                  }
+                },
+                "content": "Review this code for vulnerabilities"
+              }
+            ],
+            "roadmap": [
+              {
+                "type": "Text",
+                "nodeId": "d070a6c4-c29e-4010-9389-db599bdb2084",
+                "location": {
+                  "start": {
+                    "offset": 427,
+                    "line": 14,
+                    "column": 16
+                  },
+                  "end": {
+                    "offset": 471,
+                    "line": 14,
+                    "column": 60
+                  }
+                },
+                "content": "Create a roadmap based on highest priority"
+              }
+            ]
+          }
+        }
+      },
+      "raw": {
+        "identifier": "task",
+        "value": "{\n  \"archrev\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"6569221f-2f0c-4598-a7e7-63c1cf9c1900\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 272,\n          \"line\": 11,\n          \"column\": 16\n        },\n        \"end\": {\n          \"offset\": 313,\n          \"line\": 11,\n          \"column\": 57\n        }\n      },\n      \"content\": \"What's the architecture's biggest flaw?\"\n    }\n  ],\n  \"uxrev\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"565e3c33-5bcb-43ab-9ae3-7d708f164dd9\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 328,\n          \"line\": 12,\n          \"column\": 14\n        },\n        \"end\": {\n          \"offset\": 356,\n          \"line\": 12,\n          \"column\": 42\n        }\n      },\n      \"content\": \"Review the UX of this code\"\n    }\n  ],\n  \"secrev\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"fe841b1b-4f42-45f2-8b92-7aa99a868934\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 372,\n          \"line\": 13,\n          \"column\": 15\n        },\n        \"end\": {\n          \"offset\": 410,\n          \"line\": 13,\n          \"column\": 53\n        }\n      },\n      \"content\": \"Review this code for vulnerabilities\"\n    }\n  ],\n  \"roadmap\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"d070a6c4-c29e-4010-9389-db599bdb2084\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 427,\n          \"line\": 14,\n          \"column\": 16\n        },\n        \"end\": {\n          \"offset\": 471,\n          \"line\": 14,\n          \"column\": 60\n        }\n      },\n      \"content\": \"Create a roadmap based on highest priority\"\n    }\n  ]\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 4
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "1e4e7cff-b522-4511-a6da-68b8327aa769",
+      "location": {
+        "start": {
+          "offset": 473,
+          "line": 15,
+          "column": 2
+        },
+        "end": {
+          "offset": 503,
+          "line": 18,
+          "column": 1
+        }
+      },
+      "content": "\n\n# command creation examples\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "37c57b56-10f1-4fc0-be0b-d9b5c2f68eb3",
+      "location": {
+        "start": {
+          "offset": 503,
+          "line": 18,
+          "column": 1
+        },
+        "end": {
+          "offset": 572,
+          "line": 18,
+          "column": 70
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "710de55e-dcb3-4f7f-a516-d4c92fca68d4",
+            "location": {
+              "start": {
+                "offset": 503,
+                "line": 18,
+                "column": 1
+              },
+              "end": {
+                "offset": 572,
+                "line": 18,
+                "column": 70
+              }
+            },
+            "content": "codecat"
+          }
+        ],
+        "params": [
+          "dir"
+        ],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "c4b50733-4293-4996-bd48-36dc637f6f76",
+            "location": {
+              "start": {
+                "offset": 530,
+                "line": 18,
+                "column": 28
+              },
+              "end": {
+                "offset": 535,
+                "line": 18,
+                "column": 33
+              }
+            },
+            "content": "find "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "46fa6440-2637-48ef-9380-cdb7f56ca50b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "dir"
+          },
+          {
+            "type": "Text",
+            "nodeId": "8cf3fe7b-b53b-4409-8b5f-d864a01c7e28",
+            "location": {
+              "start": {
+                "offset": 539,
+                "line": 18,
+                "column": 37
+              },
+              "end": {
+                "offset": 571,
+                "line": 18,
+                "column": 69
+              }
+            },
+            "content": " -type f -name \"*.mld\" | head -5"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "07b7ecca-cfe5-4b9f-afd5-dd0174184a47",
+            "location": {
+              "start": {
+                "offset": 529,
+                "line": 18,
+                "column": 27
+              },
+              "end": {
+                "offset": 572,
+                "line": 18,
+                "column": 70
+              }
+            },
+            "command": "find"
+          },
+          {
+            "nodeId": "b95f5f90-274b-4e97-9b5a-29d5f1a74a8b",
+            "location": {
+              "start": {
+                "offset": 529,
+                "line": 18,
+                "column": 27
+              },
+              "end": {
+                "offset": 572,
+                "line": 18,
+                "column": 70
+              }
+            },
+            "command": "head"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "codecat",
+        "params": [
+          "dir"
+        ],
+        "command": "find @dir -type f -name \"*.mld\" | head -5",
+        "commandBases": [
+          "find",
+          "head"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 2,
+        "hasScriptRunner": false,
+        "parameterCount": 1
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "31b803bb-7316-4724-aede-17239f4d2200",
+      "location": {
+        "start": {
+          "offset": 572,
+          "line": 18,
+          "column": 70
+        },
+        "end": {
+          "offset": 574,
+          "line": 20,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "2e2c0eb3-aa2a-4729-ac5a-228510c60045",
+      "location": {
+        "start": {
+          "offset": 574,
+          "line": 20,
+          "column": 1
+        },
+        "end": {
+          "offset": 676,
+          "line": 20,
+          "column": 103
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "d040572d-7a6f-4a06-9c85-73787ccf0e48",
+            "location": {
+              "start": {
+                "offset": 574,
+                "line": 20,
+                "column": 1
+              },
+              "end": {
+                "offset": 676,
+                "line": 20,
+                "column": 103
+              }
+            },
+            "content": "ask"
+          }
+        ],
+        "params": [
+          "context",
+          "role",
+          "task"
+        ],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "3f05e936-dad6-4ebd-a55d-617ce0c9d07e",
+            "location": {
+              "start": {
+                "offset": 613,
+                "line": 20,
+                "column": 40
+              },
+              "end": {
+                "offset": 631,
+                "line": 20,
+                "column": 58
+              }
+            },
+            "content": "oneshot --context "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "9d9ebc3d-d622-4d73-bc86-e7bdcd509c15",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "context"
+          },
+          {
+            "type": "Text",
+            "nodeId": "1a26d1db-c763-462f-90e7-f9009a1ea087",
+            "location": {
+              "start": {
+                "offset": 639,
+                "line": 20,
+                "column": 66
+              },
+              "end": {
+                "offset": 655,
+                "line": 20,
+                "column": 82
+              }
+            },
+            "content": " --instructions "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "5bd4a73a-2b75-4abf-b32c-c19148730846",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "task"
+          },
+          {
+            "type": "Text",
+            "nodeId": "9c16fa3f-ec7f-4ad1-b5cc-9a926c393fdc",
+            "location": {
+              "start": {
+                "offset": 660,
+                "line": 20,
+                "column": 87
+              },
+              "end": {
+                "offset": 670,
+                "line": 20,
+                "column": 97
+              }
+            },
+            "content": " --system "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "c86cf416-7498-4fd4-ae09-0cd812f4a34f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "role"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "ffaf7953-2dfd-47d9-b184-81008f8ebfb1",
+            "location": {
+              "start": {
+                "offset": 612,
+                "line": 20,
+                "column": 39
+              },
+              "end": {
+                "offset": 676,
+                "line": 20,
+                "column": 103
+              }
+            },
+            "command": "oneshot"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "ask",
+        "params": [
+          "context",
+          "role",
+          "task"
+        ],
+        "command": "oneshot --context @context --instructions @task --system @role",
+        "commandBases": [
+          "oneshot"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "parameterCount": 3
+      }
+    }
+  ],
+  "parseError": null
+}

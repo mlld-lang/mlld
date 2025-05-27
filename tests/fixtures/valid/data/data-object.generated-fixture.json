@@ -7,10 +7,11 @@
   "expected": "John is 30.",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "cb7a2a4b-d56d-4e84-a429-705c4a9e201c",
+      "nodeId": "46928103-1bac-415f-ac41-926141c4ba1d",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "84e3238e-7c54-4f10-b608-4a94148201e0",
+            "nodeId": "f87030f5-5dfe-4a2c-9998-9619f59219c1",
             "location": {
               "start": {
                 "offset": 0,
@@ -53,7 +54,7 @@
             "name": [
               {
                 "type": "Text",
-                "nodeId": "d2c1d6e7-9795-4720-aa2a-d29748d99676",
+                "nodeId": "ebd36ec1-0ecc-473d-8a3e-ed40eeb45d83",
                 "location": {
                   "start": {
                     "offset": 23,
@@ -75,7 +76,7 @@
       },
       "raw": {
         "identifier": "user",
-        "value": "{\n  \"name\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"d2c1d6e7-9795-4720-aa2a-d29748d99676\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 23,\n          \"line\": 1,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 29,\n          \"line\": 1,\n          \"column\": 30\n        }\n      },\n      \"content\": \"John\"\n    }\n  ],\n  \"age\": 30\n}"
+        "value": "{\n  \"name\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"ebd36ec1-0ecc-473d-8a3e-ed40eeb45d83\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 23,\n          \"line\": 1,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 29,\n          \"line\": 1,\n          \"column\": 30\n        }\n      },\n      \"content\": \"John\"\n    }\n  ],\n  \"age\": 30\n}"
       },
       "meta": {
         "objectData": {
@@ -85,7 +86,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "27c13df3-52da-44b3-9bb8-3e0517a9ddb5",
+      "nodeId": "f68ae0b3-f2e8-48ff-9633-49c53e7a4ae2",
       "location": {
         "start": {
           "offset": 42,
@@ -102,7 +103,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "17c78490-1dfe-4421-a3cd-10f3e780470f",
+      "nodeId": "5db5baaf-d284-4b69-ac7c-95ccc123b417",
       "location": {
         "start": {
           "offset": 43,
@@ -122,7 +123,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "4d149a93-7bad-495f-a51d-f1ee01ba8f7f",
+            "nodeId": "6a3bbb41-f332-4e0d-a7d5-9f7e36ebd13e",
             "location": {
               "start": {
                 "offset": 50,
@@ -139,7 +140,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "7a753325-02d3-4f54-8d06-0d99348dc932",
+            "nodeId": "7b4a3cac-6a15-4844-a146-182fb989acc4",
             "location": {
               "start": {
                 "offset": 0,
@@ -163,7 +164,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "8e8fc496-7163-47a6-a137-c97b8c40f1e5",
+            "nodeId": "637178c6-18eb-4da3-b1e1-758c9dbdfa2b",
             "location": {
               "start": {
                 "offset": 64,
@@ -180,7 +181,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "0463b021-7b4e-4b06-8ba9-9e1614dc98b0",
+            "nodeId": "b9e17377-8265-4817-9dec-f1b184ac927a",
             "location": {
               "start": {
                 "offset": 0,
@@ -204,7 +205,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "496f9d93-ef80-41bf-a3ff-cfa05eaf4610",
+            "nodeId": "649e310f-f434-4ea4-a483-aba934f3b257",
             "location": {
               "start": {
                 "offset": 80,

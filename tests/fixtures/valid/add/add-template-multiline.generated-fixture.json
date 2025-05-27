@@ -7,10 +7,11 @@
   "expected": "Content with value\n\nAnd some more content\n\nHey, here's the same variable again: value",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "973bdc27-8eff-4cc4-a781-ebfea692b0c4",
+      "nodeId": "b44ec190-5281-4135-b549-dfef6f53802d",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "61da7473-1a47-4a35-83c6-9837b075f0eb",
+            "nodeId": "2a0fc1bd-f4dc-45a2-aaf1-b5e13772017b",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +51,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "b9d6e2f3-ad74-4d83-b862-225783b6d9da",
+            "nodeId": "98a44c19-e0fa-45fd-b461-6f3e57b07929",
             "location": {
               "start": {
                 "offset": 17,
@@ -79,7 +80,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "09f96c85-1e18-459a-8974-abedaf6c7070",
+      "nodeId": "d9726ab8-f60a-47f2-b4bb-03738793d5ad",
       "location": {
         "start": {
           "offset": 24,
@@ -96,7 +97,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "443be04e-3055-4ad9-8b82-5431aaf380a7",
+      "nodeId": "6e04789e-af6b-41a2-90a9-997acd1f80d4",
       "location": {
         "start": {
           "offset": 25,
@@ -116,7 +117,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "8c0b7f5d-dcd7-4567-8e07-b17f580789fe",
+            "nodeId": "155284e3-2aa6-4121-ba36-0f84c3f51683",
             "location": {
               "start": {
                 "offset": 32,
@@ -133,7 +134,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "ec604f42-f335-495d-98b3-06cb2e11dd88",
+            "nodeId": "8eb7a6e2-5289-4aac-af2e-33418ae1c082",
             "location": {
               "start": {
                 "offset": 0,
@@ -151,7 +152,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "f17ff9d2-f6d3-45e1-a33a-c3ac060d6182",
+            "nodeId": "e953df6a-e453-4714-a790-f0ecf61086bf",
             "location": {
               "start": {
                 "offset": 58,
@@ -168,7 +169,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "875915ba-8460-4d8c-bd99-be8355fea860",
+            "nodeId": "51e9daf0-72b2-4cff-b511-0c00fa9715fe",
             "location": {
               "start": {
                 "offset": 0,
@@ -186,7 +187,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "09411bbf-7c9f-4e45-841b-37cd65473a12",
+            "nodeId": "9a7fbbe2-797c-437f-aec0-d5ef423140c0",
             "location": {
               "start": {
                 "offset": 132,

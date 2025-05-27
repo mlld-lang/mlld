@@ -1,0 +1,27 @@
+{
+  "name": "complex-test-4-recursive-templates",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "# Complex Test 4: Recursive Templates and Variable References\n\n@text name = \"Recursive Test\"\n@text version = \"1.0.0\"\n@text current_date = @run [date +%Y-%m-%d]\n\n# Template that references another template\n@text header_template = [[\n===================================\n{{name}} v{{version}}\n===================================]]\n\n@exec section_template(title, content) = @add [[\n{{header_template}}\n\n## {{title}}\n\n{{content}}\n\nGenerated at: {{current_date}}\n]]\n\n# Data with template references\n@data doc_sections = {\n  \"intro\": {\n    \"title\": \"Introduction\",\n    \"content\": \"This tests recursive template expansion with {{name}}\"\n  },\n  \"features\": {\n    \"title\": \"Features\",\n    \"content\": \"Version {{version}} includes:\\n- Nested templates\\n- Variable interpolation\\n- Data references\"\n  }\n}\n\n# Complex nested template usage\n@text full_doc = [[\n{{header_template}}\n\n# Documentation for {{name}}\n\n@run @section_template(@doc_sections.intro.title, @doc_sections.intro.content)\n\n@run @section_template(@doc_sections.features.title, @doc_sections.features.content)\n\n## Summary\n\nThis document demonstrates:\n- Header: Uses {{header_template}}\n- Sections: Generated with section_template\n- Data: Pulled from {{doc_sections}}\n]]\n\n@add @full_doc",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": null,
+  "parseError": {
+    "message": "Expected \"@run\" or whitespace but \"@\" found.",
+    "location": {
+      "start": {
+        "offset": 370,
+        "line": 13,
+        "column": 42
+      },
+      "end": {
+        "offset": 371,
+        "line": 13,
+        "column": 43
+      }
+    }
+  }
+}

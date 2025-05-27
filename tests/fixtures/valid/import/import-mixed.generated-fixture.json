@@ -7,6 +7,7 @@
   "expected": "# Mixed Path Import Example\n\nThis example demonstrates importing from both local files and URLs seamlessly.\n\n## Local Import\n\n## URL Import  \n\nNow we have variables from both sources!",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": null,
   "parseError": {
     "message": "Expected \"{\" or whitespace but \"\\\"\" found.",

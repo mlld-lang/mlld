@@ -1,0 +1,225 @@
+{
+  "name": "test-field-access",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "@data person = {\n  \"name\": \"John\",\n  \"age\": 30\n}\n\n## Direct field access test:\n@add @person.name\n\n## Age: \n@add @person.age",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "7ebe0b58-a1b9-4df5-8df7-0b86dca52f86",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 48,
+          "line": 4,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "6b010e44-baee-4bce-8ee2-1bf3d09d0ddd",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "person"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "name": [
+              {
+                "type": "Text",
+                "nodeId": "d0ecfabb-073e-4d72-b0f1-cd6c424b249f",
+                "location": {
+                  "start": {
+                    "offset": 27,
+                    "line": 2,
+                    "column": 11
+                  },
+                  "end": {
+                    "offset": 33,
+                    "line": 2,
+                    "column": 17
+                  }
+                },
+                "content": "John"
+              }
+            ],
+            "age": 30
+          }
+        }
+      },
+      "raw": {
+        "identifier": "person",
+        "value": "{\n  \"name\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"d0ecfabb-073e-4d72-b0f1-cd6c424b249f\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 27,\n          \"line\": 2,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 33,\n          \"line\": 2,\n          \"column\": 17\n        }\n      },\n      \"content\": \"John\"\n    }\n  ],\n  \"age\": 30\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 2
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "b60ea66d-a5dc-490a-a636-24d1236b380b",
+      "location": {
+        "start": {
+          "offset": 48,
+          "line": 4,
+          "column": 2
+        },
+        "end": {
+          "offset": 79,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n## Direct field access test:\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "c805dbbe-7865-4a98-aa70-c2444fdebc8a",
+      "location": {
+        "start": {
+          "offset": 79,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 98,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "98c2cc69-14eb-465b-b9bc-43e5c8244e93",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "person",
+            "fields": [
+              {
+                "type": "field",
+                "name": "name"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@person"
+      },
+      "meta": {}
+    },
+    {
+      "type": "Text",
+      "nodeId": "f2e6b80e-457a-4cad-b36a-1b3ba76f700c",
+      "location": {
+        "start": {
+          "offset": 98,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 107,
+          "line": 10,
+          "column": 1
+        }
+      },
+      "content": "## Age: \n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "19cc7845-37cb-40ed-9ebe-100e9ca9cad6",
+      "location": {
+        "start": {
+          "offset": 107,
+          "line": 10,
+          "column": 1
+        },
+        "end": {
+          "offset": 123,
+          "line": 10,
+          "column": 17
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "2d8dc544-049c-4a3d-b2cd-ecd5fff26d74",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "person",
+            "fields": [
+              {
+                "type": "field",
+                "name": "age"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@person"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

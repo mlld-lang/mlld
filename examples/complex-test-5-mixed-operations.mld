@@ -39,9 +39,6 @@
 - Project: {{project}}
 - Parent: {{parent}}
 
-## Command with Variables
-@run [echo "String: @string_var, Number: @number_var"]
-
 ## Mixed Template
 The answer is {{number_var}} and the message is "{{string_var}}"
 Array has {{array_var}} items
@@ -53,6 +50,9 @@ Object keys: {{object_var}}
 
 # Test add with various sources
 @add @operations_test
+
+## Command with Variables
+@run [echo "String: @string_var, Number: @number_var"]
 
 # Test command execution
 @text command_result = @run @process_data(@array_var, @object_var)

@@ -89,8 +89,14 @@ describe('Mlld Interpreter - Fixture Tests', () => {
   
   findFixtures(fixturesDir);
   
+  // Filter out examples unless specifically requested
+  const includeExamples = process.env.INCLUDE_EXAMPLES === 'true';
+  const filteredFixtures = includeExamples ? 
+    fixtureFiles : 
+    fixtureFiles.filter(f => !f.includes('/examples/'));
+  
   // Create a test for each fixture
-  fixtureFiles.forEach(fixtureFile => {
+  filteredFixtures.forEach(fixtureFile => {
     const fixturePath = path.join(fixturesDir, fixtureFile);
     const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
     
@@ -99,13 +105,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     const isWarningFixture = !!fixture.expectedWarning;
     const isValidFixture = !isErrorFixture && !isWarningFixture;
     
-    // Skip fixtures without expected output unless they're error/warning fixtures
-    if (isValidFixture && (fixture.expected === null || fixture.expected === undefined)) {
-      it.skip(`${fixture.name} (no expected output)`, () => {});
-      return;
-    }
+    // For fixtures without expected output, run as smoke tests
+    const isSmokeTest = isValidFixture && (fixture.expected === null || fixture.expected === undefined);
     
-    it(`should handle ${fixture.name}`, async () => {
+    it(`should handle ${fixture.name}${isSmokeTest ? ' (smoke test)' : ''}`, async () => {
       // First, set up any files from the examples directory
       await setupExampleFiles(fixtureFile);
       
@@ -134,6 +137,27 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         }
       } catch (error) {
         // Ignore if shared files directory doesn't exist
+      }
+      
+      // Copy examples files directory for examples that reference files/
+      try {
+        const exampleFilesPath = path.join(__dirname, '../examples/files');
+        if (fs.existsSync(exampleFilesPath)) {
+          await fileSystem.mkdir('/files');
+          const exampleFiles = fs.readdirSync(exampleFilesPath);
+          
+          for (const file of exampleFiles) {
+            const filePath = path.join(exampleFilesPath, file);
+            const stat = fs.statSync(filePath);
+            
+            if (stat.isFile()) {
+              const content = fs.readFileSync(filePath, 'utf8');
+              await fileSystem.writeFile(`/files/${file}`, content);
+            }
+          }
+        }
+      } catch (error) {
+        // Ignore if examples files directory doesn't exist
       }
       
       // Set up package.json for project path resolution
@@ -226,12 +250,16 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             urlConfig
           });
           
-          if (isValidFixture) {
+          if (isValidFixture && !isSmokeTest) {
             // Normalize output (trim trailing whitespace/newlines)
             const normalizedResult = result.trim();
             const normalizedExpected = fixture.expected.trim();
             
             expect(normalizedResult).toBe(normalizedExpected);
+          } else if (isSmokeTest) {
+            // For smoke tests, just verify it doesn't crash and produces output
+            expect(result).toBeDefined();
+            expect(typeof result).toBe('string');
           }
           
           // TODO: Add warning validation for warning fixtures

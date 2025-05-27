@@ -1,4 +1,4 @@
-@import {*} from [imports.mld]
+@import {*} from "files/imports.mld"
 
 @path services = [@./src/services]
 @text code = @run @codecat(@services)

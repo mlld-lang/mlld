@@ -33,7 +33,7 @@ Config Directory: {{config_dir}}
 ]]
 
 ## Directory Contents:
-@run [ls -la {{config_dir}} 2>/dev/null || echo "Directory not found"]
+@run [ls -la @config_dir 2>/dev/null || echo "Directory not found"]
 
 ## Current Working Directory:
 @run [pwd]

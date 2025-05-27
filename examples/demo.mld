@@ -1,4 +1,4 @@
-@import { * } from "imports.mld"
+@import { * } from "files/imports.mld"
 
 @text title = "Meld API Demo"
 @text author = "Meld Team"

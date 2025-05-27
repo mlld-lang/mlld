@@ -1,0 +1,27 @@
+{
+  "name": "demo",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "@import { * } from \"files/imports.mld\"\n\n@text title = \"Meld API Demo\"\n@text author = \"Meld Team\"\n@text date = \"2025-02-25\"\n@data metadata = {\n  version: \"1.0.0\",\n  description: \"A comprehensive demonstration of Meld capabilities\",\n  tags: [\"demo\", \"api\", \"documentation\"]\n}\n\n@text intro_content = [[\n# {{title}}\n\n**Author:** {{author}}  \n**Date:** {{date}}  \n**Version:** {{metadata.version}}\n\n## Introduction\n\nThis document demonstrates the core capabilities of Meld, a directive-based scripting language for embedding small \"@directives\" inside plain text documents.\n]]\n\n@add @intro_content\n\n## Text Variables\n\n@text greeting = \"Hello\"\n@text name = \"World\"\n@text message = [[{{greeting}}, {{name}}!]]\n\nText variables can be defined and referenced:\n- Greeting: @greeting\n- Name: @name\n- Combined: @message\n\n## Imports \n\nYou can import things from other meld files like variables and defined commands.\n\nThen you can add them in this one: \n\n@add @task\n\n## Data Variables\n\n@data config = {\n  app: {\n    name: \"Meld Demo\",\n    version: \"1.0.0\",\n    features: [\"text\", \"data\", \"path\", \"import\", \"add\", \"run\", \"exec\"]\n  },\n  env: \"production\"\n}\n\n@text data_content = [[\nData variables store structured data:\n- App name: {{config.app.name}}\n- Version: {{config.app.version}}\n- Environment: {{config.env}}\n- Features count: {{config.app.features}}\n]]\n\n@add @data_content\n\n## Path Variables\n\n@path docs = \"./docs\"\n@path config = \"./config\"\n@path projectRoot = @./\n\nPath variables for file system references:\n- Documentation path: @docs\n- Configuration path: @config\n- Project root: @projectRoot\n\n## Command Execution\n\n@run [echo \"This is output from a shell command\"]\n\n@exec greet = @run [echo \"Hello from an exec command\"]\n@run @greet\n\n@text user = \"Alice\"\n@exec greet_user(name) = @run [echo \"Hello, @name!\"]\nThe output of this command will be included in the output:\n@run @greet_user(@user)\n\n## File Operations\n\nHere's how to add content from a file:\n\n@add [imports.mld]\n\n## Code Fences\n\nCode fences preserve content exactly as written:\n\n```python\n# This is a Python code block\ndef hello():\n    # @text not_a_directive = \"This is not interpreted\"\n    print(\"Hello, World!\")\n    # @greeting is not replaced\n```\n\n```javascript\n// This is a JavaScript code block\nfunction greet() {\n  // Directives inside code fences are preserved as-is\n  // @data config = { key: \"value\" }\n  console.log(\"Hello!\");\n}\n```\n\n## Nested Code Fences\n\n````\nOuter fence\n```\nInner fence with @greeting (not replaced)\n```\nStill in outer fence\n````\n\n## Complex Example\n\n@text section = \"Complex Example\"\n@data items = [\n  { name: \"Item 1\", value: 100 },\n  { name: \"Item 2\", value: 200 },\n  { name: \"Item 3\", value: 300 }\n]\n\n@exec calculateTotal = @run javascript [[\n  const values = [100, 200, 300];\n  return values.reduce((a, b) => a + b, 0);\n]]\n\n@text complex_template = [[\nHere's how you might represent data:\n\n| Item | Value |\n|------|-------|\n| {{items[0].name}} | {{items[0].value}} |\n| {{items[1].name}} | {{items[1].value}} |\n| {{items[2].name}} | {{items[2].value}} |\n\nTotal value: {{calculateTotal}}\n]]\n\n## Templating\n\n@text template = [[\nThis is a multi-line\ntemplate with variable\ninterpolation: {{greeting}}, {{name}}!\n\nData reference: {{config.app.name}}\n]]\n\n@add @template\n\n@add @complex_template\n\n## Conclusion\n\nThis demo shows the core capabilities of Meld:\n- Variable definitions (@text, @data, @path)\n- Command execution (@run, @exec)\n- File operations (@add, @import)\n- Code fences for literal content\n- Variable interpolation in templates ({{greeting}}, {{config.app.features}})\n\nAll of these features are available through the Meld API.",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": null,
+  "parseError": {
+    "message": "Expected \">>\", \"@\", \"\\n\", \"\\r\\n\", \"{{\", Backtick Sequence, Top-level directive context, [ \\t\\r], [ \\t], [\\r - ], or end of input but \"]\" found.",
+    "location": {
+      "start": {
+        "offset": 2809,
+        "line": 138,
+        "column": 1
+      },
+      "end": {
+        "offset": 2810,
+        "line": 138,
+        "column": 2
+      }
+    }
+  }
+}

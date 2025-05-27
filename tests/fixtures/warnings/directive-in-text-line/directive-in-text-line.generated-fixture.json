@@ -7,10 +7,11 @@
   "expected": null,
   "expectedError": null,
   "expectedWarning": "**Warning: Directive in middle of text line**\n\nThe line `Some text @add @myvar in the middle of a line.` contains a directive that doesn't start at the beginning of the line.\n\nmlld directives are only processed when they appear at the start of a line. Directives in the middle of text lines are treated as literal text.\n\n**To fix this:**\n```mlld\nSome text \n@add @myvar\nin the middle of a line.\n```",
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "ad12174f-f5fa-458b-b759-6b426149f87a",
+      "nodeId": "f7c24e44-da25-49a0-803b-6d5736c2f483",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "079d9314-4837-4e4c-9095-1c9235a1a77d",
+            "nodeId": "a4aac922-5a7b-4362-931c-1a75cdf12b0b",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +51,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "12f8e511-9386-43f5-a619-8cca4fdbe05b",
+            "nodeId": "67742f4b-be45-49f0-a393-9beec3bfc85a",
             "location": {
               "start": {
                 "offset": 14,
@@ -79,7 +80,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "f5584c3f-16f0-4ba6-9708-08ba3248802c",
+      "nodeId": "2066ac76-f9a5-44b2-b86f-f56c721b7b93",
       "location": {
         "start": {
           "offset": 27,

@@ -1,0 +1,332 @@
+{
+  "name": "test-plan",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "@text tests = @run [npm test]\n\n@text res = @run [oneshot \"What's broken here? @tests\"]\n\n@run [oneshot \"Make a plan to fix @res\"]",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "aecc98cf-6b62-4a20-87c7-7fd4069e2602",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 29,
+          "line": 1,
+          "column": 30
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "run",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "0c1b31ee-6c89-46ed-9834-7b38775e1827",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "tests"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "ae8f97b6-43d3-4ed6-8f3d-af20cf49b407",
+            "location": {
+              "start": {
+                "offset": 20,
+                "line": 1,
+                "column": 21
+              },
+              "end": {
+                "offset": 28,
+                "line": 1,
+                "column": 29
+              }
+            },
+            "content": "npm test"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "tests",
+        "content": "@run npm test"
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "run",
+        "hasVariables": false,
+        "run": {
+          "isCommand": true
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "39053500-ec10-44c8-a162-1eed2d9229e9",
+      "location": {
+        "start": {
+          "offset": 29,
+          "line": 1,
+          "column": 30
+        },
+        "end": {
+          "offset": 31,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "bc4b209c-8bba-4d53-9b23-92382dc42e71",
+      "location": {
+        "start": {
+          "offset": 31,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 86,
+          "line": 3,
+          "column": 56
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "run",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "5e2637ab-1748-4fe4-91ff-7de5c43db896",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "res"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "2da435af-2d57-4784-8488-d297f0408abd",
+            "location": {
+              "start": {
+                "offset": 49,
+                "line": 3,
+                "column": 19
+              },
+              "end": {
+                "offset": 78,
+                "line": 3,
+                "column": 48
+              }
+            },
+            "content": "oneshot \"What's broken here? "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "d07f77e7-efc4-4a94-8813-18a182a0cbd0",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "tests"
+          },
+          {
+            "type": "Text",
+            "nodeId": "24036b3e-73ca-4c52-94eb-42d3ce6ea62f",
+            "location": {
+              "start": {
+                "offset": 84,
+                "line": 3,
+                "column": 54
+              },
+              "end": {
+                "offset": 85,
+                "line": 3,
+                "column": 55
+              }
+            },
+            "content": "\""
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "res",
+        "content": "@run oneshot \"What's broken here? @tests\""
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "run",
+        "hasVariables": true,
+        "run": {
+          "isCommand": true
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "44242a45-7f1d-4ad4-ac54-a22b88b8aefd",
+      "location": {
+        "start": {
+          "offset": 86,
+          "line": 3,
+          "column": 56
+        },
+        "end": {
+          "offset": 88,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "1b4889dc-57c1-4cd9-a98c-62b3f0480ab1",
+      "location": {
+        "start": {
+          "offset": 88,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 128,
+          "line": 5,
+          "column": 41
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "9f43c493-31e5-42d6-b5d1-21e7b30ffc9b",
+            "location": {
+              "start": {
+                "offset": 94,
+                "line": 5,
+                "column": 7
+              },
+              "end": {
+                "offset": 122,
+                "line": 5,
+                "column": 35
+              }
+            },
+            "content": "oneshot \"Make a plan to fix "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "40cc464d-d347-4900-8e6b-92bb1bb9ea01",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "res"
+          },
+          {
+            "type": "Text",
+            "nodeId": "6934b712-e76f-4946-a107-b91039f5f4c4",
+            "location": {
+              "start": {
+                "offset": 126,
+                "line": 5,
+                "column": 39
+              },
+              "end": {
+                "offset": 127,
+                "line": 5,
+                "column": 40
+              }
+            },
+            "content": "\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "89b21c7f-2689-4ca7-b2ea-84b63a1bdd71",
+            "location": {
+              "start": {
+                "offset": 93,
+                "line": 5,
+                "column": 6
+              },
+              "end": {
+                "offset": 128,
+                "line": 5,
+                "column": 41
+              }
+            },
+            "command": "oneshot"
+          }
+        ]
+      },
+      "raw": {
+        "command": "oneshot \"Make a plan to fix @res\"",
+        "commandBases": [
+          "oneshot"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    }
+  ],
+  "parseError": null
+}

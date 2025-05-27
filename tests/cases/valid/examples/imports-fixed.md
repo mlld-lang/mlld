@@ -14,4 +14,4 @@
 
 @exec codecat(dir) = @run [find @dir -type f -name "*.js" -exec cat {} \;]
 
-@text echo(var) = @add [[Echo: {{var}}]]
+@exec echo(var) = @add [[Echo: {{var}}]]

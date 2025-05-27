@@ -7,10 +7,11 @@
   "expected": "Hello from code",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "cab44482-5e80-4faf-a615-31f25c06e56e",
+      "nodeId": "fa0f6ff2-ee65-4dbe-bd7f-c37395d58e77",
       "location": {
         "start": {
           "offset": 5,
@@ -30,7 +31,7 @@
         "lang": [
           {
             "type": "Text",
-            "nodeId": "47dfecf4-9035-4c44-ab91-bf72a9784717",
+            "nodeId": "38aedc0c-fa1f-4390-a4aa-c853dd22fe8e",
             "location": {
               "start": {
                 "offset": 5,
@@ -50,7 +51,7 @@
         "code": [
           {
             "type": "Text",
-            "nodeId": "c6c15e37-426b-4549-bb93-ff96e97a6ec1",
+            "nodeId": "0f48acdd-e7ad-4b34-a8f6-aa8900e036f0",
             "location": {
               "start": {
                 "offset": 16,

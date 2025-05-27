@@ -1,0 +1,532 @@
+{
+  "name": "simple",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": ">> This is a comment and should be ignored\n>> I can write a couple lines of them if I want and no one will ever know.\n\n@import { * } from \"files/imports.mld\"\n\n@data role = {\n    \"architect\": \"You are a senior architect skilled in assessing TypeScript codebases.\",\n    \"ux\": \"You are a senior ux designer skilled in assessing user experience.\",\n    \"security\": \"You are a senior security engineer skilled in assessing TypeScript codebases.\"\n}\n\n@data task = {\n    \"code_review\": \"Carefully review the code and test results and advise on the quality of the code and areas of improvement.\",\n    \"ux_review\": \"Carefully review the user experience and advise on the quality of the user experience and areas of improvement.\",\n    \"security_review\": \"Carefully review the security of the code and advise on the quality of the security and areas of improvement.\"\n}\n\n## Your role\n@add @role.architect\n\n\n\n\na bunch of extra newlines here \n\n\n\n\n## Your task\n@add @task.code_review",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Comment",
+      "nodeId": "743514f1-61e9-40a7-87b7-c2e8627620ca",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 43,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "This is a comment and should be ignored"
+    },
+    {
+      "type": "Comment",
+      "nodeId": "0b507d1d-ff27-4104-9448-f6f260c6b56b",
+      "location": {
+        "start": {
+          "offset": 43,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 118,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "I can write a couple lines of them if I want and no one will ever know."
+    },
+    {
+      "type": "Newline",
+      "nodeId": "5a7d7f53-b3fe-45c3-a6dc-7d45f1bb393c",
+      "location": {
+        "start": {
+          "offset": 118,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 119,
+          "line": 4,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "6783b6bd-14df-430d-b5eb-b97780fa41c1",
+      "location": {
+        "start": {
+          "offset": 119,
+          "line": 4,
+          "column": 1
+        },
+        "end": {
+          "offset": 157,
+          "line": 4,
+          "column": 39
+        }
+      },
+      "kind": "import",
+      "subtype": "importAll",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "2579cbb6-09be-4c31-9f22-c9d4626ec078",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "*"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "4386ebd6-d13e-437c-aac5-bc2deee82297",
+            "location": {
+              "start": {
+                "offset": 138,
+                "line": 4,
+                "column": 20
+              },
+              "end": {
+                "offset": 157,
+                "line": 4,
+                "column": 39
+              }
+            },
+            "content": "files/imports.mld"
+          }
+        ]
+      },
+      "raw": {
+        "imports": "*",
+        "path": "files/imports.mld"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "mld",
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "d482e044-6f40-4785-98a8-efb61bf07937",
+      "location": {
+        "start": {
+          "offset": 157,
+          "line": 4,
+          "column": 39
+        },
+        "end": {
+          "offset": 159,
+          "line": 6,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "dc6ce561-6228-487b-b53d-dd0f7dfa3aec",
+      "location": {
+        "start": {
+          "offset": 159,
+          "line": 6,
+          "column": 1
+        },
+        "end": {
+          "offset": 441,
+          "line": 10,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "97e1449f-beb8-48c7-a8f4-3a93981c62cf",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "role"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "architect": [
+              {
+                "type": "Text",
+                "nodeId": "747ea0f1-d3f8-41ab-b5e2-0269fbee1a59",
+                "location": {
+                  "start": {
+                    "offset": 191,
+                    "line": 7,
+                    "column": 18
+                  },
+                  "end": {
+                    "offset": 262,
+                    "line": 7,
+                    "column": 89
+                  }
+                },
+                "content": "You are a senior architect skilled in assessing TypeScript codebases."
+              }
+            ],
+            "ux": [
+              {
+                "type": "Text",
+                "nodeId": "bc38c461-a443-4911-898c-389dc7345388",
+                "location": {
+                  "start": {
+                    "offset": 274,
+                    "line": 8,
+                    "column": 11
+                  },
+                  "end": {
+                    "offset": 342,
+                    "line": 8,
+                    "column": 79
+                  }
+                },
+                "content": "You are a senior ux designer skilled in assessing user experience."
+              }
+            ],
+            "security": [
+              {
+                "type": "Text",
+                "nodeId": "05cc24d3-4057-4c2d-bf43-f5752a72e5c8",
+                "location": {
+                  "start": {
+                    "offset": 360,
+                    "line": 9,
+                    "column": 17
+                  },
+                  "end": {
+                    "offset": 439,
+                    "line": 9,
+                    "column": 96
+                  }
+                },
+                "content": "You are a senior security engineer skilled in assessing TypeScript codebases."
+              }
+            ]
+          }
+        }
+      },
+      "raw": {
+        "identifier": "role",
+        "value": "{\n  \"architect\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"747ea0f1-d3f8-41ab-b5e2-0269fbee1a59\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 191,\n          \"line\": 7,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 262,\n          \"line\": 7,\n          \"column\": 89\n        }\n      },\n      \"content\": \"You are a senior architect skilled in assessing TypeScript codebases.\"\n    }\n  ],\n  \"ux\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"bc38c461-a443-4911-898c-389dc7345388\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 274,\n          \"line\": 8,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 342,\n          \"line\": 8,\n          \"column\": 79\n        }\n      },\n      \"content\": \"You are a senior ux designer skilled in assessing user experience.\"\n    }\n  ],\n  \"security\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"05cc24d3-4057-4c2d-bf43-f5752a72e5c8\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 360,\n          \"line\": 9,\n          \"column\": 17\n        },\n        \"end\": {\n          \"offset\": 439,\n          \"line\": 9,\n          \"column\": 96\n        }\n      },\n      \"content\": \"You are a senior security engineer skilled in assessing TypeScript codebases.\"\n    }\n  ]\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 3
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "ed8e39c2-8d65-4877-9aa8-f846d6ee57c1",
+      "location": {
+        "start": {
+          "offset": 441,
+          "line": 10,
+          "column": 2
+        },
+        "end": {
+          "offset": 443,
+          "line": 12,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "b9ec18de-7b73-4aa6-83dd-fa30cc4ddda2",
+      "location": {
+        "start": {
+          "offset": 443,
+          "line": 12,
+          "column": 1
+        },
+        "end": {
+          "offset": 855,
+          "line": 16,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "964f0ac6-0f02-4aaf-a052-7ff204385e76",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "task"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "code_review": [
+              {
+                "type": "Text",
+                "nodeId": "63c64820-2efd-42ca-9c96-8d29fe4f6de9",
+                "location": {
+                  "start": {
+                    "offset": 477,
+                    "line": 13,
+                    "column": 20
+                  },
+                  "end": {
+                    "offset": 585,
+                    "line": 13,
+                    "column": 128
+                  }
+                },
+                "content": "Carefully review the code and test results and advise on the quality of the code and areas of improvement."
+              }
+            ],
+            "ux_review": [
+              {
+                "type": "Text",
+                "nodeId": "4e70ccbb-039d-4d08-b273-c2d3d25fe027",
+                "location": {
+                  "start": {
+                    "offset": 604,
+                    "line": 14,
+                    "column": 18
+                  },
+                  "end": {
+                    "offset": 717,
+                    "line": 14,
+                    "column": 131
+                  }
+                },
+                "content": "Carefully review the user experience and advise on the quality of the user experience and areas of improvement."
+              }
+            ],
+            "security_review": [
+              {
+                "type": "Text",
+                "nodeId": "b109694a-ba9d-43b4-b06b-4b620cd166ec",
+                "location": {
+                  "start": {
+                    "offset": 742,
+                    "line": 15,
+                    "column": 24
+                  },
+                  "end": {
+                    "offset": 853,
+                    "line": 15,
+                    "column": 135
+                  }
+                },
+                "content": "Carefully review the security of the code and advise on the quality of the security and areas of improvement."
+              }
+            ]
+          }
+        }
+      },
+      "raw": {
+        "identifier": "task",
+        "value": "{\n  \"code_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"63c64820-2efd-42ca-9c96-8d29fe4f6de9\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 477,\n          \"line\": 13,\n          \"column\": 20\n        },\n        \"end\": {\n          \"offset\": 585,\n          \"line\": 13,\n          \"column\": 128\n        }\n      },\n      \"content\": \"Carefully review the code and test results and advise on the quality of the code and areas of improvement.\"\n    }\n  ],\n  \"ux_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"4e70ccbb-039d-4d08-b273-c2d3d25fe027\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 604,\n          \"line\": 14,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 717,\n          \"line\": 14,\n          \"column\": 131\n        }\n      },\n      \"content\": \"Carefully review the user experience and advise on the quality of the user experience and areas of improvement.\"\n    }\n  ],\n  \"security_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"b109694a-ba9d-43b4-b06b-4b620cd166ec\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 742,\n          \"line\": 15,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 853,\n          \"line\": 15,\n          \"column\": 135\n        }\n      },\n      \"content\": \"Carefully review the security of the code and advise on the quality of the security and areas of improvement.\"\n    }\n  ]\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 3
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "53ec6683-e1cc-4df5-8b1b-491297a71fb7",
+      "location": {
+        "start": {
+          "offset": 855,
+          "line": 16,
+          "column": 2
+        },
+        "end": {
+          "offset": 870,
+          "line": 19,
+          "column": 1
+        }
+      },
+      "content": "\n\n## Your role\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "9bd68ee0-c1e9-4675-9b55-ca03a334c7f2",
+      "location": {
+        "start": {
+          "offset": 870,
+          "line": 19,
+          "column": 1
+        },
+        "end": {
+          "offset": 895,
+          "line": 24,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "3a8f51a7-9fc1-44ab-82b6-a4921e8642a3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "role",
+            "fields": [
+              {
+                "type": "field",
+                "name": "architect"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@role"
+      },
+      "meta": {}
+    },
+    {
+      "type": "Text",
+      "nodeId": "e9a9b8d5-5ebe-4145-b675-2ae0d30c9b1c",
+      "location": {
+        "start": {
+          "offset": 895,
+          "line": 24,
+          "column": 1
+        },
+        "end": {
+          "offset": 944,
+          "line": 30,
+          "column": 1
+        }
+      },
+      "content": "a bunch of extra newlines here \n\n\n\n\n## Your task\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "886580ed-3881-4054-a5a1-6fc5b7a45629",
+      "location": {
+        "start": {
+          "offset": 944,
+          "line": 30,
+          "column": 1
+        },
+        "end": {
+          "offset": 966,
+          "line": 30,
+          "column": 23
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "2045fba6-ab5c-4055-a38f-33f4c76321ba",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "task",
+            "fields": [
+              {
+                "type": "field",
+                "name": "code_review"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@task"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

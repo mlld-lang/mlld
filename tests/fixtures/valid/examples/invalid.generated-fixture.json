@@ -1,0 +1,575 @@
+{
+  "name": "invalid",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "# Common mlld Mistakes - Invalid Usage Examples\n\nThis file shows common mistakes that new mlld users make when trying to use mlld like a template language.\n\n@text myvar = \"Hello world\"\n@data person = { \"name\": \"John\", \"age\": 30 }\n\n## Mistake 1: Bare @ variable references\nThis is some text. Now I'm going to say @myvar - this WON'T work!\n\n## Mistake 2: Template syntax in regular text  \nOr maybe I'll say {{myvar}} - this also WON'T work!\n\n## Mistake 3: Directive in middle of line\nSome text @add @myvar in the middle - this WON'T work either!\n\n## Mistake 4: Object field access in text\nThe person's name is @person.name - nope, still won't work!\n\n---\n\n## The CORRECT way:\n\n@text myvar = \"Hello world\"\n\nThis is some text. Now I'm going to say:\n@add @myvar\n\nOr with templates:\n@text greeting = [[Hello {{myvar}}!]]\n@add @greeting\n\nThe key insight: mlld is a **programming language embedded IN markdown**, not a **template language**. \nIt treats as plain text EVERY line that doesn't start with a mlld directive.",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "1c1b7592-a8d5-4e71-a093-ddb452a96d9a",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 157,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "# Common mlld Mistakes - Invalid Usage Examples\n\nThis file shows common mistakes that new mlld users make when trying to use mlld like a template language.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "dd355f80-594a-4681-ba87-3bd102a4c4dc",
+      "location": {
+        "start": {
+          "offset": 157,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 184,
+          "line": 5,
+          "column": 28
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "d4bf3735-0418-4405-bd50-20f133f57887",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "myvar"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "26a4cb09-938f-44b6-9325-7abdebd1ca9e",
+            "location": {
+              "start": {
+                "offset": 171,
+                "line": 5,
+                "column": 15
+              },
+              "end": {
+                "offset": 184,
+                "line": 5,
+                "column": 28
+              }
+            },
+            "content": "Hello world"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "myvar",
+        "content": "Hello world"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "ad0fe22d-3c15-4d25-bd1c-605b0f50a809",
+      "location": {
+        "start": {
+          "offset": 184,
+          "line": 5,
+          "column": 28
+        },
+        "end": {
+          "offset": 185,
+          "line": 6,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "aa135d0b-ccc2-4875-88f8-c69028fc05e5",
+      "location": {
+        "start": {
+          "offset": 185,
+          "line": 6,
+          "column": 1
+        },
+        "end": {
+          "offset": 229,
+          "line": 6,
+          "column": 45
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "c528df18-3648-4789-9313-19c81c02c39f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "person"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "name": [
+              {
+                "type": "Text",
+                "nodeId": "f73ee0c6-320c-4582-af7e-1bdaf29875bd",
+                "location": {
+                  "start": {
+                    "offset": 210,
+                    "line": 6,
+                    "column": 26
+                  },
+                  "end": {
+                    "offset": 216,
+                    "line": 6,
+                    "column": 32
+                  }
+                },
+                "content": "John"
+              }
+            ],
+            "age": 30
+          }
+        }
+      },
+      "raw": {
+        "identifier": "person",
+        "value": "{\n  \"name\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"f73ee0c6-320c-4582-af7e-1bdaf29875bd\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 210,\n          \"line\": 6,\n          \"column\": 26\n        },\n        \"end\": {\n          \"offset\": 216,\n          \"line\": 6,\n          \"column\": 32\n        }\n      },\n      \"content\": \"John\"\n    }\n  ],\n  \"age\": 30\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 2
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "760b0ee6-5f66-49a4-9a90-a20a80ed3cac",
+      "location": {
+        "start": {
+          "offset": 229,
+          "line": 6,
+          "column": 45
+        },
+        "end": {
+          "offset": 405,
+          "line": 12,
+          "column": 19
+        }
+      },
+      "content": "\n\n## Mistake 1: Bare @ variable references\nThis is some text. Now I'm going to say @myvar - this WON'T work!\n\n## Mistake 2: Template syntax in regular text  \nOr maybe I'll say "
+    },
+    {
+      "type": "VariableReference",
+      "nodeId": "c10cec93-7480-4d86-8874-989e28a0cbad",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "valueType": "varInterpolation",
+      "identifier": "myvar"
+    },
+    {
+      "type": "Text",
+      "nodeId": "3940553b-b868-4672-8764-90c591232bb5",
+      "location": {
+        "start": {
+          "offset": 414,
+          "line": 12,
+          "column": 28
+        },
+        "end": {
+          "offset": 674,
+          "line": 24,
+          "column": 1
+        }
+      },
+      "content": " - this also WON'T work!\n\n## Mistake 3: Directive in middle of line\nSome text @add @myvar in the middle - this WON'T work either!\n\n## Mistake 4: Object field access in text\nThe person's name is @person.name - nope, still won't work!\n\n---\n\n## The CORRECT way:\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "7d6210bb-b80d-41a7-8605-923bad71904e",
+      "location": {
+        "start": {
+          "offset": 674,
+          "line": 24,
+          "column": 1
+        },
+        "end": {
+          "offset": 701,
+          "line": 24,
+          "column": 28
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "b54f5b4f-2362-4d60-b9cd-2ca76a34414f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "myvar"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "48622d4e-3d8f-47c0-b8d5-95c79739e908",
+            "location": {
+              "start": {
+                "offset": 688,
+                "line": 24,
+                "column": 15
+              },
+              "end": {
+                "offset": 701,
+                "line": 24,
+                "column": 28
+              }
+            },
+            "content": "Hello world"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "myvar",
+        "content": "Hello world"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "857c187b-022f-42e4-ac1c-9cb1ad27a134",
+      "location": {
+        "start": {
+          "offset": 701,
+          "line": 24,
+          "column": 28
+        },
+        "end": {
+          "offset": 744,
+          "line": 27,
+          "column": 1
+        }
+      },
+      "content": "\n\nThis is some text. Now I'm going to say:\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "05ef0f3e-7fc4-4659-9274-60a42ddf2640",
+      "location": {
+        "start": {
+          "offset": 744,
+          "line": 27,
+          "column": 1
+        },
+        "end": {
+          "offset": 757,
+          "line": 29,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "53888f06-c300-40f1-bb5f-0dff090b7663",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "myvar"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@myvar"
+      },
+      "meta": {}
+    },
+    {
+      "type": "Text",
+      "nodeId": "2dae95ba-071e-4878-9d32-f2de18b8b7d7",
+      "location": {
+        "start": {
+          "offset": 757,
+          "line": 29,
+          "column": 1
+        },
+        "end": {
+          "offset": 776,
+          "line": 30,
+          "column": 1
+        }
+      },
+      "content": "Or with templates:\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "3fa21d7b-8bc6-4a0c-8a12-49468d09861f",
+      "location": {
+        "start": {
+          "offset": 776,
+          "line": 30,
+          "column": 1
+        },
+        "end": {
+          "offset": 813,
+          "line": 30,
+          "column": 38
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplate",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "60d985c1-c621-4e9f-87c9-81d7518c3d1a",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "greeting"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "70abfe1a-afdd-4edd-b513-129f73ad5995",
+            "location": {
+              "start": {
+                "offset": 795,
+                "line": 30,
+                "column": 20
+              },
+              "end": {
+                "offset": 801,
+                "line": 30,
+                "column": 26
+              }
+            },
+            "content": "Hello "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "f1ff4a9c-e7d7-4266-8665-027cc621f431",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "myvar"
+          },
+          {
+            "type": "Text",
+            "nodeId": "1c636242-98f1-498c-9207-7a3baf1d60fa",
+            "location": {
+              "start": {
+                "offset": 810,
+                "line": 30,
+                "column": 35
+              },
+              "end": {
+                "offset": 811,
+                "line": 30,
+                "column": 36
+              }
+            },
+            "content": "!"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greeting",
+        "content": "Hello {{myvar}}!"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "06874b60-abd5-464e-a2d9-2958255a9777",
+      "location": {
+        "start": {
+          "offset": 813,
+          "line": 30,
+          "column": 38
+        },
+        "end": {
+          "offset": 814,
+          "line": 31,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "ed716680-9dff-448a-8d64-cfe43bd11979",
+      "location": {
+        "start": {
+          "offset": 814,
+          "line": 31,
+          "column": 1
+        },
+        "end": {
+          "offset": 830,
+          "line": 33,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "38c59ec0-a29d-4a7f-9e0c-545a510e0910",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "greeting"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@greeting"
+      },
+      "meta": {}
+    },
+    {
+      "type": "Text",
+      "nodeId": "8bd914b2-a718-41e8-893e-2d72e93552df",
+      "location": {
+        "start": {
+          "offset": 830,
+          "line": 33,
+          "column": 1
+        },
+        "end": {
+          "offset": 1010,
+          "line": 34,
+          "column": 77
+        }
+      },
+      "content": "The key insight: mlld is a **programming language embedded IN markdown**, not a **template language**. \nIt treats as plain text EVERY line that doesn't start with a mlld directive."
+    }
+  ],
+  "parseError": null
+}

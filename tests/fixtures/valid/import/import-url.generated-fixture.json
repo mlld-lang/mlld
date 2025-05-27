@@ -7,6 +7,7 @@
   "expected": "# Import from URL Example\n\nThis example demonstrates importing from a URL.\n\nThe imported variables should now be available.",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": null,
   "parseError": {
     "message": "Expected \"{\" or whitespace but \"\\\"\" found.",

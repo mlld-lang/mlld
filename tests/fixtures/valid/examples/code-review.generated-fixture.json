@@ -1,0 +1,786 @@
+{
+  "name": "code-review",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "@import {roles, tasks} from \"files/prompts.mld\"\n\n@text arch = @add [files/README.md # Architecture]\n@text standards = @add [files/README.md # Code Standards]\n@text diff = @run [git diff | cat]\n\n@text prompt = [[\n   Read our docs: {{arch}} {{standards}}\n   Review the latest changes: {{diff}}\n   Here's your task: {{tasks.codereview}}\n]]\n\n@run [oneshot @prompt --system @roles.architect]",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "ca79edc1-08b8-412c-a81e-2b99664e6afc",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 47,
+          "line": 1,
+          "column": 48
+        }
+      },
+      "kind": "import",
+      "subtype": "importSelected",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "f8ba7388-c1ff-4717-9a0a-20d838610c5b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "roles"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "478b8529-33ff-49e2-a262-6a19b2352794",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "tasks"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "97bf130a-ae8c-4468-a073-3bc654a4baf3",
+            "location": {
+              "start": {
+                "offset": 28,
+                "line": 1,
+                "column": 29
+              },
+              "end": {
+                "offset": 47,
+                "line": 1,
+                "column": 48
+              }
+            },
+            "content": "files/prompts.mld"
+          }
+        ]
+      },
+      "raw": {
+        "imports": "roles, tasks",
+        "path": "files/prompts.mld"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "mld",
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "476361ac-98e9-4da9-b7c9-153b9cf200cb",
+      "location": {
+        "start": {
+          "offset": 47,
+          "line": 1,
+          "column": 48
+        },
+        "end": {
+          "offset": 49,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "87c8d9a2-d75b-4d9c-af0d-5886445e8f38",
+      "location": {
+        "start": {
+          "offset": 49,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 99,
+          "line": 3,
+          "column": 51
+        }
+      },
+      "kind": "text",
+      "subtype": "textPathSection",
+      "source": "directive",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "9c780f10-ec6b-4685-840b-795e4a9d5644",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "arch"
+          }
+        ],
+        "section": [
+          {
+            "type": "Text",
+            "nodeId": "39822664-1df4-4158-b315-ed685ef7a59a",
+            "location": {
+              "start": {
+                "offset": 49,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "offset": 99,
+                "line": 3,
+                "column": 51
+              }
+            },
+            "content": "Architecture"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "c02a3143-e331-4317-a1d0-bfbca3611dab",
+            "location": {
+              "start": {
+                "offset": 49,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "offset": 99,
+                "line": 3,
+                "column": 51
+              }
+            },
+            "content": "files/README.md"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "arch",
+        "section": "Architecture",
+        "path": "files/README.md"
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "add",
+        "hasRename": false,
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "919b1b25-11c5-43e0-8dd3-926f374702d7",
+      "location": {
+        "start": {
+          "offset": 99,
+          "line": 3,
+          "column": 51
+        },
+        "end": {
+          "offset": 100,
+          "line": 4,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "dbabce48-705c-4a27-95cd-f71bad9980c0",
+      "location": {
+        "start": {
+          "offset": 100,
+          "line": 4,
+          "column": 1
+        },
+        "end": {
+          "offset": 157,
+          "line": 4,
+          "column": 58
+        }
+      },
+      "kind": "text",
+      "subtype": "textPathSection",
+      "source": "directive",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "66cfcf15-d2bb-4ca7-8f4a-34b2a4cbe5a0",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "standards"
+          }
+        ],
+        "section": [
+          {
+            "type": "Text",
+            "nodeId": "8cecdc44-3d0c-4da6-a026-76ecc737b4ca",
+            "location": {
+              "start": {
+                "offset": 100,
+                "line": 4,
+                "column": 1
+              },
+              "end": {
+                "offset": 157,
+                "line": 4,
+                "column": 58
+              }
+            },
+            "content": "Code Standards"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "79cc786d-77e1-4edf-9cb5-4be12f9a25d3",
+            "location": {
+              "start": {
+                "offset": 100,
+                "line": 4,
+                "column": 1
+              },
+              "end": {
+                "offset": 157,
+                "line": 4,
+                "column": 58
+              }
+            },
+            "content": "files/README.md"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "standards",
+        "section": "Code Standards",
+        "path": "files/README.md"
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "add",
+        "hasRename": false,
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "8d7c418f-e65e-4729-97d1-f6fb84bba57e",
+      "location": {
+        "start": {
+          "offset": 157,
+          "line": 4,
+          "column": 58
+        },
+        "end": {
+          "offset": 158,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "86763de7-4502-4626-9fe4-a7ef7071901d",
+      "location": {
+        "start": {
+          "offset": 158,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 192,
+          "line": 5,
+          "column": 35
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "run",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "fdb3f5f2-b69a-4b20-830b-f7750151673e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "diff"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "7ad0b490-f26e-4c27-a247-b10130d4c3e8",
+            "location": {
+              "start": {
+                "offset": 177,
+                "line": 5,
+                "column": 20
+              },
+              "end": {
+                "offset": 191,
+                "line": 5,
+                "column": 34
+              }
+            },
+            "content": "git diff | cat"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "diff",
+        "content": "@run git diff | cat"
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "run",
+        "hasVariables": false,
+        "run": {
+          "isCommand": true
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "cfeef5a0-9889-40fd-970e-00576b918ace",
+      "location": {
+        "start": {
+          "offset": 192,
+          "line": 5,
+          "column": 35
+        },
+        "end": {
+          "offset": 194,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "6630b5ae-13a7-46a8-86a2-ba1b99757581",
+      "location": {
+        "start": {
+          "offset": 194,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 336,
+          "line": 11,
+          "column": 3
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplate",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "44abb754-f4c8-4704-b514-a3f5ff970135",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "prompt"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "32309d19-31ff-4870-9008-2b752e8fcb2c",
+            "location": {
+              "start": {
+                "offset": 211,
+                "line": 7,
+                "column": 18
+              },
+              "end": {
+                "offset": 230,
+                "line": 8,
+                "column": 19
+              }
+            },
+            "content": "\n   Read our docs: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "7e9b6d21-5c1d-4e45-aead-aeac1dcbda32",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "arch"
+          },
+          {
+            "type": "Text",
+            "nodeId": "b704984c-b220-4144-8a4e-12251b9dc75b",
+            "location": {
+              "start": {
+                "offset": 238,
+                "line": 8,
+                "column": 27
+              },
+              "end": {
+                "offset": 239,
+                "line": 8,
+                "column": 28
+              }
+            },
+            "content": " "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "4ebed59f-9b92-424b-9d4d-ff50a907ca03",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "standards"
+          },
+          {
+            "type": "Text",
+            "nodeId": "e207cd1b-b307-4665-9173-74a02c6805f4",
+            "location": {
+              "start": {
+                "offset": 252,
+                "line": 8,
+                "column": 41
+              },
+              "end": {
+                "offset": 283,
+                "line": 9,
+                "column": 31
+              }
+            },
+            "content": "\n   Review the latest changes: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "d60de46a-ad85-4a0f-892a-e5c370741b2f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "diff"
+          },
+          {
+            "type": "Text",
+            "nodeId": "4b251696-bef0-4c76-8494-4ec5146b2c36",
+            "location": {
+              "start": {
+                "offset": 291,
+                "line": 9,
+                "column": 39
+              },
+              "end": {
+                "offset": 313,
+                "line": 10,
+                "column": 22
+              }
+            },
+            "content": "\n   Here's your task: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "97c23ccd-c611-4fa8-a9f5-08810693943d",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "tasks",
+            "fields": [
+              {
+                "type": "field",
+                "name": "codereview"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "90eb4d67-0991-48f2-9df9-1b2f4f35da95",
+            "location": {
+              "start": {
+                "offset": 333,
+                "line": 10,
+                "column": 42
+              },
+              "end": {
+                "offset": 334,
+                "line": 11,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "prompt",
+        "content": "\n   Read our docs: {{arch}} {{standards}}\n   Review the latest changes: {{diff}}\n   Here's your task: {{tasks}}\n"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "022103ae-7558-47d8-a32a-9507632e4688",
+      "location": {
+        "start": {
+          "offset": 336,
+          "line": 11,
+          "column": 3
+        },
+        "end": {
+          "offset": 338,
+          "line": 13,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "8b170756-bfe0-430f-b277-8234cb759181",
+      "location": {
+        "start": {
+          "offset": 338,
+          "line": 13,
+          "column": 1
+        },
+        "end": {
+          "offset": 386,
+          "line": 13,
+          "column": 49
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "e144fb17-d1ba-4765-94b9-96400deb4505",
+            "location": {
+              "start": {
+                "offset": 344,
+                "line": 13,
+                "column": 7
+              },
+              "end": {
+                "offset": 352,
+                "line": 13,
+                "column": 15
+              }
+            },
+            "content": "oneshot "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "6709d853-120e-48b3-84db-03069d0a1462",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "prompt"
+          },
+          {
+            "type": "Text",
+            "nodeId": "fc67651c-80e7-4738-a00f-f4835442c05b",
+            "location": {
+              "start": {
+                "offset": 359,
+                "line": 13,
+                "column": 22
+              },
+              "end": {
+                "offset": 369,
+                "line": 13,
+                "column": 32
+              }
+            },
+            "content": " --system "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "763623a0-292c-48b0-9134-ec25e45f7cb2",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "roles",
+            "fields": [
+              {
+                "type": "field",
+                "name": "architect"
+              }
+            ]
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "f830ff55-f863-4cf1-8b3d-7312b1a24d2f",
+            "location": {
+              "start": {
+                "offset": 343,
+                "line": 13,
+                "column": 6
+              },
+              "end": {
+                "offset": 386,
+                "line": 13,
+                "column": 49
+              }
+            },
+            "command": "oneshot"
+          }
+        ]
+      },
+      "raw": {
+        "command": "oneshot @prompt --system @roles",
+        "commandBases": [
+          "oneshot"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    }
+  ],
+  "parseError": null
+}

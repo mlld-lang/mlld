@@ -7,6 +7,7 @@
   "expected": null,
   "expectedError": "```\nExpected \"@add\" or whitespace but \"@\" found.\nLocation: line 1, column 22\n```\n\n**Error explanation:**\nThe syntax `@text codecat(dir) = @run [...]` is invalid. For parameterized commands that execute shell commands, use `@exec` instead:\n\n**Correct syntax:**\n```mlld\n@exec codecat(dir) = @run [find @dir -type f -name \"*.js\" -exec cat {} \\;]\n```\n\n**Alternative for text templates:**\n```mlld\n@text greeting(name) = @add [[Hello {{name}}!]]\n```",
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": null,
   "parseError": {
     "message": "Expected \"@add\" or whitespace but \"@\" found.",

@@ -1,0 +1,463 @@
+{
+  "name": "chain",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "# Chaining LLM Requests Example\n@import { role } from \"files/imports.mld\"\n\n@text tests = @run [npm test]\n@text res = @run [oneshot --context @tests --task \"What's one thing that's broken here?\"]\n@run [oneshot \"Make a plan to fix this:\\n\\n# Issue:\\n@res\" --system @role.architect]",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "7871fd64-30f4-403c-8888-c947494502f9",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 32,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "# Chaining LLM Requests Example\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "c8ec1f06-d4bb-451c-bb2a-93d31a5024b3",
+      "location": {
+        "start": {
+          "offset": 32,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 73,
+          "line": 2,
+          "column": 42
+        }
+      },
+      "kind": "import",
+      "subtype": "importSelected",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "94946b86-a636-4716-9128-1ba5ff617ad6",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "role"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "98c2f86c-7905-4362-b4c2-0614d2a5af90",
+            "location": {
+              "start": {
+                "offset": 54,
+                "line": 2,
+                "column": 23
+              },
+              "end": {
+                "offset": 73,
+                "line": 2,
+                "column": 42
+              }
+            },
+            "content": "files/imports.mld"
+          }
+        ]
+      },
+      "raw": {
+        "imports": "role",
+        "path": "files/imports.mld"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "mld",
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "0fb19a9c-8d3f-465c-b468-197305d8e481",
+      "location": {
+        "start": {
+          "offset": 73,
+          "line": 2,
+          "column": 42
+        },
+        "end": {
+          "offset": 75,
+          "line": 4,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "66a97df5-e453-4504-9f65-29e4d820c109",
+      "location": {
+        "start": {
+          "offset": 75,
+          "line": 4,
+          "column": 1
+        },
+        "end": {
+          "offset": 104,
+          "line": 4,
+          "column": 30
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "run",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "b1e72f04-594a-447f-bd82-fab39a5dfa7b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "tests"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "329e58fa-c62e-4f88-a36b-58e3420e1df0",
+            "location": {
+              "start": {
+                "offset": 95,
+                "line": 4,
+                "column": 21
+              },
+              "end": {
+                "offset": 103,
+                "line": 4,
+                "column": 29
+              }
+            },
+            "content": "npm test"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "tests",
+        "content": "@run npm test"
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "run",
+        "hasVariables": false,
+        "run": {
+          "isCommand": true
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "35def105-1d6b-4920-9158-003e45642bb0",
+      "location": {
+        "start": {
+          "offset": 104,
+          "line": 4,
+          "column": 30
+        },
+        "end": {
+          "offset": 105,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "fc911dff-7b80-4c8f-811e-e242d8d2855d",
+      "location": {
+        "start": {
+          "offset": 105,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 194,
+          "line": 5,
+          "column": 90
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "run",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "1befb94c-d6f3-4002-b5bd-4b45ac40f869",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "res"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "dd107ad4-c287-46c8-9d1f-a490935d9eb9",
+            "location": {
+              "start": {
+                "offset": 123,
+                "line": 5,
+                "column": 19
+              },
+              "end": {
+                "offset": 141,
+                "line": 5,
+                "column": 37
+              }
+            },
+            "content": "oneshot --context "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "076df81d-4a05-434d-b35d-06adbe7b157c",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "tests"
+          },
+          {
+            "type": "Text",
+            "nodeId": "bd02cf77-d92f-4bce-a835-fafb8e5be6bc",
+            "location": {
+              "start": {
+                "offset": 147,
+                "line": 5,
+                "column": 43
+              },
+              "end": {
+                "offset": 193,
+                "line": 5,
+                "column": 89
+              }
+            },
+            "content": " --task \"What's one thing that's broken here?\""
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "res",
+        "content": "@run oneshot --context @tests --task \"What's one thing that's broken here?\""
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "run",
+        "hasVariables": true,
+        "run": {
+          "isCommand": true
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "8a3c059a-5cfa-4618-91fe-afc4a9b6f38e",
+      "location": {
+        "start": {
+          "offset": 194,
+          "line": 5,
+          "column": 90
+        },
+        "end": {
+          "offset": 195,
+          "line": 6,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "c32ffdad-1c9b-4a76-923c-b58aa36b9409",
+      "location": {
+        "start": {
+          "offset": 195,
+          "line": 6,
+          "column": 1
+        },
+        "end": {
+          "offset": 279,
+          "line": 6,
+          "column": 85
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "2a80a6ee-2ddd-4a6d-8257-090201e542b2",
+            "location": {
+              "start": {
+                "offset": 201,
+                "line": 6,
+                "column": 7
+              },
+              "end": {
+                "offset": 248,
+                "line": 6,
+                "column": 54
+              }
+            },
+            "content": "oneshot \"Make a plan to fix this:\\n\\n# Issue:\\n"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "1423d7f5-5614-4a9e-98c3-d5d2717e8967",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "res"
+          },
+          {
+            "type": "Text",
+            "nodeId": "1af1d0f4-cd61-4bf9-bb5c-d230515aa21c",
+            "location": {
+              "start": {
+                "offset": 252,
+                "line": 6,
+                "column": 58
+              },
+              "end": {
+                "offset": 263,
+                "line": 6,
+                "column": 69
+              }
+            },
+            "content": "\" --system "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "27276b01-a406-43b4-8007-254f3944664e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "role",
+            "fields": [
+              {
+                "type": "field",
+                "name": "architect"
+              }
+            ]
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "31539d43-230e-465a-999e-49ed7ef68912",
+            "location": {
+              "start": {
+                "offset": 200,
+                "line": 6,
+                "column": 6
+              },
+              "end": {
+                "offset": 279,
+                "line": 6,
+                "column": 85
+              }
+            },
+            "command": "oneshot"
+          }
+        ]
+      },
+      "raw": {
+        "command": "oneshot \"Make a plan to fix this:\\n\\n# Issue:\\n@res\" --system @role",
+        "commandBases": [
+          "oneshot"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    }
+  ],
+  "parseError": null
+}

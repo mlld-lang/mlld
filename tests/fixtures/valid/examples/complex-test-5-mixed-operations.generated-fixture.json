@@ -1,0 +1,1589 @@
+{
+  "name": "complex-test-5-mixed-operations",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "# Complex Test 5: Mixed Operations and Error Handling\n\n# Setup various data types\n@text string_var = \"Hello, World!\"\n@data number_var = 42\n@data boolean_var = true\n@data null_var = null\n@data array_var = [\"first\", \"second\", \"third\"]\n@data object_var = {\"key\": \"value\", \"nested\": {\"deep\": \"data\"}}\n\n# Path variables with special characters\n@path home = @~\n@path project = @./\n@path parent = @../\n\n# Test various operations\n@text operations_test = [[\n# Mixed Operations Test\n\n## Variable Types\n- String: {{string_var}}\n- Number: {{number_var}}\n- Boolean: {{boolean_var}}\n- Null: {{null_var}}\n- Array: {{array_var}}\n- Object: {{object_var}}\n\n## Array Operations\n- First element: {{array_var.0}}\n- Second element: {{array_var.1}}\n- Last element: {{array_var.2}}\n\n## Object Operations\n- Direct access: {{object_var.key}}\n- Nested access: {{object_var.nested.deep}}\n\n## Path Operations\n- Home: {{home}}\n- Project: {{project}}\n- Parent: {{parent}}\n\n## Mixed Template\nThe answer is {{number_var}} and the message is \"{{string_var}}\"\nArray has {{array_var}} items\nObject keys: {{object_var}}\n]]\n\n# Test exec with complex parameters\n@exec process_data(arr, obj) = @run [echo \"Array: @arr, Object: @obj\" | wc -l]\n\n# Test add with various sources\n@add @operations_test\n\n## Command with Variables\n@run [echo \"String: @string_var, Number: @number_var\"]\n\n# Test command execution\n@text command_result = @run @process_data(@array_var, @object_var)\n\n## Command Result\nLines counted: @add @command_result\n\n# Test inline operations\nFinal thought: The value {{number_var}} with {{string_var}} makes {{boolean_var}}",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "2bca7caa-9840-4e08-94da-f25612edc32d",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 82,
+          "line": 4,
+          "column": 1
+        }
+      },
+      "content": "# Complex Test 5: Mixed Operations and Error Handling\n\n# Setup various data types\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "0d3cbfdb-7252-4de5-a222-018e69160772",
+      "location": {
+        "start": {
+          "offset": 82,
+          "line": 4,
+          "column": 1
+        },
+        "end": {
+          "offset": 116,
+          "line": 4,
+          "column": 35
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "c176b75f-16d6-4a0a-a34c-76a6ee37fc54",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "string_var"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "c59172e4-f5e4-45cc-a4c9-73c2538e3b9d",
+            "location": {
+              "start": {
+                "offset": 101,
+                "line": 4,
+                "column": 20
+              },
+              "end": {
+                "offset": 116,
+                "line": 4,
+                "column": 35
+              }
+            },
+            "content": "Hello, World!"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "string_var",
+        "content": "Hello, World!"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "067fab8f-ba32-4a5c-ad86-f61f45198822",
+      "location": {
+        "start": {
+          "offset": 116,
+          "line": 4,
+          "column": 35
+        },
+        "end": {
+          "offset": 117,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "490239e2-21dd-4b0e-a7b1-4bd575064f04",
+      "location": {
+        "start": {
+          "offset": 117,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 138,
+          "line": 5,
+          "column": 22
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "6bc81182-c3be-49fc-b3ce-c99e958222e0",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "number_var"
+          }
+        ],
+        "value": [
+          42
+        ]
+      },
+      "raw": {
+        "identifier": "number_var",
+        "value": "42"
+      },
+      "meta": {
+        "primitiveType": "number"
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "b7e4e9b9-8441-4860-a1a6-70fe576e9e78",
+      "location": {
+        "start": {
+          "offset": 138,
+          "line": 5,
+          "column": 22
+        },
+        "end": {
+          "offset": 139,
+          "line": 6,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "878e996c-1a8f-4f64-8d49-3e260d85ebed",
+      "location": {
+        "start": {
+          "offset": 139,
+          "line": 6,
+          "column": 1
+        },
+        "end": {
+          "offset": 163,
+          "line": 6,
+          "column": 25
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "de349ee4-b8d6-4ae1-ab0c-afa5dd1a382a",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "boolean_var"
+          }
+        ],
+        "value": [
+          true
+        ]
+      },
+      "raw": {
+        "identifier": "boolean_var",
+        "value": "true"
+      },
+      "meta": {
+        "primitiveType": "boolean"
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "a013bef0-7ee2-40f8-a3c1-0fc76daec9c7",
+      "location": {
+        "start": {
+          "offset": 163,
+          "line": 6,
+          "column": 25
+        },
+        "end": {
+          "offset": 164,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "ab6c8145-5946-416b-b539-c1f9689a5f77",
+      "location": {
+        "start": {
+          "offset": 164,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 185,
+          "line": 7,
+          "column": 22
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "2353a5f0-a9f7-4a09-bc82-536a38e328f7",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "null_var"
+          }
+        ],
+        "value": [
+          {
+            "type": "Null",
+            "nodeId": "ba69b002-2f0a-45ce-9dde-17c143f641a5",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "value": null
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "null_var",
+        "value": "{\"type\":\"Null\",\"nodeId\":\"ba69b002-2f0a-45ce-9dde-17c143f641a5\",\"location\":{\"start\":{\"offset\":0,\"line\":1,\"column\":1},\"end\":{\"offset\":0,\"line\":1,\"column\":1}},\"value\":null}"
+      },
+      "meta": {}
+    },
+    {
+      "type": "Newline",
+      "nodeId": "29a0fa70-b5ab-4c09-adf5-9ecfdcb1284a",
+      "location": {
+        "start": {
+          "offset": 185,
+          "line": 7,
+          "column": 22
+        },
+        "end": {
+          "offset": 186,
+          "line": 8,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "e920aa1d-a4cc-4b0d-925a-eac40c4ab67c",
+      "location": {
+        "start": {
+          "offset": 186,
+          "line": 8,
+          "column": 1
+        },
+        "end": {
+          "offset": 232,
+          "line": 8,
+          "column": 47
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "array",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "7dc1f538-1c91-465d-859a-967aa5632cfe",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "array_var"
+          }
+        ],
+        "value": {
+          "type": "array",
+          "items": [
+            [
+              {
+                "type": "Text",
+                "nodeId": "672712a4-998b-4ef3-9cce-100d75752f43",
+                "location": {
+                  "start": {
+                    "offset": 205,
+                    "line": 8,
+                    "column": 20
+                  },
+                  "end": {
+                    "offset": 212,
+                    "line": 8,
+                    "column": 27
+                  }
+                },
+                "content": "first"
+              }
+            ],
+            [
+              {
+                "type": "Text",
+                "nodeId": "6676557b-9734-41f9-89f3-da7ff2dd2b3e",
+                "location": {
+                  "start": {
+                    "offset": 214,
+                    "line": 8,
+                    "column": 29
+                  },
+                  "end": {
+                    "offset": 222,
+                    "line": 8,
+                    "column": 37
+                  }
+                },
+                "content": "second"
+              }
+            ],
+            [
+              {
+                "type": "Text",
+                "nodeId": "0aa7ecea-4808-43a7-8bf1-986f2d45f77f",
+                "location": {
+                  "start": {
+                    "offset": 224,
+                    "line": 8,
+                    "column": 39
+                  },
+                  "end": {
+                    "offset": 231,
+                    "line": 8,
+                    "column": 46
+                  }
+                },
+                "content": "third"
+              }
+            ]
+          ]
+        }
+      },
+      "raw": {
+        "identifier": "array_var",
+        "value": "[\n  [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"672712a4-998b-4ef3-9cce-100d75752f43\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 205,\n          \"line\": 8,\n          \"column\": 20\n        },\n        \"end\": {\n          \"offset\": 212,\n          \"line\": 8,\n          \"column\": 27\n        }\n      },\n      \"content\": \"first\"\n    }\n  ],\n  [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"6676557b-9734-41f9-89f3-da7ff2dd2b3e\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 214,\n          \"line\": 8,\n          \"column\": 29\n        },\n        \"end\": {\n          \"offset\": 222,\n          \"line\": 8,\n          \"column\": 37\n        }\n      },\n      \"content\": \"second\"\n    }\n  ],\n  [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"0aa7ecea-4808-43a7-8bf1-986f2d45f77f\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 224,\n          \"line\": 8,\n          \"column\": 39\n        },\n        \"end\": {\n          \"offset\": 231,\n          \"line\": 8,\n          \"column\": 46\n        }\n      },\n      \"content\": \"third\"\n    }\n  ]\n]"
+      },
+      "meta": {
+        "arrayData": {
+          "itemCount": 3
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "3ba5bf99-0d7d-4a4b-9392-4e95a6d43e21",
+      "location": {
+        "start": {
+          "offset": 232,
+          "line": 8,
+          "column": 47
+        },
+        "end": {
+          "offset": 233,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "4b6db582-b5c2-4941-a9eb-71d3e3ebaa72",
+      "location": {
+        "start": {
+          "offset": 233,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 296,
+          "line": 9,
+          "column": 64
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "452a195e-f4b5-4dac-99f0-96e299493238",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "object_var"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "key": [
+              {
+                "type": "Text",
+                "nodeId": "d21b9a4b-0200-4acc-bb7d-29c5f873a2cc",
+                "location": {
+                  "start": {
+                    "offset": 260,
+                    "line": 9,
+                    "column": 28
+                  },
+                  "end": {
+                    "offset": 267,
+                    "line": 9,
+                    "column": 35
+                  }
+                },
+                "content": "value"
+              }
+            ],
+            "nested": {
+              "type": "object",
+              "properties": {
+                "deep": [
+                  {
+                    "type": "Text",
+                    "nodeId": "549f2f32-6526-43ee-a94f-3b01ef17e868",
+                    "location": {
+                      "start": {
+                        "offset": 288,
+                        "line": 9,
+                        "column": 56
+                      },
+                      "end": {
+                        "offset": 294,
+                        "line": 9,
+                        "column": 62
+                      }
+                    },
+                    "content": "data"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "raw": {
+        "identifier": "object_var",
+        "value": "{\n  \"key\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"d21b9a4b-0200-4acc-bb7d-29c5f873a2cc\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 260,\n          \"line\": 9,\n          \"column\": 28\n        },\n        \"end\": {\n          \"offset\": 267,\n          \"line\": 9,\n          \"column\": 35\n        }\n      },\n      \"content\": \"value\"\n    }\n  ],\n  \"nested\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"deep\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"549f2f32-6526-43ee-a94f-3b01ef17e868\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 288,\n              \"line\": 9,\n              \"column\": 56\n            },\n            \"end\": {\n              \"offset\": 294,\n              \"line\": 9,\n              \"column\": 62\n            }\n          },\n          \"content\": \"data\"\n        }\n      ]\n    }\n  }\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 2
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "11b56f23-8a76-4f93-9c42-65790667efe1",
+      "location": {
+        "start": {
+          "offset": 296,
+          "line": 9,
+          "column": 64
+        },
+        "end": {
+          "offset": 339,
+          "line": 12,
+          "column": 1
+        }
+      },
+      "content": "\n\n# Path variables with special characters\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "4f151499-3949-4d2c-89ff-9a8715509840",
+      "location": {
+        "start": {
+          "offset": 339,
+          "line": 12,
+          "column": 1
+        },
+        "end": {
+          "offset": 354,
+          "line": 12,
+          "column": 16
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "f03b63f7-8d9a-44e9-bf29-e4c08ebdbb35",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "home"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "ab71978a-bbde-4856-80b1-564acdc2b310",
+            "location": {
+              "start": {
+                "offset": 352,
+                "line": 12,
+                "column": 14
+              },
+              "end": {
+                "offset": 354,
+                "line": 12,
+                "column": 16
+              }
+            },
+            "content": "@~"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "home",
+        "path": "@HOMEPATH"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": false,
+          "extension": null,
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "64e2b5f0-b06b-4e1a-aa67-1578069dbc62",
+      "location": {
+        "start": {
+          "offset": 354,
+          "line": 12,
+          "column": 16
+        },
+        "end": {
+          "offset": 355,
+          "line": 13,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "9ac2113d-d329-41e1-b321-3c053c1ec473",
+      "location": {
+        "start": {
+          "offset": 355,
+          "line": 13,
+          "column": 1
+        },
+        "end": {
+          "offset": 374,
+          "line": 13,
+          "column": 20
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "dddadb07-5d20-4b66-9c5a-ac63a6dae6bb",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "project"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "c83a98b3-4072-4c0a-88d1-ac93c39cdc7c",
+            "location": {
+              "start": {
+                "offset": 371,
+                "line": 13,
+                "column": 17
+              },
+              "end": {
+                "offset": 373,
+                "line": 13,
+                "column": 19
+              }
+            },
+            "content": "@."
+          },
+          {
+            "type": "PathSeparator",
+            "nodeId": "f50faf96-886f-447e-80e9-5d7f6369a370",
+            "location": {
+              "start": {
+                "offset": 373,
+                "line": 13,
+                "column": 19
+              },
+              "end": {
+                "offset": 374,
+                "line": 13,
+                "column": 20
+              }
+            },
+            "value": "/"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "project",
+        "path": "@PROJECTPATH/"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": false,
+          "extension": null,
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "9cce68d1-22b8-4062-b48a-d827dc452f45",
+      "location": {
+        "start": {
+          "offset": 374,
+          "line": 13,
+          "column": 20
+        },
+        "end": {
+          "offset": 375,
+          "line": 14,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "323a0420-74b3-4d0c-98cc-7b8b607f09b1",
+      "location": {
+        "start": {
+          "offset": 375,
+          "line": 14,
+          "column": 1
+        },
+        "end": {
+          "offset": 402,
+          "line": 16,
+          "column": 7
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "c54c4054-0aac-4fbb-a3fe-2f09545dcded",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "parent"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "3d87065e-b72c-445d-b476-202cb7d4772d",
+            "location": {
+              "start": {
+                "offset": 390,
+                "line": 14,
+                "column": 16
+              },
+              "end": {
+                "offset": 393,
+                "line": 14,
+                "column": 19
+              }
+            },
+            "content": "@.."
+          },
+          {
+            "type": "PathSeparator",
+            "nodeId": "d7c0e7da-6b61-461e-a60d-04d5e2bf27b4",
+            "location": {
+              "start": {
+                "offset": 393,
+                "line": 14,
+                "column": 19
+              },
+              "end": {
+                "offset": 394,
+                "line": 14,
+                "column": 20
+              }
+            },
+            "value": "/"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "parent",
+        "path": "@PROJECTPATH./"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": false,
+          "extension": null,
+          "hasSection": true,
+          "pathSubtype": "fileSectionPath"
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "43e009a1-1581-43b1-911b-f0d8166aeaf0",
+      "location": {
+        "start": {
+          "offset": 402,
+          "line": 16,
+          "column": 7
+        },
+        "end": {
+          "offset": 422,
+          "line": 17,
+          "column": 1
+        }
+      },
+      "content": " various operations\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "2ba8ce13-3116-4b3b-9a75-cae97052f32b",
+      "location": {
+        "start": {
+          "offset": 422,
+          "line": 17,
+          "column": 1
+        },
+        "end": {
+          "offset": 1084,
+          "line": 46,
+          "column": 2
+        }
+      },
+      "kind": "text",
+      "subtype": "textPathSection",
+      "source": "section",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "9d0573cd-15f6-411d-be3c-9f7df4d51059",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "operations_test"
+          }
+        ],
+        "section": [
+          {
+            "type": "Text",
+            "nodeId": "e88c96e8-5aa7-4156-8de8-88b6f37c7f94",
+            "location": {
+              "start": {
+                "offset": 422,
+                "line": 17,
+                "column": 1
+              },
+              "end": {
+                "offset": 1084,
+                "line": 46,
+                "column": 2
+              }
+            },
+            "content": "Mixed Operations Test\n\n## Variable Types\n- String: {{string_var}}\n- Number: {{number_var}}\n- Boolean: {{boolean_var}}\n- Null: {{null_var}}\n- Array: {{array_var}}\n- Object: {{object_var}}\n\n## Array Operations\n- First element: {{array_var.0}}\n- Second element: {{array_var.1}}\n- Last element: {{array_var.2}}\n\n## Object Operations\n- Direct access: {{object_var.key}}\n- Nested access: {{object_var.nested.deep}}\n\n## Path Operations\n- Home: {{home}}\n- Project: {{project}}\n- Parent: {{parent}}\n\n## Mixed Template\nThe answer is {{number_var}} and the message is \"{{string_var}}\"\nArray has {{array_var}} items\nObject keys: {{object_var}}"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "2ac96fbc-0059-4a16-87af-05fd26d74e4c",
+            "location": {
+              "start": {
+                "offset": 422,
+                "line": 17,
+                "column": 1
+              },
+              "end": {
+                "offset": 1084,
+                "line": 46,
+                "column": 2
+              }
+            },
+            "content": "["
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "operations_test",
+        "section": "Mixed Operations Test\n\n## Variable Types\n- String: {{string_var}}\n- Number: {{number_var}}\n- Boolean: {{boolean_var}}\n- Null: {{null_var}}\n- Array: {{array_var}}\n- Object: {{object_var}}\n\n## Array Operations\n- First element: {{array_var.0}}\n- Second element: {{array_var.1}}\n- Last element: {{array_var.2}}\n\n## Object Operations\n- Direct access: {{object_var.key}}\n- Nested access: {{object_var.nested.deep}}\n\n## Path Operations\n- Home: {{home}}\n- Project: {{project}}\n- Parent: {{parent}}\n\n## Mixed Template\nThe answer is {{number_var}} and the message is \"{{string_var}}\"\nArray has {{array_var}} items\nObject keys: {{object_var}}",
+        "path": "["
+      },
+      "meta": {
+        "sourceType": "section",
+        "hasRename": false,
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "9e7bc488-0316-4ca4-975c-1fd93aa09cde",
+      "location": {
+        "start": {
+          "offset": 1084,
+          "line": 46,
+          "column": 2
+        },
+        "end": {
+          "offset": 1123,
+          "line": 49,
+          "column": 1
+        }
+      },
+      "content": "]\n\n# Test exec with complex parameters\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "3f5cc0d4-c3ec-4463-a3a3-0043188a5e4b",
+      "location": {
+        "start": {
+          "offset": 1123,
+          "line": 49,
+          "column": 1
+        },
+        "end": {
+          "offset": 1201,
+          "line": 49,
+          "column": 79
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "295474f1-8379-4a04-8a21-d6e036e5b5c7",
+            "location": {
+              "start": {
+                "offset": 1123,
+                "line": 49,
+                "column": 1
+              },
+              "end": {
+                "offset": 1201,
+                "line": 49,
+                "column": 79
+              }
+            },
+            "content": "process_data"
+          }
+        ],
+        "params": [
+          "arr",
+          "obj"
+        ],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "4445e15b-29b4-48bb-981f-6fc0a60124a7",
+            "location": {
+              "start": {
+                "offset": 1160,
+                "line": 49,
+                "column": 38
+              },
+              "end": {
+                "offset": 1173,
+                "line": 49,
+                "column": 51
+              }
+            },
+            "content": "echo \"Array: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "87c8539a-e56e-496b-b865-57586986cc0f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "arr"
+          },
+          {
+            "type": "Text",
+            "nodeId": "50efaee2-9cc8-458c-b939-899f52d2352e",
+            "location": {
+              "start": {
+                "offset": 1177,
+                "line": 49,
+                "column": 55
+              },
+              "end": {
+                "offset": 1187,
+                "line": 49,
+                "column": 65
+              }
+            },
+            "content": ", Object: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "bf800955-77d4-4392-808e-335e0eef5ddc",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "obj"
+          },
+          {
+            "type": "Text",
+            "nodeId": "cea4b9f8-394d-4089-a8d8-3912f1cf8f76",
+            "location": {
+              "start": {
+                "offset": 1191,
+                "line": 49,
+                "column": 69
+              },
+              "end": {
+                "offset": 1200,
+                "line": 49,
+                "column": 78
+              }
+            },
+            "content": "\" | wc -l"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "90447851-8b56-48ab-b749-450a7622ece3",
+            "location": {
+              "start": {
+                "offset": 1159,
+                "line": 49,
+                "column": 37
+              },
+              "end": {
+                "offset": 1201,
+                "line": 49,
+                "column": 79
+              }
+            },
+            "command": "echo"
+          },
+          {
+            "nodeId": "f6aadcf0-f438-4938-9b9a-3180e639f9d5",
+            "location": {
+              "start": {
+                "offset": 1159,
+                "line": 49,
+                "column": 37
+              },
+              "end": {
+                "offset": 1201,
+                "line": 49,
+                "column": 79
+              }
+            },
+            "command": "wc"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "process_data",
+        "params": [
+          "arr",
+          "obj"
+        ],
+        "command": "echo \"Array: @arr, Object: @obj\" | wc -l",
+        "commandBases": [
+          "echo",
+          "wc"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 2,
+        "hasScriptRunner": false,
+        "parameterCount": 2
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "7ab49cb0-41c8-40b8-bcfd-22396ae44ee5",
+      "location": {
+        "start": {
+          "offset": 1201,
+          "line": 49,
+          "column": 79
+        },
+        "end": {
+          "offset": 1235,
+          "line": 52,
+          "column": 1
+        }
+      },
+      "content": "\n\n# Test add with various sources\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "b26025f4-24c4-458f-9f5e-bdc2c7e2e4aa",
+      "location": {
+        "start": {
+          "offset": 1235,
+          "line": 52,
+          "column": 1
+        },
+        "end": {
+          "offset": 1258,
+          "line": 54,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "8a3b9463-b7f2-4570-992e-ac4e9746f485",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "operations_test"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@operations_test"
+      },
+      "meta": {}
+    },
+    {
+      "type": "Text",
+      "nodeId": "69e818c1-ac9f-4f4c-953b-7765d09cac66",
+      "location": {
+        "start": {
+          "offset": 1258,
+          "line": 54,
+          "column": 1
+        },
+        "end": {
+          "offset": 1284,
+          "line": 55,
+          "column": 1
+        }
+      },
+      "content": "## Command with Variables\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "afbbabe7-feee-4076-b1ef-0a24f9789b6e",
+      "location": {
+        "start": {
+          "offset": 1284,
+          "line": 55,
+          "column": 1
+        },
+        "end": {
+          "offset": 1338,
+          "line": 55,
+          "column": 55
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "4d4ecdb9-613b-439f-a2fc-ecb10aa39bba",
+            "location": {
+              "start": {
+                "offset": 1290,
+                "line": 55,
+                "column": 7
+              },
+              "end": {
+                "offset": 1304,
+                "line": 55,
+                "column": 21
+              }
+            },
+            "content": "echo \"String: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "d08eca99-25eb-4df8-9467-2c89d9a24b4d",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "string_var"
+          },
+          {
+            "type": "Text",
+            "nodeId": "c3301090-728a-4c7d-a88d-18718a5c536d",
+            "location": {
+              "start": {
+                "offset": 1315,
+                "line": 55,
+                "column": 32
+              },
+              "end": {
+                "offset": 1325,
+                "line": 55,
+                "column": 42
+              }
+            },
+            "content": ", Number: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "a9efb967-adf8-46c7-9687-c4c2a63cb719",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "number_var"
+          },
+          {
+            "type": "Text",
+            "nodeId": "17c474ea-5f97-49aa-8f31-55414a7cb880",
+            "location": {
+              "start": {
+                "offset": 1336,
+                "line": 55,
+                "column": 53
+              },
+              "end": {
+                "offset": 1337,
+                "line": 55,
+                "column": 54
+              }
+            },
+            "content": "\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "6f53b29a-090d-4020-9306-f5ed502cc9df",
+            "location": {
+              "start": {
+                "offset": 1289,
+                "line": 55,
+                "column": 6
+              },
+              "end": {
+                "offset": 1338,
+                "line": 55,
+                "column": 55
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"String: @string_var, Number: @number_var\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "6bf9ae98-8911-43f3-9439-f2568727e984",
+      "location": {
+        "start": {
+          "offset": 1338,
+          "line": 55,
+          "column": 55
+        },
+        "end": {
+          "offset": 1365,
+          "line": 58,
+          "column": 1
+        }
+      },
+      "content": "\n\n# Test command execution\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "2e7c4912-12fa-4ffe-ae87-6d1f06b1654b",
+      "location": {
+        "start": {
+          "offset": 1365,
+          "line": 58,
+          "column": 1
+        },
+        "end": {
+          "offset": 1431,
+          "line": 58,
+          "column": 67
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "run",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "4a36213b-6b77-408a-a3bc-4ea882554395",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "command_result"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "8a31cb4a-25c0-48b8-8f5d-fac0d495429d",
+            "location": {
+              "start": {
+                "offset": 1365,
+                "line": 58,
+                "column": 1
+              },
+              "end": {
+                "offset": 1431,
+                "line": 58,
+                "column": 67
+              }
+            },
+            "content": "@run @process_data(@array_var, @object_var)"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "command_result",
+        "content": "@run @process_data(@array_var, @object_var)"
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "run",
+        "hasVariables": false,
+        "run": {
+          "isCommandRef": true,
+          "commandName": "process_data"
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "eba8a0dd-1091-4509-9eb9-48d03300fd8e",
+      "location": {
+        "start": {
+          "offset": 1431,
+          "line": 58,
+          "column": 67
+        },
+        "end": {
+          "offset": 1538,
+          "line": 64,
+          "column": 26
+        }
+      },
+      "content": "\n\n## Command Result\nLines counted: @add @command_result\n\n# Test inline operations\nFinal thought: The value "
+    },
+    {
+      "type": "VariableReference",
+      "nodeId": "e82a58c8-8117-419c-bea3-5e76148253e5",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "valueType": "varInterpolation",
+      "identifier": "number_var"
+    },
+    {
+      "type": "Text",
+      "nodeId": "6a4694f3-fd74-43f6-a8fe-39399455ec15",
+      "location": {
+        "start": {
+          "offset": 1552,
+          "line": 64,
+          "column": 40
+        },
+        "end": {
+          "offset": 1558,
+          "line": 64,
+          "column": 46
+        }
+      },
+      "content": " with "
+    },
+    {
+      "type": "VariableReference",
+      "nodeId": "967f2eb5-bbd7-4aa8-adb9-7a9cddff35da",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "valueType": "varInterpolation",
+      "identifier": "string_var"
+    },
+    {
+      "type": "Text",
+      "nodeId": "d950ac5e-eaf2-466a-9f03-f304363fb3db",
+      "location": {
+        "start": {
+          "offset": 1572,
+          "line": 64,
+          "column": 60
+        },
+        "end": {
+          "offset": 1579,
+          "line": 64,
+          "column": 67
+        }
+      },
+      "content": " makes "
+    },
+    {
+      "type": "VariableReference",
+      "nodeId": "f43addb2-93c9-419d-9881-c2985208cd87",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "valueType": "varInterpolation",
+      "identifier": "boolean_var"
+    }
+  ],
+  "parseError": null
+}

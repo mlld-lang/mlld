@@ -7,10 +7,11 @@
   "expected": "# Title\n## Section 1\n### Subsection 1.1\nContent from file\n## Section 2",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "ad9414c5-1839-4262-9091-426ae2cc2fd8",
+      "nodeId": "c994d250-3b9b-4b86-856d-4bb59ec0ff5e",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "4805d9c3-f6a1-4044-836e-6b8d69fae3b0",
+            "nodeId": "6b79f5fa-dc79-4ee8-90c0-2104fc8e715b",
             "location": {
               "start": {
                 "offset": 6,

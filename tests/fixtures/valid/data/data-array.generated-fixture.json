@@ -7,10 +7,11 @@
   "expected": "red",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "363edd02-6402-4093-ba29-adda44d1e516",
+      "nodeId": "3589812a-fbb2-45af-a848-7eb572933b0f",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "eed6ee08-9922-4879-96e4-eda7dba408d4",
+            "nodeId": "130add83-29ee-4853-b127-bcb752250e1b",
             "location": {
               "start": {
                 "offset": 0,
@@ -53,7 +54,7 @@
             [
               {
                 "type": "Text",
-                "nodeId": "ed88e11d-0b3f-457f-a894-50f986124f27",
+                "nodeId": "9d08a413-206c-47f6-b71a-d074856a53df",
                 "location": {
                   "start": {
                     "offset": 16,
@@ -72,7 +73,7 @@
             [
               {
                 "type": "Text",
-                "nodeId": "3314a311-a3c8-4bb9-b8f0-3d0045c966d8",
+                "nodeId": "bd6c9ef3-f591-462f-a59f-4baca805ca14",
                 "location": {
                   "start": {
                     "offset": 23,
@@ -91,7 +92,7 @@
             [
               {
                 "type": "Text",
-                "nodeId": "68d6dc50-e8ec-4e68-a341-fe34c3cc9326",
+                "nodeId": "373b0545-716d-4be3-bc00-1047efa72207",
                 "location": {
                   "start": {
                     "offset": 32,
@@ -112,7 +113,7 @@
       },
       "raw": {
         "identifier": "colors",
-        "value": "[\n  [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"ed88e11d-0b3f-457f-a894-50f986124f27\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 16,\n          \"line\": 1,\n          \"column\": 17\n        },\n        \"end\": {\n          \"offset\": 21,\n          \"line\": 1,\n          \"column\": 22\n        }\n      },\n      \"content\": \"red\"\n    }\n  ],\n  [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"3314a311-a3c8-4bb9-b8f0-3d0045c966d8\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 23,\n          \"line\": 1,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 30,\n          \"line\": 1,\n          \"column\": 31\n        }\n      },\n      \"content\": \"green\"\n    }\n  ],\n  [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"68d6dc50-e8ec-4e68-a341-fe34c3cc9326\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 32,\n          \"line\": 1,\n          \"column\": 33\n        },\n        \"end\": {\n          \"offset\": 38,\n          \"line\": 1,\n          \"column\": 39\n        }\n      },\n      \"content\": \"blue\"\n    }\n  ]\n]"
+        "value": "[\n  [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"9d08a413-206c-47f6-b71a-d074856a53df\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 16,\n          \"line\": 1,\n          \"column\": 17\n        },\n        \"end\": {\n          \"offset\": 21,\n          \"line\": 1,\n          \"column\": 22\n        }\n      },\n      \"content\": \"red\"\n    }\n  ],\n  [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"bd6c9ef3-f591-462f-a59f-4baca805ca14\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 23,\n          \"line\": 1,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 30,\n          \"line\": 1,\n          \"column\": 31\n        }\n      },\n      \"content\": \"green\"\n    }\n  ],\n  [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"373b0545-716d-4be3-bc00-1047efa72207\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 32,\n          \"line\": 1,\n          \"column\": 33\n        },\n        \"end\": {\n          \"offset\": 38,\n          \"line\": 1,\n          \"column\": 39\n        }\n      },\n      \"content\": \"blue\"\n    }\n  ]\n]"
       },
       "meta": {
         "arrayData": {
@@ -122,7 +123,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "c867f0b1-b871-4db7-ae83-646bdc7fa65e",
+      "nodeId": "5853c7e0-66ee-4db5-a35a-06a07b6be451",
       "location": {
         "start": {
           "offset": 39,
@@ -139,7 +140,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "6ad470bf-eba6-45d0-bbb6-36b1b807b6e2",
+      "nodeId": "1cfa5e0e-02a5-41de-b770-03e373100fd8",
       "location": {
         "start": {
           "offset": 40,
@@ -159,7 +160,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "c3e8d309-981d-49d9-a538-ddc39026632f",
+            "nodeId": "8d452a92-d435-4602-b840-c0fe4b368dc1",
             "location": {
               "start": {
                 "offset": 0,

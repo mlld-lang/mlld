@@ -1,0 +1,254 @@
+{
+  "name": "imports-simple",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "@text imported_title = \"Imported Content\"\n@data count = 42\n@text author = \"Test Suite\"\n",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "c28a010b-c947-4b0c-9ab8-19d0fffcbc83",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 41,
+          "line": 1,
+          "column": 42
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "7c5ad32a-2b8e-460b-82ae-323b4402675b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "imported_title"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "6ddd0797-6a4e-4663-937b-29fc761deda7",
+            "location": {
+              "start": {
+                "offset": 23,
+                "line": 1,
+                "column": 24
+              },
+              "end": {
+                "offset": 41,
+                "line": 1,
+                "column": 42
+              }
+            },
+            "content": "Imported Content"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "imported_title",
+        "content": "Imported Content"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "808bb394-b799-429d-af26-5ba50e1ade03",
+      "location": {
+        "start": {
+          "offset": 41,
+          "line": 1,
+          "column": 42
+        },
+        "end": {
+          "offset": 42,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "a84c6016-f511-4e33-b5cd-db19b3ac7b99",
+      "location": {
+        "start": {
+          "offset": 42,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 58,
+          "line": 2,
+          "column": 17
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "ce67e5ad-a6be-4527-a8ac-514e404f98fb",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "count"
+          }
+        ],
+        "value": [
+          42
+        ]
+      },
+      "raw": {
+        "identifier": "count",
+        "value": "42"
+      },
+      "meta": {
+        "primitiveType": "number"
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "5811ef65-f43b-4576-8863-db69e0631fef",
+      "location": {
+        "start": {
+          "offset": 58,
+          "line": 2,
+          "column": 17
+        },
+        "end": {
+          "offset": 59,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "7603a5c8-2dd2-47fd-ad32-46d1e1cd9627",
+      "location": {
+        "start": {
+          "offset": 59,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 86,
+          "line": 3,
+          "column": 28
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "47a820e9-5140-4bc3-8b46-e2389178169d",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "author"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "b8b24956-dbc1-4e5c-b5d6-98d4dab9fb13",
+            "location": {
+              "start": {
+                "offset": 74,
+                "line": 3,
+                "column": 16
+              },
+              "end": {
+                "offset": 86,
+                "line": 3,
+                "column": 28
+              }
+            },
+            "content": "Test Suite"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "author",
+        "content": "Test Suite"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "394bab64-7c56-4637-b039-ec21819098d9",
+      "location": {
+        "start": {
+          "offset": 86,
+          "line": 3,
+          "column": 28
+        },
+        "end": {
+          "offset": 87,
+          "line": 4,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    }
+  ],
+  "parseError": null
+}

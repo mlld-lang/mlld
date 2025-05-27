@@ -2,6 +2,7 @@
 
 @text name = "Recursive Test"
 @text version = "1.0.0"
+@text current_date = @run [date +%Y-%m-%d]
 
 # Template that references another template
 @text header_template = [[
@@ -9,14 +10,14 @@
 {{name}} v{{version}}
 ===================================]]
 
-@text section_template(title, content) = [[
+@exec section_template(title, content) = @add [[
 {{header_template}}
 
 ## {{title}}
 
 {{content}}
 
-Generated at: @run [date +%Y-%m-%d]
+Generated at: {{current_date}}
 ]]
 
 # Data with template references
@@ -37,9 +38,9 @@ Generated at: @run [date +%Y-%m-%d]
 
 # Documentation for {{name}}
 
-@add @section_template(@doc_sections.intro.title, @doc_sections.intro.content)
+@run @section_template(@doc_sections.intro.title, @doc_sections.intro.content)
 
-@add @section_template(@doc_sections.features.title, @doc_sections.features.content)
+@run @section_template(@doc_sections.features.title, @doc_sections.features.content)
 
 ## Summary
 

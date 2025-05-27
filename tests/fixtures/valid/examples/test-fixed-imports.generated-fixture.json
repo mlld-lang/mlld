@@ -1,0 +1,310 @@
+{
+  "name": "test-fixed-imports",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "# Testing Fixed Imports\n\n@import { imported_title, role, codecat, echo } from \"./imports-fixed.mld\"\n\n## Title: \n@add @imported_title\n\n## Roles Available: \n- Architect: @add @role.architect\n- UX: @add @role.ux  \n- Security: @add @role.security\n\n## Test the echo function:\n@add @echo(\"Hello World\")\n\n## Note: codecat function available for: @run @codecat(\"./src\")",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "79200b98-6ad4-4390-a782-e1ea1e16a7c7",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 25,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "# Testing Fixed Imports\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "6e71c658-0fde-41f0-a1b0-278b6d7e4ce8",
+      "location": {
+        "start": {
+          "offset": 25,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 99,
+          "line": 3,
+          "column": 75
+        }
+      },
+      "kind": "import",
+      "subtype": "importSelected",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "24df423c-fa77-4a4c-ae61-1eef17ed0111",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "imported_title"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "7920cdd0-16e6-4d1c-88c6-a8922b3fdbfa",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "role"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "81d5a86d-9a07-4162-8136-09d62aeabcd5",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "codecat"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "2108bd7f-54a0-4fa9-b321-34cae25b3dd4",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "echo"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "d19ef8f7-a359-45e3-8c32-ae6f535fe308",
+            "location": {
+              "start": {
+                "offset": 78,
+                "line": 3,
+                "column": 54
+              },
+              "end": {
+                "offset": 99,
+                "line": 3,
+                "column": 75
+              }
+            },
+            "content": "./imports-fixed.mld"
+          }
+        ]
+      },
+      "raw": {
+        "imports": "imported_title, role, codecat, echo",
+        "path": "./imports-fixed.mld"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "mld",
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "587cad6a-7300-44f6-8bf7-12ffc3bb2ce8",
+      "location": {
+        "start": {
+          "offset": 99,
+          "line": 3,
+          "column": 75
+        },
+        "end": {
+          "offset": 112,
+          "line": 6,
+          "column": 1
+        }
+      },
+      "content": "\n\n## Title: \n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "1bda6ccd-6583-4ea9-a10c-2739a1101aec",
+      "location": {
+        "start": {
+          "offset": 112,
+          "line": 6,
+          "column": 1
+        },
+        "end": {
+          "offset": 134,
+          "line": 8,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "6d3c9254-ffde-47be-8a0a-ee27dced49d1",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "imported_title"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@imported_title"
+      },
+      "meta": {}
+    },
+    {
+      "type": "Text",
+      "nodeId": "7b7700f5-a42d-45dc-b881-810d76250015",
+      "location": {
+        "start": {
+          "offset": 134,
+          "line": 8,
+          "column": 1
+        },
+        "end": {
+          "offset": 271,
+          "line": 14,
+          "column": 1
+        }
+      },
+      "content": "## Roles Available: \n- Architect: @add @role.architect\n- UX: @add @role.ux  \n- Security: @add @role.security\n\n## Test the echo function:\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "b362ab75-bb8a-4e59-9a9e-89f24324de1d",
+      "location": {
+        "start": {
+          "offset": 271,
+          "line": 14,
+          "column": 1
+        },
+        "end": {
+          "offset": 298,
+          "line": 16,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplateInvocation",
+      "source": "templateInvocation",
+      "values": {
+        "templateName": [
+          {
+            "type": "Text",
+            "nodeId": "706cb007-15c0-434a-8be0-4694ee7e550c",
+            "location": {
+              "start": {
+                "offset": 271,
+                "line": 14,
+                "column": 1
+              },
+              "end": {
+                "offset": 298,
+                "line": 16,
+                "column": 1
+              }
+            },
+            "content": "echo"
+          }
+        ],
+        "arguments": [
+          {
+            "type": "string",
+            "value": "Hello World"
+          }
+        ]
+      },
+      "raw": {
+        "templateName": "echo",
+        "arguments": [
+          "\"Hello World\""
+        ]
+      },
+      "meta": {
+        "isTemplateInvocation": true,
+        "argumentCount": 1
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "adf8d8f0-c236-43ec-9af9-a71bb751aabd",
+      "location": {
+        "start": {
+          "offset": 298,
+          "line": 16,
+          "column": 1
+        },
+        "end": {
+          "offset": 361,
+          "line": 16,
+          "column": 64
+        }
+      },
+      "content": "## Note: codecat function available for: @run @codecat(\"./src\")"
+    }
+  ],
+  "parseError": null
+}

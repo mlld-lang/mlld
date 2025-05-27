@@ -20,6 +20,7 @@ import path from 'node:path';
 import { parse } from '../grammar/parser/parser.js';
 import { glob } from 'glob';
 import { fileURLToPath } from 'url';
+// Note: Output generation requires compiled interpreter - will be handled post-build
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -88,15 +89,40 @@ async function cleanFixtures() {
 
 /**
  * Copy valid examples from examples/ to tests/cases/valid/examples/
+ * Cleans up old example files but preserves test files (expected.md, error.md, etc.)
  */
 async function copyExamplesToTests() {
   const targetDir = path.join(CASES_DIR, 'valid', 'examples');
   await fs.mkdir(targetDir, { recursive: true });
   
   try {
-    const files = await fs.readdir(EXAMPLES_DIR);
-    const mlldFiles = files.filter(f => f.endsWith('.mld') && !f.startsWith('invalid-'));
+    // Get current .mld files from examples
+    const exampleFiles = await fs.readdir(EXAMPLES_DIR);
+    const mlldFiles = exampleFiles.filter(f => f.endsWith('.mld') && !f.startsWith('invalid-'));
+    const expectedMdFiles = new Set(mlldFiles.map(f => f.replace('.mld', '.md')));
     
+    // Clean up old example files (but preserve test files)
+    try {
+      const existingFiles = await fs.readdir(targetDir);
+      for (const file of existingFiles) {
+        // Only remove .md files that would be generated from .mld files
+        // but don't match current .mld files (orphaned examples)
+        // Preserve files like expected.md, error.md, output.md, etc.
+        if (file.endsWith('.md') && 
+            !expectedMdFiles.has(file) && 
+            !file.includes('expected') && 
+            !file.includes('error') && 
+            !file.includes('output') &&
+            !file.includes('warning')) {
+          await fs.unlink(path.join(targetDir, file));
+          console.log(`    🗑️ Removed orphaned example: ${file}`);
+        }
+      }
+    } catch (error) {
+      // Directory might not exist yet, that's fine
+    }
+    
+    // Copy current .mld files
     let copied = 0;
     for (const file of mlldFiles) {
       const sourcePath = path.join(EXAMPLES_DIR, file);
@@ -274,23 +300,46 @@ async function processCategoryDirectory(categoryPath, categoryName) {
   
   if (categoryName === 'valid') {
     // For valid cases, we have directive-based subdirectories (add, text, run, etc.)
+    // plus some special directories like examples
     const directiveEntries = await fs.readdir(categoryPath, { withFileTypes: true });
     const directiveDirs = directiveEntries.filter(d => d.isDirectory()).map(d => d.name);
     
     for (const directiveDir of directiveDirs) {
       const directivePath = path.join(categoryPath, directiveDir);
       
-      // Get all subdirectories within the directive directory
-      const subEntries = await fs.readdir(directivePath, { withFileTypes: true });
-      const subDirs = subEntries.filter(d => d.isDirectory()).map(d => d.name);
-      
-      for (const subDir of subDirs) {
-        const exampleDir = path.join(directivePath, subDir);
-        const testName = `${directiveDir}-${subDir}`;
-        const processed = await processExampleDirectory(exampleDir, categoryName, testName, directiveDir);
+      // Special handling for examples directory - process .md files directly
+      if (directiveDir === 'examples') {
+        const processed = await processExampleDirectory(directivePath, categoryName, 'examples');
         stats.total += processed.total;
         stats.fixtures += processed.fixtures;
         stats.skipped += processed.skipped;
+        continue;
+      }
+      
+      // Check if this directory contains .md files directly (like exec-parameterized-command)
+      const directEntries = await fs.readdir(directivePath);
+      const hasDirectMdFiles = directEntries.some(f => f.startsWith('example') && f.endsWith('.md'));
+      
+      if (hasDirectMdFiles) {
+        // Process this directory directly
+        const testName = directiveDir;
+        const processed = await processExampleDirectory(directivePath, categoryName, testName, null);
+        stats.total += processed.total;
+        stats.fixtures += processed.fixtures;
+        stats.skipped += processed.skipped;
+      } else {
+        // Get all subdirectories within the directive directory
+        const subEntries = await fs.readdir(directivePath, { withFileTypes: true });
+        const subDirs = subEntries.filter(d => d.isDirectory()).map(d => d.name);
+        
+        for (const subDir of subDirs) {
+          const exampleDir = path.join(directivePath, subDir);
+          const testName = `${directiveDir}-${subDir}`;
+          const processed = await processExampleDirectory(exampleDir, categoryName, testName, directiveDir);
+          stats.total += processed.total;
+          stats.fixtures += processed.fixtures;
+          stats.skipped += processed.skipped;
+        }
       }
     }
   } else {
@@ -316,9 +365,11 @@ async function processCategoryDirectory(categoryPath, categoryName) {
 async function processExampleDirectory(dirPath, category, name, directive = null) {
   const stats = { total: 0, fixtures: 0, skipped: 0 };
   
-  // Look for example*.md files
+  // Look for example*.md files (or copied .mld files in examples directory)
   const files = await fs.readdir(dirPath);
-  const exampleFiles = files.filter(f => f.startsWith('example') && f.endsWith('.md'));
+  const exampleFiles = name === 'examples' ? 
+    files.filter(f => f.endsWith('.md') && !f.startsWith('invalid-') && !f.includes('-output') && !f.includes('.o.')) :
+    files.filter(f => f.startsWith('example') && f.endsWith('.md'));
   
   // Ensure output directory exists - organize by directive for valid cases
   const outputDir = directive ? 
@@ -338,10 +389,15 @@ async function processExampleDirectory(dirPath, category, name, directive = null
     let warningContent = null;
     
     if (category === 'valid') {
-      // Look for expected.md
-      const expectedFile = file.replace('example', 'expected');
-      if (files.includes(expectedFile)) {
-        expectedContent = await fs.readFile(path.join(dirPath, expectedFile), 'utf-8');
+      if (name === 'examples') {
+        // Examples don't have expected files - they're for demonstrating syntax
+        expectedContent = null;
+      } else {
+        // Look for expected.md
+        const expectedFile = file.replace('example', 'expected');
+        if (files.includes(expectedFile)) {
+          expectedContent = await fs.readFile(path.join(dirPath, expectedFile), 'utf-8');
+        }
       }
     } else if (category === 'exceptions') {
       // Look for error.md
@@ -357,7 +413,10 @@ async function processExampleDirectory(dirPath, category, name, directive = null
     
     // Generate fixture name
     let fixtureName = `${name}`;
-    if (file !== 'example.md') {
+    if (name === 'examples') {
+      // For examples directory, use the filename as the fixture name
+      fixtureName = file.replace('.md', '');
+    } else if (file !== 'example.md') {
       // Handle variants like example-multiline.md
       const variant = file.replace('example-', '').replace('.md', '');
       fixtureName += `-${variant}`;
@@ -378,6 +437,9 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         };
       }
       
+      // Note: Actual output generation will be handled by separate post-build script
+      let actualOutput = null;
+      
       // Create fixture
       const fixture = {
         name: fixtureName.replace('.generated-fixture.json', ''),
@@ -388,6 +450,7 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         expected: expectedContent,
         expectedError: errorContent,
         expectedWarning: warningContent,
+        actualOutput: actualOutput, // Include generated output for smoke tests
         ast: ast,
         parseError: parseError
       };

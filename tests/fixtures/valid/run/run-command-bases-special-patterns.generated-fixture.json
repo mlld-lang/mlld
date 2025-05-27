@@ -7,10 +7,11 @@
   "expected": "# Test special command patterns\n\nnpx prettier --write .\n\npython -m http.server 8000\n\nHello\n\ndeno run --allow-net server.ts",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Text",
-      "nodeId": "ac131041-6fed-4f64-811d-ea594827e6c8",
+      "nodeId": "596d68de-29b9-4967-9ea6-e8084a5f4d4c",
       "location": {
         "start": {
           "offset": 0,
@@ -27,7 +28,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "8c59cd67-2ad7-4910-a276-951d3b66b5f8",
+      "nodeId": "61232aea-7e06-4ee2-a74d-5c390a535bb5",
       "location": {
         "start": {
           "offset": 33,
@@ -47,7 +48,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "5f826ea1-3623-4bd6-ad72-471025939e45",
+            "nodeId": "b3e74503-b2ed-43ae-b997-616be40f6aa4",
             "location": {
               "start": {
                 "offset": 39,
@@ -65,7 +66,7 @@
         ],
         "commandBases": [
           {
-            "nodeId": "d3092e24-7c01-4090-8833-af95c8aacd55",
+            "nodeId": "e4448fa2-d9ba-4212-bd5a-8cbc5a0df497",
             "location": {
               "start": {
                 "offset": 38,
@@ -97,7 +98,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "d94fbee5-f447-4ebc-af9a-04a584dfbf26",
+      "nodeId": "b449f089-3817-4772-8378-6c0d30111c36",
       "location": {
         "start": {
           "offset": 69,
@@ -114,7 +115,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "532e2506-c7a2-4c0f-acac-77862fef0612",
+      "nodeId": "9c55c0d0-ede8-4da4-a6dd-6fc97e8442ce",
       "location": {
         "start": {
           "offset": 71,
@@ -134,7 +135,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "bff760af-5562-4221-a198-abb50180a901",
+            "nodeId": "23e6273d-5b83-414d-8405-f59e3a6543d5",
             "location": {
               "start": {
                 "offset": 77,
@@ -152,7 +153,7 @@
         ],
         "commandBases": [
           {
-            "nodeId": "7591bd12-b6df-4ba9-8cde-88720a562db3",
+            "nodeId": "c3aa1767-2b7a-4599-a0dc-9a7795fa7771",
             "location": {
               "start": {
                 "offset": 76,
@@ -184,7 +185,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "b305147e-091c-4a52-81b4-c10a431cd30b",
+      "nodeId": "9ecd275c-eae1-4c3d-8038-58da768d983c",
       "location": {
         "start": {
           "offset": 111,
@@ -201,7 +202,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "7093fded-c13b-401f-b7f5-6e299365857d",
+      "nodeId": "00f5666f-4756-4cf9-a557-8bd15f392478",
       "location": {
         "start": {
           "offset": 113,
@@ -221,7 +222,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "68d77fde-a1bf-4904-a68b-195cbdce8438",
+            "nodeId": "4751378d-2f74-4a46-ae73-19dd90c35bf9",
             "location": {
               "start": {
                 "offset": 119,
@@ -239,7 +240,7 @@
         ],
         "commandBases": [
           {
-            "nodeId": "6bf5bbc5-ae21-4d3c-b0e9-b8822c2cb507",
+            "nodeId": "a02b0893-54ce-48a8-8b4e-7a7d1efd446a",
             "location": {
               "start": {
                 "offset": 118,
@@ -271,7 +272,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "65128bd2-f1c6-463c-9b6b-fe14925ed6fe",
+      "nodeId": "37ecd670-8e1d-431c-b6b5-d14b36e2d811",
       "location": {
         "start": {
           "offset": 150,
@@ -288,7 +289,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "d3410863-c73a-4b6b-8815-fef6351e065b",
+      "nodeId": "b306c3ca-0f60-4655-b4ad-dd5be7cee397",
       "location": {
         "start": {
           "offset": 152,
@@ -308,7 +309,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "7c247df5-cf8e-44d4-b388-c10df516b30e",
+            "nodeId": "bb980276-c7e7-41bc-911c-7c6ac85fefd9",
             "location": {
               "start": {
                 "offset": 158,
@@ -326,7 +327,7 @@
         ],
         "commandBases": [
           {
-            "nodeId": "f2499662-21db-455e-92cd-7ca5b3350149",
+            "nodeId": "69ed1af2-7fd4-4e17-9dd2-eaca59e77739",
             "location": {
               "start": {
                 "offset": 157,

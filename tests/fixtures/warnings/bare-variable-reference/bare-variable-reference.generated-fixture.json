@@ -7,10 +7,11 @@
   "expected": null,
   "expectedError": null,
   "expectedWarning": "**Warning: Bare variable reference detected**\n\nThe line `This line contains a bare variable reference: @myvar` contains a variable reference outside of a directive.\n\nmlld is a programming language embedded in Markdown, not a template language. Variable references like `@myvar` are only processed when they appear in directive lines that start with `@`.\n\n**To fix this:**\n```mlld\nThis line contains a variable reference:\n@add @myvar\n```",
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "7dfd2b36-063d-4701-9963-9bcad9bb4016",
+      "nodeId": "794af46a-97fd-487f-a77e-f15fb26e9dbd",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "95f47ed6-6953-42ec-b9c9-7a65aec37283",
+            "nodeId": "5251fc8e-17f4-43c1-8b57-9351b1f4f409",
             "location": {
               "start": {
                 "offset": 0,
@@ -50,7 +51,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "431e6b1f-6143-42fd-bdaf-4dc1a88e2f95",
+            "nodeId": "4b30c5d9-854a-4308-9d80-d66f66778b1a",
             "location": {
               "start": {
                 "offset": 14,
@@ -79,7 +80,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "4fdea7d4-4ca2-464b-88ad-8b78b153c8ee",
+      "nodeId": "52c06488-3d51-48f5-9e34-a8b315352614",
       "location": {
         "start": {
           "offset": 27,

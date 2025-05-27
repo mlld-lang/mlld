@@ -7,10 +7,11 @@
   "expected": "## Section 1\n### Subsection 1.1\nContent from file",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "8ee5ad55-9b61-4fb7-9e61-699973a6a11c",
+      "nodeId": "de5429b3-89bd-4763-aa81-efef18432eec",
       "location": {
         "start": {
           "offset": 0,
@@ -30,7 +31,7 @@
         "sectionTitle": [
           {
             "type": "Text",
-            "nodeId": "cb11367c-25d0-458a-a2ea-95c686d54c82",
+            "nodeId": "1ad4175f-6916-4bd9-aa88-c50d9e8f01e4",
             "location": {
               "start": {
                 "offset": 5,
@@ -49,7 +50,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "2f2a750c-ac28-41d9-a4d1-6a5e94a966e7",
+            "nodeId": "89cb8117-d712-427a-a8dc-73c9bf33cc1d",
             "location": {
               "start": {
                 "offset": 23,

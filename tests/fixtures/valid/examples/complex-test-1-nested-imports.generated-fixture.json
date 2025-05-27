@@ -1,0 +1,1057 @@
+{
+  "name": "complex-test-1-nested-imports",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "# Complex Test 1: Nested Imports and Variable Scoping\n\n@text project_name = \"Meld Complex Test\"\n\n# Create a library file that imports another file\n@text lib_content = [[\n@import { imported_title } from \"files/imports.mld\"\n@text lib_message = \"Library says: {{imported_title}}\"\n@data lib_config = {\n  \"name\": \"lib\",\n  \"version\": \"1.0.0\",\n  \"imported\": @imported_title\n}\n]]\n\n>> Simulate creating the lib file (in real usage, this would be a separate file)\n@exec write_lib(content) = @run [echo '@lib_content @content' > ./files/lib.mld]\n\n@run @write_lib(\"Hi\")\n\n>> Now import from our \"lib\" that itself has imports\n@import { lib_message, lib_config } from \"./files/lib.mld\"\n\n>> Test if nested imports work and variable scoping is correct\n@text final_output = [[\nProject: {{project_name}}\nLibrary Message: {{lib_message}}\nLibrary Config: {{lib_config.name}} v{{lib_config.version}}\nImported Value in Config: {{lib_config.imported}}\n]]\n\n@add @final_output",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "f99d559a-b9ac-46e8-91a1-22181d0aca57",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 55,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "# Complex Test 1: Nested Imports and Variable Scoping\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "6875c838-b2bb-40cd-9125-c067499c8de2",
+      "location": {
+        "start": {
+          "offset": 55,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 95,
+          "line": 3,
+          "column": 41
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "0212b46b-95df-4818-bb56-b440f8a43f4b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "project_name"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "79dc63dc-a869-43fc-ac92-a7321160db1b",
+            "location": {
+              "start": {
+                "offset": 76,
+                "line": 3,
+                "column": 22
+              },
+              "end": {
+                "offset": 95,
+                "line": 3,
+                "column": 41
+              }
+            },
+            "content": "Meld Complex Test"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "project_name",
+        "content": "Meld Complex Test"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "542af133-c0ee-4696-97a9-f2d804939833",
+      "location": {
+        "start": {
+          "offset": 95,
+          "line": 3,
+          "column": 41
+        },
+        "end": {
+          "offset": 147,
+          "line": 6,
+          "column": 1
+        }
+      },
+      "content": "\n\n# Create a library file that imports another file\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "26901237-9237-415a-acc7-558e382e775c",
+      "location": {
+        "start": {
+          "offset": 147,
+          "line": 6,
+          "column": 1
+        },
+        "end": {
+          "offset": 371,
+          "line": 14,
+          "column": 3
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplate",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "1a9c331c-0e3d-4424-bc25-9f22694b916d",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "lib_content"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "8f896116-f4a6-46a7-a668-91f7ef9cc607",
+            "location": {
+              "start": {
+                "offset": 169,
+                "line": 6,
+                "column": 23
+              },
+              "end": {
+                "offset": 257,
+                "line": 8,
+                "column": 36
+              }
+            },
+            "content": "\n@import { imported_title } from \"files/imports.mld\"\n@text lib_message = \"Library says: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "322f9e89-db0f-4e0b-84b6-55237bfddd6f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "imported_title"
+          },
+          {
+            "type": "Text",
+            "nodeId": "74bba445-1ebc-47c7-959e-5acab2c45753",
+            "location": {
+              "start": {
+                "offset": 275,
+                "line": 8,
+                "column": 54
+              },
+              "end": {
+                "offset": 369,
+                "line": 14,
+                "column": 1
+              }
+            },
+            "content": "\"\n@data lib_config = {\n  \"name\": \"lib\",\n  \"version\": \"1.0.0\",\n  \"imported\": @imported_title\n}\n"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "lib_content",
+        "content": "\n@import { imported_title } from \"files/imports.mld\"\n@text lib_message = \"Library says: {{imported_title}}\"\n@data lib_config = {\n  \"name\": \"lib\",\n  \"version\": \"1.0.0\",\n  \"imported\": @imported_title\n}\n"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "f4bd10ba-b708-4f60-9ed4-5d482b0c7928",
+      "location": {
+        "start": {
+          "offset": 371,
+          "line": 14,
+          "column": 3
+        },
+        "end": {
+          "offset": 373,
+          "line": 16,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Comment",
+      "nodeId": "77c1d62b-ad4f-4613-b849-82438786d77f",
+      "location": {
+        "start": {
+          "offset": 373,
+          "line": 16,
+          "column": 1
+        },
+        "end": {
+          "offset": 454,
+          "line": 17,
+          "column": 1
+        }
+      },
+      "content": "Simulate creating the lib file (in real usage, this would be a separate file)"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "459de0e3-707b-4d30-95bd-586348f6a799",
+      "location": {
+        "start": {
+          "offset": 454,
+          "line": 17,
+          "column": 1
+        },
+        "end": {
+          "offset": 534,
+          "line": 17,
+          "column": 81
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "3e31829b-70b4-4f3a-ba87-0d6547949f7c",
+            "location": {
+              "start": {
+                "offset": 454,
+                "line": 17,
+                "column": 1
+              },
+              "end": {
+                "offset": 534,
+                "line": 17,
+                "column": 81
+              }
+            },
+            "content": "write_lib"
+          }
+        ],
+        "params": [
+          "content"
+        ],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "0211b349-1f9e-45ba-9779-6f85100e7b28",
+            "location": {
+              "start": {
+                "offset": 487,
+                "line": 17,
+                "column": 34
+              },
+              "end": {
+                "offset": 493,
+                "line": 17,
+                "column": 40
+              }
+            },
+            "content": "echo '"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "6663296b-ebe6-45c0-bf81-046faf1ad8ed",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "lib_content"
+          },
+          {
+            "type": "Text",
+            "nodeId": "4043baf1-0382-4d47-80e1-16529c19576d",
+            "location": {
+              "start": {
+                "offset": 505,
+                "line": 17,
+                "column": 52
+              },
+              "end": {
+                "offset": 506,
+                "line": 17,
+                "column": 53
+              }
+            },
+            "content": " "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "8dbaf6ee-5b27-4bca-991f-9cb285d69668",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "content"
+          },
+          {
+            "type": "Text",
+            "nodeId": "7ef32d6b-079a-459f-a305-47d3a9b80297",
+            "location": {
+              "start": {
+                "offset": 514,
+                "line": 17,
+                "column": 61
+              },
+              "end": {
+                "offset": 519,
+                "line": 17,
+                "column": 66
+              }
+            },
+            "content": "' > ."
+          },
+          {
+            "type": "PathSeparator",
+            "nodeId": "7de9a510-a508-4565-bec3-3ce0b2bf2c15",
+            "location": {
+              "start": {
+                "offset": 519,
+                "line": 17,
+                "column": 66
+              },
+              "end": {
+                "offset": 520,
+                "line": 17,
+                "column": 67
+              }
+            },
+            "value": "/"
+          },
+          {
+            "type": "Text",
+            "nodeId": "6b718e88-1040-44af-8f4f-be345e41342f",
+            "location": {
+              "start": {
+                "offset": 520,
+                "line": 17,
+                "column": 67
+              },
+              "end": {
+                "offset": 525,
+                "line": 17,
+                "column": 72
+              }
+            },
+            "content": "files"
+          },
+          {
+            "type": "PathSeparator",
+            "nodeId": "b7405a36-e7ec-4d70-8233-8b479512f878",
+            "location": {
+              "start": {
+                "offset": 525,
+                "line": 17,
+                "column": 72
+              },
+              "end": {
+                "offset": 526,
+                "line": 17,
+                "column": 73
+              }
+            },
+            "value": "/"
+          },
+          {
+            "type": "Text",
+            "nodeId": "29b10184-045a-472d-b60a-a083e64929b4",
+            "location": {
+              "start": {
+                "offset": 526,
+                "line": 17,
+                "column": 73
+              },
+              "end": {
+                "offset": 533,
+                "line": 17,
+                "column": 80
+              }
+            },
+            "content": "lib.mld"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "42c84524-d89b-4b1d-8352-bae78bc6362e",
+            "location": {
+              "start": {
+                "offset": 486,
+                "line": 17,
+                "column": 33
+              },
+              "end": {
+                "offset": 534,
+                "line": 17,
+                "column": 81
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "write_lib",
+        "params": [
+          "content"
+        ],
+        "command": "echo '@lib_content @content' > ./files/lib.mld",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "parameterCount": 1
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "a1d59226-ab24-46aa-912d-58667bce167a",
+      "location": {
+        "start": {
+          "offset": 534,
+          "line": 17,
+          "column": 81
+        },
+        "end": {
+          "offset": 536,
+          "line": 19,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "7ebb2f40-a2df-47f1-a69d-7df216c8fbbc",
+      "location": {
+        "start": {
+          "offset": 536,
+          "line": 19,
+          "column": 1
+        },
+        "end": {
+          "offset": 557,
+          "line": 19,
+          "column": 22
+        }
+      },
+      "kind": "run",
+      "subtype": "runExec",
+      "source": "exec",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "1027a651-7602-4c8c-ad15-29877f16a045",
+            "location": {
+              "start": {
+                "offset": 542,
+                "line": 19,
+                "column": 7
+              },
+              "end": {
+                "offset": 557,
+                "line": 19,
+                "column": 22
+              }
+            },
+            "content": "write_lib"
+          }
+        ],
+        "args": [
+          {
+            "type": "Text",
+            "nodeId": "b9ad21c2-afa7-4c62-8dd8-f23f1f49eddd",
+            "location": {
+              "start": {
+                "offset": 552,
+                "line": 19,
+                "column": 17
+              },
+              "end": {
+                "offset": 556,
+                "line": 19,
+                "column": 21
+              }
+            },
+            "content": "Hi"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "write_lib",
+        "args": [
+          "Hi"
+        ]
+      },
+      "meta": {
+        "argumentCount": 1
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "de1c0f14-a4ab-4f4a-98c0-7866f88bdb57",
+      "location": {
+        "start": {
+          "offset": 557,
+          "line": 19,
+          "column": 22
+        },
+        "end": {
+          "offset": 559,
+          "line": 21,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Comment",
+      "nodeId": "055f5ef7-a8d1-4e9a-ac57-b9b40ba1e776",
+      "location": {
+        "start": {
+          "offset": 559,
+          "line": 21,
+          "column": 1
+        },
+        "end": {
+          "offset": 612,
+          "line": 22,
+          "column": 1
+        }
+      },
+      "content": "Now import from our \"lib\" that itself has imports"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "c0004384-d6d0-4a29-bd23-8aeb57dabcf5",
+      "location": {
+        "start": {
+          "offset": 612,
+          "line": 22,
+          "column": 1
+        },
+        "end": {
+          "offset": 670,
+          "line": 22,
+          "column": 59
+        }
+      },
+      "kind": "import",
+      "subtype": "importSelected",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "4f59aeaa-77eb-4dc8-acb1-d4843fa0aee6",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "lib_message"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "f61f47c1-c967-484a-9b6c-3f8fb7634856",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "lib_config"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "0772c3b7-2b75-4bc6-9b37-11fadcb68213",
+            "location": {
+              "start": {
+                "offset": 653,
+                "line": 22,
+                "column": 42
+              },
+              "end": {
+                "offset": 670,
+                "line": 22,
+                "column": 59
+              }
+            },
+            "content": "./files/lib.mld"
+          }
+        ]
+      },
+      "raw": {
+        "imports": "lib_message, lib_config",
+        "path": "./files/lib.mld"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "mld",
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "8d888d04-ad15-42c2-8a0e-4f04201b786d",
+      "location": {
+        "start": {
+          "offset": 670,
+          "line": 22,
+          "column": 59
+        },
+        "end": {
+          "offset": 672,
+          "line": 24,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Comment",
+      "nodeId": "289245af-b448-44f5-aaca-2ca506ffaf8a",
+      "location": {
+        "start": {
+          "offset": 672,
+          "line": 24,
+          "column": 1
+        },
+        "end": {
+          "offset": 735,
+          "line": 25,
+          "column": 1
+        }
+      },
+      "content": "Test if nested imports work and variable scoping is correct"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "8fd86db9-2507-47fa-8a6e-82a933966541",
+      "location": {
+        "start": {
+          "offset": 735,
+          "line": 25,
+          "column": 1
+        },
+        "end": {
+          "offset": 930,
+          "line": 30,
+          "column": 3
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplate",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "c57d414c-9e30-4f6d-9960-a4bdd130ef49",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "final_output"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "cba4d68d-a48c-45fb-94a4-d092a49814ed",
+            "location": {
+              "start": {
+                "offset": 758,
+                "line": 25,
+                "column": 24
+              },
+              "end": {
+                "offset": 768,
+                "line": 26,
+                "column": 10
+              }
+            },
+            "content": "\nProject: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "625b3858-c4b3-4d67-8a15-ec7f2b2fac3c",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "project_name"
+          },
+          {
+            "type": "Text",
+            "nodeId": "f697f4e5-d7ba-440c-adb8-2b5f7320edd8",
+            "location": {
+              "start": {
+                "offset": 784,
+                "line": 26,
+                "column": 26
+              },
+              "end": {
+                "offset": 802,
+                "line": 27,
+                "column": 18
+              }
+            },
+            "content": "\nLibrary Message: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "a0e28f00-fd8f-4613-b90e-ed3f8f1fa3ed",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "lib_message"
+          },
+          {
+            "type": "Text",
+            "nodeId": "f80694ea-5052-4bba-a85d-578962a45b70",
+            "location": {
+              "start": {
+                "offset": 817,
+                "line": 27,
+                "column": 33
+              },
+              "end": {
+                "offset": 834,
+                "line": 28,
+                "column": 17
+              }
+            },
+            "content": "\nLibrary Config: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "7f0cbd38-11d6-4599-98b2-6bdd7168e409",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "lib_config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "name"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "eea4583f-34f5-4147-9114-82d6cd567e8d",
+            "location": {
+              "start": {
+                "offset": 853,
+                "line": 28,
+                "column": 36
+              },
+              "end": {
+                "offset": 855,
+                "line": 28,
+                "column": 38
+              }
+            },
+            "content": " v"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "88fe8f04-b084-480c-a13f-db40ac058b8f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "lib_config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "version"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "96369240-1422-4b67-9fc1-0bf25d3484df",
+            "location": {
+              "start": {
+                "offset": 877,
+                "line": 28,
+                "column": 60
+              },
+              "end": {
+                "offset": 904,
+                "line": 29,
+                "column": 27
+              }
+            },
+            "content": "\nImported Value in Config: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "b29dbcdc-1a9d-4aac-8c5a-bba0fc6d26bf",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "lib_config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "imported"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "fa5ee679-df0d-4ab8-aa0d-0684e2de7e0c",
+            "location": {
+              "start": {
+                "offset": 927,
+                "line": 29,
+                "column": 50
+              },
+              "end": {
+                "offset": 928,
+                "line": 30,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "final_output",
+        "content": "\nProject: {{project_name}}\nLibrary Message: {{lib_message}}\nLibrary Config: {{lib_config}} v{{lib_config}}\nImported Value in Config: {{lib_config}}\n"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "f88ca058-5fa0-43b4-9358-7da91d90d933",
+      "location": {
+        "start": {
+          "offset": 930,
+          "line": 30,
+          "column": 3
+        },
+        "end": {
+          "offset": 932,
+          "line": 32,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "e0ac5aca-3a4f-433e-811c-1015b53600ce",
+      "location": {
+        "start": {
+          "offset": 932,
+          "line": 32,
+          "column": 1
+        },
+        "end": {
+          "offset": 950,
+          "line": 32,
+          "column": 19
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "bf4aefbd-65fd-4fc5-aff5-89d780d9b090",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "final_output"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@final_output"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

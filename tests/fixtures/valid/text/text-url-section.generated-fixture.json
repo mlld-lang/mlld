@@ -7,10 +7,11 @@
   "expected": "# Text from URL Section Example\n\nThis example demonstrates fetching a specific section from a URL.\n\nHere's how to install:\n\n## Installation\n\nTo install the project, run:\n\n```bash\nnpm install example-project\n```",
   "expectedError": null,
   "expectedWarning": null,
+  "actualOutput": null,
   "ast": [
     {
       "type": "Text",
-      "nodeId": "f07301c0-8d57-46eb-81c0-26a13879aa38",
+      "nodeId": "1d061843-d8d6-4e70-bd99-1735d8838830",
       "location": {
         "start": {
           "offset": 0,
@@ -27,7 +28,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "ac8260bc-b737-478e-a9df-7ed6f2637283",
+      "nodeId": "fd49cd70-57f2-411a-8483-b520a31897c9",
       "location": {
         "start": {
           "offset": 100,
@@ -47,7 +48,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "28dc8106-81ff-4dec-8479-44fc15214cf1",
+            "nodeId": "9d506166-6a58-4160-8f2f-ea7de161150a",
             "location": {
               "start": {
                 "offset": 0,
@@ -67,7 +68,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "b95db1cf-dcf5-4cf0-97d3-35f59802d98a",
+            "nodeId": "ada82c8b-126a-4835-b2f3-4675c0b63792",
             "location": {
               "start": {
                 "offset": 121,
@@ -96,7 +97,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "f75b180d-33d4-4eb4-9dc5-bc0e084f2b3e",
+      "nodeId": "562ee8a4-741e-465b-b78c-6d11020c67dd",
       "location": {
         "start": {
           "offset": 138,
@@ -113,7 +114,7 @@
     },
     {
       "type": "VariableReference",
-      "nodeId": "e0a676c9-023d-46ec-9103-db4b7a066857",
+      "nodeId": "8fc3006d-607d-4571-8a18-0459443a417e",
       "location": {
         "start": {
           "offset": 0,

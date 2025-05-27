@@ -1,0 +1,149 @@
+{
+  "name": "test-simple-import-working",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "@import {*} from [imports-simple.mld]\n@add @imported_title\n",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "ad10521c-ecf4-454a-adc7-d0950e2f46e2",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 37,
+          "line": 1,
+          "column": 38
+        }
+      },
+      "kind": "import",
+      "subtype": "importAll",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "1adee551-3fbd-4ab1-99d0-d083e75eae45",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "*"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "997ff689-b848-4bc5-9333-890eb094d6d5",
+            "location": {
+              "start": {
+                "offset": 18,
+                "line": 1,
+                "column": 19
+              },
+              "end": {
+                "offset": 36,
+                "line": 1,
+                "column": 37
+              }
+            },
+            "content": "imports-simple.mld"
+          }
+        ]
+      },
+      "raw": {
+        "imports": "*",
+        "path": "imports-simple.mld"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "mld",
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "c8b9f6f6-d73e-448a-9a92-6a9faf679665",
+      "location": {
+        "start": {
+          "offset": 37,
+          "line": 1,
+          "column": 38
+        },
+        "end": {
+          "offset": 38,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "a526166c-051d-461e-bc9f-51d7fdfcfdd3",
+      "location": {
+        "start": {
+          "offset": 38,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 59,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "78895455-7bcf-40e3-8381-d7dd22f676ff",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "imported_title"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@imported_title"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

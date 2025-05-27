@@ -1,0 +1,430 @@
+{
+  "name": "math",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "@data items = [\n  { \"name\": \"Item 1\", \"value\": 100 },\n  { \"name\": \"Item 2\", \"value\": 200 },\n  { \"name\": \"Item 3\", \"value\": 300 }\n]\n\n@text total = @run [echo \"@items.0.value + @items.1.value + @items.2.value\" | bc]\n\n@add @total",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "544bcbee-3bd9-4b61-80d8-04872b63df82",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 130,
+          "line": 5,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "array",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "62ebc105-b8af-453a-a2fa-b2eb82624aa4",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "items"
+          }
+        ],
+        "value": {
+          "type": "array",
+          "items": [
+            {
+              "type": "object",
+              "properties": {
+                "name": [
+                  {
+                    "type": "Text",
+                    "nodeId": "822c19dd-4531-4b67-85b7-794c0e7a0b97",
+                    "location": {
+                      "start": {
+                        "offset": 28,
+                        "line": 2,
+                        "column": 13
+                      },
+                      "end": {
+                        "offset": 36,
+                        "line": 2,
+                        "column": 21
+                      }
+                    },
+                    "content": "Item 1"
+                  }
+                ],
+                "value": 100
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": [
+                  {
+                    "type": "Text",
+                    "nodeId": "213ce71e-70a7-4373-bef6-3c1c6ccd955f",
+                    "location": {
+                      "start": {
+                        "offset": 66,
+                        "line": 3,
+                        "column": 13
+                      },
+                      "end": {
+                        "offset": 74,
+                        "line": 3,
+                        "column": 21
+                      }
+                    },
+                    "content": "Item 2"
+                  }
+                ],
+                "value": 200
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": [
+                  {
+                    "type": "Text",
+                    "nodeId": "5248fac3-4138-4867-a200-1fc31115449e",
+                    "location": {
+                      "start": {
+                        "offset": 104,
+                        "line": 4,
+                        "column": 13
+                      },
+                      "end": {
+                        "offset": 112,
+                        "line": 4,
+                        "column": 21
+                      }
+                    },
+                    "content": "Item 3"
+                  }
+                ],
+                "value": 300
+              }
+            }
+          ]
+        }
+      },
+      "raw": {
+        "identifier": "items",
+        "value": "[\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"822c19dd-4531-4b67-85b7-794c0e7a0b97\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 28,\n              \"line\": 2,\n              \"column\": 13\n            },\n            \"end\": {\n              \"offset\": 36,\n              \"line\": 2,\n              \"column\": 21\n            }\n          },\n          \"content\": \"Item 1\"\n        }\n      ],\n      \"value\": 100\n    }\n  },\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"213ce71e-70a7-4373-bef6-3c1c6ccd955f\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 66,\n              \"line\": 3,\n              \"column\": 13\n            },\n            \"end\": {\n              \"offset\": 74,\n              \"line\": 3,\n              \"column\": 21\n            }\n          },\n          \"content\": \"Item 2\"\n        }\n      ],\n      \"value\": 200\n    }\n  },\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"5248fac3-4138-4867-a200-1fc31115449e\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 104,\n              \"line\": 4,\n              \"column\": 13\n            },\n            \"end\": {\n              \"offset\": 112,\n              \"line\": 4,\n              \"column\": 21\n            }\n          },\n          \"content\": \"Item 3\"\n        }\n      ],\n      \"value\": 300\n    }\n  }\n]"
+      },
+      "meta": {
+        "arrayData": {
+          "itemCount": 3
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "ff8ce60d-58e8-4166-8dac-359b9e04bd47",
+      "location": {
+        "start": {
+          "offset": 130,
+          "line": 5,
+          "column": 2
+        },
+        "end": {
+          "offset": 132,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "c1617246-48b0-4bc7-b372-81e525b18f1e",
+      "location": {
+        "start": {
+          "offset": 132,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 213,
+          "line": 7,
+          "column": 82
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "run",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "03627233-01a5-498a-9092-42fb3abcb7c5",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "total"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "85d77009-e5b6-4a49-bf2b-ed19be0c055c",
+            "location": {
+              "start": {
+                "offset": 152,
+                "line": 7,
+                "column": 21
+              },
+              "end": {
+                "offset": 158,
+                "line": 7,
+                "column": 27
+              }
+            },
+            "content": "echo \""
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "d4812489-4511-4341-85cb-5fd1c7e080ab",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "items",
+            "fields": [
+              {
+                "type": "numericField",
+                "index": 0
+              },
+              {
+                "type": "field",
+                "name": "value"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "31fa729f-03f0-4126-b359-c1593568ea38",
+            "location": {
+              "start": {
+                "offset": 172,
+                "line": 7,
+                "column": 41
+              },
+              "end": {
+                "offset": 175,
+                "line": 7,
+                "column": 44
+              }
+            },
+            "content": " + "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "82641b2c-8f8a-4faa-8ca8-d971089954e9",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "items",
+            "fields": [
+              {
+                "type": "numericField",
+                "index": 1
+              },
+              {
+                "type": "field",
+                "name": "value"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "021daa11-50af-48fa-8682-0e0083529b40",
+            "location": {
+              "start": {
+                "offset": 189,
+                "line": 7,
+                "column": 58
+              },
+              "end": {
+                "offset": 192,
+                "line": 7,
+                "column": 61
+              }
+            },
+            "content": " + "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "dbbd8a60-28f6-420e-bd7c-80c28fad7714",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "items",
+            "fields": [
+              {
+                "type": "numericField",
+                "index": 2
+              },
+              {
+                "type": "field",
+                "name": "value"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "f182906d-5904-401a-bf97-c4754a505ba9",
+            "location": {
+              "start": {
+                "offset": 206,
+                "line": 7,
+                "column": 75
+              },
+              "end": {
+                "offset": 212,
+                "line": 7,
+                "column": 81
+              }
+            },
+            "content": "\" | bc"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "total",
+        "content": "@run echo \"@items + @items + @items\" | bc"
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "run",
+        "hasVariables": true,
+        "run": {
+          "isCommand": true
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "7aa43d0f-c32b-4b68-9766-3ae3c1b4677f",
+      "location": {
+        "start": {
+          "offset": 213,
+          "line": 7,
+          "column": 82
+        },
+        "end": {
+          "offset": 215,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "1f5a3026-0a7e-4141-aee8-67c5e8cab045",
+      "location": {
+        "start": {
+          "offset": 215,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 226,
+          "line": 9,
+          "column": 12
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "cdd20504-5990-4839-bc87-c78c414570d3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "total"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@total"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}
