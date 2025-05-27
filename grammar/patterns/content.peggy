@@ -139,11 +139,10 @@ DirectCodeContent "Code content without interpolation"
 // COMBO PATTERNS - Combine different types of patterns
 // -------------------------------------------------------------
 
-// Path-style interpolation: quotes, brackets, or unquoted
+// Path-style interpolation: quotes or brackets only (no unquoted paths)
 PathStyleInterpolation "Path interpolation patterns"
   = LiteralContent
   / BracketContent
-  / UnquotedPath
 
 // Template-style interpolation: quotes or double brackets
 TemplateStyleInterpolation "Template interpolation patterns"

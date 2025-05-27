@@ -3,7 +3,7 @@
   "description": "Test fixture for valid/examples",
   "category": "valid",
   "subcategory": "examples",
-  "input": ">> This is a comment and should be ignored\n>> I can write a couple lines of them if I want and no one will ever know.\n\n@import { * } from \"files/imports.mld\"\n\n@data role = {\n    \"architect\": \"You are a senior architect skilled in assessing TypeScript codebases.\",\n    \"ux\": \"You are a senior ux designer skilled in assessing user experience.\",\n    \"security\": \"You are a senior security engineer skilled in assessing TypeScript codebases.\"\n}\n\n@data task = {\n    \"code_review\": \"Carefully review the code and test results and advise on the quality of the code and areas of improvement.\",\n    \"ux_review\": \"Carefully review the user experience and advise on the quality of the user experience and areas of improvement.\",\n    \"security_review\": \"Carefully review the security of the code and advise on the quality of the security and areas of improvement.\"\n}\n\n## Your role\n@add @role.architect\n\n## Documentation\n### Architecture\n@add @path \"./docs/dev/ARCHITECTURE.md\" # TESTING INFRASTRUCTURE\n### Mlld Processing Pipeline\n@add @path \"./docs/dev/PIPELINE.md\"\n\n## Test Results\n@run npm test core/syntax\n\n## Your task\n@add @task.code_review\n\n>> this doesn't work but should\n>> @run @text codecat(\"./examples\")",
+  "input": ">> This is a comment and should be ignored\n>> I can write a couple lines of them if I want and no one will ever know.\n\n@import { * } from \"files/imports.mld\"\n\n@data role = {\n    \"architect\": \"You are a senior architect skilled in assessing TypeScript codebases.\",\n    \"ux\": \"You are a senior ux designer skilled in assessing user experience.\",\n    \"security\": \"You are a senior security engineer skilled in assessing TypeScript codebases.\"\n}\n\n@data task = {\n    \"code_review\": \"Carefully review the code and test results and advise on the quality of the code and areas of improvement.\",\n    \"ux_review\": \"Carefully review the user experience and advise on the quality of the user experience and areas of improvement.\",\n    \"security_review\": \"Carefully review the security of the code and advise on the quality of the security and areas of improvement.\"\n}\n\n## Your role\n@add @role.architect\n\n## Documentation\n### Architecture\n@add @path \"./docs/dev/ARCHITECTURE.md\" # TESTING INFRASTRUCTURE\n### Mlld error handling\n@add @path \"./docs/dev/ERRORS.md\"\n\n## Test Results\n@run npm test core/syntax\n\n## Your task\n@add @task.code_review\n\n>> this doesn't work but should\n>> @run @text codecat(\"./examples\")\n",
   "expected": null,
   "expectedError": null,
   "expectedWarning": null,
@@ -13,12 +13,12 @@
     "message": "Expected \"@\", \"bash\", \"javascript\", \"js\", \"py\", \"python\", \"sh\", Wrapped command content, or whitespace but \"n\" found.",
     "location": {
       "start": {
-        "offset": 1078,
+        "offset": 1071,
         "line": 28,
         "column": 6
       },
       "end": {
-        "offset": 1079,
+        "offset": 1072,
         "line": 28,
         "column": 7
       }

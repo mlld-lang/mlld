@@ -8,137 +8,20 @@
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": [
-    {
-      "type": "Directive",
-      "nodeId": "6de4314f-9024-4821-bfe9-f222042b438c",
-      "location": {
-        "start": {
-          "offset": 0,
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "offset": 23,
-          "line": 1,
-          "column": 24
-        }
+  "ast": null,
+  "parseError": {
+    "message": "Expected \"@\", \"@add\", \"@run\", Any path expression, Content with @var interpolation, Path starting with @variable context, Section extraction, Wrapped template content, bracketed path with section, or whitespace but \"f\" found.",
+    "location": {
+      "start": {
+        "offset": 16,
+        "line": 1,
+        "column": 17
       },
-      "kind": "text",
-      "subtype": "textPath",
-      "source": "path",
-      "values": {
-        "identifier": [
-          {
-            "type": "VariableReference",
-            "nodeId": "5c25b7ac-f67a-426a-b492-5f31e643e3e3",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              }
-            },
-            "valueType": "identifier",
-            "identifier": "content"
-          }
-        ],
-        "path": [
-          {
-            "type": "Text",
-            "nodeId": "8e61f5f3-a631-4217-aa67-3b28bede98f5",
-            "location": {
-              "start": {
-                "offset": 16,
-                "line": 1,
-                "column": 17
-              },
-              "end": {
-                "offset": 23,
-                "line": 1,
-                "column": 24
-              }
-            },
-            "content": "file.md"
-          }
-        ]
-      },
-      "raw": {
-        "identifier": "content",
-        "path": "file.md"
-      },
-      "meta": {
-        "sourceType": "path",
-        "hasVariables": false
+      "end": {
+        "offset": 17,
+        "line": 1,
+        "column": 18
       }
-    },
-    {
-      "type": "Newline",
-      "nodeId": "3c832e78-a920-47d1-95eb-bb624965071d",
-      "location": {
-        "start": {
-          "offset": 23,
-          "line": 1,
-          "column": 24
-        },
-        "end": {
-          "offset": 24,
-          "line": 2,
-          "column": 1
-        }
-      },
-      "content": "\n"
-    },
-    {
-      "type": "Directive",
-      "nodeId": "c1192ec6-6419-46da-a169-b2b59b3954a3",
-      "location": {
-        "start": {
-          "offset": 24,
-          "line": 2,
-          "column": 1
-        },
-        "end": {
-          "offset": 37,
-          "line": 2,
-          "column": 14
-        }
-      },
-      "kind": "add",
-      "subtype": "addVariable",
-      "source": "variable",
-      "values": {
-        "variable": [
-          {
-            "type": "VariableReference",
-            "nodeId": "89111efa-2b5f-4592-a243-976317935d58",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              }
-            },
-            "valueType": "varIdentifier",
-            "identifier": "content"
-          }
-        ]
-      },
-      "raw": {
-        "variable": "@content"
-      },
-      "meta": {}
     }
-  ],
-  "parseError": null
+  }
 }

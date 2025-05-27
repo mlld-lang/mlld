@@ -21,8 +21,8 @@
 ## Documentation
 ### Architecture
 @add @path "./docs/dev/ARCHITECTURE.md" # TESTING INFRASTRUCTURE
-### Mlld Processing Pipeline
-@add @path "./docs/dev/PIPELINE.md"
+### Mlld error handling
+@add @path "./docs/dev/ERRORS.md"
 
 ## Test Results
 @run npm test core/syntax

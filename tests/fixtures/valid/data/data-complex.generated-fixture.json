@@ -11,7 +11,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "49c622e4-193f-4d16-a982-f1dba8ebe907",
+      "nodeId": "2e6caaa4-4a4d-4c6d-920d-e83f3e5e98c8",
       "location": {
         "start": {
           "offset": 0,
@@ -31,7 +31,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "a307b83e-4b5f-4b01-b52a-04df01da736c",
+            "nodeId": "37a96d57-ecc2-47d9-af4b-1940f71b3c56",
             "location": {
               "start": {
                 "offset": 0,
@@ -53,7 +53,7 @@
           "properties": {
             "greeting": {
               "type": "Directive",
-              "nodeId": "480ca008-09c3-441f-bd24-4c6307b52fe9",
+              "nodeId": "c1002159-76ff-41ec-89df-b6f505822d99",
               "location": {
                 "start": {
                   "offset": 30,
@@ -73,7 +73,7 @@
                 "command": [
                   {
                     "type": "Text",
-                    "nodeId": "9002c77f-c586-499f-8631-5bc40aa0d63c",
+                    "nodeId": "7f59ba9e-1d8a-44b5-8a3d-5f83d70e70e5",
                     "location": {
                       "start": {
                         "offset": 36,
@@ -91,7 +91,7 @@
                 ],
                 "commandBases": [
                   {
-                    "nodeId": "8e051270-85c1-4bd7-be4d-292d54015a24",
+                    "nodeId": "830adb9a-eeae-4181-9aad-104152cf57f8",
                     "location": {
                       "start": {
                         "offset": 35,
@@ -128,7 +128,7 @@
       },
       "raw": {
         "identifier": "results",
-        "value": "{\n  \"greeting\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"480ca008-09c3-441f-bd24-4c6307b52fe9\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 30,\n        \"line\": 2,\n        \"column\": 13\n      },\n      \"end\": {\n        \"offset\": 71,\n        \"line\": 2,\n        \"column\": 54\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runCommand\",\n    \"source\": null,\n    \"values\": {\n      \"command\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"9002c77f-c586-499f-8631-5bc40aa0d63c\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 36,\n              \"line\": 2,\n              \"column\": 19\n            },\n            \"end\": {\n              \"offset\": 70,\n              \"line\": 2,\n              \"column\": 53\n            }\n          },\n          \"content\": \"echo \\\"Hello from embedded command\\\"\"\n        }\n      ],\n      \"commandBases\": [\n        {\n          \"nodeId\": \"8e051270-85c1-4bd7-be4d-292d54015a24\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 35,\n              \"line\": 2,\n              \"column\": 18\n            },\n            \"end\": {\n              \"offset\": 71,\n              \"line\": 2,\n              \"column\": 54\n            }\n          },\n          \"command\": \"echo\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"command\": \"echo \\\"Hello from embedded command\\\"\",\n      \"commandBases\": [\n        \"echo\"\n      ]\n    },\n    \"meta\": {\n      \"hasVariables\": false,\n      \"commandCount\": 1,\n      \"hasScriptRunner\": false,\n      \"isDataValue\": true,\n      \"isMultiLine\": false\n    }\n  },\n  \"value\": 42\n}"
+        "value": "{\n  \"greeting\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"c1002159-76ff-41ec-89df-b6f505822d99\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 30,\n        \"line\": 2,\n        \"column\": 13\n      },\n      \"end\": {\n        \"offset\": 71,\n        \"line\": 2,\n        \"column\": 54\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runCommand\",\n    \"source\": null,\n    \"values\": {\n      \"command\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"7f59ba9e-1d8a-44b5-8a3d-5f83d70e70e5\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 36,\n              \"line\": 2,\n              \"column\": 19\n            },\n            \"end\": {\n              \"offset\": 70,\n              \"line\": 2,\n              \"column\": 53\n            }\n          },\n          \"content\": \"echo \\\"Hello from embedded command\\\"\"\n        }\n      ],\n      \"commandBases\": [\n        {\n          \"nodeId\": \"830adb9a-eeae-4181-9aad-104152cf57f8\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 35,\n              \"line\": 2,\n              \"column\": 18\n            },\n            \"end\": {\n              \"offset\": 71,\n              \"line\": 2,\n              \"column\": 54\n            }\n          },\n          \"command\": \"echo\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"command\": \"echo \\\"Hello from embedded command\\\"\",\n      \"commandBases\": [\n        \"echo\"\n      ]\n    },\n    \"meta\": {\n      \"hasVariables\": false,\n      \"commandCount\": 1,\n      \"hasScriptRunner\": false,\n      \"isDataValue\": true,\n      \"isMultiLine\": false\n    }\n  },\n  \"value\": 42\n}"
       },
       "meta": {
         "objectData": {
@@ -138,7 +138,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "ebde645a-1441-4bc5-a146-ef98b96a6048",
+      "nodeId": "d4f58bbe-4231-4054-87d0-193ccdc8ee8f",
       "location": {
         "start": {
           "offset": 86,
@@ -155,7 +155,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "fd428935-7c41-49e1-b240-5b8b2b62cce4",
+      "nodeId": "1644343c-0860-4b68-90a2-786e2fdb3c0c",
       "location": {
         "start": {
           "offset": 87,
@@ -175,7 +175,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "b0a84f20-f018-4763-b9d6-5af4c23a16aa",
+            "nodeId": "f5b124ea-80d5-44f6-8364-73abb3c551e6",
             "location": {
               "start": {
                 "offset": 0,

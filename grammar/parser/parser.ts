@@ -8588,9 +8588,6 @@ function peg$parse(input, options) {
     s0 = peg$parseLiteralContent();
     if (s0 === peg$FAILED) {
       s0 = peg$parseBracketContent();
-      if (s0 === peg$FAILED) {
-        s0 = peg$parseUnquotedPath();
-      }
     }
     peg$silentFails--;
     if (s0 === peg$FAILED) {

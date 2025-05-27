@@ -10,17 +10,17 @@
   "actualOutput": null,
   "ast": null,
   "parseError": {
-    "message": "Expected \">>\", \"@\", \"\\n\", \"\\r\\n\", \"{{\", Backtick Sequence, Top-level directive context, [ \\t\\r], [ \\t], [\\r - ], or end of input but \"]\" found.",
+    "message": "Expected \"[\", Any path expression, or whitespace but \"@\" found.",
     "location": {
       "start": {
-        "offset": 2809,
-        "line": 138,
-        "column": 1
+        "offset": 1452,
+        "line": 70,
+        "column": 21
       },
       "end": {
-        "offset": 2810,
-        "line": 138,
-        "column": 2
+        "offset": 1453,
+        "line": 70,
+        "column": 22
       }
     }
   }
