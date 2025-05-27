@@ -1,0 +1,185 @@
+{
+  "name": "text-assignment-add-section-bracket-rename",
+  "description": "Test fixture for valid/text-assignment-add",
+  "category": "valid",
+  "subcategory": "text-assignment-add",
+  "input": "@text intro = @add [file.md # Original Title] as \"# Renamed Section\"\n@add @intro",
+  "expected": "# Renamed Section\nContent under this section",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "86a7e1bd-be5e-4d8e-ac0e-84c765d4bbcb",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 68,
+          "line": 1,
+          "column": 69
+        }
+      },
+      "kind": "text",
+      "subtype": "textPathSection",
+      "source": "directive",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "a2f309e1-6a7c-4218-8031-5a8fa388e47c",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "intro"
+          }
+        ],
+        "section": [
+          {
+            "type": "Text",
+            "nodeId": "4d03d2f6-f5b3-4e1a-aeeb-73e99de3abe2",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 68,
+                "line": 1,
+                "column": 69
+              }
+            },
+            "content": "Original Title"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "33ec8d33-a918-4e6e-8a4e-cb3d0e4d1808",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 68,
+                "line": 1,
+                "column": 69
+              }
+            },
+            "content": "file.md"
+          }
+        ],
+        "rename": [
+          {
+            "type": "Text",
+            "nodeId": "c626e348-391f-4bba-b012-58f18988749b",
+            "location": {
+              "start": {
+                "offset": 49,
+                "line": 1,
+                "column": 50
+              },
+              "end": {
+                "offset": 68,
+                "line": 1,
+                "column": 69
+              }
+            },
+            "content": "# Renamed Section"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "intro",
+        "section": "Original Title",
+        "path": "file.md",
+        "rename": "# Renamed Section"
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "add",
+        "hasRename": true,
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "41b9dd7b-ac64-4fcb-aa5e-7523465d5b55",
+      "location": {
+        "start": {
+          "offset": 68,
+          "line": 1,
+          "column": 69
+        },
+        "end": {
+          "offset": 69,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "9748bfec-90a7-40d4-8d74-7c48842665b1",
+      "location": {
+        "start": {
+          "offset": 69,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 80,
+          "line": 2,
+          "column": 12
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "23ca0a9a-3ba9-4775-81cc-deb2d46966c3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "intro"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@intro"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

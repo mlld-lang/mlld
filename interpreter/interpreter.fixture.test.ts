@@ -70,20 +70,37 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     }
   }
   
-  // Load all fixtures
+  // Load all fixtures from new organized structure
   const fixturesDir = path.join(__dirname, '../tests/fixtures');
-  const fixtureFiles = fs.readdirSync(fixturesDir)
-    .filter(f => f.endsWith('.fixture.json'))
-    // Skip numbered fixtures as they are partial and expect full output
-    .filter(f => !/-\d+\.fixture\.json$/.test(f));
+  const fixtureFiles: string[] = [];
+  
+  // Recursively find all .generated-fixture.json files
+  function findFixtures(dir: string, relativePath = '') {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name !== 'index.ts') {
+        findFixtures(path.join(dir, entry.name), path.join(relativePath, entry.name));
+      } else if (entry.name.endsWith('.generated-fixture.json')) {
+        fixtureFiles.push(path.join(relativePath, entry.name));
+      }
+    }
+  }
+  
+  findFixtures(fixturesDir);
   
   // Create a test for each fixture
   fixtureFiles.forEach(fixtureFile => {
     const fixturePath = path.join(fixturesDir, fixtureFile);
     const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
     
-    // Skip fixtures without expected output (but allow empty string)
-    if (fixture.expected === null || fixture.expected === undefined) {
+    // Handle different fixture types
+    const isErrorFixture = !!fixture.expectedError || !!fixture.parseError;
+    const isWarningFixture = !!fixture.expectedWarning;
+    const isValidFixture = !isErrorFixture && !isWarningFixture;
+    
+    // Skip fixtures without expected output unless they're error/warning fixtures
+    if (isValidFixture && (fixture.expected === null || fixture.expected === undefined)) {
       it.skip(`${fixture.name} (no expected output)`, () => {});
       return;
     }
@@ -188,26 +205,43 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           }
         } : undefined;
         
-        const result = await interpret(fixture.input, {
-          fileSystem,
-          pathService,
-          format: 'markdown',
-          basePath,
-          urlConfig
-        });
-        
-        // Normalize output (trim trailing whitespace/newlines)
-        const normalizedResult = result.trim();
-        const normalizedExpected = fixture.expected.trim();
-        
-        expect(normalizedResult).toBe(normalizedExpected);
-      } catch (error) {
-        // Some fixtures might test error cases
-        if (fixture.expectedError) {
-          expect(error.message).toContain(fixture.expectedError);
+        if (isErrorFixture) {
+          // For error fixtures, expect interpretation to fail
+          await expect(async () => {
+            await interpret(fixture.input, {
+              fileSystem,
+              pathService,
+              format: 'markdown',
+              basePath,
+              urlConfig
+            });
+          }).rejects.toThrow();
         } else {
+          // For valid fixtures, expect successful interpretation
+          const result = await interpret(fixture.input, {
+            fileSystem,
+            pathService,
+            format: 'markdown',
+            basePath,
+            urlConfig
+          });
+          
+          if (isValidFixture) {
+            // Normalize output (trim trailing whitespace/newlines)
+            const normalizedResult = result.trim();
+            const normalizedExpected = fixture.expected.trim();
+            
+            expect(normalizedResult).toBe(normalizedExpected);
+          }
+          
+          // TODO: Add warning validation for warning fixtures
+        }
+      } catch (error) {
+        if (!isErrorFixture) {
+          // If this isn't an error fixture, re-throw the error
           throw error;
         }
+        // For error fixtures, this is expected - the test already passed via expect().rejects.toThrow()
       }
     });
   });

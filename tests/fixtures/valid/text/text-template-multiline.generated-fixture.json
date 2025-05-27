@@ -1,0 +1,265 @@
+{
+  "name": "text-template-multiline",
+  "description": "Test fixture for valid/text-template",
+  "category": "valid",
+  "subcategory": "text-template",
+  "input": "@text variable = \"value\"\n@text multiline = [[\nThis is a\nmulti-line template\nwith {{variable}}\n]]\n@add @multiline\n",
+  "expected": "This is a\nmulti-line template\nwith value",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "f05583aa-69a2-4447-a963-869b5fd5bd1a",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 24,
+          "line": 1,
+          "column": 25
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "7c9d64e5-02fc-44bc-b1da-5360c1de3f05",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "variable"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "4a3252d4-74ef-46de-bb13-1e22445293e9",
+            "location": {
+              "start": {
+                "offset": 17,
+                "line": 1,
+                "column": 18
+              },
+              "end": {
+                "offset": 24,
+                "line": 1,
+                "column": 25
+              }
+            },
+            "content": "value"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "variable",
+        "content": "value"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "a50a53f3-bbc6-488c-abdb-08134073726d",
+      "location": {
+        "start": {
+          "offset": 24,
+          "line": 1,
+          "column": 25
+        },
+        "end": {
+          "offset": 25,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "3cf1c395-4e1f-4f59-b318-249561cae679",
+      "location": {
+        "start": {
+          "offset": 25,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 96,
+          "line": 6,
+          "column": 3
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplate",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "0efd0937-22dd-434a-a630-84188e6d17c5",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "multiline"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "ccc0a20c-4b42-4659-98d0-e0b084264647",
+            "location": {
+              "start": {
+                "offset": 45,
+                "line": 2,
+                "column": 21
+              },
+              "end": {
+                "offset": 81,
+                "line": 5,
+                "column": 6
+              }
+            },
+            "content": "\nThis is a\nmulti-line template\nwith "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "011e86cd-2cc9-44d8-8067-477d7d272afe",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "variable"
+          },
+          {
+            "type": "Text",
+            "nodeId": "1a2e6b38-ca71-4dab-87e3-698b232834e7",
+            "location": {
+              "start": {
+                "offset": 93,
+                "line": 5,
+                "column": 18
+              },
+              "end": {
+                "offset": 94,
+                "line": 6,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "multiline",
+        "content": "\nThis is a\nmulti-line template\nwith {{variable}}\n"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "34325e03-258e-44c6-ad6e-e7e9977f68f0",
+      "location": {
+        "start": {
+          "offset": 96,
+          "line": 6,
+          "column": 3
+        },
+        "end": {
+          "offset": 97,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "edd11bef-7914-46ac-9737-95f0389a231f",
+      "location": {
+        "start": {
+          "offset": 97,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 113,
+          "line": 8,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "be3a56ad-bfb7-4a1f-a634-a73735574487",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "multiline"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@multiline"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

@@ -1,0 +1,698 @@
+{
+  "name": "data-mixed-types",
+  "description": "Test fixture for valid/data-mixed-types",
+  "category": "valid",
+  "subcategory": "data-mixed-types",
+  "input": "@text projectVar = \"MyProject\"\n@data buildInfo = {\n  name: @projectVar,\n  version: \"1.0.0\",\n  build: 42,\n  stable: true,\n  status: @run [echo \"BUILD_SUCCESS\"],\n  metadata: {\n    tags: [\"release\", \"production\"],\n    timestamp: @run [echo \"2024-01-15\"]\n  }\n}\n@add [[\nBuild {{buildInfo.name}} v{{buildInfo.version}} (#{{buildInfo.build}})\nStatus: {{buildInfo.status}}\nStable: {{buildInfo.stable}}\nDate: {{buildInfo.metadata.timestamp}}\n]]",
+  "expected": "Build MyProject v1.0.0 (#42)\nStatus: BUILD_SUCCESS\nStable: true\nDate: 2024-01-15",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "0540623d-d679-451d-8a48-66a040c518da",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 30,
+          "line": 1,
+          "column": 31
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "7d11d3a1-99ff-4503-a2aa-47d29d316590",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "projectVar"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "c471d6ee-43db-420e-b4da-29ba095efeca",
+            "location": {
+              "start": {
+                "offset": 19,
+                "line": 1,
+                "column": 20
+              },
+              "end": {
+                "offset": 30,
+                "line": 1,
+                "column": 31
+              }
+            },
+            "content": "MyProject"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "projectVar",
+        "content": "MyProject"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "1777a960-0dba-4955-a69b-aa0193543bf5",
+      "location": {
+        "start": {
+          "offset": 30,
+          "line": 1,
+          "column": 31
+        },
+        "end": {
+          "offset": 31,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "3ed8ed60-64c3-4abb-bcec-defd531efe1e",
+      "location": {
+        "start": {
+          "offset": 31,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 256,
+          "line": 12,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "202a53f9-1e7f-483b-91e6-6ea063fe7ea9",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "buildInfo"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "VariableReference",
+              "nodeId": "e1b32547-92d6-4005-a7a2-0a17478bae6b",
+              "location": {
+                "start": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                },
+                "end": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                }
+              },
+              "valueType": "varIdentifier",
+              "identifier": "projectVar"
+            },
+            "version": [
+              {
+                "type": "Text",
+                "nodeId": "782051c6-e169-4457-8861-8215c37a9349",
+                "location": {
+                  "start": {
+                    "offset": 83,
+                    "line": 4,
+                    "column": 12
+                  },
+                  "end": {
+                    "offset": 90,
+                    "line": 4,
+                    "column": 19
+                  }
+                },
+                "content": "1.0.0"
+              }
+            ],
+            "build": 42,
+            "stable": true,
+            "status": {
+              "type": "Directive",
+              "nodeId": "179103e4-0727-4905-add0-c8ba4920e954",
+              "location": {
+                "start": {
+                  "offset": 131,
+                  "line": 7,
+                  "column": 11
+                },
+                "end": {
+                  "offset": 158,
+                  "line": 7,
+                  "column": 38
+                }
+              },
+              "kind": "run",
+              "subtype": "runCommand",
+              "source": null,
+              "values": {
+                "command": [
+                  {
+                    "type": "Text",
+                    "nodeId": "888a9b7e-bfa6-4b17-a618-d3f33e2d66b7",
+                    "location": {
+                      "start": {
+                        "offset": 137,
+                        "line": 7,
+                        "column": 17
+                      },
+                      "end": {
+                        "offset": 157,
+                        "line": 7,
+                        "column": 37
+                      }
+                    },
+                    "content": "echo \"BUILD_SUCCESS\""
+                  }
+                ],
+                "commandBases": [
+                  {
+                    "nodeId": "d7e344a1-72a1-4f62-918b-e2c00fd9f708",
+                    "location": {
+                      "start": {
+                        "offset": 136,
+                        "line": 7,
+                        "column": 16
+                      },
+                      "end": {
+                        "offset": 158,
+                        "line": 7,
+                        "column": 38
+                      }
+                    },
+                    "command": "echo"
+                  }
+                ]
+              },
+              "raw": {
+                "command": "echo \"BUILD_SUCCESS\"",
+                "commandBases": [
+                  "echo"
+                ]
+              },
+              "meta": {
+                "hasVariables": false,
+                "commandCount": 1,
+                "hasScriptRunner": false,
+                "isDataValue": true,
+                "isMultiLine": false
+              }
+            },
+            "metadata": {
+              "type": "object",
+              "properties": {
+                "tags": {
+                  "type": "array",
+                  "items": [
+                    [
+                      {
+                        "type": "Text",
+                        "nodeId": "f8bb5df9-5158-4bb5-bc86-d907374a19bb",
+                        "location": {
+                          "start": {
+                            "offset": 185,
+                            "line": 9,
+                            "column": 12
+                          },
+                          "end": {
+                            "offset": 194,
+                            "line": 9,
+                            "column": 21
+                          }
+                        },
+                        "content": "release"
+                      }
+                    ],
+                    [
+                      {
+                        "type": "Text",
+                        "nodeId": "e160ccb9-eef7-4648-bcf6-7cd0ef01e3ed",
+                        "location": {
+                          "start": {
+                            "offset": 196,
+                            "line": 9,
+                            "column": 23
+                          },
+                          "end": {
+                            "offset": 208,
+                            "line": 9,
+                            "column": 35
+                          }
+                        },
+                        "content": "production"
+                      }
+                    ]
+                  ]
+                },
+                "timestamp": {
+                  "type": "Directive",
+                  "nodeId": "3219f180-9daf-4acb-bd49-5381439414ce",
+                  "location": {
+                    "start": {
+                      "offset": 226,
+                      "line": 10,
+                      "column": 16
+                    },
+                    "end": {
+                      "offset": 250,
+                      "line": 10,
+                      "column": 40
+                    }
+                  },
+                  "kind": "run",
+                  "subtype": "runCommand",
+                  "source": null,
+                  "values": {
+                    "command": [
+                      {
+                        "type": "Text",
+                        "nodeId": "2785c372-7d37-4486-a696-5f756ee77972",
+                        "location": {
+                          "start": {
+                            "offset": 232,
+                            "line": 10,
+                            "column": 22
+                          },
+                          "end": {
+                            "offset": 249,
+                            "line": 10,
+                            "column": 39
+                          }
+                        },
+                        "content": "echo \"2024-01-15\""
+                      }
+                    ],
+                    "commandBases": [
+                      {
+                        "nodeId": "3b2fdd8a-9f26-4b02-8ab2-837a2e5a7dc0",
+                        "location": {
+                          "start": {
+                            "offset": 231,
+                            "line": 10,
+                            "column": 21
+                          },
+                          "end": {
+                            "offset": 250,
+                            "line": 10,
+                            "column": 40
+                          }
+                        },
+                        "command": "echo"
+                      }
+                    ]
+                  },
+                  "raw": {
+                    "command": "echo \"2024-01-15\"",
+                    "commandBases": [
+                      "echo"
+                    ]
+                  },
+                  "meta": {
+                    "hasVariables": false,
+                    "commandCount": 1,
+                    "hasScriptRunner": false,
+                    "isDataValue": true,
+                    "isMultiLine": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "raw": {
+        "identifier": "buildInfo",
+        "value": "{\n  \"name\": {\n    \"type\": \"VariableReference\",\n    \"nodeId\": \"e1b32547-92d6-4005-a7a2-0a17478bae6b\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      },\n      \"end\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      }\n    },\n    \"valueType\": \"varIdentifier\",\n    \"identifier\": \"projectVar\"\n  },\n  \"version\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"782051c6-e169-4457-8861-8215c37a9349\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 83,\n          \"line\": 4,\n          \"column\": 12\n        },\n        \"end\": {\n          \"offset\": 90,\n          \"line\": 4,\n          \"column\": 19\n        }\n      },\n      \"content\": \"1.0.0\"\n    }\n  ],\n  \"build\": 42,\n  \"stable\": true,\n  \"status\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"179103e4-0727-4905-add0-c8ba4920e954\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 131,\n        \"line\": 7,\n        \"column\": 11\n      },\n      \"end\": {\n        \"offset\": 158,\n        \"line\": 7,\n        \"column\": 38\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runCommand\",\n    \"source\": null,\n    \"values\": {\n      \"command\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"888a9b7e-bfa6-4b17-a618-d3f33e2d66b7\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 137,\n              \"line\": 7,\n              \"column\": 17\n            },\n            \"end\": {\n              \"offset\": 157,\n              \"line\": 7,\n              \"column\": 37\n            }\n          },\n          \"content\": \"echo \\\"BUILD_SUCCESS\\\"\"\n        }\n      ],\n      \"commandBases\": [\n        {\n          \"nodeId\": \"d7e344a1-72a1-4f62-918b-e2c00fd9f708\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 136,\n              \"line\": 7,\n              \"column\": 16\n            },\n            \"end\": {\n              \"offset\": 158,\n              \"line\": 7,\n              \"column\": 38\n            }\n          },\n          \"command\": \"echo\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"command\": \"echo \\\"BUILD_SUCCESS\\\"\",\n      \"commandBases\": [\n        \"echo\"\n      ]\n    },\n    \"meta\": {\n      \"hasVariables\": false,\n      \"commandCount\": 1,\n      \"hasScriptRunner\": false,\n      \"isDataValue\": true,\n      \"isMultiLine\": false\n    }\n  },\n  \"metadata\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"tags\": {\n        \"type\": \"array\",\n        \"items\": [\n          [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"f8bb5df9-5158-4bb5-bc86-d907374a19bb\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 185,\n                  \"line\": 9,\n                  \"column\": 12\n                },\n                \"end\": {\n                  \"offset\": 194,\n                  \"line\": 9,\n                  \"column\": 21\n                }\n              },\n              \"content\": \"release\"\n            }\n          ],\n          [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"e160ccb9-eef7-4648-bcf6-7cd0ef01e3ed\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 196,\n                  \"line\": 9,\n                  \"column\": 23\n                },\n                \"end\": {\n                  \"offset\": 208,\n                  \"line\": 9,\n                  \"column\": 35\n                }\n              },\n              \"content\": \"production\"\n            }\n          ]\n        ]\n      },\n      \"timestamp\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"3219f180-9daf-4acb-bd49-5381439414ce\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 226,\n            \"line\": 10,\n            \"column\": 16\n          },\n          \"end\": {\n            \"offset\": 250,\n            \"line\": 10,\n            \"column\": 40\n          }\n        },\n        \"kind\": \"run\",\n        \"subtype\": \"runCommand\",\n        \"source\": null,\n        \"values\": {\n          \"command\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"2785c372-7d37-4486-a696-5f756ee77972\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 232,\n                  \"line\": 10,\n                  \"column\": 22\n                },\n                \"end\": {\n                  \"offset\": 249,\n                  \"line\": 10,\n                  \"column\": 39\n                }\n              },\n              \"content\": \"echo \\\"2024-01-15\\\"\"\n            }\n          ],\n          \"commandBases\": [\n            {\n              \"nodeId\": \"3b2fdd8a-9f26-4b02-8ab2-837a2e5a7dc0\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 231,\n                  \"line\": 10,\n                  \"column\": 21\n                },\n                \"end\": {\n                  \"offset\": 250,\n                  \"line\": 10,\n                  \"column\": 40\n                }\n              },\n              \"command\": \"echo\"\n            }\n          ]\n        },\n        \"raw\": {\n          \"command\": \"echo \\\"2024-01-15\\\"\",\n          \"commandBases\": [\n            \"echo\"\n          ]\n        },\n        \"meta\": {\n          \"hasVariables\": false,\n          \"commandCount\": 1,\n          \"hasScriptRunner\": false,\n          \"isDataValue\": true,\n          \"isMultiLine\": false\n        }\n      }\n    }\n  }\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 6
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "74e97c8d-4d2a-460f-8471-dbdc69e3ec12",
+      "location": {
+        "start": {
+          "offset": 256,
+          "line": 12,
+          "column": 2
+        },
+        "end": {
+          "offset": 257,
+          "line": 13,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "1eb9c5ff-be80-4dcd-aae6-5a6f52b960fc",
+      "location": {
+        "start": {
+          "offset": 257,
+          "line": 13,
+          "column": 1
+        },
+        "end": {
+          "offset": 435,
+          "line": 18,
+          "column": 3
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "d994f3aa-0a46-4c79-aa60-64ec4fcb3f56",
+            "location": {
+              "start": {
+                "offset": 264,
+                "line": 13,
+                "column": 8
+              },
+              "end": {
+                "offset": 271,
+                "line": 14,
+                "column": 7
+              }
+            },
+            "content": "\nBuild "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "eda941b3-9fa3-406d-a188-6a45604ca5cb",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "buildInfo",
+            "fields": [
+              {
+                "type": "field",
+                "name": "name"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "68b7fa80-d377-451b-95d2-36b7e67ace50",
+            "location": {
+              "start": {
+                "offset": 289,
+                "line": 14,
+                "column": 25
+              },
+              "end": {
+                "offset": 291,
+                "line": 14,
+                "column": 27
+              }
+            },
+            "content": " v"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "07f02290-036d-4045-a0a7-6aca8fd7a3ed",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "buildInfo",
+            "fields": [
+              {
+                "type": "field",
+                "name": "version"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "e296be0f-84a2-49b1-b7a2-29ea529a92db",
+            "location": {
+              "start": {
+                "offset": 312,
+                "line": 14,
+                "column": 48
+              },
+              "end": {
+                "offset": 315,
+                "line": 14,
+                "column": 51
+              }
+            },
+            "content": " (#"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "d2656fb5-40bc-4401-859a-85f6214670e8",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "buildInfo",
+            "fields": [
+              {
+                "type": "field",
+                "name": "build"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "d8aa461f-d91a-4103-ac50-8df583b38ac5",
+            "location": {
+              "start": {
+                "offset": 334,
+                "line": 14,
+                "column": 70
+              },
+              "end": {
+                "offset": 344,
+                "line": 15,
+                "column": 9
+              }
+            },
+            "content": ")\nStatus: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "be78b243-1c2f-4b29-8020-6573c92dc58e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "buildInfo",
+            "fields": [
+              {
+                "type": "field",
+                "name": "status"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "650e9205-a0fc-410c-9100-c926ca01a659",
+            "location": {
+              "start": {
+                "offset": 364,
+                "line": 15,
+                "column": 29
+              },
+              "end": {
+                "offset": 373,
+                "line": 16,
+                "column": 9
+              }
+            },
+            "content": "\nStable: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "c3d700e1-318f-4c8f-a062-c25b75d77f0b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "buildInfo",
+            "fields": [
+              {
+                "type": "field",
+                "name": "stable"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "f54e2401-3e8d-4bdd-9bb6-0870a0e92d47",
+            "location": {
+              "start": {
+                "offset": 393,
+                "line": 16,
+                "column": 29
+              },
+              "end": {
+                "offset": 400,
+                "line": 17,
+                "column": 7
+              }
+            },
+            "content": "\nDate: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "19e46852-2daf-4d6e-87d8-e2cef92ca37d",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "buildInfo",
+            "fields": [
+              {
+                "type": "field",
+                "name": "metadata"
+              },
+              {
+                "type": "field",
+                "name": "timestamp"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "c065a619-6675-4cb0-b6ef-8337f52956eb",
+            "location": {
+              "start": {
+                "offset": 432,
+                "line": 17,
+                "column": 39
+              },
+              "end": {
+                "offset": 433,
+                "line": 18,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          }
+        ]
+      },
+      "raw": {
+        "content": "\nBuild {{buildInfo}} v{{buildInfo}} (#{{buildInfo}})\nStatus: {{buildInfo}}\nStable: {{buildInfo}}\nDate: {{buildInfo}}\n"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ],
+  "parseError": null
+}

@@ -1,0 +1,26 @@
+{
+  "name": "import-url",
+  "description": "Test fixture for valid/import-url",
+  "category": "valid",
+  "subcategory": "import-url",
+  "input": "# Import from URL Example\n\nThis example demonstrates importing from a URL.\n\n@import \"https://raw.githubusercontent.com/example/repo/main/config.mld\"\n\nThe imported variables should now be available.",
+  "expected": "# Import from URL Example\n\nThis example demonstrates importing from a URL.\n\nThe imported variables should now be available.",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": null,
+  "parseError": {
+    "message": "Expected \"{\" or whitespace but \"\\\"\" found.",
+    "location": {
+      "start": {
+        "offset": 84,
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "offset": 85,
+        "line": 5,
+        "column": 10
+      }
+    }
+  }
+}

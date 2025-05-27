@@ -1,0 +1,298 @@
+{
+  "name": "exec-code-multiline",
+  "description": "Test fixture for valid/exec-code",
+  "category": "valid",
+  "subcategory": "exec-code",
+  "input": "@text name = \"bob smith\"\n@exec format (name) = @run javascript [\n  // Format the name with title case\n  const words = name.split(' ');\n  const titled = words.map(word => {\n    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();\n  });\n  return titled.join(' ');\n]\n@run @format(\"bob smith\")\n",
+  "expected": "Bob Smith",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "57eb4c9a-95b0-41ae-82fa-4f14610bfc78",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 24,
+          "line": 1,
+          "column": 25
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "51e006e0-71ba-4f74-bdf5-5214de708602",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "name"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "dc707695-1897-4ded-bad5-2132dace2c8e",
+            "location": {
+              "start": {
+                "offset": 13,
+                "line": 1,
+                "column": 14
+              },
+              "end": {
+                "offset": 24,
+                "line": 1,
+                "column": 25
+              }
+            },
+            "content": "bob smith"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "name",
+        "content": "bob smith"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "8effe44b-d018-4b23-86c1-4fbd97f7a3da",
+      "location": {
+        "start": {
+          "offset": 24,
+          "line": 1,
+          "column": 25
+        },
+        "end": {
+          "offset": 25,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "fba51bb2-8bec-4bd0-ac8b-ffc0174fdc63",
+      "location": {
+        "start": {
+          "offset": 25,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 277,
+          "line": 9,
+          "column": 2
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCode",
+      "source": "code",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "85ad560f-680a-48be-90f6-55de2e85bfb5",
+            "location": {
+              "start": {
+                "offset": 25,
+                "line": 2,
+                "column": 1
+              },
+              "end": {
+                "offset": 277,
+                "line": 9,
+                "column": 2
+              }
+            },
+            "content": "format"
+          }
+        ],
+        "params": [
+          "name"
+        ],
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "1d2b12ef-4f65-458e-a63c-798a3ab4a9eb",
+            "location": {
+              "start": {
+                "offset": 52,
+                "line": 2,
+                "column": 28
+              },
+              "end": {
+                "offset": 277,
+                "line": 9,
+                "column": 2
+              }
+            },
+            "content": "javascript"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "90bc1ae1-ce1d-4f7c-97e0-a728b5ea2e90",
+            "location": {
+              "start": {
+                "offset": 63,
+                "line": 2,
+                "column": 39
+              },
+              "end": {
+                "offset": 277,
+                "line": 9,
+                "column": 2
+              }
+            },
+            "content": "\n  // Format the name with title case\n  const words = name.split(' ');\n  const titled = words.map(word => {\n    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();\n  });\n  return titled.join(' ');\n"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "format",
+        "params": [
+          "name"
+        ],
+        "lang": "javascript",
+        "args": [],
+        "code": "\n  // Format the name with title case\n  const words = name.split(' ');\n  const titled = words.map(word => {\n    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();\n  });\n  return titled.join(' ');\n"
+      },
+      "meta": {
+        "isMultiLine": true,
+        "language": "javascript",
+        "hasVariables": false,
+        "parameterCount": 1
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "785c8422-1307-4a2f-8a6f-59aecc53c527",
+      "location": {
+        "start": {
+          "offset": 277,
+          "line": 9,
+          "column": 2
+        },
+        "end": {
+          "offset": 278,
+          "line": 10,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "eaa38a39-03f1-4792-b15c-a8977501ebf4",
+      "location": {
+        "start": {
+          "offset": 278,
+          "line": 10,
+          "column": 1
+        },
+        "end": {
+          "offset": 303,
+          "line": 10,
+          "column": 26
+        }
+      },
+      "kind": "run",
+      "subtype": "runExec",
+      "source": "exec",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "46067505-38f2-4201-b7c2-02a9da35135b",
+            "location": {
+              "start": {
+                "offset": 284,
+                "line": 10,
+                "column": 7
+              },
+              "end": {
+                "offset": 303,
+                "line": 10,
+                "column": 26
+              }
+            },
+            "content": "format"
+          }
+        ],
+        "args": [
+          {
+            "type": "Text",
+            "nodeId": "3f3545df-d110-43fd-a363-c24faaba99c8",
+            "location": {
+              "start": {
+                "offset": 291,
+                "line": 10,
+                "column": 14
+              },
+              "end": {
+                "offset": 302,
+                "line": 10,
+                "column": 25
+              }
+            },
+            "content": "bob smith"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "format",
+        "args": [
+          "bob smith"
+        ]
+      },
+      "meta": {
+        "argumentCount": 1
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "0fd738d5-3b62-4387-a9fa-afad0839e512",
+      "location": {
+        "start": {
+          "offset": 303,
+          "line": 10,
+          "column": 26
+        },
+        "end": {
+          "offset": 304,
+          "line": 11,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    }
+  ],
+  "parseError": null
+}

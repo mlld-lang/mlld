@@ -28,7 +28,7 @@
   "scripts": {
     "build:grammar:core": "npx tsc -p grammar/tsconfig.grammar.json",
     "build:grammar": "npm run build:grammar:core && node grammar/build-grammar.mjs && npm run build:fixtures && npm run build:syntax",
-    "build:fixtures": "node ./tests/utils/ast-fixtures.js process-examples ./tests/cases ./tests",
+    "build:fixtures": "node ./scripts/build-fixtures.mjs",
     "build:syntax": "node grammar/syntax-generator/build-syntax.js",
     "build:version": "node ./scripts/generate-version.js",
     "build": "npm run build:version && npm run build:grammar && tsup",

@@ -1,0 +1,429 @@
+{
+  "name": "data-field-access",
+  "description": "Test fixture for valid/data-field-access",
+  "category": "valid",
+  "subcategory": "data-field-access",
+  "input": "@data users = [\n  {name: \"Alice\", role: {title: \"Admin\", level: 5}},\n  {name: \"Bob\", role: {title: \"User\", level: 1}}\n]\n@data permissions = {\n  adminName: @users[0].name,\n  adminLevel: @users[0].role.level,\n  userCount: 2\n}\n@add [[{{permissions.adminName}} has level {{permissions.adminLevel}} access]]",
+  "expected": "Alice has level 5 access",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "3ce5825d-379f-44be-be0d-46b4bad03089",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 119,
+          "line": 4,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "array",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "20a819ff-4f70-487e-8b8c-a9c5622abdb6",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "users"
+          }
+        ],
+        "value": {
+          "type": "array",
+          "items": [
+            {
+              "type": "object",
+              "properties": {
+                "name": [
+                  {
+                    "type": "Text",
+                    "nodeId": "2cac3432-9d11-4c06-aa0a-accf992a2812",
+                    "location": {
+                      "start": {
+                        "offset": 25,
+                        "line": 2,
+                        "column": 10
+                      },
+                      "end": {
+                        "offset": 32,
+                        "line": 2,
+                        "column": 17
+                      }
+                    },
+                    "content": "Alice"
+                  }
+                ],
+                "role": {
+                  "type": "object",
+                  "properties": {
+                    "title": [
+                      {
+                        "type": "Text",
+                        "nodeId": "3ca5369b-ea10-41c5-833f-68776fc2e35e",
+                        "location": {
+                          "start": {
+                            "offset": 48,
+                            "line": 2,
+                            "column": 33
+                          },
+                          "end": {
+                            "offset": 55,
+                            "line": 2,
+                            "column": 40
+                          }
+                        },
+                        "content": "Admin"
+                      }
+                    ],
+                    "level": 5
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": [
+                  {
+                    "type": "Text",
+                    "nodeId": "7a1b3bee-b5e5-451d-b5fb-76e0c70b6d3d",
+                    "location": {
+                      "start": {
+                        "offset": 78,
+                        "line": 3,
+                        "column": 10
+                      },
+                      "end": {
+                        "offset": 83,
+                        "line": 3,
+                        "column": 15
+                      }
+                    },
+                    "content": "Bob"
+                  }
+                ],
+                "role": {
+                  "type": "object",
+                  "properties": {
+                    "title": [
+                      {
+                        "type": "Text",
+                        "nodeId": "b8500be1-6629-4cc8-b129-87c8fb2d7d4e",
+                        "location": {
+                          "start": {
+                            "offset": 99,
+                            "line": 3,
+                            "column": 31
+                          },
+                          "end": {
+                            "offset": 105,
+                            "line": 3,
+                            "column": 37
+                          }
+                        },
+                        "content": "User"
+                      }
+                    ],
+                    "level": 1
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "raw": {
+        "identifier": "users",
+        "value": "[\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"2cac3432-9d11-4c06-aa0a-accf992a2812\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 25,\n              \"line\": 2,\n              \"column\": 10\n            },\n            \"end\": {\n              \"offset\": 32,\n              \"line\": 2,\n              \"column\": 17\n            }\n          },\n          \"content\": \"Alice\"\n        }\n      ],\n      \"role\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"title\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"3ca5369b-ea10-41c5-833f-68776fc2e35e\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 48,\n                  \"line\": 2,\n                  \"column\": 33\n                },\n                \"end\": {\n                  \"offset\": 55,\n                  \"line\": 2,\n                  \"column\": 40\n                }\n              },\n              \"content\": \"Admin\"\n            }\n          ],\n          \"level\": 5\n        }\n      }\n    }\n  },\n  {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"7a1b3bee-b5e5-451d-b5fb-76e0c70b6d3d\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 78,\n              \"line\": 3,\n              \"column\": 10\n            },\n            \"end\": {\n              \"offset\": 83,\n              \"line\": 3,\n              \"column\": 15\n            }\n          },\n          \"content\": \"Bob\"\n        }\n      ],\n      \"role\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"title\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"b8500be1-6629-4cc8-b129-87c8fb2d7d4e\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 99,\n                  \"line\": 3,\n                  \"column\": 31\n                },\n                \"end\": {\n                  \"offset\": 105,\n                  \"line\": 3,\n                  \"column\": 37\n                }\n              },\n              \"content\": \"User\"\n            }\n          ],\n          \"level\": 1\n        }\n      }\n    }\n  }\n]"
+      },
+      "meta": {
+        "arrayData": {
+          "itemCount": 2
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "e09aa594-57d2-40ba-8fc9-43b9cce5d0b1",
+      "location": {
+        "start": {
+          "offset": 119,
+          "line": 4,
+          "column": 2
+        },
+        "end": {
+          "offset": 120,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "51f3ec74-8303-45ca-89a0-9beb8f59ffdf",
+      "location": {
+        "start": {
+          "offset": 120,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 223,
+          "line": 9,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "7662030e-336f-486b-9a57-1d748f96035e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "permissions"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "adminName": {
+              "type": "VariableReference",
+              "nodeId": "e78ad69c-8aed-4e72-9f48-a08b154e1682",
+              "location": {
+                "start": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                },
+                "end": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                }
+              },
+              "valueType": "varIdentifier",
+              "identifier": "users",
+              "fields": [
+                {
+                  "type": "arrayIndex",
+                  "index": 0
+                },
+                {
+                  "type": "field",
+                  "name": "name"
+                }
+              ]
+            },
+            "adminLevel": {
+              "type": "VariableReference",
+              "nodeId": "11a5c5c8-f964-42ca-8c62-4008368f7a68",
+              "location": {
+                "start": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                },
+                "end": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                }
+              },
+              "valueType": "varIdentifier",
+              "identifier": "users",
+              "fields": [
+                {
+                  "type": "arrayIndex",
+                  "index": 0
+                },
+                {
+                  "type": "field",
+                  "name": "role"
+                },
+                {
+                  "type": "field",
+                  "name": "level"
+                }
+              ]
+            },
+            "userCount": 2
+          }
+        }
+      },
+      "raw": {
+        "identifier": "permissions",
+        "value": "{\n  \"adminName\": {\n    \"type\": \"VariableReference\",\n    \"nodeId\": \"e78ad69c-8aed-4e72-9f48-a08b154e1682\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      },\n      \"end\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      }\n    },\n    \"valueType\": \"varIdentifier\",\n    \"identifier\": \"users\",\n    \"fields\": [\n      {\n        \"type\": \"arrayIndex\",\n        \"index\": 0\n      },\n      {\n        \"type\": \"field\",\n        \"name\": \"name\"\n      }\n    ]\n  },\n  \"adminLevel\": {\n    \"type\": \"VariableReference\",\n    \"nodeId\": \"11a5c5c8-f964-42ca-8c62-4008368f7a68\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      },\n      \"end\": {\n        \"offset\": 0,\n        \"line\": 1,\n        \"column\": 1\n      }\n    },\n    \"valueType\": \"varIdentifier\",\n    \"identifier\": \"users\",\n    \"fields\": [\n      {\n        \"type\": \"arrayIndex\",\n        \"index\": 0\n      },\n      {\n        \"type\": \"field\",\n        \"name\": \"role\"\n      },\n      {\n        \"type\": \"field\",\n        \"name\": \"level\"\n      }\n    ]\n  },\n  \"userCount\": 2\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 3
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "5d04c690-1d8a-45e1-99e6-5ca261b99eb5",
+      "location": {
+        "start": {
+          "offset": 223,
+          "line": 9,
+          "column": 2
+        },
+        "end": {
+          "offset": 224,
+          "line": 10,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "6e9b0dc8-4e9e-4af9-a983-2477f65088a0",
+      "location": {
+        "start": {
+          "offset": 224,
+          "line": 10,
+          "column": 1
+        },
+        "end": {
+          "offset": 302,
+          "line": 10,
+          "column": 79
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "VariableReference",
+            "nodeId": "96da5fc2-bcfd-43df-8039-57b007214815",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "permissions",
+            "fields": [
+              {
+                "type": "field",
+                "name": "adminName"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "1ba9c5fa-7b35-4903-9c23-3d74acc5cecc",
+            "location": {
+              "start": {
+                "offset": 256,
+                "line": 10,
+                "column": 33
+              },
+              "end": {
+                "offset": 267,
+                "line": 10,
+                "column": 44
+              }
+            },
+            "content": " has level "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "76adf1b9-225c-4d96-a2a3-b021adc2665b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "permissions",
+            "fields": [
+              {
+                "type": "field",
+                "name": "adminLevel"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "2ed819ff-570d-46a5-af0d-cef48edcb385",
+            "location": {
+              "start": {
+                "offset": 293,
+                "line": 10,
+                "column": 70
+              },
+              "end": {
+                "offset": 300,
+                "line": 10,
+                "column": 77
+              }
+            },
+            "content": " access"
+          }
+        ]
+      },
+      "raw": {
+        "content": "{{permissions}} has level {{permissions}} access"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ],
+  "parseError": null
+}

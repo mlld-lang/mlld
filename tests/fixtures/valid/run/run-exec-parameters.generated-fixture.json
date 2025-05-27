@@ -1,0 +1,229 @@
+{
+  "name": "run-exec-parameters",
+  "description": "Test fixture for valid/run-exec",
+  "category": "valid",
+  "subcategory": "run-exec",
+  "input": "@exec greetCommand(param) = @run [echo \"Hello, @param!\"]\n@run @greetCommand(\"World\")",
+  "expected": "Hello, World!",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "0c6483a3-7335-41c7-b597-d44ed5bf5b0a",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 56,
+          "line": 1,
+          "column": 57
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "3c098c63-6622-42b4-82b4-b7b9d2d09c81",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 56,
+                "line": 1,
+                "column": 57
+              }
+            },
+            "content": "greetCommand"
+          }
+        ],
+        "params": [
+          "param"
+        ],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "2e0b2c66-0d7b-40f8-9402-e257ec6219bf",
+            "location": {
+              "start": {
+                "offset": 34,
+                "line": 1,
+                "column": 35
+              },
+              "end": {
+                "offset": 47,
+                "line": 1,
+                "column": 48
+              }
+            },
+            "content": "echo \"Hello, "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "94e293da-cf70-4f97-a73b-27ab57dff091",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "param"
+          },
+          {
+            "type": "Text",
+            "nodeId": "faab787f-13c0-420f-b34f-6b66aa0bba5e",
+            "location": {
+              "start": {
+                "offset": 53,
+                "line": 1,
+                "column": 54
+              },
+              "end": {
+                "offset": 55,
+                "line": 1,
+                "column": 56
+              }
+            },
+            "content": "!\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "44ac3767-385d-41e2-9e96-479d1880e13b",
+            "location": {
+              "start": {
+                "offset": 33,
+                "line": 1,
+                "column": 34
+              },
+              "end": {
+                "offset": 56,
+                "line": 1,
+                "column": 57
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greetCommand",
+        "params": [
+          "param"
+        ],
+        "command": "echo \"Hello, @param!\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "parameterCount": 1
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "5cf0ae9e-7133-4d87-ae0b-f80d97fe6c7e",
+      "location": {
+        "start": {
+          "offset": 56,
+          "line": 1,
+          "column": 57
+        },
+        "end": {
+          "offset": 57,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "27ee6c4b-d08f-4984-ab55-e6b1a6734727",
+      "location": {
+        "start": {
+          "offset": 57,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 84,
+          "line": 2,
+          "column": 28
+        }
+      },
+      "kind": "run",
+      "subtype": "runExec",
+      "source": "exec",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "6fa12219-c073-4c0a-9b28-7cdfe1cd15fd",
+            "location": {
+              "start": {
+                "offset": 63,
+                "line": 2,
+                "column": 7
+              },
+              "end": {
+                "offset": 84,
+                "line": 2,
+                "column": 28
+              }
+            },
+            "content": "greetCommand"
+          }
+        ],
+        "args": [
+          {
+            "type": "Text",
+            "nodeId": "e84a1574-784b-4855-81cc-7c46b72e7c46",
+            "location": {
+              "start": {
+                "offset": 76,
+                "line": 2,
+                "column": 20
+              },
+              "end": {
+                "offset": 83,
+                "line": 2,
+                "column": 27
+              }
+            },
+            "content": "World"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greetCommand",
+        "args": [
+          "World"
+        ]
+      },
+      "meta": {
+        "argumentCount": 1
+      }
+    }
+  ],
+  "parseError": null
+}

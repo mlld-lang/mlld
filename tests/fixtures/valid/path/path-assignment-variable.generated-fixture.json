@@ -1,0 +1,289 @@
+{
+  "name": "path-assignment-variable",
+  "description": "Test fixture for valid/path-assignment",
+  "category": "valid",
+  "subcategory": "path-assignment",
+  "input": "@text username = \"john\"\n@path userConfig = [config/@username/settings.json]\n@add [[The user config is at {{userConfig}}]]",
+  "expected": "The user config is at config/john/settings.json",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "739e30d6-9417-4145-8c4f-48bb75f98218",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 23,
+          "line": 1,
+          "column": 24
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "5dd62266-1043-43e6-977a-147c62b32c5b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "username"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "d4a15036-9dbd-4c89-a19d-00c02dc14b3f",
+            "location": {
+              "start": {
+                "offset": 17,
+                "line": 1,
+                "column": 18
+              },
+              "end": {
+                "offset": 23,
+                "line": 1,
+                "column": 24
+              }
+            },
+            "content": "john"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "username",
+        "content": "john"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "5699b8c0-3847-4120-b282-3fb0c86aef8f",
+      "location": {
+        "start": {
+          "offset": 23,
+          "line": 1,
+          "column": 24
+        },
+        "end": {
+          "offset": 24,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "5aac3f8e-b034-43fd-bd2c-8c3349e978ae",
+      "location": {
+        "start": {
+          "offset": 24,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 75,
+          "line": 2,
+          "column": 52
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "d157400f-6acd-43d0-88e5-b4a02ffcf276",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "userConfig"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "f2678639-6555-4ecb-b096-ad0ddcdf7057",
+            "location": {
+              "start": {
+                "offset": 24,
+                "line": 2,
+                "column": 1
+              },
+              "end": {
+                "offset": 75,
+                "line": 2,
+                "column": 52
+              }
+            },
+            "content": "config/"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "1a76cb99-d897-43ed-b655-022331f52e0f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "username"
+          },
+          {
+            "type": "Text",
+            "nodeId": "40318c4d-63d9-4a92-921b-6a54dd533f50",
+            "location": {
+              "start": {
+                "offset": 24,
+                "line": 2,
+                "column": 1
+              },
+              "end": {
+                "offset": 75,
+                "line": 2,
+                "column": 52
+              }
+            },
+            "content": "/settings.json"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "userConfig",
+        "path": "config/@username/settings.json"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": true,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "json"
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "aa8436aa-e35d-4b36-96b5-0f995013e3c8",
+      "location": {
+        "start": {
+          "offset": 75,
+          "line": 2,
+          "column": 52
+        },
+        "end": {
+          "offset": 76,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "291e23d4-d7a0-4faf-bd94-990c4819ceb6",
+      "location": {
+        "start": {
+          "offset": 76,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 121,
+          "line": 3,
+          "column": 46
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "6f05ceb3-229c-4a80-a05d-a2dbf9191b9e",
+            "location": {
+              "start": {
+                "offset": 83,
+                "line": 3,
+                "column": 8
+              },
+              "end": {
+                "offset": 105,
+                "line": 3,
+                "column": 30
+              }
+            },
+            "content": "The user config is at "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "1ac2621f-8e8e-48a7-8bfb-573ebe26ee37",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "userConfig"
+          }
+        ]
+      },
+      "raw": {
+        "content": "The user config is at {{userConfig}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ],
+  "parseError": null
+}

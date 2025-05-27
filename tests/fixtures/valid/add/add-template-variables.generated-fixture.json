@@ -1,0 +1,165 @@
+{
+  "name": "add-template-variables",
+  "description": "Test fixture for valid/add-template",
+  "category": "valid",
+  "subcategory": "add-template",
+  "input": "@text variable = \"value\"\n@add [[Content with {{variable}}]]",
+  "expected": "Content with value",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "bba1fced-8100-4c44-ad40-a156de1da3e9",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 24,
+          "line": 1,
+          "column": 25
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "8c662f2d-7851-4587-b1d7-9f87c645a814",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "variable"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "b2e94709-5e2a-4512-ad85-924afaac2826",
+            "location": {
+              "start": {
+                "offset": 17,
+                "line": 1,
+                "column": 18
+              },
+              "end": {
+                "offset": 24,
+                "line": 1,
+                "column": 25
+              }
+            },
+            "content": "value"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "variable",
+        "content": "value"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "bf38a7a0-2d07-4cd9-a2bd-fd1789fc0f1a",
+      "location": {
+        "start": {
+          "offset": 24,
+          "line": 1,
+          "column": 25
+        },
+        "end": {
+          "offset": 25,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "9ffab6a3-17dd-4d7e-a45a-4df451ed94e5",
+      "location": {
+        "start": {
+          "offset": 25,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 59,
+          "line": 2,
+          "column": 35
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "fede9fe3-8385-4dae-ab8e-23faf3e36fb2",
+            "location": {
+              "start": {
+                "offset": 32,
+                "line": 2,
+                "column": 8
+              },
+              "end": {
+                "offset": 45,
+                "line": 2,
+                "column": 21
+              }
+            },
+            "content": "Content with "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "de8272fc-6d69-40ca-9d2b-9b804805c569",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "variable"
+          }
+        ]
+      },
+      "raw": {
+        "content": "Content with {{variable}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ],
+  "parseError": null
+}

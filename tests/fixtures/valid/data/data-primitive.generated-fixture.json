@@ -1,0 +1,151 @@
+{
+  "name": "data-primitive",
+  "description": "Test fixture for valid/data-primitive",
+  "category": "valid",
+  "subcategory": "data-primitive",
+  "input": "@data greeting.text = \"Hello, world!\"\n@add @greeting.text",
+  "expected": "Hello, world!",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "efcc86a6-84f1-4452-8786-0f864a5849cb",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 37,
+          "line": 1,
+          "column": 38
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "9cf44f73-74a5-49cc-bdb2-48d81e73ee51",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "greeting.text"
+          }
+        ],
+        "value": [
+          {
+            "type": "Text",
+            "nodeId": "785de8a3-10a2-4e85-a8ab-ae1094b03d66",
+            "location": {
+              "start": {
+                "offset": 22,
+                "line": 1,
+                "column": 23
+              },
+              "end": {
+                "offset": 37,
+                "line": 1,
+                "column": 38
+              }
+            },
+            "content": "Hello, world!"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greeting.text",
+        "value": "Hello, world!"
+      },
+      "meta": {
+        "templateData": {
+          "hasVariables": false,
+          "isTemplateContent": false
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "1f861372-d8ea-4926-879a-d2d7f4b7cdc4",
+      "location": {
+        "start": {
+          "offset": 37,
+          "line": 1,
+          "column": 38
+        },
+        "end": {
+          "offset": 38,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "bf93769d-ea88-4d80-82a1-6908fafb0e7d",
+      "location": {
+        "start": {
+          "offset": 38,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 57,
+          "line": 2,
+          "column": 20
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "d2f5f532-c38b-4822-b02a-05912b01e5a8",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "greeting",
+            "fields": [
+              {
+                "type": "field",
+                "name": "text"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@greeting"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

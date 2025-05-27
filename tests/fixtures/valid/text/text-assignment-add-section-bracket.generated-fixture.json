@@ -1,0 +1,165 @@
+{
+  "name": "text-assignment-add-section-bracket",
+  "description": "Test fixture for valid/text-assignment-add",
+  "category": "valid",
+  "subcategory": "text-assignment-add",
+  "input": "@text intro = @add [file.md # Section 1]\n@add @intro",
+  "expected": "## Section 1\n### Subsection 1.1\nContent from file",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "5276685e-fbf1-40b5-9dc3-afa90edb890c",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 40,
+          "line": 1,
+          "column": 41
+        }
+      },
+      "kind": "text",
+      "subtype": "textPathSection",
+      "source": "directive",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "73c8ea30-c4cf-4e01-b70d-19773004b969",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "intro"
+          }
+        ],
+        "section": [
+          {
+            "type": "Text",
+            "nodeId": "6e0a2689-4ba6-4f83-92c5-bcba45c56bfd",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 40,
+                "line": 1,
+                "column": 41
+              }
+            },
+            "content": "Section 1"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "153b566b-8c7b-4bc1-a813-aa5c5549e12c",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 40,
+                "line": 1,
+                "column": 41
+              }
+            },
+            "content": "file.md"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "intro",
+        "section": "Section 1",
+        "path": "file.md"
+      },
+      "meta": {
+        "sourceType": "directive",
+        "directive": "add",
+        "hasRename": false,
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "fab3249e-c59d-43ac-965b-a8867075fe54",
+      "location": {
+        "start": {
+          "offset": 40,
+          "line": 1,
+          "column": 41
+        },
+        "end": {
+          "offset": 41,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "f8f35999-0bdc-4942-891c-3318a61efb06",
+      "location": {
+        "start": {
+          "offset": 41,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 52,
+          "line": 2,
+          "column": 12
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "5980b655-eaa6-44a4-811e-0775ee362223",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "intro"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@intro"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

@@ -1,0 +1,26 @@
+{
+  "name": "text-parameterized-run-command",
+  "description": "Test fixture for exceptions/text-parameterized-run-command",
+  "category": "exceptions",
+  "subcategory": "text-parameterized-run-command",
+  "input": "# Parameterized Text with Run Command (Invalid)\n\nThis example shows an invalid syntax where someone tries to create a parameterized text variable with a `@run` command.\n\n@text codecat(dir) = @run [find @dir -type f -exec sh -c 'echo \"<$(realpath --relative-to=@dir {})>\"; cat {}; echo \"@dir {})>\"' \\;]\n\nThis should fail because:\n1. Parameterized text templates should use `@exec` not `@text`\n2. The complex shell escaping may not be properly handled\n3. There's malformed syntax at the end",
+  "expected": null,
+  "expectedError": "```\nExpected \"@add\" or whitespace but \"@\" found.\nLocation: line 1, column 22\n```\n\n**Error explanation:**\nThe syntax `@text codecat(dir) = @run [...]` is invalid. For parameterized commands that execute shell commands, use `@exec` instead:\n\n**Correct syntax:**\n```mlld\n@exec codecat(dir) = @run [find @dir -type f -name \"*.js\" -exec cat {} \\;]\n```\n\n**Alternative for text templates:**\n```mlld\n@text greeting(name) = @add [[Hello {{name}}!]]\n```",
+  "expectedWarning": null,
+  "ast": null,
+  "parseError": {
+    "message": "Expected \"@add\" or whitespace but \"@\" found.",
+    "location": {
+      "start": {
+        "offset": 191,
+        "line": 5,
+        "column": 22
+      },
+      "end": {
+        "offset": 192,
+        "line": 5,
+        "column": 23
+      }
+    }
+  }
+}

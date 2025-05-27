@@ -1,0 +1,208 @@
+{
+  "name": "data-complex",
+  "description": "Test fixture for valid/data-complex",
+  "category": "valid",
+  "subcategory": "data-complex",
+  "input": "@data results = {\n  greeting: @run [echo \"Hello from embedded command\"],\n  value: 42\n}\n@add @results.greeting",
+  "expected": "Hello from embedded command",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "a16fb950-78f0-42a7-8c8d-fe5f43c43c3b",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 86,
+          "line": 4,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "a58dacc2-60c6-491f-8c86-c259d5597ccf",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "results"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "greeting": {
+              "type": "Directive",
+              "nodeId": "7dcccb4a-0212-4296-827e-41e541e3b4a6",
+              "location": {
+                "start": {
+                  "offset": 30,
+                  "line": 2,
+                  "column": 13
+                },
+                "end": {
+                  "offset": 71,
+                  "line": 2,
+                  "column": 54
+                }
+              },
+              "kind": "run",
+              "subtype": "runCommand",
+              "source": null,
+              "values": {
+                "command": [
+                  {
+                    "type": "Text",
+                    "nodeId": "6e872314-b91b-4516-a3b9-4a5e8dbf02cd",
+                    "location": {
+                      "start": {
+                        "offset": 36,
+                        "line": 2,
+                        "column": 19
+                      },
+                      "end": {
+                        "offset": 70,
+                        "line": 2,
+                        "column": 53
+                      }
+                    },
+                    "content": "echo \"Hello from embedded command\""
+                  }
+                ],
+                "commandBases": [
+                  {
+                    "nodeId": "9c0a6519-cadb-44a0-863f-e777c6f1ad64",
+                    "location": {
+                      "start": {
+                        "offset": 35,
+                        "line": 2,
+                        "column": 18
+                      },
+                      "end": {
+                        "offset": 71,
+                        "line": 2,
+                        "column": 54
+                      }
+                    },
+                    "command": "echo"
+                  }
+                ]
+              },
+              "raw": {
+                "command": "echo \"Hello from embedded command\"",
+                "commandBases": [
+                  "echo"
+                ]
+              },
+              "meta": {
+                "hasVariables": false,
+                "commandCount": 1,
+                "hasScriptRunner": false,
+                "isDataValue": true,
+                "isMultiLine": false
+              }
+            },
+            "value": 42
+          }
+        }
+      },
+      "raw": {
+        "identifier": "results",
+        "value": "{\n  \"greeting\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"7dcccb4a-0212-4296-827e-41e541e3b4a6\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 30,\n        \"line\": 2,\n        \"column\": 13\n      },\n      \"end\": {\n        \"offset\": 71,\n        \"line\": 2,\n        \"column\": 54\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runCommand\",\n    \"source\": null,\n    \"values\": {\n      \"command\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"6e872314-b91b-4516-a3b9-4a5e8dbf02cd\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 36,\n              \"line\": 2,\n              \"column\": 19\n            },\n            \"end\": {\n              \"offset\": 70,\n              \"line\": 2,\n              \"column\": 53\n            }\n          },\n          \"content\": \"echo \\\"Hello from embedded command\\\"\"\n        }\n      ],\n      \"commandBases\": [\n        {\n          \"nodeId\": \"9c0a6519-cadb-44a0-863f-e777c6f1ad64\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 35,\n              \"line\": 2,\n              \"column\": 18\n            },\n            \"end\": {\n              \"offset\": 71,\n              \"line\": 2,\n              \"column\": 54\n            }\n          },\n          \"command\": \"echo\"\n        }\n      ]\n    },\n    \"raw\": {\n      \"command\": \"echo \\\"Hello from embedded command\\\"\",\n      \"commandBases\": [\n        \"echo\"\n      ]\n    },\n    \"meta\": {\n      \"hasVariables\": false,\n      \"commandCount\": 1,\n      \"hasScriptRunner\": false,\n      \"isDataValue\": true,\n      \"isMultiLine\": false\n    }\n  },\n  \"value\": 42\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 2
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "9c306215-6ba0-4041-817a-c0cbab3db88a",
+      "location": {
+        "start": {
+          "offset": 86,
+          "line": 4,
+          "column": 2
+        },
+        "end": {
+          "offset": 87,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "fd1dc2b2-682a-454f-baf1-390313d80e1f",
+      "location": {
+        "start": {
+          "offset": 87,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 109,
+          "line": 5,
+          "column": 23
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "46fa0c1c-296d-4511-a3e6-a9860cdf898f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "results",
+            "fields": [
+              {
+                "type": "field",
+                "name": "greeting"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@results"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

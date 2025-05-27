@@ -1,0 +1,102 @@
+{
+  "name": "text-path-section-bracket",
+  "description": "Test fixture for valid/text-path",
+  "category": "valid",
+  "subcategory": "text-path",
+  "input": "@text sectionContent = [file.md # Section 1]",
+  "expected": "",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "30164521-e2f2-4cdf-807c-5ab67a9aea83",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 44,
+          "line": 1,
+          "column": 45
+        }
+      },
+      "kind": "text",
+      "subtype": "textPathSection",
+      "source": "section",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "1f748a91-50ba-40c2-a2e6-73e9d525b10b",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "sectionContent"
+          }
+        ],
+        "section": [
+          {
+            "type": "Text",
+            "nodeId": "0125d00a-e569-476c-aa6d-e9230b0abd6f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 44,
+                "line": 1,
+                "column": 45
+              }
+            },
+            "content": "Section 1"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "add1a1b0-8670-4288-a007-8a3cd838cf74",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 44,
+                "line": 1,
+                "column": 45
+              }
+            },
+            "content": "file.md"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "sectionContent",
+        "section": "Section 1",
+        "path": "file.md"
+      },
+      "meta": {
+        "sourceType": "section",
+        "hasRename": false,
+        "hasVariables": false
+      }
+    }
+  ],
+  "parseError": null
+}

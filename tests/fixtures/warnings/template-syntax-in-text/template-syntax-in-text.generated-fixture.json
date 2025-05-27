@@ -1,0 +1,117 @@
+{
+  "name": "template-syntax-in-text",
+  "description": "Test fixture for warnings/template-syntax-in-text",
+  "category": "warnings",
+  "subcategory": "template-syntax-in-text",
+  "input": "@text myvar = \"Hello world\"\n\nThis line uses template syntax: {{myvar}}",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": "**Warning: Template syntax in regular text**\n\nThe line `This line uses template syntax: {{myvar}}` contains template syntax outside of a template directive.\n\nTemplate syntax like `{{myvar}}` only works inside template content (within `[[...]]` brackets) in mlld directives.\n\n**To fix this:**\n```mlld\n@text greeting = [[This line uses template syntax: {{myvar}}]]\n@add @greeting\n```",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "a432328c-955a-4ab6-bf06-626651ce6fe8",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 27,
+          "line": 1,
+          "column": 28
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "c21e6f31-65ad-4c36-ad42-0764fffd3616",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "myvar"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "c49a2234-429e-47d3-a4ef-ea6a23ad25be",
+            "location": {
+              "start": {
+                "offset": 14,
+                "line": 1,
+                "column": 15
+              },
+              "end": {
+                "offset": 27,
+                "line": 1,
+                "column": 28
+              }
+            },
+            "content": "Hello world"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "myvar",
+        "content": "Hello world"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "f3edca6f-1c53-48a6-9819-ac9ca5c1314a",
+      "location": {
+        "start": {
+          "offset": 27,
+          "line": 1,
+          "column": 28
+        },
+        "end": {
+          "offset": 61,
+          "line": 3,
+          "column": 33
+        }
+      },
+      "content": "\n\nThis line uses template syntax: "
+    },
+    {
+      "type": "VariableReference",
+      "nodeId": "ad3f8822-198e-45c5-9c50-276e95df4533",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "valueType": "varInterpolation",
+      "identifier": "myvar"
+    }
+  ],
+  "parseError": null
+}

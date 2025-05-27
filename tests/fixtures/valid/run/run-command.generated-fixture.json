@@ -1,0 +1,83 @@
+{
+  "name": "run-command",
+  "description": "Test fixture for valid/run-command",
+  "category": "valid",
+  "subcategory": "run-command",
+  "input": "@run [echo \"Hello from command\"]",
+  "expected": "Hello from command",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "ca84c7e7-5bdd-4279-8ab6-4a2156373a59",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 32,
+          "line": 1,
+          "column": 33
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "763fd265-ba6e-4d3d-a9bc-01eb5870f756",
+            "location": {
+              "start": {
+                "offset": 6,
+                "line": 1,
+                "column": 7
+              },
+              "end": {
+                "offset": 31,
+                "line": 1,
+                "column": 32
+              }
+            },
+            "content": "echo \"Hello from command\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "3de30126-5d08-4f8b-862a-41fa647900cb",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 32,
+                "line": 1,
+                "column": 33
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"Hello from command\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    }
+  ],
+  "parseError": null
+}

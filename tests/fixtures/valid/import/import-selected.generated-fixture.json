@@ -1,0 +1,211 @@
+{
+  "name": "import-selected",
+  "description": "Test fixture for valid/import-selected",
+  "category": "valid",
+  "subcategory": "import-selected",
+  "input": "@import {greeting, count} from [utils.mld]\n@add @greeting\n@add @count",
+  "expected": "Hello, world!\n42",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "b96ffab0-b5b5-4abd-b859-774de275f715",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 42,
+          "line": 1,
+          "column": 43
+        }
+      },
+      "kind": "import",
+      "subtype": "importSelected",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "00b72b44-345d-45b6-9be0-08759076b65e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "greeting"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "c6ff6373-8312-4c1b-b9e9-6b2cd1f81b9f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "count"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "5cb35fdc-7302-4911-86c8-453b380c5ab4",
+            "location": {
+              "start": {
+                "offset": 32,
+                "line": 1,
+                "column": 33
+              },
+              "end": {
+                "offset": 41,
+                "line": 1,
+                "column": 42
+              }
+            },
+            "content": "utils.mld"
+          }
+        ]
+      },
+      "raw": {
+        "imports": "greeting, count",
+        "path": "utils.mld"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "mld",
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "6078f04c-c5fd-41a5-8661-28fd6cbdb82c",
+      "location": {
+        "start": {
+          "offset": 42,
+          "line": 1,
+          "column": 43
+        },
+        "end": {
+          "offset": 43,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "897f20cf-facb-4c06-9414-3ace9fbf05ce",
+      "location": {
+        "start": {
+          "offset": 43,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 58,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "9c1c0935-a5c3-4e65-8266-c3b0b3970772",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "greeting"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@greeting"
+      },
+      "meta": {}
+    },
+    {
+      "type": "Directive",
+      "nodeId": "c7b01ed8-5271-4904-9d48-697fb347859f",
+      "location": {
+        "start": {
+          "offset": 58,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 69,
+          "line": 3,
+          "column": 12
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "59e6eb0e-9f4e-4488-b50e-6ec923aa1ad8",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "count"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@count"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

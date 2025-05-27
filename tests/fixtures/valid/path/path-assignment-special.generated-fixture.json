@@ -1,0 +1,186 @@
+{
+  "name": "path-assignment-special",
+  "description": "Test fixture for valid/path-assignment",
+  "category": "valid",
+  "subcategory": "path-assignment",
+  "input": "@path homeConfig = [@~/config]\n@add [[The config is {{homeConfig}}]]",
+  "expected": "The config is /Users/adam/config",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "8edc5e57-2a3f-4c88-8e98-809ec3dd9ef0",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 30,
+          "line": 1,
+          "column": 31
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "f4b033d6-ea24-4062-b960-60e4f5ee51a1",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "homeConfig"
+          }
+        ],
+        "path": [
+          {
+            "type": "VariableReference",
+            "nodeId": "7f74dcff-411e-4e2c-a752-b265625d0084",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "HOMEPATH"
+          },
+          {
+            "type": "Text",
+            "nodeId": "e3b5b8a2-0b47-489f-b21b-0ebfa8985d44",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 30,
+                "line": 1,
+                "column": 31
+              }
+            },
+            "content": "/config"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "homeConfig",
+        "path": "@HOMEPATH/config"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": true,
+          "isAbsolute": false,
+          "hasExtension": false,
+          "extension": null
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "803de0e5-dd52-49fc-9b04-f0f7b53d72d8",
+      "location": {
+        "start": {
+          "offset": 30,
+          "line": 1,
+          "column": 31
+        },
+        "end": {
+          "offset": 31,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "80b88f24-9d63-452a-a935-2ee2d7c56874",
+      "location": {
+        "start": {
+          "offset": 31,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 68,
+          "line": 2,
+          "column": 38
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "773e31a2-9cc6-4557-b98d-e09ee3cf9288",
+            "location": {
+              "start": {
+                "offset": 38,
+                "line": 2,
+                "column": 8
+              },
+              "end": {
+                "offset": 52,
+                "line": 2,
+                "column": 22
+              }
+            },
+            "content": "The config is "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "361d09b5-ce7d-4279-8b6f-26ead9e99ca7",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "homeConfig"
+          }
+        ]
+      },
+      "raw": {
+        "content": "The config is {{homeConfig}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ],
+  "parseError": null
+}

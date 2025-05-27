@@ -1,0 +1,166 @@
+{
+  "name": "data-object-nested",
+  "description": "Test fixture for valid/data-object",
+  "category": "valid",
+  "subcategory": "data-object",
+  "input": "@data config = {\n  server: {\n    port: 8080,\n    host: \"localhost\"\n  },\n  debug: true\n}\n@add @config.server.port",
+  "expected": "8080",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "1e3b52bf-3a2b-4d46-b018-bcff830b2db3",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 87,
+          "line": 7,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "e812cbec-3ec5-4f74-ae68-ae67ed8962f4",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "config"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "server": {
+              "type": "object",
+              "properties": {
+                "port": 8080,
+                "host": [
+                  {
+                    "type": "Text",
+                    "nodeId": "4b63e01d-f92c-4c30-834b-a592bdf08560",
+                    "location": {
+                      "start": {
+                        "offset": 55,
+                        "line": 4,
+                        "column": 11
+                      },
+                      "end": {
+                        "offset": 66,
+                        "line": 4,
+                        "column": 22
+                      }
+                    },
+                    "content": "localhost"
+                  }
+                ]
+              }
+            },
+            "debug": true
+          }
+        }
+      },
+      "raw": {
+        "identifier": "config",
+        "value": "{\n  \"server\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"port\": 8080,\n      \"host\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"4b63e01d-f92c-4c30-834b-a592bdf08560\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 55,\n              \"line\": 4,\n              \"column\": 11\n            },\n            \"end\": {\n              \"offset\": 66,\n              \"line\": 4,\n              \"column\": 22\n            }\n          },\n          \"content\": \"localhost\"\n        }\n      ]\n    }\n  },\n  \"debug\": true\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 2
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "ad749ad0-0dfb-448d-bb2f-0d21175306da",
+      "location": {
+        "start": {
+          "offset": 87,
+          "line": 7,
+          "column": 2
+        },
+        "end": {
+          "offset": 88,
+          "line": 8,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "5166fac6-6f48-4d4f-899f-e84ad17ae579",
+      "location": {
+        "start": {
+          "offset": 88,
+          "line": 8,
+          "column": 1
+        },
+        "end": {
+          "offset": 112,
+          "line": 8,
+          "column": 25
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "0e3182b2-9cce-4e7d-884b-8e1efe106db1",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "config",
+            "fields": [
+              {
+                "type": "field",
+                "name": "server"
+              },
+              {
+                "type": "field",
+                "name": "port"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@config"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

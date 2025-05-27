@@ -1,0 +1,147 @@
+{
+  "name": "path-assignment",
+  "description": "Test fixture for valid/path-assignment",
+  "category": "valid",
+  "subcategory": "path-assignment",
+  "input": "@path docsDir = [file.md]\n@add @docsDir",
+  "expected": "Contents of file.md",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "00fd971f-f17a-4a1a-929d-72c3bb25d73c",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 25,
+          "line": 1,
+          "column": 26
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "256ff13e-4cea-43be-8a2f-a4f9bfb34509",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "docsDir"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "6bc1dc01-7278-4431-97d9-b426f23566af",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 25,
+                "line": 1,
+                "column": 26
+              }
+            },
+            "content": "file.md"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "docsDir",
+        "path": "file.md"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "md"
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "f9bebc98-9410-4f0e-bcc9-91335e0641b0",
+      "location": {
+        "start": {
+          "offset": 25,
+          "line": 1,
+          "column": 26
+        },
+        "end": {
+          "offset": 26,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "94da1d8b-f165-426c-996e-2c33f9aae5a3",
+      "location": {
+        "start": {
+          "offset": 26,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 39,
+          "line": 2,
+          "column": 14
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "bce12124-58ee-4856-9694-6a4fda8f2e84",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "docsDir"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@docsDir"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

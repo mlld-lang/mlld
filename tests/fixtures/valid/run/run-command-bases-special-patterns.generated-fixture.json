@@ -1,0 +1,361 @@
+{
+  "name": "run-command-bases-special-patterns",
+  "description": "Test fixture for valid/run-command-bases",
+  "category": "valid",
+  "subcategory": "run-command-bases",
+  "input": "# Test special command patterns\n\n@run [echo \"npx prettier --write .\"]\n\n@run [echo \"python -m http.server 8000\"]\n\n@run [node -e \"console.log('Hello')\"]\n\n@run [echo \"deno run --allow-net server.ts\"]",
+  "expected": "# Test special command patterns\n\nnpx prettier --write .\n\npython -m http.server 8000\n\nHello\n\ndeno run --allow-net server.ts",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "ac131041-6fed-4f64-811d-ea594827e6c8",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 33,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "# Test special command patterns\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "8c59cd67-2ad7-4910-a276-951d3b66b5f8",
+      "location": {
+        "start": {
+          "offset": 33,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 69,
+          "line": 3,
+          "column": 37
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "5f826ea1-3623-4bd6-ad72-471025939e45",
+            "location": {
+              "start": {
+                "offset": 39,
+                "line": 3,
+                "column": 7
+              },
+              "end": {
+                "offset": 68,
+                "line": 3,
+                "column": 36
+              }
+            },
+            "content": "echo \"npx prettier --write .\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "d3092e24-7c01-4090-8833-af95c8aacd55",
+            "location": {
+              "start": {
+                "offset": 38,
+                "line": 3,
+                "column": 6
+              },
+              "end": {
+                "offset": 69,
+                "line": 3,
+                "column": 37
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"npx prettier --write .\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "d94fbee5-f447-4ebc-af9a-04a584dfbf26",
+      "location": {
+        "start": {
+          "offset": 69,
+          "line": 3,
+          "column": 37
+        },
+        "end": {
+          "offset": 71,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "532e2506-c7a2-4c0f-acac-77862fef0612",
+      "location": {
+        "start": {
+          "offset": 71,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 111,
+          "line": 5,
+          "column": 41
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "bff760af-5562-4221-a198-abb50180a901",
+            "location": {
+              "start": {
+                "offset": 77,
+                "line": 5,
+                "column": 7
+              },
+              "end": {
+                "offset": 110,
+                "line": 5,
+                "column": 40
+              }
+            },
+            "content": "echo \"python -m http.server 8000\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "7591bd12-b6df-4ba9-8cde-88720a562db3",
+            "location": {
+              "start": {
+                "offset": 76,
+                "line": 5,
+                "column": 6
+              },
+              "end": {
+                "offset": 111,
+                "line": 5,
+                "column": 41
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"python -m http.server 8000\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "b305147e-091c-4a52-81b4-c10a431cd30b",
+      "location": {
+        "start": {
+          "offset": 111,
+          "line": 5,
+          "column": 41
+        },
+        "end": {
+          "offset": 113,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "7093fded-c13b-401f-b7f5-6e299365857d",
+      "location": {
+        "start": {
+          "offset": 113,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 150,
+          "line": 7,
+          "column": 38
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "68d77fde-a1bf-4904-a68b-195cbdce8438",
+            "location": {
+              "start": {
+                "offset": 119,
+                "line": 7,
+                "column": 7
+              },
+              "end": {
+                "offset": 149,
+                "line": 7,
+                "column": 37
+              }
+            },
+            "content": "node -e \"console.log('Hello')\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "6bf5bbc5-ae21-4d3c-b0e9-b8822c2cb507",
+            "location": {
+              "start": {
+                "offset": 118,
+                "line": 7,
+                "column": 6
+              },
+              "end": {
+                "offset": 150,
+                "line": 7,
+                "column": 38
+              }
+            },
+            "command": "node"
+          }
+        ]
+      },
+      "raw": {
+        "command": "node -e \"console.log('Hello')\"",
+        "commandBases": [
+          "node"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "65128bd2-f1c6-463c-9b6b-fe14925ed6fe",
+      "location": {
+        "start": {
+          "offset": 150,
+          "line": 7,
+          "column": 38
+        },
+        "end": {
+          "offset": 152,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "d3410863-c73a-4b6b-8815-fef6351e065b",
+      "location": {
+        "start": {
+          "offset": 152,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 196,
+          "line": 9,
+          "column": 45
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "7c247df5-cf8e-44d4-b388-c10df516b30e",
+            "location": {
+              "start": {
+                "offset": 158,
+                "line": 9,
+                "column": 7
+              },
+              "end": {
+                "offset": 195,
+                "line": 9,
+                "column": 44
+              }
+            },
+            "content": "echo \"deno run --allow-net server.ts\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "f2499662-21db-455e-92cd-7ca5b3350149",
+            "location": {
+              "start": {
+                "offset": 157,
+                "line": 9,
+                "column": 6
+              },
+              "end": {
+                "offset": 196,
+                "line": 9,
+                "column": 45
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"deno run --allow-net server.ts\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    }
+  ],
+  "parseError": null
+}

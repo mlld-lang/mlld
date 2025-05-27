@@ -1,0 +1,99 @@
+{
+  "name": "directive-in-text-line",
+  "description": "Test fixture for warnings/directive-in-text-line",
+  "category": "warnings",
+  "subcategory": "directive-in-text-line",
+  "input": "@text myvar = \"Hello world\"\n\nSome text @add @myvar in the middle of a line.",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": "**Warning: Directive in middle of text line**\n\nThe line `Some text @add @myvar in the middle of a line.` contains a directive that doesn't start at the beginning of the line.\n\nmlld directives are only processed when they appear at the start of a line. Directives in the middle of text lines are treated as literal text.\n\n**To fix this:**\n```mlld\nSome text \n@add @myvar\nin the middle of a line.\n```",
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "ad12174f-f5fa-458b-b759-6b426149f87a",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 27,
+          "line": 1,
+          "column": 28
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "079d9314-4837-4e4c-9095-1c9235a1a77d",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "myvar"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "12f8e511-9386-43f5-a619-8cca4fdbe05b",
+            "location": {
+              "start": {
+                "offset": 14,
+                "line": 1,
+                "column": 15
+              },
+              "end": {
+                "offset": 27,
+                "line": 1,
+                "column": 28
+              }
+            },
+            "content": "Hello world"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "myvar",
+        "content": "Hello world"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "f5584c3f-16f0-4ba6-9708-08ba3248802c",
+      "location": {
+        "start": {
+          "offset": 27,
+          "line": 1,
+          "column": 28
+        },
+        "end": {
+          "offset": 75,
+          "line": 3,
+          "column": 47
+        }
+      },
+      "content": "\n\nSome text @add @myvar in the middle of a line."
+    }
+  ],
+  "parseError": null
+}

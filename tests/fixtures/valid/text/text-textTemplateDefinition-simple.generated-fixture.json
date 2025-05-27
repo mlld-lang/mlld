@@ -1,0 +1,198 @@
+{
+  "name": "text-textTemplateDefinition-simple",
+  "description": "Test fixture for valid/text-textTemplateDefinition",
+  "category": "valid",
+  "subcategory": "text-textTemplateDefinition",
+  "input": "@text greeting(name) = @add [[Hello, {{name}}!]]\n@add @greeting(\"World\")",
+  "expected": "Hello, World!",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "72dcdb41-919e-4819-b158-496497af488b",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 48,
+          "line": 1,
+          "column": 49
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplateDefinition",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "56a87694-9e9e-48cb-9d34-83a099d642f9",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "greeting"
+          }
+        ],
+        "params": [
+          "name"
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "81e0fb10-4fc1-4095-a7a6-c2d8a3d2919a",
+            "location": {
+              "start": {
+                "offset": 30,
+                "line": 1,
+                "column": 31
+              },
+              "end": {
+                "offset": 37,
+                "line": 1,
+                "column": 38
+              }
+            },
+            "content": "Hello, "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "60c42b56-1d37-46cc-8aed-d34f37bae0cb",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "name"
+          },
+          {
+            "type": "Text",
+            "nodeId": "72cd2a06-a528-4f37-8125-2befd1ba3701",
+            "location": {
+              "start": {
+                "offset": 45,
+                "line": 1,
+                "column": 46
+              },
+              "end": {
+                "offset": 46,
+                "line": 1,
+                "column": 47
+              }
+            },
+            "content": "!"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greeting",
+        "params": [
+          "name"
+        ],
+        "content": "Hello, {{name}}!"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true,
+        "isParameterized": true,
+        "parameterCount": 1
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "6d9bca78-566f-43c2-9ad5-824fb4dcd3cc",
+      "location": {
+        "start": {
+          "offset": 48,
+          "line": 1,
+          "column": 49
+        },
+        "end": {
+          "offset": 49,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "e1c7ae6f-113b-4db4-8130-63ac9f612ca5",
+      "location": {
+        "start": {
+          "offset": 49,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 72,
+          "line": 2,
+          "column": 24
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplateInvocation",
+      "source": "templateInvocation",
+      "values": {
+        "templateName": [
+          {
+            "type": "Text",
+            "nodeId": "689b303f-af92-45db-a765-eff7081466d2",
+            "location": {
+              "start": {
+                "offset": 49,
+                "line": 2,
+                "column": 1
+              },
+              "end": {
+                "offset": 72,
+                "line": 2,
+                "column": 24
+              }
+            },
+            "content": "greeting"
+          }
+        ],
+        "arguments": [
+          {
+            "type": "string",
+            "value": "World"
+          }
+        ]
+      },
+      "raw": {
+        "templateName": "greeting",
+        "arguments": [
+          "\"World\""
+        ]
+      },
+      "meta": {
+        "isTemplateInvocation": true,
+        "argumentCount": 1
+      }
+    }
+  ],
+  "parseError": null
+}

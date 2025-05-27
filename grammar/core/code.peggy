@@ -144,9 +144,9 @@ CodeLanguage
       return lang;
     }
     
-// Code language identifier for run directive
+// Code language identifier for run directive - restricted to known languages
 RunCodeLanguage
-  = language:BaseIdentifier {
+  = language:("javascript" / "js" / "python" / "py" / "bash" / "sh") {
       return language;
     }
 

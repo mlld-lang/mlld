@@ -1,0 +1,404 @@
+{
+  "name": "exec-code",
+  "description": "Test fixture for valid/exec-code",
+  "category": "valid",
+  "subcategory": "exec-code",
+  "input": "@text a = \"1\"\n@text b = \"2\"\n@exec sum (a, b) = @run javascript [console.log(Number(a) + Number(b));]\n@run @sum (1, 2)\n",
+  "expected": "3",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "373bf2c6-1bdf-4d77-ac6a-0530b16655d2",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 13,
+          "line": 1,
+          "column": 14
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "5c737e3b-9635-4645-8897-07e38119e294",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "a"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "c5d8a344-96ac-4615-8325-34154ef5d7e6",
+            "location": {
+              "start": {
+                "offset": 10,
+                "line": 1,
+                "column": 11
+              },
+              "end": {
+                "offset": 13,
+                "line": 1,
+                "column": 14
+              }
+            },
+            "content": "1"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "a",
+        "content": "1"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "fb4e2fdd-20ba-4aa9-a9f8-0e493c0ba248",
+      "location": {
+        "start": {
+          "offset": 13,
+          "line": 1,
+          "column": 14
+        },
+        "end": {
+          "offset": 14,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "a450c012-4f6d-4cff-99f0-bfdc6518c519",
+      "location": {
+        "start": {
+          "offset": 14,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 27,
+          "line": 2,
+          "column": 14
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "b37fba9c-72cd-4e04-a871-d5185626d98f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "b"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "8b6db3c0-49ce-4212-bb6c-d5626eb95771",
+            "location": {
+              "start": {
+                "offset": 24,
+                "line": 2,
+                "column": 11
+              },
+              "end": {
+                "offset": 27,
+                "line": 2,
+                "column": 14
+              }
+            },
+            "content": "2"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "b",
+        "content": "2"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "c07875d2-1974-4ea7-8524-8ef8d3f35102",
+      "location": {
+        "start": {
+          "offset": 27,
+          "line": 2,
+          "column": 14
+        },
+        "end": {
+          "offset": 28,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "b5136bd0-3557-4806-9eab-4977cde711d9",
+      "location": {
+        "start": {
+          "offset": 28,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 100,
+          "line": 3,
+          "column": 73
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCode",
+      "source": "code",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "8eb988b0-0ca0-440f-af6c-72ef0f69abb2",
+            "location": {
+              "start": {
+                "offset": 28,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "offset": 100,
+                "line": 3,
+                "column": 73
+              }
+            },
+            "content": "sum"
+          }
+        ],
+        "params": [
+          "a",
+          "b"
+        ],
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "4571ce3b-8959-42f4-8dad-f4be26c7de6d",
+            "location": {
+              "start": {
+                "offset": 52,
+                "line": 3,
+                "column": 25
+              },
+              "end": {
+                "offset": 100,
+                "line": 3,
+                "column": 73
+              }
+            },
+            "content": "javascript"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "d98336e4-8604-4db2-a481-0ec6377e8a3d",
+            "location": {
+              "start": {
+                "offset": 63,
+                "line": 3,
+                "column": 36
+              },
+              "end": {
+                "offset": 100,
+                "line": 3,
+                "column": 73
+              }
+            },
+            "content": "console.log(Number(a) + Number(b));"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "sum",
+        "params": [
+          "a",
+          "b"
+        ],
+        "lang": "javascript",
+        "args": [],
+        "code": "console.log(Number(a) + Number(b));"
+      },
+      "meta": {
+        "isMultiLine": false,
+        "language": "javascript",
+        "hasVariables": false,
+        "parameterCount": 2
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "0bebe4d6-caa6-431b-804f-a0d23aa2276f",
+      "location": {
+        "start": {
+          "offset": 100,
+          "line": 3,
+          "column": 73
+        },
+        "end": {
+          "offset": 101,
+          "line": 4,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "75ac62ff-76b9-4f00-afef-732bf93a0382",
+      "location": {
+        "start": {
+          "offset": 101,
+          "line": 4,
+          "column": 1
+        },
+        "end": {
+          "offset": 117,
+          "line": 4,
+          "column": 17
+        }
+      },
+      "kind": "run",
+      "subtype": "runExec",
+      "source": "exec",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "be500907-ca00-4526-8863-f299e390c579",
+            "location": {
+              "start": {
+                "offset": 107,
+                "line": 4,
+                "column": 7
+              },
+              "end": {
+                "offset": 117,
+                "line": 4,
+                "column": 17
+              }
+            },
+            "content": "sum"
+          }
+        ],
+        "args": [
+          {
+            "type": "Text",
+            "nodeId": "e234547a-bf3e-40d4-ab34-f72dec8055e0",
+            "location": {
+              "start": {
+                "offset": 112,
+                "line": 4,
+                "column": 12
+              },
+              "end": {
+                "offset": 113,
+                "line": 4,
+                "column": 13
+              }
+            },
+            "content": "1"
+          },
+          {
+            "type": "Text",
+            "nodeId": "540557a9-d2f3-4a15-9d08-36193af1158f",
+            "location": {
+              "start": {
+                "offset": 115,
+                "line": 4,
+                "column": 15
+              },
+              "end": {
+                "offset": 116,
+                "line": 4,
+                "column": 16
+              }
+            },
+            "content": "2"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "sum",
+        "args": [
+          "1",
+          "2"
+        ]
+      },
+      "meta": {
+        "argumentCount": 2
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "33f371db-2048-4baf-ae7b-3aae23a777cf",
+      "location": {
+        "start": {
+          "offset": 117,
+          "line": 4,
+          "column": 17
+        },
+        "end": {
+          "offset": 118,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    }
+  ],
+  "parseError": null
+}

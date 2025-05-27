@@ -1,0 +1,83 @@
+{
+  "name": "run-code-multiline",
+  "description": "Test fixture for valid/run-code",
+  "category": "valid",
+  "subcategory": "run-code",
+  "input": "@run javascript [\nfunction greet() {\n  return \"Hello from multiline code\";\n}\nconsole.log(greet());\n]",
+  "expected": "Hello from multiline code",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "05c69494-7e19-4425-964a-e3e561c70588",
+      "location": {
+        "start": {
+          "offset": 5,
+          "line": 1,
+          "column": 6
+        },
+        "end": {
+          "offset": 100,
+          "line": 6,
+          "column": 2
+        }
+      },
+      "kind": "run",
+      "subtype": "runCode",
+      "source": "code",
+      "values": {
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "e7c781a1-43a4-43ac-8d4e-9420664106a6",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 100,
+                "line": 6,
+                "column": 2
+              }
+            },
+            "content": "javascript"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "39a680c0-f033-4eab-a2ca-c03c020f69fb",
+            "location": {
+              "start": {
+                "offset": 16,
+                "line": 1,
+                "column": 17
+              },
+              "end": {
+                "offset": 100,
+                "line": 6,
+                "column": 2
+              }
+            },
+            "content": "\nfunction greet() {\n  return \"Hello from multiline code\";\n}\nconsole.log(greet());\n"
+          }
+        ]
+      },
+      "raw": {
+        "lang": "javascript",
+        "args": [],
+        "code": "\nfunction greet() {\n  return \"Hello from multiline code\";\n}\nconsole.log(greet());\n"
+      },
+      "meta": {
+        "isMultiLine": true,
+        "language": "javascript",
+        "hasVariables": false
+      }
+    }
+  ],
+  "parseError": null
+}

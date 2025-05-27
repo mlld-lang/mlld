@@ -1,0 +1,170 @@
+{
+  "name": "run-exec",
+  "description": "Test fixture for valid/run-exec",
+  "category": "valid",
+  "subcategory": "run-exec",
+  "input": "@exec greetCommand = @run [echo \"Hello from predefined command\"]\n@run @greetCommand",
+  "expected": "Hello from predefined command",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "e6c4be30-254a-44be-ac87-eedcaca35192",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 64,
+          "line": 1,
+          "column": 65
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "146b1bb2-09d1-4ebf-84c8-06aca3274e91",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 64,
+                "line": 1,
+                "column": 65
+              }
+            },
+            "content": "greetCommand"
+          }
+        ],
+        "params": [],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "c926efd0-6a80-4fda-ae35-b6eb17a0ee74",
+            "location": {
+              "start": {
+                "offset": 27,
+                "line": 1,
+                "column": 28
+              },
+              "end": {
+                "offset": 63,
+                "line": 1,
+                "column": 64
+              }
+            },
+            "content": "echo \"Hello from predefined command\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "c1b38ddb-cc2c-4316-81f2-9aaae396f9a2",
+            "location": {
+              "start": {
+                "offset": 26,
+                "line": 1,
+                "column": 27
+              },
+              "end": {
+                "offset": 64,
+                "line": 1,
+                "column": 65
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greetCommand",
+        "params": [],
+        "command": "echo \"Hello from predefined command\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "parameterCount": 0
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "e6b989cc-f1fa-4b25-ba70-1aa5bb8d1cdc",
+      "location": {
+        "start": {
+          "offset": 64,
+          "line": 1,
+          "column": 65
+        },
+        "end": {
+          "offset": 65,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "003bbb7c-112d-4e23-bf59-4cc199bba8ec",
+      "location": {
+        "start": {
+          "offset": 65,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 83,
+          "line": 2,
+          "column": 19
+        }
+      },
+      "kind": "run",
+      "subtype": "runExec",
+      "source": "exec",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "372d6ef6-1ed5-4171-b3f5-8ddba6335a2b",
+            "location": {
+              "start": {
+                "offset": 71,
+                "line": 2,
+                "column": 7
+              },
+              "end": {
+                "offset": 83,
+                "line": 2,
+                "column": 19
+              }
+            },
+            "content": "greetCommand"
+          }
+        ],
+        "args": []
+      },
+      "raw": {
+        "identifier": "greetCommand",
+        "args": []
+      },
+      "meta": {
+        "argumentCount": 0
+      }
+    }
+  ],
+  "parseError": null
+}

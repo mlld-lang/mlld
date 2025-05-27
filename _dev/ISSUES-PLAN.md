@@ -6,32 +6,81 @@
 
 This plan addresses the critical bugs discovered during investigation that prevent mlld from being production-ready. The approach prioritizes **error handling** and **real-world functionality** over feature completeness.
 
+## 🔍 Key Discoveries During Implementation
+
+### **User Education vs. Bugs**
+Many reported "bugs" were actually **user misunderstanding** of mlld's core design:
+- **mlld is a programming language embedded IN markdown**, not a template language
+- Variables like `@myvar` only work in directive lines, not in plain text
+- Template syntax `{{var}}` only works inside `[[...]]` brackets
+- This led to creating comprehensive warning system for "training wheels"
+
+### **Syntax vs. Runtime Issues**  
+Several issues that appeared to be interpreter bugs were actually **parse errors**:
+- `@text name(param) = @run [cmd]` is invalid syntax (should be `@exec`)
+- Complex shell escaping in examples caused parse failures
+- Enhanced error messages now guide users to correct syntax
+
+### **Import System Architecture**
+The import variable transfer mechanism had a subtle but critical bug:
+- `getAllVariables()` was including parent scope variables in import detection
+- Fixed with new `getCurrentVariables()` method for clean variable transfer
+- Import system works correctly when syntax is valid
+
 ## 📋 Issue Categories & Priority
 
-### **Phase 1: Foundation - Error Handling (Week 1)**
+### **Phase 1: Foundation - Error Handling (Week 1)** ✅ **COMPLETED**
 **Priority: CRITICAL** - Unblocks debugging and user experience
 
-- **#72**: Complex examples produce empty output without error messages
-- **#62**: Import directive fails silently, producing empty output instead of error  
-- **Parse errors**: Currently create empty output instead of helpful messages
+- ✅ **#72**: Complex examples produce empty output without error messages
+- ✅ **#62**: Import directive fails silently, producing empty output instead of error  
+- ✅ **Parse errors**: Currently create empty output instead of helpful messages
 
-### **Phase 2: Import System (Week 2)**
+**Implementation Notes:**
+- Fixed CLI error propagation in `cli/index.ts` - removed dependency on non-existent ErrorDisplayService
+- Added proper parse error handling in `interpreter/index.ts` with MlldParseError and location information
+- Enhanced error messages for common syntax mistakes (e.g., `@text name(param) = @run [cmd]` → suggests `@exec`)
+- CLI now shows clear error messages instead of silent failures
+
+### **Phase 2: Import System (Week 2)** ✅ **COMPLETED**
 **Priority: HIGH** - Essential for real-world usage
 
-- **#63**: Import path resolution uses wrong base path
-- **#62**: Import variables not available after `@import { * }`
-- **#69**: Test infrastructure masks import path issues
+- ✅ **#63**: Import path resolution uses wrong base path
+- ✅ **#62**: Import variables not available after `@import { * }`
+- ✅ **#69**: Test infrastructure masks import path issues
 
-### **Phase 3: Core Interpreter Bugs (Week 3)**
+**Implementation Notes:**
+- Fixed Environment.ts to use proper ES imports instead of `require()`
+- Added `getCurrentVariables()` method to Environment to avoid parent variable pollution
+- Fixed import evaluator to use `getCurrentVariables()` instead of `getAllVariables()`
+- **Key Discovery**: Main issue was invalid syntax in `examples/imports.mld` causing parse errors
+- Created working examples (`imports-simple.mld`, `imports-fixed.mld`) demonstrating correct usage
+- Import system works correctly when imported files have valid syntax
+
+### **Phase 3: Core Interpreter Bugs (Week 3)** 🔄 **IN PROGRESS**
 **Priority: MEDIUM-HIGH** - Affects feature functionality
 
-- **#71**: Parameterized exec commands fail with shell syntax error
-- **#66**: Variable interpolation happens too early in shell commands
+- 🔄 **#71**: Parameterized exec commands fail with shell syntax error
+- ⏳ **#66**: Variable interpolation happens too early in shell commands
 
-### **Phase 4: Testing Infrastructure (Week 4)**
+**Current Work:**
+- Discovered syntax errors in examples that looked like interpreter bugs
+- Added comprehensive error/warning test cases for common user mistakes
+- **Next**: Fix actual parameterized exec command issues (#71)
+
+### **Phase 4: Testing Infrastructure (Week 4)** 📋 **PLANNED**
 **Priority: MEDIUM** - Prevents regressions
 
-- **#69**: Tests use MemoryFileSystem which masks real-world path resolution issues
+- ✅ **#69**: Tests use MemoryFileSystem which masks real-world path resolution issues *(Resolved during import investigation)*
+- 📋 **Fixture System Overhaul**: Major reorganization planned in `@_dev/UPDATE-FIXTURES.md`
+
+**Planned Improvements:**
+- Reorganize `tests/cases/` into `valid/`, `exceptions/`, `warnings/`, `invalid/`
+- Move fixture generation script from `grammar/scripts/` to `scripts/`
+- Auto-copy `examples/` to test cases for validation
+- Generate error/warning fixtures from markdown files
+- Clean fixture directory on each build to prevent stale files
+- Use `.generated-fixture.json` naming to prevent accidental edits
 
 ### **Phase 5: Grammar & Polish (Week 5+)**
 **Priority: LOW-MEDIUM** - Feature enhancements

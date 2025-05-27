@@ -1,0 +1,144 @@
+{
+  "name": "exec-command",
+  "description": "Test fixture for valid/exec-command",
+  "category": "valid",
+  "subcategory": "exec-command",
+  "input": "@exec greet (name) = @run [echo \"Hello, @name!\"]",
+  "expected": "",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "e8624304-f48e-493b-9d64-9737e298a6b9",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 48,
+          "line": 1,
+          "column": 49
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "20b05261-4ec6-48d1-99a9-1ec728cd31d7",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 48,
+                "line": 1,
+                "column": 49
+              }
+            },
+            "content": "greet"
+          }
+        ],
+        "params": [
+          "name"
+        ],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "b9902d74-60b7-4dd6-8d7b-bfd80a021095",
+            "location": {
+              "start": {
+                "offset": 27,
+                "line": 1,
+                "column": 28
+              },
+              "end": {
+                "offset": 40,
+                "line": 1,
+                "column": 41
+              }
+            },
+            "content": "echo \"Hello, "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "3b4b94c2-c2bf-4b6d-9fad-8a4a6b923b9e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "name"
+          },
+          {
+            "type": "Text",
+            "nodeId": "910da7b5-8bf5-4930-bffa-f3667dbb03f5",
+            "location": {
+              "start": {
+                "offset": 45,
+                "line": 1,
+                "column": 46
+              },
+              "end": {
+                "offset": 47,
+                "line": 1,
+                "column": 48
+              }
+            },
+            "content": "!\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "96d86032-6307-438d-af2d-ab2bd1561ec1",
+            "location": {
+              "start": {
+                "offset": 26,
+                "line": 1,
+                "column": 27
+              },
+              "end": {
+                "offset": 48,
+                "line": 1,
+                "column": 49
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greet",
+        "params": [
+          "name"
+        ],
+        "command": "echo \"Hello, @name!\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "parameterCount": 1
+      }
+    }
+  ],
+  "parseError": null
+}

@@ -1,0 +1,217 @@
+{
+  "name": "add-template-multiline",
+  "description": "Test fixture for valid/add-template",
+  "category": "valid",
+  "subcategory": "add-template",
+  "input": "@text variable = \"value\"\n@add [[\nContent with {{variable}}\n\nAnd some more content\n\nHey, here's the same variable again: {{variable}}\n]]",
+  "expected": "Content with value\n\nAnd some more content\n\nHey, here's the same variable again: value",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "973bdc27-8eff-4cc4-a781-ebfea692b0c4",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 24,
+          "line": 1,
+          "column": 25
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "61da7473-1a47-4a35-83c6-9837b075f0eb",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "variable"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "b9d6e2f3-ad74-4d83-b862-225783b6d9da",
+            "location": {
+              "start": {
+                "offset": 17,
+                "line": 1,
+                "column": 18
+              },
+              "end": {
+                "offset": 24,
+                "line": 1,
+                "column": 25
+              }
+            },
+            "content": "value"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "variable",
+        "content": "value"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "09f96c85-1e18-459a-8974-abedaf6c7070",
+      "location": {
+        "start": {
+          "offset": 24,
+          "line": 1,
+          "column": 25
+        },
+        "end": {
+          "offset": 25,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "443be04e-3055-4ad9-8b82-5431aaf380a7",
+      "location": {
+        "start": {
+          "offset": 25,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 135,
+          "line": 8,
+          "column": 3
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "8c0b7f5d-dcd7-4567-8e07-b17f580789fe",
+            "location": {
+              "start": {
+                "offset": 32,
+                "line": 2,
+                "column": 8
+              },
+              "end": {
+                "offset": 46,
+                "line": 3,
+                "column": 14
+              }
+            },
+            "content": "\nContent with "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "ec604f42-f335-495d-98b3-06cb2e11dd88",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "variable"
+          },
+          {
+            "type": "Text",
+            "nodeId": "f17ff9d2-f6d3-45e1-a33a-c3ac060d6182",
+            "location": {
+              "start": {
+                "offset": 58,
+                "line": 3,
+                "column": 26
+              },
+              "end": {
+                "offset": 120,
+                "line": 7,
+                "column": 38
+              }
+            },
+            "content": "\n\nAnd some more content\n\nHey, here's the same variable again: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "875915ba-8460-4d8c-bd99-be8355fea860",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "variable"
+          },
+          {
+            "type": "Text",
+            "nodeId": "09411bbf-7c9f-4e45-841b-37cd65473a12",
+            "location": {
+              "start": {
+                "offset": 132,
+                "line": 7,
+                "column": 50
+              },
+              "end": {
+                "offset": 133,
+                "line": 8,
+                "column": 1
+              }
+            },
+            "content": "\n"
+          }
+        ]
+      },
+      "raw": {
+        "content": "\nContent with {{variable}}\n\nAnd some more content\n\nHey, here's the same variable again: {{variable}}\n"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ],
+  "parseError": null
+}

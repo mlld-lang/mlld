@@ -1,0 +1,134 @@
+{
+  "name": "text-url-section",
+  "description": "Test fixture for valid/text-url-section",
+  "category": "valid",
+  "subcategory": "text-url-section",
+  "input": "# Text from URL Section Example\n\nThis example demonstrates fetching a specific section from a URL.\n\n@text installation = \"## Installation\" from [https://raw.githubusercontent.com/example/repo/main/README.md]\n\nHere's how to install:\n\n{{installation}}",
+  "expected": "# Text from URL Section Example\n\nThis example demonstrates fetching a specific section from a URL.\n\nHere's how to install:\n\n## Installation\n\nTo install the project, run:\n\n```bash\nnpm install example-project\n```",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "f07301c0-8d57-46eb-81c0-26a13879aa38",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 100,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "# Text from URL Section Example\n\nThis example demonstrates fetching a specific section from a URL.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "ac8260bc-b737-478e-a9df-7ed6f2637283",
+      "location": {
+        "start": {
+          "offset": 100,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 138,
+          "line": 5,
+          "column": 39
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "28dc8106-81ff-4dec-8479-44fc15214cf1",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "installation"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "b95db1cf-dcf5-4cf0-97d3-35f59802d98a",
+            "location": {
+              "start": {
+                "offset": 121,
+                "line": 5,
+                "column": 22
+              },
+              "end": {
+                "offset": 138,
+                "line": 5,
+                "column": 39
+              }
+            },
+            "content": "## Installation"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "installation",
+        "content": "## Installation"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "f75b180d-33d4-4eb4-9dc5-bc0e084f2b3e",
+      "location": {
+        "start": {
+          "offset": 138,
+          "line": 5,
+          "column": 39
+        },
+        "end": {
+          "offset": 233,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": " from [https://raw.githubusercontent.com/example/repo/main/README.md]\n\nHere's how to install:\n\n"
+    },
+    {
+      "type": "VariableReference",
+      "nodeId": "e0a676c9-023d-46ec-9103-db4b7a066857",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "valueType": "varInterpolation",
+      "identifier": "installation"
+    }
+  ],
+  "parseError": null
+}

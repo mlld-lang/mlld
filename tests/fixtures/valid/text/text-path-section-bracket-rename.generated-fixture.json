@@ -1,0 +1,122 @@
+{
+  "name": "text-path-section-bracket-rename",
+  "description": "Test fixture for valid/text-path",
+  "category": "valid",
+  "subcategory": "text-path",
+  "input": "@text sectionContent = [file.md # Original Title] as \"# Modified Title\"",
+  "expected": "",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "d7174f7a-b616-4f6c-83c9-ef55d5fcc280",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 71,
+          "line": 1,
+          "column": 72
+        }
+      },
+      "kind": "text",
+      "subtype": "textPathSection",
+      "source": "section",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "31a4fb3b-99ff-4abd-872a-2e89dd53ef44",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "sectionContent"
+          }
+        ],
+        "section": [
+          {
+            "type": "Text",
+            "nodeId": "f555f272-adff-4a6e-b9e5-0a4f94f3ceb4",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 71,
+                "line": 1,
+                "column": 72
+              }
+            },
+            "content": "Original Title"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "4691a83d-203b-4a2f-9e5d-73e5ef293809",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 71,
+                "line": 1,
+                "column": 72
+              }
+            },
+            "content": "file.md"
+          }
+        ],
+        "rename": [
+          {
+            "type": "Text",
+            "nodeId": "fd9fce35-8197-42b7-83be-c7e23db47b56",
+            "location": {
+              "start": {
+                "offset": 53,
+                "line": 1,
+                "column": 54
+              },
+              "end": {
+                "offset": 71,
+                "line": 1,
+                "column": 72
+              }
+            },
+            "content": "# Modified Title"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "sectionContent",
+        "section": "Original Title",
+        "path": "file.md",
+        "rename": "# Modified Title"
+      },
+      "meta": {
+        "sourceType": "section",
+        "hasRename": true,
+        "hasVariables": false
+      }
+    }
+  ],
+  "parseError": null
+}

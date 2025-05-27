@@ -191,7 +191,6 @@ CommandStyleInterpolation "Command interpolation patterns"
   = LiteralContent
   / BracketContent
   / DoubleBracketContent
-  / UnquotedCommand
 
 // -------------------------------------------------------------
 // WRAPPED PATTERNS - Used by directives, handle raw string construction

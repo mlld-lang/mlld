@@ -1,0 +1,906 @@
+{
+  "name": "data-exec-reference",
+  "description": "Test fixture for valid/data-exec-reference",
+  "category": "valid",
+  "subcategory": "data-exec-reference",
+  "input": "@exec getDate = @run [echo \"2024-01-15\"]\n@exec getUser = @run [echo \"admin\"]\n@exec getStatus = @run [echo \"active\"]\n\n@data systemInfo = {\n  date: @run @getDate,\n  user: @run @getUser,\n  status: @run @getStatus,\n  nested: {\n    backup_date: @run @getDate,\n    backup_user: @run @getUser\n  }\n}\n\n@add [[System Information:\nDate: {{systemInfo.date}}\nUser: {{systemInfo.user}}\nStatus: {{systemInfo.status}}\n\nBackup Info:\nDate: {{systemInfo.nested.backup_date}}\nUser: {{systemInfo.nested.backup_user}}]]",
+  "expected": "System Information:\nDate: 2024-01-15\nUser: admin\nStatus: active\n\nBackup Info:\nDate: 2024-01-15\nUser: admin",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "0ddd3616-20ca-4511-acce-05b7bc4dc44c",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 40,
+          "line": 1,
+          "column": 41
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "59de34d5-fa7a-4763-a929-7ee7f6f34d7e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 40,
+                "line": 1,
+                "column": 41
+              }
+            },
+            "content": "getDate"
+          }
+        ],
+        "params": [],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "68713bc9-1f0d-41ea-966a-d3b9f2b71446",
+            "location": {
+              "start": {
+                "offset": 22,
+                "line": 1,
+                "column": 23
+              },
+              "end": {
+                "offset": 39,
+                "line": 1,
+                "column": 40
+              }
+            },
+            "content": "echo \"2024-01-15\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "8b2e91a4-90b9-48e0-9e04-efcb1baead84",
+            "location": {
+              "start": {
+                "offset": 21,
+                "line": 1,
+                "column": 22
+              },
+              "end": {
+                "offset": 40,
+                "line": 1,
+                "column": 41
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "getDate",
+        "params": [],
+        "command": "echo \"2024-01-15\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "parameterCount": 0
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "781c56f8-6975-475f-8159-b5c1ac8264e1",
+      "location": {
+        "start": {
+          "offset": 40,
+          "line": 1,
+          "column": 41
+        },
+        "end": {
+          "offset": 41,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "a00def24-5dbd-4dca-92de-68c1199bab56",
+      "location": {
+        "start": {
+          "offset": 41,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 76,
+          "line": 2,
+          "column": 36
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "a237e462-f8b1-4910-971d-7cdea224d0b4",
+            "location": {
+              "start": {
+                "offset": 41,
+                "line": 2,
+                "column": 1
+              },
+              "end": {
+                "offset": 76,
+                "line": 2,
+                "column": 36
+              }
+            },
+            "content": "getUser"
+          }
+        ],
+        "params": [],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "66399605-ff90-4b25-9f1e-15c48b3e1bcc",
+            "location": {
+              "start": {
+                "offset": 63,
+                "line": 2,
+                "column": 23
+              },
+              "end": {
+                "offset": 75,
+                "line": 2,
+                "column": 35
+              }
+            },
+            "content": "echo \"admin\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "3179fd7a-8717-4cc7-bf6b-83271dbe1764",
+            "location": {
+              "start": {
+                "offset": 62,
+                "line": 2,
+                "column": 22
+              },
+              "end": {
+                "offset": 76,
+                "line": 2,
+                "column": 36
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "getUser",
+        "params": [],
+        "command": "echo \"admin\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "parameterCount": 0
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "3bad65a6-9773-4f5e-bf02-c6292b10942f",
+      "location": {
+        "start": {
+          "offset": 76,
+          "line": 2,
+          "column": 36
+        },
+        "end": {
+          "offset": 77,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "3f73d0df-7219-43cb-9a8b-dc2544d1a1c4",
+      "location": {
+        "start": {
+          "offset": 77,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 115,
+          "line": 3,
+          "column": 39
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCommand",
+      "source": "command",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "fea899bd-cc49-4528-bb73-111f705ed6eb",
+            "location": {
+              "start": {
+                "offset": 77,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "offset": 115,
+                "line": 3,
+                "column": 39
+              }
+            },
+            "content": "getStatus"
+          }
+        ],
+        "params": [],
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "741d2020-b637-4f37-bbbd-bf3b83fc761e",
+            "location": {
+              "start": {
+                "offset": 101,
+                "line": 3,
+                "column": 25
+              },
+              "end": {
+                "offset": 114,
+                "line": 3,
+                "column": 38
+              }
+            },
+            "content": "echo \"active\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "eaa176db-cae1-4b56-b6f0-2173c3cc7dd4",
+            "location": {
+              "start": {
+                "offset": 100,
+                "line": 3,
+                "column": 24
+              },
+              "end": {
+                "offset": 115,
+                "line": 3,
+                "column": 39
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "getStatus",
+        "params": [],
+        "command": "echo \"active\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "parameterCount": 0
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "fb10facf-7f60-4a65-bfb5-3aa906d6173a",
+      "location": {
+        "start": {
+          "offset": 115,
+          "line": 3,
+          "column": 39
+        },
+        "end": {
+          "offset": 117,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "24ac15e9-74b5-4f3f-9c66-9eac851a1d74",
+      "location": {
+        "start": {
+          "offset": 117,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 291,
+          "line": 13,
+          "column": 2
+        }
+      },
+      "kind": "data",
+      "subtype": "dataAssignment",
+      "source": "object",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "fc86d6ca-6366-4af5-8f3f-84fd382901a0",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "systemInfo"
+          }
+        ],
+        "value": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "Directive",
+              "nodeId": "297209b0-000d-49aa-8080-2d65052abc54",
+              "location": {
+                "start": {
+                  "offset": 146,
+                  "line": 6,
+                  "column": 9
+                },
+                "end": {
+                  "offset": 159,
+                  "line": 6,
+                  "column": 22
+                }
+              },
+              "kind": "run",
+              "subtype": "runExec",
+              "source": "exec",
+              "values": {
+                "identifier": [
+                  {
+                    "type": "Text",
+                    "nodeId": "2a12338b-9c6b-42d8-afaa-d073e82bc8fa",
+                    "location": {
+                      "start": {
+                        "offset": 152,
+                        "line": 6,
+                        "column": 15
+                      },
+                      "end": {
+                        "offset": 159,
+                        "line": 6,
+                        "column": 22
+                      }
+                    },
+                    "content": "getDate"
+                  }
+                ],
+                "args": []
+              },
+              "raw": {
+                "identifier": "getDate",
+                "args": []
+              },
+              "meta": {
+                "argumentCount": 0,
+                "isDataValue": true
+              }
+            },
+            "user": {
+              "type": "Directive",
+              "nodeId": "9d5775ca-e487-4b32-ba48-ab2c3d092e5a",
+              "location": {
+                "start": {
+                  "offset": 169,
+                  "line": 7,
+                  "column": 9
+                },
+                "end": {
+                  "offset": 182,
+                  "line": 7,
+                  "column": 22
+                }
+              },
+              "kind": "run",
+              "subtype": "runExec",
+              "source": "exec",
+              "values": {
+                "identifier": [
+                  {
+                    "type": "Text",
+                    "nodeId": "88b352e0-7873-470c-8c4c-41eccb3e19d7",
+                    "location": {
+                      "start": {
+                        "offset": 175,
+                        "line": 7,
+                        "column": 15
+                      },
+                      "end": {
+                        "offset": 182,
+                        "line": 7,
+                        "column": 22
+                      }
+                    },
+                    "content": "getUser"
+                  }
+                ],
+                "args": []
+              },
+              "raw": {
+                "identifier": "getUser",
+                "args": []
+              },
+              "meta": {
+                "argumentCount": 0,
+                "isDataValue": true
+              }
+            },
+            "status": {
+              "type": "Directive",
+              "nodeId": "23debee6-3050-4f03-b731-91b88adc63c0",
+              "location": {
+                "start": {
+                  "offset": 194,
+                  "line": 8,
+                  "column": 11
+                },
+                "end": {
+                  "offset": 209,
+                  "line": 8,
+                  "column": 26
+                }
+              },
+              "kind": "run",
+              "subtype": "runExec",
+              "source": "exec",
+              "values": {
+                "identifier": [
+                  {
+                    "type": "Text",
+                    "nodeId": "6624b01b-2364-433a-8abf-daf1ed66d59d",
+                    "location": {
+                      "start": {
+                        "offset": 200,
+                        "line": 8,
+                        "column": 17
+                      },
+                      "end": {
+                        "offset": 209,
+                        "line": 8,
+                        "column": 26
+                      }
+                    },
+                    "content": "getStatus"
+                  }
+                ],
+                "args": []
+              },
+              "raw": {
+                "identifier": "getStatus",
+                "args": []
+              },
+              "meta": {
+                "argumentCount": 0,
+                "isDataValue": true
+              }
+            },
+            "nested": {
+              "type": "object",
+              "properties": {
+                "backup_date": {
+                  "type": "Directive",
+                  "nodeId": "f0cc50f4-6a99-42cf-a916-1947ba7d0fda",
+                  "location": {
+                    "start": {
+                      "offset": 240,
+                      "line": 10,
+                      "column": 18
+                    },
+                    "end": {
+                      "offset": 253,
+                      "line": 10,
+                      "column": 31
+                    }
+                  },
+                  "kind": "run",
+                  "subtype": "runExec",
+                  "source": "exec",
+                  "values": {
+                    "identifier": [
+                      {
+                        "type": "Text",
+                        "nodeId": "f87b8081-50c3-4ae3-bb80-2baf94c96fd0",
+                        "location": {
+                          "start": {
+                            "offset": 246,
+                            "line": 10,
+                            "column": 24
+                          },
+                          "end": {
+                            "offset": 253,
+                            "line": 10,
+                            "column": 31
+                          }
+                        },
+                        "content": "getDate"
+                      }
+                    ],
+                    "args": []
+                  },
+                  "raw": {
+                    "identifier": "getDate",
+                    "args": []
+                  },
+                  "meta": {
+                    "argumentCount": 0,
+                    "isDataValue": true
+                  }
+                },
+                "backup_user": {
+                  "type": "Directive",
+                  "nodeId": "0d53b7ed-c3aa-458b-b1d9-6150e319e88c",
+                  "location": {
+                    "start": {
+                      "offset": 272,
+                      "line": 11,
+                      "column": 18
+                    },
+                    "end": {
+                      "offset": 288,
+                      "line": 12,
+                      "column": 3
+                    }
+                  },
+                  "kind": "run",
+                  "subtype": "runExec",
+                  "source": "exec",
+                  "values": {
+                    "identifier": [
+                      {
+                        "type": "Text",
+                        "nodeId": "06d5781a-8b79-4b4c-9773-3cae0984017e",
+                        "location": {
+                          "start": {
+                            "offset": 278,
+                            "line": 11,
+                            "column": 24
+                          },
+                          "end": {
+                            "offset": 288,
+                            "line": 12,
+                            "column": 3
+                          }
+                        },
+                        "content": "getUser"
+                      }
+                    ],
+                    "args": []
+                  },
+                  "raw": {
+                    "identifier": "getUser",
+                    "args": []
+                  },
+                  "meta": {
+                    "argumentCount": 0,
+                    "isDataValue": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "raw": {
+        "identifier": "systemInfo",
+        "value": "{\n  \"date\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"297209b0-000d-49aa-8080-2d65052abc54\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 146,\n        \"line\": 6,\n        \"column\": 9\n      },\n      \"end\": {\n        \"offset\": 159,\n        \"line\": 6,\n        \"column\": 22\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runExec\",\n    \"source\": \"exec\",\n    \"values\": {\n      \"identifier\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"2a12338b-9c6b-42d8-afaa-d073e82bc8fa\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 152,\n              \"line\": 6,\n              \"column\": 15\n            },\n            \"end\": {\n              \"offset\": 159,\n              \"line\": 6,\n              \"column\": 22\n            }\n          },\n          \"content\": \"getDate\"\n        }\n      ],\n      \"args\": []\n    },\n    \"raw\": {\n      \"identifier\": \"getDate\",\n      \"args\": []\n    },\n    \"meta\": {\n      \"argumentCount\": 0,\n      \"isDataValue\": true\n    }\n  },\n  \"user\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"9d5775ca-e487-4b32-ba48-ab2c3d092e5a\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 169,\n        \"line\": 7,\n        \"column\": 9\n      },\n      \"end\": {\n        \"offset\": 182,\n        \"line\": 7,\n        \"column\": 22\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runExec\",\n    \"source\": \"exec\",\n    \"values\": {\n      \"identifier\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"88b352e0-7873-470c-8c4c-41eccb3e19d7\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 175,\n              \"line\": 7,\n              \"column\": 15\n            },\n            \"end\": {\n              \"offset\": 182,\n              \"line\": 7,\n              \"column\": 22\n            }\n          },\n          \"content\": \"getUser\"\n        }\n      ],\n      \"args\": []\n    },\n    \"raw\": {\n      \"identifier\": \"getUser\",\n      \"args\": []\n    },\n    \"meta\": {\n      \"argumentCount\": 0,\n      \"isDataValue\": true\n    }\n  },\n  \"status\": {\n    \"type\": \"Directive\",\n    \"nodeId\": \"23debee6-3050-4f03-b731-91b88adc63c0\",\n    \"location\": {\n      \"start\": {\n        \"offset\": 194,\n        \"line\": 8,\n        \"column\": 11\n      },\n      \"end\": {\n        \"offset\": 209,\n        \"line\": 8,\n        \"column\": 26\n      }\n    },\n    \"kind\": \"run\",\n    \"subtype\": \"runExec\",\n    \"source\": \"exec\",\n    \"values\": {\n      \"identifier\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"6624b01b-2364-433a-8abf-daf1ed66d59d\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 200,\n              \"line\": 8,\n              \"column\": 17\n            },\n            \"end\": {\n              \"offset\": 209,\n              \"line\": 8,\n              \"column\": 26\n            }\n          },\n          \"content\": \"getStatus\"\n        }\n      ],\n      \"args\": []\n    },\n    \"raw\": {\n      \"identifier\": \"getStatus\",\n      \"args\": []\n    },\n    \"meta\": {\n      \"argumentCount\": 0,\n      \"isDataValue\": true\n    }\n  },\n  \"nested\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"backup_date\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"f0cc50f4-6a99-42cf-a916-1947ba7d0fda\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 240,\n            \"line\": 10,\n            \"column\": 18\n          },\n          \"end\": {\n            \"offset\": 253,\n            \"line\": 10,\n            \"column\": 31\n          }\n        },\n        \"kind\": \"run\",\n        \"subtype\": \"runExec\",\n        \"source\": \"exec\",\n        \"values\": {\n          \"identifier\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"f87b8081-50c3-4ae3-bb80-2baf94c96fd0\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 246,\n                  \"line\": 10,\n                  \"column\": 24\n                },\n                \"end\": {\n                  \"offset\": 253,\n                  \"line\": 10,\n                  \"column\": 31\n                }\n              },\n              \"content\": \"getDate\"\n            }\n          ],\n          \"args\": []\n        },\n        \"raw\": {\n          \"identifier\": \"getDate\",\n          \"args\": []\n        },\n        \"meta\": {\n          \"argumentCount\": 0,\n          \"isDataValue\": true\n        }\n      },\n      \"backup_user\": {\n        \"type\": \"Directive\",\n        \"nodeId\": \"0d53b7ed-c3aa-458b-b1d9-6150e319e88c\",\n        \"location\": {\n          \"start\": {\n            \"offset\": 272,\n            \"line\": 11,\n            \"column\": 18\n          },\n          \"end\": {\n            \"offset\": 288,\n            \"line\": 12,\n            \"column\": 3\n          }\n        },\n        \"kind\": \"run\",\n        \"subtype\": \"runExec\",\n        \"source\": \"exec\",\n        \"values\": {\n          \"identifier\": [\n            {\n              \"type\": \"Text\",\n              \"nodeId\": \"06d5781a-8b79-4b4c-9773-3cae0984017e\",\n              \"location\": {\n                \"start\": {\n                  \"offset\": 278,\n                  \"line\": 11,\n                  \"column\": 24\n                },\n                \"end\": {\n                  \"offset\": 288,\n                  \"line\": 12,\n                  \"column\": 3\n                }\n              },\n              \"content\": \"getUser\"\n            }\n          ],\n          \"args\": []\n        },\n        \"raw\": {\n          \"identifier\": \"getUser\",\n          \"args\": []\n        },\n        \"meta\": {\n          \"argumentCount\": 0,\n          \"isDataValue\": true\n        }\n      }\n    }\n  }\n}"
+      },
+      "meta": {
+        "objectData": {
+          "propCount": 4
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "3f068f00-cce3-4109-bc17-246e9a617ca1",
+      "location": {
+        "start": {
+          "offset": 291,
+          "line": 13,
+          "column": 2
+        },
+        "end": {
+          "offset": 293,
+          "line": 15,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "b5a23301-86e6-45ee-be47-755bda747c3b",
+      "location": {
+        "start": {
+          "offset": 293,
+          "line": 15,
+          "column": 1
+        },
+        "end": {
+          "offset": 497,
+          "line": 22,
+          "column": 42
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "fbf59b13-9ef2-444d-807f-fefaccdd0182",
+            "location": {
+              "start": {
+                "offset": 300,
+                "line": 15,
+                "column": 8
+              },
+              "end": {
+                "offset": 326,
+                "line": 16,
+                "column": 7
+              }
+            },
+            "content": "System Information:\nDate: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "8fd63155-6b5a-46b0-9d32-a41eb44826dd",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "systemInfo",
+            "fields": [
+              {
+                "type": "field",
+                "name": "date"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "7c825bd2-261a-42de-bebd-398bb725fb49",
+            "location": {
+              "start": {
+                "offset": 345,
+                "line": 16,
+                "column": 26
+              },
+              "end": {
+                "offset": 352,
+                "line": 17,
+                "column": 7
+              }
+            },
+            "content": "\nUser: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "8bcaa37e-1d5c-4d09-8453-24e2da1ae676",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "systemInfo",
+            "fields": [
+              {
+                "type": "field",
+                "name": "user"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "df179b99-a0c6-40f7-bf1e-5dec9d0d8c4b",
+            "location": {
+              "start": {
+                "offset": 371,
+                "line": 17,
+                "column": 26
+              },
+              "end": {
+                "offset": 380,
+                "line": 18,
+                "column": 9
+              }
+            },
+            "content": "\nStatus: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "176c674f-b66e-469a-8b9c-ecb78eb22a26",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "systemInfo",
+            "fields": [
+              {
+                "type": "field",
+                "name": "status"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "7f9225c3-51bb-4ffe-bd9b-42948e2f64aa",
+            "location": {
+              "start": {
+                "offset": 401,
+                "line": 18,
+                "column": 30
+              },
+              "end": {
+                "offset": 422,
+                "line": 21,
+                "column": 7
+              }
+            },
+            "content": "\n\nBackup Info:\nDate: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "570de238-12d1-4b7c-a9a4-d6188a2b2fc6",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "systemInfo",
+            "fields": [
+              {
+                "type": "field",
+                "name": "nested"
+              },
+              {
+                "type": "field",
+                "name": "backup_date"
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "nodeId": "63c44dcf-03c4-4f8c-ab25-ea1278f069c2",
+            "location": {
+              "start": {
+                "offset": 455,
+                "line": 21,
+                "column": 40
+              },
+              "end": {
+                "offset": 462,
+                "line": 22,
+                "column": 7
+              }
+            },
+            "content": "\nUser: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "921c36d9-2a9c-46cd-affe-c264e19d2312",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "systemInfo",
+            "fields": [
+              {
+                "type": "field",
+                "name": "nested"
+              },
+              {
+                "type": "field",
+                "name": "backup_user"
+              }
+            ]
+          }
+        ]
+      },
+      "raw": {
+        "content": "System Information:\nDate: {{systemInfo}}\nUser: {{systemInfo}}\nStatus: {{systemInfo}}\n\nBackup Info:\nDate: {{systemInfo}}\nUser: {{systemInfo}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ],
+  "parseError": null
+}

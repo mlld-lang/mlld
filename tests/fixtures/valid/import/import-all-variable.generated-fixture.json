@@ -1,0 +1,283 @@
+{
+  "name": "import-all-variable",
+  "description": "Test fixture for valid/import-all",
+  "category": "valid",
+  "subcategory": "import-all",
+  "input": "@path configPath = [config.mld]\n@import {*} from [@configPath]\n@add @greeting\n@add @count",
+  "expected": "Hello, world!\n42",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "7ef8e55e-2955-4227-8624-e432fcd5a6bd",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 31,
+          "line": 1,
+          "column": 32
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "3b642cfb-026e-45b0-a05c-138fda81ac96",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "configPath"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "3caeddb1-14f5-4d5d-91c9-f773526997b1",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 31,
+                "line": 1,
+                "column": 32
+              }
+            },
+            "content": "config.mld"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "configPath",
+        "path": "config.mld"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "mld"
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "61b7f71c-1326-44c5-a1cb-4be6dd7b6d69",
+      "location": {
+        "start": {
+          "offset": 31,
+          "line": 1,
+          "column": 32
+        },
+        "end": {
+          "offset": 32,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "653f4cd5-a1ce-480c-a5d2-663bfc3c18d6",
+      "location": {
+        "start": {
+          "offset": 32,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 62,
+          "line": 2,
+          "column": 31
+        }
+      },
+      "kind": "import",
+      "subtype": "importAll",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "f1e90724-9e36-4beb-9cbb-11c04254e661",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "*"
+          }
+        ],
+        "path": [
+          {
+            "type": "VariableReference",
+            "nodeId": "995609da-f03f-4e36-ac72-83ea9cd1f193",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "configPath"
+          }
+        ]
+      },
+      "raw": {
+        "imports": "*",
+        "path": "@configPath"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": true,
+          "isAbsolute": false,
+          "hasExtension": false,
+          "extension": null,
+          "pathSubtype": "filePath"
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "4575f685-3cc1-411a-9748-21d437efd10b",
+      "location": {
+        "start": {
+          "offset": 62,
+          "line": 2,
+          "column": 31
+        },
+        "end": {
+          "offset": 63,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "c8b2fa34-b765-4117-8461-728d0af86466",
+      "location": {
+        "start": {
+          "offset": 63,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 78,
+          "line": 4,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "1c0fc784-605b-4c96-8fcb-ddd20b3c65f4",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "greeting"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@greeting"
+      },
+      "meta": {}
+    },
+    {
+      "type": "Directive",
+      "nodeId": "249ef6b0-46a0-4ad6-9e19-03eeb53323ca",
+      "location": {
+        "start": {
+          "offset": 78,
+          "line": 4,
+          "column": 1
+        },
+        "end": {
+          "offset": 89,
+          "line": 4,
+          "column": 12
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "3f00e9ee-2200-4996-a86d-75eb9e7276e0",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "count"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@count"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}

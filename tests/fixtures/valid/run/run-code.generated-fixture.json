@@ -1,0 +1,83 @@
+{
+  "name": "run-code",
+  "description": "Test fixture for valid/run-code",
+  "category": "valid",
+  "subcategory": "run-code",
+  "input": "@run javascript [console.log(\"Hello from code\")]",
+  "expected": "Hello from code",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "cab44482-5e80-4faf-a615-31f25c06e56e",
+      "location": {
+        "start": {
+          "offset": 5,
+          "line": 1,
+          "column": 6
+        },
+        "end": {
+          "offset": 48,
+          "line": 1,
+          "column": 49
+        }
+      },
+      "kind": "run",
+      "subtype": "runCode",
+      "source": "code",
+      "values": {
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "47dfecf4-9035-4c44-ab91-bf72a9784717",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 48,
+                "line": 1,
+                "column": 49
+              }
+            },
+            "content": "javascript"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "c6c15e37-426b-4549-bb93-ff96e97a6ec1",
+            "location": {
+              "start": {
+                "offset": 16,
+                "line": 1,
+                "column": 17
+              },
+              "end": {
+                "offset": 48,
+                "line": 1,
+                "column": 49
+              }
+            },
+            "content": "console.log(\"Hello from code\")"
+          }
+        ]
+      },
+      "raw": {
+        "lang": "javascript",
+        "args": [],
+        "code": "console.log(\"Hello from code\")"
+      },
+      "meta": {
+        "isMultiLine": false,
+        "language": "javascript",
+        "hasVariables": false
+      }
+    }
+  ],
+  "parseError": null
+}

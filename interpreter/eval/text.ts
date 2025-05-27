@@ -164,16 +164,95 @@ export async function evaluateText(
     }
     
   } else if (directive.source === 'run') {
-    // Check if this is a run source (e.g., @text result = @run [echo "hello"])
+    // Check if this is a run source (e.g., @text result = @run [echo "hello"] or @text result = @run @cmd(args))
     const contentNodes = directive.values?.content;
     if (!contentNodes || !Array.isArray(contentNodes)) {
       throw new Error('Text directive missing content');
     }
     
-    // The content should be the command to run
-    const command = await interpolate(contentNodes, env);
-    // Execute the command and use the output as the value
-    resolvedValue = await env.executeCommand(command);
+    // Check if this is a command reference
+    if (directive.meta?.run?.isCommandRef) {
+      // This is a command reference like @run @hello(args)
+      // Import the run evaluator to handle this properly
+      const { evaluateRun } = await import('./run');
+      
+      // Create a synthetic run directive to evaluate
+      const runDirective: DirectiveNode = {
+        type: 'Directive',
+        nodeId: directive.nodeId + '-run',
+        kind: 'run',
+        subtype: 'runExec',
+        source: 'exec',
+        values: {
+          identifier: [{ 
+            type: 'Text', 
+            nodeId: '', 
+            content: directive.meta.run.commandName 
+          }],
+          args: [] // TODO: Parse args from content if present
+        },
+        raw: {
+          identifier: directive.meta.run.commandName,
+          args: []
+        },
+        meta: {
+          argumentCount: 0
+        }
+      };
+      
+      // Parse arguments from the content if present
+      const contentStr = await interpolate(contentNodes, env);
+      const argsMatch = contentStr.match(/@\w+\((.*?)\)/);
+      if (argsMatch && argsMatch[1]) {
+        const argStr = argsMatch[1];
+        // Simple argument parsing - split by comma and trim quotes
+        const args = argStr.split(',').map(arg => {
+          const trimmed = arg.trim();
+          // Remove quotes if present
+          if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || 
+              (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+            return trimmed.slice(1, -1);
+          }
+          // Check if it's a variable reference
+          if (trimmed.startsWith('@')) {
+            return trimmed;
+          }
+          return trimmed;
+        });
+        
+        // Update the directive with parsed arguments
+        runDirective.values.args = args.map(arg => {
+          if (arg.startsWith('@')) {
+            // Variable reference
+            return {
+              type: 'VariableReference' as const,
+              nodeId: '',
+              valueType: 'varIdentifier' as const,
+              identifier: arg.substring(1)
+            };
+          } else {
+            // String literal
+            return {
+              type: 'Text' as const,
+              nodeId: '',
+              content: arg
+            };
+          }
+        });
+        runDirective.raw.args = args;
+        runDirective.meta!.argumentCount = args.length;
+      }
+      
+      // Evaluate the run directive
+      const result = await evaluateRun(runDirective, env);
+      resolvedValue = result.value;
+    } else {
+      // Regular command execution
+      const command = await interpolate(contentNodes, env);
+      // Execute the command and use the output as the value
+      resolvedValue = await env.executeCommand(command);
+    }
+    
     // Trim trailing newlines for consistency
     resolvedValue = resolvedValue.replace(/\n+$/, '');
     

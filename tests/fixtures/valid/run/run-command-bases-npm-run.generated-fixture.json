@@ -1,0 +1,369 @@
+{
+  "name": "run-command-bases-npm-run",
+  "description": "Test fixture for valid/run-command-bases",
+  "category": "valid",
+  "subcategory": "run-command-bases",
+  "input": "# Test npm run script detection\n\n@run [npm run -s testecho -- \"npm run build output\"]\n\n@run [npm run -s testecho -- \"npm run test output\"]\n\n@run [npm run -s testecho -- \"npm run dev output\"]\n\n@run [npm run -s testecho -- \"npm run build:prod output\"]",
+  "expected": "# Test npm run script detection\n\nnpm run build output\n\nnpm run test output\n\nnpm run dev output\n\nnpm run build:prod output",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "296758e9-e57f-46a3-bb10-f47d4a2bfb49",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 33,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "# Test npm run script detection\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "e916a4e1-e757-407f-8079-c74aa9fc2ce6",
+      "location": {
+        "start": {
+          "offset": 33,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 85,
+          "line": 3,
+          "column": 53
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "69478abc-226d-4366-ba05-97b250b3fc52",
+            "location": {
+              "start": {
+                "offset": 39,
+                "line": 3,
+                "column": 7
+              },
+              "end": {
+                "offset": 84,
+                "line": 3,
+                "column": 52
+              }
+            },
+            "content": "npm run -s testecho -- \"npm run build output\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "079e5732-1d66-43c7-8693-cb7a8552df2e",
+            "location": {
+              "start": {
+                "offset": 38,
+                "line": 3,
+                "column": 6
+              },
+              "end": {
+                "offset": 85,
+                "line": 3,
+                "column": 53
+              }
+            },
+            "command": "npm run",
+            "script": "-s",
+            "isScriptRunner": true
+          }
+        ]
+      },
+      "raw": {
+        "command": "npm run -s testecho -- \"npm run build output\"",
+        "commandBases": [
+          "npm run"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": true,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "23d062c4-295a-4629-afe6-636b4f73005f",
+      "location": {
+        "start": {
+          "offset": 85,
+          "line": 3,
+          "column": 53
+        },
+        "end": {
+          "offset": 87,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "5fc4c1c4-28a6-46b2-afcb-d6cb7e373d12",
+      "location": {
+        "start": {
+          "offset": 87,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 138,
+          "line": 5,
+          "column": 52
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "00d26bf4-4416-4154-b9d4-1fbd45d7ebe3",
+            "location": {
+              "start": {
+                "offset": 93,
+                "line": 5,
+                "column": 7
+              },
+              "end": {
+                "offset": 137,
+                "line": 5,
+                "column": 51
+              }
+            },
+            "content": "npm run -s testecho -- \"npm run test output\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "1b722299-0037-4725-863d-00a2de243836",
+            "location": {
+              "start": {
+                "offset": 92,
+                "line": 5,
+                "column": 6
+              },
+              "end": {
+                "offset": 138,
+                "line": 5,
+                "column": 52
+              }
+            },
+            "command": "npm run",
+            "script": "-s",
+            "isScriptRunner": true
+          }
+        ]
+      },
+      "raw": {
+        "command": "npm run -s testecho -- \"npm run test output\"",
+        "commandBases": [
+          "npm run"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": true,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "c9cfecf5-2a9e-45cf-816d-23b4b236a2cf",
+      "location": {
+        "start": {
+          "offset": 138,
+          "line": 5,
+          "column": 52
+        },
+        "end": {
+          "offset": 140,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "7447747f-5197-4161-baba-efe29b9ddfb5",
+      "location": {
+        "start": {
+          "offset": 140,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 190,
+          "line": 7,
+          "column": 51
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "e080c4c5-a298-4ce8-8038-72c038b91c96",
+            "location": {
+              "start": {
+                "offset": 146,
+                "line": 7,
+                "column": 7
+              },
+              "end": {
+                "offset": 189,
+                "line": 7,
+                "column": 50
+              }
+            },
+            "content": "npm run -s testecho -- \"npm run dev output\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "e8ef8978-64c5-42f1-805d-32b499367b1d",
+            "location": {
+              "start": {
+                "offset": 145,
+                "line": 7,
+                "column": 6
+              },
+              "end": {
+                "offset": 190,
+                "line": 7,
+                "column": 51
+              }
+            },
+            "command": "npm run",
+            "script": "-s",
+            "isScriptRunner": true
+          }
+        ]
+      },
+      "raw": {
+        "command": "npm run -s testecho -- \"npm run dev output\"",
+        "commandBases": [
+          "npm run"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": true,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "9e00682f-3ffa-4569-9229-3870ba5607ef",
+      "location": {
+        "start": {
+          "offset": 190,
+          "line": 7,
+          "column": 51
+        },
+        "end": {
+          "offset": 192,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "7db6bfff-5c4f-4078-b249-80187fcffb18",
+      "location": {
+        "start": {
+          "offset": 192,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 249,
+          "line": 9,
+          "column": 58
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "e15aee54-f0ad-4c77-bdd2-9f1c3ce177c3",
+            "location": {
+              "start": {
+                "offset": 198,
+                "line": 9,
+                "column": 7
+              },
+              "end": {
+                "offset": 248,
+                "line": 9,
+                "column": 57
+              }
+            },
+            "content": "npm run -s testecho -- \"npm run build:prod output\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "79165417-f504-409a-b45f-09fcf41288e8",
+            "location": {
+              "start": {
+                "offset": 197,
+                "line": 9,
+                "column": 6
+              },
+              "end": {
+                "offset": 249,
+                "line": 9,
+                "column": 58
+              }
+            },
+            "command": "npm run",
+            "script": "-s",
+            "isScriptRunner": true
+          }
+        ]
+      },
+      "raw": {
+        "command": "npm run -s testecho -- \"npm run build:prod output\"",
+        "commandBases": [
+          "npm run"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": true,
+        "isMultiLine": false
+      }
+    }
+  ],
+  "parseError": null
+}

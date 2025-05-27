@@ -1,0 +1,100 @@
+{
+  "name": "run-command-multiline",
+  "description": "Test fixture for valid/run-command",
+  "category": "valid",
+  "subcategory": "run-command",
+  "input": "@run [bash -c \"echo Line 1 && \\\necho Line 2\"]",
+  "expected": "Line 1\nLine 2",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "d021d550-fadc-4adf-bf4c-bdc9d3520084",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 45,
+          "line": 2,
+          "column": 14
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "e91383b4-1f9c-42dc-8dee-2b3f4ab7e947",
+            "location": {
+              "start": {
+                "offset": 6,
+                "line": 1,
+                "column": 7
+              },
+              "end": {
+                "offset": 44,
+                "line": 2,
+                "column": 13
+              }
+            },
+            "content": "bash -c \"echo Line 1 && \\\necho Line 2\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "3e27580f-f2df-45e9-bf71-3eba2954ac93",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 45,
+                "line": 2,
+                "column": 14
+              }
+            },
+            "command": "bash"
+          },
+          {
+            "nodeId": "232cf009-bd33-4825-9137-890da9c7654c",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 45,
+                "line": 2,
+                "column": 14
+              }
+            },
+            "command": "\\"
+          }
+        ]
+      },
+      "raw": {
+        "command": "bash -c \"echo Line 1 && \\\necho Line 2\"",
+        "commandBases": [
+          "bash",
+          "\\"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 2,
+        "hasScriptRunner": false,
+        "isMultiLine": true
+      }
+    }
+  ],
+  "parseError": null
+}

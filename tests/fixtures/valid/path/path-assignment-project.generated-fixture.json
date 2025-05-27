@@ -1,0 +1,186 @@
+{
+  "name": "path-assignment-project",
+  "description": "Test fixture for valid/path-assignment",
+  "category": "valid",
+  "subcategory": "path-assignment",
+  "input": "@path projectSrc = [@./src]\n@add [[The project source is {{projectSrc}}]]",
+  "expected": "The project source is /Users/adam/dev/mlld/src",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "4e4d906d-fdb4-453d-ae76-28984d358123",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 27,
+          "line": 1,
+          "column": 28
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "8a7d59ae-25c1-404a-8669-663a1b86243a",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "projectSrc"
+          }
+        ],
+        "path": [
+          {
+            "type": "VariableReference",
+            "nodeId": "2e4840c9-08e5-49e1-aa16-4172f16cb81c",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "PROJECTPATH"
+          },
+          {
+            "type": "Text",
+            "nodeId": "385adfff-905e-4d27-9d80-0f615a0cf608",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 27,
+                "line": 1,
+                "column": 28
+              }
+            },
+            "content": "/src"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "projectSrc",
+        "path": "@PROJECTPATH/src"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": true,
+          "isAbsolute": false,
+          "hasExtension": false,
+          "extension": null
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "031a1532-927e-47e9-8495-685c5a7350c1",
+      "location": {
+        "start": {
+          "offset": 27,
+          "line": 1,
+          "column": 28
+        },
+        "end": {
+          "offset": 28,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "e8bd985b-4a96-4b1c-ac8b-5ea5010dbf6b",
+      "location": {
+        "start": {
+          "offset": 28,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 73,
+          "line": 2,
+          "column": 46
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "335c468f-beed-47c5-8ce8-3d205dc21b50",
+            "location": {
+              "start": {
+                "offset": 35,
+                "line": 2,
+                "column": 8
+              },
+              "end": {
+                "offset": 57,
+                "line": 2,
+                "column": 30
+              }
+            },
+            "content": "The project source is "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "ccbc1d7d-c174-4a9c-8f22-e53dfff80293",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "projectSrc"
+          }
+        ]
+      },
+      "raw": {
+        "content": "The project source is {{projectSrc}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ],
+  "parseError": null
+}

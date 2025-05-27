@@ -1,0 +1,248 @@
+{
+  "name": "text-template",
+  "description": "Test fixture for valid/text-template",
+  "category": "valid",
+  "subcategory": "text-template",
+  "input": "@text variable = \"value\"\n@text template = [[This is a template with {{variable}}]]\n@add @template",
+  "expected": "This is a template with value",
+  "expectedError": null,
+  "expectedWarning": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "9dccbfad-d89d-4526-b1af-a01db500d00b",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 24,
+          "line": 1,
+          "column": 25
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "a8d9a20f-3268-400a-b276-b3e8de7ecb4e",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "variable"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "068fd196-0833-4a4a-b333-030ceb45cf07",
+            "location": {
+              "start": {
+                "offset": 17,
+                "line": 1,
+                "column": 18
+              },
+              "end": {
+                "offset": 24,
+                "line": 1,
+                "column": 25
+              }
+            },
+            "content": "value"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "variable",
+        "content": "value"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "25171a0b-7e2c-411f-922a-ae5d34ad1cb2",
+      "location": {
+        "start": {
+          "offset": 24,
+          "line": 1,
+          "column": 25
+        },
+        "end": {
+          "offset": 25,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "25917930-a9f1-4283-9239-d50c224faba8",
+      "location": {
+        "start": {
+          "offset": 25,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 82,
+          "line": 2,
+          "column": 58
+        }
+      },
+      "kind": "text",
+      "subtype": "textTemplate",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "9e76a3db-bd98-4b12-87ca-6e486ca3e068",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "template"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "67ebfd03-dd65-4bfc-ba8d-e651822a2b83",
+            "location": {
+              "start": {
+                "offset": 44,
+                "line": 2,
+                "column": 20
+              },
+              "end": {
+                "offset": 68,
+                "line": 2,
+                "column": 44
+              }
+            },
+            "content": "This is a template with "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "acedb0fa-4d76-4ada-8ac1-d11121f85bba",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "variable"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "template",
+        "content": "This is a template with {{variable}}"
+      },
+      "meta": {
+        "sourceType": "template",
+        "hasVariables": true,
+        "isTemplateContent": true
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "6efa2bf7-0004-486c-89b3-a6f6a5881930",
+      "location": {
+        "start": {
+          "offset": 82,
+          "line": 2,
+          "column": 58
+        },
+        "end": {
+          "offset": 83,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "72ec1f6f-6a82-4c05-b142-adf9ed93e840",
+      "location": {
+        "start": {
+          "offset": 83,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 97,
+          "line": 3,
+          "column": 15
+        }
+      },
+      "kind": "add",
+      "subtype": "addVariable",
+      "source": "variable",
+      "values": {
+        "variable": [
+          {
+            "type": "VariableReference",
+            "nodeId": "81e8696e-8cf9-44bf-a442-10c5938c0a46",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "template"
+          }
+        ]
+      },
+      "raw": {
+        "variable": "@template"
+      },
+      "meta": {}
+    }
+  ],
+  "parseError": null
+}
