@@ -96,7 +96,12 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       
       // For interpolation variables, we need to add the resolved text to output
       if (varRef.valueType === 'varInterpolation') {
-        env.addNode({ type: 'Text', content: String(resolvedValue) } as any);
+        let stringValue = String(resolvedValue);
+        // Handle path objects specially
+        if (typeof resolvedValue === 'object' && resolvedValue?.resolvedPath) {
+          stringValue = resolvedValue.resolvedPath;
+        }
+        env.addNode({ type: 'Text', content: stringValue } as any);
       }
       
       return { value: resolvedValue, env };
@@ -227,7 +232,7 @@ export async function interpolate(
           value = await resolveVariableValue(variable, env);
           break;
         case 'path':
-          value = variable.value.resolvedPath;
+          value = variable.value?.resolvedPath || variable.value;
           break;
         case 'command':
           // Commands don't interpolate - they need to be run
@@ -268,7 +273,12 @@ export async function interpolate(
         // Handle null nodes from the grammar
         parts.push('null');
       } else if (typeof value === 'object') {
-        parts.push(JSON.stringify(value));
+        // For path objects, try to extract the resolved path first
+        if (value.resolvedPath && typeof value.resolvedPath === 'string') {
+          parts.push(value.resolvedPath);
+        } else {
+          parts.push(JSON.stringify(value));
+        }
       } else {
         parts.push(String(value));
       }
