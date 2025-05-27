@@ -43,7 +43,7 @@ describe('Mlld API', () => {
       await fileSystem.writeFile('/test.md', '# Test Content\nThis is a test file.');
       
       const content = `
-@path testFile = "/test.md"
+@path testFile = [/test.md]
 @add @testFile
       `.trim();
       const result = await processMlld(content, {
@@ -77,7 +77,7 @@ describe('Mlld API', () => {
       await fileSystem.writeFile('/utils.mld', '@text helper = "Helper Text"');
       
       const content = `
-@import { helper } from "/utils.mld"
+@import { helper } from [/utils.mld]
 @add @helper
       `.trim();
       const result = await processMlld(content, {
@@ -91,7 +91,7 @@ describe('Mlld API', () => {
     it('should handle path directive correctly', async () => {
       // When a file doesn't exist, path directive should return the path as a string
       const content = `
-@path testPath = "/nonexistent.md"
+@path testPath = [/nonexistent.md]
 @add @testPath
       `.trim();
       const result = await processMlld(content, {
@@ -106,7 +106,7 @@ describe('Mlld API', () => {
       // Set up a test file with sections
       await fileSystem.writeFile('/doc.md', `# Document\n\n## Section One\nContent 1\n\n## Section Two\nContent 2`);
       
-      const content = '@add "Section Two" from "/doc.md"';
+      const content = '@add [Section Two] from [/doc.md]';
       const result = await processMlld(content, {
         fileSystem,
         pathService,
@@ -132,7 +132,7 @@ describe('Mlld API', () => {
 
     it('should handle exec directive', async () => {
       const content = `
-@exec greeting = "Hello from exec!"
+@exec greeting = @run [echo "Hello from exec!"]
       `.trim();
       const result = await processMlld(content, {
         fileSystem,

@@ -3,7 +3,7 @@
   "description": "Test fixture for valid/add-path",
   "category": "valid",
   "subcategory": "add-path",
-  "input": "@add \"Section 1\" from [file.md]",
+  "input": "@add [Section 1] from [file.md]",
   "expected": "## Section 1\n### Subsection 1.1\nContent from file",
   "expectedError": null,
   "expectedWarning": null,
@@ -11,7 +11,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "c952672e-5ecb-45e0-b9f9-cf17003f6275",
+      "nodeId": "a11110e7-74be-4120-a2b1-48e4467a13d0",
       "location": {
         "start": {
           "offset": 0,
@@ -19,67 +19,64 @@
           "column": 1
         },
         "end": {
-          "offset": 31,
+          "offset": 17,
           "line": 1,
-          "column": 32
+          "column": 18
         }
       },
       "kind": "add",
-      "subtype": "addPathSection",
-      "source": "section",
+      "subtype": "addPath",
+      "source": "path",
       "values": {
-        "sectionTitle": [
+        "path": [
           {
             "type": "Text",
-            "nodeId": "43dc607e-19da-4797-9741-16935933d02c",
+            "nodeId": "b1478d56-5638-4d68-8384-715b48ffe246",
             "location": {
               "start": {
-                "offset": 5,
+                "offset": 6,
                 "line": 1,
-                "column": 6
+                "column": 7
               },
               "end": {
-                "offset": 16,
+                "offset": 15,
                 "line": 1,
-                "column": 17
+                "column": 16
               }
             },
             "content": "Section 1"
           }
-        ],
-        "path": [
-          {
-            "type": "Text",
-            "nodeId": "e47c579f-7ca8-440f-ba6e-898e54a61a25",
-            "location": {
-              "start": {
-                "offset": 23,
-                "line": 1,
-                "column": 24
-              },
-              "end": {
-                "offset": 30,
-                "line": 1,
-                "column": 31
-              }
-            },
-            "content": "file.md"
-          }
         ]
       },
       "raw": {
-        "sectionTitle": "Section 1",
-        "path": "file.md"
+        "path": "Section 1"
       },
       "meta": {
         "path": {
           "hasVariables": false,
           "isAbsolute": false,
-          "hasExtension": true,
-          "extension": "md",
+          "hasExtension": false,
+          "extension": null,
           "pathSubtype": "filePath"
         }
       }
+    },
+    {
+      "type": "Text",
+      "nodeId": "1768a470-9a40-4b31-857b-505e2bd045f4",
+      "location": {
+        "start": {
+          "offset": 17,
+          "line": 1,
+          "column": 18
+        },
+        "end": {
+          "offset": 31,
+          "line": 1,
+          "column": 32
+        }
+      },
+      "content": "from [file.md]"
     }
   ],
   "parseError": null

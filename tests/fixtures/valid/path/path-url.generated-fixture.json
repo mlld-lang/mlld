@@ -3,25 +3,136 @@
   "description": "Test fixture for valid/path-url",
   "category": "valid",
   "subcategory": "path-url",
-  "input": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\n@path apiEndpoint = \"https://api.example.com/v1\"\n\nYou can now use the API endpoint: {{apiEndpoint}}",
+  "input": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\n@path apiEndpoint = [https://api.example.com/v1]\n\nYou can now use the API endpoint: {{apiEndpoint}}",
   "expected": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\nYou can now use the API endpoint: https://api.example.com/v1",
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": null,
-  "parseError": {
-    "message": "Expected \"[\", Any path expression, or whitespace but \"\\\"\" found.",
-    "location": {
-      "start": {
-        "offset": 114,
-        "line": 5,
-        "column": 21
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "3dbf73fe-49d8-4d58-b8cf-38441934c494",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 94,
+          "line": 5,
+          "column": 1
+        }
       },
-      "end": {
-        "offset": 115,
-        "line": 5,
-        "column": 22
+      "content": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "8fdae0ca-210f-40e6-ab8e-9c7b03284bc8",
+      "location": {
+        "start": {
+          "offset": 94,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 142,
+          "line": 5,
+          "column": 49
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "5295e9e3-8417-4bb3-85fa-49598e372c5f",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "apiEndpoint"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "ee967cbc-4b13-431c-bca0-9e5b2939f18e",
+            "location": {
+              "start": {
+                "offset": 94,
+                "line": 5,
+                "column": 1
+              },
+              "end": {
+                "offset": 142,
+                "line": 5,
+                "column": 49
+              }
+            },
+            "content": "https://api.example.com/v1"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "apiEndpoint",
+        "path": "https://api.example.com/v1"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": false,
+          "extension": null
+        }
       }
+    },
+    {
+      "type": "Text",
+      "nodeId": "05f50e44-f359-4c12-a558-35b14d9acf5b",
+      "location": {
+        "start": {
+          "offset": 142,
+          "line": 5,
+          "column": 49
+        },
+        "end": {
+          "offset": 178,
+          "line": 7,
+          "column": 35
+        }
+      },
+      "content": "\n\nYou can now use the API endpoint: "
+    },
+    {
+      "type": "VariableReference",
+      "nodeId": "19781c65-4e19-4aa0-83b1-4db96732a999",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "valueType": "varInterpolation",
+      "identifier": "apiEndpoint"
     }
-  }
+  ],
+  "parseError": null
 }
