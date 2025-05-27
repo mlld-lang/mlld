@@ -14,6 +14,7 @@ export { MlldOutputError } from './MlldOutputError';
 export { MlldDirectiveError } from './MlldDirectiveError';
 export { PathValidationError } from './PathValidationError';
 export { DataEvaluationError } from './DataEvaluationError';
+export { VariableRedefinitionError } from './VariableRedefinitionError';
 
 // Export error message collections
 export * from './messages/index'; 

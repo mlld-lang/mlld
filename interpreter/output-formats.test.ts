@@ -203,10 +203,8 @@ describe('Integration Scenarios', () => {
   });
   
   describe('Variable Immutability', () => {
-    // TODO: Variable immutability is not yet implemented in the interpreter
-    // These tests document the expected behavior once implemented
     
-    it.todo('should throw error when attempting to redefine a variable', async () => {
+    it('should throw error when attempting to redefine a variable', async () => {
       const source = `
 @text message = "First definition"
 @text message = "Second definition"
@@ -219,7 +217,7 @@ describe('Integration Scenarios', () => {
       })).rejects.toThrow(/already defined|already exists|cannot redefine/i);
     });
     
-    it.todo('should throw error when redefining across different variable types', async () => {
+    it('should throw error when redefining across different variable types', async () => {
       const source = `
 @text myVar = "Text value"
 @data myVar = {"type": "data"}
@@ -232,7 +230,7 @@ describe('Integration Scenarios', () => {
       })).rejects.toThrow(/already defined|already exists|cannot redefine/i);
     });
     
-    it.todo('should throw error when imported variable conflicts with existing', async () => {
+    it('should throw error when imported variable conflicts with existing', async () => {
       await fileSystem.writeFile('/defs.mld', '@text conflict = "From import"');
       
       const source = `
@@ -246,24 +244,6 @@ describe('Integration Scenarios', () => {
         format: 'markdown',
         basePath: '/'
       })).rejects.toThrow(/already defined|already exists|cannot redefine/i);
-    });
-    
-    // Test current behavior (allows redefinition - last one wins)
-    it('currently allows variable redefinition (last one wins)', async () => {
-      const source = `
-@text message = "First"
-@text message = "Second"
-@add @message
-`;
-      
-      const result = await interpret(source, {
-        fileSystem,
-        pathService,
-        format: 'markdown'
-      });
-      
-      // Currently the last definition wins
-      expect(result.trim()).toBe('Second');
     });
   });
 });

@@ -37,7 +37,8 @@ import {
   LiteralNode,
   DotSeparatorNode,
   PathSeparatorNode,
-  ErrorNode
+  ErrorNode,
+  SourceLocation
 } from './nodes';
 
 /**
@@ -89,6 +90,22 @@ export interface MlldVariable {
 // =========================================================================
 // VARIABLE FACTORY FUNCTIONS
 // =========================================================================
+
+/**
+ * Convert SourceLocation to InterpreterLocation format
+ */
+export function sourceLocationToInterpreterLocation(
+  sourceLocation?: SourceLocation,
+  filePath?: string
+): any {
+  if (!sourceLocation) return undefined;
+  
+  return {
+    line: sourceLocation.start.line,
+    column: sourceLocation.start.column,
+    filePath
+  };
+}
 
 /**
  * Create a text variable

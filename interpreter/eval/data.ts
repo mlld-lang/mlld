@@ -2,7 +2,7 @@ import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { parseDataValue, needsEvaluation, extractPlainValue } from './data-value-parser';
-import { createDataVariable, createComplexDataVariable } from '@core/types';
+import { createDataVariable, createComplexDataVariable, sourceLocationToInterpreterLocation } from '@core/types';
 
 /**
  * Evaluate @data directives.
@@ -44,13 +44,17 @@ export async function evaluateData(
     // Simple variable assignment
     if (isComplex) {
       // Create a complex data variable that supports lazy evaluation
-      const variable = createComplexDataVariable(varName, dataValue);
+      const variable = createComplexDataVariable(varName, dataValue, {
+        definedAt: sourceLocationToInterpreterLocation(directive.location)
+      });
       env.setVariable(varName, variable);
     } else {
       // Create a simple data variable for primitive/static values
       // Extract the plain value for simple data
       const plainValue = extractPlainValue(dataValue);
-      const variable = createDataVariable(varName, plainValue);
+      const variable = createDataVariable(varName, plainValue, {
+        definedAt: sourceLocationToInterpreterLocation(directive.location)
+      });
       env.setVariable(varName, variable);
     }
   } else {
@@ -66,7 +70,9 @@ export async function evaluateData(
     if (!rootVar) {
       // Create new root object
       rootValue = {};
-      rootVar = createDataVariable(rootName, rootValue);
+      rootVar = createDataVariable(rootName, rootValue, {
+        definedAt: sourceLocationToInterpreterLocation(directive.location)
+      });
       env.setVariable(rootName, rootVar);
     } else if (rootVar.type !== 'data') {
       throw new Error(`Variable ${rootName} is not a data variable, cannot assign field`);
@@ -98,14 +104,18 @@ export async function evaluateData(
       current[lastField] = dataValue; // Store the raw DataValue
       
       // Update the root variable
-      env.setVariable(rootName, createDataVariable(rootName, rootValue));
+      env.setVariable(rootName, createDataVariable(rootName, rootValue, {
+        definedAt: sourceLocationToInterpreterLocation(directive.location)
+      }));
     } else {
       // Simple value - extract and store directly
       const plainValue = extractPlainValue(dataValue);
       current[lastField] = plainValue;
       
       // Update the root variable
-      env.setVariable(rootName, createDataVariable(rootName, rootValue));
+      env.setVariable(rootName, createDataVariable(rootName, rootValue, {
+        definedAt: sourceLocationToInterpreterLocation(directive.location)
+      }));
     }
   }
   

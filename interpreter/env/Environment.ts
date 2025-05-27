@@ -7,6 +7,7 @@ import * as path from 'path';
 import { ImportApproval } from '@core/security/ImportApproval';
 import { ImmutableCache } from '@core/security/ImmutableCache';
 import { GistTransformer } from '@core/security/GistTransformer';
+import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 
 /**
  * Environment holds all state and provides capabilities for evaluation.
@@ -55,6 +56,26 @@ export class Environment {
   // --- Variable Management ---
   
   setVariable(name: string, variable: MlldVariable): void {
+    // Check if variable already exists in this scope
+    if (this.variables.has(name)) {
+      const existing = this.variables.get(name)!;
+      throw VariableRedefinitionError.forSameFile(
+        name,
+        existing.metadata?.definedAt || { line: 0, column: 0 },
+        variable.metadata?.definedAt || { line: 0, column: 0 }
+      );
+    }
+    
+    // Check if variable exists in parent scope (import conflict)
+    if (this.parent?.hasVariable(name)) {
+      const existing = this.parent.getVariable(name)!;
+      throw VariableRedefinitionError.forImportConflict(
+        name,
+        existing.metadata?.definedAt || { line: 0, column: 0 },
+        variable.metadata?.definedAt || { line: 0, column: 0 }
+      );
+    }
+    
     this.variables.set(name, variable);
   }
   

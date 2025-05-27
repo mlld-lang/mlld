@@ -2,7 +2,7 @@ import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
-import { createCommandVariable } from '@core/types';
+import { createCommandVariable, sourceLocationToInterpreterLocation } from '@core/types';
 
 /**
  * Extract parameter names from the params array.
@@ -112,7 +112,9 @@ export async function evaluateExec(
   }
   
   // Create and store the command variable
-  const variable = createCommandVariable(identifier, commandDef);
+  const variable = createCommandVariable(identifier, commandDef, {
+    definedAt: sourceLocationToInterpreterLocation(directive.location)
+  });
   env.setVariable(identifier, variable);
   
   // Return the command definition (no output for variable definitions)
