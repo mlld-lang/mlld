@@ -3,7 +3,7 @@
   "description": "Test fixture for valid/add-path",
   "category": "valid",
   "subcategory": "add-path",
-  "input": "@add [Section 1] from [file.md]",
+  "input": "@add \"Section 1\" from [file.md]",
   "expected": "## Section 1\n### Subsection 1.1\nContent from file",
   "expectedError": null,
   "expectedWarning": null,
@@ -11,7 +11,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "a11110e7-74be-4120-a2b1-48e4467a13d0",
+      "nodeId": "06d1a834-9f8c-43f3-98ce-5937c2cad9d2",
       "location": {
         "start": {
           "offset": 0,
@@ -19,64 +19,67 @@
           "column": 1
         },
         "end": {
-          "offset": 17,
-          "line": 1,
-          "column": 18
-        }
-      },
-      "kind": "add",
-      "subtype": "addPath",
-      "source": "path",
-      "values": {
-        "path": [
-          {
-            "type": "Text",
-            "nodeId": "b1478d56-5638-4d68-8384-715b48ffe246",
-            "location": {
-              "start": {
-                "offset": 6,
-                "line": 1,
-                "column": 7
-              },
-              "end": {
-                "offset": 15,
-                "line": 1,
-                "column": 16
-              }
-            },
-            "content": "Section 1"
-          }
-        ]
-      },
-      "raw": {
-        "path": "Section 1"
-      },
-      "meta": {
-        "path": {
-          "hasVariables": false,
-          "isAbsolute": false,
-          "hasExtension": false,
-          "extension": null,
-          "pathSubtype": "filePath"
-        }
-      }
-    },
-    {
-      "type": "Text",
-      "nodeId": "1768a470-9a40-4b31-857b-505e2bd045f4",
-      "location": {
-        "start": {
-          "offset": 17,
-          "line": 1,
-          "column": 18
-        },
-        "end": {
           "offset": 31,
           "line": 1,
           "column": 32
         }
       },
-      "content": "from [file.md]"
+      "kind": "add",
+      "subtype": "addPathSection",
+      "source": "section",
+      "values": {
+        "sectionTitle": [
+          {
+            "type": "Text",
+            "nodeId": "757d4a54-67a3-47ac-9fcc-c85fd6c09457",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 16,
+                "line": 1,
+                "column": 17
+              }
+            },
+            "content": "Section 1"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "3552650f-ffda-47be-bf9e-0941b8f2ea7f",
+            "location": {
+              "start": {
+                "offset": 23,
+                "line": 1,
+                "column": 24
+              },
+              "end": {
+                "offset": 30,
+                "line": 1,
+                "column": 31
+              }
+            },
+            "content": "file.md"
+          }
+        ]
+      },
+      "raw": {
+        "sectionTitle": "Section 1",
+        "path": "file.md"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "md",
+          "pathSubtype": "filePath"
+        }
+      }
     }
   ],
   "parseError": null

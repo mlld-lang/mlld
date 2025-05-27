@@ -3,25 +3,84 @@
   "description": "Test fixture for valid/add-section",
   "category": "valid",
   "subcategory": "add-section",
-  "input": "@add [# Section Title] from [file.md]",
+  "input": "@add \"# Section Title\" from [file.md]",
   "expected": "# Section Title\nContent under this section",
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": null,
-  "parseError": {
-    "message": "Expected \"'\", \"@\", \"\\\"\", Wrapped template content, bracketed path with section, or whitespace but \"[\" found.",
-    "location": {
-      "start": {
-        "offset": 5,
-        "line": 1,
-        "column": 6
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "983cd8f0-4123-435a-936a-4500d3bd1ebc",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 37,
+          "line": 1,
+          "column": 38
+        }
       },
-      "end": {
-        "offset": 6,
-        "line": 1,
-        "column": 7
+      "kind": "add",
+      "subtype": "addPathSection",
+      "source": "section",
+      "values": {
+        "sectionTitle": [
+          {
+            "type": "Text",
+            "nodeId": "6a65ab0a-1fb2-408c-9d63-d0af66a5eb6c",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 22,
+                "line": 1,
+                "column": 23
+              }
+            },
+            "content": "# Section Title"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "e88867d7-bf77-47ed-a85e-4b1a98f6c48d",
+            "location": {
+              "start": {
+                "offset": 29,
+                "line": 1,
+                "column": 30
+              },
+              "end": {
+                "offset": 36,
+                "line": 1,
+                "column": 37
+              }
+            },
+            "content": "file.md"
+          }
+        ]
+      },
+      "raw": {
+        "sectionTitle": "# Section Title",
+        "path": "file.md"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "md",
+          "pathSubtype": "filePath"
+        }
       }
     }
-  }
+  ],
+  "parseError": null
 }
