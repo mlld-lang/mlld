@@ -8,142 +8,20 @@
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": [
-    {
-      "type": "Directive",
-      "nodeId": "d570cbd8-4b5e-4399-a643-40ee3ecaaa95",
-      "location": {
-        "start": {
-          "offset": 0,
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "offset": 36,
-          "line": 1,
-          "column": 37
-        }
+  "ast": null,
+  "parseError": {
+    "message": "Expected Any path expression or whitespace but \"\\\"\" found.",
+    "location": {
+      "start": {
+        "offset": 17,
+        "line": 1,
+        "column": 18
       },
-      "kind": "import",
-      "subtype": "importAll",
-      "source": "path",
-      "values": {
-        "imports": [
-          {
-            "type": "VariableReference",
-            "nodeId": "b162c84a-647e-4908-893e-d3a349ec86a6",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              }
-            },
-            "valueType": "import",
-            "identifier": "*"
-          }
-        ],
-        "path": [
-          {
-            "type": "Text",
-            "nodeId": "309869fb-dbcc-44d6-b394-634f1c6b7300",
-            "location": {
-              "start": {
-                "offset": 17,
-                "line": 1,
-                "column": 18
-              },
-              "end": {
-                "offset": 36,
-                "line": 1,
-                "column": 37
-              }
-            },
-            "content": "files/imports.mld"
-          }
-        ]
-      },
-      "raw": {
-        "imports": "*",
-        "path": "files/imports.mld"
-      },
-      "meta": {
-        "path": {
-          "hasVariables": false,
-          "isAbsolute": false,
-          "hasExtension": true,
-          "extension": "mld",
-          "pathSubtype": "filePath"
-        }
+      "end": {
+        "offset": 18,
+        "line": 1,
+        "column": 19
       }
-    },
-    {
-      "type": "Newline",
-      "nodeId": "06f3da1e-d6f1-48a7-b5b4-ba56807df467",
-      "location": {
-        "start": {
-          "offset": 36,
-          "line": 1,
-          "column": 37
-        },
-        "end": {
-          "offset": 37,
-          "line": 2,
-          "column": 1
-        }
-      },
-      "content": "\n"
-    },
-    {
-      "type": "Directive",
-      "nodeId": "4398e226-fa70-42d8-8d17-76034e3cc5a9",
-      "location": {
-        "start": {
-          "offset": 37,
-          "line": 2,
-          "column": 1
-        },
-        "end": {
-          "offset": 58,
-          "line": 3,
-          "column": 1
-        }
-      },
-      "kind": "add",
-      "subtype": "addVariable",
-      "source": "variable",
-      "values": {
-        "variable": [
-          {
-            "type": "VariableReference",
-            "nodeId": "864b8f65-e43b-47aa-95ce-8e1ff34d4519",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              }
-            },
-            "valueType": "varIdentifier",
-            "identifier": "imported_title"
-          }
-        ]
-      },
-      "raw": {
-        "variable": "@imported_title"
-      },
-      "meta": {}
     }
-  ],
-  "parseError": null
+  }
 }

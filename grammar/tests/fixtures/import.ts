@@ -20,7 +20,7 @@ export const importFixtures: DirectiveFixture[] = [
   {
     name: 'import-all',
     description: 'Import directive with wildcard import',
-    input: '@import { * } from "file.md"',
+    input: '@import { * } from [file.md]',
     expected: {
       kind: 'import',
       subtype: 'importAll',
@@ -62,7 +62,7 @@ export const importFixtures: DirectiveFixture[] = [
   {
     name: 'import-selected',
     description: 'Import directive with selected imports',
-    input: '@import { name } from "file.md"',
+    input: '@import { name } from [file.md]',
     expected: {
       kind: 'import',
       subtype: 'importSelected',

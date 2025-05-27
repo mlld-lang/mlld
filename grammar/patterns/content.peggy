@@ -136,44 +136,33 @@ DirectCodeContent "Code content without interpolation"
     }
 
 // -------------------------------------------------------------
-// COMBO PATTERNS - Combine different types of patterns
+// SEMANTIC DELIMITER PATTERNS - Clear semantic meaning for each delimiter type
 // -------------------------------------------------------------
 
-// Path-style interpolation: quotes or brackets only (no unquoted paths)
-PathStyleInterpolation "Path interpolation patterns"
-  = LiteralContent
-  / BracketContent
+// Literal text without any interpolation (quotes only)
+LiteralOnlyContent "Literal text without any interpolation"
+  = LiteralContent  // Already exists: "...", '...', `...`
 
-// Template-style interpolation: quotes or double brackets
-TemplateStyleInterpolation "Template interpolation patterns"
-  = // Direct handling of double bracket content as first alternative
-    '[[' content:(InterpolationVar / TemplateTextSegment)* ']]' {
-      helpers.debug('TemplateStyleInterpolation matched [[...]] directly', { 
-        content, 
-        isArray: Array.isArray(content),
-        length: Array.isArray(content) ? content.length : 'not array'
-      });
-      
-      // Instead of returning just the content, return an object with content and wrapper type
-      return {
-        content: content,
-        wrapperType: 'doubleBracket'
-      };
-    }  
-  / rule:LiteralContent {
-      helpers.debug('TemplateStyleInterpolation matched LiteralContent', { rule });
-      
-      // If this is a quote-wrapped literal, determine its quote type
-      let wrapperType = 'none';
-      
-      // For now, just mark it as not a template wrapper
-      return {
-        content: rule,
-        wrapperType: wrapperType
-      };
-    }
-  / rule:DoubleBracketContent {
-      helpers.debug('TemplateStyleInterpolation matched DoubleBracketContent', { 
+// Path content with @var interpolation (brackets only)
+InterpolatedPathContent "Path content with @var interpolation" 
+  = BracketContent  // Already exists: [...]
+
+// Template content with {{var}} interpolation (double brackets only)
+InterpolatedTemplateContent "Template content with {{var}} interpolation"
+  = DoubleBracketContent  // Already exists: [[...]]
+
+// -------------------------------------------------------------
+// COMBO PATTERNS - Combine different types of patterns with clear semantics
+// -------------------------------------------------------------
+
+// Path-style interpolation: brackets only (enforces semantic clarity)
+PathStyleInterpolation "Path interpolation patterns"
+  = InterpolatedPathContent  // [content with @var] - all paths must be bracketed
+
+// Template-style interpolation: templates with {{var}} or literal text
+TemplateStyleInterpolation "Template interpolation patterns"  
+  = rule:InterpolatedTemplateContent {
+      helpers.debug('TemplateStyleInterpolation matched InterpolatedTemplateContent', { 
         rule, 
         isArray: Array.isArray(rule),
         length: Array.isArray(rule) ? rule.length : 'not array'
@@ -184,12 +173,20 @@ TemplateStyleInterpolation "Template interpolation patterns"
         wrapperType: 'doubleBracket'
       };
     }
+  / rule:LiteralOnlyContent {
+      helpers.debug('TemplateStyleInterpolation matched LiteralOnlyContent', { rule });
+      
+      return {
+        content: rule,
+        wrapperType: 'literal'
+      };
+    }
 
-// Command-style interpolation: all types
+// Command-style interpolation: supports all relevant interpolation types
 CommandStyleInterpolation "Command interpolation patterns"
-  = LiteralContent
-  / BracketContent
-  / DoubleBracketContent
+  = LiteralOnlyContent          // "literal command"
+  / InterpolatedPathContent     // [command with @var] 
+  / InterpolatedTemplateContent // [[command with {{var}}]]
 
 // -------------------------------------------------------------
 // WRAPPED PATTERNS - Used by directives, handle raw string construction

@@ -10,17 +10,17 @@
   "actualOutput": null,
   "ast": null,
   "parseError": {
-    "message": "Expected \"@\", \"bash\", \"javascript\", \"js\", \"py\", \"python\", \"sh\", Wrapped command content, or whitespace but \"n\" found.",
+    "message": "Expected Any path expression or whitespace but \"\\\"\" found.",
     "location": {
       "start": {
-        "offset": 1071,
-        "line": 28,
-        "column": 6
+        "offset": 138,
+        "line": 4,
+        "column": 20
       },
       "end": {
-        "offset": 1072,
-        "line": 28,
-        "column": 7
+        "offset": 139,
+        "line": 4,
+        "column": 21
       }
     }
   }

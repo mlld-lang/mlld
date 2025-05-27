@@ -115,7 +115,7 @@ describe('Grammar-Type System Alignment', () => {
     it('should only use defined NodeType values', () => {
       // Test various inputs to ensure they only produce valid node types
       const inputs = [
-        '@text val = null',
+        '@text val = "null"',
         '@text str = "string"',
         '@text section = "# Section" from [file.md]'
       ];
