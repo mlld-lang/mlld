@@ -74,7 +74,7 @@ export async function evaluateRun(
       // Create a temporary environment with parameter values
       const tempEnv = env.createChild();
       for (const [key, value] of Object.entries(argValues)) {
-        tempEnv.setVariable(key, { type: 'text', value, nodeId: '', location: null });
+        tempEnv.setParameterVariable(key, { type: 'text', value, nodeId: '', location: { line: 0, column: 0 } });
       }
       
       // TODO: Remove this workaround when issue #51 is fixed
@@ -115,7 +115,7 @@ export async function evaluateRun(
       // Interpolate the code template with parameters
       const tempEnv = env.createChild();
       for (const [key, value] of Object.entries(argValues)) {
-        tempEnv.setVariable(key, { type: 'text', value, nodeId: '', location: null });
+        tempEnv.setParameterVariable(key, { type: 'text', value, nodeId: '', location: { line: 0, column: 0 } });
       }
       
       const code = await interpolate(cmdDef.codeTemplate, tempEnv);

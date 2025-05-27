@@ -78,6 +78,25 @@ export class Environment {
     
     this.variables.set(name, variable);
   }
+
+  /**
+   * Set a parameter variable without checking for import conflicts.
+   * Used for temporary parameter variables in exec functions.
+   */
+  setParameterVariable(name: string, variable: MlldVariable): void {
+    // Only check if variable already exists in this scope
+    if (this.variables.has(name)) {
+      const existing = this.variables.get(name)!;
+      throw VariableRedefinitionError.forSameFile(
+        name,
+        existing.metadata?.definedAt || { line: 0, column: 0 },
+        variable.metadata?.definedAt || { line: 0, column: 0 }
+      );
+    }
+    
+    // Allow shadowing parent scope variables for parameters
+    this.variables.set(name, variable);
+  }
   
   getVariable(name: string): MlldVariable | undefined {
     // Check this scope first
