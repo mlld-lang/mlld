@@ -1,0 +1,84 @@
+{
+  "name": "run-comment-safety",
+  "description": "Test fixture for valid/run-comment-safety",
+  "category": "valid",
+  "subcategory": "run-comment-safety",
+  "input": "@run [echo \"this >> should not be a comment\"]",
+  "expected": "this >> should not be a comment",
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "b67f3c0f-69ff-42b1-968b-d46c5447e3e8",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 45,
+          "line": 1,
+          "column": 46
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "9b96c046-b20b-4d42-bc82-ee4f04e5c880",
+            "location": {
+              "start": {
+                "offset": 6,
+                "line": 1,
+                "column": 7
+              },
+              "end": {
+                "offset": 44,
+                "line": 1,
+                "column": 45
+              }
+            },
+            "content": "echo \"this >> should not be a comment\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "98ec8b9d-5c27-4e77-9834-de92ba2ce7bc",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 45,
+                "line": 1,
+                "column": 46
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"this >> should not be a comment\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    }
+  ],
+  "parseError": null
+}

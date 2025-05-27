@@ -1,0 +1,101 @@
+{
+  "name": "run-inline-comments",
+  "description": "Test fixture for valid/run-inline-comments",
+  "category": "valid",
+  "subcategory": "run-inline-comments",
+  "input": "@run [echo \"hello world\"] >> this is an inline comment",
+  "expected": "hello world",
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "3eb199ba-47d3-4ee6-a310-f535b8cacc82",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 54,
+          "line": 1,
+          "column": 55
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "4a33febb-3af9-4619-ae40-3aafd87739eb",
+            "location": {
+              "start": {
+                "offset": 6,
+                "line": 1,
+                "column": 7
+              },
+              "end": {
+                "offset": 24,
+                "line": 1,
+                "column": 25
+              }
+            },
+            "content": "echo \"hello world\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "fb675e1e-0bfc-4ada-b0c0-a5eff49d142d",
+            "location": {
+              "start": {
+                "offset": 5,
+                "line": 1,
+                "column": 6
+              },
+              "end": {
+                "offset": 25,
+                "line": 1,
+                "column": 26
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"hello world\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false,
+        "comment": {
+          "type": "Comment",
+          "marker": ">>",
+          "content": "this is an inline comment",
+          "location": {
+            "start": {
+              "offset": 25,
+              "line": 1,
+              "column": 26
+            },
+            "end": {
+              "offset": 54,
+              "line": 1,
+              "column": 55
+            }
+          }
+        }
+      }
+    }
+  ],
+  "parseError": null
+}

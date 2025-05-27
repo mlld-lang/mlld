@@ -8,5 +8,8 @@ export { default as runCommandBasesOperators } from './run-command-bases-operato
 export { default as runCommandBasesSpecialPatterns } from './run-command-bases-special-patterns.generated-fixture.json';
 export { default as runCommandMultiline } from './run-command-multiline.generated-fixture.json';
 export { default as runCommand } from './run-command.generated-fixture.json';
+export { default as runCommentSafety } from './run-comment-safety.generated-fixture.json';
 export { default as runExecParameters } from './run-exec-parameters.generated-fixture.json';
 export { default as runExec } from './run-exec.generated-fixture.json';
+export { default as runInlineCommentsLeft } from './run-inline-comments-left.generated-fixture.json';
+export { default as runInlineComments } from './run-inline-comments.generated-fixture.json';
