@@ -3,25 +3,184 @@
   "description": "Test fixture for valid/path-url",
   "category": "valid",
   "subcategory": "path-url",
-  "input": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\n@path apiEndpoint = [https://api.example.com/v1]\n\n@add You can now use the API endpoint: @apiEndpoint",
-  "expected": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\n<!-- SKIP: Path URL bug - See GitHub Issue #81 -->\nYou can now use the API endpoint: https://api.example.com/v1",
+  "input": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\n@path apiEndpoint = [https://api.example.com/v1]\n@add [[You can now use the API endpoint: {{apiEndpoint}}]]",
+  "expected": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\nYou can now use the API endpoint: https://api.example.com/v1",
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": null,
-  "parseError": {
-    "message": "Expected \"'\", \"@\", \"\\\"\", Any path expression, Wrapped template content, bracketed path with section, or whitespace but \"Y\" found.",
-    "location": {
-      "start": {
-        "offset": 149,
-        "line": 7,
-        "column": 6
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "7336b59a-0b38-43d7-9426-e0f75f99f9a9",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 94,
+          "line": 5,
+          "column": 1
+        }
       },
-      "end": {
-        "offset": 150,
-        "line": 7,
-        "column": 7
+      "content": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "078e871d-70b0-48be-8f21-86207e6e4507",
+      "location": {
+        "start": {
+          "offset": 94,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 142,
+          "line": 5,
+          "column": 49
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "e2be810b-a32f-46d1-92c9-3aa11aa1f003",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "apiEndpoint"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "b7d71fba-4356-4a9a-9490-cff243e7f337",
+            "location": {
+              "start": {
+                "offset": 94,
+                "line": 5,
+                "column": 1
+              },
+              "end": {
+                "offset": 142,
+                "line": 5,
+                "column": 49
+              }
+            },
+            "content": "https://api.example.com/v1"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "apiEndpoint",
+        "path": "https://api.example.com/v1"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": false,
+          "extension": null
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "1c4776ed-0e94-4561-b5cb-b8a3ff2b56c9",
+      "location": {
+        "start": {
+          "offset": 142,
+          "line": 5,
+          "column": 49
+        },
+        "end": {
+          "offset": 143,
+          "line": 6,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "398487ad-b3c0-4303-9503-d0fd01a3ea2d",
+      "location": {
+        "start": {
+          "offset": 143,
+          "line": 6,
+          "column": 1
+        },
+        "end": {
+          "offset": 201,
+          "line": 6,
+          "column": 59
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "2311d197-ab81-49ff-8eae-50732a9538e7",
+            "location": {
+              "start": {
+                "offset": 150,
+                "line": 6,
+                "column": 8
+              },
+              "end": {
+                "offset": 184,
+                "line": 6,
+                "column": 42
+              }
+            },
+            "content": "You can now use the API endpoint: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "ac2a89e1-2dde-4a1e-a841-3213ba6ae3bc",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "apiEndpoint"
+          }
+        ]
+      },
+      "raw": {
+        "content": "You can now use the API endpoint: {{apiEndpoint}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
       }
     }
-  }
+  ],
+  "parseError": null
 }

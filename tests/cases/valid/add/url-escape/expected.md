@@ -1,3 +1,3 @@
-# URL escape test - SKIP
-# This test is skipped pending implementation of URL escape sequences
-# See GitHub Issue #83
+Social: https://twitter.com/@username
+Email: https://example.com?email=test@example.com
+Backslash: https://example.com/path\with\backslashes

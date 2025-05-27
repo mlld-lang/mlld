@@ -3,25 +3,530 @@
   "description": "Test fixture for valid/add-url-escape",
   "category": "valid",
   "subcategory": "add-url-escape",
-  "input": "@path social = https://twitter.com/\\@username\n@path email = https://example.com?email=test\\@example.com\n@path backslash = https://example.com/path\\\\with\\\\backslashes",
-  "expected": "# URL escape test - SKIP\n# This test is skipped pending implementation of URL escape sequences\n# See GitHub Issue #83",
+  "input": "@path social = [https://twitter.com/\\@username]\n@path email = [https://example.com?email=test\\@example.com]\n@path backslash = [https://example.com/path\\\\with\\\\backslashes]\n@add [[Social: {{social}}]]\n@add [[Email: {{email}}]]\n@add [[Backslash: {{backslash}}]]",
+  "expected": "Social: https://twitter.com/@username\nEmail: https://example.com?email=test@example.com\nBackslash: https://example.com/path\\with\\backslashes",
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": null,
-  "parseError": {
-    "message": "Expected \"[\", Any path expression, or whitespace but \"h\" found.",
-    "location": {
-      "start": {
-        "offset": 15,
-        "line": 1,
-        "column": 16
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "dae8d589-36fa-4077-9b39-8c4c27a59e70",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 47,
+          "line": 1,
+          "column": 48
+        }
       },
-      "end": {
-        "offset": 16,
-        "line": 1,
-        "column": 17
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "e1b9f774-002d-4f96-8fea-01f1e8d19b25",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "social"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "78c12e28-4aa0-4e22-9e06-90de37f98ff0",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 47,
+                "line": 1,
+                "column": 48
+              }
+            },
+            "content": "https://twitter.com/\\"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "1a487772-e24d-46c5-9e1a-ec5ac29ae914",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "username"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "social",
+        "path": "https://twitter.com/\\@username"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": true,
+          "isAbsolute": false,
+          "hasExtension": false,
+          "extension": null
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "b97fb49e-e5f5-4f79-89de-2088dabd934c",
+      "location": {
+        "start": {
+          "offset": 47,
+          "line": 1,
+          "column": 48
+        },
+        "end": {
+          "offset": 48,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "4518d1bc-fe99-48c3-8c64-cf736f4292b4",
+      "location": {
+        "start": {
+          "offset": 48,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 107,
+          "line": 2,
+          "column": 60
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "ab12423a-8173-4b53-95d9-b6c4adac10ab",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "email"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "74ec1df8-2433-490b-9df3-49f8ada95193",
+            "location": {
+              "start": {
+                "offset": 48,
+                "line": 2,
+                "column": 1
+              },
+              "end": {
+                "offset": 107,
+                "line": 2,
+                "column": 60
+              }
+            },
+            "content": "https://example.com?email=test\\"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "7f8e5ab5-8742-42f5-b1e2-343bb3958d69",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "example"
+          },
+          {
+            "type": "Text",
+            "nodeId": "5c1782e1-5595-4e4a-96cf-f4add8387bc2",
+            "location": {
+              "start": {
+                "offset": 48,
+                "line": 2,
+                "column": 1
+              },
+              "end": {
+                "offset": 107,
+                "line": 2,
+                "column": 60
+              }
+            },
+            "content": ".com"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "email",
+        "path": "https://example.com?email=test\\@example.com"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": true,
+          "isAbsolute": false,
+          "hasExtension": true,
+          "extension": "com"
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "a925fb96-bf42-44d1-869c-dd0e443317b6",
+      "location": {
+        "start": {
+          "offset": 107,
+          "line": 2,
+          "column": 60
+        },
+        "end": {
+          "offset": 108,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "13c98051-6ba8-4685-b11c-28df707a9572",
+      "location": {
+        "start": {
+          "offset": 108,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 171,
+          "line": 3,
+          "column": 64
+        }
+      },
+      "kind": "path",
+      "subtype": "pathAssignment",
+      "source": "path",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "b34d563b-0b6a-4c99-95e9-e37d038e17cb",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "backslash"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "487f5819-fc9b-4e9a-a514-ab1309fce587",
+            "location": {
+              "start": {
+                "offset": 108,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "offset": 171,
+                "line": 3,
+                "column": 64
+              }
+            },
+            "content": "https://example.com/path\\\\with\\\\backslashes"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "backslash",
+        "path": "https://example.com/path\\\\with\\\\backslashes"
+      },
+      "meta": {
+        "path": {
+          "hasVariables": false,
+          "isAbsolute": false,
+          "hasExtension": false,
+          "extension": null
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "60f2ee0b-7336-4431-8c7f-79294a33f012",
+      "location": {
+        "start": {
+          "offset": 171,
+          "line": 3,
+          "column": 64
+        },
+        "end": {
+          "offset": 172,
+          "line": 4,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "a699bc25-30dc-435a-b400-ccc0565a9762",
+      "location": {
+        "start": {
+          "offset": 172,
+          "line": 4,
+          "column": 1
+        },
+        "end": {
+          "offset": 200,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "05b718e4-8566-4c0f-b288-998f9e6617ba",
+            "location": {
+              "start": {
+                "offset": 179,
+                "line": 4,
+                "column": 8
+              },
+              "end": {
+                "offset": 187,
+                "line": 4,
+                "column": 16
+              }
+            },
+            "content": "Social: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "3f3f0e43-72f7-4373-91fa-3acb7f7098f4",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "social"
+          }
+        ]
+      },
+      "raw": {
+        "content": "Social: {{social}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "6a581f8b-f98f-4b7e-883b-af9133d87632",
+      "location": {
+        "start": {
+          "offset": 200,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 226,
+          "line": 6,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "63104537-8388-4647-b080-468dd549e776",
+            "location": {
+              "start": {
+                "offset": 207,
+                "line": 5,
+                "column": 8
+              },
+              "end": {
+                "offset": 214,
+                "line": 5,
+                "column": 15
+              }
+            },
+            "content": "Email: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "d202dc9f-460f-469e-a36f-447aaec5dafd",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "email"
+          }
+        ]
+      },
+      "raw": {
+        "content": "Email: {{email}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "ca90d109-60c7-437f-b5e9-777c9a7f4749",
+      "location": {
+        "start": {
+          "offset": 226,
+          "line": 6,
+          "column": 1
+        },
+        "end": {
+          "offset": 259,
+          "line": 6,
+          "column": 34
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "08813724-01cd-42ff-b639-a2a232d374a2",
+            "location": {
+              "start": {
+                "offset": 233,
+                "line": 6,
+                "column": 8
+              },
+              "end": {
+                "offset": 244,
+                "line": 6,
+                "column": 19
+              }
+            },
+            "content": "Backslash: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "e2fcc8e2-4a12-4e99-bfc8-67d0d96e7432",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "backslash"
+          }
+        ]
+      },
+      "raw": {
+        "content": "Backslash: {{backslash}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
       }
     }
-  }
+  ],
+  "parseError": null
 }
