@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2025-05-27T06:58:07.004Z
+// Generated from grammar at 2025-05-27T20:49:04.266Z
 
 Prism.languages.mlld = {
   'comment': {
@@ -7,7 +7,7 @@ Prism.languages.mlld = {
     greedy: true
   },
   'directive': {
-    pattern: /@(text|data|run|add|path|import|exec|define|embed|url)\b/,
+    pattern: /@(text|data|run|add|path|import|exec)\b/,
     alias: 'keyword'
   },
   'template-block': {

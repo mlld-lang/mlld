@@ -8,7 +8,7 @@
   "patterns": [
     {
       "name": "keyword.control.directive.mlld",
-      "match": "@(text|data|run|add|path|import|exec|define|embed|url)\\b"
+      "match": "@(text|data|run|add|path|import|exec)\\b"
     },
     {
       "name": "comment.line.double-slash.mlld",

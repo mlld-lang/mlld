@@ -35,19 +35,19 @@ class MlldSyntaxGenerator {
       const grammar = fs.readFileSync(grammarPath, 'utf8');
       
       // Look for ReservedDirective rule
-      const reservedMatch = grammar.match(/ReservedDirective[^=]*=([^;]+)/s);
+      const reservedMatch = grammar.match(/ReservedDirective[^=]*=([^$]+?)(?=\n\n|\n\/\/|\ntext|\nexport|$)/s);
       if (reservedMatch) {
         const directiveMatches = reservedMatch[1].match(/"@(\w+)"/g);
         if (directiveMatches) {
-          return directiveMatches.map(d => d.replace(/"@(\w+)"/, '$1'));
+          return directiveMatches.map(d => d.replace(/["@]/g, ''));
         }
       }
     } catch (err) {
       console.warn('Could not extract directives from grammar, using fallback list');
     }
     
-    // Fallback to known list
-    return ['text', 'data', 'run', 'add', 'path', 'import', 'exec', 'define', 'embed', 'url'];
+    // Fallback to known list (only existing directives)
+    return ['text', 'data', 'run', 'add', 'path', 'import', 'exec'];
   }
 
   generatePrism() {

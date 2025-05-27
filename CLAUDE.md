@@ -1,5 +1,7 @@
 # mlld project guidelines
 
+repo: github.com/mlld-lang/mlld
+
 ## Build & Test Commands
 ```bash
 npm run build        # Build the project
@@ -37,7 +39,7 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 **Meld is a scripting language embedded in Markdown documents** - it enhances Markdown with dynamic content generation while preserving the readability of the source document.
 
 ### Core Syntax Principles
-1. **Directives only at start of lines** - Meld directives (`@text`, `@data`, etc.) are ONLY interpreted when they begin a line
+1. **Directives only at start of lines** - Mlld syntax is only interpreted in lines that start with a mlld directive
    - Exception: `@run` can be used on RHS of `@text` and `@exec` definitions
    - Exception: Directives can be used in RHS of `@data` object definitions
 2. **Variables are created without `@`** - `@text name = "value"` (not `@text @name`)
@@ -49,6 +51,7 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 ### Variable References
 - In directives: `@variable` or `@object.field.subfield`
 - In templates `[[...]]`: `{{variable}}` or `{{object.field.subfield}}`
+- Context specific: "double brackets, double braces" is the rule: "literal text for @var and {{var}}",  [@var interpolation], [[template with {{var}} interpolation]]
 - No mixing: Can't do `{{variable.@other.field}}` or `@{{variable}}`
 - Plain text: `@variable` is literal text, not a reference
 
@@ -70,6 +73,7 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 - Paths are relative to the importing file's directory
 
 ### Common Mistakes to Avoid
+- trying to treat mlld like a template langauge -- it's not; it's a programming language embedded in markdown, so it only works for lines starting with a @ directive
 - ❌ `@run echo "hello"` → ✅ `@run [echo "hello"]`
 - ❌ `@text @myvar = "value"` → ✅ `@text myvar = "value"`
 - ❌ `Hello @name!` → ✅ `@text greeting = [[Hello {{name}}!]]` then `@add @greeting`
@@ -83,5 +87,8 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 - **Tests**: `tests/cases/` (markdown examples), `tests/fixtures/` (generated), `interpreter/interpreter.fixture.test.ts` (runner)
 - **CLI**: `cli/index.ts` (entry point), `api/index.ts` (programmatic interface)
 - **Examples**: `examples/` (real-world usage patterns and integration tests)
+
+## Compacting
+When compacting for the next session--*especially* mid-task, your emphasis should be on *removing* unnecessary context which does not advance the current priority. Claude needs surgically assembled context. Be sure to avoid including unnecessary details summarizing the past conversation when it will have no clear benefit to the next Claude to pick up where you left off. Make your summary a clear mission briefing. Ask yourself "What would I need to know if I was picking this work up fresh with no context?" There may be documents or files worth referencing. Present the information in an organized and structured fashion. This is for LLM consumption, so don't hesitate to use XML in order to make it well organized and clear for Claude.
 
 ## Coding Practices

@@ -139,7 +139,7 @@ describe('Integration Scenarios', () => {
   });
   
   describe('Import Scope Precedence', () => {
-    it('should preserve parent scope variables over imported ones', async () => {
+    it('should use imported variables (first import wins immutable design)', async () => {
       // Set up imported file with variables
       await fileSystem.writeFile('/imported.mld', `
 @text greeting = "Hello from import"
@@ -148,7 +148,6 @@ describe('Integration Scenarios', () => {
 `);
       
       const source = `
-@text author = "Parent Author"
 @import {*} from [/imported.mld]
 @add @greeting
 @add " by "
@@ -162,9 +161,9 @@ describe('Integration Scenarios', () => {
         basePath: '/'
       });
       
-      // Parent's author should override imported author
+      // Import's author comes first ("first import wins" immutable design)
       // Note: Each @add creates a new line in current implementation
-      expect(result.trim()).toBe('Hello from import\n by \nParent Author');
+      expect(result.trim()).toBe('Hello from import\n by \nImport Author');
     });
     
     it('should import only selected variables', async () => {

@@ -127,7 +127,7 @@ UnquotedCommand "Unquoted command with @var interpolation"
 
 // Direct code content without interpolation
 DirectCodeContent "Code content without interpolation"
-  = '[' content:$(!']' .)* ']' { 
+  = '[' content:$((!']' .)*) ']' { 
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
   / content:$([^[\n]+) { 

@@ -11,7 +11,7 @@
   "ast": [
     {
       "type": "Directive",
-      "nodeId": "a51ab44b-ccbe-408a-aa67-61ebfb79f504",
+      "nodeId": "6a7b9980-c758-4deb-8836-79332a565675",
       "location": {
         "start": {
           "offset": 0,
@@ -31,7 +31,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "5a2d2c5b-7425-48e2-9a23-fe69d9667db2",
+            "nodeId": "463aa119-06d2-43f0-afec-87b32d752e97",
             "location": {
               "start": {
                 "offset": 0,
