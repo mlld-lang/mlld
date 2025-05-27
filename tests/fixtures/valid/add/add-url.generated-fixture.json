@@ -8,20 +8,75 @@
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": null,
-  "parseError": {
-    "message": "Expected \"'\", \"@\", \"\\\"\", Any path expression, Wrapped template content, bracketed path with section, or whitespace but \"[\" found.",
-    "location": {
-      "start": {
-        "offset": 101,
-        "line": 7,
-        "column": 6
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "45c7f57f-f01e-4663-b92d-3e5d2921d6eb",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 96,
+          "line": 7,
+          "column": 1
+        }
       },
-      "end": {
-        "offset": 102,
-        "line": 7,
-        "column": 7
+      "content": "# Add from URL Example\n\nThis example demonstrates adding content from a URL.\n\n## Documentation\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "ed22fe39-5d9c-4d47-840d-7ad2448a427f",
+      "location": {
+        "start": {
+          "offset": 96,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 180,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "kind": "add",
+      "subtype": "addPath",
+      "source": "path",
+      "values": {
+        "path": "https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md"
+      },
+      "raw": {
+        "path": "https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md"
+      },
+      "meta": {
+        "path": {
+          "isUrl": true,
+          "protocol": "https",
+          "hasVariables": false,
+          "hasSection": false,
+          "pathSubtype": "urlPath"
+        }
       }
+    },
+    {
+      "type": "Text",
+      "nodeId": "1014b807-225d-4006-9620-4dd9c157510e",
+      "location": {
+        "start": {
+          "offset": 180,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 191,
+          "line": 9,
+          "column": 12
+        }
+      },
+      "content": "That's all!"
     }
-  }
+  ],
+  "parseError": null
 }

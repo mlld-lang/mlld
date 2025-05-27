@@ -73,18 +73,42 @@ LineStartComment
       const pos = offset();
       const isAtLineStart = helpers.isLogicalLineStart(input, pos);
       return isAtLineStart;
-    } ">>" [ ] content:CommentContent {
-    return helpers.createNode(NodeType.Comment, { content: content.trim(), location: location() });
+    } marker:CommentMarker _ content:CommentContent {
+    return helpers.createNode(NodeType.Comment, { 
+      content: content.trim(), 
+      marker: marker,
+      location: location() 
+    });
   }
 
 Comment
-  = ">>" [ ] content:CommentContent {
-    return helpers.createNode(NodeType.Comment, { content: content.trim(), location: location() });
+  = marker:CommentMarker _ content:CommentContent {
+    return helpers.createNode(NodeType.Comment, { 
+      content: content.trim(), 
+      marker: marker,
+      location: location() 
+    });
   }
+
+// Support both >> and << as comment markers
+CommentMarker
+  = ">>" { return ">>"; }
+  / "<<" { return "<<"; }
 
 CommentContent
   = chars:[^\n]* "\n"? {
     return chars.join('');
+  }
+
+// Inline comment pattern - for use after directive content
+InlineComment
+  = _ marker:CommentMarker _ content:CommentContent {
+    return {
+      type: 'Comment',
+      marker: marker,
+      content: content.trim(),
+      location: location()
+    };
   }
 
 // -------------------------------------------------------------------------

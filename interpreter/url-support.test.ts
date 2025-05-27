@@ -126,7 +126,7 @@ describe('URL Support', () => {
   describe('Import with URLs', () => {
     it('should import from URL', async () => {
       // Set up mock file system for local imports
-      await fileSystem.writeFile('/project/test.mld', `@import "https://example.com/remote.mld"`);
+      await fileSystem.writeFile('/project/test.mld', `@import { * } from [https://example.com/remote.mld]`);
       
       // Mock the URL content
       const mockResponse = {

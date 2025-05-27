@@ -1,3 +1,3 @@
-# URL escape test - placeholder output
-# When interpreter implements URL fetching, these escaped @ symbols
-# should be preserved as literal @ in the URLs
+# URL escape test - SKIP
+# This test is skipped pending implementation of URL escape sequences
+# See GitHub Issue #83

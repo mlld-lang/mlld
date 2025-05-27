@@ -19,159 +19,102 @@ directly using PathCore, URLPathCore, etc.
 // -------------------------------------------------------------
 
 PathExpression "Any path expression"
-  = URLSectionPath      // https://example.com/file.md#section
-  / URLPath             // https://example.com/file.md
-  / FileSectionPath     // path/to/file.md#section  
-  / FilePath            // path/to/file.md
+  = UnifiedSectionPath  // [path/file.md#section] or [https://example.com#section]
+  / UnifiedPath         // [path/file.md] or [https://example.com]
 
 // -------------------------------------------------------------
-// URL PATHS - Remote resources with protocol
+// UNIFIED PATHS - Handle both files and URLs with identical syntax
 // -------------------------------------------------------------
 
-URLSectionPath "URL with section marker"
-  = '"' protocol:URLProtocolType ":" rest:URLRest "#" section:BaseIdentifier '"' {
-      // Handle quoted URLs with sections
-      const fullUrl = `${protocol}:${rest.raw}`;
-      helpers.debug('URLSectionPath matched quoted', { fullUrl, section });
+UnifiedSectionPath "Unified path with section marker"
+  = path:UnifiedPath _ "#" _ section:BaseIdentifier {
+      helpers.debug('UnifiedSectionPath matched', { path, section });
       
-      return {
-        type: 'path',
-        subtype: 'urlSectionPath',
-        values: { 
-          url: fullUrl,
-          protocol,
-          parts: rest.parts,
-          section
-        },
-        raw: { 
-          url: fullUrl,
-          protocol,
-          section
-        },
-        meta: helpers.createUrlMetadata(protocol, rest.parts, true)
-      };
-    }
-  / url:URLPath _ "#" _ section:BaseIdentifier {
-      helpers.debug('URLSectionPath matched', { url, section });
+      // Determine if this is a URL or file path based on content
+      const isUrl = path.values.protocol !== undefined;
       
-      return {
-        type: 'path',
-        subtype: 'urlSectionPath',
-        values: { 
-          url: url.values.url,
-          protocol: url.values.protocol,
-          parts: url.values.parts,
-          section
-        },
-        raw: { 
-          url: url.raw.url,
-          protocol: url.raw.protocol,
-          section
-        },
-        meta: helpers.createUrlMetadata(url.values.protocol, url.values.parts, true)
-      };
+      if (isUrl) {
+        return {
+          type: 'path',
+          subtype: 'urlSectionPath',
+          values: { 
+            url: path.values.url,
+            protocol: path.values.protocol,
+            parts: path.values.parts,
+            section
+          },
+          raw: { 
+            url: path.raw.url || path.raw.path,
+            protocol: path.values.protocol,
+            section
+          },
+          meta: helpers.createUrlMetadata(path.values.protocol, path.values.parts, true)
+        };
+      } else {
+        return {
+          type: 'path',
+          subtype: 'fileSectionPath',
+          values: { 
+            path: path.values.path,
+            section
+          },
+          raw: { 
+            path: path.raw.path,
+            section
+          },
+          meta: {
+            ...path.meta,
+            hasSection: true
+          }
+        };
+      }
     }
 
-URLPath "URL path"
-  = '"' protocol:URLProtocolType ":" rest:URLRest '"' {
-      // Handle quoted URLs
-      const fullUrl = `${protocol}:${rest.raw}`;
-      helpers.debug('URLPath matched quoted', { protocol, fullUrl });
+UnifiedPath "Unified path (file or URL)"
+  = path:WrappedPathContent {
+      helpers.debug('UnifiedPath matched', { path });
       
-      return {
-        type: 'path',
-        subtype: 'urlPath',
-        values: { 
-          url: fullUrl,
-          protocol,
-          parts: rest.parts
-        },
-        raw: { 
-          url: fullUrl,
-          protocol
-        },
-        meta: helpers.createUrlMetadata(protocol, rest.parts)
-      };
-    }
-  / "'" protocol:URLProtocolType ":" rest:URLRest "'" {
-      // Handle single-quoted URLs
-      const fullUrl = `${protocol}:${rest.raw}`;
-      helpers.debug('URLPath matched single-quoted', { protocol, fullUrl });
+      // Analyze the raw content to determine if this is a URL or file path
+      const rawContent = path.raw;
+      const urlMatch = rawContent.match(/^(https?|file):\/\//);
       
-      return {
-        type: 'path',
-        subtype: 'urlPath',
-        values: { 
-          url: fullUrl,
-          protocol,
-          parts: rest.parts
-        },
-        raw: { 
-          url: fullUrl,
-          protocol
-        },
-        meta: helpers.createUrlMetadata(protocol, rest.parts)
-      };
-    }
-  / "`" protocol:URLProtocolType ":" rest:URLRest "`" {
-      // Handle backtick-quoted URLs
-      const fullUrl = `${protocol}:${rest.raw}`;
-      helpers.debug('URLPath matched backtick-quoted', { protocol, fullUrl });
-      
-      return {
-        type: 'path',
-        subtype: 'urlPath',
-        values: { 
-          url: fullUrl,
-          protocol,
-          parts: rest.parts
-        },
-        raw: { 
-          url: fullUrl,
-          protocol
-        },
-        meta: helpers.createUrlMetadata(protocol, rest.parts)
-      };
-    }
-  / "[" protocol:URLProtocolType ":" rest:URLRest "]" {
-      // Handle bracketed URLs
-      const fullUrl = `${protocol}:${rest.raw}`;
-      helpers.debug('URLPath matched bracketed', { protocol, fullUrl });
-      
-      return {
-        type: 'path',
-        subtype: 'urlPath',
-        values: { 
-          url: fullUrl,
-          protocol,
-          parts: rest.parts
-        },
-        raw: { 
-          url: fullUrl,
-          protocol
-        },
-        meta: helpers.createUrlMetadata(protocol, rest.parts)
-      };
-    }
-  / protocol:URLProtocolType ":" rest:URLRest {
-      // Handle unquoted URLs
-      const fullUrl = `${protocol}:${rest.raw}`;
-      helpers.debug('URLPath matched unquoted', { protocol, fullUrl });
-      
-      return {
-        type: 'path',
-        subtype: 'urlPath',
-        values: { 
-          url: fullUrl,
-          protocol,
-          parts: rest.parts
-        },
-        raw: { 
-          url: fullUrl,
-          protocol
-        },
-        meta: helpers.createUrlMetadata(protocol, rest.parts)
-      };
+      if (urlMatch) {
+        // This is a URL - parse it as such
+        const protocol = urlMatch[1];
+        const fullUrl = rawContent;
+        
+        helpers.debug('UnifiedPath detected URL', { protocol, fullUrl });
+        
+        return {
+          type: 'path',
+          subtype: 'urlPath',
+          values: { 
+            url: fullUrl,
+            protocol,
+            parts: path.parts
+          },
+          raw: { 
+            url: fullUrl,
+            protocol
+          },
+          meta: helpers.createUrlMetadata(protocol, path.parts)
+        };
+      } else {
+        // This is a file path
+        helpers.debug('UnifiedPath detected file path', { rawContent });
+        
+        return {
+          type: 'path',
+          subtype: 'filePath',
+          values: { 
+            path: path.parts 
+          },
+          raw: { 
+            path: path.raw 
+          },
+          meta: helpers.createPathMetadata(path.raw, path.parts)
+        };
+      }
     }
 
 // URL protocol (http, https, file)
@@ -236,49 +179,6 @@ URLSegment "URL segment"
     }
 
 // -------------------------------------------------------------
-// FILE PATHS - Local filesystem paths
+// LEGACY URL HELPER RULES - Keep for backward compatibility
+// These are used by the UnifiedPath system for URL parsing
 // -------------------------------------------------------------
-
-FileSectionPath "File path with section marker"
-  = path:FilePath _ "#" _ section:BaseIdentifier {
-      helpers.debug('FileSectionPath matched', { path, section });
-      
-      return {
-        type: 'path',
-        subtype: 'fileSectionPath',
-        values: { 
-          path: path.values.path,
-          section
-        },
-        raw: { 
-          path: path.raw.path,
-          section
-        },
-        meta: {
-          ...path.meta,
-          hasSection: true
-        }
-      };
-    }
-
-FilePath "File path"
-  = path:WrappedPathContent &{
-      // Check if this looks like a URL - if so, fail this rule
-      const raw = path.raw;
-      const isURL = /^https?:\/\//.test(raw) || /^file:\/\//.test(raw);
-      return !isURL;
-    } {
-      helpers.debug('FilePath matched', { path });
-      
-      return {
-        type: 'path',
-        subtype: 'filePath',
-        values: { 
-          path: path.parts 
-        },
-        raw: { 
-          path: path.raw 
-        },
-        meta: helpers.createPathMetadata(path.raw, path.parts)
-      };
-    }

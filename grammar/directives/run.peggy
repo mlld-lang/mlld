@@ -20,7 +20,7 @@ It can be used in three main forms:
 
 // Primary @run directive 
 AtRun
-  = DirectiveContext "@run" _ "@" commandRef:RunCommandReference {
+  = DirectiveContext "@run" _ "@" commandRef:RunCommandReference comment:InlineComment? {
       helpers.debug('AtRun matched command reference', { commandRef });
       
       // This is used to run a previously defined command (created with @exec)
@@ -36,13 +36,14 @@ AtRun
           args: commandRef.rawArgs || []
         },
         {
-          argumentCount: commandRef.args ? commandRef.args.length : 0
+          argumentCount: commandRef.args ? commandRef.args.length : 0,
+          ...(comment ? { comment } : {})
         },
         location(),
         'exec'  // Source parameter
       );
     }
-  / DirectiveContext "@run" _ command:CommandCore {
+  / DirectiveContext "@run" _ command:CommandCore comment:InlineComment? {
       helpers.debug('AtRun matched shell command', { command });
       
       return helpers.createStructuredDirective(
@@ -52,13 +53,14 @@ AtRun
         command.raw,
         {
           ...command.meta,
-          isMultiLine: command.raw.command.includes('\n')
+          isMultiLine: command.raw.command.includes('\n'),
+          ...(comment ? { comment } : {})
         },
         location(),
         'command'  // Source parameter
       );
     }
-  / DirectiveContext "@run" _ runCode:RunLanguageCodeCore {
+  / DirectiveContext "@run" _ runCode:RunLanguageCodeCore comment:InlineComment? {
       helpers.debug('AtRun matched language code block using shared abstraction', runCode);
       
       // Since we're using the shared abstraction, we just need to format it for this context
@@ -67,7 +69,10 @@ AtRun
         'runCode',
         runCode.values,
         runCode.raw,
-        runCode.meta,
+        {
+          ...runCode.meta,
+          ...(comment ? { comment } : {})
+        },
         runCode.location,
         'code'  // Source parameter
       );

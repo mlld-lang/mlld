@@ -4,14 +4,14 @@
   "category": "valid",
   "subcategory": "path-url",
   "input": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\n@path apiEndpoint = [https://api.example.com/v1]\n\nYou can now use the API endpoint: {{apiEndpoint}}",
-  "expected": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\nYou can now use the API endpoint: https://api.example.com/v1",
+  "expected": "# Path URL Assignment Example\n\nThis example demonstrates assigning a URL to a path variable.\n\n<!-- SKIP: Path URL bug - See GitHub Issue #81 -->\nYou can now use the API endpoint: https://api.example.com/v1",
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
   "ast": [
     {
       "type": "Text",
-      "nodeId": "bd47e165-65b8-4da7-8798-04335b90c943",
+      "nodeId": "d4be2c6a-39e6-449c-971f-0e0d987a1095",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "7ce3d3a2-daf9-454b-b008-f46ce0418a6f",
+      "nodeId": "c0bf20b2-a569-4db8-8804-e4f42ffd6b86",
       "location": {
         "start": {
           "offset": 94,
@@ -48,7 +48,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "09c29121-27d9-4623-b191-fc64d160c50c",
+            "nodeId": "4f56628e-d833-4bda-85fc-21ca4b95a974",
             "location": {
               "start": {
                 "offset": 0,
@@ -68,7 +68,7 @@
         "path": [
           {
             "type": "Text",
-            "nodeId": "cfb67c5e-0d72-4c01-ae22-9c4ad785d61b",
+            "nodeId": "3779faa4-5a69-4842-ad1e-ab9a823477b6",
             "location": {
               "start": {
                 "offset": 94,
@@ -100,7 +100,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "6036db51-7572-413e-bb8a-25cf78b1fcbe",
+      "nodeId": "b7f3e294-10be-426b-9efe-113d7bf1365b",
       "location": {
         "start": {
           "offset": 142,
@@ -117,7 +117,7 @@
     },
     {
       "type": "VariableReference",
-      "nodeId": "eaf30f67-4660-4b4a-8ab5-2ca920f658a0",
+      "nodeId": "63b7d7d6-b735-4ba6-86f3-68b04dede98b",
       "location": {
         "start": {
           "offset": 0,

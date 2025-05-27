@@ -2,7 +2,8 @@
 
 This guide explains the principles, patterns, and practices for developing and maintaining the Mlld grammar. It serves as the primary reference for developers working on the grammar system.
 
-> **For Grammar Consumers**: Use `npm run ast -- '<mlld syntax>'` to explore the AST output and refer to [AST-CONTEXT-GUIDE.md](./AST-CONTEXT-GUIDE.md) for understanding the AST structure.
+> **For Grammar Consumers**: Use `npm run ast -- '<mlld syntax>'` to explore the AST output and refer to [docs/dev/AST.md](../../docs/dev/AST.md) for understanding the AST structure.
+> **For debugging**: Refer to [grammar/DEBUG.md](./DEBUG.md)
 
 ## Critical: How the Grammar Build System Works
 
@@ -140,7 +141,7 @@ ImportList = GenericList(ImportItem, CommaSpace)
 ```
 
 ### 2. **Hierarchical Pattern Organization**
-Follow the established abstraction hierarchy (see [NAMING-CONVENTIONS.md](./NAMING-CONVENTIONS.md)):
+Follow the established abstraction hierarchy with standardized naming conventions:
 
 ```
 Level 1: Core Primitives      → base/
@@ -152,6 +153,40 @@ Level 6: Directive Cores      → core/
 Level 7: Directive Rules      → directives/
 Level 8: RHS Patterns         → patterns/rhs.peggy
 ```
+
+#### Naming Convention Standard
+
+Each abstraction level follows specific naming patterns for consistency:
+
+**Prefixes:**
+- `Base*` - Fundamental abstractions (BaseToken, BaseSegment)
+- `At*` - Directive types (AtRun, AtText, AtPath)
+- `Wrapped*` - Container patterns that provide structured output (WrappedPathContent)
+
+**Suffixes:**
+- `*Identifier` - Identifiers and names (VariableIdentifier)
+- `*Pattern` - Matching patterns (InterpolationPattern)
+- `*Interpolation` - Variable insertion patterns (CommandInterpolation)
+- `*Content` - Content production (TemplateContent)
+- `*Core` - Reusable logic (RunCommandCore)
+- `*Context` - Context detection predicates (DirectiveContext)
+- `*Segment` - Basic text pieces (TextSegment)
+- `*Separator` - Delimiter characters (PathSeparator)
+- `*Whitespace` - Spacing patterns (HorizontalWhitespace)
+- `*Literal` - Literal values (StringLiteral)
+- `*Assignment` - Assignment operations (TextAssignment)
+- `*Reference` - Reference operations (VariableReference)
+- `*Token` - Atomic lexical elements (PathSeparatorToken)
+- `*List` - Comma-separated lists (ParameterList, not ParametersList)
+
+**Directive Subtype Naming:**
+Use composition pattern: Operation + ContentType
+- `textPath` - Text directive operating on path content
+- `textPathSection` - Text directive extracting section from path
+- `addPath` - Add directive including path content  
+- `addPathSection` - Add directive extracting section from path
+
+*Rationale: Section extraction is meaningless without context - it's always a section OF something. The naming should reflect this relationship.*
 
 ### 3. **Single Source of Truth**
 Each pattern should be defined once and imported where needed.
@@ -226,6 +261,39 @@ AtText = "@text" _ id:BaseIdentifier _ "=" _ template:TemplateCore {
 }
 ```
 
+## Grammar Rule Format Standards
+
+For consistency across all grammar files, follow these formatting standards:
+
+### Rule Definition Format
+```peggy
+// PATTERN NAME - Short description
+// Used by: List of directives/patterns that use this
+// Purpose: What this pattern matches and why
+
+PatternName "Human-readable description"
+  = /* implementation */
+```
+
+### Naming Requirements
+1. **Rule Names**: PascalCase for all rules
+2. **Comments**: Include a string literal description after the rule name
+3. **Debug Statements**: Standardized format for debug output
+   ```peggy
+   helpers.debug('RuleName matched', { details });
+   ```
+4. **Location Capture**: Consistent location capture for AST nodes
+   ```peggy
+   return helpers.createNode(NodeType.Text, { content }, location());
+   ```
+
+### Implementation Guidelines
+1. Use the correct prefix/suffix combination that best describes the rule's purpose and level
+2. Maintain consistency within abstraction levels
+3. Document each rule with a clear string description
+4. Use structured debug output with rule name and relevant details
+5. Follow the abstraction hierarchy for rule dependencies
+
 ## Anti-Patterns to Avoid
 
 ### 1. **Local Variable Redefinition**
@@ -233,6 +301,9 @@ AtText = "@text" _ id:BaseIdentifier _ "=" _ template:TemplateCore {
 // ❌ ANTI-PATTERN
 MyRule = content:('[' parts:(MyLocalVar / Text)* ']')
 MyLocalVar = "@" id:BaseIdentifier { /* reimplements AtVar */ }
+
+// ✅ GOOD: Using existing pattern with context
+BracketContent = '[' parts:(AtVar / TextSegment)* ']'
 ```
 
 ### 2. **Duplicate List Logic**
@@ -240,6 +311,12 @@ MyLocalVar = "@" id:BaseIdentifier { /* reimplements AtVar */ }
 // ❌ ANTI-PATTERN  
 Rule1List = first:Item rest:(_ "," _ item:Item { return item; })* { return [first, ...rest]; }
 Rule2List = first:Thing rest:(_ "," _ thing:Thing { return thing; })* { return [first, ...rest]; }
+
+// ✅ GOOD: Abstract the pattern
+GenericList(ItemRule, Separator)
+  = first:ItemRule rest:(Separator item:ItemRule { return item; })* {
+      return [first, ...rest];
+    }
 ```
 
 ### 3. **Inline Metadata Creation**
@@ -254,6 +331,9 @@ Rule2List = first:Thing rest:(_ "," _ thing:Thing { return thing; })* { return [
     }
   };
 }
+
+// ✅ GOOD: Use helper functions for metadata creation
+{ return helpers.createPathMeta(rawPath, variables); }
 ```
 
 ### 4. **Ignoring Core Abstractions**
@@ -261,6 +341,11 @@ Rule2List = first:Thing rest:(_ "," _ thing:Thing { return thing; })* { return [
 // ❌ ANTI-PATTERN: Not using available cores
 AtAdd = "@add" _ content:DoubleBracketContent {
   // Manually handling what TemplateCore does
+}
+
+// ✅ GOOD: Use directive cores for common logic
+AtAdd = "@add" _ content:TemplateCore {
+  // Use content.values, content.raw, content.meta
 }
 ```
 
@@ -270,7 +355,33 @@ AtAdd = "@add" _ content:DoubleBracketContent {
 myCustomVar = /* ... */        // Should be PascalCase
 Path_Segment = /* ... */       // No underscores
 pathpattern = /* ... */        // Should be PathPattern
+
+// ✅ GOOD: Follow naming conventions
+MyCustomVar = /* ... */
+PathSegment = /* ... */
+PathPattern = /* ... */
 ```
+
+### 6. **Creating Duplicate Patterns**
+```peggy
+// ❌ ANTI-PATTERN: Creating new pattern instead of using existing
+BracketVar = "@" id:BaseIdentifier { /* duplicate logic */ }
+
+// ✅ GOOD: Using existing pattern from patterns/variables.peggy
+// Import and use AtVar which already handles this case
+```
+
+## Pattern Deprecation and Removal
+
+When identifying legacy patterns that should be cleaned up:
+
+1. **Mark with comment**: `// DEPRECATED: Use AtVar instead`
+2. **Remove in next major refactor**
+3. **Never use in new code**
+
+Example: `PathVar` is deprecated in favor of `AtVar`
+
+This ensures a clean migration path while preventing further technical debt.
 
 ## Development Workflow
 
@@ -313,7 +424,9 @@ grammar/
 ├── patterns/       # Levels 2-5: Reusable patterns
 ├── core/          # Level 6: Directive cores
 ├── directives/    # Level 7: Directive implementations
-└── docs/          # Documentation (including this guide)
+├── deps/          # Build dependencies and helpers
+├── parser/        # Generated parser files (DO NOT EDIT)
+└── README.md      # This comprehensive guide
 ```
 
 ## Common Tasks
@@ -362,6 +475,6 @@ Before committing grammar changes:
 
 ## Resources
 
-- [NAMING-CONVENTIONS.md](./NAMING-CONVENTIONS.md) - Naming standards
-- [AST-CONTEXT-GUIDE.md](./AST-CONTEXT-GUIDE.md) - AST structure guide
+- [docs/dev/AST.md](../../docs/dev/AST.md) - AST structure guide
 - [Peggy.js Documentation](https://peggyjs.org/) - Parser generator docs
+- `npm run ast -- '<mlld syntax>'` - Test AST output for any valid mlld syntax
