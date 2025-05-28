@@ -716,7 +716,10 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
       const formattedError = await errorFormatter.formatError(error, {
         showSourceContext: true,
         useColors: true,
-        contextLines: 2
+        contextLines: 2,
+        useSmartPaths: true,
+        basePath: path.resolve(path.dirname(options.input)),
+        workingDirectory: process.cwd()
       });
       
       console.error('\n' + formattedError + '\n');

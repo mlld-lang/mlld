@@ -42,23 +42,44 @@ export class ErrorDisplayFormatter {
 
     // Add source context if available and requested
     if (showSourceContext && error.sourceLocation) {
-      const formattedLocation = formatLocation(error.sourceLocation);
+      const formattedLocation = await this.locationFormatter.formatLocation(error.sourceLocation, {
+        useSmartPaths,
+        basePath,
+        workingDirectory,
+        preferRelative: true,
+        maxRelativeDepth: 3
+      });
       
       if (formattedLocation.file) {
-        const sourceContext = await this.sourceExtractor.extractContext(formattedLocation, {
+        // Use original file path for source extraction (absolute path needed)
+        const sourceContext = await this.sourceExtractor.extractContext({
+          display: formattedLocation.display,
+          file: formattedLocation.file, // Use absolute path for file reading
+          line: formattedLocation.line,
+          column: formattedLocation.column
+        }, {
           contextLines,
           maxLineLength
         });
 
         if (sourceContext) {
-          const contextDisplay = this.formatSourceContext(sourceContext, useColors);
+          // Update the source context to use the smart display path
+          const enhancedSourceContext = {
+            ...sourceContext,
+            file: formattedLocation.displayPath || formattedLocation.file // Use smart path for display
+          };
+          const contextDisplay = this.formatSourceContext(enhancedSourceContext, useColors);
           parts.push(contextDisplay);
         }
       }
     }
 
     // Add error details
-    const detailsDisplay = this.formatErrorDetails(error, useColors);
+    const detailsDisplay = await this.formatErrorDetails(error, useColors, {
+      useSmartPaths,
+      basePath,
+      workingDirectory
+    });
     if (detailsDisplay) {
       parts.push(detailsDisplay);
     }
@@ -144,26 +165,37 @@ export class ErrorDisplayFormatter {
       : `${spaces}${indicator}`;
   }
 
-  private formatErrorDetails(error: MlldError, useColors: boolean): string | null {
+  private async formatErrorDetails(
+    error: MlldError, 
+    useColors: boolean,
+    pathOptions: { useSmartPaths?: boolean; basePath?: string; workingDirectory?: string; }
+  ): Promise<string | null> {
     if (!error.details || typeof error.details !== 'object') {
       return null;
     }
 
-    const { formatLocationForError } = require('./locationFormatter');
-    const relevantDetails = Object.entries(error.details)
-      .filter(([key, value]) => {
-        // Skip suggestion as it's handled separately
-        if (key === 'suggestion') return false;
-        return value !== undefined && value !== null;
-      })
-      .map(([key, value]) => {
-        // Format location objects specially
-        if (value && typeof value === 'object' && 
-            ('line' in value || 'filePath' in value)) {
-          return `  ${key}: ${formatLocationForError(value)}`;
+    const relevantDetails = [];
+    
+    for (const [key, value] of Object.entries(error.details)) {
+      // Skip suggestion as it's handled separately
+      if (key === 'suggestion') continue;
+      if (value === undefined || value === null) continue;
+
+      // Format location objects specially with smart paths
+      if (value && typeof value === 'object' && 
+          ('line' in value || 'filePath' in value)) {
+        try {
+          const formattedLocation = await this.locationFormatter.formatLocationForError(value, pathOptions);
+          relevantDetails.push(`  ${key}: ${formattedLocation}`);
+        } catch {
+          // Fallback to basic formatting if smart formatting fails
+          const { formatLocationForError } = require('./locationFormatter');
+          relevantDetails.push(`  ${key}: ${formatLocationForError(value)}`);
         }
-        return `  ${key}: ${String(value)}`;
-      });
+      } else {
+        relevantDetails.push(`  ${key}: ${String(value)}`);
+      }
+    }
 
     if (relevantDetails.length === 0) {
       return null;

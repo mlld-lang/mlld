@@ -5,6 +5,7 @@ import { IFileSystemService } from '@services/fs/IFileSystemService';
 export interface EnhancedFormattedLocation {
   readonly display: string;
   readonly file?: string;
+  readonly displayPath?: string; // Smart path without line/column
   readonly line?: number;
   readonly column?: number;
   readonly isRelative?: boolean;
@@ -63,6 +64,7 @@ export class EnhancedLocationFormatter {
       return {
         display: parts.join(':'),
         file: location.filePath,
+        displayPath,
         line: location.line,
         column: location.column,
         isRelative,
