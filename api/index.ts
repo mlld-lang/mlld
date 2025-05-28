@@ -10,9 +10,12 @@ import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { ErrorFormatSelector, type FormattedErrorResult, type ErrorFormatOptions } from '@core/utils/errorFormatSelector';
 
 // Export core types/errors
 export { MlldError };
+export { ErrorFormatSelector };
+export type { FormattedErrorResult, ErrorFormatOptions };
 
 // Export types
 export type { Location, Position } from '@core/types/index';
@@ -49,4 +52,34 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
   });
 
   return result;
+}
+
+/**
+ * Enhanced error formatting for API users
+ * 
+ * @example
+ * ```typescript
+ * try {
+ *   await processMlld(content);
+ * } catch (error) {
+ *   if (error instanceof MlldError) {
+ *     const formatter = new ErrorFormatSelector(fileSystem);
+ *     const result = await formatter.formatAuto(error, {
+ *       useSmartPaths: true,
+ *       basePath: '/path/to/project'
+ *     });
+ *     
+ *     console.log(result.formatted); // Human-readable
+ *     console.log(result.json);      // Structured data
+ *   }
+ * }
+ * ```
+ */
+export async function formatError(
+  error: MlldError,
+  options?: ErrorFormatOptions & { fileSystem?: IFileSystemService }
+): Promise<FormattedErrorResult> {
+  const { fileSystem, ...formatOptions } = options || {};
+  const formatter = new ErrorFormatSelector(fileSystem);
+  return await formatter.formatAuto(error, formatOptions);
 }

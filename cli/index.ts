@@ -16,7 +16,7 @@ import type { IPathService } from '@services/fs/IPathService';
 import { logger, cliLogger } from '@core/utils/logger';
 import { ConfigLoader } from '@core/config/loader';
 import type { ResolvedURLConfig } from '@core/config/types';
-import { ErrorDisplayFormatter } from '@core/utils/errorDisplayFormatter';
+import { ErrorFormatSelector } from '@core/utils/errorFormatSelector';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -708,44 +708,26 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
   logger.level = options.debug ? 'debug' : (options.verbose ? 'info' : 'warn');
 
   if (isMlldError) {
-    // Use enhanced error display with source context
+    // Use enhanced error formatting with auto-detection
     const fileSystem = new NodeFileSystem();
-    const errorFormatter = new ErrorDisplayFormatter(fileSystem);
+    const errorFormatter = new ErrorFormatSelector(fileSystem);
     
     try {
-      const formattedError = await errorFormatter.formatError(error, {
-        showSourceContext: true,
+      const result = await errorFormatter.formatForCLI(error, {
         useColors: true,
-        contextLines: 2,
+        useSourceContext: true,
         useSmartPaths: true,
         basePath: path.resolve(path.dirname(options.input)),
-        workingDirectory: process.cwd()
+        workingDirectory: process.cwd(),
+        contextLines: 2
       });
       
-      console.error('\n' + formattedError + '\n');
+      console.error('\n' + result + '\n');
     } catch (formatError) {
-      // Fallback to basic error display if formatting fails
-      console.error(chalk.red(`\n${error.name}: ${error.message}\n`));
-      
-      if (error.details && typeof error.details === 'object') {
-        const { formatLocationForError } = require('@core/utils/locationFormatter');
-        const detailsStr = Object.entries(error.details)
-          .filter(([key, value]) => value !== undefined && value !== null)
-          .map(([key, value]) => {
-            if (value && typeof value === 'object' && 
-                ('line' in value || 'filePath' in value)) {
-              return `  ${key}: ${formatLocationForError(value)}`;
-            }
-            return `  ${key}: ${String(value)}`;
-          })
-          .join('\n');
-        
-        if (detailsStr) {
-          console.error(chalk.gray('Details:'));
-          console.error(chalk.gray(detailsStr));
-          console.error('');
-        }
-      }
+      // Fallback to basic API format if enhanced formatting fails
+      const fallbackFormatter = new ErrorFormatSelector();
+      const result = fallbackFormatter.formatForAPI(error);
+      console.error('\n' + result.formatted + '\n');
     }
   } else if (error instanceof Error) {
     logger.error('An unexpected error occurred:', error);
