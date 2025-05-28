@@ -241,7 +241,7 @@ export class ConfigLoader {
       showProgress: outputConfig?.showProgress ?? true,
       maxOutputLines: outputConfig?.maxOutputLines ?? 50,
       errorBehavior: outputConfig?.errorBehavior ?? 'continue',
-      collectErrors: outputConfig?.collectErrors ?? false,
+      collectErrors: outputConfig?.collectErrors ?? true,
       progressStyle: outputConfig?.progressStyle ?? 'emoji',
       preserveFullOutput: outputConfig?.preserveFullOutput ?? false,
       logOutputToFile: outputConfig?.logOutputToFile ?? false,

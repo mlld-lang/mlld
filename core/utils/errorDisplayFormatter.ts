@@ -3,6 +3,7 @@ import { MlldError } from '@core/errors/MlldError';
 import { SourceContextExtractor, SourceContext } from './sourceContextExtractor';
 import { EnhancedLocationFormatter } from './enhancedLocationFormatter';
 import { IFileSystemService } from '@services/fs/IFileSystemService';
+import { logger } from '@core/utils/logger';
 
 export interface ErrorDisplayOptions {
   showSourceContext?: boolean;
@@ -42,7 +43,7 @@ export class ErrorDisplayFormatter {
 
     // Add source context if available and requested
     if (showSourceContext && error.sourceLocation) {
-      console.debug('[ErrorDisplay Debug] Formatting source context:', {
+      logger.debug('[ErrorDisplay] Formatting source context:', {
         sourceLocation: error.sourceLocation,
         errorDetails: error.details,
         hasFile: !!(error.sourceLocation as any).filePath || !!(error.details?.filePath)
@@ -56,7 +57,7 @@ export class ErrorDisplayFormatter {
         maxRelativeDepth: 3
       });
       
-      console.debug('[ErrorDisplay Debug] Formatted location:', formattedLocation);
+      logger.debug('[ErrorDisplay] Formatted location:', formattedLocation);
       
       // Check if we have source content stored in the error (for parse errors)
       const sourceContent = (error as any).sourceContent || error.details?.sourceContent;
@@ -77,7 +78,7 @@ export class ErrorDisplayFormatter {
           }
         );
 
-        console.debug('[ErrorDisplay Debug] Source context from content:', {
+        logger.debug('[ErrorDisplay] Source context from content:', {
           hasContext: !!sourceContext,
           sourceLength: sourceContent.length,
           lines: sourceContext?.lines?.length
@@ -99,7 +100,7 @@ export class ErrorDisplayFormatter {
           maxLineLength
         });
 
-        console.debug('[ErrorDisplay Debug] Source context extracted:', {
+        logger.debug('[ErrorDisplay] Source context extracted:', {
           hasContext: !!sourceContext,
           file: formattedLocation.file,
           lines: sourceContext?.lines?.length
@@ -115,10 +116,10 @@ export class ErrorDisplayFormatter {
           parts.push(contextDisplay);
         }
       } else {
-        console.debug('[ErrorDisplay Debug] No file path in formatted location and no source content');
+        logger.debug('[ErrorDisplay] No file path in formatted location and no source content');
       }
     } else {
-      console.debug('[ErrorDisplay Debug] No source context requested or no sourceLocation:', {
+      logger.debug('[ErrorDisplay] No source context requested or no sourceLocation:', {
         showSourceContext,
         hasSourceLocation: !!error.sourceLocation
       });
@@ -229,6 +230,8 @@ export class ErrorDisplayFormatter {
     for (const [key, value] of Object.entries(error.details)) {
       // Skip suggestion as it's handled separately
       if (key === 'suggestion') continue;
+      // Skip sourceContent as it's only for internal use
+      if (key === 'sourceContent') continue;
       if (value === undefined || value === null) continue;
 
       // Format location objects specially with smart paths
