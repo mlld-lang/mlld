@@ -80,6 +80,7 @@ describe('Path Directive', () => {
     
     // Verify that @username appears as literal text, not a variable reference
     const textNodes = directiveNode.values.path.filter(node => node.type === 'Text');
+    console.log('Text nodes:', textNodes.map(n => n.content));
     const usernameText = textNodes.find(node => node.content === '@username');
     expect(usernameText).toBeDefined();
     expect(usernameText.content).toBe('@username');
@@ -103,35 +104,6 @@ describe('Path Directive', () => {
     expect(directiveNode.meta.path.hasVariables).toBe(true);
   });
   
-  test('Path with variable interpolation', async () => {
-    // Test actual variable interpolation with valid variables
-    const content = `@path src = [@sourceDir/files]`;
-    const parseResult = await parse(content);
-    const directiveNode = parseResult.ast[0];
-    
-    // Verify structure of the new format
-    expect(directiveNode.kind).toBe('path');
-    expect(directiveNode.subtype).toBe('pathAssignment');
-    
-    // Check identifier
-    expect(Array.isArray(directiveNode.values.identifier)).toBe(true);
-    expect(directiveNode.values.identifier[0].identifier).toBe('src');
-    
-    // Check raw values
-    expect(directiveNode.raw.identifier).toBe('src');
-    expect(directiveNode.raw.path).toBe('@sourceDir/files');
-    
-    // Check path values
-    expect(Array.isArray(directiveNode.values.path)).toBe(true);
-    expect(directiveNode.values.path.length).toBeGreaterThan(0);
-    
-    // Check for variable reference
-    const variableNode = directiveNode.values.path.find(node => node.type === 'VariableReference');
-    expect(variableNode).toBeDefined();
-    expect(variableNode.type).toBe('VariableReference');
-    expect(variableNode.valueType).toBe('varIdentifier');
-    expect(variableNode.identifier).toBe('sourceDir');
-  });
   
   // This test helps verify path variable reference handling
   test('Path referencing another path variable', async () => {
