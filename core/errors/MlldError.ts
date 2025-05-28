@@ -98,4 +98,27 @@ export class MlldError extends Error {
   public toString(): string {
     return `${this.name} [${this.code}, ${this.severity}]: ${this.message}`;
   }
+
+  /**
+   * Serializes the error to JSON with formatted location string.
+   */
+  public toJSON(): Record<string, any> {
+    const result: Record<string, any> = {
+      name: this.name,
+      message: this.message,
+      code: this.code,
+      severity: this.severity,
+    };
+
+    if (this.details) {
+      result.details = this.details;
+    }
+
+    if (this.sourceLocation) {
+      const { formatLocationForError } = require('@core/utils/locationFormatter');
+      result.sourceLocation = formatLocationForError(this.sourceLocation);
+    }
+
+    return result;
+  }
 } 

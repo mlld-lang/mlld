@@ -1,1 +1,1 @@
-The config is /Users/adam/dev/mlld/config
+The config is /mock/project/config

@@ -160,14 +160,14 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       }
       
       // Set up package.json for project path resolution
-      if (fixture.name.includes('path-assignment-project')) {
-        // Create the expected project structure
-        await fileSystem.mkdir('/Users/adam/dev/mlld');
-        await fileSystem.writeFile('/Users/adam/dev/mlld/package.json', JSON.stringify({
+      if (fixture.name.includes('path-assignment-project') || fixture.name.includes('path-assignment-special')) {
+        // Create the expected mock project structure
+        await fileSystem.mkdir('/mock/project');
+        await fileSystem.writeFile('/mock/project/package.json', JSON.stringify({
           name: 'mlld',
           version: '1.0.0'
         }));
-        await fileSystem.mkdir('/Users/adam/dev/mlld/src');
+        await fileSystem.mkdir('/mock/project/src');
       }
       
       // Set up specific test files that aren't in the examples directory
@@ -215,10 +215,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       }
       
       try {
-        // For path-assignment-project, we need to set the correct basePath
+        // For path assignment tests, we need to set the correct basePath
         let basePath = fixture.basePath || '/';
-        if (fixture.name === 'path-assignment-project') {
-          basePath = '/Users/adam/dev/mlld';
+        if (fixture.name === 'path-assignment-project' || fixture.name === 'path-assignment-special') {
+          basePath = '/mock/project';
         }
         // For npm run tests, we need to be in the project directory
         if (fixture.name.includes('run-command-bases-npm-run')) {

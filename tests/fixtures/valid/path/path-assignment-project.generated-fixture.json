@@ -4,7 +4,7 @@
   "category": "valid",
   "subcategory": "path-assignment",
   "input": "@path projectSrc = [@./src]\n@add [[The project source is {{projectSrc}}]]",
-  "expected": "The project source is /Users/adam/dev/mlld/src",
+  "expected": "The project source is /mock/project/src",
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,

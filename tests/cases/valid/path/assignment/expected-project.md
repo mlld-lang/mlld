@@ -1,1 +1,1 @@
-The project source is /Users/adam/dev/mlld/src
+The project source is /mock/project/src
