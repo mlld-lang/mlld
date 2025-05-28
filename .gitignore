@@ -92,3 +92,5 @@ debug-combined-grammar.peggy
 
 # VS Code extension specific
 *.vsix
+
+cli/temp-test-*

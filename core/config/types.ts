@@ -5,6 +5,7 @@
 export interface MlldConfig {
   security?: SecurityConfig;
   cache?: CacheConfig;
+  output?: OutputConfig;
 }
 
 export interface SecurityConfig {
@@ -72,6 +73,23 @@ export interface CacheRule {
   requireReview?: boolean; // Override global requireReview for this pattern
 }
 
+export interface OutputConfig {
+  showProgress?: boolean;
+  maxOutputLines?: number;
+  errorBehavior?: 'halt' | 'continue';
+  collectErrors?: boolean;
+  progressStyle?: 'emoji' | 'text';
+  preserveFullOutput?: boolean;
+  logOutputToFile?: boolean;
+  showCommandContext?: boolean;
+  errorFormatting?: {
+    useColors?: boolean;
+    useSourceContext?: boolean;
+    contextLines?: number;
+    showCommandDetails?: boolean;
+  };
+}
+
 // Runtime configuration after parsing and merging
 export interface ResolvedURLConfig {
   enabled: boolean;
@@ -88,5 +106,22 @@ export interface ResolvedURLConfig {
       pattern: RegExp;
       ttl: number; // In milliseconds
     }>;
+  };
+}
+
+export interface ResolvedOutputConfig {
+  showProgress: boolean;
+  maxOutputLines: number;
+  errorBehavior: 'halt' | 'continue';
+  collectErrors: boolean;
+  progressStyle: 'emoji' | 'text';
+  preserveFullOutput: boolean;
+  logOutputToFile: boolean;
+  showCommandContext: boolean;
+  errorFormatting: {
+    useColors: boolean;
+    useSourceContext: boolean;
+    contextLines: number;
+    showCommandDetails: boolean;
   };
 }

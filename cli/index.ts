@@ -15,7 +15,7 @@ import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import { logger, cliLogger } from '@core/utils/logger';
 import { ConfigLoader } from '@core/config/loader';
-import type { ResolvedURLConfig } from '@core/config/types';
+import type { ResolvedURLConfig, ResolvedOutputConfig } from '@core/config/types';
 import { ErrorFormatSelector } from '@core/utils/errorFormatSelector';
 
 // CLI Options interface
@@ -54,6 +54,13 @@ export interface CLIOptions {
   urlAllowedDomains?: string[];
   urlBlockedDomains?: string[];
   // No transform options - transformation is always enabled
+  // Output management options
+  maxOutputLines?: number;
+  showProgress?: boolean;
+  errorBehavior?: 'halt' | 'continue';
+  collectErrors?: boolean;
+  progressStyle?: 'emoji' | 'text';
+  showCommandContext?: boolean;
 }
 
 /**
@@ -256,6 +263,32 @@ function parseArgs(args: string[]): CLIOptions {
       case '--url-blocked-domains':
         options.urlBlockedDomains = args[++i].split(',').filter(Boolean);
         break;
+      // Output management options
+      case '--max-output-lines':
+        options.maxOutputLines = parseInt(args[++i]);
+        if (isNaN(options.maxOutputLines) || options.maxOutputLines < 0) {
+          throw new Error('--max-output-lines must be a positive number');
+        }
+        break;
+      case '--show-progress':
+        options.showProgress = true;
+        break;
+      case '--no-progress':
+        options.showProgress = false;
+        break;
+      case '--error-behavior':
+        const behavior = args[++i];
+        if (behavior !== 'halt' && behavior !== 'continue') {
+          throw new Error('--error-behavior must be "halt" or "continue"');
+        }
+        options.errorBehavior = behavior;
+        break;
+      case '--collect-errors':
+        options.collectErrors = true;
+        break;
+      case '--show-command-context':
+        options.showCommandContext = true;
+        break;
       // Transformation is always enabled by default
       // No transform flags needed
       default:
@@ -341,6 +374,14 @@ URL Support Options:
   --url-max-size <bytes>  Maximum URL response size [default: 5242880]
   --url-allowed-domains   Comma-separated list of allowed domains
   --url-blocked-domains   Comma-separated list of blocked domains
+
+Output Management Options:
+  --max-output-lines <n>  Limit command output to n lines [default: 50]
+  --show-progress         Show command execution progress [default: true]
+  --no-progress           Disable progress display
+  --error-behavior <mode> How to handle command failures: halt, continue [default: continue]
+  --collect-errors        Collect errors and display summary at end
+  --show-command-context  Show source context for command execution errors
 
 Configuration:
   Mlld looks for configuration in:
@@ -564,6 +605,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     const configLoader = new ConfigLoader(path.dirname(input));
     const config = configLoader.load();
     const urlConfig = configLoader.resolveURLConfig(config);
+    const outputConfig = configLoader.resolveOutputConfig(config);
     
     // CLI options override config
     let finalUrlConfig: ResolvedURLConfig | undefined = urlConfig;
@@ -600,7 +642,14 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       fileSystem: fileSystem,
       pathService: pathService,
       strict: cliOptions.strict,
-      urlConfig: finalUrlConfig
+      urlConfig: finalUrlConfig,
+      outputOptions: {
+        showProgress: cliOptions.showProgress !== undefined ? cliOptions.showProgress : outputConfig.showProgress,
+        maxOutputLines: cliOptions.maxOutputLines !== undefined ? cliOptions.maxOutputLines : outputConfig.maxOutputLines,
+        errorBehavior: cliOptions.errorBehavior || outputConfig.errorBehavior,
+        collectErrors: cliOptions.collectErrors !== undefined ? cliOptions.collectErrors : outputConfig.collectErrors,
+        showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext
+      }
     });
 
     // Output handling (remains mostly the same)
@@ -702,6 +751,7 @@ console.error = function(...args: any[]) {
 // Moved handleError definition before main
 async function handleError(error: any, options: CLIOptions): Promise<void> {
   const isMlldError = error instanceof MlldError;
+  const isCommandError = error.constructor.name === 'MlldCommandExecutionError';
   const severity = isMlldError ? error.severity : ErrorSeverity.Fatal;
 
   // Ensure the logger configuration matches CLI options
@@ -713,14 +763,29 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
     const errorFormatter = new ErrorFormatSelector(fileSystem);
     
     try {
-      const result = await errorFormatter.formatForCLI(error, {
-        useColors: true,
-        useSourceContext: true,
-        useSmartPaths: true,
-        basePath: path.resolve(path.dirname(options.input)),
-        workingDirectory: process.cwd(),
-        contextLines: 2
-      });
+      let result: string;
+      
+      if (isCommandError && options.showCommandContext) {
+        // Enhanced formatting for command errors with full context
+        result = await errorFormatter.formatForCLI(error, {
+          useColors: true,
+          useSourceContext: true,
+          useSmartPaths: true,
+          basePath: path.resolve(path.dirname(options.input)),
+          workingDirectory: process.cwd(),
+          contextLines: 3 // More context for command errors
+        });
+      } else {
+        // Standard formatting
+        result = await errorFormatter.formatForCLI(error, {
+          useColors: true,
+          useSourceContext: true,
+          useSmartPaths: true,
+          basePath: path.resolve(path.dirname(options.input)),
+          workingDirectory: process.cwd(),
+          contextLines: 2
+        });
+      }
       
       console.error('\n' + result + '\n');
     } catch (formatError) {

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import type { MlldConfig, ResolvedURLConfig } from './types';
+import type { MlldConfig, ResolvedURLConfig, ResolvedOutputConfig } from './types';
 import { parseDuration, parseSize } from './utils';
 
 /**
@@ -84,6 +84,14 @@ export class ConfigLoader {
       };
     }
 
+    // Merge output config
+    if (global.output || project.output) {
+      merged.output = this.mergeOutputConfig(
+        global.output,
+        project.output
+      );
+    }
+
     return merged;
   }
 
@@ -150,6 +158,34 @@ export class ConfigLoader {
     return merged;
   }
 
+  private mergeOutputConfig(global?: any, project?: any): any {
+    if (!global && !project) return undefined;
+    
+    const merged = { ...global };
+    
+    if (project) {
+      // Simple properties override
+      if (project.showProgress !== undefined) merged.showProgress = project.showProgress;
+      if (project.maxOutputLines !== undefined) merged.maxOutputLines = project.maxOutputLines;
+      if (project.errorBehavior !== undefined) merged.errorBehavior = project.errorBehavior;
+      if (project.collectErrors !== undefined) merged.collectErrors = project.collectErrors;
+      if (project.progressStyle !== undefined) merged.progressStyle = project.progressStyle;
+      if (project.preserveFullOutput !== undefined) merged.preserveFullOutput = project.preserveFullOutput;
+      if (project.logOutputToFile !== undefined) merged.logOutputToFile = project.logOutputToFile;
+      if (project.showCommandContext !== undefined) merged.showCommandContext = project.showCommandContext;
+      
+      // Merge error formatting config
+      if (project.errorFormatting) {
+        merged.errorFormatting = {
+          ...(global?.errorFormatting || {}),
+          ...project.errorFormatting
+        };
+      }
+    }
+    
+    return merged;
+  }
+
   /**
    * Resolve configuration to runtime values
    */
@@ -193,5 +229,29 @@ export class ConfigLoader {
       .replace(/\*/g, '.*'); // Convert * to .*
     
     return new RegExp(`^${escaped}$`);
+  }
+
+  /**
+   * Resolve output configuration to runtime values
+   */
+  resolveOutputConfig(config: MlldConfig): ResolvedOutputConfig {
+    const outputConfig = config.output;
+    
+    return {
+      showProgress: outputConfig?.showProgress ?? true,
+      maxOutputLines: outputConfig?.maxOutputLines ?? 50,
+      errorBehavior: outputConfig?.errorBehavior ?? 'continue',
+      collectErrors: outputConfig?.collectErrors ?? false,
+      progressStyle: outputConfig?.progressStyle ?? 'emoji',
+      preserveFullOutput: outputConfig?.preserveFullOutput ?? false,
+      logOutputToFile: outputConfig?.logOutputToFile ?? false,
+      showCommandContext: outputConfig?.showCommandContext ?? true,
+      errorFormatting: {
+        useColors: outputConfig?.errorFormatting?.useColors ?? true,
+        useSourceContext: outputConfig?.errorFormatting?.useSourceContext ?? true,
+        contextLines: outputConfig?.errorFormatting?.contextLines ?? 2,
+        showCommandDetails: outputConfig?.errorFormatting?.showCommandDetails ?? true
+      }
+    };
   }
 }

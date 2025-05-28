@@ -1,4 +1,4 @@
-import type { MlldNode, MlldVariable } from '@core/types';
+import type { MlldNode, MlldVariable, SourceLocation, DirectiveNode } from '@core/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import type { ResolvedURLConfig } from '@core/config/types';
@@ -8,6 +8,31 @@ import { ImportApproval } from '@core/security/ImportApproval';
 import { ImmutableCache } from '@core/security/ImmutableCache';
 import { GistTransformer } from '@core/security/GistTransformer';
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
+import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
+
+interface CommandExecutionOptions {
+  showProgress?: boolean;
+  maxOutputLines?: number;
+  errorBehavior?: 'halt' | 'continue';
+  timeout?: number;
+  collectErrors?: boolean;
+}
+
+interface CommandExecutionContext {
+  sourceLocation?: SourceLocation;
+  directiveNode?: DirectiveNode;
+  filePath?: string;
+  directiveType?: string;
+}
+
+interface CollectedError {
+  error: MlldCommandExecutionError;
+  command: string;
+  timestamp: Date;
+  duration: number;
+  sourceLocation?: SourceLocation;
+  context?: CommandExecutionContext;
+}
 
 /**
  * Environment holds all state and provides capabilities for evaluation.
@@ -23,6 +48,16 @@ export class Environment {
   private importApproval?: ImportApproval;
   private immutableCache?: ImmutableCache;
   private currentFilePath?: string; // Track current file being processed
+  
+  // Output management properties
+  private outputOptions: CommandExecutionOptions = {
+    showProgress: true,
+    maxOutputLines: 50,
+    errorBehavior: 'continue',
+    timeout: 30000,
+    collectErrors: false
+  };
+  private collectedErrors: CollectedError[] = [];
   
   // Default URL validation options (used if no config provided)
   private defaultUrlOptions = {
@@ -163,27 +198,84 @@ export class Environment {
     return this.fileSystem.readFile(resolvedPath);
   }
   
-  async executeCommand(command: string): Promise<string> {
+  async executeCommand(
+    command: string, 
+    options?: CommandExecutionOptions,
+    context?: CommandExecutionContext
+  ): Promise<string> {
+    // Merge with instance defaults
+    const finalOptions = { ...this.outputOptions, ...options };
+    const { showProgress, maxOutputLines, errorBehavior, timeout } = finalOptions;
+    
+    const startTime = Date.now();
+    
+    if (showProgress) {
+      console.log(`⚡ Running: ${command}`);
+    }
+    
     try {
-      // Use project path as working directory if found, otherwise fall back to basePath
       const workingDirectory = await this.getProjectPath();
-      
-      const output = execSync(command, {
+      const result = execSync(command, {
         encoding: 'utf8',
         cwd: workingDirectory,
-        env: { ...process.env }
+        env: { ...process.env },
+        maxBuffer: 10 * 1024 * 1024, // 10MB limit
+        timeout: timeout || 30000
       });
-      return output.trimEnd();
-    } catch (error: any) {
-      // Even on error, we might have output
-      if (error.stdout) {
-        return error.stdout.trimEnd();
+      
+      const duration = Date.now() - startTime;
+      const { processed } = this.processOutput(result, maxOutputLines);
+      
+      if (showProgress) {
+        console.log(`✅ Completed in ${duration}ms`);
       }
-      throw new Error(`Command execution failed: ${error.message}`);
+      
+      return processed;
+      
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      
+      if (showProgress) {
+        console.log(`❌ Failed in ${duration}ms`);
+      }
+      
+      // Create rich MlldCommandExecutionError with source context
+      const commandError = MlldCommandExecutionError.create(
+        command,
+        error.status || error.code || 1,
+        duration,
+        context?.sourceLocation,
+        {
+          stdout: error.stdout,
+          stderr: error.stderr,
+          workingDirectory: await this.getProjectPath(),
+          directiveType: context?.directiveType || 'run'
+        }
+      );
+      
+      // Collect error if in continue mode or if collectErrors is enabled
+      if (errorBehavior === 'continue' || finalOptions.collectErrors) {
+        this.collectError(commandError, command, duration, context);
+      }
+      
+      if (errorBehavior === 'halt') {
+        throw commandError; // Throw rich error instead of generic error
+      }
+      
+      // Return available output for continue mode
+      const output = error.stdout || error.stderr || '';
+      const { processed } = this.processOutput(output, maxOutputLines);
+      return processed;
     }
   }
   
-  async executeCode(code: string, language: string, params?: Record<string, any>): Promise<string> {
+  async executeCode(
+    code: string, 
+    language: string, 
+    params?: Record<string, any>,
+    context?: CommandExecutionContext
+  ): Promise<string> {
+    const startTime = Date.now();
     if (language === 'javascript' || language === 'js' || language === 'node') {
       try {
         // Create a function that captures console.log output
@@ -220,6 +312,21 @@ export class Environment {
         
         return result !== undefined ? String(result) : '';
       } catch (error) {
+        if (context?.sourceLocation) {
+          const codeError = new MlldCommandExecutionError(
+            `Code execution failed: ${language}`,
+            context.sourceLocation,
+            {
+              command: `${language} code execution`,
+              exitCode: 1,
+              duration: Date.now() - startTime,
+              stderr: error instanceof Error ? error.message : 'Unknown error',
+              workingDirectory: await this.getProjectPath(),
+              directiveType: context.directiveType || 'run'
+            }
+          );
+          throw codeError;
+        }
         throw new Error(`Code execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     } else if (language === 'python' || language === 'py') {
@@ -514,6 +621,105 @@ export class Environment {
   
   setURLConfig(config: ResolvedURLConfig): void {
     this.urlConfig = config;
+  }
+  
+  // --- Output Management Methods ---
+  
+  setOutputOptions(options: Partial<CommandExecutionOptions>): void {
+    this.outputOptions = { ...this.outputOptions, ...options };
+  }
+  
+  private collectError(
+    error: MlldCommandExecutionError, 
+    command: string, 
+    duration: number,
+    context?: CommandExecutionContext
+  ): void {
+    this.collectedErrors.push({
+      error,
+      command,
+      timestamp: new Date(),
+      duration,
+      sourceLocation: context?.sourceLocation,
+      context
+    });
+  }
+  
+  getCollectedErrors(): CollectedError[] {
+    return this.collectedErrors;
+  }
+  
+  clearCollectedErrors(): void {
+    this.collectedErrors = [];
+  }
+  
+  private processOutput(output: string, maxLines?: number): { 
+    processed: string; 
+    truncated: boolean; 
+    originalLineCount: number 
+  } {
+    if (!maxLines || maxLines <= 0) {
+      return { processed: output.trimEnd(), truncated: false, originalLineCount: 0 };
+    }
+    
+    const lines = output.split('\n');
+    if (lines.length <= maxLines) {
+      return { 
+        processed: output.trimEnd(), 
+        truncated: false, 
+        originalLineCount: lines.length 
+      };
+    }
+    
+    const truncated = lines.slice(0, maxLines).join('\n');
+    const remaining = lines.length - maxLines;
+    return {
+      processed: `${truncated}\n... (${remaining} more lines, use --verbose to see all)`,
+      truncated: true,
+      originalLineCount: lines.length
+    };
+  }
+  
+  async displayCollectedErrors(): Promise<void> {
+    const errors = this.getCollectedErrors();
+    if (errors.length === 0) return;
+    
+    console.log(`\n❌ ${errors.length} error${errors.length > 1 ? 's' : ''} occurred:\n`);
+    
+    // Use ErrorFormatSelector for consistent rich formatting
+    const { ErrorFormatSelector } = await import('@core/utils/errorFormatSelector');
+    const formatter = new ErrorFormatSelector(this.fileSystem);
+    
+    for (let i = 0; i < errors.length; i++) {
+      const item = errors[i];
+      console.log(`${i + 1}. Command execution failed:`);
+      
+      try {
+        // Format using the same rich system as other mlld errors
+        const formatted = await formatter.formatForCLI(item.error, {
+          useColors: true,
+          useSourceContext: true,
+          useSmartPaths: true,
+          basePath: this.basePath,
+          workingDirectory: process.cwd(),
+          contextLines: 2
+        });
+        
+        console.log(formatted);
+      } catch (formatError) {
+        // Fallback to basic display if rich formatting fails
+        console.log(`   ├─ Command: ${item.command}`);
+        console.log(`   ├─ Duration: ${item.duration}ms`);
+        console.log(`   ├─ ${item.error.message}`);
+        if (item.error.details?.exitCode !== undefined) {
+          console.log(`   ├─ Exit code: ${item.error.details.exitCode}`);
+        }
+        console.log(`   └─ Use --verbose to see full output\n`);
+      }
+    }
+    
+    console.log(`💡 Use --verbose to see full command output`);
+    console.log(`💡 Use --help error-handling for error handling options\n`);
   }
   
   // --- Import Tracking (for circular import detection) ---

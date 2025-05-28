@@ -15,6 +15,14 @@ export async function evaluateRun(
 ): Promise<EvalResult> {
   let output = '';
   
+  // Create execution context with source information
+  const executionContext = {
+    sourceLocation: directive.location,
+    directiveNode: directive,
+    filePath: env.getCurrentFilePath(),
+    directiveType: directive.directiveType || 'run'
+  };
+  
   if (directive.subtype === 'runCommand') {
     // Handle command execution
     const commandNodes = directive.values?.identifier || directive.values?.command;
@@ -25,8 +33,8 @@ export async function evaluateRun(
     // Interpolate command (resolve variables)
     const command = await interpolate(commandNodes, env);
     
-    // Execute the command
-    output = await env.executeCommand(command);
+    // Execute the command with context for rich error reporting
+    output = await env.executeCommand(command, undefined, executionContext);
     
   } else if (directive.subtype === 'runCode') {
     // Handle code execution
@@ -38,9 +46,9 @@ export async function evaluateRun(
     // Get the code
     const code = await interpolate(codeNodes, env);
     
-    // Execute the code (default to JavaScript)
+    // Execute the code (default to JavaScript) with context for errors
     const language = directive.raw?.lang || directive.meta?.language || 'javascript';
-    output = await env.executeCode(code, language);
+    output = await env.executeCode(code, language, undefined, executionContext);
     
   } else if (directive.subtype === 'runExec') {
     // Handle exec reference
@@ -88,7 +96,8 @@ export async function evaluateRun(
       
       // Interpolate the command template with parameters
       const command = await interpolate(cleanTemplate, tempEnv);
-      output = await env.executeCommand(command);
+      // Pass context for exec command errors too
+      output = await env.executeCommand(command, undefined, executionContext);
       
     } else if (cmdDef.type === 'commandRef') {
       // This command references another command
@@ -119,7 +128,7 @@ export async function evaluateRun(
       }
       
       const code = await interpolate(cmdDef.codeTemplate, tempEnv);
-      output = await env.executeCode(code, cmdDef.language || 'javascript', argValues);
+      output = await env.executeCode(code, cmdDef.language || 'javascript', argValues, executionContext);
     }
   } else {
     throw new Error(`Unsupported run subtype: ${directive.subtype}`);

@@ -209,8 +209,9 @@ describe('Complex Data Assignment', () => {
     
     // Should have partial results
     expect(resolvedValue.success).toBe('ok');
-    expect(resolvedValue.failure).toHaveProperty('__error', true);
-    expect(resolvedValue.failure).toHaveProperty('__message');
+    // With error-behavior: continue, the command returns output even on failure
+    expect(typeof resolvedValue.failure).toBe('string');
+    expect(resolvedValue.failure).toContain('nonexistent-command');
     expect(resolvedValue.another).toBe('still works');
   });
 });

@@ -7,6 +7,14 @@ import type { IPathService } from '@services/fs/IPathService';
 
 import type { ResolvedURLConfig } from '@core/config/types';
 
+interface CommandExecutionOptions {
+  showProgress?: boolean;
+  maxOutputLines?: number;
+  errorBehavior?: 'halt' | 'continue';
+  collectErrors?: boolean;
+  showCommandContext?: boolean;
+}
+
 /**
  * Options for the interpreter
  */
@@ -18,6 +26,7 @@ export interface InterpretOptions {
   fileSystem: IFileSystemService;
   pathService: IPathService;
   urlConfig?: ResolvedURLConfig;
+  outputOptions?: CommandExecutionOptions;
 }
 
 /**
@@ -85,8 +94,18 @@ export async function interpret(
     env.setURLConfig(options.urlConfig);
   }
   
+  // Set output options if provided
+  if (options.outputOptions) {
+    env.setOutputOptions(options.outputOptions);
+  }
+  
   // Evaluate the AST
   await evaluate(ast, env);
+  
+  // Display collected errors with rich formatting if enabled
+  if (options.outputOptions?.collectErrors) {
+    await env.displayCollectedErrors();
+  }
   
   // Get the final nodes from environment
   const nodes = env.getNodes();
