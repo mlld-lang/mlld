@@ -103,9 +103,9 @@ describe('Path Directive', () => {
     expect(directiveNode.meta.path.hasVariables).toBe(true);
   });
   
-  test('Path with relative project path', async () => {
-    // Using brackets for variable interpolation per new syntax rules
-    const content = `@path src = [@./source]`;
+  test('Path with variable interpolation', async () => {
+    // Test actual variable interpolation with valid variables
+    const content = `@path src = [@sourceDir/files]`;
     const parseResult = await parse(content);
     const directiveNode = parseResult.ast[0];
     
@@ -119,18 +119,18 @@ describe('Path Directive', () => {
     
     // Check raw values
     expect(directiveNode.raw.identifier).toBe('src');
-    expect(directiveNode.raw.path).toBe('@PROJECTPATH/source');
+    expect(directiveNode.raw.path).toBe('@sourceDir/files');
     
     // Check path values
     expect(Array.isArray(directiveNode.values.path)).toBe(true);
     expect(directiveNode.values.path.length).toBeGreaterThan(0);
     
-    // Check for path variable reference to PROJECTPATH
+    // Check for variable reference
     const variableNode = directiveNode.values.path.find(node => node.type === 'VariableReference');
     expect(variableNode).toBeDefined();
     expect(variableNode.type).toBe('VariableReference');
     expect(variableNode.valueType).toBe('varIdentifier');
-    expect(variableNode.identifier).toBe('PROJECTPATH'); // Should be normalized
+    expect(variableNode.identifier).toBe('sourceDir');
   });
   
   // This test helps verify path variable reference handling

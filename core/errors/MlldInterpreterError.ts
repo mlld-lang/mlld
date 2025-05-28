@@ -94,7 +94,6 @@ export class MlldInterpreterError extends MlldError {
    * Custom serialization to avoid circular references and include only essential info
    */
   toJSON(): SerializedInterpreterError {
-    const { formatLocationForError } = require('../../core/utils/locationFormatter');
     const cause = this.cause;
     return {
       name: this.name,
