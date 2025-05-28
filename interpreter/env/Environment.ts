@@ -9,6 +9,8 @@ import { ImmutableCache } from '@core/security/ImmutableCache';
 import { GistTransformer } from '@core/security/GistTransformer';
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
+import { SecurityManager } from '@security';
+import type { RegistryResolver } from '@security/registry';
 
 interface CommandExecutionOptions {
   showProgress?: boolean;
@@ -48,6 +50,7 @@ export class Environment {
   private importApproval?: ImportApproval;
   private immutableCache?: ImmutableCache;
   private currentFilePath?: string; // Track current file being processed
+  private securityManager?: SecurityManager; // Central security coordinator
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
@@ -78,6 +81,14 @@ export class Environment {
     
     // Initialize security components for root environment only
     if (!parent) {
+      try {
+        this.securityManager = SecurityManager.getInstance(basePath);
+      } catch (error) {
+        // If security manager fails to initialize, continue with legacy components
+        console.warn('SecurityManager not available, using legacy security components');
+      }
+      
+      // Keep legacy components for backward compatibility
       this.importApproval = new ImportApproval(basePath);
       this.immutableCache = new ImmutableCache(basePath);
     }

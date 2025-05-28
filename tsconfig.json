@@ -23,6 +23,8 @@
     "paths": {
       "@core/*": ["core/*"],
       "@services/*": ["services/*"],
+      "@security/*": ["security/*"],
+      "@security": ["security/index.ts"],
       "@parser/*": ["parser/*"],
       "@interpreter/*": ["interpreter/*"],
       "@output/*": ["output/*"],
@@ -37,6 +39,7 @@
   "include": [
     "core/**/*",
     "services/**/*",
+    "security/**/*",
     "parser/**/*",
     "interpreter/**/*",
     "output/**/*",

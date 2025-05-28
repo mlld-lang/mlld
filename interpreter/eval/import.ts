@@ -29,7 +29,17 @@ export async function evaluateImport(
   const importPath = await interpolate(pathNodes, env);
   let resolvedPath: string;
   
-  if (isURL || env.isURL(importPath)) {
+  // Check if this is a registry import (mlld://user/module format)
+  if (importPath.startsWith('mlld://')) {
+    // Use registry resolver if available
+    const registryResolver = env.getRegistryResolver();
+    if (registryResolver) {
+      // This will resolve mlld://user/module to mlld://gist/user/gist-id
+      resolvedPath = await registryResolver.resolve(importPath);
+    } else {
+      resolvedPath = importPath;
+    }
+  } else if (isURL || env.isURL(importPath)) {
     // For URLs, use the URL as-is (no path resolution needed)
     resolvedPath = importPath;
     
