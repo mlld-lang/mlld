@@ -22,10 +22,8 @@ AtPath
   = DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ "[" pathContent:$(!"]" .)* "]" {
       helpers.debug('AtPath matched bracketed path', { id, pathContent });
       
-      // Process special path variables @~ and @. directly
-      // This ensures the AST and raw string are consistent with test expectations
+      // Process special path variables
       const processedContent = pathContent
-        .replace(/@~/g, '@HOMEPATH')
         .replace(/@\./g, '@PROJECTPATH');
       
       // Use WrappedPathContent abstraction to process the processed content 
@@ -91,11 +89,10 @@ AtPath
   / DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ path:PathExpression {
       helpers.debug('AtPath matched normal path', { id, path });
       
-      // ProcessedPath might need @~ and @. transformed like we did above
+      // Process special path variables
       let processedPath = path.raw.path || path.raw.url;
-      if (processedPath.includes('@~') || processedPath.includes('@.')) {
+      if (processedPath.includes('@.')) {
         processedPath = processedPath
-          .replace(/@~/g, '@HOMEPATH')
           .replace(/@\./g, '@PROJECTPATH');
       }
       
@@ -106,11 +103,10 @@ AtPath
       const processedPathParts = [...(path.values.path || path.values.parts || [])];
       for (let i = 0; i < processedPathParts.length; i++) {
         const part = processedPathParts[i];
-        if (part.type === NodeType.VariableReference && 
-            (part.identifier === '~' || part.identifier === '.')) {
+        if (part.type === NodeType.VariableReference && part.identifier === '.') {
           // Clone the node and update identifier
           const newNode = { ...part };
-          newNode.identifier = part.identifier === '~' ? 'HOMEPATH' : 'PROJECTPATH';
+          newNode.identifier = 'PROJECTPATH';
           processedPathParts[i] = newNode;
         }
       }
@@ -141,9 +137,9 @@ AtPath
 // HELPER RULES (special path identifiers)
 // -------------------------------------------------------------
 
-// Special path identifiers (HOMEPATH, PROJECTPATH, etc.)
+// Special path identifiers
 SpecialPathIdentifier
-  = "HOMEPATH" / "~" / "PROJECTPATH" / "." {
+  = "PROJECTPATH" / "." {
       return text();
     }
 

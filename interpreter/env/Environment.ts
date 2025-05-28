@@ -252,13 +252,8 @@ export class Environment {
   
   async resolvePath(inputPath: string): Promise<string> {
     // Handle special path variables
-    if (inputPath.startsWith('$HOMEPATH')) {
-      const homePath = process.env.HOME || process.env.USERPROFILE || '';
-      inputPath = inputPath.replace('$HOMEPATH', homePath);
-    }
-    
-    if (inputPath.startsWith('$PROJECTPATH')) {
-      inputPath = inputPath.replace('$PROJECTPATH', await this.getProjectPath());
+    if (inputPath.startsWith('@PROJECTPATH')) {
+      inputPath = inputPath.replace('@PROJECTPATH', await this.getProjectPath());
     }
     
     // Use the path module that's already imported

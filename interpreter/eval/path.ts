@@ -6,7 +6,7 @@ import { createPathVariable, sourceLocationToInterpreterLocation } from '@core/t
 
 /**
  * Evaluate @path directives.
- * Resolves paths with special variables like $HOMEPATH, $PROJECTPATH.
+ * Resolves paths with special variables like @PROJECTPATH.
  * 
  * Ported from PathDirectiveHandler.
  */
@@ -42,8 +42,7 @@ export async function evaluatePath(
     resolvedPath = interpolatedPath;
   } else {
     // Only resolve special variables and absolute paths for file paths
-    if (interpolatedPath.startsWith('$HOMEPATH') || 
-        interpolatedPath.startsWith('$PROJECTPATH') ||
+    if (interpolatedPath.startsWith('@PROJECTPATH') ||
         interpolatedPath.startsWith('/')) {
       resolvedPath = await env.resolvePath(interpolatedPath);
     }

@@ -264,10 +264,8 @@ function peg$parse(input, options) {
   var peg$c82 = "meta";
   var peg$c83 = "*";
   var peg$c84 = " as ";
-  var peg$c85 = "HOMEPATH";
-  var peg$c86 = "~";
-  var peg$c87 = "PROJECTPATH";
-  var peg$c88 = "add";
+  var peg$c85 = "PROJECTPATH";
+  var peg$c86 = "add";
 
   var peg$r0 = /^[ \t\r]/;
   var peg$r1 = /^[^\n]/;
@@ -492,11 +490,9 @@ function peg$parse(input, options) {
   var peg$e187 = peg$literalExpectation("meta", false);
   var peg$e188 = peg$literalExpectation("*", false);
   var peg$e189 = peg$literalExpectation(" as ", false);
-  var peg$e190 = peg$literalExpectation("HOMEPATH", false);
-  var peg$e191 = peg$literalExpectation("~", false);
-  var peg$e192 = peg$literalExpectation("PROJECTPATH", false);
-  var peg$e193 = peg$classExpectation([",", ")"], true, false);
-  var peg$e194 = peg$literalExpectation("add", false);
+  var peg$e190 = peg$literalExpectation("PROJECTPATH", false);
+  var peg$e191 = peg$classExpectation([",", ")"], true, false);
+  var peg$e192 = peg$literalExpectation("add", false);
 
   var peg$f0 = function(nodes) {
     helpers.debug('Start: Entered');
@@ -3086,10 +3082,8 @@ function peg$parse(input, options) {
   var peg$f268 = function(id, pathContent) {
       helpers.debug('AtPath matched bracketed path', { id, pathContent });
       
-      // Process special path variables @~ and @. directly
-      // This ensures the AST and raw string are consistent with test expectations
+      // Process special path variables
       const processedContent = pathContent
-        .replace(/@~/g, '@HOMEPATH')
         .replace(/@\./g, '@PROJECTPATH');
       
       // Use WrappedPathContent abstraction to process the processed content 
@@ -3155,11 +3149,10 @@ function peg$parse(input, options) {
   var peg$f269 = function(id, path) {
       helpers.debug('AtPath matched normal path', { id, path });
       
-      // ProcessedPath might need @~ and @. transformed like we did above
+      // Process special path variables
       let processedPath = path.raw.path || path.raw.url;
-      if (processedPath.includes('@~') || processedPath.includes('@.')) {
+      if (processedPath.includes('@.')) {
         processedPath = processedPath
-          .replace(/@~/g, '@HOMEPATH')
           .replace(/@\./g, '@PROJECTPATH');
       }
       
@@ -3170,11 +3163,10 @@ function peg$parse(input, options) {
       const processedPathParts = [...(path.values.path || path.values.parts || [])];
       for (let i = 0; i < processedPathParts.length; i++) {
         const part = processedPathParts[i];
-        if (part.type === NodeType.VariableReference && 
-            (part.identifier === '~' || part.identifier === '.')) {
+        if (part.type === NodeType.VariableReference && part.identifier === '.') {
           // Clone the node and update identifier
           const newNode = { ...part };
-          newNode.identifier = part.identifier === '~' ? 'HOMEPATH' : 'PROJECTPATH';
+          newNode.identifier = 'PROJECTPATH';
           processedPathParts[i] = newNode;
         }
       }
@@ -14387,45 +14379,27 @@ function peg$parse(input, options) {
   function peg$parseSpecialPathIdentifier() {
     var s0, s1;
 
-    if (input.substr(peg$currPos, 8) === peg$c85) {
+    if (input.substr(peg$currPos, 11) === peg$c85) {
       s0 = peg$c85;
-      peg$currPos += 8;
+      peg$currPos += 11;
     } else {
       s0 = peg$FAILED;
       if (peg$silentFails === 0) { peg$fail(peg$e190); }
     }
     if (s0 === peg$FAILED) {
-      if (input.charCodeAt(peg$currPos) === 126) {
-        s0 = peg$c86;
+      s0 = peg$currPos;
+      if (input.charCodeAt(peg$currPos) === 46) {
+        s1 = peg$c11;
         peg$currPos++;
       } else {
-        s0 = peg$FAILED;
-        if (peg$silentFails === 0) { peg$fail(peg$e191); }
+        s1 = peg$FAILED;
+        if (peg$silentFails === 0) { peg$fail(peg$e26); }
       }
-      if (s0 === peg$FAILED) {
-        if (input.substr(peg$currPos, 11) === peg$c87) {
-          s0 = peg$c87;
-          peg$currPos += 11;
-        } else {
-          s0 = peg$FAILED;
-          if (peg$silentFails === 0) { peg$fail(peg$e192); }
-        }
-        if (s0 === peg$FAILED) {
-          s0 = peg$currPos;
-          if (input.charCodeAt(peg$currPos) === 46) {
-            s1 = peg$c11;
-            peg$currPos++;
-          } else {
-            s1 = peg$FAILED;
-            if (peg$silentFails === 0) { peg$fail(peg$e26); }
-          }
-          if (s1 !== peg$FAILED) {
-            peg$savedPos = s0;
-            s1 = peg$f270();
-          }
-          s0 = s1;
-        }
+      if (s1 !== peg$FAILED) {
+        peg$savedPos = s0;
+        s1 = peg$f270();
       }
+      s0 = s1;
     }
 
     return s0;
@@ -14719,7 +14693,7 @@ function peg$parse(input, options) {
           peg$currPos++;
         } else {
           s3 = peg$FAILED;
-          if (peg$silentFails === 0) { peg$fail(peg$e193); }
+          if (peg$silentFails === 0) { peg$fail(peg$e191); }
         }
         if (s3 !== peg$FAILED) {
           while (s3 !== peg$FAILED) {
@@ -14729,7 +14703,7 @@ function peg$parse(input, options) {
               peg$currPos++;
             } else {
               s3 = peg$FAILED;
-              if (peg$silentFails === 0) { peg$fail(peg$e193); }
+              if (peg$silentFails === 0) { peg$fail(peg$e191); }
             }
           }
         } else {
@@ -15295,12 +15269,12 @@ function peg$parse(input, options) {
                               }
                               if (s10 === peg$FAILED) {
                                 s10 = peg$currPos;
-                                if (input.substr(peg$currPos, 3) === peg$c88) {
-                                  s11 = peg$c88;
+                                if (input.substr(peg$currPos, 3) === peg$c86) {
+                                  s11 = peg$c86;
                                   peg$currPos += 3;
                                 } else {
                                   s11 = peg$FAILED;
-                                  if (peg$silentFails === 0) { peg$fail(peg$e194); }
+                                  if (peg$silentFails === 0) { peg$fail(peg$e192); }
                                 }
                                 if (s11 !== peg$FAILED) {
                                   s12 = peg$parse_();

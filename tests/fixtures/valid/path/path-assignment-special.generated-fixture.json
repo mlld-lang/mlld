@@ -50,26 +50,8 @@
         ],
         "path": [
           {
-            "type": "VariableReference",
-            "nodeId": "node-3",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              }
-            },
-            "valueType": "varIdentifier",
-            "identifier": "HOMEPATH"
-          },
-          {
             "type": "Text",
-            "nodeId": "node-4",
+            "nodeId": "node-3",
             "location": {
               "start": {
                 "offset": 0,
@@ -82,17 +64,17 @@
                 "column": 31
               }
             },
-            "content": "/config"
+            "content": "@~/config"
           }
         ]
       },
       "raw": {
         "identifier": "homeConfig",
-        "path": "@HOMEPATH/config"
+        "path": "@~/config"
       },
       "meta": {
         "path": {
-          "hasVariables": true,
+          "hasVariables": false,
           "isAbsolute": false,
           "hasExtension": false,
           "extension": null
@@ -101,7 +83,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "node-5",
+      "nodeId": "node-4",
       "location": {
         "start": {
           "offset": 30,
@@ -118,7 +100,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-6",
+      "nodeId": "node-5",
       "location": {
         "start": {
           "offset": 31,
@@ -138,7 +120,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "node-7",
+            "nodeId": "node-6",
             "location": {
               "start": {
                 "offset": 38,
@@ -155,7 +137,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "node-8",
+            "nodeId": "node-7",
             "location": {
               "start": {
                 "offset": 0,
