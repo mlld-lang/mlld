@@ -478,3 +478,59 @@ Before committing grammar changes:
 - [docs/dev/AST.md](../../docs/dev/AST.md) - AST structure guide
 - [Peggy.js Documentation](https://peggyjs.org/) - Parser generator docs
 - `npm run ast -- '<mlld syntax>'` - Test AST output for any valid mlld syntax
+
+## Lessons Learned the Hard Way
+
+### The Delimiter Standardization Disaster
+
+**What We Tried**: Standardize delimiter semantics (`"..."` = literal, `[...]` = interpolated, `[[...]]` = templates) across the grammar.
+
+**What Went Wrong**: We violated every core grammar principle and turned 11 failing tests into 50+ failing tests.
+
+#### Critical Mistakes Made
+
+1. **Violated Abstraction-First Design** ❌  
+   **WRONG**: Added custom delimiter logic directly in individual directives  
+   **RIGHT**: Fix the underlying abstractions (`WrappedPathContent`, `TemplateCore`) once
+
+2. **Violated Single Source of Truth** ❌  
+   **WRONG**: Created duplicate delimiter handling across multiple directives  
+   **RIGHT**: Implement delimiter semantics in core patterns, inherit everywhere
+
+3. **Ignored Existing Abstractions** ❌  
+   **WRONG**: Bypassed existing abstractions and implemented custom parsing  
+   **RIGHT**: Fix `BracketContent` and `TemplateCore` to handle semantics correctly
+
+4. **Classic Anti-Pattern: Not Using Available Cores** ❌  
+   ```peggy
+   // ❌ WHAT WE DID: Custom template parsing in @add
+   @add _ '"' content:EscapedStringContent '"' {
+     // Manual handling of what TemplateCore should do
+   }
+   
+   // ✅ WHAT WE SHOULD HAVE DONE: Use TemplateCore with fixed semantics
+   @add _ template:TemplateCore {
+     // TemplateCore handles all delimiter logic
+   }
+   ```
+
+#### The Fundamental Lesson
+
+**Architectural changes require architectural solutions.** When a problem spans multiple directives, the solution belongs in the shared abstractions, not in individual directive implementations.
+
+#### Process Lessons
+
+1. **Read the Grammar Principles First** - Don't skip studying this README before system changes
+2. **Understand Before Changing** - Don't jump into implementation without understanding existing abstractions  
+3. **Bottom-Up vs Top-Down** - Fix core abstractions first, then let directives inherit the behavior
+4. **Test Core Patterns** - Test abstractions before testing individual directives
+
+#### Recovery Strategy
+
+When you find yourself in a similar situation:
+1. **Stop adding point solutions** to individual directives
+2. **Revert and restart** with proper abstraction analysis
+3. **Fix shared patterns once** rather than fixing symptoms everywhere
+4. **Use the grammar's existing architecture** instead of fighting it
+
+The grammar's "abstraction-first design" principle exists precisely to avoid this kind of systemic breakage. By violating it, we created exactly the kind of maintenance nightmare the architecture was designed to prevent.
