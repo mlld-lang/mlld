@@ -12,6 +12,7 @@ import type { ResolvedURLConfig } from '@core/config/types';
  */
 export interface InterpretOptions {
   basePath?: string;
+  filePath?: string; // Current file being processed (for error reporting)
   strict?: boolean;
   format?: 'markdown' | 'xml';
   fileSystem: IFileSystemService;
@@ -73,6 +74,11 @@ export async function interpret(
     options.pathService,
     options.basePath || process.cwd()
   );
+  
+  // Set the current file path if provided (for error reporting)
+  if (options.filePath) {
+    env.setCurrentFilePath(options.filePath);
+  }
   
   // Configure URL settings if provided
   if (options.urlConfig) {

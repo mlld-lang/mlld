@@ -279,7 +279,7 @@ export async function evaluateText(
   
   // Create and store the variable with location information
   const variable = createTextVariable(identifier, finalValue, {
-    definedAt: sourceLocationToInterpreterLocation(directive.location)
+    definedAt: sourceLocationToInterpreterLocation(directive.location, env.getCurrentFilePath())
   });
   env.setVariable(identifier, variable);
   

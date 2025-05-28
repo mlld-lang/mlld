@@ -57,7 +57,7 @@ export async function evaluatePath(
     isAbsolute: resolvedPath.startsWith('/') || isURL || env.isURL(resolvedPath),
     isRelative: !resolvedPath.startsWith('/') && !isURL && !env.isURL(resolvedPath)
   }, {
-    definedAt: sourceLocationToInterpreterLocation(directive.location)
+    definedAt: sourceLocationToInterpreterLocation(directive.location, env.getCurrentFilePath())
   });
   
   env.setVariable(identifier, variable);

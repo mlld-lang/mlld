@@ -16,6 +16,7 @@ import type { IPathService } from '@services/fs/IPathService';
 import { logger, cliLogger } from '@core/utils/logger';
 import { ConfigLoader } from '@core/config/loader';
 import type { ResolvedURLConfig } from '@core/config/types';
+import { ErrorDisplayFormatter } from '@core/utils/errorDisplayFormatter';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -594,6 +595,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     // Use the new interpreter
     const result = await interpret(content, {
       basePath: path.resolve(path.dirname(input)),
+      filePath: path.resolve(input), // Pass the current file path for error reporting
       format: normalizedFormat,
       fileSystem: fileSystem,
       pathService: pathService,
@@ -699,68 +701,52 @@ console.error = function(...args: any[]) {
 
 // Moved handleError definition before main
 async function handleError(error: any, options: CLIOptions): Promise<void> {
-  const isMlldError = error instanceof MlldError; // Ensure MlldError is used as value
+  const isMlldError = error instanceof MlldError;
   const severity = isMlldError ? error.severity : ErrorSeverity.Fatal;
-
-  const displayErrorWithSourceContext = (error: MlldError) => {
-    // Display error with proper formatting and source context
-    const sourceLocation = error.sourceLocation;
-    
-    if (sourceLocation && sourceLocation.filePath) {
-      const location = sourceLocation.line ? `:${sourceLocation.line}` : '';
-      const columnInfo = sourceLocation.column ? `:${sourceLocation.column}` : '';
-      console.error(chalk.red(`\nError in ${sourceLocation.filePath}${location}${columnInfo}\n`));
-      
-      if (error.code) {
-        console.error(chalk.yellow(`  Code: ${error.code}`));
-      }
-      console.error(chalk.red(`  ${error.name}: ${error.message}\n`));
-    } else {
-      console.error(chalk.red(`\n${error.name}: ${error.message}`));
-      if (error.code) {
-        console.error(chalk.yellow(`  Code: ${error.code}`));
-      }
-      console.error('');
-    }
-
-    // Show additional details if available
-    if (error.details && typeof error.details === 'object') {
-      const { formatLocationForError } = require('@core/utils/locationFormatter');
-      const detailsStr = Object.entries(error.details)
-        .filter(([key, value]) => value !== undefined && value !== null)
-        .map(([key, value]) => {
-          // Format location objects specially
-          if (value && typeof value === 'object' && 
-              ('line' in value || 'filePath' in value)) {
-            return `  ${key}: ${formatLocationForError(value)}`;
-          }
-          return `  ${key}: ${String(value)}`;
-        })
-        .join('\n');
-      
-      if (detailsStr) {
-        console.error(chalk.gray('Details:'));
-        console.error(chalk.gray(detailsStr));
-        console.error('');
-      }
-    }
-
-    // Show cause if available
-    if (error.cause instanceof Error) {
-      console.error(chalk.gray(`Caused by: ${error.cause.message}`));
-      console.error('');
-    }
-  };
 
   // Ensure the logger configuration matches CLI options
   logger.level = options.debug ? 'debug' : (options.verbose ? 'info' : 'warn');
 
   if (isMlldError) {
-    displayErrorWithSourceContext(error);
+    // Use enhanced error display with source context
+    const fileSystem = new NodeFileSystem();
+    const errorFormatter = new ErrorDisplayFormatter(fileSystem);
+    
+    try {
+      const formattedError = await errorFormatter.formatError(error, {
+        showSourceContext: true,
+        useColors: true,
+        contextLines: 2
+      });
+      
+      console.error('\n' + formattedError + '\n');
+    } catch (formatError) {
+      // Fallback to basic error display if formatting fails
+      console.error(chalk.red(`\n${error.name}: ${error.message}\n`));
+      
+      if (error.details && typeof error.details === 'object') {
+        const { formatLocationForError } = require('@core/utils/locationFormatter');
+        const detailsStr = Object.entries(error.details)
+          .filter(([key, value]) => value !== undefined && value !== null)
+          .map(([key, value]) => {
+            if (value && typeof value === 'object' && 
+                ('line' in value || 'filePath' in value)) {
+              return `  ${key}: ${formatLocationForError(value)}`;
+            }
+            return `  ${key}: ${String(value)}`;
+          })
+          .join('\n');
+        
+        if (detailsStr) {
+          console.error(chalk.gray('Details:'));
+          console.error(chalk.gray(detailsStr));
+          console.error('');
+        }
+      }
+    }
   } else if (error instanceof Error) {
     logger.error('An unexpected error occurred:', error);
     console.error(chalk.red(`Unexpected Error: ${error.message}`));
-    // Also check for cause on standard errors
     const cause = error.cause;
     if (cause instanceof Error) {
         console.error(chalk.red(`  Cause: ${cause.message}`));

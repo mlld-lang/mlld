@@ -113,7 +113,7 @@ export async function evaluateExec(
   
   // Create and store the command variable
   const variable = createCommandVariable(identifier, commandDef, {
-    definedAt: sourceLocationToInterpreterLocation(directive.location)
+    definedAt: sourceLocationToInterpreterLocation(directive.location, env.getCurrentFilePath())
   });
   env.setVariable(identifier, variable);
   

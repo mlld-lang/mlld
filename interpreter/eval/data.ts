@@ -45,7 +45,7 @@ export async function evaluateData(
     if (isComplex) {
       // Create a complex data variable that supports lazy evaluation
       const variable = createComplexDataVariable(varName, dataValue, {
-        definedAt: sourceLocationToInterpreterLocation(directive.location)
+        definedAt: sourceLocationToInterpreterLocation(directive.location, env.getCurrentFilePath())
       });
       env.setVariable(varName, variable);
     } else {
@@ -53,7 +53,7 @@ export async function evaluateData(
       // Extract the plain value for simple data
       const plainValue = extractPlainValue(dataValue);
       const variable = createDataVariable(varName, plainValue, {
-        definedAt: sourceLocationToInterpreterLocation(directive.location)
+        definedAt: sourceLocationToInterpreterLocation(directive.location, env.getCurrentFilePath())
       });
       env.setVariable(varName, variable);
     }
@@ -71,7 +71,7 @@ export async function evaluateData(
       // Create new root object
       rootValue = {};
       rootVar = createDataVariable(rootName, rootValue, {
-        definedAt: sourceLocationToInterpreterLocation(directive.location)
+        definedAt: sourceLocationToInterpreterLocation(directive.location, env.getCurrentFilePath())
       });
       env.setVariable(rootName, rootVar);
     } else if (rootVar.type !== 'data') {

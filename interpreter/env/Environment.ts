@@ -22,6 +22,7 @@ export class Environment {
   private urlConfig?: ResolvedURLConfig;
   private importApproval?: ImportApproval;
   private immutableCache?: ImmutableCache;
+  private currentFilePath?: string; // Track current file being processed
   
   // Default URL validation options (used if no config provided)
   private defaultUrlOptions = {
@@ -53,6 +54,14 @@ export class Environment {
     return this.basePath;
   }
   
+  getCurrentFilePath(): string | undefined {
+    return this.currentFilePath || this.parent?.getCurrentFilePath();
+  }
+  
+  setCurrentFilePath(filePath: string | undefined): void {
+    this.currentFilePath = filePath;
+  }
+  
   // --- Variable Management ---
   
   setVariable(name: string, variable: MlldVariable): void {
@@ -69,8 +78,8 @@ export class Environment {
         const importPath = existingIsImported ? existing.metadata?.importPath : variable.metadata?.importPath;
         throw VariableRedefinitionError.forImportConflict(
           name,
-          existing.metadata?.definedAt || { line: 0, column: 0 },
-          variable.metadata?.definedAt || { line: 0, column: 0 },
+          existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() },
+          variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() },
           importPath,
           existingIsImported
         );
@@ -78,8 +87,8 @@ export class Environment {
         // Same-file redefinition
         throw VariableRedefinitionError.forSameFile(
           name,
-          existing.metadata?.definedAt || { line: 0, column: 0 },
-          variable.metadata?.definedAt || { line: 0, column: 0 }
+          existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() },
+          variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() }
         );
       }
     }
@@ -92,8 +101,8 @@ export class Environment {
       
       throw VariableRedefinitionError.forImportConflict(
         name,
-        existing.metadata?.definedAt || { line: 0, column: 0 },
-        variable.metadata?.definedAt || { line: 0, column: 0 },
+        existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() },
+        variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() },
         importPath,
         isExistingImported
       );
@@ -112,8 +121,8 @@ export class Environment {
       const existing = this.variables.get(name)!;
       throw VariableRedefinitionError.forSameFile(
         name,
-        existing.metadata?.definedAt || { line: 0, column: 0 },
-        variable.metadata?.definedAt || { line: 0, column: 0 }
+        existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() },
+        variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() }
       );
     }
     
