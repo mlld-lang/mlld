@@ -17,6 +17,7 @@ export { default as imports } from './imports.generated-fixture.json';
 export { default as invalid } from './invalid.generated-fixture.json';
 export { default as jokes } from './jokes.generated-fixture.json';
 export { default as math } from './math.generated-fixture.json';
+export { default as outputTest } from './output-test.generated-fixture.json';
 export { default as plan } from './plan.generated-fixture.json';
 export { default as readmeEmbed } from './readme-embed.generated-fixture.json';
 export { default as sectionDemo } from './section-demo.generated-fixture.json';
