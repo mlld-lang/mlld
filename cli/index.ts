@@ -593,7 +593,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     
     // Use the new interpreter
     const result = await interpret(content, {
-      basePath: path.dirname(input),
+      basePath: path.resolve(path.dirname(input)),
       format: normalizedFormat,
       fileSystem: fileSystem,
       pathService: pathService,

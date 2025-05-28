@@ -31,7 +31,7 @@ class MlldSyntaxGenerator {
 
   extractDirectivesFromGrammar() {
     try {
-      const grammarPath = path.join(__dirname, '../../base/tokens.peggy');
+      const grammarPath = path.join(__dirname, '../base/tokens.peggy');
       const grammar = fs.readFileSync(grammarPath, 'utf8');
       
       // Look for ReservedDirective rule
@@ -43,7 +43,8 @@ class MlldSyntaxGenerator {
         }
       }
     } catch (err) {
-      console.warn('Could not extract directives from grammar, using fallback list');
+      console.warn(`Could not read grammar file: ${err.message}`);
+      console.warn('Using hardcoded directive list instead');
     }
     
     // Fallback to known list (only existing directives)

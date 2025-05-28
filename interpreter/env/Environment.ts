@@ -156,9 +156,12 @@ export class Environment {
   
   async executeCommand(command: string): Promise<string> {
     try {
+      // Use project path as working directory if found, otherwise fall back to basePath
+      const workingDirectory = await this.getProjectPath();
+      
       const output = execSync(command, {
         encoding: 'utf8',
-        cwd: this.basePath,
+        cwd: workingDirectory,
         env: { ...process.env }
       });
       return output.trimEnd();
@@ -291,13 +294,27 @@ export class Environment {
   // --- Special Variables ---
   
   async getProjectPath(): Promise<string> {
-    // Walk up from basePath to find project root (has package.json)
+    // Walk up from basePath to find project root
     let current = this.basePath;
     
     while (current !== path.dirname(current)) {
       try {
-        if (await this.fileSystem.exists(path.join(current, 'package.json'))) {
-          return current;
+        // Check for common project indicators in order of preference
+        const indicators = [
+          'mlld.config.json',
+          'package.json',
+          '.git',
+          'pyproject.toml',
+          'Cargo.toml',
+          'pom.xml',
+          'build.gradle',
+          'Makefile'
+        ];
+        
+        for (const indicator of indicators) {
+          if (await this.fileSystem.exists(path.join(current, indicator))) {
+            return current;
+          }
         }
       } catch {
         // Continue searching

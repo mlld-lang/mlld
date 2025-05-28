@@ -3,7 +3,7 @@
   "injectionSelector": "text.html.markdown, text.html.markdown.source",
   "patterns": [
     {
-      "begin": "^(@(text|data|run|add|path|import|exec)\\b)",
+      "begin": "^(@(data|text|run|add|path|import|exec)\\b)",
       "end": "$",
       "name": "meta.embedded.block.mlld",
       "beginCaptures": {

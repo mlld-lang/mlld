@@ -1,14 +1,14 @@
 " Vim syntax file for Mlld
 " Language: Mlld
 " Maintainer: Auto-generated
-" Latest Revision: 2025-05-27T23:53:53.126Z
+" Latest Revision: 2025-05-28T00:02:05.900Z
 
 if exists("b:current_syntax")
   finish
 endif
 
 " Keywords (directives)
-syn keyword mlldDirective @text @data @run @add @path @import @exec
+syn keyword mlldDirective @data @text @run @add @path @import @exec
 
 " Comments
 syn match mlldComment ">>.*$"

@@ -11,7 +11,7 @@
   "ast": [
     {
       "type": "Text",
-      "nodeId": "aa752e1e-3a4a-46fc-833e-0d555e87b837",
+      "nodeId": "node-1",
       "location": {
         "start": {
           "offset": 0,
@@ -28,7 +28,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "5c94803e-1971-403c-b075-11630492ca1b",
+      "nodeId": "node-2",
       "location": {
         "start": {
           "offset": 76,
@@ -48,7 +48,7 @@
         "imports": [
           {
             "type": "VariableReference",
-            "nodeId": "4a8befe8-7b29-4a85-a5b0-f8e28ebf2278",
+            "nodeId": "node-3",
             "location": {
               "start": {
                 "offset": 0,
@@ -83,7 +83,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "e96c37af-f07d-4132-b876-2a0b283e4649",
+      "nodeId": "node-4",
       "location": {
         "start": {
           "offset": 159,

@@ -32,6 +32,58 @@ const FIXTURES_DIR = path.join(PROJECT_ROOT, 'tests', 'fixtures');
 const EXAMPLES_DIR = path.join(PROJECT_ROOT, 'examples');
 const EXAMPLES_MD = path.join(CASES_DIR, 'EXAMPLES.md');
 
+/**
+ * Normalize nodeIds in AST for stable fixture generation
+ * Replaces random UUIDs with predictable IDs based on content
+ */
+function normalizeNodeIds(obj, idCounter = { value: 1 }) {
+  if (Array.isArray(obj)) {
+    return obj.map(item => normalizeNodeIds(item, idCounter));
+  }
+  
+  if (obj && typeof obj === 'object') {
+    const normalized = {};
+    
+    for (const [key, value] of Object.entries(obj)) {
+      if (key === 'nodeId' && typeof value === 'string') {
+        // Replace UUID with predictable ID
+        normalized[key] = `node-${idCounter.value++}`;
+      } else {
+        normalized[key] = normalizeNodeIds(value, idCounter);
+      }
+    }
+    
+    return normalized;
+  }
+  
+  return obj;
+}
+
+/**
+ * Write fixture file only if content has changed
+ * This prevents unnecessary git modifications
+ */
+async function writeFixtureIfChanged(filePath, content) {
+  let existingContent = '';
+  
+  try {
+    existingContent = await fs.readFile(filePath, 'utf8');
+  } catch (error) {
+    // File doesn't exist, will write
+  }
+  
+  // Normalize nodeIds for stable comparison
+  const normalizedContent = normalizeNodeIds(content);
+  const newContent = JSON.stringify(normalizedContent, null, 2);
+  
+  if (existingContent !== newContent) {
+    await fs.writeFile(filePath, newContent);
+    return true; // File was updated
+  }
+  
+  return false; // No change needed
+}
+
 // Main entry point
 async function main() {
   try {
@@ -42,9 +94,9 @@ async function main() {
     console.log(`Examples: ${EXAMPLES_DIR}`);
     console.log('');
     
-    // Step 1: Clean slate - remove old fixtures
-    console.log('🧹 Cleaning old fixtures...');
-    await cleanFixtures();
+    // Step 1: Check existing fixtures (but don't wipe them)
+    console.log('🔍 Checking existing fixtures...');
+    await cleanOrphanedFixtures();
     
     // Step 2: Copy examples to test cases
     console.log('📋 Copying examples to test cases...');
@@ -75,15 +127,35 @@ async function main() {
 }
 
 /**
- * Clean slate: Remove all old fixtures to prevent staleness
+ * Clean orphaned fixtures: Remove fixtures that no longer have corresponding test cases
+ * This is more surgical than wiping everything
  */
-async function cleanFixtures() {
+async function cleanOrphanedFixtures() {
   try {
-    await fs.rm(FIXTURES_DIR, { recursive: true, force: true });
     await fs.mkdir(FIXTURES_DIR, { recursive: true });
-    console.log('  ✓ Cleaned fixtures directory');
+    
+    // Get all current fixture files
+    let existingFixtures = [];
+    try {
+      const fixtureFiles = await fs.readdir(FIXTURES_DIR);
+      existingFixtures = fixtureFiles.filter(f => f.endsWith('.generated-fixture.json'));
+    } catch (error) {
+      // Directory doesn't exist yet, that's fine
+      console.log('  ℹ️ No existing fixtures directory');
+      return;
+    }
+    
+    if (existingFixtures.length === 0) {
+      console.log('  ℹ️ No existing fixtures to check');
+      return;
+    }
+    
+    // TODO: In future, we could check which fixtures are orphaned
+    // For now, we'll rely on writeFixtureIfChanged to only update what's needed
+    console.log(`  ℹ️ Found ${existingFixtures.length} existing fixtures (will update only if changed)`);
+    
   } catch (error) {
-    console.log('  ℹ️ No existing fixtures to clean');
+    console.log('  ⚠️ Error checking existing fixtures:', error.message);
   }
 }
 
@@ -455,11 +527,15 @@ async function processExampleDirectory(dirPath, category, name, directive = null
         parseError: parseError
       };
       
-      // Write fixture
+      // Write fixture only if content changed
       const fixturePath = path.join(outputDir, fixtureName);
-      await fs.writeFile(fixturePath, JSON.stringify(fixture, null, 2));
+      const wasUpdated = await writeFixtureIfChanged(fixturePath, fixture);
       
-      console.log(`  ✓ ${fixtureName}`);
+      if (wasUpdated) {
+        console.log(`  ✓ ${fixtureName} (updated)`);
+      } else {
+        console.log(`  ✓ ${fixtureName} (unchanged)`);
+      }
       stats.fixtures++;
     } catch (error) {
       console.log(`  ✗ ${file}: ${error.message}`);
