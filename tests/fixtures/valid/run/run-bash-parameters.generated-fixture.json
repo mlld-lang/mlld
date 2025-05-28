@@ -1,0 +1,233 @@
+{
+  "name": "run-bash-parameters",
+  "description": "Test fixture for valid/run-bash",
+  "category": "valid",
+  "subcategory": "run-bash",
+  "input": "# Bash Code with Parameters\n\n@exec greeting(name, count) = @run bash [\n  echo \"Hello, $name!\"\n  echo \"You are visitor number $count\"\n]\n\n@run @greeting(\"Alice\", 42)",
+  "expected": "# Bash Code with Parameters\n\nHello, Alice!\nYou are visitor number 42",
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "node-1",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 29,
+          "line": 3,
+          "column": 1
+        }
+      },
+      "content": "# Bash Code with Parameters\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-2",
+      "location": {
+        "start": {
+          "offset": 29,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 134,
+          "line": 6,
+          "column": 2
+        }
+      },
+      "kind": "exec",
+      "subtype": "execCode",
+      "source": "code",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "node-3",
+            "location": {
+              "start": {
+                "offset": 29,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "offset": 134,
+                "line": 6,
+                "column": 2
+              }
+            },
+            "content": "greeting"
+          }
+        ],
+        "params": [
+          "name",
+          "count"
+        ],
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "node-4",
+            "location": {
+              "start": {
+                "offset": 64,
+                "line": 3,
+                "column": 36
+              },
+              "end": {
+                "offset": 134,
+                "line": 6,
+                "column": 2
+              }
+            },
+            "content": "bash"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "node-5",
+            "location": {
+              "start": {
+                "offset": 69,
+                "line": 3,
+                "column": 41
+              },
+              "end": {
+                "offset": 134,
+                "line": 6,
+                "column": 2
+              }
+            },
+            "content": "\n  echo \"Hello, $name!\"\n  echo \"You are visitor number $count\"\n"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greeting",
+        "params": [
+          "name",
+          "count"
+        ],
+        "lang": "bash",
+        "args": [],
+        "code": "\n  echo \"Hello, $name!\"\n  echo \"You are visitor number $count\"\n"
+      },
+      "meta": {
+        "parameterCount": 2,
+        "language": "bash",
+        "isMultiLine": true,
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-6",
+      "location": {
+        "start": {
+          "offset": 134,
+          "line": 6,
+          "column": 2
+        },
+        "end": {
+          "offset": 136,
+          "line": 8,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-7",
+      "location": {
+        "start": {
+          "offset": 136,
+          "line": 8,
+          "column": 1
+        },
+        "end": {
+          "offset": 163,
+          "line": 8,
+          "column": 28
+        }
+      },
+      "kind": "run",
+      "subtype": "runExec",
+      "source": "exec",
+      "values": {
+        "identifier": [
+          {
+            "type": "Text",
+            "nodeId": "node-8",
+            "location": {
+              "start": {
+                "offset": 142,
+                "line": 8,
+                "column": 7
+              },
+              "end": {
+                "offset": 163,
+                "line": 8,
+                "column": 28
+              }
+            },
+            "content": "greeting"
+          }
+        ],
+        "args": [
+          {
+            "type": "Text",
+            "nodeId": "node-9",
+            "location": {
+              "start": {
+                "offset": 151,
+                "line": 8,
+                "column": 16
+              },
+              "end": {
+                "offset": 158,
+                "line": 8,
+                "column": 23
+              }
+            },
+            "content": "Alice"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-10",
+            "location": {
+              "start": {
+                "offset": 160,
+                "line": 8,
+                "column": 25
+              },
+              "end": {
+                "offset": 162,
+                "line": 8,
+                "column": 27
+              }
+            },
+            "content": "42"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "greeting",
+        "args": [
+          "Alice",
+          "42"
+        ]
+      },
+      "meta": {
+        "argumentCount": 2
+      }
+    }
+  ],
+  "parseError": null
+}

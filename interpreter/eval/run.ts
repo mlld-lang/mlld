@@ -2,6 +2,7 @@ import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
+import { InterpolationContext } from '../core/interpolation-context';
 
 /**
  * Evaluate @run directives.
@@ -30,8 +31,8 @@ export async function evaluateRun(
       throw new Error('Run command directive missing command');
     }
     
-    // Interpolate command (resolve variables)
-    const command = await interpolate(commandNodes, env);
+    // Interpolate command (resolve variables) with shell command context
+    const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
     
     // Execute the command with context for rich error reporting
     output = await env.executeCommand(command, undefined, executionContext);
@@ -43,8 +44,8 @@ export async function evaluateRun(
       throw new Error('Run code directive missing code');
     }
     
-    // Get the code
-    const code = await interpolate(codeNodes, env);
+    // Get the code - use default context for code blocks
+    const code = await interpolate(codeNodes, env, InterpolationContext.Default);
     
     // Execute the code (default to JavaScript) with context for errors
     const language = directive.raw?.lang || directive.meta?.language || 'javascript';
@@ -73,7 +74,7 @@ export async function evaluateRun(
     if (cmdDef.paramNames && cmdDef.paramNames.length > 0) {
       for (let i = 0; i < cmdDef.paramNames.length; i++) {
         const paramName = cmdDef.paramNames[i];
-        const argValue = args[i] ? await interpolate([args[i]], env) : '';
+        const argValue = args[i] ? await interpolate([args[i]], env, InterpolationContext.Default) : '';
         argValues[paramName] = argValue;
       }
     }
@@ -95,7 +96,7 @@ export async function evaluateRun(
       });
       
       // Interpolate the command template with parameters
-      const command = await interpolate(cleanTemplate, tempEnv);
+      const command = await interpolate(cleanTemplate, tempEnv, InterpolationContext.ShellCommand);
       // Pass context for exec command errors too
       output = await env.executeCommand(command, undefined, executionContext);
       
@@ -127,7 +128,7 @@ export async function evaluateRun(
         tempEnv.setParameterVariable(key, { type: 'text', value, nodeId: '', location: { line: 0, column: 0 } });
       }
       
-      const code = await interpolate(cmdDef.codeTemplate, tempEnv);
+      const code = await interpolate(cmdDef.codeTemplate, tempEnv, InterpolationContext.Default);
       output = await env.executeCode(code, cmdDef.language || 'javascript', argValues, executionContext);
     }
   } else {

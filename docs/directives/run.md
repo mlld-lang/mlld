@@ -5,20 +5,30 @@ title: "@run Directive"
 
 # @run Directive
 
-The `@run` directive executes shell commands and includes their output in your Mlld document.
+The `@run` directive executes shell commands or code blocks and includes their output in your Mlld document.
 
 ## Syntax
 
+### Shell Commands
 ```mlld
 @run [command_text]
 @run [command_text] under header_text
 @run [$command(@textvar1, @textvar2)]
 ```
 
+### Code Execution
+```mlld
+@run language [code_block]
+@run language(param1, param2) [code_block]
+```
+
 Where:
 - `command_text` is the shell command to execute
 - `header_text` is optional text to use as a header for the command output
 - `$command` refers to a command defined with `@exec`
+- `language` is the programming language: `javascript`/`js`/`node`, `python`/`py`, or `bash`/`sh`/`shell`
+- `code_block` is the code to execute (can be multiline with `[[...]]`)
+- `param1, param2` are optional parameters passed to the code
 
 ## Command Specification
 
@@ -61,6 +71,43 @@ The implementation handles these error scenarios:
 - Command execution failures
 - Commands that exit with non-zero status codes
 
+## Code Execution
+
+The `@run` directive can execute code in different languages:
+
+### JavaScript/Node.js
+- Parameters become function arguments
+- Console output is captured
+- The code runs in a sandboxed environment
+
+```mlld
+@run javascript [console.log("Hello from JS")]
+@run js(x, y) [console.log(Number(x) + Number(y))]
+```
+
+### Python
+- Parameters are injected as variables
+- Code is written to a temporary file and executed
+- Requires `python3` to be available
+
+```mlld
+@run python [print("Hello from Python")]
+@run py(name) [print(f"Hello, {name}!")]
+```
+
+### Bash/Shell
+- Parameters are passed as environment variables
+- Code is executed with `bash -c`
+- Environment variables from the parent process are available
+
+```mlld
+@run bash [echo "Hello from Bash"]
+@run sh(user, count) [
+  echo "Welcome, $user!"
+  echo "You are visitor number $count"
+]
+```
+
 ## Examples
 
 Basic command execution:
@@ -95,6 +142,15 @@ Using defined commands:
 ```mlld
 @exec listFiles(dir) = @run [ls -la @dir]
 @run [$listFiles($PROJECTPATH)]
+```
+
+Using code execution with `@exec`:
+```mlld
+@exec greet(name, lang) = @run bash [
+  echo "Hello, $name!"
+  echo "Your preferred language is $lang"
+]
+@run @greet("Developer", "Mlld")
 ```
 
 ## Environment & Working Directory

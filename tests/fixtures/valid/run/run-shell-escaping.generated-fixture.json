@@ -1,0 +1,1488 @@
+{
+  "name": "run-shell-escaping",
+  "description": "Test fixture for valid/run-shell-escaping",
+  "category": "valid",
+  "subcategory": "run-shell-escaping",
+  "input": "# Test Shell Escaping in Commands\n\nThis tests that variables containing special shell characters are properly escaped.\n\n@text simple = \"Hello World\"\n@text with_quotes = \"She said 'hello' and \\\"goodbye\\\"\"\n@text with_dollar = \"Price is $100.00\"\n@text with_backticks = \"Use `npm install` to install\"\n@text with_at = \"@username mentioned @other\"\n@text with_newlines = \"Line 1\nLine 2\nLine 3\"\n@text with_mixed = \"Complex: $VAR, @user, `cmd`, 'single', \\\"double\\\"\"\n\n>> Test simple text\n@run [echo \"@simple\"]\n\n>> Test quotes\n@run [echo \"@with_quotes\"]\n\n>> Test dollar signs\n@run [echo \"@with_dollar\"]\n\n>> Test backticks\n@run [echo \"@with_backticks\"]\n\n>> Test @ symbols\n@run [echo \"@with_at\"]\n\n>> Test newlines\n@run [echo \"@with_newlines\"]\n\n>> Test mixed special characters\n@run [echo \"@with_mixed\"]",
+  "expected": "# Test Shell Escaping in Commands\n\nThis tests that variables containing special shell characters are properly escaped.\n\n>> Test simple text\nHello World\n\n>> Test quotes\nShe said 'hello' and \"goodbye\"\n\n>> Test dollar signs\nPrice is $100.00\n\n>> Test backticks\nUse `npm install` to install\n\n>> Test @ symbols\n@username mentioned @other\n\n>> Test newlines\nLine 1\nLine 2\nLine 3\n\n>> Test mixed special characters\nComplex: $VAR, @user, `cmd`, 'single', \"double\"",
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "node-1",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 120,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "# Test Shell Escaping in Commands\n\nThis tests that variables containing special shell characters are properly escaped.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-2",
+      "location": {
+        "start": {
+          "offset": 120,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 148,
+          "line": 5,
+          "column": 29
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "simple"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "node-4",
+            "location": {
+              "start": {
+                "offset": 135,
+                "line": 5,
+                "column": 16
+              },
+              "end": {
+                "offset": 148,
+                "line": 5,
+                "column": 29
+              }
+            },
+            "content": "Hello World"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "simple",
+        "content": "Hello World"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-5",
+      "location": {
+        "start": {
+          "offset": 148,
+          "line": 5,
+          "column": 29
+        },
+        "end": {
+          "offset": 149,
+          "line": 6,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-6",
+      "location": {
+        "start": {
+          "offset": 149,
+          "line": 6,
+          "column": 1
+        },
+        "end": {
+          "offset": 193,
+          "line": 6,
+          "column": 45
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-7",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "with_quotes"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "node-8",
+            "location": {
+              "start": {
+                "offset": 169,
+                "line": 6,
+                "column": 21
+              },
+              "end": {
+                "offset": 193,
+                "line": 6,
+                "column": 45
+              }
+            },
+            "content": "She said 'hello' and \\"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "with_quotes",
+        "content": "She said 'hello' and \\"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-9",
+      "location": {
+        "start": {
+          "offset": 193,
+          "line": 6,
+          "column": 45
+        },
+        "end": {
+          "offset": 204,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "goodbye\\\"\"\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-10",
+      "location": {
+        "start": {
+          "offset": 204,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 242,
+          "line": 7,
+          "column": 39
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-11",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "with_dollar"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "node-12",
+            "location": {
+              "start": {
+                "offset": 224,
+                "line": 7,
+                "column": 21
+              },
+              "end": {
+                "offset": 242,
+                "line": 7,
+                "column": 39
+              }
+            },
+            "content": "Price is $100.00"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "with_dollar",
+        "content": "Price is $100.00"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-13",
+      "location": {
+        "start": {
+          "offset": 242,
+          "line": 7,
+          "column": 39
+        },
+        "end": {
+          "offset": 243,
+          "line": 8,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-14",
+      "location": {
+        "start": {
+          "offset": 243,
+          "line": 8,
+          "column": 1
+        },
+        "end": {
+          "offset": 296,
+          "line": 8,
+          "column": 54
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-15",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "with_backticks"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "node-16",
+            "location": {
+              "start": {
+                "offset": 266,
+                "line": 8,
+                "column": 24
+              },
+              "end": {
+                "offset": 296,
+                "line": 8,
+                "column": 54
+              }
+            },
+            "content": "Use `npm install` to install"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "with_backticks",
+        "content": "Use `npm install` to install"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-17",
+      "location": {
+        "start": {
+          "offset": 296,
+          "line": 8,
+          "column": 54
+        },
+        "end": {
+          "offset": 297,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-18",
+      "location": {
+        "start": {
+          "offset": 297,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 341,
+          "line": 9,
+          "column": 45
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-19",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "with_at"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "node-20",
+            "location": {
+              "start": {
+                "offset": 313,
+                "line": 9,
+                "column": 17
+              },
+              "end": {
+                "offset": 341,
+                "line": 9,
+                "column": 45
+              }
+            },
+            "content": "@username mentioned @other"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "with_at",
+        "content": "@username mentioned @other"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-21",
+      "location": {
+        "start": {
+          "offset": 341,
+          "line": 9,
+          "column": 45
+        },
+        "end": {
+          "offset": 342,
+          "line": 10,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-22",
+      "location": {
+        "start": {
+          "offset": 342,
+          "line": 10,
+          "column": 1
+        },
+        "end": {
+          "offset": 386,
+          "line": 12,
+          "column": 8
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-23",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "with_newlines"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "node-24",
+            "location": {
+              "start": {
+                "offset": 364,
+                "line": 10,
+                "column": 23
+              },
+              "end": {
+                "offset": 386,
+                "line": 12,
+                "column": 8
+              }
+            },
+            "content": "Line 1\nLine 2\nLine 3"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "with_newlines",
+        "content": "Line 1\nLine 2\nLine 3"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-25",
+      "location": {
+        "start": {
+          "offset": 386,
+          "line": 12,
+          "column": 8
+        },
+        "end": {
+          "offset": 387,
+          "line": 13,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-26",
+      "location": {
+        "start": {
+          "offset": 387,
+          "line": 13,
+          "column": 1
+        },
+        "end": {
+          "offset": 448,
+          "line": 13,
+          "column": 62
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-27",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "with_mixed"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "node-28",
+            "location": {
+              "start": {
+                "offset": 406,
+                "line": 13,
+                "column": 20
+              },
+              "end": {
+                "offset": 448,
+                "line": 13,
+                "column": 62
+              }
+            },
+            "content": "Complex: $VAR, @user, `cmd`, 'single', \\"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "with_mixed",
+        "content": "Complex: $VAR, @user, `cmd`, 'single', \\"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-29",
+      "location": {
+        "start": {
+          "offset": 448,
+          "line": 13,
+          "column": 62
+        },
+        "end": {
+          "offset": 459,
+          "line": 15,
+          "column": 1
+        }
+      },
+      "content": "double\\\"\"\n\n"
+    },
+    {
+      "type": "Comment",
+      "nodeId": "node-30",
+      "location": {
+        "start": {
+          "offset": 459,
+          "line": 15,
+          "column": 1
+        },
+        "end": {
+          "offset": 479,
+          "line": 16,
+          "column": 1
+        }
+      },
+      "content": "Test simple text",
+      "marker": ">>"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-31",
+      "location": {
+        "start": {
+          "offset": 479,
+          "line": 16,
+          "column": 1
+        },
+        "end": {
+          "offset": 517,
+          "line": 19,
+          "column": 1
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-32",
+            "location": {
+              "start": {
+                "offset": 485,
+                "line": 16,
+                "column": 7
+              },
+              "end": {
+                "offset": 491,
+                "line": 16,
+                "column": 13
+              }
+            },
+            "content": "echo \""
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-33",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "simple"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-34",
+            "location": {
+              "start": {
+                "offset": 498,
+                "line": 16,
+                "column": 20
+              },
+              "end": {
+                "offset": 499,
+                "line": 16,
+                "column": 21
+              }
+            },
+            "content": "\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-35",
+            "location": {
+              "start": {
+                "offset": 484,
+                "line": 16,
+                "column": 6
+              },
+              "end": {
+                "offset": 500,
+                "line": 16,
+                "column": 22
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"@simple\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false,
+        "comment": {
+          "type": "Comment",
+          "marker": ">>",
+          "content": "Test quotes",
+          "location": {
+            "start": {
+              "offset": 500,
+              "line": 16,
+              "column": 22
+            },
+            "end": {
+              "offset": 517,
+              "line": 19,
+              "column": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-36",
+      "location": {
+        "start": {
+          "offset": 517,
+          "line": 19,
+          "column": 1
+        },
+        "end": {
+          "offset": 566,
+          "line": 22,
+          "column": 1
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-37",
+            "location": {
+              "start": {
+                "offset": 523,
+                "line": 19,
+                "column": 7
+              },
+              "end": {
+                "offset": 529,
+                "line": 19,
+                "column": 13
+              }
+            },
+            "content": "echo \""
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-38",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "with_quotes"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-39",
+            "location": {
+              "start": {
+                "offset": 541,
+                "line": 19,
+                "column": 25
+              },
+              "end": {
+                "offset": 542,
+                "line": 19,
+                "column": 26
+              }
+            },
+            "content": "\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-40",
+            "location": {
+              "start": {
+                "offset": 522,
+                "line": 19,
+                "column": 6
+              },
+              "end": {
+                "offset": 543,
+                "line": 19,
+                "column": 27
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"@with_quotes\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false,
+        "comment": {
+          "type": "Comment",
+          "marker": ">>",
+          "content": "Test dollar signs",
+          "location": {
+            "start": {
+              "offset": 543,
+              "line": 19,
+              "column": 27
+            },
+            "end": {
+              "offset": 566,
+              "line": 22,
+              "column": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-41",
+      "location": {
+        "start": {
+          "offset": 566,
+          "line": 22,
+          "column": 1
+        },
+        "end": {
+          "offset": 612,
+          "line": 25,
+          "column": 1
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-42",
+            "location": {
+              "start": {
+                "offset": 572,
+                "line": 22,
+                "column": 7
+              },
+              "end": {
+                "offset": 578,
+                "line": 22,
+                "column": 13
+              }
+            },
+            "content": "echo \""
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-43",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "with_dollar"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-44",
+            "location": {
+              "start": {
+                "offset": 590,
+                "line": 22,
+                "column": 25
+              },
+              "end": {
+                "offset": 591,
+                "line": 22,
+                "column": 26
+              }
+            },
+            "content": "\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-45",
+            "location": {
+              "start": {
+                "offset": 571,
+                "line": 22,
+                "column": 6
+              },
+              "end": {
+                "offset": 592,
+                "line": 22,
+                "column": 27
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"@with_dollar\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false,
+        "comment": {
+          "type": "Comment",
+          "marker": ">>",
+          "content": "Test backticks",
+          "location": {
+            "start": {
+              "offset": 592,
+              "line": 22,
+              "column": 27
+            },
+            "end": {
+              "offset": 612,
+              "line": 25,
+              "column": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-46",
+      "location": {
+        "start": {
+          "offset": 612,
+          "line": 25,
+          "column": 1
+        },
+        "end": {
+          "offset": 661,
+          "line": 28,
+          "column": 1
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-47",
+            "location": {
+              "start": {
+                "offset": 618,
+                "line": 25,
+                "column": 7
+              },
+              "end": {
+                "offset": 624,
+                "line": 25,
+                "column": 13
+              }
+            },
+            "content": "echo \""
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-48",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "with_backticks"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-49",
+            "location": {
+              "start": {
+                "offset": 639,
+                "line": 25,
+                "column": 28
+              },
+              "end": {
+                "offset": 640,
+                "line": 25,
+                "column": 29
+              }
+            },
+            "content": "\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-50",
+            "location": {
+              "start": {
+                "offset": 617,
+                "line": 25,
+                "column": 6
+              },
+              "end": {
+                "offset": 641,
+                "line": 25,
+                "column": 30
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"@with_backticks\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false,
+        "comment": {
+          "type": "Comment",
+          "marker": ">>",
+          "content": "Test @ symbols",
+          "location": {
+            "start": {
+              "offset": 641,
+              "line": 25,
+              "column": 30
+            },
+            "end": {
+              "offset": 661,
+              "line": 28,
+              "column": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-51",
+      "location": {
+        "start": {
+          "offset": 661,
+          "line": 28,
+          "column": 1
+        },
+        "end": {
+          "offset": 702,
+          "line": 31,
+          "column": 1
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-52",
+            "location": {
+              "start": {
+                "offset": 667,
+                "line": 28,
+                "column": 7
+              },
+              "end": {
+                "offset": 673,
+                "line": 28,
+                "column": 13
+              }
+            },
+            "content": "echo \""
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-53",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "with_at"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-54",
+            "location": {
+              "start": {
+                "offset": 681,
+                "line": 28,
+                "column": 21
+              },
+              "end": {
+                "offset": 682,
+                "line": 28,
+                "column": 22
+              }
+            },
+            "content": "\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-55",
+            "location": {
+              "start": {
+                "offset": 666,
+                "line": 28,
+                "column": 6
+              },
+              "end": {
+                "offset": 683,
+                "line": 28,
+                "column": 23
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"@with_at\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false,
+        "comment": {
+          "type": "Comment",
+          "marker": ">>",
+          "content": "Test newlines",
+          "location": {
+            "start": {
+              "offset": 683,
+              "line": 28,
+              "column": 23
+            },
+            "end": {
+              "offset": 702,
+              "line": 31,
+              "column": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-56",
+      "location": {
+        "start": {
+          "offset": 702,
+          "line": 31,
+          "column": 1
+        },
+        "end": {
+          "offset": 765,
+          "line": 34,
+          "column": 1
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-57",
+            "location": {
+              "start": {
+                "offset": 708,
+                "line": 31,
+                "column": 7
+              },
+              "end": {
+                "offset": 714,
+                "line": 31,
+                "column": 13
+              }
+            },
+            "content": "echo \""
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-58",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "with_newlines"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-59",
+            "location": {
+              "start": {
+                "offset": 728,
+                "line": 31,
+                "column": 27
+              },
+              "end": {
+                "offset": 729,
+                "line": 31,
+                "column": 28
+              }
+            },
+            "content": "\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-60",
+            "location": {
+              "start": {
+                "offset": 707,
+                "line": 31,
+                "column": 6
+              },
+              "end": {
+                "offset": 730,
+                "line": 31,
+                "column": 29
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"@with_newlines\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false,
+        "comment": {
+          "type": "Comment",
+          "marker": ">>",
+          "content": "Test mixed special characters",
+          "location": {
+            "start": {
+              "offset": 730,
+              "line": 31,
+              "column": 29
+            },
+            "end": {
+              "offset": 765,
+              "line": 34,
+              "column": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-61",
+      "location": {
+        "start": {
+          "offset": 765,
+          "line": 34,
+          "column": 1
+        },
+        "end": {
+          "offset": 790,
+          "line": 34,
+          "column": 26
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-62",
+            "location": {
+              "start": {
+                "offset": 771,
+                "line": 34,
+                "column": 7
+              },
+              "end": {
+                "offset": 777,
+                "line": 34,
+                "column": 13
+              }
+            },
+            "content": "echo \""
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-63",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "with_mixed"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-64",
+            "location": {
+              "start": {
+                "offset": 788,
+                "line": 34,
+                "column": 24
+              },
+              "end": {
+                "offset": 789,
+                "line": 34,
+                "column": 25
+              }
+            },
+            "content": "\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-65",
+            "location": {
+              "start": {
+                "offset": 770,
+                "line": 34,
+                "column": 6
+              },
+              "end": {
+                "offset": 790,
+                "line": 34,
+                "column": 26
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"@with_mixed\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": true,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    }
+  ],
+  "parseError": null
+}

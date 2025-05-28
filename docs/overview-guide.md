@@ -6,12 +6,12 @@ Meld (`.mld`) is a prompt scripting language embedded in Markdown that enables d
 
 ## Why Meld?
 
-In the age of agents and LLMs, we need better ways to:
+We need better ways to:
 - Build complex, reusable prompts from modular components
 - Combine static documentation with dynamic data
 - Chain multiple LLM calls together
 - Version control and share prompt engineering workflows
-- Structure content in LLM-friendly formats (built-in XML output)
+- Structure content in LLM-friendly formats
 
 Meld solves these problems by treating markdown files as programmable modules.
 

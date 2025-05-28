@@ -361,6 +361,53 @@ export class Environment {
       } catch (error) {
         throw new Error(`Python execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
+    } else if (language === 'bash' || language === 'sh' || language === 'shell') {
+      try {
+        // Build environment variables from parameters
+        const envVars: Record<string, string> = {};
+        
+        if (params) {
+          for (const [key, value] of Object.entries(params)) {
+            // Convert value to string for environment variable
+            envVars[key] = String(value);
+          }
+        }
+        
+        // Execute bash code with environment variables
+        const child_process = require('child_process');
+        
+        try {
+          const result = child_process.execSync(`bash -c ${JSON.stringify(code)}`, {
+            encoding: 'utf8',
+            env: { ...process.env, ...envVars },
+            cwd: this.basePath,
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+          
+          return result.toString().replace(/\n+$/, '');
+        } catch (execError: any) {
+          // Handle execution error with proper error details
+          if (context?.sourceLocation) {
+            const bashError = new MlldCommandExecutionError(
+              `Code execution failed: ${language}`,
+              context.sourceLocation,
+              {
+                command: `${language} code execution`,
+                exitCode: execError.status || 1,
+                duration: Date.now() - startTime,
+                stderr: execError.stderr?.toString() || execError.message,
+                stdout: execError.stdout?.toString() || '',
+                workingDirectory: this.basePath,
+                directiveType: context.directiveType || 'run'
+              }
+            );
+            throw bashError;
+          }
+          throw new Error(`Bash execution failed: ${execError.stderr || execError.message}`);
+        }
+      } catch (error) {
+        throw new Error(`Bash execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     } else {
       throw new Error(`Unsupported code language: ${language}`);
     }

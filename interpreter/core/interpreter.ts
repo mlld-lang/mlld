@@ -3,6 +3,7 @@ import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
 import { isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
+import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
 
 /**
  * Core evaluation result type
@@ -195,8 +196,9 @@ export async function resolveVariableValue(variable: MlldVariable, env: Environm
  * String interpolation helper - resolves {{variables}} in content
  */
 export async function interpolate(
-  nodes: Array<{ type: string; content?: string; name?: string; identifier?: string; fields?: any[] }>,
-  env: Environment
+  nodes: Array<{ type: string; content?: string; name?: string; identifier?: string; fields?: any[]; value?: string }>,
+  env: Environment,
+  context: InterpolationContext = InterpolationContext.Default
 ): Promise<string> {
   const parts: string[] = [];
   
@@ -267,21 +269,27 @@ export async function interpolate(
       }
       
       // Convert final value to string
+      let stringValue: string;
+      
       if (value === null) {
-        parts.push('null');
+        stringValue = 'null';
       } else if (typeof value === 'object' && value.type === 'Null') {
         // Handle null nodes from the grammar
-        parts.push('null');
+        stringValue = 'null';
       } else if (typeof value === 'object') {
         // For path objects, try to extract the resolved path first
         if (value.resolvedPath && typeof value.resolvedPath === 'string') {
-          parts.push(value.resolvedPath);
+          stringValue = value.resolvedPath;
         } else {
-          parts.push(JSON.stringify(value));
+          stringValue = JSON.stringify(value);
         }
       } else {
-        parts.push(String(value));
+        stringValue = String(value);
       }
+      
+      // Apply context-appropriate escaping
+      const strategy = EscapingStrategyFactory.getStrategy(context);
+      parts.push(strategy.escape(stringValue));
     }
   }
   

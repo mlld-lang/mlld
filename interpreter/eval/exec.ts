@@ -97,7 +97,7 @@ export async function evaluateExec(
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     
-    const language = directive.raw?.language || 'javascript';
+    const language = directive.raw?.lang || 'javascript';
     
     // Store the code template (not interpolated yet)
     commandDef = {

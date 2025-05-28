@@ -3,25 +3,1437 @@
   "description": "Test fixture for valid/examples",
   "category": "valid",
   "subcategory": "examples",
-  "input": "# Output Management Test\n\nThis file tests the new output management features.\n\n## Test 1: Progress Indicators\n\n@run [echo \"Starting process...\"]\n@run [sleep 1 && echo \"Processing...\"]\n@run [echo \"Complete!\"]\n\n## Test 2: Long Output (should truncate)\n\n@run [seq 1 100]\n\n## Test 3: Error Handling\n\n### Halt Mode (comment out to test)\n@text mode = \"Testing halt mode\"\n@run [echo \"This runs\"]\n<!-- @run [nonexistent-command] -->\n@run [echo \"This won't run if error above is uncommented\"]\n\n### Continue Mode\n@run [echo \"Starting continue mode test\"]\n@run [false]\n@run [echo \"This should still run even after error\"]\n\n## Test 4: Multiple Errors (for collection)\n\n@run [echo \"Task 1: Success\"]\n@run [exit 1]\n@run [echo \"Task 2: Success\"] \n@run [exit 2]\n@run [echo \"Task 3: Success\"]\n\n## Test 5: Code Execution\n\n@run {js}\nconsole.log(\"JavaScript output test\");\nfor (let i = 1; i <= 5; i++) {\n  console.log(`Line ${i}`);\n}\n{js}\n\n## Done!\n\nAll tests complete.",
+  "input": "# Output Management Test\n\nThis file tests the new output management features.\n\n## Test 1: Progress Indicators\n\n@run [echo \"Starting process...\"]\n@run [sleep 1 && echo \"Processing...\"]\n@run [echo \"Complete!\"]\n\n## Test 2: Long Output (should truncate)\n\n@run [seq 1 100]\n\n## Test 3: Error Handling\n\n### Halt Mode (comment out to test)\n@text mode = \"Testing halt mode\"\n@run [echo \"This runs\"]\n<!-- @run [nonexistent-command] -->\n@run [echo \"This won't run if error above is uncommented\"]\n\n### Continue Mode\n@run [echo \"Starting continue mode test\"]\n@run [false]\n@run [echo \"This should still run even after error\"]\n\n## Test 4: Multiple Errors (for collection)\n\n@run [echo \"Task 1: Success\"]\n@run [exit 1]\n@run [echo \"Task 2: Success\"] \n@run [exit 2]\n@run [echo \"Task 3: Success\"]\n\n## Test 5: Code Execution\n\n@run javascript [\nconsole.log(\"JavaScript output test\");\nfor (let i = 1; i <= 5; i++) {\n  console.log(`Line ${i}`);\n}\n]\n\n## Done!\n\nAll tests complete.",
   "expected": null,
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": null,
-  "parseError": {
-    "message": "Expected \"@\", \"bash\", \"javascript\", \"js\", \"py\", \"python\", \"sh\", Wrapped command content, or whitespace but \"{\" found.",
-    "location": {
-      "start": {
-        "offset": 809,
-        "line": 38,
-        "column": 6
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "node-1",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 111,
+          "line": 7,
+          "column": 1
+        }
       },
-      "end": {
-        "offset": 810,
-        "line": 38,
-        "column": 7
+      "content": "# Output Management Test\n\nThis file tests the new output management features.\n\n## Test 1: Progress Indicators\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-2",
+      "location": {
+        "start": {
+          "offset": 111,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 144,
+          "line": 7,
+          "column": 34
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-3",
+            "location": {
+              "start": {
+                "offset": 117,
+                "line": 7,
+                "column": 7
+              },
+              "end": {
+                "offset": 143,
+                "line": 7,
+                "column": 33
+              }
+            },
+            "content": "echo \"Starting process...\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-4",
+            "location": {
+              "start": {
+                "offset": 116,
+                "line": 7,
+                "column": 6
+              },
+              "end": {
+                "offset": 144,
+                "line": 7,
+                "column": 34
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"Starting process...\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
       }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-5",
+      "location": {
+        "start": {
+          "offset": 144,
+          "line": 7,
+          "column": 34
+        },
+        "end": {
+          "offset": 145,
+          "line": 8,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-6",
+      "location": {
+        "start": {
+          "offset": 145,
+          "line": 8,
+          "column": 1
+        },
+        "end": {
+          "offset": 183,
+          "line": 8,
+          "column": 39
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-7",
+            "location": {
+              "start": {
+                "offset": 151,
+                "line": 8,
+                "column": 7
+              },
+              "end": {
+                "offset": 182,
+                "line": 8,
+                "column": 38
+              }
+            },
+            "content": "sleep 1 && echo \"Processing...\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-8",
+            "location": {
+              "start": {
+                "offset": 150,
+                "line": 8,
+                "column": 6
+              },
+              "end": {
+                "offset": 183,
+                "line": 8,
+                "column": 39
+              }
+            },
+            "command": "sleep"
+          },
+          {
+            "nodeId": "node-9",
+            "location": {
+              "start": {
+                "offset": 150,
+                "line": 8,
+                "column": 6
+              },
+              "end": {
+                "offset": 183,
+                "line": 8,
+                "column": 39
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "sleep 1 && echo \"Processing...\"",
+        "commandBases": [
+          "sleep",
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 2,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-10",
+      "location": {
+        "start": {
+          "offset": 183,
+          "line": 8,
+          "column": 39
+        },
+        "end": {
+          "offset": 184,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-11",
+      "location": {
+        "start": {
+          "offset": 184,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 207,
+          "line": 9,
+          "column": 24
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-12",
+            "location": {
+              "start": {
+                "offset": 190,
+                "line": 9,
+                "column": 7
+              },
+              "end": {
+                "offset": 206,
+                "line": 9,
+                "column": 23
+              }
+            },
+            "content": "echo \"Complete!\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-13",
+            "location": {
+              "start": {
+                "offset": 189,
+                "line": 9,
+                "column": 6
+              },
+              "end": {
+                "offset": 207,
+                "line": 9,
+                "column": 24
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"Complete!\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-14",
+      "location": {
+        "start": {
+          "offset": 207,
+          "line": 9,
+          "column": 24
+        },
+        "end": {
+          "offset": 251,
+          "line": 13,
+          "column": 1
+        }
+      },
+      "content": "\n\n## Test 2: Long Output (should truncate)\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-15",
+      "location": {
+        "start": {
+          "offset": 251,
+          "line": 13,
+          "column": 1
+        },
+        "end": {
+          "offset": 267,
+          "line": 13,
+          "column": 17
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-16",
+            "location": {
+              "start": {
+                "offset": 257,
+                "line": 13,
+                "column": 7
+              },
+              "end": {
+                "offset": 266,
+                "line": 13,
+                "column": 16
+              }
+            },
+            "content": "seq 1 100"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-17",
+            "location": {
+              "start": {
+                "offset": 256,
+                "line": 13,
+                "column": 6
+              },
+              "end": {
+                "offset": 267,
+                "line": 13,
+                "column": 17
+              }
+            },
+            "command": "seq"
+          }
+        ]
+      },
+      "raw": {
+        "command": "seq 1 100",
+        "commandBases": [
+          "seq"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-18",
+      "location": {
+        "start": {
+          "offset": 267,
+          "line": 13,
+          "column": 17
+        },
+        "end": {
+          "offset": 332,
+          "line": 18,
+          "column": 1
+        }
+      },
+      "content": "\n\n## Test 3: Error Handling\n\n### Halt Mode (comment out to test)\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-19",
+      "location": {
+        "start": {
+          "offset": 332,
+          "line": 18,
+          "column": 1
+        },
+        "end": {
+          "offset": 364,
+          "line": 18,
+          "column": 33
+        }
+      },
+      "kind": "text",
+      "subtype": "textAssignment",
+      "source": "literal",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-20",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "mode"
+          }
+        ],
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "node-21",
+            "location": {
+              "start": {
+                "offset": 345,
+                "line": 18,
+                "column": 14
+              },
+              "end": {
+                "offset": 364,
+                "line": 18,
+                "column": 33
+              }
+            },
+            "content": "Testing halt mode"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "mode",
+        "content": "Testing halt mode"
+      },
+      "meta": {
+        "sourceType": "literal",
+        "hasVariables": false,
+        "isTemplateContent": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-22",
+      "location": {
+        "start": {
+          "offset": 364,
+          "line": 18,
+          "column": 33
+        },
+        "end": {
+          "offset": 365,
+          "line": 19,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-23",
+      "location": {
+        "start": {
+          "offset": 365,
+          "line": 19,
+          "column": 1
+        },
+        "end": {
+          "offset": 388,
+          "line": 19,
+          "column": 24
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-24",
+            "location": {
+              "start": {
+                "offset": 371,
+                "line": 19,
+                "column": 7
+              },
+              "end": {
+                "offset": 387,
+                "line": 19,
+                "column": 23
+              }
+            },
+            "content": "echo \"This runs\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-25",
+            "location": {
+              "start": {
+                "offset": 370,
+                "line": 19,
+                "column": 6
+              },
+              "end": {
+                "offset": 388,
+                "line": 19,
+                "column": 24
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"This runs\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-26",
+      "location": {
+        "start": {
+          "offset": 388,
+          "line": 19,
+          "column": 24
+        },
+        "end": {
+          "offset": 425,
+          "line": 21,
+          "column": 1
+        }
+      },
+      "content": "\n<!-- @run [nonexistent-command] -->\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-27",
+      "location": {
+        "start": {
+          "offset": 425,
+          "line": 21,
+          "column": 1
+        },
+        "end": {
+          "offset": 483,
+          "line": 21,
+          "column": 59
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-28",
+            "location": {
+              "start": {
+                "offset": 431,
+                "line": 21,
+                "column": 7
+              },
+              "end": {
+                "offset": 482,
+                "line": 21,
+                "column": 58
+              }
+            },
+            "content": "echo \"This won't run if error above is uncommented\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-29",
+            "location": {
+              "start": {
+                "offset": 430,
+                "line": 21,
+                "column": 6
+              },
+              "end": {
+                "offset": 483,
+                "line": 21,
+                "column": 59
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"This won't run if error above is uncommented\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-30",
+      "location": {
+        "start": {
+          "offset": 483,
+          "line": 21,
+          "column": 59
+        },
+        "end": {
+          "offset": 503,
+          "line": 24,
+          "column": 1
+        }
+      },
+      "content": "\n\n### Continue Mode\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-31",
+      "location": {
+        "start": {
+          "offset": 503,
+          "line": 24,
+          "column": 1
+        },
+        "end": {
+          "offset": 544,
+          "line": 24,
+          "column": 42
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-32",
+            "location": {
+              "start": {
+                "offset": 509,
+                "line": 24,
+                "column": 7
+              },
+              "end": {
+                "offset": 543,
+                "line": 24,
+                "column": 41
+              }
+            },
+            "content": "echo \"Starting continue mode test\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-33",
+            "location": {
+              "start": {
+                "offset": 508,
+                "line": 24,
+                "column": 6
+              },
+              "end": {
+                "offset": 544,
+                "line": 24,
+                "column": 42
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"Starting continue mode test\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-34",
+      "location": {
+        "start": {
+          "offset": 544,
+          "line": 24,
+          "column": 42
+        },
+        "end": {
+          "offset": 545,
+          "line": 25,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-35",
+      "location": {
+        "start": {
+          "offset": 545,
+          "line": 25,
+          "column": 1
+        },
+        "end": {
+          "offset": 557,
+          "line": 25,
+          "column": 13
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-36",
+            "location": {
+              "start": {
+                "offset": 551,
+                "line": 25,
+                "column": 7
+              },
+              "end": {
+                "offset": 556,
+                "line": 25,
+                "column": 12
+              }
+            },
+            "content": "false"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-37",
+            "location": {
+              "start": {
+                "offset": 550,
+                "line": 25,
+                "column": 6
+              },
+              "end": {
+                "offset": 557,
+                "line": 25,
+                "column": 13
+              }
+            },
+            "command": "false"
+          }
+        ]
+      },
+      "raw": {
+        "command": "false",
+        "commandBases": [
+          "false"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-38",
+      "location": {
+        "start": {
+          "offset": 557,
+          "line": 25,
+          "column": 13
+        },
+        "end": {
+          "offset": 558,
+          "line": 26,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-39",
+      "location": {
+        "start": {
+          "offset": 558,
+          "line": 26,
+          "column": 1
+        },
+        "end": {
+          "offset": 610,
+          "line": 26,
+          "column": 53
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-40",
+            "location": {
+              "start": {
+                "offset": 564,
+                "line": 26,
+                "column": 7
+              },
+              "end": {
+                "offset": 609,
+                "line": 26,
+                "column": 52
+              }
+            },
+            "content": "echo \"This should still run even after error\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-41",
+            "location": {
+              "start": {
+                "offset": 563,
+                "line": 26,
+                "column": 6
+              },
+              "end": {
+                "offset": 610,
+                "line": 26,
+                "column": 53
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"This should still run even after error\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-42",
+      "location": {
+        "start": {
+          "offset": 610,
+          "line": 26,
+          "column": 53
+        },
+        "end": {
+          "offset": 657,
+          "line": 30,
+          "column": 1
+        }
+      },
+      "content": "\n\n## Test 4: Multiple Errors (for collection)\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-43",
+      "location": {
+        "start": {
+          "offset": 657,
+          "line": 30,
+          "column": 1
+        },
+        "end": {
+          "offset": 686,
+          "line": 30,
+          "column": 30
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-44",
+            "location": {
+              "start": {
+                "offset": 663,
+                "line": 30,
+                "column": 7
+              },
+              "end": {
+                "offset": 685,
+                "line": 30,
+                "column": 29
+              }
+            },
+            "content": "echo \"Task 1: Success\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-45",
+            "location": {
+              "start": {
+                "offset": 662,
+                "line": 30,
+                "column": 6
+              },
+              "end": {
+                "offset": 686,
+                "line": 30,
+                "column": 30
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"Task 1: Success\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-46",
+      "location": {
+        "start": {
+          "offset": 686,
+          "line": 30,
+          "column": 30
+        },
+        "end": {
+          "offset": 687,
+          "line": 31,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-47",
+      "location": {
+        "start": {
+          "offset": 687,
+          "line": 31,
+          "column": 1
+        },
+        "end": {
+          "offset": 700,
+          "line": 31,
+          "column": 14
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-48",
+            "location": {
+              "start": {
+                "offset": 693,
+                "line": 31,
+                "column": 7
+              },
+              "end": {
+                "offset": 699,
+                "line": 31,
+                "column": 13
+              }
+            },
+            "content": "exit 1"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-49",
+            "location": {
+              "start": {
+                "offset": 692,
+                "line": 31,
+                "column": 6
+              },
+              "end": {
+                "offset": 700,
+                "line": 31,
+                "column": 14
+              }
+            },
+            "command": "exit"
+          }
+        ]
+      },
+      "raw": {
+        "command": "exit 1",
+        "commandBases": [
+          "exit"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-50",
+      "location": {
+        "start": {
+          "offset": 700,
+          "line": 31,
+          "column": 14
+        },
+        "end": {
+          "offset": 701,
+          "line": 32,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-51",
+      "location": {
+        "start": {
+          "offset": 701,
+          "line": 32,
+          "column": 1
+        },
+        "end": {
+          "offset": 730,
+          "line": 32,
+          "column": 30
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-52",
+            "location": {
+              "start": {
+                "offset": 707,
+                "line": 32,
+                "column": 7
+              },
+              "end": {
+                "offset": 729,
+                "line": 32,
+                "column": 29
+              }
+            },
+            "content": "echo \"Task 2: Success\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-53",
+            "location": {
+              "start": {
+                "offset": 706,
+                "line": 32,
+                "column": 6
+              },
+              "end": {
+                "offset": 730,
+                "line": 32,
+                "column": 30
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"Task 2: Success\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-54",
+      "location": {
+        "start": {
+          "offset": 730,
+          "line": 32,
+          "column": 30
+        },
+        "end": {
+          "offset": 732,
+          "line": 33,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-55",
+      "location": {
+        "start": {
+          "offset": 732,
+          "line": 33,
+          "column": 1
+        },
+        "end": {
+          "offset": 745,
+          "line": 33,
+          "column": 14
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-56",
+            "location": {
+              "start": {
+                "offset": 738,
+                "line": 33,
+                "column": 7
+              },
+              "end": {
+                "offset": 744,
+                "line": 33,
+                "column": 13
+              }
+            },
+            "content": "exit 2"
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-57",
+            "location": {
+              "start": {
+                "offset": 737,
+                "line": 33,
+                "column": 6
+              },
+              "end": {
+                "offset": 745,
+                "line": 33,
+                "column": 14
+              }
+            },
+            "command": "exit"
+          }
+        ]
+      },
+      "raw": {
+        "command": "exit 2",
+        "commandBases": [
+          "exit"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-58",
+      "location": {
+        "start": {
+          "offset": 745,
+          "line": 33,
+          "column": 14
+        },
+        "end": {
+          "offset": 746,
+          "line": 34,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-59",
+      "location": {
+        "start": {
+          "offset": 746,
+          "line": 34,
+          "column": 1
+        },
+        "end": {
+          "offset": 775,
+          "line": 34,
+          "column": 30
+        }
+      },
+      "kind": "run",
+      "subtype": "runCommand",
+      "source": "command",
+      "values": {
+        "command": [
+          {
+            "type": "Text",
+            "nodeId": "node-60",
+            "location": {
+              "start": {
+                "offset": 752,
+                "line": 34,
+                "column": 7
+              },
+              "end": {
+                "offset": 774,
+                "line": 34,
+                "column": 29
+              }
+            },
+            "content": "echo \"Task 3: Success\""
+          }
+        ],
+        "commandBases": [
+          {
+            "nodeId": "node-61",
+            "location": {
+              "start": {
+                "offset": 751,
+                "line": 34,
+                "column": 6
+              },
+              "end": {
+                "offset": 775,
+                "line": 34,
+                "column": 30
+              }
+            },
+            "command": "echo"
+          }
+        ]
+      },
+      "raw": {
+        "command": "echo \"Task 3: Success\"",
+        "commandBases": [
+          "echo"
+        ]
+      },
+      "meta": {
+        "hasVariables": false,
+        "commandCount": 1,
+        "hasScriptRunner": false,
+        "isMultiLine": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-62",
+      "location": {
+        "start": {
+          "offset": 775,
+          "line": 34,
+          "column": 30
+        },
+        "end": {
+          "offset": 804,
+          "line": 38,
+          "column": 1
+        }
+      },
+      "content": "\n\n## Test 5: Code Execution\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-63",
+      "location": {
+        "start": {
+          "offset": 809,
+          "line": 38,
+          "column": 6
+        },
+        "end": {
+          "offset": 923,
+          "line": 43,
+          "column": 2
+        }
+      },
+      "kind": "run",
+      "subtype": "runCode",
+      "source": "code",
+      "values": {
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "node-64",
+            "location": {
+              "start": {
+                "offset": 809,
+                "line": 38,
+                "column": 6
+              },
+              "end": {
+                "offset": 923,
+                "line": 43,
+                "column": 2
+              }
+            },
+            "content": "javascript"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "node-65",
+            "location": {
+              "start": {
+                "offset": 820,
+                "line": 38,
+                "column": 17
+              },
+              "end": {
+                "offset": 923,
+                "line": 43,
+                "column": 2
+              }
+            },
+            "content": "\nconsole.log(\"JavaScript output test\");\nfor (let i = 1; i <= 5; i++) {\n  console.log(`Line ${i}`);\n}\n"
+          }
+        ]
+      },
+      "raw": {
+        "lang": "javascript",
+        "args": [],
+        "code": "\nconsole.log(\"JavaScript output test\");\nfor (let i = 1; i <= 5; i++) {\n  console.log(`Line ${i}`);\n}\n"
+      },
+      "meta": {
+        "isMultiLine": true,
+        "language": "javascript",
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-66",
+      "location": {
+        "start": {
+          "offset": 923,
+          "line": 43,
+          "column": 2
+        },
+        "end": {
+          "offset": 954,
+          "line": 47,
+          "column": 20
+        }
+      },
+      "content": "\n\n## Done!\n\nAll tests complete."
     }
-  }
+  ],
+  "parseError": null
 }
