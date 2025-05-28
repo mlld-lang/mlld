@@ -3,7 +3,5 @@
  * Tracks data origins and trust levels throughout execution
  */
 
-export { TaintTracker, TaintLevel, TaintedValue } from './TaintTracker';
-
-// Re-export types
-export type { TaintLevel, TaintedValue } from './TaintTracker';
+export { TaintTracker, TaintLevel } from './TaintTracker';
+export type { TaintedValue } from './TaintTracker';

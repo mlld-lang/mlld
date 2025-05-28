@@ -3,9 +3,8 @@
  * Provides "DNS for Gists" functionality with security advisory checking
  */
 
-export { RegistryResolver, Registry, RegistryModule } from './RegistryResolver';
-export { AdvisoryChecker, Advisory, AdvisoryDatabase } from './AdvisoryChecker';
+export { RegistryResolver } from './RegistryResolver';
+export type { Registry, RegistryModule } from './RegistryResolver';
 
-// Re-export types for convenience
-export type { RegistryModule, Registry } from './RegistryResolver';
+export { AdvisoryChecker } from './AdvisoryChecker';
 export type { Advisory, AdvisoryDatabase } from './AdvisoryChecker';

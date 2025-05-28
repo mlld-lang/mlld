@@ -108,6 +108,15 @@ export class Environment {
     this.currentFilePath = filePath;
   }
   
+  getRegistryResolver(): RegistryResolver | undefined {
+    // Get from security manager if available
+    if (this.securityManager) {
+      return (this.securityManager as any).registryResolver;
+    }
+    // Check parent if not found
+    return this.parent?.getRegistryResolver();
+  }
+  
   // --- Variable Management ---
   
   setVariable(name: string, variable: MlldVariable): void {

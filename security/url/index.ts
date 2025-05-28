@@ -3,7 +3,8 @@
  * Handles validation and secure fetching of URLs
  */
 
-export { URLValidator, URLSecurityConfig, DEFAULT_URL_CONFIG } from './URLValidator';
+export { URLValidator, DEFAULT_URL_CONFIG } from './URLValidator';
+export type { URLSecurityConfig } from './URLValidator';
 
 // Future additions:
 // export { URLFetcher } from './URLFetcher';

@@ -4,6 +4,7 @@ import { watch } from 'fs/promises';
 import { existsSync } from 'fs';
 import { createInterface } from 'readline';
 import { initCommand } from './commands/init';
+import { registryCommand } from './commands/registry';
 import chalk from 'chalk';
 import { version } from '@core/version';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
@@ -312,6 +313,31 @@ function parseArgs(args: string[]): CLIOptions {
  * Display help information
  */
 function displayHelp(command?: string) {
+  if (command === 'registry') {
+    console.log(`
+Usage: mlld registry <subcommand> [options]
+
+Manage mlld module registry.
+
+Subcommands:
+  install              Install all modules from lock file
+  update [module]      Update module(s) to latest version
+  audit                Check for security advisories
+  search <query>       Search for modules
+  info <module>        Show module details
+  stats                Show local usage statistics
+  stats share          Share anonymous usage statistics
+  outdated             Show outdated modules
+
+Examples:
+  mlld registry search json
+  mlld registry info adamavenir/json-utils
+  mlld registry update
+  mlld registry audit
+    `);
+    return;
+  }
+  
   if (command === 'debug-resolution') {
     console.log(`
 Usage: mlld debug-resolution [options] <input-file>
@@ -351,6 +377,7 @@ Usage: mlld [command] [options] <input-file>
 
 Commands:
   init                    Create a new Mlld project
+  registry                Manage mlld module registry
   debug-resolution        Debug variable resolution in a Mlld file
   debug-transform         Debug node transformations through the pipeline
 
@@ -853,6 +880,12 @@ export async function main(customArgs?: string[]): Promise<void> {
     // Handle init command
     if (cliOptions.input === 'init') {
       await initCommand();
+      return;
+    }
+    
+    // Handle registry command
+    if (cliOptions.input === 'registry') {
+      await registryCommand(args.slice(1));
       return;
     }
     
