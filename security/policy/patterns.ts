@@ -28,6 +28,8 @@ export const IMMUTABLE_SECURITY_PATTERNS = Object.freeze({
   // Paths that can NEVER be written
   protectedWritePaths: Object.freeze([
     '~/.mlld/**',          // Our own security config!
+    'mlld.lock.json',      // Lock file integrity
+    '**/mlld.lock.json',   // Lock file in any location
     '/etc/**',             // System config
     '/usr/**',             // System binaries
     '/bin/**',             // System binaries
