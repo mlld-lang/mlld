@@ -42,6 +42,12 @@ export class ErrorDisplayFormatter {
 
     // Add source context if available and requested
     if (showSourceContext && error.sourceLocation) {
+      console.debug('[ErrorDisplay Debug] Formatting source context:', {
+        sourceLocation: error.sourceLocation,
+        errorDetails: error.details,
+        hasFile: !!(error.sourceLocation as any).filePath || !!(error.details?.filePath)
+      });
+      
       const formattedLocation = await this.locationFormatter.formatLocation(error.sourceLocation, {
         useSmartPaths,
         basePath,
@@ -50,7 +56,38 @@ export class ErrorDisplayFormatter {
         maxRelativeDepth: 3
       });
       
-      if (formattedLocation.file) {
+      console.debug('[ErrorDisplay Debug] Formatted location:', formattedLocation);
+      
+      // Check if we have source content stored in the error (for parse errors)
+      const sourceContent = (error as any).sourceContent || error.details?.sourceContent;
+      
+      if (sourceContent) {
+        // Use source content directly when available (more reliable than file reading)
+        const sourceContext = this.sourceExtractor.extractContextFromSource(
+          sourceContent,
+          {
+            display: formattedLocation.display,
+            file: formattedLocation.displayPath || formattedLocation.file || '<stdin>',
+            line: formattedLocation.line,
+            column: formattedLocation.column
+          },
+          {
+            contextLines,
+            maxLineLength
+          }
+        );
+
+        console.debug('[ErrorDisplay Debug] Source context from content:', {
+          hasContext: !!sourceContext,
+          sourceLength: sourceContent.length,
+          lines: sourceContext?.lines?.length
+        });
+
+        if (sourceContext) {
+          const contextDisplay = this.formatSourceContext(sourceContext, useColors);
+          parts.push(contextDisplay);
+        }
+      } else if (formattedLocation.file) {
         // Use original file path for source extraction (absolute path needed)
         const sourceContext = await this.sourceExtractor.extractContext({
           display: formattedLocation.display,
@@ -62,6 +99,12 @@ export class ErrorDisplayFormatter {
           maxLineLength
         });
 
+        console.debug('[ErrorDisplay Debug] Source context extracted:', {
+          hasContext: !!sourceContext,
+          file: formattedLocation.file,
+          lines: sourceContext?.lines?.length
+        });
+
         if (sourceContext) {
           // Update the source context to use the smart display path
           const enhancedSourceContext = {
@@ -71,7 +114,14 @@ export class ErrorDisplayFormatter {
           const contextDisplay = this.formatSourceContext(enhancedSourceContext, useColors);
           parts.push(contextDisplay);
         }
+      } else {
+        console.debug('[ErrorDisplay Debug] No file path in formatted location and no source content');
       }
+    } else {
+      console.debug('[ErrorDisplay Debug] No source context requested or no sourceLocation:', {
+        showSourceContext,
+        hasSourceLocation: !!error.sourceLocation
+      });
     }
 
     // Add error details

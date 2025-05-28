@@ -19,6 +19,7 @@ export interface MlldParseErrorOptions {
   severity?: ErrorSeverity;
   context?: any;
   filePath?: string; // Add filePath to options
+  sourceContent?: string; // Add source content for displaying context
 }
 
 /**
@@ -31,6 +32,8 @@ export class MlldParseError extends MlldError {
   public readonly location?: Location;
   // Explicitly store the cause passed in options
   public readonly cause?: unknown;
+  // Store source content for error display
+  public readonly sourceContent?: string;
 
   constructor(
     message: string, 
@@ -68,13 +71,23 @@ export class MlldParseError extends MlldError {
     // Parse errors are typically fatal, but can be overridden
     const severity = options.severity || ErrorSeverity.Fatal;
     
+    // Debug logging
+    console.debug('[MlldParseError Debug] Constructor called:', {
+      message,
+      position,
+      location,
+      filePath: options.filePath || filePath,
+      hasSourceLocation: !!location
+    });
+    
     super(`Parse error: ${message}${locationStr}`, {
       // Pass filePath via details, not directly
       code: 'PARSE_ERROR', // Assign a default code or get from options if needed
       severity,
       details: {
         ...options.context, // Keep existing context details
-        filePath: options.filePath || filePath 
+        filePath: options.filePath || filePath,
+        sourceContent: options.sourceContent // Store source content in details
       },
       sourceLocation: location, // Use sourceLocation for the parsed location
       cause: options.cause
@@ -83,6 +96,9 @@ export class MlldParseError extends MlldError {
     this.name = 'MlldParseError';
     this.location = location; // Keep this for direct access if needed
     this.cause = options.cause; // Store the cause
+    this.sourceContent = options.sourceContent; // Store source content
+    
+    console.debug('[MlldParseError Debug] Created error with sourceLocation:', this.sourceLocation);
 
     // Ensure proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, MlldParseError.prototype);

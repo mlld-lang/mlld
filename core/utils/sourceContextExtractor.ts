@@ -38,43 +38,68 @@ export class SourceContextExtractor {
 
     try {
       const lines = await this.getFileLines(location.file);
-      const errorLineIndex = location.line - 1;
-      
-      if (errorLineIndex < 0 || errorLineIndex >= lines.length) {
-        return null;
-      }
-
-      const startLine = Math.max(0, errorLineIndex - contextLines);
-      const endLine = Math.min(lines.length - 1, errorLineIndex + contextLines);
-
-      const contextLines_: SourceLine[] = [];
-      
-      for (let i = startLine; i <= endLine; i++) {
-        let content = lines[i];
-        
-        if (content.length > maxLineLength) {
-          const column = location.column || 1;
-          const start = Math.max(0, column - 40);
-          const end = Math.min(content.length, start + maxLineLength);
-          content = (start > 0 ? '...' : '') + content.slice(start, end) + (end < content.length ? '...' : '');
-        }
-
-        contextLines_.push({
-          number: i + 1,
-          content,
-          isErrorLine: i === errorLineIndex
-        });
-      }
-
-      return {
-        file: location.file,
-        lines: contextLines_,
-        errorLine: location.line,
-        errorColumn: location.column || 1
-      };
+      return this.extractContextFromLines(lines, location, { contextLines, maxLineLength });
     } catch (error) {
       return null;
     }
+  }
+
+  /**
+   * Extract context from provided source content instead of reading from file
+   */
+  extractContextFromSource(
+    sourceContent: string,
+    location: FormattedLocation,
+    options: ExtractSourceContextOptions = {}
+  ): SourceContext | null {
+    if (!location.line) {
+      return null;
+    }
+
+    const lines = sourceContent.split('\n');
+    return this.extractContextFromLines(lines, location, options);
+  }
+
+  private extractContextFromLines(
+    lines: string[],
+    location: FormattedLocation,
+    options: ExtractSourceContextOptions = {}
+  ): SourceContext | null {
+    const { contextLines = 2, maxLineLength = 120 } = options;
+    const errorLineIndex = location.line! - 1;
+    
+    if (errorLineIndex < 0 || errorLineIndex >= lines.length) {
+      return null;
+    }
+
+    const startLine = Math.max(0, errorLineIndex - contextLines);
+    const endLine = Math.min(lines.length - 1, errorLineIndex + contextLines);
+
+    const contextLines_: SourceLine[] = [];
+    
+    for (let i = startLine; i <= endLine; i++) {
+      let content = lines[i];
+      
+      if (content.length > maxLineLength) {
+        const column = location.column || 1;
+        const start = Math.max(0, column - 40);
+        const end = Math.min(content.length, start + maxLineLength);
+        content = (start > 0 ? '...' : '') + content.slice(start, end) + (end < content.length ? '...' : '');
+      }
+
+      contextLines_.push({
+        number: i + 1,
+        content,
+        isErrorLine: i === errorLineIndex
+      });
+    }
+
+    return {
+      file: location.file,
+      lines: contextLines_,
+      errorLine: location.line!,
+      errorColumn: location.column || 1
+    };
   }
 
   private async getFileLines(filePath: string): Promise<string[]> {

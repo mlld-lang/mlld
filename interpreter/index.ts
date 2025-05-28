@@ -51,6 +51,28 @@ export async function interpret(
     const location = (parseError as any).location;
     const position = location?.start || location || undefined;
     
+    // Debug logging for parse error location
+    console.debug('[ParseError Debug] Raw error:', {
+      message: parseError.message,
+      location: location,
+      position: position,
+      filePath: options.filePath,
+      sourceLength: source.length
+    });
+    
+    // Add filePath to the position/location if we have one
+    if (position && options.filePath) {
+      if ('line' in position) {
+        // It's a Position, convert to Location with filePath
+        position.filePath = options.filePath;
+      } else {
+        // It's a Location, add filePath
+        position.filePath = options.filePath;
+      }
+    }
+    
+    console.debug('[ParseError Debug] Enhanced position:', position);
+    
     // Enhance error message for common mistakes
     let enhancedMessage = parseError.message;
     
@@ -70,7 +92,9 @@ export async function interpret(
       position,
       {
         severity: ErrorSeverity.Fatal,
-        cause: parseError
+        cause: parseError,
+        filePath: options.filePath,
+        sourceContent: source // Pass the source content for error display
       }
     );
   }

@@ -13,7 +13,7 @@ from .errors import (
 )
 
 # Version will be synced with main mlld package
-__version__ = "0.1.0"
+__version__ = "1.0.0-rc"
 
 __all__ = [
     "Mlld",

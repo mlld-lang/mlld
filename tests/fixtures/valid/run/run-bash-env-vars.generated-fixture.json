@@ -179,7 +179,7 @@
       },
       "raw": {
         "identifier": "user_data",
-        "value": "{\n  \"role\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"64d71708-5cbe-453a-a953-1cfc66dc402c\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 95,\n          \"line\": 4,\n          \"column\": 29\n        },\n        \"end\": {\n          \"offset\": 102,\n          \"line\": 4,\n          \"column\": 36\n        }\n      },\n      \"content\": \"admin\"\n    }\n  ],\n  \"level\": 5\n}"
+        "value": "{\n  \"role\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"8ead7a17-b32c-44b1-ae50-7b43bf01348f\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 95,\n          \"line\": 4,\n          \"column\": 29\n        },\n        \"end\": {\n          \"offset\": 102,\n          \"line\": 4,\n          \"column\": 36\n        }\n      },\n      \"content\": \"admin\"\n    }\n  ],\n  \"level\": 5\n}"
       },
       "meta": {
         "objectData": {
