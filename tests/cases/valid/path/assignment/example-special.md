@@ -1,2 +1,2 @@
-@path homeConfig = [@~/config]
-@add [[The config is {{homeConfig}}]]
+@path projectConfig = [@./config]
+@add [[The config is {{projectConfig}}]]
