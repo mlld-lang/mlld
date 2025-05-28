@@ -28,7 +28,10 @@ export class ErrorDisplayFormatter {
       showSourceContext = true,
       contextLines = 2,
       maxLineLength = 120,
-      useColors = true
+      useColors = true,
+      useSmartPaths = true,
+      basePath,
+      workingDirectory = process.cwd()
     } = options;
 
     const parts: string[] = [];
