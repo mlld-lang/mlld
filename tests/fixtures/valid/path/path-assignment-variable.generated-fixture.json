@@ -140,21 +140,38 @@
             "nodeId": "node-7",
             "location": {
               "start": {
-                "offset": 24,
+                "offset": 44,
                 "line": 2,
-                "column": 1
+                "column": 21
               },
               "end": {
-                "offset": 75,
+                "offset": 50,
                 "line": 2,
-                "column": 52
+                "column": 27
               }
             },
-            "content": "config/"
+            "content": "config"
+          },
+          {
+            "type": "PathSeparator",
+            "nodeId": "node-8",
+            "location": {
+              "start": {
+                "offset": 50,
+                "line": 2,
+                "column": 27
+              },
+              "end": {
+                "offset": 51,
+                "line": 2,
+                "column": 28
+              }
+            },
+            "value": "/"
           },
           {
             "type": "VariableReference",
-            "nodeId": "node-8",
+            "nodeId": "node-9",
             "location": {
               "start": {
                 "offset": 0,
@@ -171,21 +188,38 @@
             "identifier": "username"
           },
           {
-            "type": "Text",
-            "nodeId": "node-9",
+            "type": "PathSeparator",
+            "nodeId": "node-10",
             "location": {
               "start": {
-                "offset": 24,
+                "offset": 60,
                 "line": 2,
-                "column": 1
+                "column": 37
               },
               "end": {
-                "offset": 75,
+                "offset": 61,
                 "line": 2,
-                "column": 52
+                "column": 38
               }
             },
-            "content": "/settings.json"
+            "value": "/"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-11",
+            "location": {
+              "start": {
+                "offset": 61,
+                "line": 2,
+                "column": 38
+              },
+              "end": {
+                "offset": 74,
+                "line": 2,
+                "column": 51
+              }
+            },
+            "content": "settings.json"
           }
         ]
       },
@@ -204,7 +238,7 @@
     },
     {
       "type": "Newline",
-      "nodeId": "node-10",
+      "nodeId": "node-12",
       "location": {
         "start": {
           "offset": 75,
@@ -221,7 +255,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-11",
+      "nodeId": "node-13",
       "location": {
         "start": {
           "offset": 76,
@@ -241,7 +275,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "node-12",
+            "nodeId": "node-14",
             "location": {
               "start": {
                 "offset": 83,
@@ -258,7 +292,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "node-13",
+            "nodeId": "node-15",
             "location": {
               "start": {
                 "offset": 0,

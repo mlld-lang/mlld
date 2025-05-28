@@ -56,9 +56,9 @@ describe('Path Directive', () => {
     expect(directiveNode.meta.path.hasVariables).toBe(true);
   });
   
-  test('Path with home directory alias', async () => {
-    // Using brackets for variable interpolation per new syntax rules
-    const content = `@path home = [@~/mlld/files]`;
+  test('Path with escape sequences', async () => {
+    // Test escape sequence handling in paths
+    const content = `@path social = [https://twitter.com/\@username]`;
     const parseResult = await parse(content);
     const directiveNode = parseResult.ast[0];
     
@@ -68,22 +68,21 @@ describe('Path Directive', () => {
     
     // Check identifier
     expect(Array.isArray(directiveNode.values.identifier)).toBe(true);
-    expect(directiveNode.values.identifier[0].identifier).toBe('home');
+    expect(directiveNode.values.identifier[0].identifier).toBe('social');
     
     // Check raw values
-    expect(directiveNode.raw.identifier).toBe('home');
-    expect(directiveNode.raw.path).toBe('@HOMEPATH/mlld/files');
+    expect(directiveNode.raw.identifier).toBe('social');
+    expect(directiveNode.raw.path).toBe('https://twitter.com/@username');
     
-    // Check path values
+    // Check path values - should contain literal @username, not a variable reference
     expect(Array.isArray(directiveNode.values.path)).toBe(true);
     expect(directiveNode.values.path.length).toBeGreaterThan(0);
     
-    // Check for path variable reference in path values
-    const variableNode = directiveNode.values.path.find(node => node.type === 'VariableReference');
-    expect(variableNode).toBeDefined();
-    expect(variableNode.type).toBe('VariableReference');
-    expect(variableNode.valueType).toBe('varIdentifier');
-    expect(variableNode.identifier).toBe('HOMEPATH'); // Should be normalized
+    // Verify that @username appears as literal text, not a variable reference
+    const textNodes = directiveNode.values.path.filter(node => node.type === 'Text');
+    const usernameText = textNodes.find(node => node.content === '@username');
+    expect(usernameText).toBeDefined();
+    expect(usernameText.content).toBe('@username');
   });
   
   test('Path with variable interpolation', async () => {

@@ -1,7 +1,7 @@
 " Vim syntax file for Mlld
 " Language: Mlld
 " Maintainer: Auto-generated
-" Latest Revision: 2025-05-28T00:19:45.655Z
+" Latest Revision: 2025-05-28T00:36:19.752Z
 
 if exists("b:current_syntax")
   finish

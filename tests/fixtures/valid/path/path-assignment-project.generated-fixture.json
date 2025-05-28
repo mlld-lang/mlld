@@ -8,180 +8,20 @@
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": [
-    {
-      "type": "Directive",
-      "nodeId": "node-1",
-      "location": {
-        "start": {
-          "offset": 0,
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "offset": 27,
-          "line": 1,
-          "column": 28
-        }
+  "ast": null,
+  "parseError": {
+    "message": "Expected Any path expression, Content with @var interpolation, or whitespace but \"[\" found.",
+    "location": {
+      "start": {
+        "offset": 19,
+        "line": 1,
+        "column": 20
       },
-      "kind": "path",
-      "subtype": "pathAssignment",
-      "source": "path",
-      "values": {
-        "identifier": [
-          {
-            "type": "VariableReference",
-            "nodeId": "node-2",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              }
-            },
-            "valueType": "identifier",
-            "identifier": "projectSrc"
-          }
-        ],
-        "path": [
-          {
-            "type": "VariableReference",
-            "nodeId": "node-3",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              }
-            },
-            "valueType": "varIdentifier",
-            "identifier": "PROJECTPATH"
-          },
-          {
-            "type": "Text",
-            "nodeId": "node-4",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 27,
-                "line": 1,
-                "column": 28
-              }
-            },
-            "content": "/src"
-          }
-        ]
-      },
-      "raw": {
-        "identifier": "projectSrc",
-        "path": "@PROJECTPATH/src"
-      },
-      "meta": {
-        "path": {
-          "hasVariables": true,
-          "isAbsolute": false,
-          "hasExtension": false,
-          "extension": null
-        }
-      }
-    },
-    {
-      "type": "Newline",
-      "nodeId": "node-5",
-      "location": {
-        "start": {
-          "offset": 27,
-          "line": 1,
-          "column": 28
-        },
-        "end": {
-          "offset": 28,
-          "line": 2,
-          "column": 1
-        }
-      },
-      "content": "\n"
-    },
-    {
-      "type": "Directive",
-      "nodeId": "node-6",
-      "location": {
-        "start": {
-          "offset": 28,
-          "line": 2,
-          "column": 1
-        },
-        "end": {
-          "offset": 73,
-          "line": 2,
-          "column": 46
-        }
-      },
-      "kind": "add",
-      "subtype": "addTemplate",
-      "source": "template",
-      "values": {
-        "content": [
-          {
-            "type": "Text",
-            "nodeId": "node-7",
-            "location": {
-              "start": {
-                "offset": 35,
-                "line": 2,
-                "column": 8
-              },
-              "end": {
-                "offset": 57,
-                "line": 2,
-                "column": 30
-              }
-            },
-            "content": "The project source is "
-          },
-          {
-            "type": "VariableReference",
-            "nodeId": "node-8",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              }
-            },
-            "valueType": "varInterpolation",
-            "identifier": "projectSrc"
-          }
-        ]
-      },
-      "raw": {
-        "content": "The project source is {{projectSrc}}"
-      },
-      "meta": {
-        "isTemplateContent": true,
-        "hasVariables": true,
-        "wrapperType": "doubleBracket"
+      "end": {
+        "offset": 20,
+        "line": 1,
+        "column": 21
       }
     }
-  ],
-  "parseError": null
+  }
 }

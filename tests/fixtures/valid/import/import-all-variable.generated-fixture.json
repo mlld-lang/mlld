@@ -54,14 +54,14 @@
             "nodeId": "node-3",
             "location": {
               "start": {
-                "offset": 0,
+                "offset": 20,
                 "line": 1,
-                "column": 1
+                "column": 21
               },
               "end": {
-                "offset": 31,
+                "offset": 30,
                 "line": 1,
-                "column": 32
+                "column": 31
               }
             },
             "content": "config.mld"

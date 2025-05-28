@@ -17,53 +17,38 @@ It is used in the form:
 // TOP-LEVEL PATH DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @path directive - handles bracketed paths
+// Primary @path directive - handles bracketed paths using proper abstraction
 AtPath
-  = DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ "[" pathContent:$(!"]" .)* "]" {
-      helpers.debug('AtPath matched bracketed path', { id, pathContent });
+  = DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ content:BracketContent {
+      helpers.debug('AtPath matched bracketed path', { id, content });
       
-      // Process special path variables
-      const processedContent = pathContent
-        .replace(/@\./g, '@PROJECTPATH');
+      // Process special path variables in the parsed content (only @. special case)
+      const processedPathParts = [];
       
-      // Use WrappedPathContent abstraction to process the processed content 
-      // instead of manual parsing
-      const pathWrapper = {
-        parts: [],
-        raw: processedContent
-      };
-      
-      // Parse path contents for variables - similar to what WrappedPathContent would do
-      // but with our processed special variables
-      const pathParts = [];
-      let lastIndex = 0;
-      const varPattern = /@([a-zA-Z0-9_]+)/g;
-      let match;
-      
-      while ((match = varPattern.exec(processedContent)) !== null) {
-        // Add text content before the variable
-        if (match.index > lastIndex) {
-          const textContent = processedContent.substring(lastIndex, match.index);
-          if (textContent) {
-            pathParts.push(helpers.createNode(NodeType.Text, { content: textContent, location: location() }));
+      for (const part of content) {
+        if (part.type === 'Text' && part.content && part.content.includes('@.')) {
+          // Handle @. in text nodes by replacing with @PROJECTPATH and re-parsing as variable
+          const updatedContent = part.content.replace(/@\./g, '@PROJECTPATH');
+          
+          // If the replacement happened, we need to split this into text and variable parts
+          if (updatedContent !== part.content) {
+            // For simplicity, just replace @. with @PROJECTPATH in the text content
+            // The interpreter will handle @PROJECTPATH as a special variable
+            const newTextNode = helpers.createNode(NodeType.Text, { 
+              content: updatedContent, 
+              location: part.location 
+            });
+            processedPathParts.push(newTextNode);
+          } else {
+            processedPathParts.push(part);
           }
+        } else {
+          processedPathParts.push(part);
         }
-        
-        // Add the variable reference node
-        const varName = match[1]; 
-        pathParts.push(helpers.createVariableReferenceNode('varIdentifier', { identifier: varName }, location()));
-        
-        // Update lastIndex to after the variable reference
-        lastIndex = match.index + match[0].length;
       }
       
-      // Add any remaining text after the last variable
-      if (lastIndex < processedContent.length) {
-        const textContent = processedContent.substring(lastIndex);
-        if (textContent) {
-          pathParts.push(helpers.createNode(NodeType.Text, { content: textContent, location: location() }));
-        }
-      }
+      // Reconstruct raw string from processed parts for metadata
+      const rawString = helpers.reconstructRawString(processedPathParts);
       
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
@@ -73,14 +58,14 @@ AtPath
         'pathAssignment',
         {
           identifier: [idNode],
-          path: pathParts
+          path: processedPathParts
         },
         {
           identifier: id,
-          path: processedContent
+          path: rawString
         },
         {
-          path: helpers.createPathMetadata(processedContent, pathParts)
+          path: helpers.createPathMetadata(rawString, processedPathParts)
         },
         location(),
         'path'  // Source parameter

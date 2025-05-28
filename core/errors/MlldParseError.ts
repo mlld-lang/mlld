@@ -1,14 +1,17 @@
 import type { Location, Position } from '@core/types/index';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
+import { formatLocationForError } from '@core/utils/locationFormatter';
 
 interface SerializedParseError {
   name: string;
   message: string;
+  code: string;
+  severity: ErrorSeverity;
   location?: Location;
+  sourceLocation?: string;
   filePath?: string;
   cause?: string;
-  severity: ErrorSeverity;
-  context?: any;
+  details?: any;
 }
 
 export interface MlldParseErrorOptions {
@@ -89,8 +92,6 @@ export class MlldParseError extends MlldError {
    * Custom serialization to avoid circular references and include only essential info
    */
   toJSON(): SerializedParseError {
-    // Construct JSON directly, MlldError doesn't have toJSON
-    // Access the stored 'cause' property
     const cause = this.cause;
     return {
       name: this.name,
@@ -98,9 +99,10 @@ export class MlldParseError extends MlldError {
       code: this.code,
       severity: this.severity,
       location: this.location,
-      filePath: this.details?.filePath, // Get filePath from details
-      cause: cause instanceof Error ? cause.message : String(cause), // Handle cause serialization
-      details: this.details // Include other details
-    } as SerializedParseError; // Cast is okay if SerializedParseError matches this structure
+      sourceLocation: this.sourceLocation ? formatLocationForError(this.sourceLocation) : undefined,
+      filePath: this.details?.filePath,
+      cause: cause instanceof Error ? cause.message : String(cause),
+      details: this.details
+    } as SerializedParseError;
   }
 } 

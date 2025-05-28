@@ -1,5 +1,6 @@
 import { MlldInterpreterError, InterpreterLocation, MlldInterpreterErrorOptions } from './MlldInterpreterError';
 import { ErrorSeverity } from './MlldError';
+import { formatLocationForError } from '@core/utils/locationFormatter';
 
 export interface VariableRedefinitionContext {
   variableName: string;
@@ -30,10 +31,7 @@ export class VariableRedefinitionError extends MlldInterpreterError {
     let enhancedMessage = message; // Use the specific message passed to constructor
     
     if (context?.existingLocation) {
-      const existingLoc = context.existingLocation;
-      const locStr = existingLoc.filePath 
-        ? `${existingLoc.filePath}:${existingLoc.line}:${existingLoc.column}`
-        : `line ${existingLoc.line}, column ${existingLoc.column}`;
+      const locStr = formatLocationForError(context.existingLocation);
       enhancedMessage += `. Originally defined at ${locStr}`;
     }
     

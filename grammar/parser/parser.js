@@ -3079,51 +3079,36 @@ function peg$parse(input, options) {
       }
       return name;
     };
-  var peg$f268 = function(id, pathContent) {
-      helpers.debug('AtPath matched bracketed path', { id, pathContent });
+  var peg$f268 = function(id, content) {
+      helpers.debug('AtPath matched bracketed path', { id, content });
       
-      // Process special path variables
-      const processedContent = pathContent
-        .replace(/@\./g, '@PROJECTPATH');
+      // Process special path variables in the parsed content (only @. special case)
+      const processedPathParts = [];
       
-      // Use WrappedPathContent abstraction to process the processed content 
-      // instead of manual parsing
-      const pathWrapper = {
-        parts: [],
-        raw: processedContent
-      };
-      
-      // Parse path contents for variables - similar to what WrappedPathContent would do
-      // but with our processed special variables
-      const pathParts = [];
-      let lastIndex = 0;
-      const varPattern = /@([a-zA-Z0-9_]+)/g;
-      let match;
-      
-      while ((match = varPattern.exec(processedContent)) !== null) {
-        // Add text content before the variable
-        if (match.index > lastIndex) {
-          const textContent = processedContent.substring(lastIndex, match.index);
-          if (textContent) {
-            pathParts.push(helpers.createNode(NodeType.Text, { content: textContent, location: location() }));
+      for (const part of content) {
+        if (part.type === 'Text' && part.content && part.content.includes('@.')) {
+          // Handle @. in text nodes by replacing with @PROJECTPATH and re-parsing as variable
+          const updatedContent = part.content.replace(/@\./g, '@PROJECTPATH');
+          
+          // If the replacement happened, we need to split this into text and variable parts
+          if (updatedContent !== part.content) {
+            // For simplicity, just replace @. with @PROJECTPATH in the text content
+            // The interpreter will handle @PROJECTPATH as a special variable
+            const newTextNode = helpers.createNode(NodeType.Text, { 
+              content: updatedContent, 
+              location: part.location 
+            });
+            processedPathParts.push(newTextNode);
+          } else {
+            processedPathParts.push(part);
           }
+        } else {
+          processedPathParts.push(part);
         }
-        
-        // Add the variable reference node
-        const varName = match[1]; 
-        pathParts.push(helpers.createVariableReferenceNode('varIdentifier', { identifier: varName }, location()));
-        
-        // Update lastIndex to after the variable reference
-        lastIndex = match.index + match[0].length;
       }
       
-      // Add any remaining text after the last variable
-      if (lastIndex < processedContent.length) {
-        const textContent = processedContent.substring(lastIndex);
-        if (textContent) {
-          pathParts.push(helpers.createNode(NodeType.Text, { content: textContent, location: location() }));
-        }
-      }
+      // Reconstruct raw string from processed parts for metadata
+      const rawString = helpers.reconstructRawString(processedPathParts);
       
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
@@ -3133,14 +3118,14 @@ function peg$parse(input, options) {
         'pathAssignment',
         {
           identifier: [idNode],
-          path: pathParts
+          path: processedPathParts
         },
         {
           identifier: id,
-          path: processedContent
+          path: rawString
         },
         {
-          path: helpers.createPathMetadata(processedContent, pathParts)
+          path: helpers.createPathMetadata(rawString, processedPathParts)
         },
         location(),
         'path'  // Source parameter
@@ -14176,7 +14161,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parseAtPath() {
-    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8;
 
     s0 = peg$currPos;
     s1 = peg$parseDirectiveContext();
@@ -14202,106 +14187,10 @@ function peg$parse(input, options) {
           }
           if (s6 !== peg$FAILED) {
             s7 = peg$parse_();
-            if (input.charCodeAt(peg$currPos) === 91) {
-              s8 = peg$c60;
-              peg$currPos++;
-            } else {
-              s8 = peg$FAILED;
-              if (peg$silentFails === 0) { peg$fail(peg$e122); }
-            }
+            s8 = peg$parseBracketContent();
             if (s8 !== peg$FAILED) {
-              s9 = peg$currPos;
-              s10 = [];
-              s11 = peg$currPos;
-              s12 = peg$currPos;
-              peg$silentFails++;
-              if (input.charCodeAt(peg$currPos) === 93) {
-                s13 = peg$c61;
-                peg$currPos++;
-              } else {
-                s13 = peg$FAILED;
-                if (peg$silentFails === 0) { peg$fail(peg$e123); }
-              }
-              peg$silentFails--;
-              if (s13 === peg$FAILED) {
-                s12 = undefined;
-              } else {
-                peg$currPos = s12;
-                s12 = peg$FAILED;
-              }
-              if (s12 !== peg$FAILED) {
-                if (input.length > peg$currPos) {
-                  s13 = input.charAt(peg$currPos);
-                  peg$currPos++;
-                } else {
-                  s13 = peg$FAILED;
-                  if (peg$silentFails === 0) { peg$fail(peg$e9); }
-                }
-                if (s13 !== peg$FAILED) {
-                  s12 = [s12, s13];
-                  s11 = s12;
-                } else {
-                  peg$currPos = s11;
-                  s11 = peg$FAILED;
-                }
-              } else {
-                peg$currPos = s11;
-                s11 = peg$FAILED;
-              }
-              while (s11 !== peg$FAILED) {
-                s10.push(s11);
-                s11 = peg$currPos;
-                s12 = peg$currPos;
-                peg$silentFails++;
-                if (input.charCodeAt(peg$currPos) === 93) {
-                  s13 = peg$c61;
-                  peg$currPos++;
-                } else {
-                  s13 = peg$FAILED;
-                  if (peg$silentFails === 0) { peg$fail(peg$e123); }
-                }
-                peg$silentFails--;
-                if (s13 === peg$FAILED) {
-                  s12 = undefined;
-                } else {
-                  peg$currPos = s12;
-                  s12 = peg$FAILED;
-                }
-                if (s12 !== peg$FAILED) {
-                  if (input.length > peg$currPos) {
-                    s13 = input.charAt(peg$currPos);
-                    peg$currPos++;
-                  } else {
-                    s13 = peg$FAILED;
-                    if (peg$silentFails === 0) { peg$fail(peg$e9); }
-                  }
-                  if (s13 !== peg$FAILED) {
-                    s12 = [s12, s13];
-                    s11 = s12;
-                  } else {
-                    peg$currPos = s11;
-                    s11 = peg$FAILED;
-                  }
-                } else {
-                  peg$currPos = s11;
-                  s11 = peg$FAILED;
-                }
-              }
-              s9 = input.substring(s9, peg$currPos);
-              if (input.charCodeAt(peg$currPos) === 93) {
-                s10 = peg$c61;
-                peg$currPos++;
-              } else {
-                s10 = peg$FAILED;
-                if (peg$silentFails === 0) { peg$fail(peg$e123); }
-              }
-              if (s10 !== peg$FAILED) {
-                peg$savedPos = s0;
-                s0 = peg$f268(s4, s9);
-              } else {
-                peg$currPos = s0;
-                s0 = peg$FAILED;
-              }
+              peg$savedPos = s0;
+              s0 = peg$f268(s4, s8);
             } else {
               peg$currPos = s0;
               s0 = peg$FAILED;

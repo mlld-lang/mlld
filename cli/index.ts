@@ -725,9 +725,17 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
 
     // Show additional details if available
     if (error.details && typeof error.details === 'object') {
+      const { formatLocationForError } = require('@core/utils/locationFormatter');
       const detailsStr = Object.entries(error.details)
         .filter(([key, value]) => value !== undefined && value !== null)
-        .map(([key, value]) => `  ${key}: ${String(value)}`)
+        .map(([key, value]) => {
+          // Format location objects specially
+          if (value && typeof value === 'object' && 
+              ('line' in value || 'filePath' in value)) {
+            return `  ${key}: ${formatLocationForError(value)}`;
+          }
+          return `  ${key}: ${String(value)}`;
+        })
         .join('\n');
       
       if (detailsStr) {

@@ -1,4 +1,5 @@
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
+import { formatLocationForError } from '@core/utils/locationFormatter';
 
 export interface InterpreterLocation {
   line: number;
@@ -11,6 +12,7 @@ interface SerializedInterpreterError {
   message: string;
   nodeType: string;
   location?: InterpreterLocation;
+  sourceLocation?: string;
   filePath?: string;
   cause?: string;
   fullCauseMessage?: string;
@@ -92,12 +94,14 @@ export class MlldInterpreterError extends MlldError {
    * Custom serialization to avoid circular references and include only essential info
    */
   toJSON(): SerializedInterpreterError {
+    const { formatLocationForError } = require('../../core/utils/locationFormatter');
     const cause = this.cause;
     return {
       name: this.name,
       message: this.message,
       nodeType: this.nodeType,
       location: this.location,
+      sourceLocation: this.sourceLocation ? formatLocationForError(this.sourceLocation) : undefined,
       filePath: this.location?.filePath,
       cause: cause instanceof Error ? cause.message : String(cause),
       fullCauseMessage: cause instanceof Error ? this.getFullCauseMessage(cause) : undefined,

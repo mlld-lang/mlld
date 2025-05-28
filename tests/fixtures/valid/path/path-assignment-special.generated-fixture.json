@@ -8,180 +8,20 @@
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": [
-    {
-      "type": "Directive",
-      "nodeId": "node-1",
-      "location": {
-        "start": {
-          "offset": 0,
-          "line": 1,
-          "column": 1
-        },
-        "end": {
-          "offset": 33,
-          "line": 1,
-          "column": 34
-        }
+  "ast": null,
+  "parseError": {
+    "message": "Expected Any path expression, Content with @var interpolation, or whitespace but \"[\" found.",
+    "location": {
+      "start": {
+        "offset": 22,
+        "line": 1,
+        "column": 23
       },
-      "kind": "path",
-      "subtype": "pathAssignment",
-      "source": "path",
-      "values": {
-        "identifier": [
-          {
-            "type": "VariableReference",
-            "nodeId": "node-2",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              }
-            },
-            "valueType": "identifier",
-            "identifier": "projectConfig"
-          }
-        ],
-        "path": [
-          {
-            "type": "VariableReference",
-            "nodeId": "node-3",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              }
-            },
-            "valueType": "varIdentifier",
-            "identifier": "PROJECTPATH"
-          },
-          {
-            "type": "Text",
-            "nodeId": "node-4",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 33,
-                "line": 1,
-                "column": 34
-              }
-            },
-            "content": "/config"
-          }
-        ]
-      },
-      "raw": {
-        "identifier": "projectConfig",
-        "path": "@PROJECTPATH/config"
-      },
-      "meta": {
-        "path": {
-          "hasVariables": true,
-          "isAbsolute": false,
-          "hasExtension": false,
-          "extension": null
-        }
-      }
-    },
-    {
-      "type": "Newline",
-      "nodeId": "node-5",
-      "location": {
-        "start": {
-          "offset": 33,
-          "line": 1,
-          "column": 34
-        },
-        "end": {
-          "offset": 34,
-          "line": 2,
-          "column": 1
-        }
-      },
-      "content": "\n"
-    },
-    {
-      "type": "Directive",
-      "nodeId": "node-6",
-      "location": {
-        "start": {
-          "offset": 34,
-          "line": 2,
-          "column": 1
-        },
-        "end": {
-          "offset": 74,
-          "line": 2,
-          "column": 41
-        }
-      },
-      "kind": "add",
-      "subtype": "addTemplate",
-      "source": "template",
-      "values": {
-        "content": [
-          {
-            "type": "Text",
-            "nodeId": "node-7",
-            "location": {
-              "start": {
-                "offset": 41,
-                "line": 2,
-                "column": 8
-              },
-              "end": {
-                "offset": 55,
-                "line": 2,
-                "column": 22
-              }
-            },
-            "content": "The config is "
-          },
-          {
-            "type": "VariableReference",
-            "nodeId": "node-8",
-            "location": {
-              "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-              }
-            },
-            "valueType": "varInterpolation",
-            "identifier": "projectConfig"
-          }
-        ]
-      },
-      "raw": {
-        "content": "The config is {{projectConfig}}"
-      },
-      "meta": {
-        "isTemplateContent": true,
-        "hasVariables": true,
-        "wrapperType": "doubleBracket"
+      "end": {
+        "offset": 23,
+        "line": 1,
+        "column": 24
       }
     }
-  ],
-  "parseError": null
+  }
 }

@@ -41,6 +41,8 @@ export interface MlldErrorOptions {
   cause?: unknown;
 }
 
+import { formatLocationForError } from '@core/utils/locationFormatter';
+
 /**
  * Base class for all custom Mlld errors.
  * Provides structure for error codes, severity, details, and source location.
@@ -115,7 +117,6 @@ export class MlldError extends Error {
     }
 
     if (this.sourceLocation) {
-      const { formatLocationForError } = require('@core/utils/locationFormatter');
       result.sourceLocation = formatLocationForError(this.sourceLocation);
     }
 
