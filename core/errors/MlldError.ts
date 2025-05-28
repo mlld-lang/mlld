@@ -12,15 +12,7 @@ export enum ErrorSeverity {
   Warning = 'warning',
 }
 
-/**
- * Represents the source location related to an error.
- */
-export interface ErrorSourceLocation {
-  filePath?: string;
-  line?: number;
-  column?: number;
-  offset?: number;
-}
+import { SourceLocation } from '@core/types';
 
 /**
  * Base interface for Mlld error details.
@@ -37,7 +29,7 @@ export interface MlldErrorOptions {
   code: string;
   severity: ErrorSeverity;
   details?: BaseErrorDetails;
-  sourceLocation?: ErrorSourceLocation;
+  sourceLocation?: SourceLocation;
   cause?: unknown;
 }
 
@@ -55,7 +47,7 @@ export class MlldError extends Error {
   /** Additional context-specific details about the error */
   public readonly details?: BaseErrorDetails;
   /** Optional source location where the error occurred */
-  public readonly sourceLocation?: ErrorSourceLocation;
+  public readonly sourceLocation?: SourceLocation;
 
   constructor(
     message: string,
@@ -63,7 +55,7 @@ export class MlldError extends Error {
       code: string;
       severity: ErrorSeverity;
       details?: BaseErrorDetails;
-      sourceLocation?: ErrorSourceLocation;
+      sourceLocation?: SourceLocation;
       cause?: unknown; // Allow chaining errors
     }
   ) {

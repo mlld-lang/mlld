@@ -94,17 +94,18 @@ export interface MlldVariable {
 // =========================================================================
 
 /**
- * Convert SourceLocation to InterpreterLocation format
+ * Convert AST SourceLocation (with start/end) to unified SourceLocation format
  */
-export function sourceLocationToInterpreterLocation(
-  sourceLocation?: SourceLocation,
+export function astLocationToSourceLocation(
+  astLocation?: { start: Position; end: Position },
   filePath?: string
-): any {
-  if (!sourceLocation) return undefined;
+): SourceLocation | undefined {
+  if (!astLocation) return undefined;
   
   return {
-    line: sourceLocation.start.line,
-    column: sourceLocation.start.column,
+    line: astLocation.start.line,
+    column: astLocation.start.column,
+    offset: astLocation.start.offset,
     filePath
   };
 }
@@ -226,6 +227,49 @@ export interface Position {
 export interface Location {
   start: Position;
   end: Position;
+}
+
+/**
+ * Unified source location type that replaces both InterpreterLocation and ErrorSourceLocation.
+ * This type serves as the single source of truth for representing source locations
+ * throughout the codebase, supporting both precise locations (with line/column) and
+ * partial locations (file-only references).
+ */
+export interface SourceLocation {
+  /** The file path where this location occurs */
+  filePath?: string;
+  /** Line number (1-based) - required for precise locations */
+  line?: number;
+  /** Column number (1-based) - required for precise locations */
+  column?: number;
+  /** Byte offset in the file (0-based) - optional for enhanced tooling support */
+  offset?: number;
+}
+
+/**
+ * Creates a precise SourceLocation with line and column information
+ */
+export function createPreciseLocation(
+  line: number,
+  column: number,
+  filePath?: string,
+  offset?: number
+): SourceLocation {
+  return { filePath, line, column, offset };
+}
+
+/**
+ * Creates a file-only SourceLocation for references without precise position
+ */
+export function createFileLocation(filePath: string): SourceLocation {
+  return { filePath };
+}
+
+/**
+ * Type guard to check if a SourceLocation has precise position information
+ */
+export function isPreciseLocation(location: SourceLocation): location is Required<Pick<SourceLocation, 'line' | 'column'>> & SourceLocation {
+  return typeof location.line === 'number' && typeof location.column === 'number';
 }
 
 // =========================================================================

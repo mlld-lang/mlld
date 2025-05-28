@@ -1,11 +1,12 @@
-import { MlldInterpreterError, InterpreterLocation, MlldInterpreterErrorOptions } from './MlldInterpreterError';
+import { MlldInterpreterError, MlldInterpreterErrorOptions } from './MlldInterpreterError';
 import { ErrorSeverity } from './MlldError';
 import { formatLocationForError } from '@core/utils/locationFormatter';
+import { SourceLocation } from '@core/types';
 
 export interface VariableRedefinitionContext {
   variableName: string;
-  existingLocation?: InterpreterLocation;
-  newLocation?: InterpreterLocation;
+  existingLocation?: SourceLocation;
+  newLocation?: SourceLocation;
   filePath?: string;
   suggestion?: string;
 }
@@ -62,8 +63,8 @@ export class VariableRedefinitionError extends MlldInterpreterError {
    */
   static forSameFile(
     variableName: string,
-    existingLocation: InterpreterLocation,
-    newLocation: InterpreterLocation
+    existingLocation: SourceLocation,
+    newLocation: SourceLocation
   ): VariableRedefinitionError {
     return new VariableRedefinitionError(
       `Variable '${variableName}' is already defined and cannot be redefined`,
@@ -84,8 +85,8 @@ export class VariableRedefinitionError extends MlldInterpreterError {
    */
   static forImportConflict(
     variableName: string,
-    existingLocation: InterpreterLocation,
-    newLocation: InterpreterLocation,
+    existingLocation: SourceLocation,
+    newLocation: SourceLocation,
     importPath?: string,
     isExistingImported?: boolean
   ): VariableRedefinitionError {

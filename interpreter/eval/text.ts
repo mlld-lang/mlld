@@ -2,7 +2,7 @@ import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
-import { createTextVariable, sourceLocationToInterpreterLocation } from '@core/types';
+import { createTextVariable, astLocationToSourceLocation } from '@core/types';
 import { createLLMXML } from 'llmxml';
 
 /**
@@ -279,7 +279,7 @@ export async function evaluateText(
   
   // Create and store the variable with location information
   const variable = createTextVariable(identifier, finalValue, {
-    definedAt: sourceLocationToInterpreterLocation(directive.location, env.getCurrentFilePath())
+    definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
   });
   env.setVariable(identifier, variable);
   

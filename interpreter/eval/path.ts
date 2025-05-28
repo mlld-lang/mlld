@@ -2,7 +2,7 @@ import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
-import { createPathVariable, sourceLocationToInterpreterLocation } from '@core/types';
+import { createPathVariable, astLocationToSourceLocation } from '@core/types';
 
 /**
  * Evaluate @path directives.
@@ -57,7 +57,7 @@ export async function evaluatePath(
     isAbsolute: resolvedPath.startsWith('/') || isURL || env.isURL(resolvedPath),
     isRelative: !resolvedPath.startsWith('/') && !isURL && !env.isURL(resolvedPath)
   }, {
-    definedAt: sourceLocationToInterpreterLocation(directive.location, env.getCurrentFilePath())
+    definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
   });
   
   env.setVariable(identifier, variable);

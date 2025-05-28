@@ -1,0 +1,27 @@
+{
+  "name": "variables-redefinition-import-conflict",
+  "description": "Test fixture for exceptions/variables-redefinition-import-conflict",
+  "category": "exceptions",
+  "subcategory": "variables-redefinition-import-conflict",
+  "input": "@import { title } from \"config.mld\"\n@text title = \"Local Title\"\n@add @title",
+  "expected": null,
+  "expectedError": "VariableRedefinition: Interpreter error (variable-redefinition): Variable 'title' is already imported and cannot be redefined locally. Originally defined at ./config.mld:1:1. Consider using import aliases: @import { title as titleImported } from \"config.mld\" at line 2, column 1 in ./example.md\n\n  ./example.md:2:1\n  1 | @import { title } from \"config.mld\"\n  2 | @text title = \"Local Title\"\n      ^\n  3 | @add @title\n\nDetails:\n  variableName: title\n  existingLocation: ./config.mld:1:1\n  newLocation: ./example.md:2:1\n  filePath: ./example.md\n  nodeType: variable-redefinition\n\n💡 Consider using import aliases: @import { title as titleImported } from \"config.mld\"",
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": null,
+  "parseError": {
+    "message": "Expected Any path expression or whitespace but \"\\\"\" found.",
+    "location": {
+      "start": {
+        "offset": 23,
+        "line": 1,
+        "column": 24
+      },
+      "end": {
+        "offset": 24,
+        "line": 1,
+        "column": 25
+      }
+    }
+  }
+}

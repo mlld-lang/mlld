@@ -1,17 +1,12 @@
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
 import { formatLocationForError } from '@core/utils/locationFormatter';
-
-export interface InterpreterLocation {
-  line: number;
-  column: number;
-  filePath?: string;
-}
+import { SourceLocation, isPreciseLocation } from '@core/types';
 
 interface SerializedInterpreterError {
   name: string;
   message: string;
   nodeType: string;
-  location?: InterpreterLocation;
+  location?: SourceLocation;
   sourceLocation?: string;
   filePath?: string;
   cause?: string;
@@ -28,7 +23,7 @@ interface SerializedInterpreterError {
 export interface InterpreterErrorContext {
   filePath?: string;
   nodeType?: string;
-  location?: InterpreterLocation;
+  location?: SourceLocation;
   parentFilePath?: string;
   childFilePath?: string;
   state?: {
@@ -49,20 +44,20 @@ export interface MlldInterpreterErrorOptions {
  */
 export class MlldInterpreterError extends MlldError {
   public readonly nodeType: string;
-  public readonly location?: InterpreterLocation;
+  public readonly location?: SourceLocation;
   public readonly context?: InterpreterErrorContext;
   public readonly cause?: unknown;
 
   constructor(
     message: string,
     nodeType: string,
-    location?: InterpreterLocation,
+    location?: SourceLocation,
     options: MlldInterpreterErrorOptions = {}
   ) {
     // Format message with location if available
-    const locationStr = location 
+    const locationStr = location && isPreciseLocation(location)
       ? ` at line ${location.line}, column ${location.column}${location.filePath ? ` in ${location.filePath}` : ''}`
-      : '';
+      : location?.filePath ? ` in ${location.filePath}` : '';
     
     // Interpreter errors are typically recoverable by default, but can be overridden
     const severity = options.severity || ErrorSeverity.Recoverable;

@@ -415,16 +415,37 @@ async function processCategoryDirectory(categoryPath, categoryName) {
       }
     }
   } else {
-    // For other categories (exceptions, warnings, invalid), process directly
+    // For other categories (exceptions, warnings, invalid), process recursively
     const entries = await fs.readdir(categoryPath, { withFileTypes: true });
     const subDirs = entries.filter(d => d.isDirectory()).map(d => d.name);
     
     for (const subDir of subDirs) {
-      const exampleDir = path.join(categoryPath, subDir);
-      const processed = await processExampleDirectory(exampleDir, categoryName, subDir);
-      stats.total += processed.total;
-      stats.fixtures += processed.fixtures;
-      stats.skipped += processed.skipped;
+      const subDirPath = path.join(categoryPath, subDir);
+      
+      // Check if this subdirectory contains example.md files directly
+      const subEntries = await fs.readdir(subDirPath);
+      const hasDirectMdFiles = subEntries.some(f => f.startsWith('example') && f.endsWith('.md'));
+      
+      if (hasDirectMdFiles) {
+        // Process this directory directly
+        const processed = await processExampleDirectory(subDirPath, categoryName, subDir);
+        stats.total += processed.total;
+        stats.fixtures += processed.fixtures;
+        stats.skipped += processed.skipped;
+      } else {
+        // This subdirectory contains more subdirectories, process them
+        const nestedEntries = await fs.readdir(subDirPath, { withFileTypes: true });
+        const nestedDirs = nestedEntries.filter(d => d.isDirectory()).map(d => d.name);
+        
+        for (const nestedDir of nestedDirs) {
+          const exampleDir = path.join(subDirPath, nestedDir);
+          const testName = `${subDir}-${nestedDir}`;
+          const processed = await processExampleDirectory(exampleDir, categoryName, testName);
+          stats.total += processed.total;
+          stats.fixtures += processed.fixtures;
+          stats.skipped += processed.skipped;
+        }
+      }
     }
   }
   

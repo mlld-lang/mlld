@@ -1,0 +1,27 @@
+{
+  "name": "text-missing-bracket",
+  "description": "Test fixture for invalid/text-missing-bracket",
+  "category": "invalid",
+  "subcategory": "text-missing-bracket",
+  "input": "# Invalid Text Template Example\n\nThis document demonstrates an invalid text template with missing closing bracket.\n\n@text greeting = [[Hello, {{name}}",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": null,
+  "parseError": {
+    "message": "Expected \"@\", \"@add\", \"@run\", Any path expression, Content with @var interpolation, Path starting with @variable context, Section extraction, Wrapped template content, bracketed path with section, or whitespace but \"[\" found.",
+    "location": {
+      "start": {
+        "offset": 133,
+        "line": 5,
+        "column": 18
+      },
+      "end": {
+        "offset": 134,
+        "line": 5,
+        "column": 19
+      }
+    }
+  }
+}
