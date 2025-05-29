@@ -1,0 +1,204 @@
+{
+  "name": "import-stdin",
+  "description": "Test fixture for valid/import-stdin",
+  "category": "valid",
+  "subcategory": "import-stdin",
+  "input": "@import { name, version } from @stdin\n@add [[Project {{name}} v{{version}}]]",
+  "expected": "Project test-project v1.0.0",
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "node-1",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 37,
+          "line": 1,
+          "column": 38
+        }
+      },
+      "kind": "import",
+      "subtype": "importSelected",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-2",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "name"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "version"
+          }
+        ],
+        "path": "@stdin"
+      },
+      "raw": {
+        "imports": "name, version",
+        "path": "@stdin"
+      },
+      "meta": {
+        "path": {
+          "isSpecial": true,
+          "source": "stdin",
+          "pathSubtype": "stdinPath"
+        }
+      }
+    },
+    {
+      "type": "Newline",
+      "nodeId": "node-4",
+      "location": {
+        "start": {
+          "offset": 37,
+          "line": 1,
+          "column": 38
+        },
+        "end": {
+          "offset": 38,
+          "line": 2,
+          "column": 1
+        }
+      },
+      "content": "\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-5",
+      "location": {
+        "start": {
+          "offset": 38,
+          "line": 2,
+          "column": 1
+        },
+        "end": {
+          "offset": 76,
+          "line": 2,
+          "column": 39
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "node-6",
+            "location": {
+              "start": {
+                "offset": 45,
+                "line": 2,
+                "column": 8
+              },
+              "end": {
+                "offset": 53,
+                "line": 2,
+                "column": 16
+              }
+            },
+            "content": "Project "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-7",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "name"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-8",
+            "location": {
+              "start": {
+                "offset": 61,
+                "line": 2,
+                "column": 24
+              },
+              "end": {
+                "offset": 63,
+                "line": 2,
+                "column": 26
+              }
+            },
+            "content": " v"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-9",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "version"
+          }
+        ]
+      },
+      "raw": {
+        "content": "Project {{name}} v{{version}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ],
+  "parseError": null,
+  "stdinContent": "@text name = \"test-project\"\n@text version = \"1.0.0\""
+}

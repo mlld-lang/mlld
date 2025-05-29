@@ -7,4 +7,5 @@ export { default as importAll } from './import-all.generated-fixture.json';
 export { default as importMixed } from './import-mixed.generated-fixture.json';
 export { default as importNamespace } from './import-namespace.generated-fixture.json';
 export { default as importSelected } from './import-selected.generated-fixture.json';
+export { default as importStdin } from './import-stdin.generated-fixture.json';
 export { default as importUrl } from './import-url.generated-fixture.json';

@@ -10,7 +10,7 @@
   "actualOutput": null,
   "ast": null,
   "parseError": {
-    "message": "Expected Any path expression or whitespace but \"\\\"\" found.",
+    "message": "Expected \"@stdin\", Any path expression, or whitespace but \"\\\"\" found.",
     "location": {
       "start": {
         "offset": 28,

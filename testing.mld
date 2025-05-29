@@ -1,0 +1,2 @@
+@text overview = [@./docs/overview-guide.md]
+@run [llm "Read this overview and tell me what you think about mlld: @overview\n\nthis seems like an obvious idea. is the reason no one has built anything like this yet because it's insanely insecure?"]

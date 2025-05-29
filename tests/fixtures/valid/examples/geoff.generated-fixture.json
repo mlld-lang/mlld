@@ -1,0 +1,27 @@
+{
+  "name": "geoff",
+  "description": "Test fixture for valid/examples",
+  "category": "valid",
+  "subcategory": "examples",
+  "input": "@path src = @./interpreter\n\n>> Create a folder for generated docs:\n@run [mkdir -p @src/docs]\n\n>> For each .ts file in src, send it to oneshot asking for detailed docs:\n@run [\n  for f in @src/**/*.ts; do\n    filename=$(basename \"$f\")\n    echo echo \"# $filname docs\" > README.md\n  done\n]\n\n@run [\n  for f in @src/**/*.ts; do \n    oneshot \\\n      --task \"Please provide a thorough, user-friendly documentation in Markdown for this file. Include usage instructions, examples, and any important notes or edge cases.\" \\\n      --file \"$f\" \\\n      --output \"docs/$(basename \"$f\").md\" \\\n      --model \"gpt-4o-mini\" \\\n      --silent;\n  done\n]\n\n>> Get names of files\n\n>> Finally, generate a README.md at the project level that links to all docs:\n@run [echo \"# Project docs\" > README.md]\n@run [\n  for f in @src/**/*.ts; do \n    echo \"* [$(basename \"$f\").md](docs/$(basename \"$f\").md)\" >> README.md\n  done\n]",
+  "expected": null,
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": null,
+  "parseError": {
+    "message": "Expected Any path expression, Content with @var interpolation, or whitespace but \"@\" found.",
+    "location": {
+      "start": {
+        "offset": 12,
+        "line": 1,
+        "column": 13
+      },
+      "end": {
+        "offset": 13,
+        "line": 1,
+        "column": 14
+      }
+    }
+  }
+}

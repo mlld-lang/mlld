@@ -27,6 +27,7 @@ export interface InterpretOptions {
   pathService: IPathService;
   urlConfig?: ResolvedURLConfig;
   outputOptions?: CommandExecutionOptions;
+  stdinContent?: string; // Optional stdin content
 }
 
 /**
@@ -109,6 +110,11 @@ export async function interpret(
   // Set output options if provided
   if (options.outputOptions) {
     env.setOutputOptions(options.outputOptions);
+  }
+  
+  // Set stdin content if provided
+  if (options.stdinContent !== undefined) {
+    env.setStdinContent(options.stdinContent);
   }
   
   // Evaluate the AST

@@ -250,7 +250,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               pathService,
               format: 'markdown',
               basePath,
-              urlConfig
+              urlConfig,
+              stdinContent: fixture.stdinContent
             });
             // If we get here, the test should fail because we expected an error
             expect.fail('Expected interpretation to throw an error, but it succeeded');
@@ -333,7 +334,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             pathService,
             format: 'markdown',
             basePath,
-            urlConfig
+            urlConfig,
+            stdinContent: fixture.stdinContent
           });
           
           if (isValidFixture && !isSmokeTest) {

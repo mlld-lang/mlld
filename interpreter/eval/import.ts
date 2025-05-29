@@ -1,4 +1,4 @@
-import type { DirectiveNode, TextNode } from '@core/types';
+import type { DirectiveNode, TextNode, MlldVariable } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate, evaluate } from '../core/interpreter';
@@ -16,10 +16,22 @@ export async function evaluateImport(
   env: Environment
 ): Promise<EvalResult> {
   // Get the path to import
-  const pathNodes = directive.values?.path;
-  if (!pathNodes) {
+  const pathValue = directive.values?.path;
+  if (!pathValue) {
     throw new Error('Import directive missing path');
   }
+  
+  // Handle special case where path is a string (e.g., @stdin)
+  if (typeof pathValue === 'string') {
+    if (pathValue === '@stdin') {
+      return await evaluateStdinImport(directive, env);
+    }
+    // For other string paths, we need to handle them appropriately
+    throw new Error(`Unexpected string path in import: ${pathValue}`);
+  }
+  
+  // Normal case: pathValue is an array of nodes
+  const pathNodes = pathValue;
   
   // Check if this is a URL path based on the path node structure
   const pathNode = pathNodes[0]; // Assuming single path node for imports
@@ -207,4 +219,93 @@ function extractSection(content: string, sectionName: string): string {
   }
   
   return sectionLines.join('\\n').trim();
+}
+
+/**
+ * Evaluate stdin import.
+ * Handles importing data from stdin with JSON auto-detection.
+ */
+async function evaluateStdinImport(
+  directive: DirectiveNode,
+  env: Environment
+): Promise<EvalResult> {
+  // Get stdin content from environment
+  const stdinContent = env.readStdin();
+  
+  // Try to parse as JSON first
+  let variables: Map<string, MlldVariable> = new Map();
+  
+  try {
+    const jsonData = JSON.parse(stdinContent);
+    
+    // Convert JSON to variables
+    if (typeof jsonData === 'object' && jsonData !== null && !Array.isArray(jsonData)) {
+      // JSON object - extract fields as variables
+      for (const [key, value] of Object.entries(jsonData)) {
+        variables.set(key, {
+          type: 'data',
+          value: value,
+          nodeId: '',
+          location: { line: 0, column: 0 },
+          metadata: {
+            isImported: true,
+            importPath: '@stdin',
+            definedAt: { line: 0, column: 0, filePath: '@stdin' }
+          }
+        });
+      }
+    } else {
+      // Non-object JSON (array, string, number, etc.) - store as 'content'
+      variables.set('content', {
+        type: 'data',
+        value: jsonData,
+        nodeId: '',
+        location: { line: 0, column: 0 },
+        metadata: {
+          isImported: true,
+          importPath: '@stdin',
+          definedAt: { line: 0, column: 0, filePath: '@stdin' }
+        }
+      });
+    }
+  } catch {
+    // Not valid JSON - store as plain text in 'content' variable
+    variables.set('content', {
+      type: 'text',
+      value: stdinContent,
+      nodeId: '',
+      location: { line: 0, column: 0 },
+      metadata: {
+        isImported: true,
+        importPath: '@stdin',
+        definedAt: { line: 0, column: 0, filePath: '@stdin' }
+      }
+    });
+  }
+  
+  // Handle variable merging based on import type
+  if (directive.subtype === 'importAll') {
+    // Import all variables
+    for (const [name, variable] of variables) {
+      env.setVariable(name, variable);
+    }
+  } else if (directive.subtype === 'importSelected') {
+    // Import selected variables
+    const imports = directive.values?.imports || [];
+    for (const importNode of imports) {
+      const varName = importNode.identifier;
+      const variable = variables.get(varName);
+      if (variable) {
+        // Use alias if provided, otherwise use original name
+        const targetName = importNode.alias || varName;
+        env.setVariable(targetName, variable);
+      } else {
+        // Variable not found in stdin data
+        throw new Error(`Variable '${varName}' not found in stdin data`);
+      }
+    }
+  }
+  
+  // Imports are definition directives - they don't produce output
+  return { value: undefined, env };
 }

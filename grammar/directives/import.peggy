@@ -19,7 +19,7 @@ It can be used in these forms:
 
 // Primary @import directive
 AtImport
-  = DirectiveContext "@import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:PathExpression {
+  = DirectiveContext "@import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath {
       helpers.debug('AtImport matched', { imports, path });
       
       // Get the raw imports text
@@ -85,6 +85,27 @@ AtImport
 // -------------------------------------------------------------
 // HELPER RULES
 // -------------------------------------------------------------
+
+// Import path - handles special @stdin source and regular paths
+ImportPath
+  = "@stdin" {
+      helpers.debug('ImportPath matched @stdin');
+      return {
+        type: 'path',
+        subtype: 'stdinPath',
+        values: { 
+          path: '@stdin'
+        },
+        raw: { 
+          path: '@stdin'
+        },
+        meta: {
+          isSpecial: true,
+          source: 'stdin'
+        }
+      };
+    }
+  / PathExpression
 
 // Using standard list pattern from patterns/lists.peggy
 ImportsList

@@ -52,6 +52,7 @@ export class Environment {
   private currentFilePath?: string; // Track current file being processed
   private securityManager?: SecurityManager; // Central security coordinator
   private registryManager?: RegistryManager; // Registry for mlld:// URLs
+  private stdinContent?: string; // Cached stdin content
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
@@ -227,6 +228,31 @@ export class Environment {
     }
     const resolvedPath = await this.resolvePath(pathOrUrl);
     return this.fileSystem.readFile(resolvedPath);
+  }
+  
+  /**
+   * Set stdin content for this environment (typically only on root)
+   */
+  setStdinContent(content: string): void {
+    if (!this.parent) {
+      // Only store on root environment
+      this.stdinContent = content;
+    } else {
+      // Delegate to parent
+      this.parent.setStdinContent(content);
+    }
+  }
+  
+  /**
+   * Read stdin content (cached)
+   */
+  readStdin(): string {
+    // Check root environment for stdin content
+    if (!this.parent) {
+      return this.stdinContent || '';
+    }
+    // Delegate to parent
+    return this.parent.readStdin();
   }
   
   async executeCommand(
