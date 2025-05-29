@@ -1208,7 +1208,7 @@ function peg$parse(input, options) {
           subtype: 'urlPath',
           values: { 
             url: [helpers.createNode(NodeType.Text, { content: fullUrl, location: location() })],
-            protocol,
+            protocol: [helpers.createNode(NodeType.Text, { content: protocol, location: location() })],
             parts: path.parts
           },
           raw: { 
@@ -2953,7 +2953,7 @@ function peg$parse(input, options) {
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        commandRef: commandRef.identifier,
+        commandRef: Array.isArray(commandRef.identifier) ? commandRef.identifier : [helpers.createNode(NodeType.Text, { content: commandRef.identifier, location: location() })],
         args: commandRef.args || []
       };
       
