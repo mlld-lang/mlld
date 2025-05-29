@@ -46,24 +46,31 @@ security/
 - [ ] Move existing security modules (`ImportApproval`, `ImmutableCache`)
 - [ ] Create basic integration hooks in `Environment.ts`
 
-#### 1.2 Immutable Global Policy
-```typescript
-// ~/.mlld/security-policy.json (OS read-only)
+#### 1.2 Global Security Policy in Lock File
+```json
+// ~/.config/mlld/mlld.lock.json (Global policies)
 {
   "version": "1.0.0",
-  "immutable": true,
-  "protectedPaths": {
-    "neverRead": [
-      "~/.ssh/**", "~/.aws/**", "~/.gnupg/**",
-      "~/.npmrc", "~/.env*", "**/secrets/**"
+  "security": {
+    "protectedPaths": {
+      "neverRead": [
+        "~/.ssh/**", "~/.aws/**", "~/.gnupg/**",
+        "~/.npmrc", "~/.env*", "**/secrets/**"
+      ],
+      "neverWrite": [
+        "~/.config/mlld/**", "/etc/**", "/System/**"
+      ]
+    },
+    "blockedCommands": [
+      "rm -rf /", ":(){ :|:& };:"
     ],
-    "neverWrite": [
-      "~/.mlld/**", "/etc/**", "/System/**"
-    ]
-  },
-  "blockedCommands": [
-    "rm -rf /", ":(){ :|:& };:"
-  ]
+    "requireApproval": ["curl", "wget", "nc"],
+    "defaultTTL": {
+      "github.com": "1h",
+      "gist.github.com": "24h",
+      "*.api.com": "5m"
+    }
+  }
 }
 ```
 
@@ -183,9 +190,37 @@ Continue? [y/N]
 
 ### 3. Taint Rules
 - LLM output → TAINTED
-- Network content → TAINTED
-- Tainted data → Cannot execute as command
+- Network content → TAINTED (unless `trust always` specified)
+- Tainted data → Cannot execute as command (unless `trust always` specified)
 - Tainted data → Requires approval for file writes
+
+### 4. Trust Level Precedence
+
+The precedence differs based on whether we're dealing with security (trust) or performance (TTL):
+
+#### Security/Trust Precedence (More Restrictive Wins)
+```
+1. Global ~/.config/mlld/mlld.lock.json blocks (highest priority)
+2. Project mlld.lock.json blocks
+3. Inline `trust never`
+4. Global/Project approval requirements
+5. Inline `trust verify`
+6. Inline `trust always` (can only work if not blocked above)
+```
+
+#### TTL Precedence (More Specific Wins)
+```
+1. Inline TTL specifications (highest priority)
+2. Project mlld.lock.json TTL settings
+3. Global ~/.config/mlld/mlld.lock.json defaults
+```
+
+This design ensures security policies cannot be bypassed while allowing performance tuning.
+
+**Example**: If global policy blocks `evil.com`:
+- `@path data = [https://evil.com/api] trust always` → ❌ Still blocked
+- `@run [curl https://evil.com] trust always` → ❌ Still blocked
+- No way to bypass the global block from within a script
 
 ## Integration Points
 
@@ -225,40 +260,63 @@ interface Variable {
 
 ## Configuration Examples
 
-### Minimal Security (Development)
+### Project Lock File (./mlld.lock.json)
 ```json
 {
+  "version": "1.0.0",
+  "modules": {
+    "@trusted/internal-tool": {
+      "resolved": "https://gist.github.com/...",
+      "hash": "sha256:...",
+      "ttl": { "type": "static" },
+      "trust": "always"
+    },
+    "@external/api-client": {
+      "resolved": "https://cdn.example.com/...",
+      "hash": "sha256:...",
+      "ttl": { "type": "ttl", "value": 300000 },
+      "trust": "verify"
+    }
+  },
   "security": {
-    "mode": "permissive",
-    "requireApproval": false,
-    "auditOnly": true
+    "trustedDomains": ["mycompany.com", "internal.corp"],
+    "blockedCommands": ["rm -rf", "dd if="],
+    "requireApproval": ["curl", "wget"]
   }
 }
 ```
 
-### Default Security (Recommended)
+### Global Lock File (~/.config/mlld/mlld.lock.json)
 ```json
 {
+  "version": "1.0.0",
   "security": {
     "mode": "interactive",
-    "requireApproval": true,
     "blockLLMExecution": true,
-    "protectSensitivePaths": true
+    "protectSensitivePaths": true,
+    "protectedPaths": {
+      "neverRead": ["~/.ssh/**", "~/.aws/**"],
+      "neverWrite": ["~/.config/mlld/**", "/System/**"]
+    },
+    "defaultTTL": {
+      "github.com": "1h",
+      "*.api.com": "5m",
+      "*": "7d"
+    }
   }
 }
 ```
 
-### Maximum Security (Production)
-```json
-{
-  "security": {
-    "mode": "strict",
-    "requireApproval": "always",
-    "allowedCommands": ["echo", "cat", "ls"],
-    "blockedPatterns": ["*"],
-    "sandboxed": true
-  }
-}
+### Inline Trust Overrides
+```meld
+# Override for trusted internal resource
+@path api (live) = [https://internal.corp/api] trust always
+
+# Force verification for suspicious source
+@path data (1h) = [https://external.site/data] trust verify
+
+# Block dangerous command regardless of policies
+@run [rm -rf /] trust never
 ```
 
 ## Success Metrics

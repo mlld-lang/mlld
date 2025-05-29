@@ -33,16 +33,14 @@ mlld-lang/registry/
 
 ```
 .mlld/
-├── mlld.lock.json         # Locked gist versions
 ├── cache/
-│   └── gist/
-│       └── username/
-│           └── gist_id/
-│               └── revision/
-│                   ├── content.mld
-│                   └── metadata.json
+│   └── content/
+│       ├── e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+│       └── e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.meta.json
 └── stats/
     └── pending.json       # Local stats to upload
+
+mlld.lock.json            # Project lock file with modules, TTL, and trust settings
 ```
 
 ## Implementation
@@ -75,30 +73,36 @@ Each user has their own `{username}/registry.json`:
 
 ### 2. Lock File Integration
 
-When user imports `mlld://adamavenir/json-utils`:
+When user imports `@adamavenir/json-utils` or uses new syntax:
 
 1. **First time**: 
    - Resolve name → gist ID
    - Fetch current gist revision
-   - Show content for approval
-   - Lock to specific revision
-   - Cache locally
+   - Show content for approval (unless `trust always`)
+   - Lock to specific revision with hash
+   - Cache locally by content hash
 
 2. **Subsequent imports**:
    - Use locked version from cache
-   - No network requests needed
+   - Check TTL if specified
+   - No network requests unless TTL expired or `(live)`
 
 ```json
 {
   "version": "1.0.0",
-  "imports": {
-    "mlld://adamavenir/json-utils": {
-      "resolved": "mlld://gist/adamavenir/b2f4e09a42db6c680b454f6f93efa9d8",
-      "gistRevision": "b20e54d6dbf422252b7b670af492632f2fa6c1a2",
-      "integrity": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "registryVersion": "2024-01-25T10:00:00Z",
-      "approvedAt": "2024-01-25T14:30:00Z"
+  "modules": {
+    "@adamavenir/json-utils": {
+      "resolved": "https://gist.githubusercontent.com/adamavenir/b2f4e09a42db6c680b454f6f93efa9d8/raw/content.mld",
+      "hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "shortHash": "e3b0c4",
+      "installedAt": "2024-01-25T10:00:00Z",
+      "ttl": { "type": "ttl", "value": 86400000 },  // 24 hours
+      "trust": "verify",
+      "lastChecked": "2024-01-25T10:00:00Z"
     }
+  },
+  "security": {
+    // Project-specific security overrides
   }
 }
 ```
@@ -108,47 +112,62 @@ When user imports `mlld://adamavenir/json-utils`:
 ```typescript
 // In interpreter/eval/import.ts
 async function resolveImport(importPath: string, env: Environment): Promise<string> {
-  // Check if it's a mlld:// import
-  if (!importPath.startsWith('mlld://')) {
-    return importPath;
-  }
-  
-  // Check lock file first
-  const locked = await env.lockFile.getImport(importPath);
-  if (locked) {
-    // Try cache
-    const cached = await env.cache.get(locked.resolved, locked.gistRevision);
+  // Check if it's a lock file reference (no brackets)
+  const lockModule = await env.lockFile.getModule(importPath);
+  if (lockModule) {
+    // Check TTL
+    if (lockModule.ttl?.type === 'live') {
+      // Always fetch fresh for 'live' resources
+      return fetchFreshContent(lockModule.resolved);
+    }
+    
+    if (lockModule.ttl?.type === 'ttl') {
+      const now = Date.now();
+      const lastChecked = new Date(lockModule.lastChecked).getTime();
+      if (now - lastChecked > lockModule.ttl.value) {
+        // TTL expired, fetch fresh
+        const content = await fetchFreshContent(lockModule.resolved);
+        await env.lockFile.updateLastChecked(importPath);
+        return content;
+      }
+    }
+    
+    // Try cache (static or within TTL)
+    const cached = await env.cache.get(lockModule.hash);
     if (cached) {
       await trackUsage(importPath, 'cache-hit');
       return cached;
     }
-    // Fetch specific locked version
-    return fetchLockedGist(locked);
+    
+    // Cache miss, fetch and cache
+    const content = await fetchContent(lockModule.resolved);
+    await env.cache.set(lockModule.hash, content);
+    return content;
   }
   
-  // New import - resolve through registry
-  const moduleName = importPath.slice(7); // Remove mlld://
-  
-  // Check if it's already a gist reference
-  if (moduleName.startsWith('gist/')) {
-    return importPath;
+  // Not in lock file - check if it's a registry reference
+  if (importPath.startsWith('@') && !importPath.includes('/')) {
+    // This is @username/module format
+    const registry = await fetchRegistry();
+    const [username, moduleName] = importPath.slice(1).split('/');
+    
+    const module = registry[username]?.modules[moduleName];
+    if (!module) {
+      throw new MlldImportError(`Unknown module: ${importPath}`);
+    }
+    
+    // Check advisories
+    await checkAdvisories(importPath, module.gist);
+    
+    // Resolve to gist URL
+    const gistUrl = `https://gist.githubusercontent.com/${username}/${module.gist}/raw/content.mld`;
+    await trackUsage(importPath, 'first-import');
+    
+    return gistUrl;
   }
   
-  const registry = await fetchRegistry(); // With caching
-  
-  const module = registry.modules[moduleName];
-  if (!module) {
-    throw new MlldImportError(`Unknown module: ${moduleName}`);
-  }
-  
-  // Check advisories
-  await checkAdvisories(moduleName, module.gist);
-  
-  // Resolve to gist and continue normal flow
-  const gistPath = `mlld://gist/${module.gist}`;
-  await trackUsage(importPath, 'first-import');
-  
-  return gistPath;
+  // Fall back to existing path resolution
+  return importPath;
 }
 ```
 
@@ -193,13 +212,24 @@ async function shareStats() {
 ### 5. CLI Commands
 
 ```bash
-# Install from lock file (like npm install)
-mlld install
+# Install module with TTL and trust
+mlld install @adamavenir/json-utils --ttl 7d --trust verify
 
-# Update specific module to latest
-mlld update adamavenir/json-utils
+# Install from URL with alias
+mlld install [https://api.example.com/schema.json] --alias apischema --ttl 1h
 
-# Show outdated modules
+# Update specific module (respects TTL)
+mlld update @adamavenir/json-utils
+
+# Force update (ignores TTL)
+mlld update @adamavenir/json-utils --force
+
+# List installed modules
+mlld ls
+# @adamavenir/json-utils@e3b0c4 (ttl: 7d, trust: verify)
+# apischema (alias) → https://api.example.com/schema.json@a1b2c3 (ttl: 1h)
+
+# Show outdated modules (TTL expired)
 mlld outdated
 
 # Audit for security advisories
@@ -208,11 +238,8 @@ mlld audit
 # Share anonymous usage stats
 mlld stats share
 
-# Search user's registry
-mlld search adamavenir/json
-
 # Show module info
-mlld info adamavenir/json-utils
+mlld info @adamavenir/json-utils
 ```
 
 ### 6. Publishing Workflow

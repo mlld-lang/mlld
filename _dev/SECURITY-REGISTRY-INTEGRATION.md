@@ -46,7 +46,7 @@ enum TaintLevel {
 ### 3. Security Flow for Registry Imports
 
 ```
-User writes: @import { foo } from "mlld://gist/user/id"
+User writes: @import { foo } from @user/module
                     ↓
             SecurityManager
                     ↓
@@ -77,17 +77,24 @@ The lock file becomes a security artifact:
 ```json
 {
   "version": "1.0.0",
-  "imports": {
-    "mlld://gist/user/abc123": {
+  "modules": {
+    "@user/module": {
       "resolved": "https://gist.githubusercontent.com/...",
-      "integrity": "sha256:...",
-      "taintLevel": "gist",              // Track trust level
-      "securityAdvisories": [],           // Known issues
-      "approvedCommands": ["echo", "ls"], // What it can do
-      "riskScore": "low",                 // Calculated risk
-      "approvedAt": "2024-01-25T10:00:00Z",
-      "approvedBy": "user@example.com"
+      "hash": "sha256:...",
+      "shortHash": "abc123",
+      "ttl": { "type": "ttl", "value": 86400000 },
+      "trust": "verify",
+      "taintLevel": "gist",
+      "securityAdvisories": [],
+      "detectedCommands": ["echo", "ls"],
+      "riskScore": "low",
+      "installedAt": "2024-01-25T10:00:00Z",
+      "lastChecked": "2024-01-25T10:00:00Z"
     }
+  },
+  "security": {
+    "trustedPublishers": ["@trusted-org"],
+    "blockedModules": ["@malicious/module"]
   }
 }
 ```
@@ -120,20 +127,32 @@ When executing commands from registry imports:
 // In CommandAnalyzer
 async analyze(command: string, context: CommandContext) {
   // Check if command comes from a registry import
-  if (context.source?.startsWith('mlld://')) {
-    const importMeta = await this.lockFile.getImport(context.source);
+  const sourceMod = await this.lockFile.getModuleBySource(context.source);
+  if (sourceMod) {
+    // Use trust levels
+    if (sourceMod.trust === 'never') {
+      throw new SecurityError('Module marked as never trust');
+    }
     
-    // Higher scrutiny for community imports
-    if (importMeta.taintLevel === 'gist') {
+    if (sourceMod.trust === 'verify') {
       risks.push({
-        type: 'UNTRUSTED_SOURCE',
+        type: 'REQUIRES_VERIFICATION',
+        severity: 'MEDIUM',
+        description: 'Module requires verification for each use'
+      });
+    }
+    
+    // Check TTL for live resources
+    if (sourceMod.ttl?.type === 'live') {
+      risks.push({
+        type: 'DYNAMIC_CONTENT',
         severity: 'HIGH',
-        description: 'Command from community import'
+        description: 'Content may change between executions'
       });
     }
     
     // Check if import has advisories
-    if (importMeta.securityAdvisories?.length > 0) {
+    if (sourceMod.securityAdvisories?.length > 0) {
       risks.push({
         type: 'KNOWN_VULNERABLE',
         severity: 'CRITICAL',
@@ -148,14 +167,18 @@ async analyze(command: string, context: CommandContext) {
 
 ```bash
 # Security-focused registry commands
-mlld security audit          # Check all imports for advisories
-mlld security verify         # Verify integrity of all imports
-mlld security lock-status    # Show lock file security info
+mlld audit                   # Check all modules for advisories
+mlld verify                  # Verify integrity of all modules
+mlld ls --security           # Show modules with trust/TTL info
 
-# Registry commands with security
-mlld registry import <url> --security-scan   # Pre-import scan
-mlld registry trust <publisher>              # Trust a publisher
-mlld registry advisories                     # List all advisories
+# Module management with security
+mlld install @user/module --trust verify --ttl 7d
+mlld update @user/module --force   # Override TTL
+mlld trust @publisher            # Trust all modules from publisher
+
+# Security policy management
+mlld config security --global    # Edit ~/.config/mlld/mlld.lock.json
+mlld config security --project   # Edit ./mlld.lock.json
 ```
 
 ### 8. Implementation Phases

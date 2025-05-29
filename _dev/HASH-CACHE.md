@@ -30,7 +30,8 @@ The `mlld.lock.json` becomes the project-wide namespace for all imports:
       "hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "shortHash": "e3b0c4",
       "installedAt": "2024-01-25T10:00:00Z",
-      "ttl": 604800000,  // Optional: 7 days in ms
+      "ttl": { "type": "ttl", "value": 604800000 },  // 7 days
+      "trust": "verify",
       "lastChecked": "2024-01-25T10:00:00Z"
     },
     "companydata": {
@@ -38,8 +39,18 @@ The `mlld.lock.json` becomes the project-wide namespace for all imports:
       "hash": "sha256:a1b2c3d4e5f6789012345678901234567890123456789012345678901234",
       "shortHash": "a1b2c3",
       "installedAt": "2024-01-25T11:00:00Z",
+      "ttl": { "type": "live" },  // Always fetch fresh
+      "trust": "always",
       "lastChecked": "2024-01-25T11:00:00Z",
       "alias": true
+    }
+  },
+  "security": {
+    // Project-specific security policies
+    "trustedDomains": ["cdn.example.com"],
+    "defaultTTL": {
+      "*.gist.github.com": "7d",
+      "*": "1h"
     }
   }
 }
@@ -86,9 +97,19 @@ mlld i @username/module  # Short form
 mlld install [https://example.com/tool.mld]
 mlld install [https://example.com/tool.mld] --alias mytool
 
-# Install with TTL (time-to-live)
+# Install with TTL (time-to-live) options
 mlld install @username/module --ttl 5h
+mlld install @username/module --ttl live    # Always fetch fresh
+mlld install @username/module --ttl static  # Cache forever
 mlld install [https://api.com/data.json] --alias apidata --ttl 7d
+
+# Install with trust levels
+mlld install @trusted/internal --trust always
+mlld install @external/tool --trust verify
+mlld install @suspicious/module --trust never  # Will error
+
+# Combined TTL and trust
+mlld install @username/module --ttl 1h --trust verify
 
 # Install specific version
 mlld install @username/module@e3b0c4
@@ -100,13 +121,13 @@ mlld install @username/module@e3b0c4
 # List all installed modules
 mlld ls
 # Output:
-# @adamavenir/json-utils@e3b0c4
-# companydata (alias) → https://cdn.example.com/data.json@a1b2c3
+# @adamavenir/json-utils@e3b0c4 (ttl: 7d, trust: verify)
+# companydata (alias) → https://cdn.example.com/data.json@a1b2c3 (live, trust: always)
 
 # List only aliases
 mlld ls alias
 # Output:
-# companydata → https://cdn.example.com/data.json@a1b2c3
+# companydata → https://cdn.example.com/data.json@a1b2c3 (live)
 
 # Update module to latest (respects TTL)
 mlld update @username/module
@@ -114,10 +135,17 @@ mlld update @companydata  # Update alias
 
 # Update all modules (respects TTL)
 mlld update all
+# Skipping @adamavenir/json-utils (TTL: 5d remaining)
+# Updating @external/api (TTL expired)
 
 # Force update, ignoring TTL
 mlld update --force
 mlld update @username/module --force
+
+# Show outdated modules (TTL expired)
+mlld outdated
+# @external/api - TTL expired 2h ago
+# @data/feed - live (always outdated)
 
 # Remove module
 mlld rm @username/module
@@ -169,14 +197,23 @@ When encountering an import:
    - Resolve as current behavior
    
 3. **TTL validation** (if found in lock)
-   - If TTL exists and `lastChecked + ttl < now`, mark for update
+   - If `type: 'live'`, always fetch fresh (no cache)
+   - If `type: 'static'`, always use cache (never update)
+   - If `type: 'ttl'` and `lastChecked + value < now`, fetch fresh
    - Otherwise use cached version
    
-4. **Error conditions**
+4. **Trust validation** (security check)
+   - If `trust: 'never'`, block access
+   - If `trust: 'verify'`, prompt for approval
+   - If `trust: 'always'`, bypass approval (if policy allows)
+   - If no trust specified, use default policy
+   
+5. **Error conditions**
    - Module name conflicts with local file
    - Alias conflicts with existing module name
    - Version mismatch (importing @user/module@abc123 when @user/module@def456 is locked)
    - Attempting to import same module with different versions
+   - Trust level blocks access
 
 ## Nested Import Handling
 
@@ -213,10 +250,14 @@ Example:
 All imports go through standard security flow:
 1. **Fetch content**
 2. **Check advisories** (if from registry)
-3. **Show preview** for approval
+3. **Apply trust level**:
+   - `trust never`: Block immediately
+   - `trust verify`: Always show preview for approval
+   - `trust always`: Skip approval (if global policy allows)
+   - No trust: Use default policy
 4. **Calculate hash**
-5. **Store in cache**
-6. **Update lock file**
+5. **Store in cache** (unless `type: 'live'`)
+6. **Update lock file** with TTL and trust metadata
 
 ## Benefits
 

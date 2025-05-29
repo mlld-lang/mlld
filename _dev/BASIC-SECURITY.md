@@ -52,22 +52,25 @@ $ mlld my-script.mld
 
 ### Configuration Storage
 
-After approval, the decision is stored in the project's `mlld.config.json`:
+After approval, the decision is stored in the project's `mlld.lock.json`:
 
 ```json
 {
-  "security": {
-    "imports": {
-      "allowed": [
-        {
-          "url": "https://gist.github.com/someuser/abc123",
-          "hash": "sha256:abcd1234...",  // Content hash for integrity
-          "pinnedVersion": true,          // true if 'y', false if 'f'
-          "allowedAt": "2024-01-25T10:30:00Z",
-          "detectedCommands": ["npm install", "echo"]  // For transparency
-        }
-      ]
+  "version": "1.0.0",
+  "modules": {
+    "@someuser/module": {
+      "resolved": "https://gist.githubusercontent.com/someuser/abc123/raw/content.mld",
+      "hash": "sha256:abcd1234...",
+      "shortHash": "abcd12",
+      "installedAt": "2024-01-25T10:30:00Z",
+      "ttl": { "type": "ttl", "value": 604800000 },  // 7 days default
+      "trust": "verify",  // Default trust level
+      "lastChecked": "2024-01-25T10:30:00Z",
+      "detectedCommands": ["npm install", "echo"]  // For transparency
     }
+  },
+  "security": {
+    // Project-specific security policies
   }
 }
 ```

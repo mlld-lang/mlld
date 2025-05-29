@@ -83,17 +83,22 @@ mlld publish my-prompts.mld
 4. Shows URL to view stats
 ```
 
-### 3. Module Usage (Unchanged)
+### 3. Module Usage
 
 ```meld
-# Exact same syntax as Phase 1
-@import { reviewer } from "mlld://registry/prompts/code-review"
+# New lock file syntax (no brackets, uses @ prefix)
+@import { reviewer } from @prompts/code-review
+
+# With TTL and trust in .mld files
+@path api (5m) = [https://api.mlld.ai/v1] trust always
+@path tools (static) = [@adamavenir/dev-tools] trust verify
 
 # Behind the scenes:
-1. CLI checks local lock file (same as Phase 1)
-2. If not locked, calls mlld.ai API
+1. CLI checks project mlld.lock.json
+2. If not locked, calls mlld.ai API 
 3. API returns gist info + tracks download
-4. Rest is identical to Phase 1
+4. Module installed with default TTL from global policy
+5. User can override with inline TTL/trust
 ```
 
 ## API Design
@@ -131,11 +136,12 @@ POST /api/publish            # Create gist + register
 ```typescript
 // GET /api/registry/prompts/code-review
 {
-  "name": "prompts/code-review",
+  "name": "@prompts/code-review",
   "gist": {
     "id": "a1f3e09a42db6c680b454f6f93efa9d8",
     "owner": "anthropics"
   },
+  "resolved": "https://gist.githubusercontent.com/anthropics/a1f3e09a42db6c680b454f6f93efa9d8/raw/content.mld",
   "description": "Code review prompt templates",
   "tags": ["prompts", "code-review"],
   "author": {
@@ -147,6 +153,8 @@ POST /api/publish            # Create gist + register
     "downloads_week": 523,
     "downloads_day": 89
   },
+  "recommendedTTL": "7d",
+  "securityAdvisories": [],
   "created_at": "2024-01-15T10:00:00Z"
 }
 ```
@@ -167,12 +175,17 @@ POST /api/publish            # Create gist + register
 
 ```
 - Module name and description
-- Install command (copy button)
+- Install commands:
+  mlld install @prompts/code-review
+  mlld install @prompts/code-review --ttl 7d --trust verify
 - Author info (GitHub profile link)
 - Download stats graph
+- Recommended TTL setting
+- Trust level suggestions
 - Tags
 - "View on GitHub" → gist link
 - Security advisories (if any)
+- Example usage in .mld files
 ```
 
 ### Dashboard (mlld.ai/dashboard)
