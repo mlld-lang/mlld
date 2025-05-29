@@ -4,15 +4,61 @@
 
 The security architecture is built but not connected. This document outlines the specific integration tasks needed to make security features functional.
 
+## ✅ COMPLETED AS OF 2025-05-29
+
+### What's Been Done
+1. **Security Module Structure** - All components created in `/security/`
+2. **Environment Integration** - SecurityManager added to Environment class
+3. **Command Security** - run.ts now blocks dangerous commands like `rm -rf /`
+4. **Basic Integration** - Commands are analyzed before execution
+
+### What Works Now
+- `@run [rm -rf /]` is blocked with error: "Security: Command blocked - Attempting to delete root filesystem!"
+- Command analysis detects dangerous patterns
+- Security warnings shown for suspicious commands
+- Taint level detection (though not fully propagated)
+
 ## Critical Path Integration Tasks
 
-### 1. Hook Security into Command Execution (Day 1)
+### 1. Hook Security into Command Execution (Day 1) ✅ IMPLEMENTED DIFFERENTLY
+
+**Status**: DONE - But implemented without the full PolicyManager/AuditLogger flow
 
 **File**: `interpreter/eval/run.ts`
 
+**What was implemented**:
 ```typescript
-// Add to evaluateRun() before command execution:
-import { SecurityManager } from '@security';
+// Actual implementation in run.ts:
+const security = env.getSecurityManager();
+if (security) {
+  const taintLevel = determineTaintLevel(commandNodes, env);
+  const analyzer = (security as any).commandAnalyzer;
+  if (analyzer) {
+    const analysis = await analyzer.analyze(command);
+    
+    // Block immediately dangerous commands
+    if (analysis.blocked) {
+      const reason = analysis.risks?.[0]?.description || 'Security policy violation';
+      throw new MlldCommandExecutionError(
+        `Security: Command blocked - ${reason}`,
+        directive.location,
+        { /* error details */ }
+      );
+    }
+    
+    // Block LLM output execution
+    if (taintLevel === TaintLevel.LLM_OUTPUT) {
+      throw new MlldCommandExecutionError(
+        'Security: Cannot execute LLM-generated commands',
+        directive.location,
+        { /* error details */ }
+      );
+    }
+  }
+}
+```
+
+**Original plan code (for reference)**:
 
 export async function evaluateRun(
   directive: DirectiveNode,
@@ -53,26 +99,33 @@ export async function evaluateRun(
 
 ### 2. Connect Registry Resolution to Imports (Day 1)
 
+**NOTE: Registry design has changed! See `_dev/HASH-CACHE-TODO.md` for new approach**
+
+The new import system uses:
+- Lock file (`mlld.lock.json`) as source of truth
+- Content-addressed cache with SHA256 hashes
+- Import syntax: `@import { x } from @user/module` (no quotes)
+- All security checks happen at install time, not runtime
+
 **File**: `interpreter/eval/import.ts`
 
 ```typescript
-// Update the mlld:// handling section:
-if (importPath.startsWith('mlld://')) {
+// NEW: Handle module references (no quotes/brackets)
+if (node.source.type === 'module-reference' || node.source.type === 'alias-reference') {
+  // Resolve from lock file (no network calls)
+  const content = await env.resolveModuleImport(node.source);
+  
+  // Content is already verified by hash from cache
+  // Security was checked during 'mlld install'
+  return content;
+}
+
+// EXISTING: Handle path/URL imports
+if (importPath.startsWith('https://') || importPath.startsWith('http://')) {
+  // These still need security checks at runtime
   const security = env.getSecurityManager();
   if (security) {
-    // Resolve through security (handles registry + advisories)
-    const { resolvedURL, taint, advisories } = await security.resolveImport(importPath);
-    
-    // Mark the import with its taint level
-    env.markImportTaint(resolvedURL, taint);
-    
-    resolvedPath = resolvedURL;
-  } else {
-    // Fallback to existing registry resolver
-    const registryResolver = env.getRegistryResolver();
-    if (registryResolver) {
-      resolvedPath = await registryResolver.resolve(importPath);
-    }
+    await security.checkImport(importPath);
   }
 }
 ```
@@ -147,35 +200,43 @@ if (security) {
 
 ### 6. Implement CLI Commands (Day 3-4)
 
-**File**: `cli/commands/registry.ts`
+**NOTE: New CLI commands per `_dev/HASH-CACHE-TODO.md`:**
+- `mlld install @user/module` - Install module from registry
+- `mlld add <url> --alias name` - Add URL with alias
+- `mlld update [--force]` - Update modules respecting TTL
+- `mlld ls [alias]` - List installed modules/aliases
+- `mlld rm @user/module` - Remove module
+
+Security integration happens during install:
+- Advisories checked when installing
+- Content verified by hash
+- Approval prompts for new imports
+- Lock file tracks approved content
+
+**File**: `cli/commands/install.ts` (NEW)
 
 ```typescript
-export async function registryCommand(args: string[]) {
-  const [subcommand, ...rest] = args;
+export async function installCommand(ref: string, options: InstallOptions) {
+  // 1. Resolve module/URL to actual content location
+  // 2. Check security advisories (if from registry)
+  // 3. Show approval prompt with content preview
+  // 4. Download and verify hash
+  // 5. Store in cache
+  // 6. Update lock file
   
-  switch (subcommand) {
-    case 'search':
-      return registrySearch(rest[0]);
-    case 'info':
-      return registryInfo(rest[0]);
-    case 'audit':
-      return registryAudit();
-    default:
-      console.log('Usage: mlld registry <search|info|audit>');
-  }
-}
-
-async function registrySearch(query: string) {
   const security = SecurityManager.getInstance(process.cwd());
-  const resolver = security.getRegistryResolver();
-  const results = await resolver.searchModules(query);
-  
-  console.log(`Found ${results.length} modules:\n`);
-  for (const [name, module] of results) {
-    console.log(`${name} - ${module.description}`);
-    console.log(`  Author: ${module.author}`);
-    console.log(`  Tags: ${module.tags.join(', ')}\n`);
+  if (ref.startsWith('@')) {
+    // Registry module - check advisories
+    const advisories = await security.checkAdvisories(ref);
+    if (advisories.length > 0) {
+      const approved = await security.promptInstallApproval(ref, advisories);
+      if (!approved) {
+        throw new Error('Installation cancelled due to security advisories');
+      }
+    }
   }
+  
+  // Continue with installation...
 }
 ```
 
@@ -407,3 +468,29 @@ describe('Security Integration', () => {
 - **Day 6**: Testing and polish
 
 This plan focuses on the minimal integration needed to make security functional. Once these connections are made, the existing security components will spring to life and provide the protection designed in the architecture.
+
+## 🚧 REMAINING WORK SUMMARY
+
+### High Priority (Security Critical)
+1. **Registry Import Resolution** (Task #2) - Make mlld:// URLs work
+2. **Path Security** (Task #3) - Block access to SSH keys, credentials
+3. **Variable Taint Tracking** (Task #4) - Track untrusted data through variables
+4. **Command Output Taint** (Task #5) - Mark command outputs appropriately
+
+### Medium Priority (Feature Complete)
+5. **PolicyManager** (Task #8) - User-configurable security rules
+6. **AuditLogger** (Task #9) - Security event logging
+7. **Approval Prompts** - Interactive security decisions
+8. **CLI Commands** (Task #6) - Registry and security management
+
+### Low Priority (Polish)
+9. **Security Hooks** (Task #7) - Pre/post evaluation hooks
+10. **Integration Tests** (Task #10) - Comprehensive test suite
+
+### Key Files to Modify
+- `interpreter/eval/import.ts` - Add registry resolution
+- `interpreter/env/Environment.ts` - Add path checks to readFile/writeFile
+- `security/policy/PolicyManager.ts` - Create this file
+- `security/audit/AuditLogger.ts` - Create this file
+- `cli/commands/registry.ts` - Create registry CLI commands
+- `cli/commands/security.ts` - Create security CLI commands
