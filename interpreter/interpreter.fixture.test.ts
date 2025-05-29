@@ -37,6 +37,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'path-assignment-project': 'path/assignment',
       'path-assignment-special': 'path/assignment',
       'path-assignment-variable': 'path/assignment',
+      'run-file-content-escaping': 'run/file-content-escaping',
     };
     
     // Check if we have a mapping for this fixture
@@ -197,17 +198,30 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // TODO: This fixture may be incorrectly named or incomplete
         const env = (fileSystem as any).environment || {};
         env.result = { type: 'text', value: 'Command output' };
+      } else if (fixture.name.includes('run-bash')) {
+        // Enable bash mocking for bash tests
+        process.env.MOCK_BASH = 'true';
       } else if (fixture.name === 'text-template') {
         // This test expects a 'variable' to exist with value 'value'
         // But the fixture doesn't define it - skip for now
         // TODO: File issue for incomplete fixture
-      } else if (fixture.name === 'text-url' || fixture.name === 'text-url-section') {
+      } else if (fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url') {
         // Mock fetch for URL tests
         global.fetch = async (url: string) => {
           if (url === 'https://raw.githubusercontent.com/example/repo/main/README.md') {
             return {
               ok: true,
               text: async () => '# Example Project\n\nThis is the README content fetched from the URL.'
+            } as any;
+          } else if (url === 'https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md') {
+            return {
+              ok: true,
+              text: async () => '# Getting Started\n\nWelcome to our project! This guide will help you get up and running quickly.\n\n## Installation\n\nRun `npm install` to get started.\n'
+            } as any;
+          } else if (url === 'https://raw.githubusercontent.com/example/repo/main/config.mld') {
+            return {
+              ok: true,
+              text: async () => '@text greeting = "Hello from URL!"\n@data version = "2.0.0"\n@text author = "URL Import"'
             } as any;
           }
           throw new Error(`Unexpected URL in test: ${url}`);
@@ -226,7 +240,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         }
         
         // Enable URL support for URL tests
-        const urlConfig = (fixture.name === 'text-url' || fixture.name === 'text-url-section') ? {
+        const urlConfig = (fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url') ? {
           enabled: true,
           allowedProtocols: ['https'],
           allowedDomains: [],
@@ -382,6 +396,11 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           throw error;
         }
         // For error fixtures, this is expected - the test already passed via expect().rejects.toThrow()
+      } finally {
+        // Clean up environment variables
+        if (fixture.name.includes('run-bash')) {
+          delete process.env.MOCK_BASH;
+        }
       }
     });
   });

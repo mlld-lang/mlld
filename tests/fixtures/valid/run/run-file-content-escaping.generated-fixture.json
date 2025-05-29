@@ -4,7 +4,7 @@
   "category": "valid",
   "subcategory": "run-file-content-escaping",
   "input": "# Test File Content in Commands\n\nThis tests passing file content to external commands.\n\n@text test_file = [test-file.md]\n\n>> File content should be properly escaped when passed to commands\n@run [echo \"@test_file\"]",
-  "expected": "# Test File Content in Commands\n\nThis tests passing file content to external commands.\n\n>> File content should be properly escaped when passed to commands\n# Test File\n\nThis file contains @mlld syntax that should not be interpreted.\n\n@text example = \"This should not execute\"\n@run [echo \"This should not run\"]\n\nIt also has $SHELL_VARS and `backticks` and 'quotes'.",
+  "expected": "# Test File Content in Commands\n\nThis tests passing file content to external commands.\n\n# Test File\n\nThis file contains @mlld syntax that should not be interpreted.\n\n@text example = \"This should not execute\"\n@run [echo \"This should not run\"]\n\nIt also has $SHELL_VARS and `backticks` and 'quotes'.",
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,

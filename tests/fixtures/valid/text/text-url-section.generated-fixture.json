@@ -8,9 +8,148 @@
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
-  "ast": null,
-  "parseError": {
-    "message": "section.path.some is not a function",
-    "location": null
-  }
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "node-1",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 100,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "# Text from URL Section Example\n\nThis example demonstrates fetching a specific section from a URL.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-2",
+      "location": {
+        "start": {
+          "offset": 100,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 207,
+          "line": 5,
+          "column": 108
+        }
+      },
+      "kind": "text",
+      "subtype": "textPathSection",
+      "source": "section",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "installation"
+          }
+        ],
+        "section": [
+          {
+            "type": "Text",
+            "nodeId": "node-4",
+            "location": {
+              "start": {
+                "offset": 121,
+                "line": 5,
+                "column": 22
+              },
+              "end": {
+                "offset": 138,
+                "line": 5,
+                "column": 39
+              }
+            },
+            "content": "## Installation"
+          }
+        ],
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "node-5",
+            "location": {
+              "start": {
+                "offset": 144,
+                "line": 5,
+                "column": 45
+              },
+              "end": {
+                "offset": 207,
+                "line": 5,
+                "column": 108
+              }
+            },
+            "content": "https://raw.githubusercontent.com/example/repo/main/README.md"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "installation",
+        "section": "## Installation",
+        "path": "https://raw.githubusercontent.com/example/repo/main/README.md"
+      },
+      "meta": {
+        "sourceType": "section",
+        "hasRename": false,
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-6",
+      "location": {
+        "start": {
+          "offset": 207,
+          "line": 5,
+          "column": 108
+        },
+        "end": {
+          "offset": 233,
+          "line": 9,
+          "column": 1
+        }
+      },
+      "content": "\n\nHere's how to install:\n\n"
+    },
+    {
+      "type": "VariableReference",
+      "nodeId": "node-7",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        }
+      },
+      "valueType": "varInterpolation",
+      "identifier": "installation"
+    }
+  ],
+  "parseError": null
 }

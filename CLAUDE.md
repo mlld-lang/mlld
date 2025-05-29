@@ -102,3 +102,6 @@ When compacting for the next session--*especially* mid-task, your emphasis shoul
 
 ## Coding Practices
 - Don't add comments saying something is being removed or changed -- keep comments timeless
+
+## Development Workflows
+- If you want to run mlld for a manual test, run `npm run reinstall` then you can run the `mlld` command locally

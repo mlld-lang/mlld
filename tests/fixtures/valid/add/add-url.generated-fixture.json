@@ -4,7 +4,7 @@
   "category": "valid",
   "subcategory": "add-url",
   "input": "# Add from URL Example\n\nThis example demonstrates adding content from a URL.\n\n## Documentation\n\n@add [https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md]\n\nThat's all!",
-  "expected": "# Add from URL Example\n\nThis example demonstrates adding content from a URL.\n\n## Documentation\n\n# Getting Started\n\nWelcome to our project! This guide will help you get up and running quickly.\n\n## Installation\n\nRun `npm install` to get started.\n\nThat's all!",
+  "expected": "# Add from URL Example\n\nThis example demonstrates adding content from a URL.\n\n## Documentation\n\n# Getting Started\n\nWelcome to our project! This guide will help you get up and running quickly.\n\n## Installation\n\nRun `npm install` to get started.\nThat's all!",
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
@@ -45,7 +45,25 @@
       "subtype": "addPath",
       "source": "path",
       "values": {
-        "path": "https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md"
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "node-3",
+            "location": {
+              "start": {
+                "offset": 101,
+                "line": 7,
+                "column": 6
+              },
+              "end": {
+                "offset": 178,
+                "line": 7,
+                "column": 83
+              }
+            },
+            "content": "https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md"
+          }
+        ]
       },
       "raw": {
         "path": "https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md"
@@ -62,7 +80,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "node-3",
+      "nodeId": "node-4",
       "location": {
         "start": {
           "offset": 180,

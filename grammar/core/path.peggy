@@ -51,7 +51,7 @@ SectionPathCore
         subtype: 'sectionPath',
         values: { 
           path: path.parts,
-          section
+          section: [helpers.createNode(NodeType.Text, { content: section, location: location() })]
         },
         raw: { 
           path: path.raw,
@@ -78,8 +78,8 @@ URLPathCore
         type: 'path',
         subtype: 'urlPath',
         values: { 
-          url: fullUrl,
-          protocol
+          url: [helpers.createNode(NodeType.Text, { content: fullUrl, location: location() })],
+          protocol: [helpers.createNode(NodeType.Text, { content: protocol, location: location() })]
         },
         raw: { 
           url: fullUrl,

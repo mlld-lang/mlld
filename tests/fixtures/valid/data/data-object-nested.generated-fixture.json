@@ -82,7 +82,7 @@
       },
       "raw": {
         "identifier": "config",
-        "value": "{\n  \"server\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"port\": 8080,\n      \"host\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"d172c4b9-0687-473a-afd4-7e9795812367\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 55,\n              \"line\": 4,\n              \"column\": 11\n            },\n            \"end\": {\n              \"offset\": 66,\n              \"line\": 4,\n              \"column\": 22\n            }\n          },\n          \"content\": \"localhost\"\n        }\n      ]\n    }\n  },\n  \"debug\": true\n}"
+        "value": "{\n  \"server\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"port\": 8080,\n      \"host\": [\n        {\n          \"type\": \"Text\",\n          \"nodeId\": \"8e6ad2f1-a07c-4356-984b-00ad53d68beb\",\n          \"location\": {\n            \"start\": {\n              \"offset\": 55,\n              \"line\": 4,\n              \"column\": 11\n            },\n            \"end\": {\n              \"offset\": 66,\n              \"line\": 4,\n              \"column\": 22\n            }\n          },\n          \"content\": \"localhost\"\n        }\n      ]\n    }\n  },\n  \"debug\": true\n}"
       },
       "meta": {
         "objectData": {

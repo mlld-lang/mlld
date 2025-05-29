@@ -104,7 +104,7 @@ AtExec
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        commandRef: commandRef.identifier,
+        commandRef: Array.isArray(commandRef.identifier) ? commandRef.identifier : [helpers.createNode(NodeType.Text, { content: commandRef.identifier, location: location() })],
         args: commandRef.args || []
       };
       

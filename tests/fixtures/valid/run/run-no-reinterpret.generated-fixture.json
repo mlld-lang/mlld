@@ -4,7 +4,7 @@
   "category": "valid",
   "subcategory": "run-no-reinterpret",
   "input": "# Test Variables Are Not Re-interpreted\n\nThis tests that variable values containing mlld syntax are treated as literals.\n\n@text mlld_content = \"@text foo = 'bar'\n@run [echo 'hello']\n@add @foo\"\n\n@text path_content = \"[some/path.md]\"\n@text template_content = \"Hello {{name}}\"\n\n>> Variable containing mlld directives should be literal\n@run [echo \"@mlld_content\"]\n\n>> Variable containing path syntax should be literal\n@run [echo \"@path_content\"]\n\n>> Variable containing template syntax should be literal\n@run [echo \"@template_content\"]",
-  "expected": "# Test Variables Are Not Re-interpreted\n\nThis tests that variable values containing mlld syntax are treated as literals.\n\n>> Variable containing mlld directives should be literal\n@text foo = 'bar'\n@run [echo 'hello']\n@add @foo\n\n>> Variable containing path syntax should be literal\n[some/path.md]\n\n>> Variable containing template syntax should be literal\nHello {{name}}",
+  "expected": "# Test Variables Are Not Re-interpreted\n\nThis tests that variable values containing mlld syntax are treated as literals.\n\n@text foo = 'bar'\n@run [echo 'hello']\n@add @foo\n\n[some/path.md]\n\nHello {{name}}",
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,

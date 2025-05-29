@@ -4,7 +4,7 @@
   "category": "valid",
   "subcategory": "import-url",
   "input": "# Import from URL Example\n\nThis example demonstrates importing from a URL.\n\n@import { * } from [https://raw.githubusercontent.com/example/repo/main/config.mld]\n\nThe imported variables should now be available.",
-  "expected": "# Import from URL Example - SKIP\n\nThis test is skipped pending full URL import implementation.\nURL imports may require additional grammar support.",
+  "expected": "# Import from URL Example\n\nThis example demonstrates importing from a URL.\n\nThe imported variables should now be available.",
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
@@ -65,7 +65,25 @@
             "identifier": "*"
           }
         ],
-        "path": "https://raw.githubusercontent.com/example/repo/main/config.mld"
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "node-4",
+            "location": {
+              "start": {
+                "offset": 95,
+                "line": 5,
+                "column": 20
+              },
+              "end": {
+                "offset": 159,
+                "line": 5,
+                "column": 84
+              }
+            },
+            "content": "https://raw.githubusercontent.com/example/repo/main/config.mld"
+          }
+        ]
       },
       "raw": {
         "imports": "*",
@@ -82,7 +100,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "node-4",
+      "nodeId": "node-5",
       "location": {
         "start": {
           "offset": 159,

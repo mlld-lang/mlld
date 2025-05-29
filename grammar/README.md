@@ -122,7 +122,67 @@ Every grammar decision is also a type system decision. When making changes:
 
 ## Core Principles
 
-### 1. **Abstraction-First Design**
+### 1. **Values Are Node Arrays (With One Exception)**
+The `values` field in AST nodes MUST contain arrays of nodes for all content that could require processing or interpolation.
+
+```javascript
+// ❌ WRONG: Raw string in values
+{
+  "values": {
+    "path": "https://example.com/file.mld"
+  }
+}
+
+// ✅ CORRECT: Array of nodes
+{
+  "values": {
+    "path": [
+      {
+        "type": "Text",
+        "content": "https://example.com/file.mld"
+      }
+    ]
+  }
+}
+```
+
+**Rationale**: This ensures consistent processing across the interpreter and enables features like:
+- Variable interpolation in any value (e.g., `[https://{{domain}}/{{path}}]`)
+- Section extraction from URLs (e.g., `[url # Section Name]`)
+- Uniform handling of all directive arguments
+
+**Exception: Data Directive Complex Values**
+The `@data` directive uses type discriminators instead of node arrays for complex values:
+
+```javascript
+// Data directive with embedded directive
+{
+  "values": {
+    "value": {
+      "type": "object",
+      "properties": {
+        "test": {
+          "type": "directive",
+          "directive": { /* full directive node */ }
+        },
+        "name": "literal string"  // Primitives stored directly
+      }
+    }
+  }
+}
+```
+
+This exception exists because:
+1. Data directive stores JavaScript-like data structures
+2. Embedded directives need lazy evaluation
+3. Type preservation is critical for data access patterns
+4. Primitives in data objects/arrays don't support interpolation
+
+**Rule of Thumb**: If a value could have variable interpolation or needs processing, it must be a node array. If it's a data structure literal, it follows JavaScript semantics.
+
+**Note on Section Syntax**: The space before `#` is required in mlld section extraction syntax (e.g., `[file.md # Section]`). This is not an HTML anchor - it's mlld-specific syntax for extracting markdown sections.
+
+### 2. **Abstraction-First Design**
 Build reusable patterns at the appropriate abstraction level. Don't repeat parsing logic.
 
 ```peggy

@@ -1,0 +1,27 @@
+{
+  "name": "comments-inline",
+  "description": "Test fixture for valid/comments-inline",
+  "category": "valid",
+  "subcategory": "comments-inline",
+  "input": "# Test Inline Comments\n\nThis tests that inline comments at the end of directives are properly handled.\n\n@text greeting = \"Hello World\" >> This sets up our greeting\n@data config = { \"debug\": true } << Configuration object\n\n@import { x, y } from \"./utils.mld\" << Import some utilities\n\n@exec sayHello(name) = @run [echo \"Hello, {{name}}!\"] >> Parameterized command\n\n@run [echo \"@greeting\"] << Output the greeting\n\n@path docs = \"./documentation\" >> Path to docs folder\n\n@add [README.md] << Include the readme file",
+  "expected": "# Test Inline Comments\n\nThis tests that inline comments at the end of directives are properly handled.\n\nHello World\n\n# Example Project\n\nThis is the main README content.",
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": null,
+  "parseError": {
+    "message": "Expected \"@stdin\", Any path expression, or whitespace but \"\\\"\" found.",
+    "location": {
+      "start": {
+        "offset": 244,
+        "line": 8,
+        "column": 23
+      },
+      "end": {
+        "offset": 245,
+        "line": 8,
+        "column": 24
+      }
+    }
+  }
+}

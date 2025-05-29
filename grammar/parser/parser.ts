@@ -1161,7 +1161,7 @@ function peg$parse(input, options) {
             url: path.values.url,
             protocol: path.values.protocol,
             parts: path.values.parts,
-            section
+            section: [helpers.createNode(NodeType.Text, { content: section, location: location() })]
           },
           raw: { 
             url: path.raw.url || path.raw.path,
@@ -1176,7 +1176,7 @@ function peg$parse(input, options) {
           subtype: 'fileSectionPath',
           values: { 
             path: path.values.path,
-            section
+            section: [helpers.createNode(NodeType.Text, { content: section, location: location() })]
           },
           raw: { 
             path: path.raw.path,
@@ -1207,7 +1207,7 @@ function peg$parse(input, options) {
           type: 'path',
           subtype: 'urlPath',
           values: { 
-            url: fullUrl,
+            url: [helpers.createNode(NodeType.Text, { content: fullUrl, location: location() })],
             protocol,
             parts: path.parts
           },
@@ -1728,7 +1728,7 @@ function peg$parse(input, options) {
         subtype: 'codeBlock',
         values: { 
           code: code.parts,
-          ...(language ? { language } : {})
+          ...(language ? { language: [helpers.createNode(NodeType.Text, { content: language, location: location() })] } : {})
         },
         raw: { 
           code: codeContent,
@@ -1750,7 +1750,7 @@ function peg$parse(input, options) {
         type: 'code',
         subtype: 'languageCode',
         values: { 
-          language,
+          language: [helpers.createNode(NodeType.Text, { content: language, location: location() })],
           code: code.parts
         },
         raw: { 
@@ -2010,7 +2010,7 @@ function peg$parse(input, options) {
         subtype: 'sectionPath',
         values: { 
           path: path.parts,
-          section
+          section: [helpers.createNode(NodeType.Text, { content: section, location: location() })]
         },
         raw: { 
           path: path.raw,
@@ -2031,8 +2031,8 @@ function peg$parse(input, options) {
         type: 'path',
         subtype: 'urlPath',
         values: { 
-          url: fullUrl,
-          protocol
+          url: [helpers.createNode(NodeType.Text, { content: fullUrl, location: location() })],
+          protocol: [helpers.createNode(NodeType.Text, { content: protocol, location: location() })]
         },
         raw: { 
           url: fullUrl,
@@ -3013,7 +3013,7 @@ function peg$parse(input, options) {
         imports: [helpers.createVariableReferenceNode('import', { 
           identifier: '*'
         })],
-        path: path.values?.path || path.raw?.path || path // Handle different path formats
+        path: path.values?.path || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
       
       // Create raw object with text segments
@@ -3071,7 +3071,7 @@ function peg$parse(input, options) {
             });
           }
         }),
-        path: path.values?.path || path.values?.url || path // Handle both file and URL paths and string paths
+        path: path.values?.path || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle both file and URL paths and string paths
       };
       
       // Create raw object with text segments
@@ -3104,7 +3104,7 @@ function peg$parse(input, options) {
         type: 'path',
         subtype: 'stdinPath',
         values: { 
-          path: '@stdin'
+          path: [helpers.createNode(NodeType.Text, { content: '@stdin', location: location() })]
         },
         raw: { 
           path: '@stdin'

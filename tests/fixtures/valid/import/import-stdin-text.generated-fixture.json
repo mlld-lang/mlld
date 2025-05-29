@@ -65,7 +65,25 @@
             "identifier": "content"
           }
         ],
-        "path": "@stdin"
+        "path": [
+          {
+            "type": "Text",
+            "nodeId": "node-4",
+            "location": {
+              "start": {
+                "offset": 114,
+                "line": 5,
+                "column": 26
+              },
+              "end": {
+                "offset": 120,
+                "line": 5,
+                "column": 32
+              }
+            },
+            "content": "@stdin"
+          }
+        ]
       },
       "raw": {
         "imports": "content",
@@ -80,7 +98,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "node-4",
+      "nodeId": "node-5",
       "location": {
         "start": {
           "offset": 120,
@@ -97,7 +115,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-5",
+      "nodeId": "node-6",
       "location": {
         "start": {
           "offset": 122,
@@ -117,7 +135,7 @@
         "content": [
           {
             "type": "Text",
-            "nodeId": "node-6",
+            "nodeId": "node-7",
             "location": {
               "start": {
                 "offset": 129,
@@ -134,7 +152,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "node-7",
+            "nodeId": "node-8",
             "location": {
               "start": {
                 "offset": 0,

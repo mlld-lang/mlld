@@ -1,7 +1,7 @@
 import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
-import { interpolate } from '../core/interpreter';
+import { interpolate, resolveVariableValue } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 
 /**
@@ -74,8 +74,30 @@ export async function evaluateRun(
     if (cmdDef.paramNames && cmdDef.paramNames.length > 0) {
       for (let i = 0; i < cmdDef.paramNames.length; i++) {
         const paramName = cmdDef.paramNames[i];
-        const argValue = args[i] ? await interpolate([args[i]], env, InterpolationContext.Default) : '';
-        argValues[paramName] = argValue;
+        if (!args[i]) {
+          argValues[paramName] = '';
+          continue;
+        }
+        
+        // Handle variable references in arguments
+        const arg = args[i];
+        if (arg.type === 'Text' && arg.content && arg.content.startsWith('@')) {
+          // This is a variable reference
+          const varName = arg.content.substring(1);
+          const variable = env.getVariable(varName);
+          if (variable) {
+            // Resolve the variable value
+            const value = await resolveVariableValue(variable, env);
+            argValues[paramName] = value;
+          } else {
+            // Variable not found, keep as-is
+            argValues[paramName] = arg.content;
+          }
+        } else {
+          // Normal interpolation
+          const argValue = await interpolate([arg], env, InterpolationContext.Default);
+          argValues[paramName] = argValue;
+        }
       }
     }
     

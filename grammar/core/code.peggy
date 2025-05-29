@@ -44,7 +44,7 @@ CodeCore
         subtype: 'codeBlock',
         values: { 
           code: code.parts,
-          ...(language ? { language } : {})
+          ...(language ? { language: [helpers.createNode(NodeType.Text, { content: language, location: location() })] } : {})
         },
         raw: { 
           code: codeContent,
@@ -72,7 +72,7 @@ LanguageCodeCore
         type: 'code',
         subtype: 'languageCode',
         values: { 
-          language,
+          language: [helpers.createNode(NodeType.Text, { content: language, location: location() })],
           code: code.parts
         },
         raw: { 

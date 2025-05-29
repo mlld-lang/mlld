@@ -223,12 +223,34 @@ function isTopLevelDirective(node: any, parent: any): boolean {
 ### Data Directive Fields
 
 **`values.value`** can contain:
-- **Primitives**: strings, numbers, booleans, null
-- **Objects**: `{ type: 'object', properties: {...} }`
-- **Arrays**: `{ type: 'array', items: [...] }`
+- **Primitives**: strings, numbers, booleans, null (stored directly, not as node arrays)
+- **Objects**: `{ type: 'object', properties: {...} }` with type discriminator
+- **Arrays**: `{ type: 'array', items: [...] }` with type discriminator
 - **Directive nodes**: Full directive with `meta.isDataValue: true`
 - **Variable references**: With `valueType: 'varIdentifier'`
 - **Template arrays**: Array of Text/VariableReference nodes
+
+**Important**: The data directive is the only directive where primitive values in objects/arrays are NOT wrapped in node arrays. This is because:
+1. Data directive represents JavaScript data structures
+2. Primitives in data contexts are literals without interpolation
+3. Type discriminators (`type: 'object'`, `type: 'directive'`, etc.) provide the necessary type information
+4. This design enables lazy evaluation of embedded directives
+
+Example of data directive value structure:
+```javascript
+// @data config = { name: "app", version: 1.0, test: @run [npm test] }
+{
+  "type": "object",
+  "properties": {
+    "name": "app",              // Direct string, not node array
+    "version": 1.0,             // Direct number, not node array
+    "test": {
+      "type": "directive",      // Type discriminator
+      "directive": { /* ... */ }
+    }
+  }
+}
+```
 
 ### Text Directive Fields
 

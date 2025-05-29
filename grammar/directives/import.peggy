@@ -36,7 +36,7 @@ AtImportShorthand
         imports: [helpers.createVariableReferenceNode('import', { 
           identifier: '*'
         })],
-        path: path.values?.path || path.raw?.path || path // Handle different path formats
+        path: path.values?.path || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
       
       // Create raw object with text segments
@@ -97,7 +97,7 @@ AtImportFull
             });
           }
         }),
-        path: path.values?.path || path.values?.url || path // Handle both file and URL paths and string paths
+        path: path.values?.path || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle both file and URL paths and string paths
       };
       
       // Create raw object with text segments
@@ -137,7 +137,7 @@ ImportPath
         type: 'path',
         subtype: 'stdinPath',
         values: { 
-          path: '@stdin'
+          path: [helpers.createNode(NodeType.Text, { content: '@stdin', location: location() })]
         },
         raw: { 
           path: '@stdin'

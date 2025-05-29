@@ -55,14 +55,9 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       return { value: '\n', env };
       
     case 'Comment':
-      // Comments are preserved in output but don't affect evaluation
+      // Comments are NOT included in output
       const commentNode = node as CommentNode;
-      const commentTextNode: TextNode = {
-        type: 'Text',
-        nodeId: `${commentNode.nodeId || 'comment'}-text`,
-        content: commentNode.content
-      };
-      env.addNode(commentTextNode);
+      // Skip comments - don't add any nodes to output
       return { value: commentNode.content, env };
       
     case 'VariableReference':

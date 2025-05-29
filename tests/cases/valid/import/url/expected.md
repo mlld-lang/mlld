@@ -1,4 +1,5 @@
-# Import from URL Example - SKIP
+# Import from URL Example
 
-This test is skipped pending full URL import implementation.
-URL imports may require additional grammar support.
+This example demonstrates importing from a URL.
+
+The imported variables should now be available.

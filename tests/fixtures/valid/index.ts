@@ -2,6 +2,7 @@
 // This file is auto-generated. Do not edit manually.
 
 export * from './add';
+export * from './comments';
 export * from './data';
 export * from './examples';
 export * from './exec';

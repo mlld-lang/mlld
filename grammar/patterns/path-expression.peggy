@@ -41,7 +41,7 @@ UnifiedSectionPath "Unified path with section marker"
             url: path.values.url,
             protocol: path.values.protocol,
             parts: path.values.parts,
-            section
+            section: [helpers.createNode(NodeType.Text, { content: section, location: location() })]
           },
           raw: { 
             url: path.raw.url || path.raw.path,
@@ -56,7 +56,7 @@ UnifiedSectionPath "Unified path with section marker"
           subtype: 'fileSectionPath',
           values: { 
             path: path.values.path,
-            section
+            section: [helpers.createNode(NodeType.Text, { content: section, location: location() })]
           },
           raw: { 
             path: path.raw.path,
@@ -89,8 +89,8 @@ UnifiedPath "Unified path (file or URL)"
           type: 'path',
           subtype: 'urlPath',
           values: { 
-            url: fullUrl,
-            protocol,
+            url: [helpers.createNode(NodeType.Text, { content: fullUrl, location: location() })],
+            protocol: [helpers.createNode(NodeType.Text, { content: protocol, location: location() })],
             parts: path.parts
           },
           raw: { 
