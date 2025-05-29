@@ -245,12 +245,12 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           // Prepare stdin content for stdin import tests
           let stdinContent: string | undefined;
           if (fixture.name.includes('import-stdin')) {
-            if (fixture.name.includes('json') || fixture.name.includes('shorthand')) {
-              // JSON stdin content
-              stdinContent = '{"name": "test-project", "version": "1.0.0"}';
-            } else if (fixture.name.includes('text')) {
+            if (fixture.name.includes('text')) {
               // Plain text stdin content
               stdinContent = 'Hello from stdin!';
+            } else {
+              // JSON stdin content (default for all other stdin tests)
+              stdinContent = '{"name": "test-project", "version": "1.0.0"}';
             }
           }
           
@@ -343,12 +343,12 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           // Prepare stdin content for stdin import tests
           let stdinContent: string | undefined;
           if (fixture.name.includes('import-stdin')) {
-            if (fixture.name.includes('json') || fixture.name.includes('shorthand')) {
-              // JSON stdin content
-              stdinContent = '{"name": "test-project", "version": "1.0.0"}';
-            } else if (fixture.name.includes('text')) {
+            if (fixture.name.includes('text')) {
               // Plain text stdin content
               stdinContent = 'Hello from stdin!';
+            } else {
+              // JSON stdin content (default for all other stdin tests)
+              stdinContent = '{"name": "test-project", "version": "1.0.0"}';
             }
           }
           
