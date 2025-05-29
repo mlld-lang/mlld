@@ -10,7 +10,7 @@ import { GistTransformer } from '@core/security/GistTransformer';
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
 import { SecurityManager } from '@security';
-import type { RegistryResolver } from '@security/registry';
+import { RegistryManager } from '@core/registry';
 
 interface CommandExecutionOptions {
   showProgress?: boolean;
@@ -51,6 +51,7 @@ export class Environment {
   private immutableCache?: ImmutableCache;
   private currentFilePath?: string; // Track current file being processed
   private securityManager?: SecurityManager; // Central security coordinator
+  private registryManager?: RegistryManager; // Registry for mlld:// URLs
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
@@ -88,6 +89,13 @@ export class Environment {
         console.warn('SecurityManager not available, using legacy security components');
       }
       
+      // Initialize registry manager
+      try {
+        this.registryManager = new RegistryManager(basePath);
+      } catch (error) {
+        console.warn('RegistryManager not available:', error);
+      }
+      
       // Keep legacy components for backward compatibility
       this.importApproval = new ImportApproval(basePath);
       this.immutableCache = new ImmutableCache(basePath);
@@ -108,13 +116,16 @@ export class Environment {
     this.currentFilePath = filePath;
   }
   
-  getRegistryResolver(): RegistryResolver | undefined {
-    // Get from security manager if available
-    if (this.securityManager) {
-      return (this.securityManager as any).registryResolver;
-    }
-    // Check parent if not found
-    return this.parent?.getRegistryResolver();
+  getSecurityManager(): SecurityManager | undefined {
+    // Get from this environment or parent
+    if (this.securityManager) return this.securityManager;
+    return this.parent?.getSecurityManager();
+  }
+  
+  getRegistryManager(): RegistryManager | undefined {
+    // Get from this environment or parent
+    if (this.registryManager) return this.registryManager;
+    return this.parent?.getRegistryManager();
   }
   
   // --- Variable Management ---
