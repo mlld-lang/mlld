@@ -1,0 +1,166 @@
+{
+  "name": "import-stdin-text",
+  "description": "Test fixture for valid/import-stdin",
+  "category": "valid",
+  "subcategory": "import-stdin",
+  "input": "# Stdin Import - Plain Text\n\nThis example demonstrates importing plain text from stdin.\n\n@import { content } from @stdin\n\n@add [[Received: {{content}}]]",
+  "expected": "# Stdin Import - Plain Text\n\nThis example demonstrates importing plain text from stdin.\n\nReceived: Hello from stdin!",
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "node-1",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 89,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "# Stdin Import - Plain Text\n\nThis example demonstrates importing plain text from stdin.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-2",
+      "location": {
+        "start": {
+          "offset": 89,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 120,
+          "line": 5,
+          "column": 32
+        }
+      },
+      "kind": "import",
+      "subtype": "importSelected",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "content"
+          }
+        ],
+        "path": "@stdin"
+      },
+      "raw": {
+        "imports": "content",
+        "path": "@stdin"
+      },
+      "meta": {
+        "path": {
+          "isSpecial": true,
+          "source": "stdin"
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-4",
+      "location": {
+        "start": {
+          "offset": 120,
+          "line": 5,
+          "column": 32
+        },
+        "end": {
+          "offset": 122,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-5",
+      "location": {
+        "start": {
+          "offset": 122,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 152,
+          "line": 7,
+          "column": 31
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "node-6",
+            "location": {
+              "start": {
+                "offset": 129,
+                "line": 7,
+                "column": 8
+              },
+              "end": {
+                "offset": 139,
+                "line": 7,
+                "column": 18
+              }
+            },
+            "content": "Received: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-7",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "content"
+          }
+        ]
+      },
+      "raw": {
+        "content": "Received: {{content}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ],
+  "parseError": null
+}

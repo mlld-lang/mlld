@@ -76,8 +76,7 @@
           "isUrl": true,
           "protocol": "https",
           "hasVariables": false,
-          "hasSection": false,
-          "pathSubtype": "urlPath"
+          "hasSection": false
         }
       }
     },

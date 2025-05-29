@@ -167,8 +167,7 @@
           "hasVariables": true,
           "isAbsolute": false,
           "hasExtension": false,
-          "extension": null,
-          "pathSubtype": "filePath"
+          "extension": null
         }
       }
     },

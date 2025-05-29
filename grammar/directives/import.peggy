@@ -19,6 +19,50 @@ It can be used in these forms:
 
 // Primary @import directive
 AtImport
+  = AtImportShorthand
+  / AtImportFull
+
+// Shorthand import: @import [path] or @import @stdin
+AtImportShorthand
+  = DirectiveContext "@import" _ path:ImportPath {
+      helpers.debug('AtImportShorthand matched', { path });
+      
+      // Shorthand always imports all (*)
+      const imports = ["*"];
+      const importsRaw = "*";
+      
+      // Create values object with variable references
+      const values = {
+        imports: [helpers.createVariableReferenceNode('import', { 
+          identifier: '*'
+        })],
+        path: path.values?.path || path.raw?.path || path // Handle different path formats
+      };
+      
+      // Create raw object with text segments
+      const raw = {
+        imports: importsRaw,
+        path: path.raw?.path || path // Handle string paths like @stdin
+      };
+      
+      // Create meta object with path metadata
+      const meta = {
+        path: path.meta || {}
+      };
+      
+      return helpers.createStructuredDirective(
+        'import',
+        'importAll',
+        values,
+        raw,
+        meta,
+        location(),
+        'path'
+      );
+    }
+
+// Full import with explicit imports list
+AtImportFull
   = DirectiveContext "@import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath {
       helpers.debug('AtImport matched', { imports, path });
       
@@ -53,21 +97,20 @@ AtImport
             });
           }
         }),
-        path: path.values.path || path.values.url // Handle both file and URL paths
+        path: path.values?.path || path.values?.url || path // Handle both file and URL paths and string paths
       };
       
       // Create raw object with text segments
       const raw = {
         imports: importsRaw,
-        path: path.raw.path || path.raw.url // Handle both file and URL paths
+        path: path.raw?.path || path.raw?.url || path // Handle both file and URL paths and string paths
       };
       
       // Create meta object with path metadata
       const meta = {
-        path: {
-          // Include all relevant path metadata
-          ...path.meta,
-          pathSubtype: path.subtype // Preserve the specific path type
+        path: path.meta || { 
+          isSpecial: typeof path === 'string',
+          pathSubtype: path.subtype 
         }
       };
       

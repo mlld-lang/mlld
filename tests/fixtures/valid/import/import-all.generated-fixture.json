@@ -77,8 +77,7 @@
           "hasVariables": false,
           "isAbsolute": false,
           "hasExtension": true,
-          "extension": "mld",
-          "pathSubtype": "filePath"
+          "extension": "mld"
         }
       }
     },

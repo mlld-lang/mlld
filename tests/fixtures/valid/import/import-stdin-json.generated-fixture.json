@@ -1,0 +1,219 @@
+{
+  "name": "import-stdin-json",
+  "description": "Test fixture for valid/import-stdin",
+  "category": "valid",
+  "subcategory": "import-stdin",
+  "input": "# Stdin Import - JSON\n\nThis example demonstrates importing JSON data from stdin.\n\n@import { name, version } from @stdin\n\n@add [[Project: {{name}} v{{version}}]]",
+  "expected": "# Stdin Import - JSON\n\nThis example demonstrates importing JSON data from stdin.\n\nProject: test-project v1.0.0",
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "node-1",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 82,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "# Stdin Import - JSON\n\nThis example demonstrates importing JSON data from stdin.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-2",
+      "location": {
+        "start": {
+          "offset": 82,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 119,
+          "line": 5,
+          "column": 38
+        }
+      },
+      "kind": "import",
+      "subtype": "importSelected",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "name"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-4",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "version"
+          }
+        ],
+        "path": "@stdin"
+      },
+      "raw": {
+        "imports": "name, version",
+        "path": "@stdin"
+      },
+      "meta": {
+        "path": {
+          "isSpecial": true,
+          "source": "stdin"
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-5",
+      "location": {
+        "start": {
+          "offset": 119,
+          "line": 5,
+          "column": 38
+        },
+        "end": {
+          "offset": 121,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-6",
+      "location": {
+        "start": {
+          "offset": 121,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 160,
+          "line": 7,
+          "column": 40
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "node-7",
+            "location": {
+              "start": {
+                "offset": 128,
+                "line": 7,
+                "column": 8
+              },
+              "end": {
+                "offset": 137,
+                "line": 7,
+                "column": 17
+              }
+            },
+            "content": "Project: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-8",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "name"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-9",
+            "location": {
+              "start": {
+                "offset": 145,
+                "line": 7,
+                "column": 25
+              },
+              "end": {
+                "offset": 147,
+                "line": 7,
+                "column": 27
+              }
+            },
+            "content": " v"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-10",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "version"
+          }
+        ]
+      },
+      "raw": {
+        "content": "Project: {{name}} v{{version}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ],
+  "parseError": null
+}

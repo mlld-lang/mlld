@@ -12,9 +12,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SyntaxError = exports.parser = void 0;
 exports.parse = parse;
 exports.parseSync = parseSync;
-// Import the generated parser
-const parser_js_1 = __importDefault(require("./parser.js"));
-exports.parser = parser_js_1.default;
+// Import the generated parser dynamically
+let parserModule;
+const getParser = async () => {
+    if (!parserModule) {
+        parserModule = await import("./parser.js");
+    }
+    return parserModule.default;
+};
+exports.parser = { parse: async (...args) => (await getParser()).parse(...args) };
 /**
  * Parse Mlld source code into an AST
  *
@@ -25,7 +31,8 @@ exports.parser = parser_js_1.default;
  */
 async function parse(source, options) {
     try {
-        const ast = parser_js_1.default.parse(source, {
+        const parser = await getParser();
+        const ast = parser.parse(source, {
             startRule: 'Start',
             ...options
         });

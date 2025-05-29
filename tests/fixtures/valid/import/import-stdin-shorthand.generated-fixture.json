@@ -1,0 +1,201 @@
+{
+  "name": "import-stdin-shorthand",
+  "description": "Test fixture for valid/import-stdin",
+  "category": "valid",
+  "subcategory": "import-stdin",
+  "input": "# Stdin Import - Shorthand Syntax\n\nThis example demonstrates the shorthand import syntax for stdin.\n\n@import @stdin\n\n@add [[Name: {{name}}, Version: {{version}}]]",
+  "expected": "# Stdin Import - Shorthand Syntax\n\nThis example demonstrates the shorthand import syntax for stdin.\n\nName: test-project, Version: 1.0.0",
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Text",
+      "nodeId": "node-1",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 101,
+          "line": 5,
+          "column": 1
+        }
+      },
+      "content": "# Stdin Import - Shorthand Syntax\n\nThis example demonstrates the shorthand import syntax for stdin.\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-2",
+      "location": {
+        "start": {
+          "offset": 101,
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "offset": 115,
+          "line": 5,
+          "column": 15
+        }
+      },
+      "kind": "import",
+      "subtype": "importAll",
+      "source": "path",
+      "values": {
+        "imports": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-3",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "import",
+            "identifier": "*"
+          }
+        ],
+        "path": "@stdin"
+      },
+      "raw": {
+        "imports": "*",
+        "path": "@stdin"
+      },
+      "meta": {
+        "path": {
+          "isSpecial": true,
+          "source": "stdin"
+        }
+      }
+    },
+    {
+      "type": "Text",
+      "nodeId": "node-4",
+      "location": {
+        "start": {
+          "offset": 115,
+          "line": 5,
+          "column": 15
+        },
+        "end": {
+          "offset": 117,
+          "line": 7,
+          "column": 1
+        }
+      },
+      "content": "\n\n"
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-5",
+      "location": {
+        "start": {
+          "offset": 117,
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "offset": 162,
+          "line": 7,
+          "column": 46
+        }
+      },
+      "kind": "add",
+      "subtype": "addTemplate",
+      "source": "template",
+      "values": {
+        "content": [
+          {
+            "type": "Text",
+            "nodeId": "node-6",
+            "location": {
+              "start": {
+                "offset": 124,
+                "line": 7,
+                "column": 8
+              },
+              "end": {
+                "offset": 130,
+                "line": 7,
+                "column": 14
+              }
+            },
+            "content": "Name: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-7",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "name"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-8",
+            "location": {
+              "start": {
+                "offset": 138,
+                "line": 7,
+                "column": 22
+              },
+              "end": {
+                "offset": 149,
+                "line": 7,
+                "column": 33
+              }
+            },
+            "content": ", Version: "
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-9",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              }
+            },
+            "valueType": "varInterpolation",
+            "identifier": "version"
+          }
+        ]
+      },
+      "raw": {
+        "content": "Name: {{name}}, Version: {{version}}"
+      },
+      "meta": {
+        "isTemplateContent": true,
+        "hasVariables": true,
+        "wrapperType": "doubleBracket"
+      }
+    }
+  ],
+  "parseError": null
+}

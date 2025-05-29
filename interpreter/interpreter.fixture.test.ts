@@ -242,6 +242,18 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         } : undefined;
         
         if (isErrorFixture) {
+          // Prepare stdin content for stdin import tests
+          let stdinContent: string | undefined;
+          if (fixture.name.includes('import-stdin')) {
+            if (fixture.name.includes('json') || fixture.name.includes('shorthand')) {
+              // JSON stdin content
+              stdinContent = '{"name": "test-project", "version": "1.0.0"}';
+            } else if (fixture.name.includes('text')) {
+              // Plain text stdin content
+              stdinContent = 'Hello from stdin!';
+            }
+          }
+          
           // For error fixtures, expect interpretation to fail and validate error format
           let caughtError: any = null;
           try {
@@ -250,7 +262,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               pathService,
               format: 'markdown',
               basePath,
-              urlConfig
+              urlConfig,
+              stdinContent
             });
             // If we get here, the test should fail because we expected an error
             expect.fail('Expected interpretation to throw an error, but it succeeded');
@@ -327,13 +340,26 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             }
           }
         } else {
+          // Prepare stdin content for stdin import tests
+          let stdinContent: string | undefined;
+          if (fixture.name.includes('import-stdin')) {
+            if (fixture.name.includes('json') || fixture.name.includes('shorthand')) {
+              // JSON stdin content
+              stdinContent = '{"name": "test-project", "version": "1.0.0"}';
+            } else if (fixture.name.includes('text')) {
+              // Plain text stdin content
+              stdinContent = 'Hello from stdin!';
+            }
+          }
+          
           // For valid fixtures, expect successful interpretation
           const result = await interpret(fixture.input, {
             fileSystem,
             pathService,
             format: 'markdown',
             basePath,
-            urlConfig
+            urlConfig,
+            stdinContent
           });
           
           if (isValidFixture && !isSmokeTest) {
