@@ -1,5 +1,4 @@
 import { parse as parseShell } from 'shell-quote';
-import { runASTAnalysis } from '@nodesecure/js-x-ray';
 import type { TaintLevel } from '@security/taint';
 import { IMMUTABLE_SECURITY_PATTERNS } from '@security/policy/patterns';
 

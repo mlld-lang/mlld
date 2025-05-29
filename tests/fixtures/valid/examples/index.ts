@@ -10,7 +10,6 @@ export { default as complexTest-4RecursiveTemplates } from './complex-test-4-rec
 export { default as complexTest-5MixedOperations } from './complex-test-5-mixed-operations.generated-fixture.json';
 export { default as demo } from './demo.generated-fixture.json';
 export { default as example } from './example.generated-fixture.json';
-export { default as geoff } from './geoff.generated-fixture.json';
 export { default as haltTest } from './halt-test.generated-fixture.json';
 export { default as importsFixed } from './imports-fixed.generated-fixture.json';
 export { default as importsRoles } from './imports-roles.generated-fixture.json';

@@ -595,6 +595,46 @@ async function watchFiles(options: CLIOptions): Promise<void> {
 }
 
 /**
+ * Read stdin content if available
+ */
+async function readStdinIfAvailable(): Promise<string | undefined> {
+  // Check if stdin is a TTY (terminal) - if so, there's no piped input
+  if (process.stdin.isTTY) {
+    return undefined;
+  }
+  
+  // Read from stdin
+  const chunks: Buffer[] = [];
+  
+  return new Promise((resolve) => {
+    let timeout: NodeJS.Timeout;
+    
+    // Set a short timeout to check if data is available
+    timeout = setTimeout(() => {
+      // No data received within timeout, assume no stdin
+      process.stdin.pause();
+      process.stdin.removeAllListeners('data');
+      process.stdin.removeAllListeners('end');
+      resolve(undefined);
+    }, 100);
+    
+    process.stdin.on('data', (chunk) => {
+      clearTimeout(timeout);
+      chunks.push(chunk);
+    });
+    
+    process.stdin.on('end', () => {
+      clearTimeout(timeout);
+      const content = Buffer.concat(chunks).toString('utf8');
+      resolve(content);
+    });
+    
+    // Start reading
+    process.stdin.resume();
+  });
+}
+
+/**
  * Process a file with specific API options
  */
 async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: ProcessOptions): Promise<void> {
@@ -627,6 +667,9 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     // Read the input file using Node's fs directly
     const fs = await import('fs/promises');
     const content = await fs.readFile(input, 'utf8');
+    
+    // Read stdin if available
+    const stdinContent = await readStdinIfAvailable();
     
     // Load configuration
     const configLoader = new ConfigLoader(path.dirname(input));
@@ -670,6 +713,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       pathService: pathService,
       strict: cliOptions.strict,
       urlConfig: finalUrlConfig,
+      stdinContent: stdinContent,
       outputOptions: {
         showProgress: cliOptions.showProgress !== undefined ? cliOptions.showProgress : outputConfig.showProgress,
         maxOutputLines: cliOptions.maxOutputLines !== undefined ? cliOptions.maxOutputLines : outputConfig.maxOutputLines,
