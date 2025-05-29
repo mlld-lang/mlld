@@ -1,0 +1,18 @@
+- Error Location 
+- Output manager
+
+- Review security/url implementation 
+- Review error system
+- Review cli 
+- Review syntax highlighting
+- Review website
+- Review docs/
+- Update docs/dev/
+  - ARCHITECTURE.md
+  - TESTS.md
+
+Run with.... what was that!!
+
+@run with {
+  filter: 
+}
