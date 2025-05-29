@@ -2,6 +2,15 @@
 
 repo: github.com/mlld-lang/mlld
 
+## Module System
+- **Package Type**: ESM-first (`"type": "module"`) - all `.js` files are ES modules
+- **Dual Build**: tsup creates both `.mjs` and `.cjs` outputs for compatibility
+- **Parser Generation**: Peggy generates both `parser.js` (ESM) and `parser.ts` (with types)
+- **Important**: Run `npm run build:grammar` before other builds to generate the parser
+- **Scripts**: Build scripts import parser directly from `grammar/parser/parser.js`
+- **TypeScript**: Uses `@grammar/parser` which resolves to the index.ts wrapper
+- See `docs/dev/MODULES.md` for complete module system documentation
+
 ## Build & Test Commands
 ```bash
 npm run build        # Build the project
