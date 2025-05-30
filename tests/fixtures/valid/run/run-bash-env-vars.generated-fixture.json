@@ -179,7 +179,7 @@
       },
       "raw": {
         "identifier": "user_data",
-        "value": "{\n  \"role\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"5dfab887-00b1-44b8-8e55-26add7e6894e\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 95,\n          \"line\": 4,\n          \"column\": 29\n        },\n        \"end\": {\n          \"offset\": 102,\n          \"line\": 4,\n          \"column\": 36\n        }\n      },\n      \"content\": \"admin\"\n    }\n  ],\n  \"level\": 5\n}"
+        "value": "{\n  \"role\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-9\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 95,\n          \"line\": 4,\n          \"column\": 29\n        },\n        \"end\": {\n          \"offset\": 102,\n          \"line\": 4,\n          \"column\": 36\n        }\n      },\n      \"content\": \"admin\"\n    }\n  ],\n  \"level\": 5\n}"
       },
       "meta": {
         "objectData": {
@@ -189,7 +189,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "node-9",
+      "nodeId": "node-10",
       "location": {
         "start": {
           "offset": 116,
@@ -206,7 +206,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-10",
+      "nodeId": "node-11",
       "location": {
         "start": {
           "offset": 118,
@@ -226,7 +226,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "node-11",
+            "nodeId": "node-12",
             "location": {
               "start": {
                 "offset": 118,
@@ -249,7 +249,7 @@
         "lang": [
           {
             "type": "Text",
-            "nodeId": "node-12",
+            "nodeId": "node-13",
             "location": {
               "start": {
                 "offset": 154,
@@ -269,7 +269,7 @@
         "code": [
           {
             "type": "Text",
-            "nodeId": "node-13",
+            "nodeId": "node-14",
             "location": {
               "start": {
                 "offset": 159,
@@ -305,7 +305,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "node-14",
+      "nodeId": "node-15",
       "location": {
         "start": {
           "offset": 235,
@@ -322,7 +322,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-15",
+      "nodeId": "node-16",
       "location": {
         "start": {
           "offset": 237,
@@ -342,7 +342,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "node-16",
+            "nodeId": "node-17",
             "location": {
               "start": {
                 "offset": 243,
@@ -361,7 +361,7 @@
         "args": [
           {
             "type": "Text",
-            "nodeId": "node-17",
+            "nodeId": "node-18",
             "location": {
               "start": {
                 "offset": 251,
@@ -378,7 +378,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "node-18",
+            "nodeId": "node-19",
             "location": {
               "start": {
                 "offset": 262,

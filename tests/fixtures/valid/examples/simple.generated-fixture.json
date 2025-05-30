@@ -289,7 +289,7 @@
       },
       "raw": {
         "identifier": "role",
-        "value": "{\n  \"architect\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"54ad16ef-0a3a-42b6-bc2f-07d7e12cfded\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 191,\n          \"line\": 7,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 262,\n          \"line\": 7,\n          \"column\": 89\n        }\n      },\n      \"content\": \"You are a senior architect skilled in assessing TypeScript codebases.\"\n    }\n  ],\n  \"ux\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"6bd3ad96-f9ce-4b12-bcf1-69e6b1f53654\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 274,\n          \"line\": 8,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 342,\n          \"line\": 8,\n          \"column\": 79\n        }\n      },\n      \"content\": \"You are a senior ux designer skilled in assessing user experience.\"\n    }\n  ],\n  \"security\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"90f4d4fc-79bb-4fdb-b9eb-f23107e91da5\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 360,\n          \"line\": 9,\n          \"column\": 17\n        },\n        \"end\": {\n          \"offset\": 439,\n          \"line\": 9,\n          \"column\": 96\n        }\n      },\n      \"content\": \"You are a senior security engineer skilled in assessing TypeScript codebases.\"\n    }\n  ]\n}"
+        "value": "{\n  \"architect\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-15\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 191,\n          \"line\": 7,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 262,\n          \"line\": 7,\n          \"column\": 89\n        }\n      },\n      \"content\": \"You are a senior architect skilled in assessing TypeScript codebases.\"\n    }\n  ],\n  \"ux\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-16\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 274,\n          \"line\": 8,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 342,\n          \"line\": 8,\n          \"column\": 79\n        }\n      },\n      \"content\": \"You are a senior ux designer skilled in assessing user experience.\"\n    }\n  ],\n  \"security\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-17\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 360,\n          \"line\": 9,\n          \"column\": 17\n        },\n        \"end\": {\n          \"offset\": 439,\n          \"line\": 9,\n          \"column\": 96\n        }\n      },\n      \"content\": \"You are a senior security engineer skilled in assessing TypeScript codebases.\"\n    }\n  ]\n}"
       },
       "meta": {
         "objectData": {
@@ -299,7 +299,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "node-15",
+      "nodeId": "node-18",
       "location": {
         "start": {
           "offset": 441,
@@ -316,7 +316,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-16",
+      "nodeId": "node-19",
       "location": {
         "start": {
           "offset": 443,
@@ -336,7 +336,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "node-17",
+            "nodeId": "node-20",
             "location": {
               "start": {
                 "offset": 0,
@@ -359,7 +359,7 @@
             "code_review": [
               {
                 "type": "Text",
-                "nodeId": "node-18",
+                "nodeId": "node-21",
                 "location": {
                   "start": {
                     "offset": 477,
@@ -378,7 +378,7 @@
             "ux_review": [
               {
                 "type": "Text",
-                "nodeId": "node-19",
+                "nodeId": "node-22",
                 "location": {
                   "start": {
                     "offset": 604,
@@ -397,7 +397,7 @@
             "security_review": [
               {
                 "type": "Text",
-                "nodeId": "node-20",
+                "nodeId": "node-23",
                 "location": {
                   "start": {
                     "offset": 742,
@@ -418,7 +418,7 @@
       },
       "raw": {
         "identifier": "task",
-        "value": "{\n  \"code_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"3359a097-1f11-441b-b902-2a1fce54600b\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 477,\n          \"line\": 13,\n          \"column\": 20\n        },\n        \"end\": {\n          \"offset\": 585,\n          \"line\": 13,\n          \"column\": 128\n        }\n      },\n      \"content\": \"Carefully review the code and test results and advise on the quality of the code and areas of improvement.\"\n    }\n  ],\n  \"ux_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"d9b2ccbc-d0ea-4fcf-8234-c71f3ba4b0e3\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 604,\n          \"line\": 14,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 717,\n          \"line\": 14,\n          \"column\": 131\n        }\n      },\n      \"content\": \"Carefully review the user experience and advise on the quality of the user experience and areas of improvement.\"\n    }\n  ],\n  \"security_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"a794a74d-ac73-4463-9f08-d09d9abbe202\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 742,\n          \"line\": 15,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 853,\n          \"line\": 15,\n          \"column\": 135\n        }\n      },\n      \"content\": \"Carefully review the security of the code and advise on the quality of the security and areas of improvement.\"\n    }\n  ]\n}"
+        "value": "{\n  \"code_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-24\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 477,\n          \"line\": 13,\n          \"column\": 20\n        },\n        \"end\": {\n          \"offset\": 585,\n          \"line\": 13,\n          \"column\": 128\n        }\n      },\n      \"content\": \"Carefully review the code and test results and advise on the quality of the code and areas of improvement.\"\n    }\n  ],\n  \"ux_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-25\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 604,\n          \"line\": 14,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 717,\n          \"line\": 14,\n          \"column\": 131\n        }\n      },\n      \"content\": \"Carefully review the user experience and advise on the quality of the user experience and areas of improvement.\"\n    }\n  ],\n  \"security_review\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-26\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 742,\n          \"line\": 15,\n          \"column\": 24\n        },\n        \"end\": {\n          \"offset\": 853,\n          \"line\": 15,\n          \"column\": 135\n        }\n      },\n      \"content\": \"Carefully review the security of the code and advise on the quality of the security and areas of improvement.\"\n    }\n  ]\n}"
       },
       "meta": {
         "objectData": {
@@ -428,7 +428,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "node-21",
+      "nodeId": "node-27",
       "location": {
         "start": {
           "offset": 855,
@@ -445,7 +445,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-22",
+      "nodeId": "node-28",
       "location": {
         "start": {
           "offset": 870,
@@ -465,7 +465,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "node-23",
+            "nodeId": "node-29",
             "location": {
               "start": {
                 "offset": 0,
@@ -496,7 +496,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "node-24",
+      "nodeId": "node-30",
       "location": {
         "start": {
           "offset": 895,
@@ -513,7 +513,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-25",
+      "nodeId": "node-31",
       "location": {
         "start": {
           "offset": 944,
@@ -533,7 +533,7 @@
         "variable": [
           {
             "type": "VariableReference",
-            "nodeId": "node-26",
+            "nodeId": "node-32",
             "location": {
               "start": {
                 "offset": 0,

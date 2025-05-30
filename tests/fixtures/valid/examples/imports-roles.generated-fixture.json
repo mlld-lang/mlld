@@ -253,7 +253,7 @@
       },
       "raw": {
         "identifier": "role",
-        "value": "{\n  \"architect\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"e850286e-e184-422d-98d5-0554245b6ac9\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 83,\n          \"line\": 4,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 114,\n          \"line\": 4,\n          \"column\": 49\n        }\n      },\n      \"content\": \"You are a software architect.\"\n    }\n  ],\n  \"security\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"cf70322c-f015-45ca-a8a8-558e0d3782a7\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 132,\n          \"line\": 5,\n          \"column\": 17\n        },\n        \"end\": {\n          \"offset\": 162,\n          \"line\": 5,\n          \"column\": 47\n        }\n      },\n      \"content\": \"You are a security engineer.\"\n    }\n  ],\n  \"ux\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"86487dff-52f8-4c14-9ac4-bfaf7e35b8c0\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 174,\n          \"line\": 6,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 198,\n          \"line\": 6,\n          \"column\": 35\n        }\n      },\n      \"content\": \"You are a ux designer.\"\n    }\n  ],\n  \"pm\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"2d90aa6a-ed02-4de1-94a2-ec2e280356c5\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 210,\n          \"line\": 7,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 238,\n          \"line\": 7,\n          \"column\": 39\n        }\n      },\n      \"content\": \"You are a project manager.\"\n    }\n  ]\n}"
+        "value": "{\n  \"architect\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-13\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 83,\n          \"line\": 4,\n          \"column\": 18\n        },\n        \"end\": {\n          \"offset\": 114,\n          \"line\": 4,\n          \"column\": 49\n        }\n      },\n      \"content\": \"You are a software architect.\"\n    }\n  ],\n  \"security\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-14\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 132,\n          \"line\": 5,\n          \"column\": 17\n        },\n        \"end\": {\n          \"offset\": 162,\n          \"line\": 5,\n          \"column\": 47\n        }\n      },\n      \"content\": \"You are a security engineer.\"\n    }\n  ],\n  \"ux\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-15\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 174,\n          \"line\": 6,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 198,\n          \"line\": 6,\n          \"column\": 35\n        }\n      },\n      \"content\": \"You are a ux designer.\"\n    }\n  ],\n  \"pm\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-16\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 210,\n          \"line\": 7,\n          \"column\": 11\n        },\n        \"end\": {\n          \"offset\": 238,\n          \"line\": 7,\n          \"column\": 39\n        }\n      },\n      \"content\": \"You are a project manager.\"\n    }\n  ]\n}"
       },
       "meta": {
         "objectData": {
@@ -263,7 +263,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "node-13",
+      "nodeId": "node-17",
       "location": {
         "start": {
           "offset": 240,
@@ -280,7 +280,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-14",
+      "nodeId": "node-18",
       "location": {
         "start": {
           "offset": 242,
@@ -300,7 +300,7 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "node-15",
+            "nodeId": "node-19",
             "location": {
               "start": {
                 "offset": 0,
@@ -323,7 +323,7 @@
             "archrev": [
               {
                 "type": "Text",
-                "nodeId": "node-16",
+                "nodeId": "node-20",
                 "location": {
                   "start": {
                     "offset": 272,
@@ -342,7 +342,7 @@
             "uxrev": [
               {
                 "type": "Text",
-                "nodeId": "node-17",
+                "nodeId": "node-21",
                 "location": {
                   "start": {
                     "offset": 328,
@@ -361,7 +361,7 @@
             "secrev": [
               {
                 "type": "Text",
-                "nodeId": "node-18",
+                "nodeId": "node-22",
                 "location": {
                   "start": {
                     "offset": 372,
@@ -380,7 +380,7 @@
             "roadmap": [
               {
                 "type": "Text",
-                "nodeId": "node-19",
+                "nodeId": "node-23",
                 "location": {
                   "start": {
                     "offset": 427,
@@ -401,7 +401,7 @@
       },
       "raw": {
         "identifier": "task",
-        "value": "{\n  \"archrev\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"6c443a49-e54b-4902-a465-82d7e0861e12\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 272,\n          \"line\": 11,\n          \"column\": 16\n        },\n        \"end\": {\n          \"offset\": 313,\n          \"line\": 11,\n          \"column\": 57\n        }\n      },\n      \"content\": \"What's the architecture's biggest flaw?\"\n    }\n  ],\n  \"uxrev\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"5b615bfe-2163-4544-b17c-859feac921ca\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 328,\n          \"line\": 12,\n          \"column\": 14\n        },\n        \"end\": {\n          \"offset\": 356,\n          \"line\": 12,\n          \"column\": 42\n        }\n      },\n      \"content\": \"Review the UX of this code\"\n    }\n  ],\n  \"secrev\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"b8ee730f-57e1-41bc-9811-be765376a756\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 372,\n          \"line\": 13,\n          \"column\": 15\n        },\n        \"end\": {\n          \"offset\": 410,\n          \"line\": 13,\n          \"column\": 53\n        }\n      },\n      \"content\": \"Review this code for vulnerabilities\"\n    }\n  ],\n  \"roadmap\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"5fe4f336-d757-4da1-9073-69cc08e01a61\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 427,\n          \"line\": 14,\n          \"column\": 16\n        },\n        \"end\": {\n          \"offset\": 471,\n          \"line\": 14,\n          \"column\": 60\n        }\n      },\n      \"content\": \"Create a roadmap based on highest priority\"\n    }\n  ]\n}"
+        "value": "{\n  \"archrev\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-24\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 272,\n          \"line\": 11,\n          \"column\": 16\n        },\n        \"end\": {\n          \"offset\": 313,\n          \"line\": 11,\n          \"column\": 57\n        }\n      },\n      \"content\": \"What's the architecture's biggest flaw?\"\n    }\n  ],\n  \"uxrev\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-25\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 328,\n          \"line\": 12,\n          \"column\": 14\n        },\n        \"end\": {\n          \"offset\": 356,\n          \"line\": 12,\n          \"column\": 42\n        }\n      },\n      \"content\": \"Review the UX of this code\"\n    }\n  ],\n  \"secrev\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-26\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 372,\n          \"line\": 13,\n          \"column\": 15\n        },\n        \"end\": {\n          \"offset\": 410,\n          \"line\": 13,\n          \"column\": 53\n        }\n      },\n      \"content\": \"Review this code for vulnerabilities\"\n    }\n  ],\n  \"roadmap\": [\n    {\n      \"type\": \"Text\",\n      \"nodeId\": \"node-27\",\n      \"location\": {\n        \"start\": {\n          \"offset\": 427,\n          \"line\": 14,\n          \"column\": 16\n        },\n        \"end\": {\n          \"offset\": 471,\n          \"line\": 14,\n          \"column\": 60\n        }\n      },\n      \"content\": \"Create a roadmap based on highest priority\"\n    }\n  ]\n}"
       },
       "meta": {
         "objectData": {
@@ -411,7 +411,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "node-20",
+      "nodeId": "node-28",
       "location": {
         "start": {
           "offset": 473,
@@ -428,7 +428,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-21",
+      "nodeId": "node-29",
       "location": {
         "start": {
           "offset": 503,
@@ -448,7 +448,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "node-22",
+            "nodeId": "node-30",
             "location": {
               "start": {
                 "offset": 503,
@@ -470,7 +470,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "node-23",
+            "nodeId": "node-31",
             "location": {
               "start": {
                 "offset": 530,
@@ -487,7 +487,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "node-24",
+            "nodeId": "node-32",
             "location": {
               "start": {
                 "offset": 0,
@@ -505,7 +505,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "node-25",
+            "nodeId": "node-33",
             "location": {
               "start": {
                 "offset": 539,
@@ -536,7 +536,7 @@
     },
     {
       "type": "Text",
-      "nodeId": "node-26",
+      "nodeId": "node-34",
       "location": {
         "start": {
           "offset": 572,
@@ -553,7 +553,7 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-27",
+      "nodeId": "node-35",
       "location": {
         "start": {
           "offset": 574,
@@ -573,7 +573,7 @@
         "identifier": [
           {
             "type": "Text",
-            "nodeId": "node-28",
+            "nodeId": "node-36",
             "location": {
               "start": {
                 "offset": 574,
@@ -597,7 +597,7 @@
         "command": [
           {
             "type": "Text",
-            "nodeId": "node-29",
+            "nodeId": "node-37",
             "location": {
               "start": {
                 "offset": 613,
@@ -614,7 +614,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "node-30",
+            "nodeId": "node-38",
             "location": {
               "start": {
                 "offset": 0,
@@ -632,7 +632,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "node-31",
+            "nodeId": "node-39",
             "location": {
               "start": {
                 "offset": 639,
@@ -649,7 +649,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "node-32",
+            "nodeId": "node-40",
             "location": {
               "start": {
                 "offset": 0,
@@ -667,7 +667,7 @@
           },
           {
             "type": "Text",
-            "nodeId": "node-33",
+            "nodeId": "node-41",
             "location": {
               "start": {
                 "offset": 660,
@@ -684,7 +684,7 @@
           },
           {
             "type": "VariableReference",
-            "nodeId": "node-34",
+            "nodeId": "node-42",
             "location": {
               "start": {
                 "offset": 0,
