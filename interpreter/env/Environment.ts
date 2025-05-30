@@ -51,6 +51,7 @@ export class Environment {
   private immutableCache?: ImmutableCache;
   private currentFilePath?: string; // Track current file being processed
   private securityManager?: SecurityManager; // Central security coordinator
+  private registryManager?: RegistryManager; // Registry for mlld:// URLs
   private stdinContent?: string; // Cached stdin content
   private registryManager?: RegistryManager; // Registry for mlld:// URLs
   
