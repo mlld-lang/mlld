@@ -7,7 +7,7 @@
 
 ## Objective
 
-Create a minimal registry using GitHub Gists as infrastructure, with DNS TXT records for discovery. This gives us a working registry with zero server costs.
+Create a minimal PUBLIC registry using GitHub Gists as infrastructure, with DNS TXT records for discovery at `public.mlld.ai`. This gives us a working registry with zero server costs and makes it crystal clear these are PUBLIC modules.
 
 ## Architecture
 
@@ -15,15 +15,17 @@ Create a minimal registry using GitHub Gists as infrastructure, with DNS TXT rec
 1. Author creates a gist with their .mld file
 2. Author gets the raw content URL with specific commit hash
 3. Author submits PR to registry repo with module metadata
-4. DNS TXT record created: `user-module.registry.mlld.ai`
-5. TXT record contains gist raw URL
+4. DNS TXT record created: `user-module.public.mlld.ai`
+5. TXT record contains gist raw URL with specific commit hash
 
 ### Module Resolution Flow  
 1. User imports: `@import { x } from @alice/utils`
-2. CLI queries: `alice-utils.registry.mlld.ai` TXT record
-3. TXT record returns: `v=mlld1;url=https://gist.githubuserco...`
-4. CLI fetches content from URL
-5. Content cached locally by hash
+2. System checks for custom resolver for 'alice' namespace
+3. If none, queries DNS: `alice-utils.public.mlld.ai` TXT record
+4. TXT record returns: `v=mlld1;url=https://gist.githubuserco...`
+5. CLI fetches content from URL
+6. Content cached locally by hash
+7. Lock file updated with resolution
 
 ## Registry Repository Structure
 
@@ -60,6 +62,10 @@ registry/
     "hash": "59d76372d3c4a93e7aae34cb98b13a8e99dfb95f",
     "url": "https://gist.githubusercontent.com/alicej/8bb1c645c1cf0dd515bd8f834fb82fcf/raw/59d76372d3c4a93e7aae34cb98b13a8e99dfb95f/utils.mld"
   },
+  "dependencies": {
+    "@bob/helpers": "a8c3f2d4e5b6c7d8e9f0a1b2c3d4e5f6",
+    "@charlie/core": "b9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8"
+  },
   "keywords": ["utils", "helpers", "strings"],
   "mlldVersion": ">=0.5.0",
   "publishedAt": "2024-01-15T10:30:00Z",
@@ -72,7 +78,7 @@ registry/
 
 ### DNS TXT Record Format
 ```
-alice-utils.registry.mlld.ai. IN TXT "v=mlld1;url=https://gist.githubusercontent.com/alicej/8bb1c645c1cf0dd515bd8f834fb82fcf/raw/59d76372d3c4a93e7aae34cb98b13a8e99dfb95f/utils.mld"
+alice-utils.public.mlld.ai. IN TXT "v=mlld1;url=https://gist.githubusercontent.com/alicej/8bb1c645c1cf0dd515bd8f834fb82fcf/raw/59d76372d3c4a93e7aae34cb98b13a8e99dfb95f/utils.mld"
 ```
 
 ## Implementation Components
@@ -84,7 +90,7 @@ export class RegistryClient {
   private dnsResolver = new DNSResolver();
   
   async resolve(moduleId: string): Promise<ModuleInfo> {
-    // Convert @alice/utils to alice-utils.registry.mlld.ai
+    // Convert @alice/utils to alice-utils.public.mlld.ai
     const domain = this.moduleToDomain(moduleId);
     
     try {
@@ -183,7 +189,7 @@ resource "cloudflare_record" "module" {
   for_each = local.modules
   
   zone_id = var.cloudflare_zone_id
-  name    = "${each.key}.registry"
+  name    = "${each.key}.public"
   type    = "TXT"
   value   = "v=mlld1;url=${each.value.url}"
   ttl     = 300
@@ -196,7 +202,7 @@ resource "cloudflare_record" "module" {
 # dns/update-records.sh
 
 # Read modules and create DNS records
-jq -r '.[] | "\(.name | sub("@";"") | sub("/";"_")).registry.mlld.ai. IN TXT \"v=mlld1;url=\(.source.url)\""' \
+jq -r '.[] | "\(.name | sub("@";"") | sub("/";"_")).public.mlld.ai. IN TXT \"v=mlld1;url=\(.source.url)\""' \
   modules.json > records.txt
 
 # Use nsupdate or cloud provider CLI
@@ -263,7 +269,7 @@ title: mlld Registry
 
 ### Phase 2: DNS Infrastructure (Day 1 Afternoon)
 1. [ ] Choose DNS provider (Cloudflare recommended)
-2. [ ] Create registry.mlld.ai subdomain
+2. [ ] Create public.mlld.ai subdomain
 3. [ ] Write DNS update script/terraform
 4. [ ] Create initial TXT records
 5. [ ] Test DNS resolution
@@ -301,7 +307,7 @@ title: mlld Registry
 ### DNS Resolution
 ```bash
 # Test DNS lookup
-dig TXT alice-utils.registry.mlld.ai
+dig TXT alice-utils.public.mlld.ai
 
 # Should return:
 # "v=mlld1;url=https://gist.githubusercontent.com/..."
@@ -322,13 +328,15 @@ mlld registry info @alice/utils
 
 ## Success Criteria
 
-- [ ] Modules resolvable via DNS
+- [ ] Modules resolvable via DNS at public.mlld.ai
 - [ ] Zero server infrastructure needed
 - [ ] Registry browsable on mlld.ai
-- [ ] Clear publishing process
+- [ ] Clear publishing process with transitive dependencies
 - [ ] Fast resolution (<200ms)
 - [ ] Offline support via cache
 - [ ] 10+ example modules published
+- [ ] Dependency tracking at publish time
+- [ ] Clear PUBLIC nature of the registry
 
 ## Future Enhancements
 
@@ -347,6 +355,8 @@ mlld registry info @alice/utils
 - Gist raw URLs include commit hash for immutability
 - Registry repo is source of truth
 - Consider npm registry compatibility
+- The `public.mlld.ai` domain makes it VERY clear these are PUBLIC modules
+- Private modules aren't a registry feature - they use different resolvers
 
 ## Related Documentation
 

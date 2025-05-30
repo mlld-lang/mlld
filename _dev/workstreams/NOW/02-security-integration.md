@@ -1,13 +1,21 @@
-# Security Integration - Connecting Existing Components
+# Security Integration - Resolvers as Security Boundary
 
 **Status**: Not Started  
 **Priority**: P0 - Critical for security  
-**Estimated Time**: 2 days  
-**Dependencies**: Grammar updates (for trust levels)
+**Estimated Time**: 2-3 days  
+**Dependencies**: Grammar updates (for trust levels), Resolver system
 
 ## Objective
 
-Connect the already-built security components to the interpreter so they actually protect users. We have 80% of the code written but 0% of it running in production.
+Connect the already-built security components to the interpreter with a focus on **resolvers as the primary security boundary**. This fundamentally changes our approach - by controlling resolvers, we can sandbox mlld without giving filesystem access.
+
+## Key Insight: Resolvers ARE the Security Model
+
+The biggest realization: if `mlld.lock.json` is read-only and resolvers are restricted, mlld becomes completely sandboxed even with full code execution. This means:
+- No filesystem access except through resolvers
+- No network access except through resolvers
+- Complete control over data flow
+- Perfect for web/sandbox environments
 
 ## Current State
 
@@ -28,7 +36,7 @@ Connect the already-built security components to the interpreter so they actuall
 
 ## Integration Points
 
-### 1. Environment Initialization
+### 1. Environment Initialization with Resolver-First Security
 ```typescript
 // interpreter/env/Environment.ts
 class Environment {
@@ -38,17 +46,42 @@ class Environment {
     
     // Need to add:
     this.securityManager.initialize({
+      // Resolver-based security
+      pathOnlyMode: options.security?.pathOnlyMode || false,
+      allowedResolvers: options.security?.allowedResolvers || ['local', 'github', 'dns'],
+      allowCustomResolvers: options.security?.allowCustomResolvers ?? true,
+      
+      // Traditional security layers (now secondary)
       commandAnalyzer: true,
       pathValidator: true,
       taintTracker: true,
-      urlValidator: true,
-      policyManager: false // Not built yet
+      urlValidator: true
     });
   }
 }
 ```
 
-### 2. Run/Exec Directive Integration
+### 2. Path-Only Mode Implementation
+```typescript
+// New security mode where ALL file access goes through resolvers
+if (env.securityManager.isPathOnlyMode()) {
+  // Block direct filesystem access
+  if (!path.startsWith('@')) {
+    throw new MlldSecurityError(
+      'Path-only mode: Direct filesystem access blocked. Use resolvers like @data/file.txt'
+    );
+  }
+  
+  // Block parent directory access
+  if (path.includes('../')) {
+    throw new MlldSecurityError(
+      'Path-only mode: Parent directory access blocked'
+    );
+  }
+}
+```
+
+### 3. Run/Exec Directive Integration
 ```typescript
 // interpreter/eval/run.ts
 async function evaluateRun(node, env) {
@@ -72,20 +105,31 @@ async function evaluateRun(node, env) {
 }
 ```
 
-### 3. Path Directive Integration
+### 4. Path Directive Integration with Resolver Checks
 ```typescript
 // interpreter/eval/path.ts
 async function evaluatePath(node, env) {
   const pathValue = await evaluatePathExpression(node.value, env);
   
-  // Add validation:
-  const validation = await env.securityManager.validatePath(pathValue, {
-    basePath: env.basePath,
-    operation: 'read'
-  });
-  
-  if (!validation.allowed) {
-    throw new MlldSecurityError(validation.reason);
+  // Check if using resolver
+  if (pathValue.startsWith('@')) {
+    // Validate resolver is allowed
+    const resolver = env.resolverManager.getResolverForPath(pathValue);
+    if (!env.securityManager.isResolverAllowed(resolver)) {
+      throw new MlldSecurityError(
+        `Resolver '${resolver.name}' not in allowed list: ${env.securityManager.allowedResolvers.join(', ')}`
+      );
+    }
+  } else {
+    // Traditional path validation
+    const validation = await env.securityManager.validatePath(pathValue, {
+      basePath: env.basePath,
+      operation: 'read'
+    });
+    
+    if (!validation.allowed) {
+      throw new MlldSecurityError(validation.reason);
+    }
   }
   
   // Track taint:
@@ -96,7 +140,7 @@ async function evaluatePath(node, env) {
 }
 ```
 
-### 4. Import Integration (Enhance Existing)
+### 5. Import Integration with Resolver Security
 ```typescript
 // interpreter/eval/import.ts
 async function evaluateImport(node, env) {
@@ -118,7 +162,7 @@ async function evaluateImport(node, env) {
 }
 ```
 
-### 5. Taint Propagation
+### 6. Taint Propagation with Resolver Awareness
 ```typescript
 // interpreter/eval/data.ts
 async function evaluateData(node, env) {
@@ -128,6 +172,12 @@ async function evaluateData(node, env) {
   if (node.value.type === 'Reference') {
     const sourceTaint = env.securityManager.taintTracker.getTaint(node.value.name);
     env.securityManager.taintTracker.markVariable(node.name, sourceTaint);
+  }
+  
+  // Mark resolver-sourced data
+  if (value.source?.startsWith('@')) {
+    const resolverTaint = env.securityManager.getResolverTaintLevel(value.source);
+    env.securityManager.taintTracker.markVariable(node.name, resolverTaint);
   }
   
   // Continue with data assignment...
@@ -179,77 +229,108 @@ async function evaluateData(node, env) {
 
 ## Configuration
 
-Add to `mlld.config.json`:
+Add to `mlld.lock.json` (not config - lock file controls security):
 ```json
 {
   "security": {
-    "commands": {
-      "analyze": true,
-      "trustedPatterns": ["npm run", "git status"],
-      "blockedPatterns": ["rm -rf /", ":(){ :|:& };:"]
-    },
-    "paths": {
-      "validate": true,
-      "allowedPaths": ["./", "~/mlld-workspace"],
-      "blockedPaths": ["/etc", "/sys", "/proc"]
-    },
-    "urls": {
-      "validate": true,
-      "allowedProtocols": ["https"],
-      "allowedDomains": ["github.com", "githubusercontent.com"],
-      "blockedDomains": ["malicious.com"]
-    },
-    "taint": {
-      "track": true,
-      "blockCommandsFromNetwork": true
+    "policy": {
+      "resolvers": {
+        "allowCustom": false,
+        "allowedResolvers": ["local", "github"],
+        "pathOnlyMode": true  // Complete sandboxing!
+      },
+      "imports": {
+        "maxDepth": 3,
+        "requireApproval": true
+      },
+      "commands": {
+        "analyze": true,
+        "requireApproval": ["rm", "curl", "wget"]
+      }
     }
-  }
+  },
+  "registries": [
+    {
+      "prefix": "@data/",
+      "resolver": "local",
+      "type": "input",
+      "config": {
+        "path": "/sandbox/readonly",
+        "readonly": true
+      }
+    },
+    {
+      "prefix": "@output/",
+      "resolver": "s3",
+      "type": "output",
+      "config": {
+        "bucket": "my-outputs",
+        "permissions": ["write"]
+      }
+    }
+  ]
 }
 ```
 
 ## Testing Strategy
 
 ### Security Test Cases
-1. **Command Blocking**: Try `rm -rf /`, expect block
-2. **Path Traversal**: Try `../../../etc/passwd`, expect block
-3. **URL Validation**: Try `http://` URL, expect warning
-4. **Taint Flow**: Import from URL, use in command, expect warning
-5. **Trust Levels**: Test always/verify/never behaviors
+1. **Path-Only Mode**: Direct filesystem access blocked, only resolvers work
+2. **Resolver Whitelist**: Non-allowed resolvers blocked
+3. **Command Blocking**: Try `rm -rf /`, expect block
+4. **Path Traversal**: Try `../../../etc/passwd`, expect block
+5. **URL Validation**: Try `http://` URL, expect warning
+6. **Taint Flow**: Import from URL, use in command, expect warning
+7. **Trust Levels**: Test always/verify/never behaviors (no angle brackets!)
 
 ### Integration Tests
 ```mlld
-# Should prompt for approval
-@run [curl https://api.example.com] <trust verify>
+# Path-only mode - only resolvers work
+@path data = @data/input.json  # OK
+@path fail = [./direct.json]   # BLOCKED in path-only mode
+
+# Should prompt for approval (no angle brackets)
+@run [curl https://api.example.com] trust verify
 
 # Should block
-@path secret = [/etc/passwd] <trust never>
+@path secret = [/etc/passwd] trust never
 
 # Should allow
-@run [npm test] <trust always>
+@run [npm test] trust always
 
 # Should track taint
 @import { data } from @url https://untrusted.com
 @run [echo {{data}}]  # Should warn about tainted data
+
+# Resolver security
+@import { utils } from @custom/mytools  # Blocked if custom resolvers disabled
 ```
 
 ## Success Criteria
 
+- [ ] Path-only mode completely sandboxes mlld
+- [ ] Resolver whitelist enforced
 - [ ] All security components called during execution
 - [ ] Dangerous commands blocked by default
 - [ ] Path traversal attempts blocked
 - [ ] URL validation working
 - [ ] Taint tracking flows through variables
-- [ ] Trust levels properly honored
+- [ ] Trust levels properly honored (no angle brackets)
 - [ ] No performance regression
 - [ ] Clear security error messages
+- [ ] Lock file security policies enforced
 
 ## Notes
 
+- **Resolvers are the security boundary** - this is the key insight
+- Path-only mode enables complete sandboxing
+- We provide guardrails, not guarantees (honest security posture)
 - Start with blocking/warning, can tune later
 - Security checks should be fast (<1ms)
 - Approval UI should be clear about risks
 - Consider caching security decisions
-- Log all security events for debugging
+- Log all security events to `~/.mlld/audit/`
+- Trust syntax uses no angle brackets: `trust verify` not `<trust verify>`
 
 ## Related Documentation
 

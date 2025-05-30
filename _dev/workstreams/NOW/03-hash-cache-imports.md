@@ -7,18 +7,19 @@
 
 ## Objective
 
-Implement the new content-addressed module system that replaces the old mlld:// URL approach with npm-style @user/module imports.
+Implement the new content-addressed module system that replaces the old mlld:// URL approach with npm-style @user/module imports. This system forms the foundation of our security model by enabling complete sandboxing through resolver control.
 
 ## Design Overview
 
 ### Import Flow
-1. User writes: `@import { x } from @user/module`
-2. Interpreter checks local hash cache
-3. If not cached, fetch from registry (gist)
-4. Hash the content (SHA-256)
-5. Store in cache by hash
-6. Update lock file with hash
+1. User writes: `@import { x } from @namespace/path/to/module`
+2. System checks resolver configuration for namespace
+3. Resolver handles the import (could be local, DNS, custom)
+4. Content is fetched and hashed (SHA-256)
+5. Store in immutable cache by hash
+6. Update lock file with hash and metadata
 7. Future imports use cached version
+8. Show transitive imports (up to 3 levels) for approval
 
 ### Storage Structure
 ```
@@ -30,8 +31,10 @@ Implement the new content-addressed module system that replaces the old mlld:// 
 │   │   │   └── metadata.json
 │   │   └── g23a.../
 │   └── index.json     # Maps module@version to hash
-└── registry/
-    └── modules.json   # Local registry cache
+├── registry/
+│   └── modules.json   # Local registry cache
+└── resolvers/
+    └── config.json    # Custom resolver configurations
 ```
 
 ## Core Components to Build
@@ -77,8 +80,18 @@ export class ModuleCache {
 ```typescript
 export class RegistryClient {
   async resolve(moduleId: string): Promise<ModuleInfo> {
-    // Resolve @user/module to gist URL
-    // Check DNS TXT record: user-module.registry.mlld.ai
+    // Parse module path: @namespace/path/to/module
+    const parts = moduleId.slice(1).split('/');
+    const namespace = parts[0];
+    
+    // Check if namespace has a custom resolver
+    const resolver = await this.getResolver(namespace);
+    if (resolver) {
+      return resolver.resolve(moduleId);
+    }
+    
+    // Default: DNS resolution for @user/module format
+    // Check DNS TXT record: user-module.public.mlld.ai
   }
   
   async fetch(moduleInfo: ModuleInfo): Promise<string> {
@@ -117,10 +130,14 @@ export class ModuleResolver {
 interface LockEntry {
   resolved: string;      // Full hash
   integrity: string;     // sha256-base64
-  source: string;        // Gist URL
+  source: string;        // Gist URL or resolver URI
   fetchedAt: string;     // ISO timestamp
   ttl?: string;          // From TTL option
   trust?: string;        // From trust option
+  resolver?: string;     // Which resolver was used
+  dependencies?: {       // Transitive dependencies
+    [key: string]: string; // module -> hash
+  };
 }
 
 export class LockFile {
@@ -143,20 +160,25 @@ ImportDirective = "@import" _ ImportTargets _ "from" _ ImportSource
 ImportSource = ModuleReference SecurityOptions? / PathExpression SecurityOptions?
 
 ModuleReference = "@" ModuleIdentifier
-ModuleIdentifier = ModuleName ("@" ShortHash)?
-ModuleName = UserName "/" PackageName
-UserName = [a-z][a-z0-9-]*
-PackageName = [a-z][a-z0-9-]*
+ModuleIdentifier = ModuleNamespace "/" ModulePath* "/" ModuleName ("@" ShortHash)?
+ModuleNamespace = [a-z][a-z0-9-]*
+ModulePath = [a-z][a-z0-9-]*
+ModuleName = [a-z][a-z0-9-]*
 ShortHash = [a-f0-9]{4,}
+
+// Security options without angle brackets
+SecurityOptions = _ "(" TTL ")" _ TrustOption?
+TrustOption = "trust" _ ("always" / "verify" / "once")
 ```
 
 ### AST Node Types
 ```typescript
 interface ModuleReference {
   type: 'ModuleReference';
-  user: string;
-  name: string;
-  version?: string;  // Short hash
+  namespace: string;  // e.g. 'alice' or 'resolver'
+  path: string[];     // e.g. ['utils'] or ['deep', 'nested', 'module']
+  name: string;       // Final module name
+  version?: string;   // Short hash
   security?: SecurityOptions;
 }
 ```
@@ -168,7 +190,8 @@ interface ModuleReference {
 async function evaluateImport(node: ImportDirective, env: Environment) {
   if (node.source.type === 'ModuleReference') {
     // New module import logic
-    const moduleRef = `@${node.source.user}/${node.source.name}`;
+    const modulePath = [node.source.namespace, ...node.source.path, node.source.name];
+    const moduleRef = `@${modulePath.join('/')}`;
     const version = node.source.version;
     
     // Resolve to local file
@@ -284,7 +307,7 @@ export async function list() {
 
 ### TTL and Trust
 ```mlld
-@import { live } from @news/feed (1h) <trust verify>
+@import { live } from @news/feed (1h) trust verify
 ```
 
 ### Lock File Result
@@ -305,11 +328,13 @@ export async function list() {
 
 - [ ] Module imports work offline after first fetch
 - [ ] Content addressing prevents tampering
-- [ ] Lock file tracks all module dependencies
-- [ ] CLI commands provide good UX
+- [ ] Lock file tracks all module dependencies (including transitive)
+- [ ] Resolver system enables complete sandboxing
+- [ ] Import depth limit enforced (3 levels)
 - [ ] Clear error messages for common issues
 - [ ] Performance: <100ms for cached imports
 - [ ] Security: All modules validated by hash
+- [ ] Path-only mode works without filesystem access
 
 ## Notes
 

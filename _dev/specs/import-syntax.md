@@ -1,7 +1,7 @@
 # Import Syntax Specification
 
-Version: 1.0  
-Last Updated: 2025-05-29
+Version: 1.1  
+Last Updated: 2025-05-30
 
 ## Overview
 
@@ -10,13 +10,14 @@ This document specifies the complete import syntax for mlld, including local fil
 ## Basic Syntax
 
 ```mlld
-@import { targets } from source <options>
+@import { targets } from source (ttl) trust
 ```
 
 Where:
 - `targets` - What to import (variables, or `*` for all)
 - `source` - Where to import from
-- `options` - Optional TTL and trust settings
+- `(ttl)` - Optional cache time-to-live
+- `trust` - Optional trust level (no angle brackets)
 
 ## Import Sources
 
@@ -30,7 +31,7 @@ Where:
 @import { data } from [/home/user/data.mld]
 
 # With options
-@import { secrets } from [./secrets.mld] <trust never>
+@import { secrets } from [./secrets.mld] trust never
 ```
 
 **Rules**:
@@ -47,17 +48,18 @@ Where:
 @import { api } from @alice/client@f8h4
 
 # With options
-@import { risky } from @bob/utils (1h) <trust verify>
+@import { risky } from @bob/utils (1h) trust verify
 
 # Import all exports
 @import { * } from @alice/helpers
 ```
 
 **Rules**:
-- Module names: `@user/package`
+- Module names: `@user/package` or `@user/scope/package`
 - Optional version: `@user/package@hash`
 - User and package names: lowercase, alphanumeric, hyphens
 - Hash: 4+ hex characters
+- Extended paths supported: `@alice/tools/cli`, `@company/apps/webapp`
 
 ### 3. URLs (Quotes)
 ```mlld
@@ -68,7 +70,7 @@ Where:
 @import { data } from "https://api.example.com/config.mld" (30m)
 
 # Trust level
-@import { script } from "https://sketchy.com/run.mld" <trust never>
+@import { script } from "https://sketchy.com/run.mld" trust never
 ```
 
 **Rules**:
@@ -79,19 +81,20 @@ Where:
 ### 4. Standard Input
 ```mlld
 # Import all from stdin
-@import { * } from "@stdin"
+@import { * } from @input
 
 # Destructure JSON from stdin
-@import { name, version } from "@stdin"
+@import { name, version } from @input
 
 # With trust
-@import { config } from "@stdin" <trust always>
+@import { config } from @input trust always
 ```
 
 **Rules**:
-- Special source `"@stdin"`
+- Special source `@input` (no quotes)
 - Supports JSON destructuring
 - Useful for piped input
+- Legacy syntax `"@stdin"` still supported
 
 ## Import Targets
 
@@ -146,16 +149,16 @@ Controls security verification:
 
 ```mlld
 # Trust levels
-@import { safe } from @alice/utils <trust always>    # Skip checks
-@import { unknown } from @new/module <trust verify>  # Prompt user (default)
-@import { danger } from @hack/tools <trust never>    # Block import
+@import { safe } from @alice/utils trust always    # Skip checks
+@import { unknown } from @new/module trust verify  # Prompt user (default)
+@import { danger } from @hack/tools trust never    # Block import
 ```
 
 ### Combined Options
 ```mlld
 # Both TTL and trust
-@import { api } from @service/client (1h) <trust verify>
-@import { data } from "https://api.com/data" (30m) <trust always>
+@import { api } from @service/client (1h) trust verify
+@import { data } from "https://api.com/data" (30m) trust always
 ```
 
 ## Resolution Process
@@ -203,7 +206,7 @@ Expected: @import { greet } from @alice/utils
 ### Security Block
 ```
 Error: Import blocked by security policy
-  @import { danger } from @hack/tools <trust never>
+  @import { danger } from @hack/tools trust never
 
 This import has been explicitly marked as untrusted.
 ```
@@ -221,7 +224,7 @@ The module may be cached locally. Try: mlld ls
 ### Common Patterns
 ```mlld
 # Development utilities
-@import { log, debug } from @dev/tools <trust always>
+@import { log, debug } from @dev/tools trust always
 
 # API clients with refresh
 @import { github, gitlab } from @apis/clients (1h)
@@ -236,13 +239,13 @@ The module may be cached locally. Try: mlld ls
 ### Security-Conscious Imports
 ```mlld
 # Verify external modules
-@import { parse } from @community/parser <trust verify>
+@import { parse } from @community/parser trust verify
 
 # Never trust certain sources  
-@import { exec } from @sketchy/runner <trust never>
+@import { exec } from @sketchy/runner trust never
 
 # Always trust internal modules
-@import { * } from @company/internal <trust always>
+@import { * } from @company/internal trust always
 ```
 
 ### Dynamic Imports (Future)
@@ -271,3 +274,5 @@ The module may be cached locally. Try: mlld ls
 - Import conditions
 - Namespace imports
 - Default exports
+- Version ranges (e.g., `@alice/utils@^1.0.0`)
+- Import aliases for modules

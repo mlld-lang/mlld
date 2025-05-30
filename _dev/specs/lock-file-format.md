@@ -80,6 +80,17 @@ The mlld lock file (`mlld.lock.json`) records all module dependencies, security 
         "allowed": ["./", "~/mlld-workspace"],
         "blocked": ["/etc", "/sys", "/proc"]
       }
+    },
+    "registries": {
+      "default": {
+        "url": "https://registry.mlld.ai",
+        "priority": 1
+      },
+      "custom": {
+        "url": "https://custom.example.com",
+        "priority": 2,
+        "patterns": ["@company/*"]
+      }
     }
   }
 }

@@ -1,18 +1,132 @@
-- Error Location 
-- Output manager
+# Todo
 
-- Review security/url implementation 
-- Review error system
-- Review cli 
-- Review syntax highlighting
-- Review website
-- Review docs/
-- Update docs/dev/
+## v0.1 - Core Module System (Simplified)
+
+### Phase 1: Grammar & Parsing
+1. **Grammar Updates** (_dev/workstreams/NOW/01-grammar-ttl-trust.md)
+   - [ ] Add basic TTL syntax: (30m), (1h), (7d), (live), (static) 
+   - [ ] Add frontmatter parsing (YAML at file start)
+   - [ ] Extend module syntax for resolver paths (@namespace/path/to/module)
+   - [ ] Change @stdin to @input throughout
+   - [ ] Generate new AST types
+
+2. **Frontmatter Support** (_dev/workstreams/NOW/07-frontmatter-support.md)
+   - [ ] Add YAML parser dependency
+   - [ ] Parse frontmatter from .mld files
+   - [ ] Make frontmatter available as @fm variable
+   - [ ] Handle frontmatter in imports
+
+### Phase 2: Module System
+3. **Resolver System** (_dev/workstreams/NOW/06-resolver-system.md)
+   - [ ] Define Resolver interface
+   - [ ] Build ResolverManager 
+   - [ ] Create DNS resolver (for @user/module)
+   - [ ] Create local resolver (for @custom/ paths)
+   - [ ] Add resolver configuration to lock files
+
+4. **Hash-Cache Imports** (_dev/workstreams/NOW/03-hash-cache-imports.md)
+   - [ ] Build HashUtils for SHA-256 content addressing
+   - [ ] Create ModuleCache for ~/.mlld/cache storage
+   - [ ] Integrate with resolver system
+   - [ ] Update lock file format for modules
+
+5. **Registry DNS** (_dev/workstreams/NOW/04-registry-gists.md)
+   - [ ] Set up mlld-lang/registry GitHub repo
+   - [ ] Configure DNS for public.mlld.ai
+   - [ ] Support GitHub gists initially
+   - [ ] Create 5-10 example modules
+   - [ ] Write simple publishing guide
+
+### Phase 3: CLI & Integration
+6. **Interpreter Updates** (_dev/workstreams/NOW/08-interpreter-updates.md)
+   - [ ] Reserve module prefixes as keywords
+   - [ ] Implement @input (renamed from @stdin)
+   - [ ] Integrate frontmatter as @fm
+   - [ ] Route imports through resolver system
+   - [ ] Focus on GREAT error messages
+
+7. **CLI Commands** (_dev/workstreams/NOW/05-cli-commands.md)
+   - [ ] Implement `mlld install @user/module`
+   - [ ] Implement `mlld ls` command
+   - [ ] Basic progress indicators
+   - [ ] Clear error messages
+
+## v0.2 - Security & Advanced Features
+
+### Security
+- [ ] Wire up existing SecurityManager
+- [ ] Basic command pattern detection
+- [ ] Path validation
+- [ ] Import approval UI (thoughtful design!)
+- [ ] Add trust levels to grammar
+
+### Advanced Resolvers  
+- [ ] GitHub resolver (private repos)
+- [ ] HTTP resolver
+- [ ] GitLab, Bitbucket, Codeberg support
+
+### CLI Enhancements
+- [ ] `mlld update` command
+- [ ] `mlld rm` command
+- [ ] Resolver management commands
+
+## v0.3 - Future Features
+
+### Output System
+- [ ] Design @output directive
+- [ ] Output resolvers
+- [ ] Multi-output scripts
+
+### Registry Website
+- [ ] Static site generation
+- [ ] Module browsing
+- [ ] Search functionality
+
+## Much Later
+- Advisory system
+- MCP integration
+- Advanced security policies
+
+## Registry
+
+### NEXT Workstreams (After NOW is done):
+
+1. **Registry Static Site** (_dev/workstreams/NEXT/registry-static-site.md)
+   - [ ] Fetch registry data during 11ty build
+   - [ ] Create module browse/search pages
+   - [ ] Generate individual module pages
+   - [ ] Add client-side search with Fuse.js
+   - [ ] Deploy to mlld.ai/registry
+
+2. **Advisory Design** (_dev/workstreams/NEXT/advisory-design.md)
+   - [ ] Define advisory JSON format
+   - [ ] Create submission/review process
+   - [ ] Build CLI audit command
+   - [ ] Design reputation system
+   - [ ] Plan distribution mechanism
+
+3. **MCP Registry** (_dev/workstreams/NEXT/mcp-registry-design.md)
+   - [ ] Extend registry for MCP servers
+   - [ ] Design @mcp directive syntax
+   - [ ] Plan security/permissions model
+   - [ ] Create MCP runner infrastructure
+   - [ ] Define quality standards
+
+## Needs review
+- security/url implementation 
+- error system
+- output manager
+- cli 
+- syntax highlighting
+- website
+- docs/
+- docs/dev/
   - ARCHITECTURE.md
   - TESTS.md
 
-Run with.... what was that!!
+Find the "run with" concept notes .... what was that?!?
 
 @run with {
-  filter: 
+  filter: ...
+  what else was it??
 }

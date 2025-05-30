@@ -7,24 +7,27 @@
 
 ## Objective
 
-Implement CLI commands for module management: install, update, remove, list, and search. Provide an npm-like experience for mlld users.
+Implement CLI commands for module management: install, update, remove, list, and search. Provide an npm-like experience for mlld users. These commands integrate with the resolver system to enable secure module distribution.
 
 ## Command Specifications
 
 ### mlld install
 ```bash
-# Install a module
+# Install a module (shows transitive dependencies for approval)
 mlld install @alice/utils
 
 # Install specific version (by hash)
 mlld install @alice/utils@f8h4
 
-# Install with options
-mlld install @alice/utils --save-dev
-mlld install @alice/utils --global
+# Install with security options
+mlld install @alice/utils --trust verify
+mlld install @alice/utils --ttl 7d
 
 # Install from lock file
 mlld install  # (no args, like npm install)
+
+# Install from custom resolver
+mlld install @company/internal-tools  # Uses company resolver
 ```
 
 ### mlld update  
@@ -149,15 +152,32 @@ export async function installCommand(args: string[], options: InstallOptions) {
     try {
       // Resolve and install
       const resolved = await resolver.resolve(module.name, {
-        version: module.version
+        version: module.version,
+        ttl: options.ttl,
+        trust: options.trust
       });
+      
+      // Show transitive dependencies for approval
+      if (resolved.dependencies && Object.keys(resolved.dependencies).length > 0) {
+        console.log('\nThis module includes the following dependencies:');
+        for (const [dep, hash] of Object.entries(resolved.dependencies)) {
+          console.log(`  ${dep}@${hash.slice(0, 8)}`);
+        }
+        const approved = await confirm('Install all dependencies?');
+        if (!approved) {
+          console.log('Installation cancelled.');
+          return;
+        }
+      }
       
       // Update lock file
       await lockFile.addModule(module.name, {
         resolved: resolved.hash,
         integrity: resolved.integrity,
         source: resolved.source,
-        fetchedAt: new Date().toISOString()
+        fetchedAt: new Date().toISOString(),
+        resolver: resolved.resolver,
+        dependencies: resolved.dependencies
       });
       
       console.log(`✓ Installed ${module.name}@${resolved.hash.slice(0, 8)}`);
@@ -326,6 +346,14 @@ class ModuleNotFoundError extends MlldError {
     this.hint = 'Try searching with: mlld search ' + moduleName.split('/')[1];
   }
 }
+
+class SecurityWarning extends MlldError {
+  constructor(pattern: string, risk: string) {
+    super(`Security Warning: ${pattern} detected`);
+    this.hint = `This module contains ${risk}. Review carefully before proceeding.`;
+    // Note: We warn but don't block - user decides
+  }
+}
 ```
 
 ## Lock File Integration
@@ -334,6 +362,27 @@ class ModuleNotFoundError extends MlldError {
 ```json
 {
   "version": 1,
+  "registries": [
+    {
+      "prefix": "@company/",
+      "resolver": "local",
+      "type": "input",
+      "config": {
+        "path": "/company/modules"
+      }
+    }
+  ],
+  "security": {
+    "policy": {
+      "resolvers": {
+        "allowCustom": false,
+        "pathOnlyMode": false
+      },
+      "imports": {
+        "maxDepth": 3
+      }
+    }
+  },
   "modules": {
     "@alice/utils": {
       "resolved": "f8h4a9c2b5e1d7f3a8b2c9d5e2f7a1b4c8d9e3f5",
@@ -341,10 +390,13 @@ class ModuleNotFoundError extends MlldError {
       "source": "https://gist.githubusercontent.com/...",
       "fetchedAt": "2024-01-15T10:30:00Z",
       "ttl": "7d",
-      "trust": "verify"
+      "trust": "verify",
+      "resolver": "dns-public",
+      "dependencies": {
+        "@bob/helpers": "a8c3f2d4e5b6c7d8e9f0a1b2c3d4e5f6"
+      }
     }
   },
-  "devModules": {},
   "metadata": {
     "mlldVersion": "0.5.0",
     "createdAt": "2024-01-15T10:00:00Z",
@@ -399,6 +451,9 @@ class ModuleNotFoundError extends MlldError {
 - [ ] Lock file stays consistent
 - [ ] Good progress feedback
 - [ ] Intuitive command structure
+- [ ] Transitive dependency approval flow
+- [ ] Resolver configuration respected
+- [ ] Security policies enforced
 
 ## Future Enhancements
 
@@ -409,6 +464,9 @@ class ModuleNotFoundError extends MlldError {
 - Module scripts/hooks
 - Workspace support
 - Audit command for security
+- Path-only mode enforcement
+- Custom resolver management
+- `@output` directive support
 
 ## Notes
 
@@ -417,6 +475,9 @@ class ModuleNotFoundError extends MlldError {
 - Always update lock file atomically
 - Consider Windows path differences
 - Support both long and short command forms
+- Security warnings are informative, not blocking
+- Show users what mlld is doing (transparency)
+- Resolvers are the security boundary, not the CLI
 
 ## Related Documentation
 

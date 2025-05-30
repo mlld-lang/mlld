@@ -1,7 +1,7 @@
 # TTL and Trust Syntax Specification
 
-Version: 1.0  
-Last Updated: 2025-05-29
+Version: 1.1  
+Last Updated: 2025-05-30
 
 ## Overview
 
@@ -11,12 +11,12 @@ TTL (Time To Live) and Trust options provide inline control over caching and sec
 
 ### Basic Structure
 ```mlld
-directive source (ttl) <trust level>
+directive source (ttl) trust level
 ```
 
 Both options are optional and can be used independently or together:
 - `(ttl)` - Controls cache behavior
-- `<trust level>` - Controls security verification
+- `trust level` - Controls security verification (no angle brackets)
 
 ## TTL (Time To Live)
 
@@ -71,58 +71,58 @@ Trust levels control security verification and approval requirements.
 
 ### Syntax
 ```mlld
-<trust level>
+trust level
 ```
 
 ### Trust Levels
 | Level | Behavior | Use Case |
 |-------|----------|----------|
-| `<trust always>` | Skip all security checks | Trusted internal code |
-| `<trust verify>` | Prompt for approval (default) | Unknown sources |
-| `<trust never>` | Block execution/import | Known dangerous code |
+| `trust always` | Skip all security checks | Trusted internal code |
+| `trust verify` | Prompt for approval (default) | Unknown sources |
+| `trust never` | Block execution/import | Known dangerous code |
 
 ### Examples
 ```mlld
 # Always trust internal tools
-@import { deploy } from @company/tools <trust always>
+@import { deploy } from @company/tools trust always
 
 # Verify external modules (default)
-@import { parse } from @community/parser <trust verify>
+@import { parse } from @community/parser trust verify
 
 # Block dangerous operations
-@exec cleanup() = @run [rm -rf /] <trust never>
+@exec cleanup() = @run [rm -rf /] trust never
 
 # Trust specific commands
-@run [npm test] <trust always>
+@run [npm test] trust always
 ```
 
 ### Default Trust Levels
-- Local files: `<trust always>`
-- Registry modules: `<trust verify>`
-- URLs: `<trust verify>`
-- Commands: `<trust verify>`
+- Local files: `trust always`
+- Registry modules: `trust verify`
+- URLs: `trust verify`
+- Commands: `trust verify`
 
 ## Combined Usage
 
 ### Syntax Order
 TTL always comes before trust level:
 ```mlld
-directive source (ttl) <trust level>
+directive source (ttl) trust level
 ```
 
 ### Examples
 ```mlld
 # API with cache and verification
-@import { api } from @external/service (1h) <trust verify>
+@import { api } from @external/service (1h) trust verify
 
 # Live data, always trusted
-@text status = @url "https://internal.company.com/status" (live) <trust always>
+@text status = @url "https://internal.company.com/status" (live) trust always
 
 # Cached but needs verification
-@import { toolkit } from @tools/cli (7d) <trust verify>
+@import { toolkit } from @tools/cli (7d) trust verify
 
 # Never cache, never trust
-@path config = @url "https://sketchy.site/config" (live) <trust never>
+@path config = @url "https://sketchy.site/config" (live) trust never
 ```
 
 ## Whitespace Rules
@@ -130,23 +130,23 @@ directive source (ttl) <trust level>
 ### Flexible Spacing
 All of these are valid:
 ```mlld
-@import{x}from@alice/utils(1h)<trust always>  # Minimal
-@import { x } from @alice/utils (1h) <trust always>  # Normal
-@import { x } from @alice/utils (1h)   <trust always>  # Extra space
+@import{x}from@alice/utils(1h)trust always  # Minimal
+@import { x } from @alice/utils (1h) trust always  # Normal
+@import { x } from @alice/utils (1h)   trust always  # Extra space
 @import { x } from @alice/utils
   (1h) 
-  <trust always>  # Multiline
+  trust always  # Multiline
 ```
 
 ### Not Allowed
 ```mlld
 # Wrong order
-@import { x } from @alice/utils <trust always> (1h)  # ❌
+@import { x } from @alice/utils trust always (1h)  # ❌
 
 # Invalid unit
 @import { x } from @alice/utils (30minutes)  # ❌
 
-# Missing brackets/angles
+# Missing parentheses for TTL
 @import { x } from @alice/utils 1h trust always  # ❌
 ```
 
@@ -154,32 +154,32 @@ All of these are valid:
 
 ### Import Directive
 ```mlld
-@import { name } from source (ttl) <trust>
+@import { name } from source (ttl) trust
 ```
-Applies to: modules, files, URLs, stdin
+Applies to: modules, files, URLs, stdin, @input
 
 ### Text Directive (URL/Path RHS)
 ```mlld
-@text content = @url "https://..." (ttl) <trust>
-@text data = @path [./file] (ttl) <trust>  
+@text content = @url "https://..." (ttl) trust
+@text data = @path [./file] (ttl) trust  
 ```
 
 ### Path Directive
 ```mlld
-@path file = [./data.json] (ttl) <trust>
-@path remote = @url "https://..." (ttl) <trust>
+@path file = [./data.json] (ttl) trust
+@path remote = @url "https://..." (ttl) trust
 ```
 
 ### Add Directive (URL/Path sources)
 ```mlld
-@add @url "https://..." (ttl) <trust>
-@add @path [./template.mld] (ttl) <trust>
+@add @url "https://..." (ttl) trust
+@add @path [./template.mld] (ttl) trust
 ```
 
 ### Run/Exec Directives (Trust only)
 ```mlld
-@run [command] <trust>
-@exec cmd() = @run [command] <trust>
+@run [command] trust
+@exec cmd() = @run [command] trust
 ```
 Note: Commands don't have TTL (not cached)
 
@@ -198,7 +198,7 @@ More specific contexts can optimize caching.
 ```
 Global Block > Project Block > Inline > Default
      ↓             ↓            ↓         ↓
-  <never>       <never>      <verify>  <verify>
+   never         never       verify    verify
 ```
 
 Security restrictions cannot be overridden.
@@ -230,14 +230,14 @@ Error: Invalid TTL value: (30min)
 
 ### Invalid Trust  
 ```
-Error: Invalid trust level: <trust sometimes>
+Error: Invalid trust level: trust sometimes
        Valid levels are: always, verify, never
 ```
 
 ### Security Block
 ```
 Error: Operation blocked by trust policy
-  @import { dangerous } from @hack/tools <trust never>
+  @import { dangerous } from @hack/tools trust never
   
 This has been explicitly marked as untrusted.
 ```
@@ -251,9 +251,9 @@ This has been explicitly marked as untrusted.
 - `(static)` - Your own code, immutable data
 
 ### Trust Guidelines  
-- `<trust always>` - Your code, company internal
-- `<trust verify>` - Community modules, new sources
-- `<trust never>` - Known bad, learning examples
+- `trust always` - Your code, company internal
+- `trust verify` - Community modules, new sources
+- `trust never` - Known bad, learning examples
 
 ### Performance vs Security
 - TTL affects performance (cache vs fresh)
@@ -264,6 +264,6 @@ This has been explicitly marked as untrusted.
 ## Future Extensions
 
 - Conditional TTL: `(live if production else 1h)`
-- Trust with expiry: `<trust always until 2024-12-31>`
-- Trust delegation: `<trust as @alice>`
+- Trust with expiry: `trust always until 2024-12-31`
+- Trust delegation: `trust as @alice`
 - Cache warming: `(1h, prefetch)``
