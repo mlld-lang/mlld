@@ -1,7 +1,7 @@
 {
   "name": "mlld",
   "version": "1.0.0-rc",
-  "description": "Mlld: A template language for LLM prompts",
+  "description": "mlld: a modular prompt scripting language",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
@@ -19,7 +19,7 @@
     }
   },
   "bin": {
-    "mlld": "./bin/mlld-wrapper.cjs"
+    "mlld": "bin/mlld-wrapper.cjs"
   },
   "files": [
     "dist/",

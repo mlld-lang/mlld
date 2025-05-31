@@ -1,7 +1,3 @@
-**NOTE:** If you're looking for [the old 'mlld' package for aspect oriented programming](https://www.npmjs.com/package/mlld/v/1.3.2), you'll want to pin your version to `<2.0.0`
-
----
-
 # mlld (pre-release)
 
 mlld is a prompt scripting language.
@@ -50,24 +46,24 @@ Mlld has a fairly extensive js API which give access to its AST, interpreted var
 
 ```javascript
 // ES Module import
-import runMlld from 'mlld';
+import { processMlld } from 'mlld';
 
 // Process mlld content
 const mlldContent = `
   @text greeting = "Hello"
   @text name = "World"
   
-  @embed [[{{greeting}}, {{name}}!]]
+  @add [[{{greeting}}, {{name}}!]]
 `;
 
 // Simple usage
-const result = await runMlld(mlldContent);
+const result = await processMlld(mlldContent);
 console.log(result); // "Hello, World!"
 
 // With options
-const xmlResult = await runMlld(mlldContent, {
+const xmlResult = await processMlld(mlldContent, {
   format: 'xml',
-  transformation: true
+  basePath: '/path/to/project'
 });
 ```
 
@@ -80,12 +76,12 @@ Mlld is a simple scripting language designed to work within markdown-like docume
 ```mlld
 @text name = "value"              # Define a text variable
 @data config = { "key": "value" } # Define a structured data variable
-@path docs = "$PROJECTPATH/docs"  # Define a path (must use $PROJECTPATH or $HOMEPATH)
-@embed [file.md]                  # Embed content from another file
-@embed [file.md # section]        # Embed specific section from file
+@path docs = [file.md]            # Define a path reference
+@add [file.md]                    # Add content from another file
+@add "# Section" from [file.md]   # Add specific section from file
 @run [command]                    # Run a shell command
-@import [file.mld]               # Import another mlld file
-@define cmd = @run [echo "hi"]    # Define a reusable command
+@import { * } from [file.mld]     # Import another mlld file
+@exec cmd = @run [echo "hi"]      # Define a reusable command
 ```
 
 ### Variables & Interpolation
@@ -93,13 +89,18 @@ Mlld is a simple scripting language designed to work within markdown-like docume
 Must be inside an @ directive to be interpolated
 
 ```mlld
-{{variable}}            # Reference a variable
-{{datavar.field}}       # Access data field
-$pathvar                # Reference a path variable
+>> In directive contexts:
+@variable               << Reference a variable in directives
+@datavar.field          << Access data field in directives
+@pathvar                << Reference a path variable in directives
 
-# Variables can be used in strings and commands:
-@text greeting = "Hello {{name}}!"
-@run [cat {{file}}]
+>> In template contexts:
+{{variable}}            << Reference a variable in templates
+{{datavar.field}}       << Access data field in templates
+
+>> Variables can be used in templates and commands:
+@text greeting = [[Hello {{name}}!]]
+@run [cat @file]
 ```
 
 ### Comments & Code Fences
@@ -108,7 +109,7 @@ $pathvar                # Reference a path variable
 >> This is a comment
 >> Comments must start at line beginning
 
-# Code fences preserve content exactly:
+>> Code fences preserve content exactly:
 ```python
 def hello():
     print("Hi")  # @text directives here are preserved as-is
@@ -122,22 +123,23 @@ def hello():
 - Use backticks for template strings with variables:
 ```mlld
 @text simple = "Hello"
-@text template = `Hello {{name}}!`
-@text multiline = [[`
+@text template = [[Hello {{name}}!]]
+@text multiline = [[
   Multi-line
   template with {{vars}}
-`]]
+]]
 ```
 
 ### Path Variables
 
-- Must use `$PROJECTPATH` (or `$.`) or `$HOMEPATH` (or `$~`)
-- Forward slashes as separators
+- Reference files and URLs using brackets
+- Support both local files and remote URLs
 ```mlld
-@path docs = "$PROJECTPATH/docs"
-@path home = "$HOMEPATH/mlld"
-# Example Usage:
-@embed [$docs/some_file.txt] 
+@path docs = [./docs/api.md]
+@path remote = [https://example.com/config.json]
+>> Example Usage:
+@add @docs
+@add [./some_file.txt] 
 ```
 
 ### Data Variables
@@ -146,7 +148,80 @@ def hello():
 - Support field access
 ```mlld
 @data user = { "name": "Alice", "id": 123 }
-@text name = "User: {{user.name}}"
+@text name = [[User: {{user.name}}]]
+```
+
+## Module System & Registry
+
+Mlld has a decentralized module system that enables sharing and reusing code across projects.
+
+### Public Modules
+
+Share modules publicly via the mlld registry:
+
+```mlld
+>> Import from public registry (DNS-based, no servers)
+@import { format, parse } from @alice/strings
+@import { * } from @company/templates
+
+>> Modules are cached locally and content-addressed for security
+>> Lock files ensure reproducible builds
+```
+
+Public modules are published as GitHub gists and discovered via DNS TXT records. No central servers required.
+
+### Private Modules & Custom Resolvers
+
+Configure resolvers for private or corporate modules:
+
+```mlld
+>> Local filesystem modules
+@import { utils } from @notes/helpers
+
+>> Private GitHub repositories  
+@import { internal } from @company/tools
+
+>> Custom HTTP endpoints
+@import { api } from @corporate/modules
+```
+
+Configure resolvers in your lock file:
+```json
+{
+  "registries": [
+    {
+      "prefix": "@notes/",
+      "resolver": "local",
+      "config": { "path": "~/Documents/Notes" }
+    },
+    {
+      "prefix": "@company/", 
+      "resolver": "github",
+      "config": {
+        "owner": "company",
+        "repo": "mlld-modules",
+        "token": "${GITHUB_TOKEN}"
+      }
+    }
+  ]
+}
+```
+
+### Security & Caching
+
+- **Content Addressing**: All modules identified by SHA-256 hash
+- **Progressive Trust**: Interactive approval for new modules  
+- **Offline-First**: Everything cached locally for reliability
+- **TTL Control**: Configure cache refresh intervals
+
+```mlld
+>> Security options
+@import { trusted } from @company/utils trust always
+@import { external } from @community/parser trust verify
+
+>> Cache control  
+@import { live } from @api/data (30m) << Refresh every 30 minutes
+@import { stable } from @alice/lib (static) << Never refresh
 ```
 
 ## License

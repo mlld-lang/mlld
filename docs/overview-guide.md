@@ -315,15 +315,18 @@ Verify rate limits
 
 This structured documentation becomes perfectly parseable XML that LLMs can navigate and query effectively.
 
-## URL Support for Remote Content
+## Module System: Public Registry & Private Resolvers
 
-Meld can fetch content from URLs, enabling distributed prompt libraries and real-time data integration:
+Meld has a decentralized module system supporting both public sharing and private/corporate modules.
 
-### Importing Remote Modules
+### Public Module Registry
+
+Import modules from the public registry using `@user/module` syntax:
 
 ```meld
-@import { * } from "https://example.com/prompts/standard-roles.mld"
-@import { coding_standards } from "https://example.com/docs/standards.mld"
+@import { senior_reviewer, code_analyst } from @prompts/roles
+@import { coding_standards } from @company/standards
+@import { pr_template } from @templates/github
 
 @text current_pr = @run [gh pr view --json body -q .body]
 
@@ -336,6 +339,87 @@ Our coding standards:
 Please review this PR:
 {{current_pr}}
 ]]
+```
+
+**How it works:**
+- DNS TXT records map `@user/module` to GitHub gists
+- Content is cached locally and identified by SHA-256 hash
+- No central servers - fully decentralized
+- Lock files ensure reproducible builds
+
+### Private Module Resolvers
+
+Configure custom resolvers for private or corporate modules in your lock file:
+
+```json
+{
+  "registries": [
+    {
+      "prefix": "@notes/",
+      "resolver": "local",
+      "config": { "path": "~/Documents/Notes" }
+    },
+    {
+      "prefix": "@company/", 
+      "resolver": "github",
+      "config": {
+        "owner": "company",
+        "repo": "mlld-modules",
+        "token": "${GITHUB_TOKEN}"
+      }
+    },
+    {
+      "prefix": "@api/",
+      "resolver": "http", 
+      "config": {
+        "baseUrl": "https://internal.company.com/modules",
+        "headers": { "Authorization": "Bearer ${API_TOKEN}" }
+      }
+    }
+  ]
+}
+```
+
+Then import from your configured namespaces:
+
+```meld
+>> Local filesystem modules
+@import { daily_standup } from @notes/meetings
+@import { project_context } from @notes/projects/current
+
+>> Private GitHub repository
+@import { internal_apis } from @company/documentation
+@import { security_checklist } from @company/compliance
+
+>> Custom HTTP endpoint
+@import { live_data } from @api/dashboard
+```
+
+### Security & Trust
+
+Control security with trust levels and TTL:
+
+```meld
+>> Always trust company modules
+@import { deploy } from @company/tools trust always
+
+>> Verify external modules on first use
+@import { parser } from @community/utils trust verify
+
+>> Refresh live data every 30 minutes
+@import { metrics } from @api/monitoring (30m) trust always
+
+>> Never trust certain sources
+@import { example } from @untrusted/demo trust never
+```
+
+### Direct URL Support
+
+Still support direct URL imports when needed:
+
+```meld
+@import { * } from "https://example.com/prompts/standard-roles.mld"
+@import { coding_standards } from "https://example.com/docs/standards.mld"
 ```
 
 ### Fetching Documentation
