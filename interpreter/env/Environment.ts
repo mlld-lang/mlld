@@ -14,7 +14,8 @@ import { RegistryManager, ModuleCache, LockFile } from '@core/registry';
 import { URLCache } from '../cache/URLCache';
 import { 
   ResolverManager, 
-  DNSResolver, 
+  DNSResolver,
+  RegistryResolver,
   LocalResolver, 
   GitHubResolver, 
   HTTPResolver,
@@ -153,6 +154,8 @@ export class Environment {
         );
         
         // Register built-in resolvers
+        // RegistryResolver should be first to be the primary resolver for @user/module patterns
+        this.resolverManager.registerResolver(new RegistryResolver());
         this.resolverManager.registerResolver(new DNSResolver());
         this.resolverManager.registerResolver(new LocalResolver(this.fileSystem));
         this.resolverManager.registerResolver(new GitHubResolver());

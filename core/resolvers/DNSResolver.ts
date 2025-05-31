@@ -130,23 +130,41 @@ export class DNSResolver implements Resolver {
 
   /**
    * Perform actual DNS TXT lookup
-   * In production, this would use node:dns or a DNS library
-   * For now, we'll simulate it with a fetch to a DNS API
    */
   private async performDNSLookup(dnsName: string): Promise<string> {
-    // In a real implementation, we would use node:dns.resolveTxt
-    // For now, simulate with a hypothetical DNS API
-    // This is a placeholder that should be replaced with actual DNS lookup
-    
-    // Example using node:dns (would need to be imported):
-    // const dns = require('dns').promises;
-    // const records = await dns.resolveTxt(dnsName);
-    // return records.flat().join('');
-
-    // For now, throw an error indicating this needs implementation
-    throw new Error(
-      'DNS lookup not yet implemented. ' +
-      'In production, this would query TXT records for ' + dnsName
-    );
+    try {
+      // Use Node.js built-in DNS resolver
+      const dns = await import('dns/promises');
+      const records = await dns.resolveTxt(dnsName);
+      
+      // TXT records are returned as arrays of arrays of strings
+      // We need to find the mlld record and parse it
+      for (const record of records) {
+        const txtValue = record.join('');
+        
+        // Look for mlld format: "v=mlld1;url=..."
+        if (txtValue.startsWith('v=mlld1;')) {
+          const urlMatch = txtValue.match(/url=([^;]+)/);
+          if (urlMatch) {
+            const url = urlMatch[1];
+            
+            // Fetch the content from the URL
+            const response = await fetch(url);
+            if (!response.ok) {
+              throw new Error(`Failed to fetch module content: ${response.status} ${response.statusText}`);
+            }
+            
+            return response.text();
+          }
+        }
+      }
+      
+      throw new Error(`No valid mlld record found in TXT records for ${dnsName}`);
+    } catch (error) {
+      if (error.code === 'ENOTFOUND' || error.code === 'ENODATA') {
+        throw new Error(`No DNS TXT record found for ${dnsName}`);
+      }
+      throw error;
+    }
   }
 }
