@@ -1,6 +1,6 @@
 # mlld (pre-release)
 
-mlld is a prompt scripting language.
+mlld is a modular prompt scripting language.
 
 ## Installation
 
@@ -42,7 +42,7 @@ mlld input.mld --stdout
 
 ## JavaScript API
 
-Mlld has a fairly extensive js API which give access to its AST, interpreted variables, etc., but it's not documented yet. However, here's mlld's simple API for processing content directly:
+Here's mlld's simple API for processing content directly in JS:
 
 ```javascript
 // ES Module import
@@ -105,16 +105,17 @@ Must be inside an @ directive to be interpolated
 
 ### Comments & Code Fences
 
-```mlld
+````mlld
 >> This is a comment
->> Comments must start at line beginning
+>> Comments work at line beginnings
+@add [file.md] << They can also be added at line endings
 
 >> Code fences preserve content exactly:
 ```python
 def hello():
     print("Hi")  # @text directives here are preserved as-is
 ```
-```
+````
 
 ### String Values
 
