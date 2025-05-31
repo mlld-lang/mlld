@@ -4,7 +4,7 @@
 // Primary @text directive
 AtText
   // Literal string assignment with security options
-  = DirectiveContext "@text" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ "\"" content:$([^"]*) "\"" {
+  = DirectiveContext "@text" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ content:StringLiteral {
       const securityOptions = security ? security[0] : null;
       helpers.debug('AtText matched literal string', { id, content, securityOptions });
       

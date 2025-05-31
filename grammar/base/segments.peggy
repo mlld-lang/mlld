@@ -15,7 +15,7 @@ escape sequences based on its intended usage.
 
 // Universal escape sequence - returns the literal character
 EscapeSequence "Escape sequence"
-  = "\\" char:("@" / "\\" / "[" / "]" / "{" / "}") {
+  = "\\" char:("@" / "\\" / "[" / "]" / "{" / "}" / '"' / "'" / "`") {
       return char === "\\" ? "\\" : char;
     }
 

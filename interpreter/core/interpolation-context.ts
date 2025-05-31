@@ -88,13 +88,14 @@ class ShellCommandEscapingStrategy implements EscapingStrategy {
   escape(value: string): string {
     if (!value) return '';
     
-    // Escape characters that have special meaning in double-quoted strings
-    // This assumes the value will be used within double quotes in the shell command
-    // We need to escape: \ $ ` " 
-    // Note: newlines work fine in double quotes, no need to escape them
+    // For shell commands, we need to handle the fact that the value
+    // will be used within double quotes in the shell command.
+    // The strategy is to escape characters that have special meaning 
+    // in double-quoted strings: \ $ ` "
     
+    // Important: We must escape backslashes first to avoid double-escaping
     let escaped = value
-      .replace(/\\/g, '\\\\')  // Backslash must be escaped first
+      .replace(/\\/g, '\\\\')  // Escape backslashes first
       .replace(/"/g, '\\"')    // Escape double quotes
       .replace(/\$/g, '\\$')   // Escape dollar signs
       .replace(/`/g, '\\`');   // Escape backticks
