@@ -14,6 +14,11 @@ export class ImmutableCache {
    * Get cached content by URL and hash
    */
   async get(url: string, expectedHash?: string): Promise<string | null> {
+    // In test mode, always return cache miss
+    if (process.env.MLLD_TEST === '1') {
+      return null;
+    }
+    
     const urlHash = this.hashUrl(url);
     const cachePath = path.join(this.cacheDir, urlHash);
     
@@ -50,6 +55,11 @@ export class ImmutableCache {
    * Store content in cache
    */
   async set(url: string, content: string): Promise<string> {
+    // In test mode, skip caching
+    if (process.env.MLLD_TEST === '1') {
+      return createHash('sha256').update(content, 'utf8').digest('hex');
+    }
+    
     // Ensure cache directory exists
     await fs.mkdir(this.cacheDir, { recursive: true });
     

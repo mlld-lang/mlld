@@ -191,7 +191,7 @@ PackageName
 
 // Special command patterns
 SpecialCommand
-  = lang:PythonCommand _ "-m" _ mod:ModuleName {
+  = lang:PythonCommand _ "-m" _ mod:CommandModuleName {
       const command = lang + " -m";
       return {
         type: 'commandBase',
@@ -232,7 +232,7 @@ PythonCommand
   = "python" / "python3" / "python2"
 
 // Module name (allows dots)
-ModuleName
+CommandModuleName
   = $([a-zA-Z_][a-zA-Z0-9_]* ("." [a-zA-Z_][a-zA-Z0-9_]*)*)
 
 // Shell commands that support inline execution

@@ -11,7 +11,8 @@ export const NodeType = {
     SectionMarker: 'SectionMarker',
     Error: 'Error',
     Newline: 'Newline',
-    StringLiteral: 'StringLiteral', // Added missing type
+    StringLiteral: 'StringLiteral',
+    Frontmatter: 'Frontmatter',
 };
 export const DirectiveKind = {
     run: 'run',
@@ -21,6 +22,7 @@ export const DirectiveKind = {
     data: 'data',
     path: 'path',
     import: 'import',
+    output: 'output',
 };
 export const helpers = {
     debug(msg, ...args) {
@@ -212,10 +214,10 @@ export const helpers = {
         return this.createNode(NodeType.VariableReference, { valueType, ...data });
     },
     normalizePathVar(id) {
-        if (id === '~')
-            return 'HOMEPATH';
         if (id === '.')
             return 'PROJECTPATH';
+        if (id === 'TIME')
+            return 'TIME';
         return id;
     },
     validateRunContent: () => true,
@@ -360,5 +362,44 @@ export const helpers = {
             hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
             hasSection
         };
+    },
+    ttlToSeconds(value, unit) {
+        const multipliers = {
+            'seconds': 1,
+            'minutes': 60,
+            'hours': 3600,
+            'days': 86400,
+            'weeks': 604800
+        };
+        return value * (multipliers[unit] || 1);
+    },
+    createSecurityMeta(options) {
+        if (!options)
+            return {};
+        const meta = {};
+        if (options.ttl) {
+            meta.ttl = options.ttl;
+        }
+        if (options.trust) {
+            meta.trust = options.trust;
+        }
+        return meta;
+    },
+    detectFormatFromPath(path) {
+        const ext = path.match(/\.([a-zA-Z0-9]+)$/)?.[1]?.toLowerCase();
+        if (!ext)
+            return null;
+        const formatMap = {
+            'json': 'json',
+            'xml': 'xml',
+            'yaml': 'yaml',
+            'yml': 'yaml',
+            'csv': 'csv',
+            'md': 'markdown',
+            'markdown': 'markdown',
+            'txt': 'text',
+            'text': 'text'
+        };
+        return formatMap[ext] || null;
     },
 };

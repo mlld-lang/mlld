@@ -48,6 +48,17 @@ function normalizeNodeIds(obj, idCounter = { value: 1 }) {
       if (key === 'nodeId' && typeof value === 'string') {
         // Replace UUID with predictable ID
         normalized[key] = `node-${idCounter.value++}`;
+      } else if (key === 'value' && typeof value === 'string' && value.includes('"nodeId"')) {
+        // Special handling for raw.value fields that contain stringified JSON with nodeIds
+        try {
+          // Parse the JSON, normalize it, and re-stringify
+          const parsed = JSON.parse(value);
+          const normalizedParsed = normalizeNodeIds(parsed, idCounter);
+          normalized[key] = JSON.stringify(normalizedParsed, null, 2);
+        } catch (e) {
+          // If parsing fails, just keep the original value
+          normalized[key] = value;
+        }
       } else {
         normalized[key] = normalizeNodeIds(value, idCounter);
       }

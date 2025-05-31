@@ -3,8 +3,37 @@
 
 // Primary @text directive
 AtText
+  // Literal string assignment with security options
+  = DirectiveContext "@text" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ "\"" content:$([^"]*) "\"" {
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtText matched literal string', { id, content, securityOptions });
+      
+      const subtype = 'textAssignment';
+      const sourceType = 'literal';
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          content: [helpers.createNode(NodeType.Text, { content, location: location() })]
+        },
+        {
+          identifier: id,
+          content
+        },
+        {
+          sourceType,
+          hasVariables: false,
+          isTemplateContent: false,
+          ...helpers.createSecurityMeta(securityOptions)
+        },
+        location(),
+        sourceType
+      );
+    }
   // Bracketed path with section: [path/to/file.md # Section] - must come first for precedence
-  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ section:BracketedPathSection rename:AsNewTitle? {
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ section:BracketedPathSection rename:AsNewTitle? {
       helpers.debug('AtText matched bracketed path section', { id, section, rename });
       
       const subtype = 'textPathSection';
@@ -282,8 +311,8 @@ AtText
       );
     }
   // @add directive reference - for backward compatibility
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ path:PathExpression {
-      helpers.debug('AtText matched @add with path', { id, path });
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? {
+      helpers.debug('AtText matched @add with path', { id, path, security });
       
       const subtype = 'textPath';
       const sourceType = 'directive';
@@ -296,7 +325,8 @@ AtText
         sourceType: sourceType,
         directive: 'add',
         hasVariables: hasVariables,
-        pathSubtype: path.subtype // Preserve the specific path type
+        pathSubtype: path.subtype, // Preserve the specific path type
+        ...helpers.createSecurityMeta(security)
       };
       
       return helpers.createStructuredDirective(

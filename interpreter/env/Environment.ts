@@ -9,6 +9,18 @@ import { ImmutableCache } from '@core/security/ImmutableCache';
 import { GistTransformer } from '@core/security/GistTransformer';
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
+import { SecurityManager } from '@security';
+import { RegistryManager, ModuleCache, LockFile } from '@core/registry';
+import { URLCache } from '../cache/URLCache';
+import { 
+  ResolverManager, 
+  DNSResolver, 
+  LocalResolver, 
+  GitHubResolver, 
+  HTTPResolver,
+  convertLockFileToResolverConfigs
+} from '@core/resolvers';
+import { logger } from '@core/utils/logger';
 
 interface CommandExecutionOptions {
   showProgress?: boolean;
@@ -48,6 +60,12 @@ export class Environment {
   private importApproval?: ImportApproval;
   private immutableCache?: ImmutableCache;
   private currentFilePath?: string; // Track current file being processed
+  private securityManager?: SecurityManager; // Central security coordinator
+  private registryManager?: RegistryManager; // Registry for mlld:// URLs
+  private stdinContent?: string; // Cached stdin content
+  private resolverManager?: ResolverManager; // New resolver system
+  private urlCacheManager?: URLCache; // URL cache manager
+  private reservedNames: Set<string> = new Set(['INPUT', 'TIME', 'PROJECTPATH']); // Reserved variable names
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
@@ -76,11 +94,155 @@ export class Environment {
   ) {
     this.parent = parent;
     
+    // Inherit reserved names from parent environment
+    if (parent) {
+      this.reservedNames = new Set(parent.reservedNames);
+    }
+    
     // Initialize security components for root environment only
     if (!parent) {
+      try {
+        this.securityManager = SecurityManager.getInstance(basePath);
+      } catch (error) {
+        // If security manager fails to initialize, continue with legacy components
+        console.warn('SecurityManager not available, using legacy security components');
+      }
+      
+      // Initialize registry manager
+      try {
+        this.registryManager = new RegistryManager(basePath);
+      } catch (error) {
+        console.warn('RegistryManager not available:', error);
+      }
+      
+      // Initialize module cache and lock file
+      let moduleCache: ModuleCache | undefined;
+      let lockFile: LockFile | undefined;
+      
+      try {
+        moduleCache = new ModuleCache();
+        // Try to load lock file from project root
+        const lockFilePath = path.join(basePath, 'mlld.lock.json');
+        lockFile = new LockFile(lockFilePath);
+        
+        // Initialize URL cache manager with a simple cache adapter and lock file
+        if (moduleCache && lockFile) {
+          // Create a cache adapter that URLCache can use
+          const cacheAdapter = {
+            async set(content: string, metadata: any): Promise<string> {
+              const entry = await moduleCache!.store(content, metadata.source);
+              return entry.hash;
+            },
+            async get(hash: string): Promise<string | null> {
+              const result = await moduleCache!.get(hash);
+              return result ? result.content : null;
+            }
+          };
+          this.urlCacheManager = new URLCache(cacheAdapter as any, lockFile);
+        }
+      } catch (error) {
+        console.warn('Failed to initialize cache/lock file:', error);
+      }
+      
+      // Initialize resolver manager
+      try {
+        this.resolverManager = new ResolverManager(
+          undefined, // Use default security policy
+          moduleCache,
+          lockFile
+        );
+        
+        // Register built-in resolvers
+        this.resolverManager.registerResolver(new DNSResolver());
+        this.resolverManager.registerResolver(new LocalResolver(this.fileSystem));
+        this.resolverManager.registerResolver(new GitHubResolver());
+        this.resolverManager.registerResolver(new HTTPResolver());
+        
+        // Load resolver configs from lock file if available
+        if (lockFile) {
+          const registries = lockFile.getRegistries();
+          if (Object.keys(registries).length > 0) {
+            const configs = convertLockFileToResolverConfigs(registries);
+            this.resolverManager.configureRegistries(configs);
+          }
+        }
+      } catch (error) {
+        console.warn('ResolverManager initialization failed:', error);
+      }
+      
+      // Keep legacy components for backward compatibility
       this.importApproval = new ImportApproval(basePath);
       this.immutableCache = new ImmutableCache(basePath);
+      
+      // Initialize reserved variables
+      this.initializeReservedVariables();
+      
+      // Reserve module prefixes from resolver configuration
+      this.reserveModulePrefixes();
     }
+  }
+  
+  /**
+   * Reserve module prefixes from resolver configuration
+   * This prevents variables from using names that conflict with module prefixes
+   */
+  private reserveModulePrefixes(): void {
+    if (!this.resolverManager) {
+      return;
+    }
+    
+    // Get configured registries from resolver manager
+    const registries = this.resolverManager.getRegistries();
+    
+    for (const registry of registries) {
+      // Extract the name from prefix (e.g., "@work/" -> "work")
+      const match = registry.prefix.match(/^@(\w+)\//);
+      if (match) {
+        const prefixName = match[1];
+        this.reservedNames.add(prefixName);
+        logger.debug(`Reserved module prefix name: ${prefixName}`);
+      }
+    }
+  }
+  
+  /**
+   * Initialize reserved variables (INPUT, TIME, etc.)
+   * Only called for root environment (non-child)
+   */
+  private initializeReservedVariables(): void {
+    // Initialize @INPUT from stdin content if available
+    if (this.stdinContent) {
+      const inputVar: MlldVariable = {
+        type: 'text',
+        value: this.stdinContent,
+        nodeId: '',
+        location: { line: 0, column: 0 },
+        metadata: {
+          isReserved: true,
+          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        }
+      };
+      this.setVariable('INPUT', inputVar);
+      // Note: lowercase 'input' is handled in getVariable() to avoid conflicts
+    }
+    
+    // Initialize @TIME with current timestamp
+    // Allow mocking for tests via MLLD_MOCK_TIME environment variable
+    const mockTime = process.env.MLLD_MOCK_TIME;
+    const timeValue = mockTime || new Date().toISOString(); // RFC 3339 format
+    
+    const timeVar: MlldVariable = {
+      type: 'text',
+      value: timeValue,
+      nodeId: '',
+      location: { line: 0, column: 0 },
+      metadata: {
+        isReserved: true,
+        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+      }
+    };
+    this.setVariable('TIME', timeVar);
+    // Note: lowercase 'time' is handled in getVariable() to avoid conflicts
   }
   
   // --- Property Accessors ---
@@ -97,9 +259,32 @@ export class Environment {
     this.currentFilePath = filePath;
   }
   
+  getSecurityManager(): SecurityManager | undefined {
+    // Get from this environment or parent
+    if (this.securityManager) return this.securityManager;
+    return this.parent?.getSecurityManager();
+  }
+  
+  getRegistryManager(): RegistryManager | undefined {
+    // Get from this environment or parent
+    if (this.registryManager) return this.registryManager;
+    return this.parent?.getRegistryManager();
+  }
+  
+  getResolverManager(): ResolverManager | undefined {
+    // Get from this environment or parent
+    if (this.resolverManager) return this.resolverManager;
+    return this.parent?.getResolverManager();
+  }
+  
   // --- Variable Management ---
   
   setVariable(name: string, variable: MlldVariable): void {
+    // Check if the name is reserved (but allow system variables to be set)
+    if (this.reservedNames.has(name) && !variable.metadata?.isReserved && !variable.metadata?.isSystem) {
+      throw new Error(`Cannot create variable '${name}': this name is reserved for system use`);
+    }
+    
     // Check if variable already exists in this scope
     if (this.variables.has(name)) {
       const existing = this.variables.get(name)!;
@@ -170,12 +355,46 @@ export class Environment {
     const variable = this.variables.get(name);
     if (variable) return variable;
     
+    // Handle lowercase aliases for reserved variables
+    if (!this.parent) { // Only in root environment
+      if (name === 'input' && this.variables.has('INPUT')) {
+        return this.variables.get('INPUT');
+      } else if (name === 'time' && this.variables.has('TIME')) {
+        return this.variables.get('TIME');
+      }
+    }
+    
     // Check parent scope
     return this.parent?.getVariable(name);
   }
   
   hasVariable(name: string): boolean {
     return this.variables.has(name) || (this.parent?.hasVariable(name) ?? false);
+  }
+  
+  // --- Frontmatter Support ---
+  
+  /**
+   * Set frontmatter data for this environment
+   * Creates both @fm and @frontmatter as aliases to the same data
+   */
+  setFrontmatter(data: any): void {
+    const frontmatterVariable: MlldVariable = {
+      type: 'data',
+      value: data,
+      nodeId: '',
+      location: { line: 0, column: 0 },
+      metadata: { 
+        isSystem: true, 
+        immutable: true,
+        source: 'frontmatter',
+        definedAt: { line: 0, column: 0, filePath: '<frontmatter>' }
+      }
+    };
+    
+    // Create both @fm and @frontmatter as aliases
+    this.variables.set('fm', frontmatterVariable);
+    this.variables.set('frontmatter', frontmatterVariable);
   }
   
   // --- Node Management ---
@@ -196,6 +415,59 @@ export class Environment {
     }
     const resolvedPath = await this.resolvePath(pathOrUrl);
     return this.fileSystem.readFile(resolvedPath);
+  }
+  
+  /**
+   * Resolve a module reference using the ResolverManager
+   * This handles @prefix/ patterns and falls back to DNS for @user/module
+   */
+  async resolveModule(reference: string): Promise<string> {
+    const resolverManager = this.getResolverManager();
+    if (!resolverManager) {
+      throw new Error('ResolverManager not available');
+    }
+    
+    const result = await resolverManager.resolve(reference);
+    return result.content.content;
+  }
+  
+  /**
+   * Set stdin content for this environment (typically only on root)
+   */
+  setStdinContent(content: string): void {
+    if (!this.parent) {
+      // Only store on root environment
+      this.stdinContent = content;
+      
+      // Update @INPUT reserved variable
+      const inputVar: MlldVariable = {
+        type: 'text',
+        value: content,
+        nodeId: '',
+        location: { line: 0, column: 0 },
+        metadata: {
+          isReserved: true,
+          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        }
+      };
+      this.setVariable('INPUT', inputVar);
+      // Note: lowercase 'input' is handled in getVariable() to avoid conflicts
+    } else {
+      // Delegate to parent
+      this.parent.setStdinContent(content);
+    }
+  }
+  
+  /**
+   * Read stdin content (cached)
+   */
+  readStdin(): string {
+    // Check root environment for stdin content
+    if (!this.parent) {
+      return this.stdinContent || '';
+    }
+    // Delegate to parent
+    return this.parent.readStdin();
   }
   
   async executeCommand(
@@ -369,7 +641,11 @@ export class Environment {
         if (params) {
           for (const [key, value] of Object.entries(params)) {
             // Convert value to string for environment variable
-            envVars[key] = String(value);
+            if (typeof value === 'object' && value !== null) {
+              envVars[key] = JSON.stringify(value);
+            } else {
+              envVars[key] = String(value);
+            }
           }
         }
         
@@ -377,6 +653,37 @@ export class Environment {
         const child_process = require('child_process');
         
         try {
+          // Mock bash execution in test environment if needed
+          if (process.env.MOCK_BASH === 'true') {
+            // Simple mock that handles echo commands
+            const lines = code.trim().split('\n');
+            const outputs: string[] = [];
+            
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('echo ')) {
+                // Extract the string to echo, handling quotes
+                const echoContent = trimmed.substring(5).trim();
+                let output = echoContent;
+                
+                // Handle quoted strings
+                if ((echoContent.startsWith('"') && echoContent.endsWith('"')) ||
+                    (echoContent.startsWith("'") && echoContent.endsWith("'"))) {
+                  output = echoContent.slice(1, -1);
+                }
+                
+                // Replace environment variables
+                for (const [key, value] of Object.entries(envVars)) {
+                  output = output.replace(new RegExp(`\\$${key}`, 'g'), value);
+                }
+                
+                outputs.push(output);
+              }
+            }
+            
+            return outputs.join('\n');
+          }
+          
           const result = child_process.execSync(`bash -c ${JSON.stringify(code)}`, {
             encoding: 'utf8',
             env: { ...process.env, ...envVars },
@@ -403,7 +710,7 @@ export class Environment {
             );
             throw bashError;
           }
-          throw new Error(`Bash execution failed: ${execError.stderr || execError.message}`);
+          throw new Error(`Bash execution failed: ${execError.stderr || execError.message || 'Unknown error'}`);
         }
       } catch (error) {
         throw new Error(`Bash execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -664,6 +971,35 @@ export class Environment {
   
   setURLOptions(options: Partial<typeof this.defaultUrlOptions>): void {
     Object.assign(this.defaultUrlOptions, options);
+  }
+
+  /**
+   * Get URLCache manager
+   */
+  getURLCache(): URLCache | undefined {
+    if (this.parent) {
+      return this.parent.getURLCache();
+    }
+    return this.urlCacheManager;
+  }
+
+  /**
+   * Fetch URL with security options from @path directive
+   */
+  async fetchURLWithSecurity(
+    url: string, 
+    security?: import('@core/types/primitives').SecurityOptions,
+    configuredBy?: string
+  ): Promise<string> {
+    const urlCache = this.getURLCache();
+    
+    if (urlCache && security) {
+      // Use the new URL cache with security options
+      return urlCache.fetchURL(url, security, configuredBy);
+    }
+    
+    // Fall back to existing fetchURL method
+    return this.fetchURL(url);
   }
   
   setURLConfig(config: ResolvedURLConfig): void {

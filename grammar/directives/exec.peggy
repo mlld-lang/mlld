@@ -20,8 +20,8 @@ by the @run directive. It can be used in these forms:
 
 // Primary @exec directive - unified approach with RHS delegation
 AtExec
-  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:ExecRHS {
-      helpers.debug('AtExec matched with unified RHS delegation', { id, params, content });
+  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:ExecRHS trust:(_ t:TrustOption { return t; })? {
+      helpers.debug('AtExec matched with unified RHS delegation', { id, params, content, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -51,7 +51,8 @@ AtExec
         source = 'command';
         metaObj = {
           parameterCount: processedParams.length,
-          commandType: 'command'
+          commandType: 'command',
+          ...helpers.createSecurityMeta({ trust })
         };
       } else if (content.type === 'code') {
         // Code content (language + code blob, no interpolation)
@@ -67,7 +68,8 @@ AtExec
           parameterCount: processedParams.length,
           language: content.rawLang,
           isMultiLine: content.raw.includes('\n'),
-          hasVariables: false  // Code blocks don't support variable interpolation
+          hasVariables: false,  // Code blocks don't support variable interpolation
+          ...helpers.createSecurityMeta({ trust })
         };
       } else {
         throw new Error(`Unknown exec content type: ${content.type}`);
@@ -90,8 +92,8 @@ AtExec
         source
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ "@" commandRef:CommandReference {
-      helpers.debug('AtExec matched command reference', { id, params, commandRef });
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ "@" commandRef:CommandReference trust:(_ t:TrustOption { return t; })? {
+      helpers.debug('AtExec matched command reference', { id, params, commandRef, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -104,7 +106,7 @@ AtExec
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        commandRef: commandRef.identifier,
+        commandRef: Array.isArray(commandRef.identifier) ? commandRef.identifier : [helpers.createNode(NodeType.Text, { content: commandRef.identifier, location: location() })],
         args: commandRef.args || []
       };
       
@@ -119,7 +121,8 @@ AtExec
       const metaObj = {
         parameterCount: processedParams.length,
         argumentCount: commandRef.args ? commandRef.args.length : 0,
-        isCommandRef: true
+        isCommandRef: true,
+        ...helpers.createSecurityMeta({ trust })
       };
       
       // Add metadata if present

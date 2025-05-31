@@ -68,9 +68,9 @@ AtAdd
         'section'  // Added source parameter
       );
     }
-  / DirectiveContext "@add" _ sectionTitle:QuotedContent _ "from" _ path:PathExpression _ asTitle:AsNewTitle? {
+  / DirectiveContext "@add" _ sectionTitle:QuotedContent _ "from" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ asTitle:AsNewTitle? {
       // This rule should match section syntax FIRST before the template rule below
-      helpers.debug('AtAdd matched section', { sectionTitle, path, asTitle });
+      helpers.debug('AtAdd matched section', { sectionTitle, path, asTitle, security });
       
       // Process the section title and path
       const sectionTitleNode = sectionTitle[0]; // Get the first node from the array
@@ -102,7 +102,8 @@ AtAdd
         path: {
           ...path.meta,
           pathSubtype: path.subtype // Preserve the specific path type
-        }
+        },
+        ...helpers.createSecurityMeta(security)
       };
       
       return helpers.createStructuredDirective(
@@ -115,7 +116,8 @@ AtAdd
         'section'  // Added source parameter
       );
     }
-  / DirectiveContext "@add" _ template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "@add" _ security:(SecurityOptions _)? template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+      const securityOptions = security ? security[0] : null;
       helpers.debug('AtAdd matched template content', { template, headerLevel, underHeader });
       
       // Extract header level and under header if provided
@@ -158,10 +160,11 @@ AtAdd
         raw.underHeader = underHeaderValue;
       }
       
-      // Create meta object with isTemplateContent flag
+      // Create meta object with isTemplateContent flag and security
       const meta = {
         isTemplateContent: true,
-        ...template.meta
+        ...template.meta,
+        ...helpers.createSecurityMeta(securityOptions)
       };
       
       return helpers.createStructuredDirective(
@@ -243,7 +246,8 @@ AtAdd
         'templateInvocation'
       );
     }
-  / DirectiveContext "@add" _ "@" varRef:VariableReference _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "@add" _ security:(SecurityOptions _)? "@" varRef:VariableReference _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+      const securityOptions = security ? security[0] : null;
       helpers.debug('AtAdd matched variable reference', { varRef, headerLevel, underHeader });
       
       // Extract variable reference information
@@ -289,8 +293,10 @@ AtAdd
         raw.underHeader = underHeaderValue;
       }
       
-      // Create empty meta object for variable embedding
-      const meta = {};
+      // Create meta object with security options
+      const meta = {
+        ...helpers.createSecurityMeta(securityOptions)
+      };
       
       return helpers.createStructuredDirective(
         'add', 
@@ -302,8 +308,81 @@ AtAdd
         'variable'  // Added source parameter
       );
     }
-  / DirectiveContext "@add" _ !("[[") !('[' [^#\]]* '#') path:PathExpression _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
-      helpers.debug('AtAdd matched path', { path, headerLevel, underHeader });
+  / DirectiveContext "@add" _ security:(SecurityOptions _)? "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtAdd matched quoted string', { content, headerLevel, underHeader, securityOptions });
+      
+      // Create path structure
+      const path = {
+        type: 'path',
+        subtype: 'filePath',
+        values: { 
+          path: [helpers.createNode(NodeType.Text, { content, location: location() })]
+        },
+        raw: { 
+          path: content
+        },
+        meta: helpers.createPathMetadata(content, [helpers.createNode(NodeType.Text, { content, location: location() })])
+      };
+      
+      // Extract header level and under header if provided
+      const headerLevelValue = headerLevel ? headerLevel : null;
+      const underHeaderValue = underHeader ? underHeader : null;
+      
+      // Create values object with path parts
+      const values = {
+        path: path.values.path
+      };
+      
+      // Add headerLevel and underHeader if present
+      if (headerLevelValue) {
+        values.headerLevel = [helpers.createNode(NodeType.Number, {
+          value: headerLevelValue.value,
+          raw: headerLevelValue.raw,
+          location: location()
+        })];
+      }
+      
+      if (underHeaderValue) {
+        values.underHeader = [helpers.createNode(NodeType.Text, {
+          content: underHeaderValue,
+          raw: underHeaderValue,
+          location: location()
+        })];
+      }
+      
+      // Create raw object with raw path string
+      const raw = {
+        path: content
+      };
+      
+      // Add headerLevel and underHeader to raw if present
+      if (headerLevelValue) {
+        raw.headerLevel = headerLevelValue.raw;
+      }
+      
+      if (underHeaderValue) {
+        raw.underHeader = underHeaderValue;
+      }
+      
+      // Create meta object with path metadata and security
+      const meta = {
+        path: path.meta,
+        ...helpers.createSecurityMeta(securityOptions)
+      };
+      
+      return helpers.createStructuredDirective(
+        'add', 
+        'addPath', 
+        values, 
+        raw, 
+        meta, 
+        location(),
+        'path'
+      );
+    }
+  / DirectiveContext "@add" _ !("[[") !('[' [^#\]]* '#') path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+      helpers.debug('AtAdd matched path', { path, headerLevel, underHeader, security });
       
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
@@ -350,7 +429,8 @@ AtAdd
         path: {
           ...path.meta,
           pathSubtype: path.subtype // Preserve the specific path type
-        }
+        },
+        ...helpers.createSecurityMeta(security)
       };
       
       return helpers.createStructuredDirective(

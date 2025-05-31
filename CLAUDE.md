@@ -2,6 +2,15 @@
 
 repo: github.com/mlld-lang/mlld
 
+## Module System
+- **Package Type**: ESM-first (`"type": "module"`) - all `.js` files are ES modules
+- **Dual Build**: tsup creates both `.mjs` and `.cjs` outputs for compatibility
+- **Parser Generation**: Peggy generates both `parser.js` (ESM) and `parser.ts` (with types)
+- **Important**: Run `npm run build:grammar` before other builds to generate the parser
+- **Scripts**: Build scripts import parser directly from `grammar/parser/parser.js`
+- **TypeScript**: Uses `@grammar/parser` which resolves to the index.ts wrapper
+- See `docs/dev/MODULES.md` for complete module system documentation
+
 ## Build & Test Commands
 ```bash
 npm run build        # Build the project
@@ -9,6 +18,12 @@ npm test <dir>       # Run tests for a specific section of code
 npm test <file_path> # Run specific test file (e.g. npm test cli/priority-cli.test.ts)
 npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 ```
+
+## Generated Files (Gitignored)
+- **Grammar files**: `grammar/parser/*.js`, `grammar/parser/*.ts`, `grammar/generated/*`
+- **Test fixtures**: `tests/fixtures/**/*.generated-fixture.json`
+- **Always run**: `npm run build:grammar` after pulling to regenerate files locally
+- This prevents merge conflicts from generated files
 
 ## Code Style
 - **Imports**: Use @ paths aliases (@core/, @services/, etc.) as defined in tsconfig.json -- no relative paths for imports
@@ -93,3 +108,6 @@ When compacting for the next session--*especially* mid-task, your emphasis shoul
 
 ## Coding Practices
 - Don't add comments saying something is being removed or changed -- keep comments timeless
+
+## Development Workflows
+- If you want to run mlld for a manual test, run `npm run reinstall` then you can run the `mlld` command locally

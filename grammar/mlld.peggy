@@ -28,7 +28,7 @@
 
 // Main entry point - processes a complete document
 Start
-  = nodes:(
+  = frontmatter:Frontmatter? nodes:(
       LineStartComment
     / Comment
     / CodeFence
@@ -38,7 +38,10 @@ Start
     / TextBlock
     )* {
     helpers.debug('Start: Entered');
-    return nodes;
+    const result = [];
+    if (frontmatter) result.push(frontmatter);
+    result.push(...nodes);
+    return result;
   }
 
 // structural newline that should become an AST node
@@ -165,6 +168,7 @@ Directive
     / AtAdd          // Add directives (content inclusion)
     / AtData         // Data directives (structured data)
     / AtPath         // Path directives (path variables)
+    / AtOutput       // Output directives (output routing)
     ) { return dir; }
 
 // -------------------------------------------------------------------------
@@ -206,3 +210,4 @@ CodeFenceLangID
 // - AtAdd from directives/add.peggy
 // - AtData from directives/data.peggy
 // - AtPath from directives/path.peggy
+// - AtOutput from directives/output.peggy

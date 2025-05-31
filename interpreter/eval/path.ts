@@ -3,6 +3,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { createPathVariable, astLocationToSourceLocation } from '@core/types';
+import type { SecurityOptions } from '@core/types/primitives';
 
 /**
  * Evaluate @path directives.
@@ -33,6 +34,12 @@ export async function evaluatePath(
   // Interpolate the path (resolve variables)
   const interpolatedPath = await interpolate(pathNodes, env);
   
+  // Extract security options from the directive meta
+  const security: SecurityOptions | undefined = directive.meta ? {
+    ttl: directive.meta.ttl,
+    trust: directive.meta.trust
+  } : undefined;
+  
   // Handle special path variables and absolute paths
   let resolvedPath = interpolatedPath;
   
@@ -50,12 +57,14 @@ export async function evaluatePath(
     resolvedPath = resolvedPath.replace(/^\.\//, '');
   }
   
-  // Create and store the variable
+  // Create and store the variable with security metadata
   const variable = createPathVariable(identifier, {
     originalPath: interpolatedPath,
     resolvedPath: resolvedPath,
     isAbsolute: resolvedPath.startsWith('/') || isURL || env.isURL(resolvedPath),
-    isRelative: !resolvedPath.startsWith('/') && !isURL && !env.isURL(resolvedPath)
+    isRelative: !resolvedPath.startsWith('/') && !isURL && !env.isURL(resolvedPath),
+    isURL: isURL || env.isURL(resolvedPath),
+    security: security
   }, {
     definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
   });

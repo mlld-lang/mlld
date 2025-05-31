@@ -26,6 +26,7 @@ export * from './exec';
 export * from './path';
 export * from './data';
 export * from './run';
+export * from './output';
 
 // Import node types for the MlldNode union
 import {
@@ -38,6 +39,9 @@ import {
   DotSeparatorNode,
   PathSeparatorNode,
   ErrorNode,
+  FrontmatterNode,
+  NewlineNode,
+  SectionMarkerNode,
   SourceLocation
 } from './nodes';
 
@@ -57,7 +61,10 @@ export type MlldNode =
   | LiteralNode
   | DotSeparatorNode
   | PathSeparatorNode
-  | ErrorNode;
+  | ErrorNode
+  | FrontmatterNode
+  | NewlineNode
+  | SectionMarkerNode;
 
 // =========================================================================
 // VARIABLE TYPES

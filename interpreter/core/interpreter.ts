@@ -1,9 +1,10 @@
-import type { MlldNode, DirectiveNode, TextNode, CommentNode, MlldDocument, MlldVariable } from '@core/types';
+import type { MlldNode, DirectiveNode, TextNode, CommentNode, MlldDocument, MlldVariable, FrontmatterNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
 import { isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
+import { parseFrontmatter } from '../utils/frontmatter-parser';
 
 /**
  * Core evaluation result type
@@ -21,13 +22,34 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
   // Handle array of nodes (from parser)
   if (Array.isArray(node)) {
     let lastValue: any = undefined;
-    for (const n of node) {
-      const result = await evaluate(n, env);
-      lastValue = result.value;
+    
+    // First, check if the first node is frontmatter and process it
+    if (node.length > 0 && node[0].type === 'Frontmatter') {
+      const frontmatterNode = node[0] as FrontmatterNode;
+      const frontmatterData = parseFrontmatter(frontmatterNode.content);
+      env.setFrontmatter(frontmatterData);
       
-      // Add text nodes to output if they're top-level
-      if (n.type === 'Text') {
-        env.addNode(n);
+      // Process remaining nodes
+      for (let i = 1; i < node.length; i++) {
+        const n = node[i];
+        const result = await evaluate(n, env);
+        lastValue = result.value;
+        
+        // Add text nodes to output if they're top-level
+        if (n.type === 'Text') {
+          env.addNode(n);
+        }
+      }
+    } else {
+      // No frontmatter, process all nodes normally
+      for (const n of node) {
+        const result = await evaluate(n, env);
+        lastValue = result.value;
+        
+        // Add text nodes to output if they're top-level
+        if (n.type === 'Text') {
+          env.addNode(n);
+        }
       }
     }
     return { value: lastValue, env };
@@ -55,15 +77,17 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       return { value: '\n', env };
       
     case 'Comment':
-      // Comments are preserved in output but don't affect evaluation
+      // Comments are NOT included in output
       const commentNode = node as CommentNode;
-      const commentTextNode: TextNode = {
-        type: 'Text',
-        nodeId: `${commentNode.nodeId || 'comment'}-text`,
-        content: commentNode.content
-      };
-      env.addNode(commentTextNode);
+      // Skip comments - don't add any nodes to output
       return { value: commentNode.content, env };
+      
+    case 'Frontmatter':
+      // Process frontmatter node
+      const frontmatterNode = node as FrontmatterNode;
+      const frontmatterData = parseFrontmatter(frontmatterNode.content);
+      env.setFrontmatter(frontmatterData);
+      return { value: frontmatterData, env };
       
     case 'VariableReference':
       // Variable references are handled by interpolation in context

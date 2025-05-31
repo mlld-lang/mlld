@@ -81,6 +81,12 @@ export async function evaluateDataValue(
       throw new Error(`Variable not found: ${value.identifier}`);
     }
     
+    // For command variables, return the variable itself (for lazy execution)
+    // This preserves the command for later execution rather than executing it now
+    if (variable.type === 'command') {
+      return variable;
+    }
+    
     let result = variable.value;
     
     // Apply field access if present

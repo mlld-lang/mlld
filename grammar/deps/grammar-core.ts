@@ -12,7 +12,8 @@ export const NodeType = {
   SectionMarker: 'SectionMarker',
   Error: 'Error',
   Newline: 'Newline',
-  StringLiteral: 'StringLiteral', // Added missing type
+  StringLiteral: 'StringLiteral',
+  Frontmatter: 'Frontmatter',
 } as const;
 export type NodeTypeKey = keyof typeof NodeType;
 
@@ -24,6 +25,7 @@ export const DirectiveKind = {
   data: 'data',
   path: 'path',
   import: 'import',
+  output: 'output',
 } as const;
 export type DirectiveKindKey = keyof typeof DirectiveKind;
 
@@ -239,8 +241,8 @@ export const helpers = {
   },
 
   normalizePathVar(id: string) {
-    if (id === '~') return 'HOMEPATH';
     if (id === '.') return 'PROJECTPATH';
+    if (id === 'TIME') return 'TIME';
     return id;
   },
 
@@ -389,5 +391,50 @@ export const helpers = {
       hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
       hasSection
     };
+  },
+
+  ttlToSeconds(value: number, unit: string): number {
+    const multipliers: Record<string, number> = {
+      'seconds': 1,
+      'minutes': 60,
+      'hours': 3600,
+      'days': 86400,
+      'weeks': 604800
+    };
+    return value * (multipliers[unit] || 1);
+  },
+
+  createSecurityMeta(options?: any) {
+    if (!options) return {};
+    
+    const meta: any = {};
+    
+    if (options.ttl) {
+      meta.ttl = options.ttl;
+    }
+    
+    if (options.trust) {
+      meta.trust = options.trust;
+    }
+    
+    return meta;
+  },
+
+  detectFormatFromPath(path: string): string | null {
+    const ext = path.match(/\.([a-zA-Z0-9]+)$/)?.[1]?.toLowerCase();
+    if (!ext) return null;
+    
+    const formatMap: Record<string, string> = {
+      'json': 'json',
+      'xml': 'xml',
+      'yaml': 'yaml',
+      'yml': 'yaml',
+      'csv': 'csv',
+      'md': 'markdown',
+      'markdown': 'markdown',
+      'txt': 'text',
+      'text': 'text'
+    };
+    return formatMap[ext] || null;
   },
 };

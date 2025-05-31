@@ -19,7 +19,39 @@ It is used in the form:
 
 // Primary @path directive - handles bracketed paths using proper abstraction
 AtPath
-  = DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ content:BracketContent {
+  // Quoted string path with security options
+  = DirectiveContext "@path" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ "\"" content:$([^"]*) "\"" {
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtPath matched quoted string', { id, content, securityOptions });
+      
+      // Create variable reference node for identifier
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      
+      // Create path parts
+      const pathParts = [helpers.createNode(NodeType.Text, { content, location: location() })];
+      
+      return helpers.createStructuredDirective(
+        'path',
+        'pathAssignment',
+        {
+          identifier: [idNode],
+          path: pathParts
+        },
+        {
+          identifier: id,
+          path: content
+        },
+        {
+          path: helpers.createPathMetadata(content, pathParts),
+          ...helpers.createSecurityMeta(securityOptions)
+        },
+        location(),
+        'path'
+      );
+    }
+  // Bracketed path with security options
+  / DirectiveContext "@path" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ content:BracketContent {
+      const securityOptions = security ? security[0] : null;
       helpers.debug('AtPath matched bracketed path', { id, content });
       
       // Process special path variables in the parsed content (only @. special case)
@@ -65,14 +97,15 @@ AtPath
           path: rawString
         },
         {
-          path: helpers.createPathMetadata(rawString, processedPathParts)
+          path: helpers.createPathMetadata(rawString, processedPathParts),
+          ...helpers.createSecurityMeta(securityOptions)
         },
         location(),
         'path'  // Source parameter
       );
     }
-  / DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ path:PathExpression {
-      helpers.debug('AtPath matched normal path', { id, path });
+  / DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? {
+      helpers.debug('AtPath matched normal path', { id, path, security });
       
       // Process special path variables
       let processedPath = path.raw.path || path.raw.url;
@@ -111,7 +144,8 @@ AtPath
           path: {
             ...path.meta,
             pathSubtype: path.subtype // Preserve the specific path type
-          }
+          },
+          ...helpers.createSecurityMeta(security)
         },
         location(),
         'path'  // Source parameter

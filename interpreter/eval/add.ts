@@ -53,9 +53,17 @@ export async function evaluateAdd(
       case 'path':
         // For path variables, we should read the file contents
         const pathValue = variable.value.resolvedPath;
+        const isURL = variable.value.isURL;
+        const security = variable.value.security;
+        
         try {
-          // Try to read the file
-          value = await env.readFile(pathValue);
+          if (isURL && security) {
+            // Use URL cache with security options
+            value = await env.fetchURLWithSecurity(pathValue, security, varName);
+          } else {
+            // Regular file or URL without security options
+            value = await env.readFile(pathValue);
+          }
         } catch (error) {
           // If it's not a file or can't be read, use the path itself
           value = pathValue;
@@ -117,45 +125,77 @@ export async function evaluateAdd(
     
   } else if (directive.subtype === 'addPath') {
     // Handle path inclusion (whole file)
-    const pathNodes = directive.values?.path;
-    if (!pathNodes) {
+    const pathValue = directive.values?.path;
+    if (!pathValue) {
       throw new Error('Add path directive missing path');
     }
     
-    // Check if this is a URL path based on the path node structure
-    const pathNode = pathNodes[0]; // Assuming single path node
-    const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
+    // Handle both string paths (URLs) and node arrays
+    let resolvedPath: string;
+    if (typeof pathValue === 'string') {
+      // Direct string path (typically URLs)
+      resolvedPath = pathValue;
+    } else if (Array.isArray(pathValue)) {
+      // Array of path nodes
+      resolvedPath = await interpolate(pathValue, env);
+    } else {
+      throw new Error('Invalid path type in add directive');
+    }
     
-    // Resolve the path
-    const resolvedPath = await interpolate(pathNodes, env);
     if (!resolvedPath) {
       throw new Error('Add path directive resolved to empty path');
     }
     
-    // Read the file content or fetch URL (env.readFile handles both)
-    content = await env.readFile(resolvedPath);
+    // Check if this directive has security options
+    const security = directive.meta ? {
+      ttl: directive.meta.ttl,
+      trust: directive.meta.trust
+    } : undefined;
+    
+    // Read the file content or fetch URL with security options if URL
+    if (env.isURL(resolvedPath) && security) {
+      content = await env.fetchURLWithSecurity(resolvedPath, security, 'add-directive');
+    } else {
+      content = await env.readFile(resolvedPath);
+    }
     
   } else if (directive.subtype === 'addPathSection') {
     // Handle section extraction: @add "Section Title" from [file.md]
     const sectionTitleNodes = directive.values?.sectionTitle;
-    const pathNodes = directive.values?.path;
+    const pathValue = directive.values?.path;
     
-    if (!sectionTitleNodes || !pathNodes) {
+    if (!sectionTitleNodes || !pathValue) {
       throw new Error('Add section directive missing section title or path');
     }
-    
-    // Check if this is a URL path based on the path node structure
-    const pathNode = pathNodes[0]; // Assuming single path node
-    const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
     
     // Get the section title
     const sectionTitle = await interpolate(sectionTitleNodes, env);
     
-    // Resolve the path
-    const resolvedPath = await interpolate(pathNodes, env);
+    // Handle both string paths (URLs) and node arrays
+    let resolvedPath: string;
+    if (typeof pathValue === 'string') {
+      // Direct string path (typically URLs)
+      resolvedPath = pathValue;
+    } else if (Array.isArray(pathValue)) {
+      // Array of path nodes
+      resolvedPath = await interpolate(pathValue, env);
+    } else {
+      throw new Error('Invalid path type in add section directive');
+    }
     
-    // Read the file content or fetch URL (env.readFile handles both)
-    const fileContent = await env.readFile(resolvedPath);
+    // Check if this directive has security options
+    const security = directive.meta ? {
+      ttl: directive.meta.ttl,
+      trust: directive.meta.trust
+    } : undefined;
+    
+    // Read the file content or fetch URL with security options if URL
+    let fileContent: string;
+    if (env.isURL(resolvedPath) && security) {
+      fileContent = await env.fetchURLWithSecurity(resolvedPath, security, 'add-section-directive');
+    } else {
+      fileContent = await env.readFile(resolvedPath);
+    }
     
     // Extract the section using llmxml
     const llmxml = createLLMXML();

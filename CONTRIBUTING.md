@@ -14,6 +14,8 @@ We use a specific branch structure to keep development organized:
 1. Fork and clone the repository
 2. Install dependencies: `npm install`
 3. Build the project: `npm run build`
+   - This will generate parser files and test fixtures
+   - Generated files are gitignored to avoid merge conflicts
 4. Run the tests: `npm run test`
 5. Make sure you're on the `dev` branch: `git checkout dev`
 

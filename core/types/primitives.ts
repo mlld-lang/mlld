@@ -77,6 +77,25 @@ export interface ErrorNode extends BaseMlldNode {
   partialNode?: any;
 }
 
+// Frontmatter node
+export interface FrontmatterNode extends BaseMlldNode {
+  type: 'Frontmatter';
+  content: string;
+  data?: any; // Parsed YAML
+}
+
+// Newline node
+export interface NewlineNode extends BaseMlldNode {
+  type: 'Newline';
+  content: string;
+}
+
+// Section marker node
+export interface SectionMarkerNode extends BaseMlldNode {
+  type: 'SectionMarker';
+  value: string;
+}
+
 // Formatting metadata for text nodes
 export interface FormattingMetadata {
   trimLines?: boolean;
@@ -95,7 +114,8 @@ export type DirectiveKind =
   | 'exec'
   | 'text'
   | 'path'
-  | 'data';
+  | 'data'
+  | 'output';
 
 export type DirectiveSubtype = 
   | 'importAll' | 'importSelected'
@@ -104,7 +124,8 @@ export type DirectiveSubtype =
   | 'dataAssignment'
   | 'pathAssignment'
   | 'runCommand' | 'runExec' | 'runCode'
-  | 'execCode' | 'execCommand';
+  | 'execCode' | 'execCommand'
+  | 'outputResolver' | 'outputFile' | 'outputCommand';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 
@@ -117,4 +138,27 @@ export interface DirectiveNode extends BaseMlldNode {
   values: { [key: string]: BaseMlldNode[] };
   raw: { [key: string]: string };
   meta: { [key: string]: unknown };
+}
+
+// Security-related types
+export interface SecurityOptions {
+  ttl?: TTLOption;
+  trust?: TrustLevel;
+}
+
+export interface TTLOption {
+  type: 'duration' | 'special';
+  value?: number;
+  unit?: string;
+  seconds?: number;
+}
+
+export type TrustLevel = 'always' | 'verify' | 'never';
+
+// Module reference types
+export interface ModuleReference {
+  namespace: string;
+  path?: string[];
+  name: string;
+  hash?: string;
 }

@@ -16,6 +16,14 @@ build/
 # Generated files
 core/version.ts
 
+# Grammar generated files
+grammar/parser/parser.js
+grammar/parser/parser.ts
+grammar/generated/
+
+# Test fixtures (generated from test cases)
+tests/fixtures/**/*.generated-fixture.json
+
 # Logs
 logs/
 *.log

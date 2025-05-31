@@ -4,6 +4,10 @@ import { watch } from 'fs/promises';
 import { existsSync } from 'fs';
 import { createInterface } from 'readline';
 import { initCommand } from './commands/init';
+import { registryCommand } from './commands/registry';
+import { createInstallCommand } from './commands/install';
+import { createLsCommand } from './commands/ls';
+import { createInfoCommand } from './commands/info';
 import chalk from 'chalk';
 import { version } from '@core/version';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
@@ -95,6 +99,35 @@ function getOutputExtension(format: 'markdown' | 'xml'): string {
     default:
       return '.md';
   }
+}
+
+/**
+ * Parse flags from command line arguments
+ */
+function parseFlags(args: string[]): Record<string, any> {
+  const flags: Record<string, any> = {};
+  
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg.startsWith('--')) {
+      const key = arg.slice(2);
+      if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+        flags[key] = args[++i];
+      } else {
+        flags[key] = true;
+      }
+    } else if (arg.startsWith('-') && arg.length > 1) {
+      const key = arg.slice(1);
+      if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+        flags[key] = args[++i];
+      } else {
+        flags[key] = true;
+      }
+    }
+  }
+  
+  return flags;
 }
 
 /**
@@ -312,6 +345,31 @@ function parseArgs(args: string[]): CLIOptions {
  * Display help information
  */
 function displayHelp(command?: string) {
+  if (command === 'registry') {
+    console.log(`
+Usage: mlld registry <subcommand> [options]
+
+Manage mlld module registry.
+
+Subcommands:
+  install              Install all modules from lock file
+  update [module]      Update module(s) to latest version
+  audit                Check for security advisories
+  search <query>       Search for modules
+  info <module>        Show module details
+  stats                Show local usage statistics
+  stats share          Share anonymous usage statistics
+  outdated             Show outdated modules
+
+Examples:
+  mlld registry search json
+  mlld registry info adamavenir/json-utils
+  mlld registry update
+  mlld registry audit
+    `);
+    return;
+  }
+  
   if (command === 'debug-resolution') {
     console.log(`
 Usage: mlld debug-resolution [options] <input-file>
@@ -351,6 +409,10 @@ Usage: mlld [command] [options] <input-file>
 
 Commands:
   init                    Create a new Mlld project
+  install, i              Install mlld modules
+  ls, list               List installed modules
+  info, show             Show module details
+  registry                Manage mlld module registry
   debug-resolution        Debug variable resolution in a Mlld file
   debug-transform         Debug node transformations through the pipeline
 
@@ -568,6 +630,46 @@ async function watchFiles(options: CLIOptions): Promise<void> {
 }
 
 /**
+ * Read stdin content if available
+ */
+async function readStdinIfAvailable(): Promise<string | undefined> {
+  // Check if stdin is a TTY (terminal) - if so, there's no piped input
+  if (process.stdin.isTTY) {
+    return undefined;
+  }
+  
+  // Read from stdin
+  const chunks: Buffer[] = [];
+  
+  return new Promise((resolve) => {
+    let timeout: NodeJS.Timeout;
+    
+    // Set a short timeout to check if data is available
+    timeout = setTimeout(() => {
+      // No data received within timeout, assume no stdin
+      process.stdin.pause();
+      process.stdin.removeAllListeners('data');
+      process.stdin.removeAllListeners('end');
+      resolve(undefined);
+    }, 100);
+    
+    process.stdin.on('data', (chunk) => {
+      clearTimeout(timeout);
+      chunks.push(chunk);
+    });
+    
+    process.stdin.on('end', () => {
+      clearTimeout(timeout);
+      const content = Buffer.concat(chunks).toString('utf8');
+      resolve(content);
+    });
+    
+    // Start reading
+    process.stdin.resume();
+  });
+}
+
+/**
  * Process a file with specific API options
  */
 async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: ProcessOptions): Promise<void> {
@@ -600,6 +702,9 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     // Read the input file using Node's fs directly
     const fs = await import('fs/promises');
     const content = await fs.readFile(input, 'utf8');
+    
+    // Read stdin if available
+    const stdinContent = await readStdinIfAvailable();
     
     // Load configuration
     const configLoader = new ConfigLoader(path.dirname(input));
@@ -643,6 +748,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       pathService: pathService,
       strict: cliOptions.strict,
       urlConfig: finalUrlConfig,
+      stdinContent: stdinContent,
       outputOptions: {
         showProgress: cliOptions.showProgress !== undefined ? cliOptions.showProgress : outputConfig.showProgress,
         maxOutputLines: cliOptions.maxOutputLines !== undefined ? cliOptions.maxOutputLines : outputConfig.maxOutputLines,
@@ -853,6 +959,33 @@ export async function main(customArgs?: string[]): Promise<void> {
     // Handle init command
     if (cliOptions.input === 'init') {
       await initCommand();
+      return;
+    }
+    
+    // Handle registry command
+    if (cliOptions.input === 'registry') {
+      await registryCommand(args.slice(1));
+      return;
+    }
+    
+    // Handle install command
+    if (cliOptions.input === 'install' || cliOptions.input === 'i') {
+      const installCmd = createInstallCommand();
+      await installCmd.execute(args.slice(1), parseFlags(args));
+      return;
+    }
+    
+    // Handle ls command
+    if (cliOptions.input === 'ls' || cliOptions.input === 'list') {
+      const lsCmd = createLsCommand();
+      await lsCmd.execute(args.slice(1), parseFlags(args));
+      return;
+    }
+    
+    // Handle info command
+    if (cliOptions.input === 'info' || cliOptions.input === 'show') {
+      const infoCmd = createInfoCommand();
+      await infoCmd.execute(args.slice(1), parseFlags(args));
       return;
     }
     

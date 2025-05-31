@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSync } from '@grammar/parser';
+import { parse } from '@grammar/parser';
 import { 
   isDirectiveNode,
   isTextDirective,
@@ -24,9 +24,10 @@ import { NodeType } from '@core/shared/types';
 describe('Grammar-Type System Alignment', () => {
   
   describe('Text Directive Type Validation', () => {
-    it('should produce valid textAssignment nodes', () => {
+    it('should produce valid textAssignment nodes', async () => {
       const input = '@text greeting = "Hello World"';
-      const ast = parseSync(input);
+      const result = await parse(input);
+      const ast = result.ast;
       
       const directive = ast[0];
       expect(isDirectiveNode(directive)).toBe(true);
@@ -53,20 +54,22 @@ describe('Grammar-Type System Alignment', () => {
       expect(directive.values.content).toBeDefined();
     });
 
-    it('should produce valid textTemplate nodes', () => {
+    it('should produce valid textTemplate nodes', async () => {
       const input = '@text message = [[Hello {{name}}!]]';
-      const ast = parseSync(input);
+      const result = await parse(input);
+      const ast = result.ast;
       
       const directive = ast[0];
       expect(directive.subtype).toBe('textTemplate');
       expect(directive.meta.hasVariables).toBe(true);
     });
 
-    it('should reject invalid text subtypes', () => {
+    it('should reject invalid text subtypes', async () => {
       // This test would fail currently because grammar produces
       // subtypes like 'textPath' that don't exist in types
       const input = '@text content = [file.md]';
-      const ast = parseSync(input);
+      const result = await parse(input);
+      const ast = result.ast;
       
       const directive = ast[0];
       const validTextSubtypes: DirectiveSubtype[] = [
@@ -83,9 +86,10 @@ describe('Grammar-Type System Alignment', () => {
   });
 
   describe('Data Directive Type Validation', () => {
-    it('should produce dataAssignment not dataDirective', () => {
+    it('should produce dataAssignment not dataDirective', async () => {
       const input = '@data config = { "key": "value" }';
-      const ast = parseSync(input);
+      const result = await parse(input);
+      const ast = result.ast;
       
       const directive = ast[0];
       expect(directive.subtype).toBe('dataAssignment'); // Currently fails
@@ -93,9 +97,10 @@ describe('Grammar-Type System Alignment', () => {
   });
 
   describe('Variable Reference Type Validation', () => {
-    it('should produce valid VariableReferenceNode structure', () => {
+    it('should produce valid VariableReferenceNode structure', async () => {
       const input = '@text message = [[Hello {{user.name}}!]]';
-      const ast = parseSync(input);
+      const result = await parse(input);
+      const ast = result.ast;
       
       const directive = ast[0];
       const content = directive.values.content;
@@ -112,7 +117,7 @@ describe('Grammar-Type System Alignment', () => {
   });
 
   describe('Node Type Constants', () => {
-    it('should only use defined NodeType values', () => {
+    it('should only use defined NodeType values', async () => {
       // Test various inputs to ensure they only produce valid node types
       const inputs = [
         '@text val = "null"',
@@ -122,22 +127,24 @@ describe('Grammar-Type System Alignment', () => {
       
       const validNodeTypes = Object.values(NodeType);
       
-      inputs.forEach(input => {
-        const ast = parseSync(input);
+      for (const input of inputs) {
+        const result = await parse(input);
+        const ast = result.ast;
         // Walk the AST and check all node types
         walkAst(ast, (node) => {
           if (node.type) {
             expect(validNodeTypes).toContain(node.type);
           }
         });
-      });
+      }
     });
   });
 
   describe('Directive Property Placement', () => {
-    it('should place source at root level when present', () => {
+    it('should place source at root level when present', async () => {
       const input = '@add [[template content]]';
-      const ast = parseSync(input);
+      const result = await parse(input);
+      const ast = result.ast;
       
       const directive = ast[0];
       

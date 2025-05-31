@@ -1,6 +1,7 @@
 // Generated index for examples fixtures
 // This file is auto-generated. Do not edit manually.
 
+export { default as apiCalls } from './api-calls.generated-fixture.json';
 export { default as chain } from './chain.generated-fixture.json';
 export { default as codeReview } from './code-review.generated-fixture.json';
 export { default as complexTest-1NestedImports } from './complex-test-1-nested-imports.generated-fixture.json';
@@ -10,15 +11,19 @@ export { default as complexTest-4RecursiveTemplates } from './complex-test-4-rec
 export { default as complexTest-5MixedOperations } from './complex-test-5-mixed-operations.generated-fixture.json';
 export { default as demo } from './demo.generated-fixture.json';
 export { default as example } from './example.generated-fixture.json';
+export { default as frontmatterBasic } from './frontmatter-basic.generated-fixture.json';
+export { default as frontmatterImport } from './frontmatter-import.generated-fixture.json';
 export { default as geoff } from './geoff.generated-fixture.json';
-export { default as haltTest } from './halt-test.generated-fixture.json';
+export { default as httpNamespace } from './http-namespace.generated-fixture.json';
 export { default as importsFixed } from './imports-fixed.generated-fixture.json';
 export { default as importsRoles } from './imports-roles.generated-fixture.json';
 export { default as importsSimple } from './imports-simple.generated-fixture.json';
 export { default as imports } from './imports.generated-fixture.json';
 export { default as invalid } from './invalid.generated-fixture.json';
 export { default as jokes } from './jokes.generated-fixture.json';
+export { default as llmInterface } from './llm-interface.generated-fixture.json';
 export { default as math } from './math.generated-fixture.json';
+export { default as moduleImports } from './module-imports.generated-fixture.json';
 export { default as outputTest } from './output-test.generated-fixture.json';
 export { default as plan } from './plan.generated-fixture.json';
 export { default as readmeEmbed } from './readme-embed.generated-fixture.json';

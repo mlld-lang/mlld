@@ -29,6 +29,16 @@ export class ImportApproval {
     if (!this.config.requireApproval) {
       return true;
     }
+    
+    // In CI/test environments, auto-approve
+    if (process.env.CI || 
+        process.env.NODE_ENV === 'test' || 
+        process.env.MLLD_TEST === '1' ||
+        process.env.VITEST || 
+        process.env.VITEST_WORKER_ID ||
+        process.env.VITEST_POOL_ID !== undefined) {
+      return true;
+    }
 
     // Calculate content hash
     const hash = this.calculateHash(content);
@@ -60,6 +70,11 @@ export class ImportApproval {
   }
 
   private async promptForApproval(url: string, content: string, hash: string): Promise<boolean> {
+    // In test mode, auto-approve without saving
+    if (process.env.MLLD_TEST === '1') {
+      return true;
+    }
+    
     console.log(`\n⚠️  Import requires approval:`);
     console.log(`   ${url}\n`);
     
@@ -128,6 +143,11 @@ export class ImportApproval {
     existing: ImportAllowEntry, 
     newHash: string
   ): Promise<boolean> {
+    // In test mode, auto-approve without saving
+    if (process.env.MLLD_TEST === '1') {
+      return true;
+    }
+    
     console.log(`\n⚠️  Cached import has changed:`);
     console.log(`   ${url}\n`);
     console.log(`   Previously approved: ${new Date(existing.allowedAt).toLocaleDateString()}`);

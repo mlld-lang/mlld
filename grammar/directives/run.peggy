@@ -20,8 +20,9 @@ It can be used in three main forms:
 
 // Primary @run directive 
 AtRun
-  = DirectiveContext "@run" _ "@" commandRef:RunCommandReference comment:InlineComment? {
-      helpers.debug('AtRun matched command reference', { commandRef });
+  = DirectiveContext "@run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference comment:InlineComment? {
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtRun matched command reference', { commandRef, securityOptions });
       
       // This is used to run a previously defined command (created with @exec)
       return helpers.createStructuredDirective(
@@ -37,14 +38,16 @@ AtRun
         },
         {
           argumentCount: commandRef.args ? commandRef.args.length : 0,
+          ...helpers.createSecurityMeta(securityOptions),
           ...(comment ? { comment } : {})
         },
         location(),
         'exec'  // Source parameter
       );
     }
-  / DirectiveContext "@run" _ command:CommandCore comment:InlineComment? {
-      helpers.debug('AtRun matched shell command', { command });
+  / DirectiveContext "@run" _ security:(SecurityOptions _)? command:CommandCore comment:InlineComment? {
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtRun matched shell command', { command, securityOptions });
       
       return helpers.createStructuredDirective(
         'run',
@@ -54,14 +57,16 @@ AtRun
         {
           ...command.meta,
           isMultiLine: command.raw.command.includes('\n'),
+          ...helpers.createSecurityMeta(securityOptions),
           ...(comment ? { comment } : {})
         },
         location(),
         'command'  // Source parameter
       );
     }
-  / DirectiveContext "@run" _ runCode:RunLanguageCodeCore comment:InlineComment? {
-      helpers.debug('AtRun matched language code block using shared abstraction', runCode);
+  / DirectiveContext "@run" _ security:(SecurityOptions _)? runCode:RunLanguageCodeCore comment:InlineComment? {
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtRun matched language code block using shared abstraction', runCode, securityOptions);
       
       // Since we're using the shared abstraction, we just need to format it for this context
       return helpers.createStructuredDirective(
@@ -71,6 +76,7 @@ AtRun
         runCode.raw,
         {
           ...runCode.meta,
+          ...helpers.createSecurityMeta(securityOptions),
           ...(comment ? { comment } : {})
         },
         runCode.location,
@@ -121,9 +127,9 @@ RunDirectiveRef
 // HELPER RULES
 // -------------------------------------------------------------
 
-// Command reference structure (for @run @command)
+// Command reference structure (for @run @command with field access support)
 RunCommandReference
-  = identifier:BaseIdentifier _ args:RunCommandArguments? {
+  = identifier:BaseIdentifier fields:AnyFieldAccess* _ args:RunCommandArguments? {
       // Process arguments if present
       const processedArgs = args || [];
       const rawArgs = processedArgs.map(arg => {
@@ -132,9 +138,16 @@ RunCommandReference
         return '';
       });
       
+      // Create a variable reference node with field access support
+      const varRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: identifier,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+      
       return {
-        identifier: [helpers.createNode(NodeType.Text, { content: identifier, location: location() })],
+        identifier: [varRef],
         rawIdentifier: identifier,
+        fields: fields,
         args: processedArgs,
         rawArgs: rawArgs
       };
