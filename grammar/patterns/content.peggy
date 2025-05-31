@@ -215,7 +215,7 @@ TemplateStyleInterpolation "Template interpolation patterns"
 // Command-style interpolation: supports all relevant interpolation types
 CommandStyleInterpolation "Command interpolation patterns"
   = LiteralOnlyContent          // "literal command"
-  / CommandBracketContent       // [command with @var] - permissive for shell commands
+  / InterpolatedPathContent     // [command with @var] 
   / InterpolatedTemplateContent // [[command with {{var}}]]
 
 // -------------------------------------------------------------
@@ -257,7 +257,7 @@ WrappedTemplateContent "Wrapped template content"
 
 // For commands in run, exec directives
 WrappedCommandContent "Wrapped command content"
-  = content:CommandStyleInterpolation {
+  = content:CommandContentInterpolation {
       // Construct raw string from the content nodes
       const rawString = helpers.reconstructRawString(content);
       
@@ -266,6 +266,12 @@ WrappedCommandContent "Wrapped command content"
         raw: rawString
       };
     }
+
+// Specialized command interpolation that allows complex shell syntax
+CommandContentInterpolation "Command content interpolation patterns"
+  = LiteralOnlyContent          // "literal command"
+  / CommandBracketContent       // [command with @var] - permissive for shell commands
+  / InterpolatedTemplateContent // [[command with {{var}}]]
 
 // For code blocks in run, exec directives
 WrappedCodeContent "Wrapped code content"
