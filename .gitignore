@@ -19,7 +19,8 @@ core/version.ts
 # Grammar generated files
 grammar/parser/parser.js
 grammar/parser/parser.ts
-grammar/generated/
+grammar/generated/*
+!grammar/generated/.gitkeep
 
 # Test fixtures (generated from test cases)
 tests/fixtures/**/*.generated-fixture.json
