@@ -28,7 +28,7 @@ DottedIdentifier "Dotted Identifier"
 
 // Primary @data directive
 AtData
-  = DirectiveContext "@data" _ id:DottedIdentifier _ "=" _ value:DataValue {
+  = DirectiveContext "@data" _ id:DottedIdentifier _ securityOptions:SecurityOptions? _ "=" _ value:DataValue {
       helpers.debug('AtData matched', { id, valueType: value.type });
       
       // Create variable reference node for identifier
@@ -65,6 +65,9 @@ AtData
       } else if (value.type === "variableReference") {
         // Variable reference - wrap in array
         values.value = [value.value];
+      } else if (value.type === "literalPath") {
+        // Literal path content - array of content nodes
+        values.value = value.value.parts;
       } else {
         // For primitive values, ensure it's a ContentNodeArray
         values.value = Array.isArray(value.value) ? value.value : [value.value];
@@ -92,6 +95,12 @@ AtData
           identifier: value.value.identifier,
           hasFieldAccess: !!(value.value.fields && value.value.fields.length > 0)
         } };
+      } else if (value.type === "literalPath") {
+        source = 'literalPath';
+        metaObj = { literalPathData: { 
+          raw: value.value.raw,
+          hasVariables: value.value.parts.some(p => p.type === NodeType.VariableReference)
+        } };
       } else if (value.type === "primitive") {
         source = 'literal';
         // Detect the specific primitive type
@@ -111,6 +120,11 @@ AtData
         }
       }
       
+      // Include security options in metadata if present
+      if (securityOptions) {
+        metaObj.security = securityOptions;
+      }
+      
       // Return the directive node
       return helpers.createStructuredDirective(
         'data',
@@ -118,7 +132,8 @@ AtData
         values,
         {
           identifier: rawIdentifier,
-          value: rawValue
+          value: rawValue,
+          ...(securityOptions ? { securityOptions: JSON.stringify(securityOptions) } : {})
         },
         metaObj,
         location(),
@@ -130,7 +145,7 @@ AtData
 // DATA VALUE TYPES
 // -------------------------------------------------------------
 
-// Any data value (object, array, primitive, directive, template, variable)
+// Any data value (object, array, primitive, directive, template, variable, literal path)
 DataValue
   = DirectiveValue
   / TemplateValue  
@@ -149,6 +164,7 @@ DataValue
         rawText: JSON.stringify(array, null, 2)
       };
     }
+  / LiteralPathValue
   / value:DataPrimitiveValue {
       const rawText = typeof value === 'object' && value.type === NodeType.VariableReference ?
                      `@${value.identifier}` :
@@ -310,6 +326,10 @@ DataObjectLiteral
           else if (value.type === "variableReference") {
             result[key] = value.value; // Variable reference node
           }
+          // Handle literal paths
+          else if (value.type === "literalPath") {
+            result[key] = value.value.parts; // Array of content nodes
+          }
           // Handle primitive values
           else {
             result[key] = value.value || value;
@@ -369,6 +389,8 @@ DataArrayLiteral
           return item.value; // Array of content nodes
         } else if (item.type === "variableReference") {
           return item.value; // Variable reference node
+        } else if (item.type === "literalPath") {
+          return item.value.parts; // Array of content nodes
         } else {
           return item.value || item;
         }
@@ -396,6 +418,71 @@ DataPrimitiveValue
       return helpers.createNode('Null', { value: null }, location());
     }
   / varRef:Variable { return varRef; }
+
+// -------------------------------------------------------------
+// LITERAL PATH VALUES
+// -------------------------------------------------------------
+
+// Literal path value for data objects (wrapped in brackets)
+LiteralPathValue
+  = "[" _ path:LiteralPathContent _ "]" {
+      return {
+        type: "literalPath",
+        value: path,
+        rawText: "[" + (path.raw || "") + "]"
+      };
+    }
+
+// Content inside literal path brackets (excluding @ for variables)
+LiteralPathContent
+  = parts:LiteralPathPart+ {
+      const raw = parts.map(p => {
+        if (p.type === NodeType.Text) {
+          return p.content;
+        } else if (p.type === NodeType.VariableReference) {
+          return '@' + p.identifier;
+        }
+        return p.content || p;
+      }).join('');
+      
+      return {
+        parts,
+        raw
+      };
+    }
+
+// Parts of a literal path (text or variable references)
+LiteralPathPart
+  = LiteralPathEscapedAt
+  / LiteralPathVariableRef  
+  / LiteralPathText
+
+// Escaped @ symbol in literal path
+LiteralPathEscapedAt
+  = "\\@" {
+      return helpers.createNode(NodeType.Text, { 
+        content: '@', 
+        location: location() 
+      });
+    }
+
+// Variable reference in literal path
+LiteralPathVariableRef
+  = "@" varName:BaseIdentifier {
+      return helpers.createVariableReferenceNode('literalPath', { 
+        identifier: varName,
+        location: location()
+      });
+    }
+
+// Regular text in literal path (everything except @, ], and newlines)
+LiteralPathText
+  = chars:$([^@\]\n]+) {
+      return helpers.createNode(NodeType.Text, { 
+        content: chars, 
+        location: location() 
+      });
+    }
 
 // -------------------------------------------------------------
 // DIRECTIVE REFERENCES

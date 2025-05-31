@@ -53,6 +53,36 @@ BracketContent "Content with @var interpolation"
       return parts;
     }
 
+// Content inside command brackets - much more permissive for shell commands
+CommandBracketContent "Command content with @var interpolation"
+  = '[' parts:(CommandBracketVar / CommandTextContent)* ']' {
+      // Return only the content within brackets, not the brackets themselves
+      return parts;
+    }
+
+// Variable reference within command bracketed content
+CommandBracketVar
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* { 
+      const node = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+      helpers.debug('CreateVAR in CommandBracketContent', { id, node, fields: fields });
+      return node;
+    }
+
+// Permissive text content for commands - allows everything except @ and unescaped ]
+CommandTextContent "Permissive command text content"
+  = chars:CommandBracketChar+ { 
+      const content = chars.join('');
+      helpers.debug('CommandTextContent matched', { content });
+      return helpers.createNode(NodeType.Text, { content, location: location() });
+    }
+
+CommandBracketChar
+  = EscapeSequence
+  / !"@" !"]" char:. { return char; }
+
 // Variable reference within bracketed content
 BracketVar
   = "@" id:BaseIdentifier fields:AnyFieldAccess* { 
@@ -185,7 +215,7 @@ TemplateStyleInterpolation "Template interpolation patterns"
 // Command-style interpolation: supports all relevant interpolation types
 CommandStyleInterpolation "Command interpolation patterns"
   = LiteralOnlyContent          // "literal command"
-  / InterpolatedPathContent     // [command with @var] 
+  / CommandBracketContent       // [command with @var] - permissive for shell commands
   / InterpolatedTemplateContent // [[command with {{var}}]]
 
 // -------------------------------------------------------------
