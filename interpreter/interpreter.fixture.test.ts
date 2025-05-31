@@ -226,7 +226,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // This test expects a 'variable' to exist with value 'value'
         // But the fixture doesn't define it - skip for now
         // TODO: File issue for incomplete fixture
-      } else if (fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url') {
+      } else if (fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed') {
         // Mock fetch for URL tests
         global.fetch = async (url: string) => {
           if (url === 'https://raw.githubusercontent.com/example/repo/main/README.md') {
@@ -253,6 +253,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           throw new Error(`Unexpected URL in test: ${url}`);
         };
       }
+      
+      // Set up environment variables from fixture if specified  
+      let originalEnvVars: Record<string, string | undefined> = {};
       
       try {
         // For path assignment tests, we need to set the correct basePath
@@ -410,6 +413,14 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             stdinContent = '{"config": "test-value", "data": "sample-data"}';
           }
           
+          // Set up environment variables from fixture if specified
+          if ((fixture as any).environmentVariables) {
+            for (const [key, value] of Object.entries((fixture as any).environmentVariables)) {
+              originalEnvVars[key] = process.env[key];
+              process.env[key] = value as string;
+            }
+          }
+          
           // For valid fixtures, expect successful interpretation
           const result = await interpret(fixture.input, {
             fileSystem,
@@ -441,7 +452,18 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         }
         // For error fixtures, this is expected - the test already passed via expect().rejects.toThrow()
       } finally {
-        // Clean up environment variables
+        // Clean up environment variables from fixture
+        if ((fixture as any).environmentVariables) {
+          for (const key of Object.keys((fixture as any).environmentVariables)) {
+            if (originalEnvVars[key] === undefined) {
+              delete process.env[key];
+            } else {
+              process.env[key] = originalEnvVars[key];
+            }
+          }
+        }
+        
+        // Clean up other environment variables
         if (fixture.name.includes('run-bash')) {
           delete process.env.MOCK_BASH;
         }

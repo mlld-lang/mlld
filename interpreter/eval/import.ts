@@ -355,41 +355,42 @@ async function evaluateInputImport(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
-  // Get input content from INPUT reserved variable
-  const inputVar = env.getVariable('INPUT');
-  if (!inputVar || !inputVar.value) {
-    throw new Error('No input data available. @INPUT requires data to be provided via stdin or --stdin flag.');
+  // For @INPUT imports, use the merged @INPUT variable that includes env vars
+  // For @stdin imports (legacy), fall back to raw stdin content
+  const inputVariable = env.getVariable('INPUT');
+  let inputData: any = null;
+  
+  if (inputVariable) {
+    // Use the merged @INPUT variable (includes env vars + stdin)
+    inputData = inputVariable.value;
+  } else {
+    // Fallback to raw stdin for legacy @stdin imports or if no @INPUT
+    const rawStdinContent = env.getRawStdinContent();
+    if (!rawStdinContent) {
+      throw new Error('No input data available. @stdin/@INPUT imports require data to be provided via stdin.');
+    }
+    
+    // Try to parse raw stdin as JSON
+    try {
+      inputData = JSON.parse(rawStdinContent);
+    } catch {
+      inputData = rawStdinContent;
+    }
   }
   
-  const inputContent = String(inputVar.value);
+  if (inputData === null || inputData === undefined) {
+    throw new Error('No input data available. @stdin/@INPUT imports require data to be provided via stdin.');
+  }
   
-  // Try to parse as JSON first
+  // Convert inputData to variables
   let variables: Map<string, MlldVariable> = new Map();
   
-  try {
-    const jsonData = JSON.parse(inputContent);
-    
-    // Convert JSON to variables
-    if (typeof jsonData === 'object' && jsonData !== null && !Array.isArray(jsonData)) {
-      // JSON object - extract fields as variables
-      for (const [key, value] of Object.entries(jsonData)) {
-        variables.set(key, {
-          type: 'data',
-          value: value,
-          nodeId: '',
-          location: { line: 0, column: 0 },
-          metadata: {
-            isImported: true,
-            importPath: '@INPUT',
-            definedAt: { line: 0, column: 0, filePath: '@INPUT' }
-          }
-        });
-      }
-    } else {
-      // Non-object JSON (array, string, number, etc.) - store as 'content'
-      variables.set('content', {
+  if (typeof inputData === 'object' && inputData !== null && !Array.isArray(inputData)) {
+    // Object data - extract fields as variables
+    for (const [key, value] of Object.entries(inputData)) {
+      variables.set(key, {
         type: 'data',
-        value: jsonData,
+        value: value,
         nodeId: '',
         location: { line: 0, column: 0 },
         metadata: {
@@ -399,11 +400,11 @@ async function evaluateInputImport(
         }
       });
     }
-  } catch {
-    // Not valid JSON - store as plain text in 'content' variable
+  } else {
+    // Non-object data (array, string, number, etc.) - store as 'content'
     variables.set('content', {
-      type: 'text',
-      value: inputContent,
+      type: 'data',
+      value: inputData,
       nodeId: '',
       location: { line: 0, column: 0 },
       metadata: {

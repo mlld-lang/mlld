@@ -213,11 +213,12 @@ export class Environment {
    * Only called for root environment (non-child)
    */
   private initializeReservedVariables(): void {
-    // Initialize @INPUT from stdin content if available
-    if (this.stdinContent) {
+    // Initialize @INPUT from merged stdin content and environment variables
+    const inputValue = this.createInputValue();
+    if (inputValue !== null) {
       const inputVar: MlldVariable = {
-        type: 'text',
-        value: this.stdinContent,
+        type: inputValue.type,
+        value: inputValue.value,
         nodeId: '',
         location: { line: 0, column: 0 },
         metadata: {
@@ -225,7 +226,8 @@ export class Environment {
           definedAt: { line: 0, column: 0, filePath: '<reserved>' }
         }
       };
-      this.setVariable('INPUT', inputVar);
+      // Direct assignment for reserved variables during initialization
+      this.variables.set('INPUT', inputVar);
       // Note: lowercase 'input' is handled in getVariable() to avoid conflicts
     }
     
@@ -244,7 +246,8 @@ export class Environment {
         definedAt: { line: 0, column: 0, filePath: '<reserved>' }
       }
     };
-    this.setVariable('TIME', timeVar);
+    // Direct assignment for reserved variables during initialization
+    this.variables.set('TIME', timeVar);
     // Note: lowercase 'time' is handled in getVariable() to avoid conflicts
   }
   
@@ -435,6 +438,92 @@ export class Environment {
   }
   
   /**
+   * Create the @INPUT value by merging stdin content with environment variables
+   */
+  private createInputValue(): { type: 'text' | 'data'; value: any } | null {
+    // Get environment variables if enabled
+    const envVars = this.getEnvironmentVariables();
+    
+    // Parse stdin content if available
+    let stdinData: any = null;
+    if (this.stdinContent) {
+      try {
+        // Try to parse as JSON first
+        stdinData = JSON.parse(this.stdinContent);
+      } catch {
+        // If not JSON, treat as plain text
+        stdinData = this.stdinContent;
+      }
+    }
+    
+    // Determine the final @INPUT value
+    if (Object.keys(envVars).length > 0 && stdinData !== null) {
+      // Both env vars and stdin: merge them
+      if (typeof stdinData === 'object' && stdinData !== null && !Array.isArray(stdinData)) {
+        // Merge env vars into JSON object (env vars take precedence)
+        return {
+          type: 'data',
+          value: { ...stdinData, ...envVars }
+        };
+      } else {
+        // Stdin is not an object, add it as 'content' alongside env vars
+        return {
+          type: 'data',
+          value: {
+            content: stdinData,
+            ...envVars
+          }
+        };
+      }
+    } else if (Object.keys(envVars).length > 0) {
+      // Only env vars: return as data object
+      return {
+        type: 'data',
+        value: envVars
+      };
+    } else if (stdinData !== null) {
+      // Only stdin: preserve original stdin behavior for @INPUT when no env vars
+      return {
+        type: typeof stdinData === 'object' ? 'data' : 'text',
+        value: stdinData
+      };
+    }
+    
+    // No input available
+    return null;
+  }
+
+  /**
+   * Get raw stdin content for legacy @stdin imports
+   * This preserves the original behavior for @import from "@stdin"
+   */
+  getRawStdinContent(): string {
+    return this.stdinContent || '';
+  }
+
+  /**
+   * Get environment variables if enabled
+   */
+  private getEnvironmentVariables(): Record<string, string> {
+    // TODO: Add config support for allow_env_vars (defaults to true for now)
+    const allowEnvVars = true;
+    
+    if (!allowEnvVars) {
+      return {};
+    }
+    
+    const envVars: Record<string, string> = {};
+    
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) {
+        envVars[key] = value;
+      }
+    }
+    
+    return envVars;
+  }
+
+  /**
    * Set stdin content for this environment (typically only on root)
    */
   setStdinContent(content: string): void {
@@ -442,18 +531,22 @@ export class Environment {
       // Only store on root environment
       this.stdinContent = content;
       
-      // Update @INPUT reserved variable
-      const inputVar: MlldVariable = {
-        type: 'text',
-        value: content,
-        nodeId: '',
-        location: { line: 0, column: 0 },
-        metadata: {
-          isReserved: true,
-          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-        }
-      };
-      this.setVariable('INPUT', inputVar);
+      // Update @INPUT reserved variable with merged content
+      const inputValue = this.createInputValue();
+      if (inputValue !== null) {
+        const inputVar: MlldVariable = {
+          type: inputValue.type,
+          value: inputValue.value,
+          nodeId: '',
+          location: { line: 0, column: 0 },
+          metadata: {
+            isReserved: true,
+            definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+          }
+        };
+        // Direct assignment to avoid redefinition error since INPUT might already exist
+        this.variables.set('INPUT', inputVar);
+      }
       // Note: lowercase 'input' is handled in getVariable() to avoid conflicts
     } else {
       // Delegate to parent
