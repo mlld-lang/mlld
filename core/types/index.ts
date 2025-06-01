@@ -82,18 +82,77 @@ export enum VariableType {
   IMPORT = 'import'
 }
 
-// Base variable interface
-export interface MlldVariable {
+// Base variable metadata interface
+export interface VariableMetadata {
+  createdAt?: number;
+  modifiedAt?: number;
+  definedAt?: any; // SourceLocation
+  isImported?: boolean;
+  importPath?: string;
+  isComplex?: boolean;
+}
+
+// Discriminated union for properly typed variables
+export type MlldVariable = 
+  | TextVariable
+  | DataVariable
+  | PathVariable
+  | CommandVariable
+  | ImportVariable;
+
+// Individual variable types with strong typing
+export interface TextVariable {
+  type: VariableType.TEXT;
+  name: string;
+  value: string;
+  metadata?: VariableMetadata;
+}
+
+export interface DataVariable {
+  type: VariableType.DATA;
+  name: string;
+  value: unknown; // Data can be any JSON-serializable value
+  metadata?: VariableMetadata;
+}
+
+export interface PathVariable {
+  type: VariableType.PATH;
+  name: string;
+  value: {
+    resolvedPath: string;
+    isURL?: boolean;
+    security?: any; // SecurityOptions type if defined
+  };
+  metadata?: VariableMetadata;
+}
+
+export interface CommandVariable {
+  type: VariableType.COMMAND;
+  name: string;
+  value: {
+    command: string;
+    params?: string[];
+  };
+  metadata?: VariableMetadata;
+}
+
+export interface ImportVariable {
+  type: VariableType.IMPORT;
+  name: string;
+  value: {
+    source: string;
+    imported: string[];
+  };
+  metadata?: VariableMetadata;
+}
+
+// Legacy interface for backward compatibility (deprecated)
+/** @deprecated Use discriminated MlldVariable types instead */
+export interface LegacyMlldVariable {
   type: VariableType;
   name: string;
   value: any;
-  metadata?: {
-    createdAt?: number;
-    modifiedAt?: number;
-    definedAt?: any; // SourceLocation
-    isImported?: boolean;
-    importPath?: string;
-  };
+  metadata?: VariableMetadata;
 }
 
 // =========================================================================
@@ -123,8 +182,8 @@ export function astLocationToSourceLocation(
 export function createTextVariable(
   name: string,
   value: string,
-  metadata?: any
-): MlldVariable {
+  metadata?: Partial<VariableMetadata>
+): TextVariable {
   return {
     type: VariableType.TEXT,
     name,
@@ -142,9 +201,9 @@ export function createTextVariable(
  */
 export function createDataVariable(
   name: string,
-  value: any,
-  metadata?: any
-): MlldVariable {
+  value: unknown,
+  metadata?: Partial<VariableMetadata>
+): DataVariable {
   return {
     type: VariableType.DATA,
     name,
@@ -162,9 +221,9 @@ export function createDataVariable(
  */
 export function createComplexDataVariable(
   name: string,
-  value: any,
-  metadata?: any
-): MlldVariable {
+  value: unknown,
+  metadata?: Partial<VariableMetadata>
+): DataVariable {
   return {
     type: VariableType.DATA,
     name,
@@ -183,13 +242,21 @@ export function createComplexDataVariable(
  */
 export function createPathVariable(
   name: string,
-  value: any, // Can be string or path state object
-  metadata?: any
-): MlldVariable {
+  resolvedPath: string,
+  options?: {
+    isURL?: boolean;
+    security?: any;
+  },
+  metadata?: Partial<VariableMetadata>
+): PathVariable {
   return {
     type: VariableType.PATH,
     name,
-    value,
+    value: {
+      resolvedPath,
+      isURL: options?.isURL || false,
+      ...(options?.security && { security: options.security })
+    },
     metadata: {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
@@ -203,19 +270,74 @@ export function createPathVariable(
  */
 export function createCommandVariable(
   name: string,
-  value: any, // Command definition
-  metadata?: any
-): MlldVariable {
+  command: string,
+  params?: string[],
+  metadata?: Partial<VariableMetadata>
+): CommandVariable {
   return {
     type: VariableType.COMMAND,
     name,
-    value,
+    value: {
+      command,
+      params: params || []
+    },
     metadata: {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       ...metadata
     }
   };
+}
+
+/**
+ * Create an import variable
+ */
+export function createImportVariable(
+  name: string,
+  source: string,
+  imported: string[],
+  metadata?: Partial<VariableMetadata>
+): ImportVariable {
+  return {
+    type: VariableType.IMPORT,
+    name,
+    value: {
+      source,
+      imported
+    },
+    metadata: {
+      createdAt: Date.now(),
+      modifiedAt: Date.now(),
+      ...metadata
+    }
+  };
+}
+
+// =========================================================================
+// TYPE GUARD FUNCTIONS
+// =========================================================================
+
+/**
+ * Type guard functions for safe runtime type checking
+ */
+export function isTextVariable(variable: MlldVariable): variable is TextVariable {
+  return variable.type === VariableType.TEXT;
+}
+
+export function isDataVariable(variable: MlldVariable): variable is DataVariable {
+  return variable.type === VariableType.DATA;
+}
+
+export function isPathVariable(variable: MlldVariable): variable is PathVariable {
+  return variable.type === VariableType.PATH;
+}
+
+export function isCommandVariable(variable: MlldVariable): variable is CommandVariable {
+  return variable.type === VariableType.COMMAND;
+}
+
+export function isImportVariable(variable: MlldVariable): variable is ImportVariable {
+  return variable.type === VariableType.IMPORT;
 }
 
 // =========================================================================

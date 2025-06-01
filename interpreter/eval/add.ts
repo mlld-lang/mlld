@@ -2,6 +2,7 @@ import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
+import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
 import { createLLMXML } from 'llmxml';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
 
@@ -41,36 +42,40 @@ export async function evaluateAdd(
       throw new Error(`Variable not found: ${varName}`);
     }
     
-    // Get the base value
+    // Get the base value using type-safe approach
     let value: any;
-    switch (variable.type) {
-      case 'text':
-        value = variable.value;
-        break;
-      case 'data':
-        value = variable.value;
-        break;
-      case 'path':
-        // For path variables, we should read the file contents
-        const pathValue = variable.value.resolvedPath;
-        const isURL = variable.value.isURL;
-        const security = variable.value.security;
-        
-        try {
-          if (isURL && security) {
-            // Use URL cache with security options
-            value = await env.fetchURLWithSecurity(pathValue, security, varName);
-          } else {
-            // Regular file or URL without security options
-            value = await env.readFile(pathValue);
-          }
-        } catch (error) {
-          // If it's not a file or can't be read, use the path itself
-          value = pathValue;
+    if (isTextVariable(variable)) {
+      // Text variables contain string content - use directly
+      value = variable.value;
+    } else if (isDataVariable(variable)) {
+      // Data variables contain structured data
+      value = variable.value;
+    } else if (isPathVariable(variable)) {
+      // Path variables contain file path info - read the file
+      const pathValue = variable.value.resolvedPath;
+      const isURL = variable.value.isURL;
+      const security = variable.value.security;
+      
+      try {
+        if (isURL && security) {
+          // Use URL cache with security options
+          value = await env.fetchURLWithSecurity(pathValue, security, varName);
+        } else {
+          // Regular file or URL without security options
+          value = await env.readFile(pathValue);
         }
-        break;
-      default:
-        value = (variable as any).value;
+      } catch (error) {
+        // If it's not a file or can't be read, use the path itself
+        value = pathValue;
+      }
+    } else if (isImportVariable(variable)) {
+      // Import variables contain imported data
+      value = variable.value;
+    } else if (isCommandVariable(variable)) {
+      // Command variables - should probably not be used directly in add
+      throw new Error(`Cannot add command variable directly. Commands need to be executed first.`);
+    } else {
+      throw new Error(`Unknown variable type in add evaluator: ${(variable as any).type}`);
     }
     
     // Handle field access if present in the variable node

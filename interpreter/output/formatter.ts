@@ -1,5 +1,6 @@
 import type { MlldNode, MlldVariable } from '@core/types';
 import { createLLMXML } from 'llmxml';
+import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
 
 /**
  * Output formatting options
@@ -91,20 +92,21 @@ function buildStructuredMarkdown(nodes: MlldNode[], options: FormatOptions): str
 }
 
 /**
- * Get string value from variable
+ * Get string value from variable using type-safe approach
  */
 function getVariableValue(variable: MlldVariable): string {
-  switch (variable.type) {
-    case 'text':
-      return variable.value;
-    case 'data':
-      return JSON.stringify(variable.value, null, 2);
-    case 'path':
-      return variable.value.resolvedPath;
-    case 'command':
-      return JSON.stringify(variable.value);
-    default:
-      return String((variable as any).value);
+  if (isTextVariable(variable)) {
+    return variable.value;
+  } else if (isDataVariable(variable)) {
+    return JSON.stringify(variable.value, null, 2);
+  } else if (isPathVariable(variable)) {
+    return variable.value.resolvedPath;
+  } else if (isCommandVariable(variable)) {
+    return JSON.stringify(variable.value);
+  } else if (isImportVariable(variable)) {
+    return JSON.stringify(variable.value);
+  } else {
+    throw new Error(`Unknown variable type in formatter: ${(variable as any).type}`);
   }
 }
 

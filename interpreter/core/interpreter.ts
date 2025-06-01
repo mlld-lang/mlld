@@ -1,6 +1,7 @@
 import type { MlldNode, DirectiveNode, TextNode, CommentNode, MlldDocument, MlldVariable, FrontmatterNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
+import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
 import { isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
@@ -247,25 +248,26 @@ export async function interpolate(
         continue;
       }
       
-      // Extract value based on variable type
+      // Extract value based on variable type using type-safe approach
       let value: any = '';
-      switch (variable.type) {
-        case 'text':
-          value = variable.value;
-          break;
-        case 'data':
-          // Handle both simple and complex data variables
-          value = await resolveVariableValue(variable, env);
-          break;
-        case 'path':
-          value = variable.value?.resolvedPath || variable.value;
-          break;
-        case 'command':
-          // Commands don't interpolate - they need to be run
-          value = `[command: ${variable.name}]`;
-          break;
-        default:
-          value = (variable as any).value;
+      if (isTextVariable(variable)) {
+        // Text variables contain string content - use directly
+        value = variable.value;
+      } else if (isDataVariable(variable)) {
+        // Handle both simple and complex data variables
+        value = await resolveVariableValue(variable, env);
+      } else if (isPathVariable(variable)) {
+        // For path variables in interpolation, use the resolved path string
+        value = variable.value.resolvedPath;
+      } else if (isCommandVariable(variable)) {
+        // Commands don't interpolate - they need to be run
+        value = `[command: ${variable.name}]`;
+      } else if (isImportVariable(variable)) {
+        // Import variables contain imported data - use their value
+        value = variable.value;
+      } else {
+        // This should never happen with proper typing
+        throw new Error(`Unknown variable type for interpolation: ${(variable as any).type}`);
       }
       
       // Handle field access if present

@@ -11,7 +11,8 @@ import {
   isTemplateValue,
   isPrimitiveValue
 } from '@core/types/data';
-import { evaluate, interpolate } from '../core/interpreter';
+import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
+import { evaluate, interpolate, resolveVariableValue } from '../core/interpreter';
 import { accessField } from '../utils/field-access';
 
 /**
@@ -87,13 +88,29 @@ export async function evaluateDataValue(
       return variable;
     }
     
-    let result = variable.value;
+    // Extract value using type-safe approach
+    let result: any;
+    if (isTextVariable(variable)) {
+      result = variable.value;
+    } else if (isDataVariable(variable)) {
+      result = await resolveVariableValue(variable, env);
+    } else if (isPathVariable(variable)) {
+      result = variable.value.resolvedPath;
+    } else if (isCommandVariable(variable)) {
+      result = variable; // Already handled above but included for completeness
+    } else if (isImportVariable(variable)) {
+      result = variable.value;
+    } else {
+      throw new Error(`Unknown variable type in data evaluation: ${(variable as any).type}`);
+    }
     
     // Apply field access if present
     if (value.fields && value.fields.length > 0) {
-      // If the variable is a complex data variable, we need to evaluate it first
+      // If the variable is a complex data variable that needs further evaluation
       if (variable.type === 'data' && 'isFullyEvaluated' in variable && !variable.isFullyEvaluated) {
-        result = await evaluateDataValue(variable.value, env);
+        // For legacy complex data variables, we need to evaluate the raw value
+        const complexVar = variable as any;
+        result = await evaluateDataValue(complexVar.value, env);
       }
       
       for (const field of value.fields) {
