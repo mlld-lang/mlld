@@ -37,14 +37,26 @@ export interface RegistryResolverConfig {
  * Registry format from registry.json files
  */
 interface RegistryFile {
-  version: string;
-  updated: string;
+  version?: string;
+  updated?: string;
   author: string;
   modules: Record<string, {
-    gist: string;
+    name: string;
     description: string;
-    tags?: string[];
-    created: string;
+    author: {
+      name: string;
+      github: string;
+    };
+    source: {
+      type: string;
+      repo: string;
+      hash: string;
+      url: string;
+    };
+    dependencies: Record<string, string>;
+    keywords: string[];
+    mlldVersion: string;
+    publishedAt: string;
   }>;
 }
 
@@ -95,8 +107,10 @@ export class RegistryResolver implements Resolver {
       // Fetch user's registry file
       const registryFile = await this.fetchUserRegistry(user, registryRepo, branch, config);
       
-      // Look up the module
-      const moduleEntry = registryFile.modules[moduleName];
+      // Look up the module - try both full name (@user/module) and just module name
+      const fullModuleName = `@${user}/${moduleName}`;
+      let moduleEntry = registryFile.modules[fullModuleName] || registryFile.modules[moduleName];
+      
       if (!moduleEntry) {
         throw new MlldResolutionError(
           `Module '${moduleName}' not found in ${user}'s registry`,
@@ -107,17 +121,16 @@ export class RegistryResolver implements Resolver {
         );
       }
 
-      // Construct the gist URL
-      const gistId = moduleEntry.gist;
-      const gistUrl = `https://gist.githubusercontent.com/${user}/${gistId}/raw`;
+      // Get the source URL directly from the registry
+      const sourceUrl = moduleEntry.source.url;
       
-      logger.debug(`Resolved ${ref} to gist: ${gistUrl}`);
+      logger.debug(`Resolved ${ref} to source: ${sourceUrl}`);
 
-      // Fetch the gist content
-      const gistContent = await this.fetchGistContent(gistUrl, config?.token);
+      // Fetch the module content
+      const moduleContent = await this.fetchModuleContent(sourceUrl, config?.token);
 
       return {
-        content: gistContent,
+        content: moduleContent,
         metadata: {
           source: `registry://${ref}`,
           timestamp: new Date(),
@@ -125,8 +138,8 @@ export class RegistryResolver implements Resolver {
           author: user,
           mimeType: 'text/x-mlld',
           description: moduleEntry.description,
-          gistId: gistId,
-          gistUrl: gistUrl
+          sourceUrl: sourceUrl,
+          sourceHash: moduleEntry.source.hash
         }
       };
     } catch (error) {
@@ -201,8 +214,8 @@ export class RegistryResolver implements Resolver {
       return cached;
     }
 
-    // Construct GitHub raw URL
-    const registryUrl = `https://raw.githubusercontent.com/${registryRepo}/${branch}/${username}/registry.json`;
+    // Construct GitHub raw URL - registry uses modules/{username}/registry.json structure
+    const registryUrl = `https://raw.githubusercontent.com/${registryRepo}/${branch}/modules/${username}/registry.json`;
     
     logger.debug(`Fetching registry for ${username} from: ${registryUrl}`);
 
@@ -245,10 +258,10 @@ export class RegistryResolver implements Resolver {
   }
 
   /**
-   * Fetch gist content
+   * Fetch module content from source URL
    */
-  private async fetchGistContent(gistUrl: string, token?: string): Promise<string> {
-    logger.debug(`Fetching gist content from: ${gistUrl}`);
+  private async fetchModuleContent(sourceUrl: string, token?: string): Promise<string> {
+    logger.debug(`Fetching module content from: ${sourceUrl}`);
 
     const headers: HeadersInit = {
       'User-Agent': 'mlld-registry-resolver'
@@ -258,10 +271,10 @@ export class RegistryResolver implements Resolver {
       headers['Authorization'] = `token ${token}`;
     }
 
-    const response = await fetch(gistUrl, { headers });
+    const response = await fetch(sourceUrl, { headers });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch gist: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to fetch module: ${response.status} ${response.statusText}`);
     }
 
     return response.text();
@@ -291,10 +304,6 @@ export class RegistryResolver implements Resolver {
       throw new Error('Registry file must be a valid JSON object');
     }
 
-    if (!data.version) {
-      throw new Error('Registry file missing version field');
-    }
-
     if (!data.author) {
       throw new Error('Registry file missing author field');
     }
@@ -314,8 +323,12 @@ export class RegistryResolver implements Resolver {
       }
 
       const module = moduleData as any;
-      if (!module.gist || typeof module.gist !== 'string') {
-        throw new Error(`Module '${moduleName}' missing or invalid gist field`);
+      if (!module.source || typeof module.source !== 'object') {
+        throw new Error(`Module '${moduleName}' missing or invalid source field`);
+      }
+
+      if (!module.source.url || typeof module.source.url !== 'string') {
+        throw new Error(`Module '${moduleName}' missing or invalid source.url field`);
       }
 
       if (!module.description || typeof module.description !== 'string') {
