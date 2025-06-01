@@ -110,4 +110,9 @@ When compacting for the next session--*especially* mid-task, your emphasis shoul
 - Don't add comments saying something is being removed or changed -- keep comments timeless
 
 ## Development Workflows
-- If you want to run mlld for a manual test, run `npm run reinstall` then you can run the `mlld` command locally
+- **Local Testing**: To test mlld locally with custom command names:
+  - `npm run reinstall` - installs as `mlld-<current-git-branch>` (e.g., `mlld-rc`, `mlld-main`)
+  - `npm run reinstall -- myname` - installs as `mlld-myname` 
+  - `npm run reinstall:clean` - removes ALL `mlld-*` commands
+  - `npm run reinstall:clean -- myname` - removes only `mlld-myname`
+  - These commands create symlinks in your global npm bin directory, so you can run multiple versions side-by-side
