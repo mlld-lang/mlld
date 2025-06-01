@@ -103,3 +103,6 @@ debug-combined-grammar.peggy
 *.vsix
 
 cli/temp-test-*
+
+# Local install metadata
+.mlld-local-installs.json
