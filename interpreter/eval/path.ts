@@ -58,11 +58,7 @@ export async function evaluatePath(
   }
   
   // Create and store the variable with security metadata
-  const variable = createPathVariable(identifier, {
-    originalPath: interpolatedPath,
-    resolvedPath: resolvedPath,
-    isAbsolute: resolvedPath.startsWith('/') || isURL || env.isURL(resolvedPath),
-    isRelative: !resolvedPath.startsWith('/') && !isURL && !env.isURL(resolvedPath),
+  const variable = createPathVariable(identifier, resolvedPath, {
     isURL: isURL || env.isURL(resolvedPath),
     security: security
   }, {

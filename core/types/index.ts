@@ -129,10 +129,7 @@ export interface PathVariable {
 export interface CommandVariable {
   type: VariableType.COMMAND;
   name: string;
-  value: {
-    command: string;
-    params?: string[];
-  };
+  value: any; // Command definition object with commandTemplate, paramNames, type, etc.
   metadata?: VariableMetadata;
 }
 
@@ -270,17 +267,13 @@ export function createPathVariable(
  */
 export function createCommandVariable(
   name: string,
-  command: string,
-  params?: string[],
+  commandDef: any,
   metadata?: Partial<VariableMetadata>
 ): CommandVariable {
   return {
     type: VariableType.COMMAND,
     name,
-    value: {
-      command,
-      params: params || []
-    },
+    value: commandDef,
     metadata: {
       createdAt: Date.now(),
       modifiedAt: Date.now(),

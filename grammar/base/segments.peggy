@@ -71,6 +71,18 @@ PathChar
   = EscapeSequence
   / ![\]/[\]@${}] char:. { return char; }
 
+// Section text segment - for section names after #, with escape support
+SectionTextSegment "Section text segment"
+  = chars:SectionChar+ { 
+      const content = chars.join('');
+      helpers.debug('SectionTextSegment matched', { content });
+      return helpers.createNode(NodeType.Text, { content, location: location() });
+    }
+
+SectionChar
+  = EscapeSequence
+  / ![\]] char:. { return char; }
+
 // -------------------------------------------------------------
 // ESCAPE-AWARE STRING CONTENT  
 // -------------------------------------------------------------

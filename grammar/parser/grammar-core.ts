@@ -402,4 +402,16 @@ export const helpers = {
         };
         return formatMap[ext] || null;
     },
+    createSectionMeta(pathParts, sectionParts, hasRename) {
+        return {
+            sourceType: 'section',
+            hasVariables: [...pathParts, ...sectionParts].some(part => part && part.type === 'VariableReference'),
+            hasRename: hasRename
+        };
+    },
+    reconstructSectionPath(pathParts, sectionParts) {
+        const pathStr = this.reconstructRawString(pathParts);
+        const sectionStr = this.reconstructRawString(sectionParts);
+        return `${pathStr} # ${sectionStr}`;
+    },
 };

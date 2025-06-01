@@ -187,7 +187,11 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       }
       
       // Set up specific test files that aren't in the examples directory
-      if (fixture.name.startsWith('import-')) {
+      if (fixture.name === 'comments-inline') {
+        // Set up files for comments-inline test
+        await fileSystem.writeFile('/utils.mld', '@text x = "Value X"\n@text y = "Value Y"');
+        await fileSystem.writeFile('/README.md', '# Example Project\n\nThis is the main README content.');
+      } else if (fixture.name.startsWith('import-')) {
         // Set up files for import alias tests
         if (fixture.name === 'import-alias') {
           await fileSystem.writeFile('/config.mld', '@text author = "Config Author"\n@text title = "My Project"');

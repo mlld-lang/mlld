@@ -21,20 +21,17 @@ It can be used in these forms:
 
 // Primary @add directive with all variants
 AtAdd
-  // Bracketed path with section: [path/to/file.md # Section] - must come first for precedence  
-  = DirectiveContext "@add" _ !'[[' section:BracketedPathSection rename:AsNewTitle? {
-      helpers.debug('AtAdd matched bracketed path section', { section, rename });
+  // Double-bracketed path with section: [[path/to/file.md # Section]]
+  = DirectiveContext "@add" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? {
+      helpers.debug('AtAdd matched double-bracketed path section', { content, rename });
       
-      const rawPath = section.path;
-      const sectionText = section.section;
-      
-      // Parse the path text into parts (this is simplified - in real implementation you'd want proper parsing)
-      const pathParts = [helpers.createNode(NodeType.Text, { content: rawPath, location: location() })];
+      const rawPath = content.raw.split(' # ')[0];
+      const sectionText = content.section;
       
       // Create values object
       const values = {
         sectionTitle: [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })],
-        path: pathParts
+        path: content.parts
       };
       
       // Add new title if provided
@@ -55,7 +52,51 @@ AtAdd
       
       // Create meta object with path metadata
       const meta = {
-        path: helpers.createPathMetadata(rawPath, pathParts)
+        path: helpers.createPathMetadata(rawPath, content.parts)
+      };
+      
+      return helpers.createStructuredDirective(
+        'add', 
+        'addPathSection', 
+        values, 
+        raw, 
+        meta, 
+        location(),
+        'section'  // Added source parameter
+      );
+    }
+  // Single-bracketed path with section: [path/to/file.md # Section]  
+  / DirectiveContext "@add" _ content:WrappedPathContent &{ return content.type === 'sectionPath'; } rename:AsNewTitle? {
+      helpers.debug('AtAdd matched bracketed path section', { content, rename });
+      
+      const rawPath = content.raw.split(' # ')[0];
+      const sectionText = content.section;
+      
+      // Create values object
+      const values = {
+        sectionTitle: [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })],
+        path: content.parts
+      };
+      
+      // Add new title if provided
+      if (rename) {
+        values.newTitle = rename;
+      }
+      
+      // Create raw object
+      const raw = {
+        sectionTitle: sectionText,
+        path: rawPath
+      };
+      
+      // Add new title to raw if present
+      if (rename) {
+        raw.newTitle = rename[0].content;
+      }
+      
+      // Create meta object with path metadata
+      const meta = {
+        path: helpers.createPathMetadata(rawPath, content.parts)
       };
       
       return helpers.createStructuredDirective(

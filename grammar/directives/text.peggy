@@ -32,47 +32,97 @@ AtText
         sourceType
       );
     }
-  // Bracketed path with section: [path/to/file.md # Section] - must come first for precedence
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ section:BracketedPathSection rename:AsNewTitle? {
-      helpers.debug('AtText matched bracketed path section', { id, section, rename });
+  // Double-bracketed path with section: [[path/to/file.md # Section]]
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? {
+      helpers.debug('AtText matched double-bracketed path section', { id, content, rename });
       
       const subtype = 'textPathSection';
       const sourceType = 'section';
       
-      const rawPath = section.path;
-      const sectionText = section.section;
-      
-      // Parse the path text into parts (simplified)
-      const pathParts = [helpers.createNode(NodeType.Text, { content: rawPath, location: location() })];
+      const rawPath = content.raw.split(' # ')[0];
+      const sectionText = content.section;
       
       // Create values object with section and path
       const values = {
         identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-        section: [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })],
-        path: pathParts
+        path: content.parts,
+        sectionTitle: [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })]
       };
       
-      // Add rename if present
+      // Add new title if provided
       if (rename) {
-        values.rename = rename;
+        values.newTitle = rename;
       }
       
       // Create raw object
       const raw = {
         identifier: id,
-        section: sectionText,
-        path: rawPath
+        path: rawPath,
+        sectionTitle: sectionText
       };
       
+      // Add new title to raw if present
       if (rename) {
-        raw.rename = helpers.reconstructRawString(rename);
+        raw.newTitle = rename[0].content;
+      }
+      
+      const meta = {
+        sourceType,
+        hasVariables: false,
+        isTemplateContent: false,
+        path: helpers.createPathMetadata(rawPath, content.parts)
+      };
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        values,
+        raw,
+        meta,
+        location(),
+        sourceType
+      );
+    }
+  // Single-bracketed path with section: [path/to/file.md # Section]
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ content:WrappedPathContent &{ return content.type === 'sectionPath'; } rename:AsNewTitle? {
+      helpers.debug('AtText matched single-bracketed path section', { id, content, rename });
+      
+      const subtype = 'textPathSection';
+      const sourceType = 'section';
+      
+      const rawPath = content.raw.split(' # ')[0];
+      const sectionText = content.section;
+      
+      // Create values object with section and path
+      const values = {
+        identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+        path: content.parts,
+        sectionTitle: [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })]
+      };
+      
+      // Add new title if provided
+      if (rename) {
+        values.newTitle = rename;
+      }
+      
+      // Create raw object
+      const raw = {
+        identifier: id,
+        path: rawPath,
+        sectionTitle: sectionText
+      };
+      
+      // Add new title to raw if present
+      if (rename) {
+        raw.newTitle = rename[0].content;
       }
       
       // Create meta object
       const meta = { 
         sourceType: sourceType,
-        hasRename: !!rename,
-        hasVariables: false // Simplified for now
+        hasVariables: false,
+        isTemplateContent: false,
+        path: helpers.createPathMetadata(rawPath, content.parts)
       };
       
       return helpers.createStructuredDirective(
@@ -207,47 +257,46 @@ AtText
       );
     }
   // @add directive with bracketed path section: @text var = @add [path/to/file.md # Section]
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ section:BracketedPathSection rename:AsNewTitle? {
-      helpers.debug('AtText matched @add with bracketed path section', { id, section, rename });
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ content:WrappedPathContent &{ return content.type === 'sectionPath'; } rename:AsNewTitle? {
+      helpers.debug('AtText matched @add with bracketed path section', { id, content, rename });
       
       const subtype = 'textPathSection';
       const sourceType = 'directive';
       
-      const rawPath = section.path;
-      const sectionText = section.section;
-      
-      // Parse the path text into parts (simplified)
-      const pathParts = [helpers.createNode(NodeType.Text, { content: rawPath, location: location() })];
+      const rawPath = content.raw.split(' # ')[0];
+      const sectionText = content.section;
       
       // Create values object with section and path
       const values = {
         identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-        section: [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })],
-        path: pathParts
+        path: content.parts,
+        sectionTitle: [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })]
       };
       
-      // Add rename if present
+      // Add new title if provided
       if (rename) {
-        values.rename = rename;
+        values.newTitle = rename;
       }
       
       // Create raw object
       const raw = {
         identifier: id,
-        section: sectionText,
-        path: rawPath
+        path: rawPath,
+        sectionTitle: sectionText
       };
       
+      // Add new title to raw if present
       if (rename) {
-        raw.rename = helpers.reconstructRawString(rename);
+        raw.newTitle = rename[0].content;
       }
       
       // Create meta object
       const meta = { 
         sourceType: sourceType,
         directive: 'add',
-        hasRename: !!rename,
-        hasVariables: false // Simplified for now
+        hasVariables: false,
+        isTemplateContent: false,
+        path: helpers.createPathMetadata(rawPath, content.parts)
       };
       
       return helpers.createStructuredDirective(

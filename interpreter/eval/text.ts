@@ -88,7 +88,7 @@ export async function evaluateText(
   let resolvedValue: string;
   
   // Handle path source directives (both new source field and old subtype)
-  if ((directive.source === 'path' || directive.subtype === 'textPath') && !directive.values?.section) {
+  if (directive.source === 'path' && directive.subtype === 'textPath' && !directive.values?.section) {
     // Handle direct path content: @text content = [file.md] or @text content = file.md
     // For textAssignment with source='path', path is in content
     // For textPath subtype, path is in path
@@ -106,9 +106,9 @@ export async function evaluateText(
     // Read the file content or fetch URL (env.readFile handles both)
     resolvedValue = await env.readFile(resolvedPath);
     
-  } else if ((directive.source === 'path' || directive.subtype === 'textPathSection') && directive.values?.section) {
-    // Handle section extraction: @text section = "## Setup" from [file.md]
-    const sectionNodes = directive.values?.section;
+  } else if (directive.source === 'section' && directive.subtype === 'textPathSection') {
+    // Handle section extraction: @text section = [file.md # Section]
+    const sectionNodes = directive.values?.sectionTitle;
     const pathNodes = directive.values?.path;
     
     if (!sectionNodes || !pathNodes) {

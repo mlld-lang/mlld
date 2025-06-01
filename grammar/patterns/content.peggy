@@ -53,6 +53,42 @@ BracketContent "Content with @var interpolation"
       return parts;
     }
 
+// Section-aware bracket content for path # section syntax
+SectionBracketContent "Bracketed path with section extraction"
+  = '[' &{
+      // Look ahead to check if this is a section pattern
+      const remaining = input.substring(location().start.offset + 1);
+      const endIndex = remaining.indexOf(']');
+      if (endIndex === -1) return false;
+      const content = remaining.substring(0, endIndex);
+      
+      // Check if it matches the section pattern
+      const match = content.match(/^([^#]+)\s+#\s+(.+)$/);
+      if (!match) return false;
+      
+      const pathPart = match[1].trim();
+      const sectionPart = match[2].trim();
+      
+      // Path should look path-like: has valid file extension or contains /
+      // Valid extensions: 2-4 alphabetic characters (not just numbers)
+      const hasExtension = /\.[a-zA-Z]{2,4}$/.test(pathPart);
+      const hasSlash = pathPart.includes('/');
+      const looksLikePath = hasExtension || hasSlash;
+      
+      return looksLikePath && pathPart.length > 0 && sectionPart.length > 0;
+    } pathText:$([^#\]]*) _ '#' _ sectionText:$([^\]]*) ']' {
+      // Parse path and section as simple text for now
+      const pathParts = pathText.trim() ? [helpers.createNode(NodeType.Text, { content: pathText.trim(), location: location() })] : [];
+      const sectionParts = sectionText.trim() ? [helpers.createNode(NodeType.Text, { content: sectionText.trim(), location: location() })] : [];
+      
+      return {
+        type: 'sectionPath',
+        path: pathParts,
+        section: sectionParts,
+        wrapperType: 'bracket'
+      };
+    }
+
 // Content inside command brackets - much more permissive for shell commands
 CommandBracketContent "Command content with @var interpolation"
   = '[' parts:(CommandBracketVar / CommandTextContent)* ']' {
@@ -97,7 +133,43 @@ BracketVar
 
 // Content inside double brackets with {{var}} interpolation
 DoubleBracketContent "Content with {{var}} interpolation"
-  = '[[' parts:(InterpolationVar / TemplateTextSegment)* ']]' {
+  = '[[' &{
+      // Look ahead to check if this is a section pattern (path-like # section-name)
+      const remaining = input.substring(location().start.offset + 2);
+      const endIndex = remaining.indexOf(']]');
+      if (endIndex === -1) return false;
+      const content = remaining.substring(0, endIndex);
+      
+      // Check if it matches the section pattern: something path-like before #
+      const match = content.match(/^([^#]+)\s+#\s+(.+)$/);
+      if (!match) return false;
+      
+      const pathPart = match[1].trim();
+      const sectionPart = match[2].trim();
+      
+      // Path should look path-like: has valid file extension or contains /
+      // Valid extensions: 2-4 alphabetic characters (not just numbers)
+      const hasExtension = /\.[a-zA-Z]{2,4}$/.test(pathPart);
+      const hasSlash = pathPart.includes('/');
+      const looksLikePath = hasExtension || hasSlash;
+      
+      // Section should not start with another # (that would be a heading)
+      const notHeading = !sectionPart.startsWith('#');
+      
+      return looksLikePath && notHeading && pathPart.length > 0 && sectionPart.length > 0;
+    } pathText:$([^#]*) _ '#' _ sectionText:$([^\]]*) ']]' {
+      // This is a double-bracketed section path
+      const pathParts = [helpers.createNode(NodeType.Text, { content: pathText.trim(), location: location() })];
+      const sectionParts = [helpers.createNode(NodeType.Text, { content: sectionText.trim(), location: location() })];
+      
+      return {
+        type: 'doubleBracketSection',
+        path: pathParts,
+        section: sectionParts,
+        wrapperType: 'doubleBracket'
+      };
+    }
+  / '[[' parts:(InterpolationVar / TemplateTextSegment)* ']]' {
       helpers.debug('DoubleBracketContent matched [[...]]', { 
         parts: parts,
         isArray: Array.isArray(parts),
@@ -187,7 +259,8 @@ InterpolatedTemplateContent "Template content with {{var}} interpolation"
 
 // Path-style interpolation: brackets only (enforces semantic clarity)
 PathStyleInterpolation "Path interpolation patterns"
-  = InterpolatedPathContent  // [content with @var] - all paths must be bracketed
+  = SectionBracketContent    // [path # section] - section extraction takes precedence
+  / InterpolatedPathContent  // [content with @var] - all paths must be bracketed
 
 // Template-style interpolation: templates with {{var}} or literal text
 TemplateStyleInterpolation "Template interpolation patterns"  
@@ -195,8 +268,14 @@ TemplateStyleInterpolation "Template interpolation patterns"
       helpers.debug('TemplateStyleInterpolation matched InterpolatedTemplateContent', { 
         rule, 
         isArray: Array.isArray(rule),
-        length: Array.isArray(rule) ? rule.length : 'not array'
+        length: Array.isArray(rule) ? rule.length : 'not array',
+        hasType: rule && typeof rule === 'object' && 'type' in rule
       });
+      
+      // Check if this is actually a double-bracketed section
+      if (rule && typeof rule === 'object' && !Array.isArray(rule) && rule.type === 'doubleBracketSection') {
+        return rule; // Pass through the section structure
+      }
       
       return {
         content: rule,
@@ -225,7 +304,21 @@ CommandStyleInterpolation "Command interpolation patterns"
 // For paths in path, import, exec, add directives
 WrappedPathContent "Wrapped path content"
   = content:PathStyleInterpolation {
-      // Construct raw string from the content nodes
+      // Handle section extraction as a special case
+      if (content.type === 'sectionPath') {
+        const pathRaw = helpers.reconstructRawString(content.path);
+        const sectionRaw = helpers.reconstructRawString(content.section);
+        const rawString = `${pathRaw} # ${sectionRaw}`;
+        
+        return {
+          parts: content.path,
+          raw: rawString,
+          section: sectionRaw,
+          type: 'sectionPath'
+        };
+      }
+      
+      // Regular path content
       const rawString = helpers.reconstructRawString(content);
       
       return {
@@ -241,11 +334,26 @@ WrappedTemplateContent "Wrapped template content"
         contentType: typeof content,
         isArray: Array.isArray(content),
         contentLength: Array.isArray(content) ? content.length : 'not array',
-        firstItemType: Array.isArray(content.content) && content.content.length > 0 ? content.content[0].type : 'no items',
-        wrapperType: content.wrapperType
+        contentHasType: content && content.type,
+        wrapperType: content && content.wrapperType
       });
       
-      // Construct raw string from the content nodes
+      // Handle double-bracketed section as a special case
+      if (content && typeof content === 'object' && content.type === 'doubleBracketSection') {
+        const pathRaw = helpers.reconstructRawString(content.path);
+        const sectionRaw = helpers.reconstructRawString(content.section);
+        const rawString = `${pathRaw} # ${sectionRaw}`;
+        
+        return {
+          parts: content.path,
+          raw: rawString,
+          section: sectionRaw,
+          type: 'doubleBracketSection',
+          wrapperType: 'doubleBracket'
+        };
+      }
+      
+      // Regular template content
       const rawString = helpers.reconstructRawString(content.content);
       
       return {

@@ -437,4 +437,20 @@ export const helpers = {
     };
     return formatMap[ext] || null;
   },
+
+  createSectionMeta(pathParts: any[], sectionParts: any[], hasRename: boolean) {
+    return {
+      sourceType: 'section',
+      hasVariables: [...pathParts, ...sectionParts].some(part =>
+        part && part.type === 'VariableReference'
+      ),
+      hasRename: hasRename
+    };
+  },
+
+  reconstructSectionPath(pathParts: any[], sectionParts: any[]): string {
+    const pathStr = this.reconstructRawString(pathParts);
+    const sectionStr = this.reconstructRawString(sectionParts);
+    return `${pathStr} # ${sectionStr}`;
+  },
 };
