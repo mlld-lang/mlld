@@ -90,6 +90,17 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       env.setFrontmatter(frontmatterData);
       return { value: frontmatterData, env };
       
+    case 'CodeFence':
+      // Handle markdown code fences as text content
+      const codeFenceNode = node as any;
+      const codeTextNode: TextNode = {
+        type: 'Text',
+        nodeId: `${codeFenceNode.nodeId || 'codefence'}-text`,
+        content: codeFenceNode.content
+      };
+      env.addNode(codeTextNode);
+      return { value: codeFenceNode.content, env };
+      
     case 'VariableReference':
       // Variable references are handled by interpolation in context
       // If we get here, it's likely an error or a grammar bug
