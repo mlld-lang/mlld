@@ -284,7 +284,7 @@ export async function interpolate(
       // Handle field access if present
       if (node.fields && node.fields.length > 0 && typeof value === 'object' && value !== null) {
         for (const field of node.fields) {
-          if (field.type === 'arrayIndex') {
+          if (field.type === 'arrayIndex' || field.type === 'numericField') {
             const index = field.index;
             if (Array.isArray(value)) {
               value = value[index];
