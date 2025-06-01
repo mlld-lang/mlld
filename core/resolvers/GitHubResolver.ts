@@ -7,6 +7,32 @@ import {
 import { MlldResolutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint/TaintTracker';
 
+// GitHub API response types
+interface GitHubContentItem {
+  name: string;
+  path: string;
+  sha: string;
+  size?: number;
+  url: string;
+  html_url: string;
+  git_url: string;
+  download_url?: string;
+  type: 'file' | 'dir' | 'symlink' | 'submodule';
+  content?: string;
+  encoding?: string;
+}
+
+interface GitHubRepoInfo {
+  default_branch: string;
+  name: string;
+  full_name: string;
+  private: boolean;
+  owner: {
+    login: string;
+    type: string;
+  };
+}
+
 /**
  * Configuration for GitHubResolver
  */
@@ -122,14 +148,15 @@ export class GitHubResolver implements Resolver {
         }
       };
     } catch (error) {
-      if (error.status === 404) {
+      const err = error as { status?: number; message?: string };
+      if (err.status === 404) {
         throw new MlldResolutionError(
           `File not found in repository: ${path}`,
           { reference: ref, repository: config.repository, path }
         );
       }
       throw new MlldResolutionError(
-        `Failed to fetch from GitHub: ${error.message}`,
+        `Failed to fetch from GitHub: ${err.message || 'Unknown error'}`,
         { 
           reference: ref, 
           repository: config.repository,
@@ -164,14 +191,14 @@ export class GitHubResolver implements Resolver {
         return [];
       }
 
-      const items = await response.json();
+      const items = await response.json() as GitHubContentItem[];
       if (!Array.isArray(items)) {
         return [];
       }
 
       return items.map(item => ({
         path: `${prefix}/${item.name}`,
-        type: item.type === 'dir' ? 'directory' : 'file',
+        type: item.type === 'dir' ? 'directory' : 'file' as const,
         size: item.size,
         lastModified: new Date(item.sha) // Using SHA as a proxy for last modified
       }));
@@ -183,35 +210,43 @@ export class GitHubResolver implements Resolver {
   /**
    * Validate configuration
    */
-  validateConfig(config: any): string[] {
+  validateConfig(config: unknown): string[] {
     const errors: string[] = [];
+    
+    // Type guard for config
+    if (!config || typeof config !== 'object') {
+      errors.push('config must be an object');
+      return errors;
+    }
+    
+    const cfg = config as Record<string, unknown>;
 
-    if (!config?.repository) {
+    if (!cfg.repository) {
       errors.push('repository is required');
-    } else if (typeof config.repository !== 'string') {
+    } else if (typeof cfg.repository !== 'string') {
       errors.push('repository must be a string');
-    } else if (!config.repository.includes('/')) {
+    } else if (!cfg.repository.includes('/')) {
       errors.push('repository must be in format "owner/repo"');
     }
 
-    if (config.token !== undefined && typeof config.token !== 'string') {
+    if (cfg.token !== undefined && typeof cfg.token !== 'string') {
       errors.push('token must be a string');
     }
 
-    if (config.branch !== undefined && typeof config.branch !== 'string') {
+    if (cfg.branch !== undefined && typeof cfg.branch !== 'string') {
       errors.push('branch must be a string');
     }
 
-    if (config.basePath !== undefined && typeof config.basePath !== 'string') {
+    if (cfg.basePath !== undefined && typeof cfg.basePath !== 'string') {
       errors.push('basePath must be a string');
     }
 
-    if (config.useRawApi !== undefined && typeof config.useRawApi !== 'boolean') {
+    if (cfg.useRawApi !== undefined && typeof cfg.useRawApi !== 'boolean') {
       errors.push('useRawApi must be a boolean');
     }
 
-    if (config.cacheTimeout !== undefined) {
-      if (typeof config.cacheTimeout !== 'number' || config.cacheTimeout < 0) {
+    if (cfg.cacheTimeout !== undefined) {
+      if (typeof cfg.cacheTimeout !== 'number' || cfg.cacheTimeout < 0) {
         errors.push('cacheTimeout must be a non-negative number');
       }
     }
@@ -318,8 +353,8 @@ export class GitHubResolver implements Resolver {
       }
 
       if (!response.ok) {
-        const error = new Error(`GitHub API error: ${response.statusText}`);
-        (error as any).status = response.status;
+        const error = new Error(`GitHub API error: ${response.statusText}`) as Error & { status: number };
+        error.status = response.status;
         throw error;
       }
 
@@ -342,15 +377,19 @@ export class GitHubResolver implements Resolver {
     }
 
     if (!response.ok) {
-      const error = new Error(`GitHub API error: ${response.statusText}`);
-      (error as any).status = response.status;
+      const error = new Error(`GitHub API error: ${response.statusText}`) as Error & { status: number };
+      error.status = response.status;
       throw error;
     }
 
-    const data = await response.json();
+    const data = await response.json() as GitHubContentItem;
     
     if (data.type !== 'file') {
       throw new Error(`Path is not a file: ${path}`);
+    }
+    
+    if (!data.content) {
+      throw new Error(`No content found for file: ${path}`);
     }
 
     // Decode base64 content
@@ -389,7 +428,7 @@ export class GitHubResolver implements Resolver {
       );
       
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.json() as GitHubRepoInfo;
         const defaultBranch = data.default_branch || 'main';
         
         this.cache.set(cacheKey, {

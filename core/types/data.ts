@@ -101,18 +101,19 @@ export function isContentNodeArray(value: DataValue): value is ContentNodeArray 
 /**
  * Additional type guards used by the interpreter
  */
-export function isVariableReferenceValue(value: any): value is VariableNodeArray {
-  return value?.type === 'VariableReference';
+export function isVariableReferenceValue(value: unknown): value is VariableNodeArray {
+  return typeof value === 'object' && value !== null && 'type' in value && (value as any).type === 'VariableReference';
 }
 
-export function isTemplateValue(value: any): value is ContentNodeArray {
+export function isTemplateValue(value: unknown): value is ContentNodeArray {
   return Array.isArray(value) && value.some(item => 
-    item?.type === 'Text' || 
-    (item?.type === 'VariableReference' && item?.valueType === 'varInterpolation')
+    (typeof item === 'object' && item !== null && 'type' in item) &&
+    ((item as any).type === 'Text' || 
+    ((item as any).type === 'VariableReference' && (item as any).valueType === 'varInterpolation'))
   );
 }
 
-export function isPrimitiveValue(value: any): value is string | number | boolean | null {
+export function isPrimitiveValue(value: unknown): value is string | number | boolean | null {
   return typeof value === 'string' || 
          typeof value === 'number' || 
          typeof value === 'boolean' || 

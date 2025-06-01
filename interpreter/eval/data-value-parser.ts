@@ -1,8 +1,8 @@
 // ASTNode type no longer needed - using MlldNode from core/types
 import type { 
   DataValue, 
-  DataObject, 
-  DataArray
+  DataObjectValue, 
+  DataArrayValue
 } from '@core/types/data';
 import {
   isDirectiveValue,
@@ -10,15 +10,48 @@ import {
   isTemplateValue,
   isPrimitiveValue 
 } from '@core/types/data';
+import type { 
+  BaseMlldNode,
+  TextNode,
+  VariableReferenceNode,
+  DirectiveNode,
+  LiteralNode
+} from '@core/types/primitives';
+
+// Forward declaration for recursive type
+interface ASTArrayNode {
+  type: 'array';
+  items: ASTDataNode[];
+}
+
+interface ASTObjectNode {
+  type: 'object';
+  properties: Record<string, ASTDataNode>;
+}
+
+// Union type for all possible AST nodes that can be passed to parseDataValue
+type ASTDataNode = 
+  | BaseMlldNode
+  | TextNode
+  | VariableReferenceNode
+  | DirectiveNode
+  | LiteralNode
+  | (BaseMlldNode | TextNode | VariableReferenceNode | DirectiveNode | LiteralNode | string | number | boolean | null)[] // Arrays of nodes
+  | { type: 'Null' } // Special null node from grammar
+  | ASTArrayNode // Array AST node
+  | ASTObjectNode // Object AST node
+  | { type: 'primitive'; value: string | number | boolean | null } // Wrapped primitive
+  | Record<string, unknown> // Plain object
+  | string | number | boolean | null; // Direct primitives
 
 /**
  * Parses an AST node into a DataValue for use in complex data assignments.
  * This handles the actual AST structure where directives, variables, and templates
  * are represented as their native node types.
  */
-export function parseDataValue(node: any): DataValue {
+export function parseDataValue(node: ASTDataNode): DataValue {
   // Handle null nodes from the grammar
-  if (node?.type === 'Null') {
+  if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'Null') {
     return null;
   }
   
@@ -28,86 +61,100 @@ export function parseDataValue(node: any): DataValue {
   }
   
   // Handle directive nodes (embedded directives in data)
-  if (node?.type === 'Directive') {
+  if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'Directive') {
     // The grammar marks directives in data context with meta.isDataValue
-    return node; // Return the directive node directly
+    return node as DirectiveNode; // Return the directive node directly
   }
   
   // Handle variable references
-  if (node?.type === 'VariableReference') {
-    return node; // Return the variable reference node directly
+  if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'VariableReference') {
+    return node as VariableReferenceNode; // Return the variable reference node directly
   }
   
   // Handle bare Text nodes (common in simple data values)
-  if (node?.type === 'Text') {
-    return node.content; // Extract the text content directly
+  if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'Text') {
+    return (node as TextNode).content; // Extract the text content directly
   }
   
   // Handle template arrays (arrays containing Text/VariableReference nodes)
   if (Array.isArray(node)) {
     // Special case: single Text node arrays (common in data values)
-    if (node.length === 1 && node[0]?.type === 'Text') {
-      return node[0].content; // Extract the text content directly
+    if (node.length === 1 && typeof node[0] === 'object' && node[0] !== null && 'type' in node[0] && node[0].type === 'Text') {
+      return (node[0] as TextNode).content; // Extract the text content directly
     }
     
     // Check if this is a template array
     const hasTemplateContent = node.some(item => 
-      item?.type === 'Text' || 
-      (item?.type === 'VariableReference' && item?.valueType === 'varInterpolation')
+      (typeof item === 'object' && item !== null && 'type' in item) &&
+      (item.type === 'Text' || 
+      (item.type === 'VariableReference' && (item as VariableReferenceNode).valueType === 'varInterpolation'))
     );
     
     if (hasTemplateContent) {
-      return node; // Return template array directly
+      return node as (TextNode | VariableReferenceNode)[]; // Return template array directly
     }
     
     // Otherwise it's a regular data array
     return {
       type: 'array',
       items: node.map(parseDataValue)
-    };
+    } as DataArrayValue;
   }
   
   // Handle array AST nodes
-  if (node?.type === 'array' && node.items) {
+  if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'array' && 'items' in node) {
     return {
       type: 'array',
-      items: node.items.map(parseDataValue)
-    };
+      items: (node as { type: 'array'; items: ASTDataNode[] }).items.map(parseDataValue)
+    } as DataArrayValue;
   }
   
   // Handle objects
-  if (node?.type === 'object' || (typeof node === 'object' && node !== null && !node.type)) {
-    const properties: Record<string, DataValue> = {};
-    
-    // Handle both AST object nodes and plain objects
-    const props = node.properties || node;
-    
-    for (const [key, value] of Object.entries(props)) {
-      properties[key] = parseDataValue(value);
+  if (typeof node === 'object' && node !== null) {
+    if ('type' in node && node.type === 'object' && 'properties' in node) {
+      // AST object node
+      const properties: Record<string, DataValue> = {};
+      for (const [key, value] of Object.entries((node as { type: 'object'; properties: Record<string, ASTDataNode> }).properties)) {
+        properties[key] = parseDataValue(value);
+      }
+      return {
+        type: 'object',
+        properties
+      } as DataObjectValue;
+    } else if (!('type' in node)) {
+      // Plain object
+      const properties: Record<string, DataValue> = {};
+      for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+        properties[key] = parseDataValue(value as ASTDataNode);
+      }
+      return {
+        type: 'object',
+        properties
+      } as DataObjectValue;
     }
-    
-    return {
-      type: 'object',
-      properties
-    };
   }
   
   // Handle wrapped primitive values from grammar
-  if (node?.type === 'primitive' && 'value' in node) {
-    return node.value;
+  if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'primitive' && 'value' in node) {
+    return (node as { type: 'primitive'; value: string | number | boolean | null }).value;
   }
   
   // If we can't identify the node type, treat it as a literal
   console.warn('Unexpected node type in data value:', node);
-  return node;
+  return node as string;
 }
+
+// Type for the plain JavaScript values that can be extracted
+type PlainValue = string | number | boolean | null | PlainObject | PlainArray;
+type PlainObject = { [key: string]: PlainValue };
+type PlainArray = PlainValue[];
 
 /**
  * Extract plain value from DataValue (for simple data variables)
  */
-export function extractPlainValue(value: DataValue): any {
+export function extractPlainValue(value: DataValue): PlainValue {
   // Handle null nodes from the grammar
-  if (value?.type === 'Null') {
+  if ((value as any)?.type === 'Null') {
     return null;
   }
   
@@ -116,24 +163,25 @@ export function extractPlainValue(value: DataValue): any {
   }
   
   // Handle Text nodes (from string values in data assignments)
-  if (value?.type === 'Text' && 'content' in value) {
-    return value.content;
+  if ((value as any)?.type === 'Text' && 'content' in (value as any)) {
+    return (value as TextNode).content;
   }
   
-  if (value?.type === 'object') {
-    const obj: any = {};
-    for (const [key, val] of Object.entries(value.properties)) {
+  if ((value as any)?.type === 'object') {
+    const obj: PlainObject = {};
+    for (const [key, val] of Object.entries((value as DataObjectValue).properties)) {
       obj[key] = extractPlainValue(val);
     }
     return obj;
   }
   
-  if (value?.type === 'array') {
-    return value.items?.map(extractPlainValue) || [];
+  if ((value as any)?.type === 'array') {
+    return ((value as DataArrayValue).items?.map(extractPlainValue) || []) as PlainArray;
   }
   
-  // For other types, return as-is
-  return value;
+  // For other types (directives, variable references, templates), return null
+  // These should be evaluated before extraction
+  return null;
 }
 
 /**
@@ -156,12 +204,12 @@ export function needsEvaluation(value: DataValue): boolean {
     return true;
   }
   
-  if (value?.type === 'object') {
-    return Object.values(value.properties).some(needsEvaluation);
+  if ((value as any)?.type === 'object') {
+    return Object.values((value as DataObjectValue).properties).some(needsEvaluation);
   }
   
-  if (value?.type === 'array') {
-    return value.items?.some(needsEvaluation) || false;
+  if ((value as any)?.type === 'array') {
+    return (value as DataArrayValue).items?.some(needsEvaluation) || false;
   }
   
   return false;
