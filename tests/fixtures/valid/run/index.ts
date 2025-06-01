@@ -19,4 +19,6 @@ export { default as runFileContentEscaping } from './run-file-content-escaping.g
 export { default as runInlineCommentsLeft } from './run-inline-comments-left.generated-fixture.json';
 export { default as runInlineComments } from './run-inline-comments.generated-fixture.json';
 export { default as runNoReinterpret } from './run-no-reinterpret.generated-fixture.json';
+export { default as runRunCodeBracketNesting } from './run-run-code-bracket-nesting.generated-fixture.json';
+export { default as runRunCommandBracketNesting } from './run-run-command-bracket-nesting.generated-fixture.json';
 export { default as runShellEscaping } from './run-shell-escaping.generated-fixture.json';

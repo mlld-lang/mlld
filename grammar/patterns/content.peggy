@@ -107,7 +107,7 @@ CommandBracketVar
       return node;
     }
 
-// Permissive text content for commands - allows everything except @ and unescaped ]
+// Permissive text content for commands - allows everything except @ and the final closing ]
 CommandTextContent "Permissive command text content"
   = chars:CommandBracketChar+ { 
       const content = chars.join('');
@@ -115,9 +115,13 @@ CommandTextContent "Permissive command text content"
       return helpers.createNode(NodeType.Text, { content, location: location() });
     }
 
+// Smart bracket character matching - only stops at ] that ends the command
 CommandBracketChar
   = EscapeSequence
-  / !"@" !"]" char:. { return char; }
+  / !"@" &{
+      // Use our helper to check if this is a command-ending bracket
+      return !helpers.isCommandEndingBracket(input, peg$currPos);
+    } char:. { return char; }
 
 // Variable reference within bracketed content
 BracketVar
@@ -229,13 +233,27 @@ UnquotedCommand "Unquoted command with @var interpolation"
 
 // Direct code content without interpolation
 DirectCodeContent "Code content without interpolation"
-  = '[' content:$((!']' .)*) ']' { 
+  = '[' content:$(CodeBracketContent) ']' { 
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
   / content:$([^[\n]+) { 
       // Fallback for unbracketed code - must consume at least one character
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
+
+// Code content inside brackets - respects bracket nesting for programming languages
+CodeBracketContent "Code content with bracket nesting support"
+  = chars:CodeBracketChar* {
+      return chars.join('');
+    }
+
+// Character matcher for code blocks - only stops at ] that ends the code block
+CodeBracketChar
+  = EscapeSequence
+  / &{
+      // Use our helper to check if this is a code-ending bracket
+      return !helpers.isCommandEndingBracket(input, peg$currPos);
+    } char:. { return char; }
 
 // -------------------------------------------------------------
 // SEMANTIC DELIMITER PATTERNS - Clear semantic meaning for each delimiter type

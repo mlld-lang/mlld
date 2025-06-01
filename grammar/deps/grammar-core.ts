@@ -453,4 +453,93 @@ export const helpers = {
     const sectionStr = this.reconstructRawString(sectionParts);
     return `${pathStr} # ${sectionStr}`;
   },
+
+  /**
+   * Checks if we're at a bracket that should end command parsing
+   * This uses a refined heuristic that handles embedded commands in data structures
+   */
+  isCommandEndingBracket(input: string, pos: number): boolean {
+    if (input[pos] !== ']') return false;
+
+    // Look at what follows the ]
+    const nextPos = pos + 1;
+    if (nextPos >= input.length) return true; // End of input
+
+    const nextChar = input[nextPos];
+
+    // End on ] followed by newline (possibly with whitespace)
+    if (nextChar === '\n') return true;
+
+    // End on ] followed by comma (for embedded commands in data objects)
+    if (nextChar === ',') return true;
+
+    // End on ] followed by closing brace or bracket (for nested data structures)
+    if (nextChar === '}' || nextChar === ')') return true;
+
+    // End on ] followed by whitespace then newline, comma, or closing delimiter
+    if (nextChar === ' ' || nextChar === '\t') {
+      for (let i = nextPos; i < input.length; i++) {
+        const char = input[i];
+        if (char === '\n' || char === ',' || char === '}' || char === ')') return true;
+        if (char !== ' ' && char !== '\t') break;
+      }
+    }
+
+    return false;
+  },
+
+  /**
+   * Parse command content that may contain variables and text segments
+   * This is used by the CommandBracketContent rule to handle @var interpolation
+   */
+  parseCommandContent(content: string): any[] {
+    const parts = [];
+    let i = 0;
+    let currentText = '';
+    
+    while (i < content.length) {
+      // Check for variable reference
+      if (content[i] === '@' && i + 1 < content.length) {
+        // Save any accumulated text
+        if (currentText) {
+          parts.push(this.createNode(NodeType.Text, { 
+            content: currentText,
+            location: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } }
+          }));
+          currentText = '';
+        }
+        
+        // Extract variable name
+        i++; // Skip @
+        let varName = '';
+        while (i < content.length && /[a-zA-Z0-9_]/.test(content[i])) {
+          varName += content[i];
+          i++;
+        }
+        
+        if (varName) {
+          parts.push(this.createVariableReferenceNode('varIdentifier', {
+            identifier: varName
+          }));
+        } else {
+          // Not a valid variable, treat @ as literal text
+          currentText += '@';
+        }
+      } else {
+        // Regular character
+        currentText += content[i];
+        i++;
+      }
+    }
+    
+    // Add any remaining text
+    if (currentText) {
+      parts.push(this.createNode(NodeType.Text, { 
+        content: currentText,
+        location: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } }
+      }));
+    }
+    
+    return parts;
+  },
 };
