@@ -1,23 +1,26 @@
-import type { DirectiveNode, TextNode } from '@core/types';
+import type { DirectiveNode, TextNode, MlldNode, VariableReference, CommandVariable } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate, resolveVariableValue } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldCommandExecutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint';
+import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/command/analyzer/CommandAnalyzer';
+import type { SecurityManager } from '@security/SecurityManager';
+import { isCommandVariable, createTextVariable } from '@core/types';
 
 /**
  * Determine the taint level of command arguments
  */
-function determineTaintLevel(nodes: any[], env: Environment): TaintLevel {
+function determineTaintLevel(nodes: MlldNode[], env: Environment): TaintLevel {
   // For now, use a simple heuristic:
   // - If any variable is used, assume it could be tainted
   // - TODO: Implement proper taint tracking through variable propagation
   
   for (const node of nodes) {
-    if (node.type === 'Variable' || node.type === 'FieldAccess') {
+    if (node.type === 'VariableReference') {
       // Check if this variable came from LLM output or user input
-      const varName = node.name || node.base?.name;
+      const varName = node.identifier;
       if (varName) {
         // TODO: Get actual taint level from variable metadata
         // For now, be conservative and assume variables could be tainted
@@ -47,7 +50,7 @@ export async function evaluateRun(
     sourceLocation: directive.location,
     directiveNode: directive,
     filePath: env.getCurrentFilePath(),
-    directiveType: directive.directiveType || 'run'
+    directiveType: directive.meta?.directiveType as string || 'run'
   };
   
   if (directive.subtype === 'runCommand') {
@@ -67,13 +70,14 @@ export async function evaluateRun(
       const taintLevel = determineTaintLevel(commandNodes, env);
       
       // Use command analyzer to check the command
-      const analyzer = (security as any).commandAnalyzer;
+      const securityManager = security as SecurityManager & { commandAnalyzer?: CommandAnalyzer };
+      const analyzer = securityManager.commandAnalyzer;
       if (analyzer) {
-        const analysis = await analyzer.analyze(command);
+        const analysis = await analyzer.analyze(command, taintLevel);
         
         // Block immediately dangerous commands
         if (analysis.blocked) {
-          const reason = analysis.risks?.[0]?.description || 'Security policy violation';
+          const reason = analysis.risks[0]?.description || 'Security policy violation';
           throw new MlldCommandExecutionError(
             `Security: Command blocked - ${reason}`,
             directive.location,
@@ -105,7 +109,7 @@ export async function evaluateRun(
         }
         
         // TODO: Add approval prompts for suspicious commands
-        if (analysis.risks && analysis.risks.length > 0) {
+        if (analysis.risks.length > 0) {
           console.warn(`⚠️  Security warning for command: ${command}`);
           for (const risk of analysis.risks) {
             console.warn(`   - ${risk.type}: ${risk.description}`);
@@ -128,7 +132,7 @@ export async function evaluateRun(
     const code = await interpolate(codeNodes, env, InterpolationContext.Default);
     
     // Execute the code (default to JavaScript) with context for errors
-    const language = directive.raw?.lang || directive.meta?.language || 'javascript';
+    const language = directive.raw?.lang || (directive.meta?.language as string) || 'javascript';
     output = await env.executeCode(code, language, undefined, executionContext);
     
   } else if (directive.subtype === 'runExec') {
@@ -139,61 +143,71 @@ export async function evaluateRun(
     }
     
     // Check if this is a field access pattern (e.g., @http.get)
-    const identifierNode = directive.values?.identifier?.[0];
-    let cmdVar: any;
+    const identifierNodes = directive.values?.identifier;
+    if (!identifierNodes || identifierNodes.length === 0) {
+      throw new Error('Run exec directive missing identifier');
+    }
     
-    if (identifierNode?.type === 'VariableReference' && identifierNode.fields && identifierNode.fields.length > 0) {
+    const identifierNode = identifierNodes[0];
+    let cmdVar: CommandVariable;
+    
+    if (identifierNode.type === 'VariableReference' && (identifierNode as VariableReference).fields && (identifierNode as VariableReference).fields.length > 0) {
       // Handle field access (e.g., @http.get)
-      const baseVar = env.getVariable(identifierNode.identifier);
+      const varRef = identifierNode as VariableReference;
+      const baseVar = env.getVariable(varRef.identifier);
       if (!baseVar) {
-        throw new Error(`Base variable not found: ${identifierNode.identifier}`);
+        throw new Error(`Base variable not found: ${varRef.identifier}`);
       }
       
       // Resolve the field access to get the actual command
       let value = await resolveVariableValue(baseVar, env);
       
       // Navigate through the field access chain
-      for (const field of identifierNode.fields) {
+      for (const field of varRef.fields) {
         if (field.type === 'field' && typeof value === 'object' && value !== null) {
-          value = value[field.name];
+          value = (value as Record<string, unknown>)[field.name];
         } else if (field.type === 'arrayIndex' && Array.isArray(value)) {
           value = value[field.index];
         } else {
-          throw new Error(`Cannot access field '${field.name || field.index}' on ${typeof value}`);
+          const fieldName = field.type === 'field' ? field.name : field.index;
+          throw new Error(`Cannot access field '${fieldName}' on ${typeof value}`);
         }
       }
       
       // The resolved value could be a command object directly or a string reference
-      if (typeof value === 'object' && value !== null && value.type === 'command') {
+      if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'command') {
         // Direct command object
-        cmdVar = value;
+        cmdVar = value as CommandVariable;
       } else if (typeof value === 'string') {
-        // String reference to a command
-        cmdVar = env.getVariable(value);
-        if (!cmdVar || cmdVar.type !== 'command') {
+        // String reference to a command  
+        const variable = env.getVariable(value);
+        if (!variable || !isCommandVariable(variable)) {
           throw new Error(`Command variable not found: ${value}`);
         }
+        cmdVar = variable;
       } else {
         throw new Error(`Field access did not resolve to a command: ${typeof value}, got: ${JSON.stringify(value)}`);
       }
     } else {
       // Handle simple command reference (original behavior)
-      cmdVar = env.getVariable(execRef);
-      if (!cmdVar || cmdVar.type !== 'command') {
+      const variable = env.getVariable(execRef);
+      if (!variable || !isCommandVariable(variable)) {
         throw new Error(`Command variable not found: ${execRef}`);
       }
+      cmdVar = variable;
     }
     
     const cmdDef = cmdVar.value;
     
     // Get arguments from the run directive
     const args = directive.values?.args || [];
-    const argValues: Record<string, any> = {};
+    const argValues: Record<string, string> = {};
     
     // Map parameter names to argument values
-    if (cmdDef.paramNames && cmdDef.paramNames.length > 0) {
-      for (let i = 0; i < cmdDef.paramNames.length; i++) {
-        const paramName = cmdDef.paramNames[i];
+    const paramNames = cmdDef.paramNames as string[] | undefined;
+    if (paramNames && paramNames.length > 0) {
+      for (let i = 0; i < paramNames.length; i++) {
+        const paramName = paramNames[i];
         if (!args[i]) {
           argValues[paramName] = '';
           continue;
@@ -201,7 +215,7 @@ export async function evaluateRun(
         
         // Handle variable references in arguments
         const arg = args[i];
-        if (arg.type === 'Text' && arg.content && arg.content.startsWith('@')) {
+        if (arg && arg.type === 'Text' && 'content' in arg && arg.content.startsWith('@')) {
           // This is a variable reference
           const varName = arg.content.substring(1);
           const variable = env.getVariable(varName);
@@ -221,17 +235,17 @@ export async function evaluateRun(
       }
     }
     
-    if (cmdDef.type === 'command') {
+    if (cmdDef.type === 'command' && 'commandTemplate' in cmdDef) {
       // Create a temporary environment with parameter values
       const tempEnv = env.createChild();
       for (const [key, value] of Object.entries(argValues)) {
-        tempEnv.setParameterVariable(key, { type: 'text', value, nodeId: '', location: { line: 0, column: 0 } });
+        tempEnv.setParameterVariable(key, createTextVariable(key, value));
       }
       
       // TODO: Remove this workaround when issue #51 is fixed
       // Strip leading '[' from first command segment if present
-      const cleanTemplate = cmdDef.commandTemplate.map((seg: any, idx: number) => {
-        if (idx === 0 && seg.type === 'Text' && seg.content.startsWith('[')) {
+      const cleanTemplate = cmdDef.commandTemplate.map((seg: MlldNode, idx: number) => {
+        if (idx === 0 && seg.type === 'Text' && 'content' in seg && seg.content.startsWith('[')) {
           return { ...seg, content: seg.content.substring(1) };
         }
         return seg;
@@ -243,7 +257,8 @@ export async function evaluateRun(
       // NEW: Security check for exec commands
       const security = env.getSecurityManager();
       if (security) {
-        const analyzer = (security as any).commandAnalyzer;
+        const securityManager = security as SecurityManager & { commandAnalyzer?: CommandAnalyzer };
+        const analyzer = securityManager.commandAnalyzer;
         if (analyzer) {
           const analysis = await analyzer.analyze(command);
           if (analysis.blocked) {
@@ -270,7 +285,7 @@ export async function evaluateRun(
     } else if (cmdDef.type === 'commandRef') {
       // This command references another command
       const refCmdVar = env.getVariable(cmdDef.commandRef);
-      if (!refCmdVar || refCmdVar.type !== 'command') {
+      if (!refCmdVar || !isCommandVariable(refCmdVar)) {
         throw new Error(`Referenced command not found: ${cmdDef.commandRef}`);
       }
       
@@ -292,7 +307,7 @@ export async function evaluateRun(
       // Interpolate the code template with parameters
       const tempEnv = env.createChild();
       for (const [key, value] of Object.entries(argValues)) {
-        tempEnv.setParameterVariable(key, { type: 'text', value, nodeId: '', location: { line: 0, column: 0 } });
+        tempEnv.setParameterVariable(key, createTextVariable(key, value));
       }
       
       const code = await interpolate(cmdDef.codeTemplate, tempEnv, InterpolationContext.Default);
