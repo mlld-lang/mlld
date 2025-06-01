@@ -50,7 +50,7 @@ export default tseslint.config(
       'no-unused-vars': 'off', // Disable base rule
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }], // Enable TS version
       '@typescript-eslint/explicit-function-return-type': 'off', // Too strict for most code
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'error', // Disallow any type
       'semi': ['error', 'always'],
       'quotes': ['error', 'single', { 'allowTemplateLiterals': true }],
       // Apply custom rule to TS files specifically, mirroring 'overrides'
@@ -69,9 +69,31 @@ export default tseslint.config(
       },
     },
     rules: {
-       // Add any other TS-specific rules here if needed
-       // Example: Rules requiring type information
-       // '@typescript-eslint/no-floating-promises': 'error', 
+       // Type-aware rules that require TypeScript parser
+       '@typescript-eslint/no-unsafe-assignment': 'error', // Disallow assignment of any to variables
+       '@typescript-eslint/no-unsafe-member-access': 'error', // Disallow member access on any typed values
+       '@typescript-eslint/no-unsafe-call': 'error', // Disallow calling any typed values
+       '@typescript-eslint/no-unsafe-return': 'error', // Disallow returning any from functions
+    }
+  },
+  
+  // Disable type-aware rules for low-impact areas
+  {
+    files: [
+      'grammar/**/*.ts',     // Generated parser code
+      'tests/**/*.ts',       // Test utilities
+      'cli/**/*.ts',         // CLI with yargs
+      '**/*.test.ts',        // Test files
+      '**/*.spec.ts',        // Spec files
+      'scripts/**/*.js',     // Build scripts
+      'scripts/**/*.mjs',    // Build scripts
+    ],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
     }
   },
   

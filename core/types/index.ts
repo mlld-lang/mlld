@@ -126,10 +126,35 @@ export interface PathVariable {
   metadata?: VariableMetadata;
 }
 
+// Command definition structure
+export interface BaseCommandDefinition {
+  type: 'command' | 'commandRef' | 'code';
+  paramNames?: string[];
+}
+
+export interface CommandTemplateDefinition extends BaseCommandDefinition {
+  type: 'command';
+  commandTemplate: MlldNode[];
+}
+
+export interface CommandRefDefinition extends BaseCommandDefinition {
+  type: 'commandRef';
+  commandRef: string;
+  commandArgs?: MlldNode[];
+}
+
+export interface CodeDefinition extends BaseCommandDefinition {
+  type: 'code';
+  codeTemplate: MlldNode[];
+  language?: string;
+}
+
+export type CommandDefinition = CommandTemplateDefinition | CommandRefDefinition | CodeDefinition;
+
 export interface CommandVariable {
   type: VariableType.COMMAND;
   name: string;
-  value: any; // Command definition object with commandTemplate, paramNames, type, etc.
+  value: CommandDefinition;
   metadata?: VariableMetadata;
 }
 
@@ -267,7 +292,7 @@ export function createPathVariable(
  */
 export function createCommandVariable(
   name: string,
-  commandDef: any,
+  commandDef: CommandDefinition,
   metadata?: Partial<VariableMetadata>
 ): CommandVariable {
   return {
