@@ -274,18 +274,29 @@ export const helpers = {
                     // Handle different variable types with appropriate syntax
                     const varId = nodes.identifier;
                     const valueType = nodes.valueType;
+                    const fields = nodes.fields || [];
+                    // Build the field access path
+                    let fieldPath = '';
+                    for (const field of fields) {
+                        if (field.type === 'field' || field.type === 'dot') {
+                            fieldPath += `.${field.name || field.value}`;
+                        }
+                        else if (field.type === 'array') {
+                            fieldPath += `[${field.index}]`;
+                        }
+                    }
                     // Variable syntax handling:
                     // - 'varInterpolation' for {{var}} (in strings)
                     // - 'varIdentifier' for @var (direct reference)
                     if (valueType === 'varInterpolation') {
-                        return `{{${varId}}}`;
+                        return `{{${varId}${fieldPath}}}`;
                     }
                     else if (valueType === 'varIdentifier') {
-                        return `@${varId}`;
+                        return `@${varId}${fieldPath}`;
                     }
                     else {
                         // Default case - should not happen with consistent valueTypes
-                        return `{{${varId}}}`;
+                        return `{{${varId}${fieldPath}}}`;
                     }
                 }
             }
@@ -302,16 +313,27 @@ export const helpers = {
             else if (node.type === NodeType.VariableReference) {
                 const varId = node.identifier;
                 const valueType = node.valueType;
+                const fields = node.fields || [];
+                // Build the field access path
+                let fieldPath = '';
+                for (const field of fields) {
+                    if (field.type === 'field' || field.type === 'dot') {
+                        fieldPath += `.${field.name || field.value}`;
+                    }
+                    else if (field.type === 'array') {
+                        fieldPath += `[${field.index}]`;
+                    }
+                }
                 // Use the same variable syntax handling logic as above
                 if (valueType === 'varInterpolation') {
-                    raw += `{{${varId}}}`;
+                    raw += `{{${varId}${fieldPath}}}`;
                 }
                 else if (valueType === 'varIdentifier') {
-                    raw += `@${varId}`;
+                    raw += `@${varId}${fieldPath}`;
                 }
                 else {
                     // Default case - should not happen with consistent valueTypes
-                    raw += `{{${varId}}}`;
+                    raw += `{{${varId}${fieldPath}}}`;
                 }
             }
             else if (node.type === NodeType.PathSeparator) {

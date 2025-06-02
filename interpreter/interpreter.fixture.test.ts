@@ -110,8 +110,6 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     
     // Skip tests with known issues
     const skipTests: Record<string, string> = {
-      'frontmatter-alias': 'Issue #97: Frontmatter field access not implemented',
-      'frontmatter-basic': 'Issue #97: Frontmatter field access not implemented',
       'modules-hash': 'Issue #98: Module registry with hash validation not implemented',
       'security-ttl-durations': 'Issue #99: TTL/trust security features not implemented',
       'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
