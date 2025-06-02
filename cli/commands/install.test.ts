@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { InstallCommand } from './install';
 import * as path from 'path';
 import * as fs from 'fs/promises';
@@ -15,6 +15,13 @@ describe('InstallCommand', () => {
     // Create a temporary directory for testing
     tempDir = await fs.mkdtemp(path.join(process.cwd(), 'test-install-'));
     installCommand = new InstallCommand(tempDir, { verbose: false });
+  });
+
+  afterEach(async () => {
+    // Clean up the temporary directory
+    if (tempDir) {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('should create install command instance', () => {
