@@ -306,6 +306,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           } else if (fixture.name === 'reserved-input-variable') {
             // This test expects JSON input for @INPUT testing
             stdinContent = '{"config": "test-value", "data": "sample-data"}';
+          } else if (fixture.name === 'import-environment-variables') {
+            // This test expects JSON with MYVAR and OTHERVAR
+            stdinContent = '{"MYVAR": "hello", "OTHERVAR": "world"}';
           }
           
           // For error fixtures, expect interpretation to fail and validate error format
@@ -413,6 +416,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           } else if (fixture.name === 'reserved-input-variable') {
             // This test expects JSON input for @INPUT testing
             stdinContent = '{"config": "test-value", "data": "sample-data"}';
+          } else if (fixture.name === 'import-environment-variables') {
+            // This test expects JSON with MYVAR and OTHERVAR
+            stdinContent = '{"MYVAR": "hello", "OTHERVAR": "world"}';
           }
           
           // Set up environment variables from fixture if specified

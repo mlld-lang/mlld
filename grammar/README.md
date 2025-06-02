@@ -265,6 +265,228 @@ BracketContent = '[' parts:(AtVar / TextSegment)* ']'
 // AtVar is imported from patterns/variables.peggy
 ```
 
+### 4. **Context Detection System**
+The grammar includes a sophisticated context detection system (`base/context.peggy`) for disambiguating syntax in different parsing contexts.
+
+**Key Contexts:**
+- `DirectiveContext` - Top-level directives (`@run`, `@text`)
+- `VariableContext` - Variable references (`@varName`)
+- `RHSContext` - Right-hand side of assignments (`= @run [cmd]`)
+- `RunCodeBlockContext` - Language + code patterns
+
+**Usage:**
+```peggy
+// Use predicates to select appropriate parsing rules
+CommandContent
+  = &{ return helpers.isRHSContext(input, peg$currPos); } RHSCommandPattern
+  / &{ return helpers.isInRunCodeBlockContext(input, peg$currPos); } CodePattern
+  / DefaultCommandPattern
+
+// Context helpers available: isAtDirectiveContext(), isRHSContext(), etc.
+```
+
+This system enables context-aware parsing without runtime state tracking, maintaining clean separation between syntactic and semantic concerns.
+
+### 5. **Semantic Design Philosophy**
+The grammar follows a semantic-first approach where directives determine their content parsing rules, not the delimiters.
+
+**Core Principle**: Same syntax can have different semantics based on context. The directive chooses its semantic parser.
+
+```peggy
+// ❌ WRONG: Universal bracket parser trying to guess context
+BracketContent = "[" content:UniversalContent "]"
+
+// ✅ RIGHT: Directive chooses semantic parser
+AtRun
+  = "@run" _ lang:Language _ code:CodeContent    // Language → Code semantics
+  / "@run" _ command:CommandContent              // No language → Command semantics
+```
+
+**Why This Matters**: Peggy is a top-down parser that commits to branches. Once it takes a fork, it follows that semantic path. This aligns perfectly with how we think about Mlld directives.
+
+## Directive Parse Trees
+
+**CRITICAL**: Before making ANY grammar changes, you MUST update the relevant parse tree documentation below. The tree must accurately reflect the parsing decisions and semantic choices. This is not optional.
+
+### @run Directive
+
+```
+@run ...
+├─ Language + "[" detected?
+│  ├─ YES: "@run python [...]"
+│  │  └─ [CodeContent] - Semantic choice
+│  │     └─ Content is literal code
+│  │        ├─ No @ variable processing
+│  │        ├─ Preserve all [brackets]
+│  │        └─ Preserve all quotes
+│  │
+├─ "[" detected (no language)?
+│  ├─ YES: "@run [...]"
+│  │  └─ [CommandContent] - Semantic choice
+│  │     └─ CommandParts with @var interpolation
+│  │        ├─ @var → Variable reference
+│  │        └─ text → Command text segments
+│  │
+├─ "@" detected?
+│  ├─ YES: "@run @command"
+│  │  └─ Command reference (exec)
+│  │
+└─ Other patterns
+   └─ Delegate to RunLanguageCodeCore
+      └─ Handles language (args) patterns
+```
+
+### @text Directive
+
+```
+@text name = ...
+├─ "[[" detected?
+│  ├─ YES: Template
+│  │  └─ [[TemplateContent]]
+│  │     └─ {{var}} interpolation only
+│  │
+├─ "[" detected?
+│  ├─ YES: Could be path or section
+│  │  ├─ Contains " # "?
+│  │  │  ├─ YES: [SectionExtraction]
+│  │  │  │  └─ [path # section]
+│  │  │  └─ NO: [PathContent]
+│  │  │     └─ [/path/to/@var/file]
+│  │
+├─ "@run" detected?
+│  ├─ YES: RunReference
+│  │  └─ @run directive (see tree above)
+│  │
+└─ '"' or "'" detected?
+   └─ QuotedLiteral
+      └─ "simple string" (no interpolation)
+```
+
+### @data Directive
+
+```
+@data obj = ...
+├─ "{" detected?
+│  ├─ YES: ObjectLiteral
+│  │  └─ { key: DataValue, ... }
+│  │     └─ DataValue can be:
+│  │        ├─ Primitive: "string", 123, true
+│  │        ├─ @run [...] → Embedded directive
+│  │        └─ Nested object/array
+│  │
+├─ "[" detected?
+│  ├─ YES: ArrayLiteral
+│  │  └─ [DataValue, DataValue, ...]
+│  │     └─ Same DataValue options as above
+│  │
+├─ "@run" detected?
+│  ├─ YES: DirectiveValue
+│  │  └─ Execute and use result
+│  │
+└─ Other: PrimitiveValue
+   └─ String, number, boolean, null
+```
+
+### @exec Directive
+
+```
+@exec name(params) = ...
+├─ "@run" detected?
+│  ├─ YES: RunReference
+│  │  └─ @run directive (see tree above)
+│  │
+├─ [Language] detected?
+│  ├─ YES: Code execution
+│  │  └─ Same as @run language branch
+│  │
+└─ "[" detected?
+   └─ CommandExecution
+      └─ Same as @run command branch
+```
+
+### @path Directive
+
+```
+@path var = ...
+├─ "[" detected?
+│  ├─ YES: BracketPath
+│  │  └─ [@var/path/segments]
+│  │
+├─ '"' detected?
+│  ├─ YES: QuotedPath
+│  │  └─ "path with spaces"
+│  │
+└─ No delimiter?
+   └─ UnquotedPath
+      └─ @var/path/segments
+```
+
+### @import Directive
+
+```
+@import ...
+├─ Security options? (optional)
+│  ├─ (TTL): (10d), (30m), (static)
+│  └─ trust: always, verify, never
+│
+├─ Import pattern?
+│  ├─ { imports } from source → Selective import
+│  │  ├─ { var1, var2 } → Named imports
+│  │  ├─ { var1 as alias1 } → Aliased imports
+│  │  └─ { * } → Import all (explicit)
+│  │
+│  └─ source (no braces) → Import all (implicit)
+│
+└─ Source types:
+   ├─ @input → Special stdin/pipe input
+   ├─ @author/module → Registry module
+   ├─ @resolver/path/to/mod → Module with path
+   ├─ [@var/path.mld] → Path with variables
+   ├─ [path/to/file.mld] → Local file path
+   ├─ [https://url.com/file] → Remote URL
+   └─ "path/to/file.mld" → Quoted path
+
+Full syntax examples:
+- @import { x, y } from [path/to/file.mld]
+- @import { x as X } from @author/module
+- @import [file.mld] (10d) trust always
+- @import { * } from [@pathvar/file.mld]
+- @import { data } from @input
+- @import @corp/utils (static) trust verify
+```
+
+### @add Directive
+
+```
+@add ...
+├─ "[[" detected?
+│  ├─ YES: TemplateContent
+│  │  └─ [[text with {{vars}}]]
+│  │
+├─ "[" detected?
+│  ├─ YES: PathOrSection
+│  │  └─ Same logic as @text
+│  │
+├─ "@" detected?
+│  ├─ YES: VariableReference
+│  │  └─ @varname to output
+│  │
+└─ '"' detected?
+   └─ LiteralContent
+      └─ "text to add"
+```
+
+## Parse Tree Maintenance
+
+When modifying the grammar:
+
+1. **FIRST**: Update the parse tree for affected directives
+2. **SECOND**: Ensure the tree accurately reflects all branches
+3. **THIRD**: Implement changes that match the tree
+4. **FOURTH**: Verify tests match the tree structure
+
+The parse trees are the source of truth for grammar behavior. Any mismatch between trees and implementation is a bug.
+
 ## Pattern Usage Guide
 
 ### Variable References
@@ -536,6 +758,8 @@ Before committing grammar changes:
 ## Resources
 
 - [docs/dev/AST.md](../../docs/dev/AST.md) - AST structure guide
+- [grammar/docs/SEMANTIC-PARSING.md](./docs/SEMANTIC-PARSING.md) - Semantic parsing approach
+- [grammar/docs/BRACKET-HANDLING-DESIGN.md](./docs/BRACKET-HANDLING-DESIGN.md) - Bracket handling design
 - [Peggy.js Documentation](https://peggyjs.org/) - Parser generator docs
 - `npm run ast -- '<mlld syntax>'` - Test AST output for any valid mlld syntax
 

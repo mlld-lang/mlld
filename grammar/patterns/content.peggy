@@ -46,65 +46,79 @@ LiteralContent "Literal content without interpolation"
     }
 
 
-// Content inside single brackets with @var interpolation
+// SEMANTIC: Path content - knows it's parsing a file path
+SemanticPathContent "Semantic path content with @var interpolation"
+  = '[' parts:PathParts ']' {
+      // Just return the path parts - section handling should be at directive level
+      return parts;
+    }
+
+// Parts that make up a path
+PathParts "Path component parts"
+  = parts:(SpecialVariable / Variable / PathTextSegment / PathSeparator)* {
+      return parts;
+    }
+
+// Section name - everything after # until ]
+SectionName "Section name"
+  = chars:$(!']' .)+ { return chars.trim(); }
+
+// Content inside single brackets for backward compatibility
 BracketContent "Content with @var interpolation"
-  = '[' parts:(BracketVar / PathTextSegment / PathSeparator)* ']' {
+  = SemanticPathContent
+
+// Removed: SectionBracketContent - now handled by directive-specific semantic parsers
+
+// SEMANTIC: Command bracket content - knows it's parsing a shell command
+SemanticCommandBracketContent "Semantic command content with @var interpolation"
+  = '[' parts:(SpecialVariable / Variable / QuotedCommandString / CommandTextContent)* ']' {
       // Return only the content within brackets, not the brackets themselves
       return parts;
     }
 
-// Section-aware bracket content for path # section syntax
-SectionBracketContent "Bracketed path with section extraction"
-  = '[' &{
-      // Look ahead to check if this is a section pattern
-      const remaining = input.substring(location().start.offset + 1);
-      const endIndex = remaining.indexOf(']');
-      if (endIndex === -1) return false;
-      const content = remaining.substring(0, endIndex);
-      
-      // Check if it matches the section pattern
-      const match = content.match(/^([^#]+)\s+#\s+(.+)$/);
-      if (!match) return false;
-      
-      const pathPart = match[1].trim();
-      const sectionPart = match[2].trim();
-      
-      // Path should look path-like: has valid file extension or contains /
-      // Valid extensions: 2-4 alphabetic characters (not just numbers)
-      const hasExtension = /\.[a-zA-Z]{2,4}$/.test(pathPart);
-      const hasSlash = pathPart.includes('/');
-      const looksLikePath = hasExtension || hasSlash;
-      
-      return looksLikePath && pathPart.length > 0 && sectionPart.length > 0;
-    } pathText:$([^#\]]*) _ '#' _ sectionText:$([^\]]*) ']' {
-      // Parse path and section as simple text for now
-      const pathParts = pathText.trim() ? [helpers.createNode(NodeType.Text, { content: pathText.trim(), location: location() })] : [];
-      const sectionParts = sectionText.trim() ? [helpers.createNode(NodeType.Text, { content: sectionText.trim(), location: location() })] : [];
-      
-      return {
-        type: 'sectionPath',
-        path: pathParts,
-        section: sectionParts,
-        wrapperType: 'bracket'
-      };
-    }
-
-// Content inside command brackets - much more permissive for shell commands
+// Regular command bracket content for backward compatibility
 CommandBracketContent "Command content with @var interpolation"
-  = '[' parts:(CommandBracketVar / CommandTextContent)* ']' {
-      // Return only the content within brackets, not the brackets themselves
-      return parts;
+  = SemanticCommandBracketContent
+
+// Quoted strings in commands - preserve quotes for shell semantics
+QuotedCommandString "Quoted string in command"
+  = '"' content:DoubleQuotedCommandContent '"' {
+      // Preserve quotes in command context
+      return helpers.createNode(NodeType.Text, { 
+        content: '"' + content + '"', 
+        location: location() 
+      });
+    }
+  / "'" content:SingleQuotedCommandContent "'" {
+      // Single quotes = no interpolation in shell
+      return helpers.createNode(NodeType.Text, { 
+        content: "'" + content + "'", 
+        location: location() 
+      });
     }
 
-// Variable reference within command bracketed content
-CommandBracketVar
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* { 
-      const node = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-      helpers.debug('CreateVAR in CommandBracketContent', { id, node, fields: fields });
-      return node;
+// Double quoted content - allows @var interpolation
+DoubleQuotedCommandContent
+  = parts:(SpecialVariable / Variable / DoubleQuotedText)* {
+      // Flatten to string preserving variable references
+      return parts.map(p => {
+        if (p.type === NodeType.VariableReference) {
+          return '@' + p.identifier;
+        }
+        return p.content || '';
+      }).join('');
+    }
+
+// Single quoted content - no interpolation
+SingleQuotedCommandContent  
+  = chars:(!"'" char:. { return char; })* {
+      return chars.join('');
+    }
+
+// Text inside double quotes
+DoubleQuotedText
+  = chars:(!['"@] char:. { return char; })+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
 // Permissive text content for commands - allows everything except @ and the final closing ]
@@ -123,57 +137,11 @@ CommandBracketChar
       return !helpers.isCommandEndingBracket(input, peg$currPos);
     } char:. { return char; }
 
-// Variable reference within bracketed content
-BracketVar
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* { 
-      const node = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-      helpers.debug('CreateVAR in BracketContent', { id, node, fields: fields });
-      return node;
-    }
 
 
 // Content inside double brackets with {{var}} interpolation
 DoubleBracketContent "Content with {{var}} interpolation"
-  = '[[' &{
-      // Look ahead to check if this is a section pattern (path-like # section-name)
-      const remaining = input.substring(location().start.offset + 2);
-      const endIndex = remaining.indexOf(']]');
-      if (endIndex === -1) return false;
-      const content = remaining.substring(0, endIndex);
-      
-      // Check if it matches the section pattern: something path-like before #
-      const match = content.match(/^([^#]+)\s+#\s+(.+)$/);
-      if (!match) return false;
-      
-      const pathPart = match[1].trim();
-      const sectionPart = match[2].trim();
-      
-      // Path should look path-like: has valid file extension or contains /
-      // Valid extensions: 2-4 alphabetic characters (not just numbers)
-      const hasExtension = /\.[a-zA-Z]{2,4}$/.test(pathPart);
-      const hasSlash = pathPart.includes('/');
-      const looksLikePath = hasExtension || hasSlash;
-      
-      // Section should not start with another # (that would be a heading)
-      const notHeading = !sectionPart.startsWith('#');
-      
-      return looksLikePath && notHeading && pathPart.length > 0 && sectionPart.length > 0;
-    } pathText:$([^#]*) _ '#' _ sectionText:$([^\]]*) ']]' {
-      // This is a double-bracketed section path
-      const pathParts = [helpers.createNode(NodeType.Text, { content: pathText.trim(), location: location() })];
-      const sectionParts = [helpers.createNode(NodeType.Text, { content: sectionText.trim(), location: location() })];
-      
-      return {
-        type: 'doubleBracketSection',
-        path: pathParts,
-        section: sectionParts,
-        wrapperType: 'doubleBracket'
-      };
-    }
-  / '[[' parts:(InterpolationVar / TemplateTextSegment)* ']]' {
+  = '[[' parts:(InterpolationVar / TemplateTextSegment)* ']]' {
       helpers.debug('DoubleBracketContent matched [[...]]', { 
         parts: parts,
         isArray: Array.isArray(parts),
@@ -231,29 +199,34 @@ UnquotedCommand "Unquoted command with @var interpolation"
       return parts;
     }
 
-// Direct code content without interpolation
-DirectCodeContent "Code content without interpolation"
-  = '[' content:$(CodeBracketContent) ']' { 
+// SEMANTIC: Code content - knows it's parsing code, preserves EVERYTHING literally
+SemanticCodeContent "Semantic code content without any interpolation"
+  = '[' content:$(CodeLiteralContent) ']' { 
+      // In code context, everything is literal - no @ processing, no escapes
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
+
+// Direct code content for backward compatibility
+DirectCodeContent "Code content without interpolation"
+  = SemanticCodeContent
   / content:$([^[\n]+) { 
       // Fallback for unbracketed code - must consume at least one character
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
 
-// Code content inside brackets - respects bracket nesting for programming languages
-CodeBracketContent "Code content with bracket nesting support"
-  = chars:CodeBracketChar* {
-      return chars.join('');
+// Code literal content - preserves absolutely everything including nested brackets
+CodeLiteralContent "Literal code content with natural bracket nesting"
+  = parts:CodeLiteralPart* {
+      return parts.join('');
     }
 
-// Character matcher for code blocks - only stops at ] that ends the code block
-CodeBracketChar
-  = EscapeSequence
-  / &{
-      // Use our helper to check if this is a code-ending bracket
-      return !helpers.isCommandEndingBracket(input, peg$currPos);
-    } char:. { return char; }
+// Parts of code - handle nested brackets naturally
+CodeLiteralPart
+  = '[' inner:CodeLiteralContent ']' {
+      // Preserve brackets in code
+      return '[' + inner + ']';
+    }
+  / !']' char:. { return char; }
 
 // -------------------------------------------------------------
 // SEMANTIC DELIMITER PATTERNS - Clear semantic meaning for each delimiter type
@@ -277,8 +250,7 @@ InterpolatedTemplateContent "Template content with {{var}} interpolation"
 
 // Path-style interpolation: brackets only (enforces semantic clarity)
 PathStyleInterpolation "Path interpolation patterns"
-  = SectionBracketContent    // [path # section] - section extraction takes precedence
-  / InterpolatedPathContent  // [content with @var] - all paths must be bracketed
+  = InterpolatedPathContent  // [content with @var] - all paths must be bracketed
 
 // Template-style interpolation: templates with {{var}} or literal text
 TemplateStyleInterpolation "Template interpolation patterns"  
@@ -316,27 +288,52 @@ CommandStyleInterpolation "Command interpolation patterns"
   / InterpolatedTemplateContent // [[command with {{var}}]]
 
 // -------------------------------------------------------------
+// SEMANTIC FORK PATTERNS - Help directives choose content type
+// -------------------------------------------------------------
+
+// Semantic text content - looks ahead to determine content type
+SemanticTextContent "Semantic content for @text directive"
+  = "[[" {
+      // Double brackets = template content
+      helpers.debug('SemanticTextContent detected [[');
+      return { type: 'template', lookahead: '[[' };
+    }
+  / "[" ahead:$([^\]]*) "]" &{
+      // Look for # to determine if it's a section
+      return ahead.includes(' # ');
+    } {
+      helpers.debug('SemanticTextContent detected [ with section');
+      return { type: 'section', lookahead: '[' };
+    }
+  / "[" {
+      // Single bracket without section = path
+      helpers.debug('SemanticTextContent detected [');
+      return { type: 'path', lookahead: '[' };
+    }
+  / "@run" {
+      // Run reference
+      helpers.debug('SemanticTextContent detected @run');
+      return { type: 'run', lookahead: '@run' };
+    }
+  / "\"" {
+      // Quoted literal
+      helpers.debug('SemanticTextContent detected "');
+      return { type: 'literal', lookahead: '"' };
+    }
+  / "'" {
+      // Quoted literal
+      helpers.debug('SemanticTextContent detected \'');
+      return { type: 'literal', lookahead: '\'' };
+    }
+
+// -------------------------------------------------------------
 // WRAPPED PATTERNS - Used by directives, handle raw string construction
 // -------------------------------------------------------------
 
 // For paths in path, import, exec, add directives
 WrappedPathContent "Wrapped path content"
   = content:PathStyleInterpolation {
-      // Handle section extraction as a special case
-      if (content.type === 'sectionPath') {
-        const pathRaw = helpers.reconstructRawString(content.path);
-        const sectionRaw = helpers.reconstructRawString(content.section);
-        const rawString = `${pathRaw} # ${sectionRaw}`;
-        
-        return {
-          parts: content.path,
-          raw: rawString,
-          section: sectionRaw,
-          type: 'sectionPath'
-        };
-      }
-      
-      // Regular path content
+      // PathStyleInterpolation already handles brackets
       const rawString = helpers.reconstructRawString(content);
       
       return {
@@ -355,21 +352,6 @@ WrappedTemplateContent "Wrapped template content"
         contentHasType: content && content.type,
         wrapperType: content && content.wrapperType
       });
-      
-      // Handle double-bracketed section as a special case
-      if (content && typeof content === 'object' && content.type === 'doubleBracketSection') {
-        const pathRaw = helpers.reconstructRawString(content.path);
-        const sectionRaw = helpers.reconstructRawString(content.section);
-        const rawString = `${pathRaw} # ${sectionRaw}`;
-        
-        return {
-          parts: content.path,
-          raw: rawString,
-          section: sectionRaw,
-          type: 'doubleBracketSection',
-          wrapperType: 'doubleBracket'
-        };
-      }
       
       // Regular template content
       const rawString = helpers.reconstructRawString(content.content);

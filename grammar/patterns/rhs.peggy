@@ -161,15 +161,16 @@ RunRHS
 // Purpose: Distinguishes between command content (with variable interpolation) and 
 //          code content (language + code blob without interpolation) for exec assignments
 ExecRHS "Exec directive right-hand side content"
-  = command:WrappedCommandContent {
-      // Bracket command pattern (e.g., "[find @dir -type f]") - must be first for precedence
-      // Produces execCommand subtype with variable interpolation support
-      helpers.debug('ExecRHS matched command pattern', { command });
+  = "[" parts:ExecCommandParts "]" {
+      // Semantic: bracket indicates command content with @var interpolation
+      helpers.debug('ExecRHS matched bracketed command', { parts });
+      
+      const rawCommand = helpers.reconstructRawString(parts);
       
       return {
         type: 'command',
-        command: command.parts,
-        raw: command.raw
+        command: parts,
+        raw: rawCommand
       };
     }
   / language:RunCodeLanguage _ args:RunCodeArguments? _ code:DirectCodeContent {
@@ -200,3 +201,26 @@ ExecRHS "Exec directive right-hand side content"
 
 // These are simplified references to directives that might appear in RHS
 // They will be replaced with actual implementations from core/
+
+// Command parts for exec context - allows @var interpolation
+ExecCommandParts
+  = parts:(ExecCommandVariable / ExecCommandText)* {
+      return parts;
+    }
+
+// Variable in exec command context
+ExecCommandVariable
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / SpecialVariable
+
+// Text segments in exec commands
+ExecCommandText
+  = chars:$((!']' !'@' .)+) {
+      return helpers.createNode(NodeType.Text, { content: chars, location: location() });
+    }

@@ -36,9 +36,13 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
         const result = await evaluate(n, env);
         lastValue = result.value;
         
-        // Add text nodes to output if they're top-level
+        // Add text nodes to output if they're top-level and not inline comments
         if (n.type === 'Text') {
-          env.addNode(n);
+          const textNode = n as TextNode;
+          // Skip inline comments (lines starting with >> or <<)
+          if (!textNode.content.trimStart().match(/^(>>|<<)/)) {
+            env.addNode(n);
+          }
         }
       }
     } else {
@@ -47,9 +51,13 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
         const result = await evaluate(n, env);
         lastValue = result.value;
         
-        // Add text nodes to output if they're top-level
+        // Add text nodes to output if they're top-level and not inline comments
         if (n.type === 'Text') {
-          env.addNode(n);
+          const textNode = n as TextNode;
+          // Skip inline comments (lines starting with >> or <<)
+          if (!textNode.content.trimStart().match(/^(>>|<<)/)) {
+            env.addNode(n);
+          }
         }
       }
     }
