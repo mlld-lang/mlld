@@ -32,7 +32,10 @@ function sanitizeName(name) {
 // Get the npm global bin directory
 function getGlobalBinDir() {
   try {
-    return execSync('npm bin -g', { encoding: 'utf8' }).trim();
+    const prefix = execSync('npm config get prefix', { encoding: 'utf8' }).trim();
+    // On Windows, binaries go directly in the prefix
+    // On Unix-like systems, they go in prefix/bin
+    return process.platform === 'win32' ? prefix : path.join(prefix, 'bin');
   } catch (error) {
     console.error('Could not determine npm global bin directory');
     process.exit(1);
