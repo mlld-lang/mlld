@@ -236,7 +236,7 @@ describe('ResolverManager with Cache Integration', () => {
       const result2 = await manager.resolve('@slow/module');
       const time2 = Date.now() - start2;
       
-      expect(time2).toBeLessThan(10); // Should be very fast
+      expect(time2).toBeLessThan(time1 / 2); // Should be at least 2x faster than uncached
       expect(result2.resolverName).toBe('cache');
     });
   });

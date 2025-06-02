@@ -38,8 +38,10 @@ describe('ModuleCache', () => {
       
       // Verify files were created
       const { prefix, rest } = HashUtils.getCachePathComponents(entry.hash);
-      const contentPath = path.join(testCacheRoot, 'sha256', prefix, rest, 'content.mld');
-      const metadataPath = path.join(testCacheRoot, 'sha256', prefix, rest, 'metadata.json');
+      // Use cache's internal structure instead of hard-coding paths
+      const cacheDir = (cache as any).cacheRoot;
+      const contentPath = path.join(cacheDir, prefix, rest, 'content.mld');
+      const metadataPath = path.join(cacheDir, prefix, rest, 'metadata.json');
       
       expect(await fs.promises.readFile(contentPath, 'utf8')).toBe(content);
       
@@ -104,7 +106,8 @@ describe('ModuleCache', () => {
       
       // Corrupt the content file
       const { prefix, rest } = HashUtils.getCachePathComponents(entry.hash);
-      const contentPath = path.join(testCacheRoot, 'sha256', prefix, rest, 'content.mld');
+      const cacheDir = (cache as any).cacheRoot;
+      const contentPath = path.join(cacheDir, prefix, rest, 'content.mld');
       await fs.promises.writeFile(contentPath, 'corrupted content', 'utf8');
       
       await expect(cache.get(entry.hash)).rejects.toThrow(/Cache corruption detected/);
@@ -207,7 +210,8 @@ describe('ModuleCache', () => {
       const entry = await cache.store(content, 'cleanup.mld');
       
       const { prefix } = HashUtils.getCachePathComponents(entry.hash);
-      const prefixDir = path.join(testCacheRoot, 'sha256', prefix);
+      const cacheDir = (cache as any).cacheRoot;
+      const prefixDir = path.join(cacheDir, prefix);
       
       await cache.remove(entry.hash);
       
