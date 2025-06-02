@@ -172,7 +172,26 @@ ImportPath
     }
   / ModuleReference
   / QuotedPath
+  / BracketImportPath
   / PathExpression
+
+// Bracketed path for imports - handles [@var/path]
+BracketImportPath
+  = "[" parts:PathParts "]" {
+      helpers.debug('BracketImportPath matched', { parts });
+      const rawPath = helpers.reconstructRawString(parts);
+      return {
+        type: 'path',
+        subtype: 'filePath',
+        values: { 
+          path: parts
+        },
+        raw: { 
+          path: rawPath
+        },
+        meta: helpers.createPathMetadata(rawPath, parts)
+      };
+    }
 
 // Quoted path for imports
 QuotedPath

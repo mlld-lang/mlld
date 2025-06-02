@@ -421,18 +421,34 @@ AtRun
 
 ```
 @import ...
-├─ "{" detected?
-│  ├─ YES: SelectiveImport
-│  │  └─ { var1, var2 } from "path"
+├─ Security options? (optional)
+│  ├─ (TTL): (10d), (30m), (static)
+│  └─ trust: always, verify, never
+│
+├─ Import pattern?
+│  ├─ { imports } from source → Selective import
+│  │  ├─ { var1, var2 } → Named imports
+│  │  ├─ { var1 as alias1 } → Aliased imports
+│  │  └─ { * } → Import all (explicit)
 │  │
-├─ "@" detected?
-│  ├─ YES: SpecialImport
-│  │  ├─ @input → stdin/input
-│  │  └─ @module/path → Registry module
-│  │
-└─ "[" or '"' detected?
-   └─ PathImport
-      └─ Import all from path
+│  └─ source (no braces) → Import all (implicit)
+│
+└─ Source types:
+   ├─ @input → Special stdin/pipe input
+   ├─ @author/module → Registry module
+   ├─ @resolver/path/to/mod → Module with path
+   ├─ [@var/path.mld] → Path with variables
+   ├─ [path/to/file.mld] → Local file path
+   ├─ [https://url.com/file] → Remote URL
+   └─ "path/to/file.mld" → Quoted path
+
+Full syntax examples:
+- @import { x, y } from [path/to/file.mld]
+- @import { x as X } from @author/module
+- @import [file.mld] (10d) trust always
+- @import { * } from [@pathvar/file.mld]
+- @import { data } from @input
+- @import @corp/utils (static) trust verify
 ```
 
 ### @add Directive
@@ -738,6 +754,8 @@ Before committing grammar changes:
 ## Resources
 
 - [docs/dev/AST.md](../../docs/dev/AST.md) - AST structure guide
+- [grammar/docs/SEMANTIC-PARSING.md](./docs/SEMANTIC-PARSING.md) - Semantic parsing approach
+- [grammar/docs/BRACKET-HANDLING-DESIGN.md](./docs/BRACKET-HANDLING-DESIGN.md) - Bracket handling design
 - [Peggy.js Documentation](https://peggyjs.org/) - Parser generator docs
 - `npm run ast -- '<mlld syntax>'` - Test AST output for any valid mlld syntax
 
