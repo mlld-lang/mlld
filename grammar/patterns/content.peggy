@@ -48,7 +48,7 @@ LiteralContent "Literal content without interpolation"
 
 // Content inside single brackets with @var interpolation
 BracketContent "Content with @var interpolation"
-  = '[' parts:(BracketVar / PathTextSegment / PathSeparator)* ']' {
+  = '[' parts:(Variable / PathTextSegment / PathSeparator)* ']' {
       // Return only the content within brackets, not the brackets themselves
       return parts;
     }
@@ -91,20 +91,9 @@ SectionBracketContent "Bracketed path with section extraction"
 
 // Content inside command brackets - much more permissive for shell commands
 CommandBracketContent "Command content with @var interpolation"
-  = '[' parts:(CommandBracketVar / CommandTextContent)* ']' {
+  = '[' parts:(Variable / CommandTextContent)* ']' {
       // Return only the content within brackets, not the brackets themselves
       return parts;
-    }
-
-// Variable reference within command bracketed content
-CommandBracketVar
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* { 
-      const node = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-      helpers.debug('CreateVAR in CommandBracketContent', { id, node, fields: fields });
-      return node;
     }
 
 // Permissive text content for commands - allows everything except @ and the final closing ]
@@ -123,16 +112,6 @@ CommandBracketChar
       return !helpers.isCommandEndingBracket(input, peg$currPos);
     } char:. { return char; }
 
-// Variable reference within bracketed content
-BracketVar
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* { 
-      const node = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-      helpers.debug('CreateVAR in BracketContent', { id, node, fields: fields });
-      return node;
-    }
 
 
 // Content inside double brackets with {{var}} interpolation

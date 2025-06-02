@@ -438,36 +438,22 @@ export const helpers = {
     },
     /**
      * Checks if we're at a bracket that should end command parsing
-     * This uses a refined heuristic that handles embedded commands in data structures
+     * This uses a specific heuristic: ] at end of input OR ] on its own line
      */
     isCommandEndingBracket(input, pos) {
         if (input[pos] !== ']')
             return false;
-        // Look at what follows the ]
+        // Check if ] is at the end of input (single-line commands)
         const nextPos = pos + 1;
         if (nextPos >= input.length)
-            return true; // End of input
-        const nextChar = input[nextPos];
-        // End on ] followed by newline (possibly with whitespace)
-        if (nextChar === '\n')
             return true;
-        // End on ] followed by comma (for embedded commands in data objects)
-        if (nextChar === ',')
-            return true;
-        // End on ] followed by closing brace or bracket (for nested data structures)
-        if (nextChar === '}' || nextChar === ')')
-            return true;
-        // End on ] followed by whitespace then newline, comma, or closing delimiter
-        if (nextChar === ' ' || nextChar === '\t') {
-            for (let i = nextPos; i < input.length; i++) {
-                const char = input[i];
-                if (char === '\n' || char === ',' || char === '}' || char === ')')
-                    return true;
-                if (char !== ' ' && char !== '\t')
-                    break;
-            }
+        // Check if ] is followed only by whitespace then newline (] on its own line in multi-line commands)
+        let i = nextPos;
+        while (i < input.length && (input[i] === ' ' || input[i] === '\t')) {
+            i++;
         }
-        return false;
+        // Must be followed by newline or end of input
+        return i >= input.length || input[i] === '\n';
     },
     /**
      * Parse command content that may contain variables and text segments

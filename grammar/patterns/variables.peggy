@@ -7,24 +7,49 @@
 
 // Variable types - the root rule used by other directives
 Variable
-  = ReservedVariable
+  = SpecialVariable    // Check special vars first (includes @., case-insensitive forms)
   / InterpolationVar
   / AtVar
 
-// Reserved variables that have special meaning
-ReservedVariable
-  = "@TIME" {
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: 'TIME',
-        isReserved: true
-      }, location());
-    }
-  / "@PROJECTPATH" {
+// Special variables with case insensitivity and special forms
+SpecialVariable "Special reserved variable"
+  = "@." {
+      // @. is always PROJECTPATH
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: 'PROJECTPATH',
-        isReserved: true
+        isSpecial: true,
+        originalForm: '@.'
       }, location());
     }
+  / "@" id:SpecialVariableName {
+      // Normalize to uppercase and handle deprecations
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id.normalized,
+        isSpecial: true,
+        originalCase: id.original,
+        ...(id.deprecated ? { deprecated: true } : {})
+      }, location());
+    }
+
+// Special variable names with case insensitive matching
+SpecialVariableName
+  = id:CaseInsensitiveTime { return { original: id, normalized: 'TIME' }; }
+  / id:CaseInsensitiveProjectPath { return { original: id, normalized: 'PROJECTPATH' }; }
+  / id:CaseInsensitiveInput { return { original: id, normalized: 'INPUT' }; }
+  / id:CaseInsensitiveStdin { return { original: id, normalized: 'INPUT', deprecated: true }; }
+
+// Case insensitive matchers for special variables
+CaseInsensitiveTime
+  = chars:([Tt] [Ii] [Mm] [Ee]) { return chars.join(''); }
+
+CaseInsensitiveProjectPath
+  = chars:([Pp] [Rr] [Oo] [Jj] [Ee] [Cc] [Tt] [Pp] [Aa] [Tt] [Hh]) { return chars.join(''); }
+
+CaseInsensitiveInput
+  = chars:([Ii] [Nn] [Pp] [Uu] [Tt]) { return chars.join(''); }
+
+CaseInsensitiveStdin
+  = chars:([Ss] [Tt] [Dd] [Ii] [Nn]) { return chars.join(''); }
 
 // AtVar for direct variable references (using context detection)
 // Used in paths, commands, and single bracket contexts
@@ -58,8 +83,23 @@ AtVar
 
 // {{var}} syntax for interpolation in templates
 InterpolationVar
-  = InterpolationSimpleVar
+  = InterpolationSpecialVar
+  / InterpolationSimpleVar
   / InterpolationDataVar
+
+// {{TIME}}, {{PROJECTPATH}}, {{INPUT}} - special variables in templates
+InterpolationSpecialVar
+  = "{{" _ id:SpecialVariableName format:VarFormat? _ "}}" {
+      const node = helpers.createVariableReferenceNode('varInterpolation', {
+        identifier: id.normalized,
+        isSpecial: true,
+        originalCase: id.original,
+        ...(format ? { format } : {}),
+        ...(id.deprecated ? { deprecated: true } : {})
+      }, location());
+      helpers.debug('CreateVAR', { rule: 'InterpolationSpecialVar', node });
+      return node;
+    }
 
 // {{var}} for simple variable interpolation
 InterpolationSimpleVar

@@ -265,6 +265,28 @@ BracketContent = '[' parts:(AtVar / TextSegment)* ']'
 // AtVar is imported from patterns/variables.peggy
 ```
 
+### 4. **Context Detection System**
+The grammar includes a sophisticated context detection system (`base/context.peggy`) for disambiguating syntax in different parsing contexts.
+
+**Key Contexts:**
+- `DirectiveContext` - Top-level directives (`@run`, `@text`)
+- `VariableContext` - Variable references (`@varName`)
+- `RHSContext` - Right-hand side of assignments (`= @run [cmd]`)
+- `RunCodeBlockContext` - Language + code patterns
+
+**Usage:**
+```peggy
+// Use predicates to select appropriate parsing rules
+CommandContent
+  = &{ return helpers.isRHSContext(input, peg$currPos); } RHSCommandPattern
+  / &{ return helpers.isInRunCodeBlockContext(input, peg$currPos); } CodePattern
+  / DefaultCommandPattern
+
+// Context helpers available: isAtDirectiveContext(), isRHSContext(), etc.
+```
+
+This system enables context-aware parsing without runtime state tracking, maintaining clean separation between syntactic and semantic concerns.
+
 ## Pattern Usage Guide
 
 ### Variable References
