@@ -177,7 +177,7 @@ ImportPath
 
 // Bracketed path for imports - handles [@var/path]
 BracketImportPath
-  = "[" parts:PathParts "]" {
+  = "[" parts:ImportPathParts "]" {
       helpers.debug('BracketImportPath matched', { parts });
       const rawPath = helpers.reconstructRawString(parts);
       return {
@@ -295,3 +295,20 @@ ImportItem
       }
       return name;
     }
+
+// Path parts for import context - allows @var interpolation
+ImportPathParts
+  = parts:(ImportPathVariable / PathTextSegment / PathSeparator)* {
+      return parts;
+    }
+
+// Variable in import path context
+ImportPathVariable  
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / SpecialVariable  // Special vars like @., @TIME, etc.

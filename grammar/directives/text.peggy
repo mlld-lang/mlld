@@ -83,22 +83,24 @@ AtText
         sourceType
       );
     }
-  // Single-bracketed path with section: [path/to/file.md # Section]
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ content:WrappedPathContent &{ return content.type === 'sectionPath'; } rename:AsNewTitle? {
-      helpers.debug('AtText matched single-bracketed path section', { id, content, rename });
+  // Bracketed path (with optional section) - semantic parsing
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "[" parts:TextPathParts _ section:(" # " s:SectionName { return s; })? "]" rename:AsNewTitle? {
+      helpers.debug('AtText matched bracketed path', { id, parts, section, rename });
       
-      const subtype = 'textPathSection';
-      const sourceType = 'section';
+      const rawPath = helpers.reconstructRawString(parts);
+      const hasSectionExtraction = !!section;
+      const subtype = hasSectionExtraction ? 'textPathSection' : 'textPath';
+      const sourceType = hasSectionExtraction ? 'section' : 'path';
       
-      const rawPath = content.raw.split(' # ')[0];
-      const sectionText = content.section;
-      
-      // Create values object with section and path
+      // Create values object
       const values = {
         identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-        path: content.parts,
-        sectionTitle: [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })]
+        path: parts
       };
+      
+      if (hasSectionExtraction) {
+        values.sectionTitle = [helpers.createNode(NodeType.Text, { content: section, location: location() })];
+      }
       
       // Add new title if provided
       if (rename) {
@@ -108,9 +110,12 @@ AtText
       // Create raw object
       const raw = {
         identifier: id,
-        path: rawPath,
-        sectionTitle: sectionText
+        path: rawPath
       };
+      
+      if (hasSectionExtraction) {
+        raw.sectionTitle = section;
+      }
       
       // Add new title to raw if present
       if (rename) {
@@ -120,9 +125,9 @@ AtText
       // Create meta object
       const meta = { 
         sourceType: sourceType,
-        hasVariables: false,
+        hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
         isTemplateContent: false,
-        path: helpers.createPathMetadata(rawPath, content.parts)
+        path: helpers.createPathMetadata(rawPath, parts)
       };
       
       return helpers.createStructuredDirective(
@@ -667,3 +672,20 @@ TextParameter
     }
 
 // AsNewTitle is imported from add.peggy
+
+// Path parts for text context - allows @var interpolation
+TextPathParts
+  = parts:(TextPathVariable / PathTextSegment / PathSeparator)* {
+      return parts;
+    }
+
+// Variable in text path context
+TextPathVariable
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / SpecialVariable
