@@ -7,6 +7,8 @@ export { default as dataArray } from './data-array.generated-fixture.json';
 export { default as dataComplex } from './data-complex.generated-fixture.json';
 export { default as dataExecReference } from './data-exec-reference.generated-fixture.json';
 export { default as dataFieldAccess } from './data-field-access.generated-fixture.json';
+export { default as dataForeachObject } from './data-foreach-object.generated-fixture.json';
+export { default as dataForeach } from './data-foreach.generated-fixture.json';
 export { default as dataGrammarFixes } from './data-grammar-fixes.generated-fixture.json';
 export { default as dataMixedTypes } from './data-mixed-types.generated-fixture.json';
 export { default as dataNestedDirectives } from './data-nested-directives.generated-fixture.json';

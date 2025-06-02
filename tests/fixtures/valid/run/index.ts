@@ -21,4 +21,7 @@ export { default as runInlineComments } from './run-inline-comments.generated-fi
 export { default as runNoReinterpret } from './run-no-reinterpret.generated-fixture.json';
 export { default as runRunCodeBracketNesting } from './run-run-code-bracket-nesting.generated-fixture.json';
 export { default as runRunCommandBracketNesting } from './run-run-command-bracket-nesting.generated-fixture.json';
+export { default as runRunWithClauseSimple } from './run-run-with-clause-simple.generated-fixture.json';
+export { default as runRunWithClauseUsage } from './run-run-with-clause-usage.generated-fixture.json';
+export { default as runRunWithClause } from './run-run-with-clause.generated-fixture.json';
 export { default as runShellEscaping } from './run-shell-escaping.generated-fixture.json';
