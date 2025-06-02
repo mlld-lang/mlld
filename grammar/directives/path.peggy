@@ -49,15 +49,15 @@ AtPath
         'path'
       );
     }
-  // Bracketed path with security options
-  / DirectiveContext "@path" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ content:BracketContent {
+  // Bracketed path with security options - semantic parsing
+  / DirectiveContext "@path" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ "[" parts:PathAssignmentParts "]" {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtPath matched bracketed path', { id, content });
+      helpers.debug('AtPath matched bracketed path', { id, parts });
       
       // Process special path variables in the parsed content (only @. special case)
       const processedPathParts = [];
       
-      for (const part of content) {
+      for (const part of parts) {
         if (part.type === 'Text' && part.content && part.content.includes('@.')) {
           // Handle @. in text nodes by replacing with @PROJECTPATH and re-parsing as variable
           const updatedContent = part.content.replace(/@\./g, '@PROJECTPATH');
@@ -155,6 +155,23 @@ AtPath
 // -------------------------------------------------------------
 // HELPER RULES (special path identifiers)
 // -------------------------------------------------------------
+
+// Path parts for path assignment - allows @var interpolation
+PathAssignmentParts
+  = parts:(PathAssignmentVariable / PathTextSegment / PathSeparator)* {
+      return parts;
+    }
+
+// Variable in path assignment context
+PathAssignmentVariable
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / SpecialVariable
 
 // Special path identifiers
 SpecialPathIdentifier

@@ -1,20 +1,8 @@
-# Basic Pipeline Test
+# Pipeline Basic Test
 
-@exec validate_json(data) = @run [
-  node -e 'try { JSON.parse(`@data`); console.log(`@data`); } catch { }'
-]
+@exec uppercase(text) = @run [echo "$@text" | tr '[:lower:]' '[:upper:]']
+@exec addPrefix(text) = @run [echo "PREFIX: $@text"]
 
-@exec extract_field(data, field) = @run [
-  node -e 'const d = JSON.parse(`@data`); console.log(JSON.stringify(d["@field"]))'
-]
-
-@text api_response = @run [echo '{"users": ["alice", "bob"], "count": 2}']
-
-@text users = @run [echo "@api_response"] with {
-  pipeline: [
-    @validate_json(@input),
-    @extract_field(@input, "users")
-  ]
+@run [echo "hello world"] with {
+  pipeline: [@uppercase, @addPrefix]
 }
-
-@add @users

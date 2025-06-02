@@ -147,7 +147,8 @@ AtData
 
 // Any data value (object, array, primitive, directive, template, variable, literal path)
 DataValue
-  = DirectiveValue
+  = ForeachCommandExpression
+  / DirectiveValue
   / TemplateValue  
   / VariableReferenceValue
   / object:DataObjectLiteral {
@@ -177,18 +178,41 @@ DataValue
       };
     }
 
-// Embedded directive value - using core patterns directly for data context
+// Embedded directive value - semantic parsing for data context
 DirectiveValue
-  = "@run" _ command:CommandCore {
+  = "@run" _ "[" parts:DataCommandParts "]" {
+      const rawCommand = helpers.reconstructRawString(parts);
+      
+      // Extract command bases
+      let commandBases = [];
+      let rawBases = [];
+      if (parts.length > 0 && parts[0].type === NodeType.Text) {
+        const cmdMatch = parts[0].content.match(/^(\S+)/);
+        if (cmdMatch) {
+          commandBases.push(helpers.createNode(NodeType.CommandBase, {
+            command: cmdMatch[1],
+            location: parts[0].location
+          }));
+          rawBases.push(cmdMatch[1]);
+        }
+      }
+      
       const runDirective = helpers.createStructuredDirective(
         'run',
         'runCommand',
-        command.values,
-        command.raw,
+        {
+          command: parts,
+          commandBases: commandBases
+        },
+        {
+          command: rawCommand,
+          commandBases: rawBases
+        },
         { 
-          ...command.meta, 
           isDataValue: true,
-          isMultiLine: command.raw.command.includes('\n')
+          isMultiLine: rawCommand.includes('\n'),
+          commandCount: commandBases.length,
+          hasScriptRunner: false
         },
         location()
       );
@@ -196,7 +220,7 @@ DirectiveValue
       return {
         type: "nestedDirective",
         directive: runDirective,
-        rawText: "@run " + (command.raw && command.raw.command ? command.raw.command : "")
+        rawText: "@run [" + rawCommand + "]"
       };
     }
   / "@run" _ exec:RunExecCore {
@@ -485,5 +509,74 @@ LiteralPathText
     }
 
 // -------------------------------------------------------------
+// FOREACH COMMAND EXPRESSIONS
+// -------------------------------------------------------------
+
+// Foreach command expression for iterating over arrays with parameterized commands
+ForeachCommandExpression
+  = "foreach" _ cmd:ForeachCommandRef _ "(" _ arrays:ForeachArrayArgumentList _ ")" {
+      helpers.debug('ForeachCommandExpression matched', { cmd, arrays });
+      
+      return {
+        type: "foreach-command",
+        value: {
+          type: 'foreach-command',
+          command: cmd,
+          arrays: arrays
+        },
+        rawText: text()
+      };
+    }
+
+// Command reference for foreach expressions
+ForeachCommandRef
+  = "@" identifier:BaseIdentifier fields:AnyFieldAccess* {
+      return {
+        type: 'commandRef',
+        identifier: identifier,
+        fields: fields || []
+      };
+    }
+
+// List of array arguments separated by commas
+ForeachArrayArgumentList
+  = first:ForeachVariableRef rest:(_ "," _ arr:ForeachVariableRef { return arr; })* {
+      return [first].concat(rest || []);
+    }
+
+// Variable reference for array arguments
+ForeachVariableRef
+  = "@" identifier:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(identifier);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+
+// -------------------------------------------------------------
 // DIRECTIVE REFERENCES
 // -------------------------------------------------------------
+
+// Command parts for data context - allows @var interpolation
+DataCommandParts
+  = parts:(DataCommandVariable / DataCommandText)* {
+      return parts;
+    }
+
+// Variable in data command context
+DataCommandVariable
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / SpecialVariable
+
+// Text segments in data commands
+DataCommandText
+  = chars:$((!']' !'@' .)+) {
+      return helpers.createNode(NodeType.Text, { content: chars, location: location() });
+    }

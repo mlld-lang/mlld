@@ -312,24 +312,28 @@ AtRun
 
 ```
 @run ...
-├─ [Language] detected?
-│  ├─ YES: "@run python ..."
-│  │  └─ [CodeContent]
-│  │     └─ "[" → CodeLiteral → "]"
-│  │        └─ Everything is literal text
-│  │           ├─ No @ variable processing
-│  │           ├─ Preserve all [brackets]
-│  │           └─ Preserve all quotes
+├─ Language + "[" detected?
+│  ├─ YES: "@run python [...]"
+│  │  └─ [CodeContent] - Semantic choice
+│  │     └─ Content is literal code
+│  │        ├─ No @ variable processing
+│  │        ├─ Preserve all [brackets]
+│  │        └─ Preserve all quotes
 │  │
-│  └─ NO: "@run ..."
-│     └─ [CommandContent]
-│        └─ "[" → CommandParts → "]"
-│           ├─ @var → Variable interpolation
-│           ├─ "..." → DoubleQuotedCommand
-│           │  └─ @var interpolation inside
-│           ├─ '...' → SingleQuotedCommand
-│           │  └─ All literal (no @var)
-│           └─ text → Command text
+├─ "[" detected (no language)?
+│  ├─ YES: "@run [...]"
+│  │  └─ [CommandContent] - Semantic choice
+│  │     └─ CommandParts with @var interpolation
+│  │        ├─ @var → Variable reference
+│  │        └─ text → Command text segments
+│  │
+├─ "@" detected?
+│  ├─ YES: "@run @command"
+│  │  └─ Command reference (exec)
+│  │
+└─ Other patterns
+   └─ Delegate to RunLanguageCodeCore
+      └─ Handles language (args) patterns
 ```
 
 ### @text Directive

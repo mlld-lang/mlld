@@ -1,4 +1,4 @@
-import type { DirectiveNode, TextNode, MlldNode, VariableReference, CommandVariable } from '@core/types';
+import type { DirectiveNode, TextNode, MlldNode, VariableReference, CommandVariable, WithClause } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate, resolveVariableValue } from '../core/interpreter';
@@ -8,6 +8,8 @@ import { TaintLevel } from '@security/taint';
 import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/command/analyzer/CommandAnalyzer';
 import type { SecurityManager } from '@security/SecurityManager';
 import { isCommandVariable, createTextVariable } from '@core/types';
+import { executePipeline } from './pipeline';
+import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 
 /**
  * Determine the taint level of command arguments
@@ -315,6 +317,26 @@ export async function evaluateRun(
     }
   } else {
     throw new Error(`Unsupported run subtype: ${directive.subtype}`);
+  }
+  
+  // Handle with clause if present
+  const withClause = directive.meta?.withClause as WithClause | undefined;
+  if (withClause) {
+    // Check dependencies first if specified
+    if (withClause.needs) {
+      const checker = new DefaultDependencyChecker();
+      await checkDependencies(withClause.needs, checker, directive.location);
+    }
+    
+    // Apply pipeline transformations if specified
+    if (withClause.pipeline && withClause.pipeline.length > 0) {
+      output = await executePipeline(
+        output,
+        withClause.pipeline,
+        env,
+        directive.location
+      );
+    }
   }
   
   // Output directives always end with a newline

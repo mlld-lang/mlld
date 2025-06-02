@@ -1,8 +1,9 @@
 /**
  * Data directive type definitions
  */
-import { DirectiveNode, TypedDirectiveNode } from './base';
+import { TypedDirectiveNode } from './base';
 import { ContentNodeArray, VariableNodeArray } from './values';
+import { DirectiveNode, SourceLocation } from './primitives';
 
 /**
  * Data directive raw values
@@ -10,6 +11,7 @@ import { ContentNodeArray, VariableNodeArray } from './values';
 export interface DataRaw {
   identifier: string;
   value: string;
+  [key: string]: string; // Allow additional properties for compatibility
 }
 
 /**
@@ -34,16 +36,18 @@ export interface DataDirectiveNode extends TypedDirectiveNode<'data', 'dataAssig
 export interface DataValues {
   identifier: VariableNodeArray;
   value: DataValue;
+  [key: string]: any; // Allow additional properties for compatibility
 }
 
 /**
- * Recursive type for data values - can be primitives, objects, arrays, or directives
+ * Recursive type for data values - can be primitives, objects, arrays, directives, or foreach expressions
  */
 export type DataValue = 
   | ContentNodeArray // String literals, numbers, booleans represented as content nodes
   | DataObjectValue
   | DataArrayValue
-  | DirectiveNode; // Nested directive
+  | DirectiveNode // Nested directive
+  | ForeachCommandExpression; // Foreach command expression
 
 /**
  * An object value in a data structure
@@ -61,6 +65,45 @@ export interface DataObjectValue {
 export interface DataArrayValue {
   type: 'array';
   items: DataValue[]; // Each item can be any data value including nested objects/arrays/directives
+}
+
+/**
+ * A foreach command expression for iterating over arrays with parameterized commands
+ */
+export interface ForeachCommandExpression {
+  type: 'foreach-command';
+  command: CommandReference;
+  arrays: VariableReference[];
+}
+
+/**
+ * Field access type for variable references
+ */
+export interface FieldAccess {
+  type: 'field' | 'index';
+  name?: string;
+  value?: string | number;
+}
+
+/**
+ * Command reference for foreach expressions
+ */
+export interface CommandReference {
+  type: 'commandRef';
+  identifier: string;
+  fields: FieldAccess[];
+}
+
+/**
+ * Variable reference for foreach array arguments
+ */
+export interface VariableReference {
+  type: 'VariableReference';
+  nodeId: string;
+  location: SourceLocation;
+  valueType: string;
+  identifier: string;
+  fields?: FieldAccess[];
 }
 
 /**
@@ -133,6 +176,17 @@ export function isRunDirectiveValue(value: DataValue): value is DirectiveNode {
 
 export function isTextDirectiveValue(value: DataValue): value is DirectiveNode {
   return isDirectiveValue(value) && value.kind === 'text';
+}
+
+/**
+ * Type guard for foreach command expressions
+ */
+export function isForeachCommandExpression(value: DataValue): value is ForeachCommandExpression {
+  return typeof value === 'object' && 
+         value !== null && 
+         !Array.isArray(value) && 
+         'type' in value && 
+         value.type === 'foreach-command';
 }
 
 /**

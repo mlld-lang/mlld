@@ -13,6 +13,7 @@ export const NodeType = {
     Newline: 'Newline',
     StringLiteral: 'StringLiteral',
     Frontmatter: 'Frontmatter',
+    CommandBase: 'CommandBase',
 };
 export const DirectiveKind = {
     run: 'run',

@@ -710,7 +710,7 @@ export class Environment {
         let pythonCode = '';
         if (params) {
           for (const [key, value] of Object.entries(params)) {
-            pythonCode += `${key} = ${JSON.stringify(value)}\\n`;
+            pythonCode += `${key} = ${JSON.stringify(value)}\n`;
           }
         }
         pythonCode += code;

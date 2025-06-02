@@ -9,11 +9,17 @@ import {
   isDirectiveValue,
   isVariableReferenceValue,
   isTemplateValue,
-  isPrimitiveValue
+  isPrimitiveValue,
+  isForeachCommandExpression
 } from '@core/types/data';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
 import { evaluate, interpolate, resolveVariableValue } from '../core/interpreter';
 import { accessField } from '../utils/field-access';
+import { 
+  cartesianProduct, 
+  validateArrayInputs, 
+  isWithinPerformanceLimit 
+} from '../utils/cartesian-product';
 
 /**
  * Cache for evaluated directives to avoid re-evaluation
@@ -73,6 +79,16 @@ export async function evaluateDataValue(
       evaluationCache.set(value, state);
       throw error;
     }
+  }
+  
+  // Handle foreach command expressions
+  if (isForeachCommandExpression(value)) {
+    return await evaluateForeachCommand(value, env);
+  }
+  
+  // Handle objects with type 'foreach-command' (from grammar output)
+  if (value && typeof value === 'object' && value.type === 'foreach-command') {
+    return await evaluateForeachCommand(value, env);
   }
   
   // Handle variable references (with potential field access)
@@ -166,8 +182,13 @@ export async function evaluateDataValue(
     return evaluatedElements;
   }
   
-  // Check if it's an array that needs interpolation (template content)
+  // Check if it's an array that needs interpolation (template content) or contains foreach
   if (Array.isArray(value)) {
+    // Check if the array contains a single foreach command object
+    if (value.length === 1 && value[0] && typeof value[0] === 'object' && value[0].type === 'foreach-command') {
+      return await evaluateForeachCommand(value[0], env);
+    }
+    
     // Check if all elements are Text or VariableReference nodes
     const isTemplateContent = value.every(item => 
       item?.type === 'Text' || item?.type === 'VariableReference'
@@ -181,6 +202,11 @@ export async function evaluateDataValue(
     // Otherwise it's a regular array that should have been handled above
     console.warn('Unhandled array in evaluateDataValue:', value);
     return value;
+  }
+  
+  // Handle direct foreach structure from grammar 
+  if (value && typeof value === 'object' && value.type === 'foreach-command') {
+    return await evaluateForeachCommand(value, env);
   }
   
   // Fallback - return the value as-is
@@ -245,4 +271,139 @@ export function collectEvaluationErrors(
   }
   
   return errors;
+}
+
+/**
+ * Evaluates a foreach command expression by iterating over arrays with a parameterized command.
+ * 
+ * @param foreachExpr - The foreach command expression to evaluate
+ * @param env - The evaluation environment
+ * @returns Array of results from command execution
+ */
+async function evaluateForeachCommand(
+  foreachExpr: any, // Use any for now since the grammar output structure might not match exactly
+  env: Environment
+): Promise<any[]> {
+  const { command, arrays } = foreachExpr.value || foreachExpr;
+  
+  // 1. Resolve the command variable
+  const cmdVariable = env.getVariable(command.identifier);
+  if (!cmdVariable) {
+    throw new Error(`Command not found: ${command.identifier}`);
+  }
+  
+  if (!isCommandVariable(cmdVariable)) {
+    throw new Error(`Variable ${command.identifier} is not a command. Got type: ${cmdVariable.type}`);
+  }
+  
+  // 2. Evaluate all array arguments
+  const evaluatedArrays: any[][] = [];
+  for (let i = 0; i < arrays.length; i++) {
+    const arrayVar = arrays[i];
+    const arrayValue = await evaluateDataValue(arrayVar, env);
+    
+    if (!Array.isArray(arrayValue)) {
+      throw new Error(`Argument ${i + 1} to foreach must be an array, got ${typeof arrayValue}`);
+    }
+    
+    evaluatedArrays.push(arrayValue);
+  }
+  
+  // 3. Validate array inputs and performance limits
+  validateArrayInputs(evaluatedArrays);
+  
+  if (!isWithinPerformanceLimit(evaluatedArrays)) {
+    const totalCombinations = evaluatedArrays.reduce((total, arr) => total * arr.length, 1);
+    throw new Error(`Foreach operation would generate ${totalCombinations} combinations, which exceeds the performance limit. Consider reducing array sizes or using more specific filtering.`);
+  }
+  
+  // 4. Check parameter count matches array count
+  const paramCount = cmdVariable.value.paramNames?.length || 0;
+  if (evaluatedArrays.length !== paramCount) {
+    throw new Error(`Command ${command.identifier} expects ${paramCount} parameters, got ${evaluatedArrays.length} arrays`);
+  }
+  
+  // 5. Generate cartesian product
+  const tuples = cartesianProduct(evaluatedArrays);
+  
+  // 6. Execute command for each tuple
+  const results: any[] = [];
+  for (let i = 0; i < tuples.length; i++) {
+    const tuple = tuples[i];
+    
+    try {
+      // Create argument map for parameter substitution
+      const argMap: Record<string, any> = {};
+      cmdVariable.value.paramNames.forEach((param: string, index: number) => {
+        argMap[param] = tuple[index];
+      });
+      
+      // Invoke the parameterized command with arguments
+      const result = await invokeParameterizedCommand(cmdVariable, argMap, env);
+      results.push(result);
+    } catch (error) {
+      // Include iteration context in error message
+      const iterationContext = cmdVariable.value.paramNames.map((param: string, index: number) => 
+        `${param}: ${JSON.stringify(tuple[index])}`
+      ).join(', ');
+      
+      throw new Error(
+        `Error in foreach iteration ${i + 1} (${iterationContext}): ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+  
+  return results;
+}
+
+/**
+ * Invokes a parameterized command (exec or text template) with given arguments.
+ * 
+ * @param cmdVariable - The command variable to invoke
+ * @param argMap - Map of parameter names to argument values  
+ * @param env - The evaluation environment
+ * @returns The result of command execution
+ */
+async function invokeParameterizedCommand(
+  cmdVariable: any,
+  argMap: Record<string, any>,
+  env: Environment
+): Promise<any> {
+  // Create a child environment with parameter bindings
+  const childEnv = env.createChild();
+  
+  // Bind arguments to parameter names
+  for (const [paramName, paramValue] of Object.entries(argMap)) {
+    // Create appropriate variable type based on the parameter value
+    if (typeof paramValue === 'string') {
+      childEnv.setVariable(paramName, {
+        type: 'text',
+        name: paramName,
+        value: paramValue,
+        definedAt: null
+      });
+    } else {
+      childEnv.setVariable(paramName, {
+        type: 'data',
+        name: paramName,
+        value: paramValue,
+        definedAt: null,
+        isFullyEvaluated: true
+      });
+    }
+  }
+  
+  const commandDef = cmdVariable.value;
+  
+  if (commandDef.type === 'command') {
+    // Execute command template with bound parameters
+    const command = await interpolate(commandDef.commandTemplate, childEnv);
+    return await env.executeCommand(command);
+  } else if (commandDef.type === 'code') {
+    // Execute code template with bound parameters
+    const code = await interpolate(commandDef.codeTemplate, childEnv);
+    return await env.executeCode(code, commandDef.language);
+  } else {
+    throw new Error(`Unsupported command type: ${commandDef.type}`);
+  }
 }

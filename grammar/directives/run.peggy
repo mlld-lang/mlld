@@ -18,9 +18,109 @@ It can be used in three main forms:
 // TOP-LEVEL RUN DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @run directive 
+// Primary @run directive - Semantic parsing based on what follows @run
+// Order matters: most specific patterns first
 AtRun
-  = DirectiveContext "@run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference withClause:WithClause? comment:InlineComment? {
+  = DirectiveContext "@run" _ security:(SecurityOptions _)? lang:RunCodeLanguage _ "[" content:$(CodeLiteralContent) "]" withClause:WithClause? comment:InlineComment? {
+      // Language detected -> Code semantics (no interpolation)
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtRun matched language code block', { lang, content, securityOptions, withClause });
+      
+      const values = {
+        lang: [helpers.createNode(NodeType.Text, { content: lang, location: location() })],
+        args: [],
+        code: [helpers.createNode(NodeType.Text, { content, location: location() })]
+      };
+      
+      const raw = {
+        lang: lang,
+        args: [],
+        code: content
+      };
+      
+      const meta = {
+        isMultiLine: content.includes('\n'),
+        ...helpers.createSecurityMeta(securityOptions),
+        ...(comment ? { comment } : {})
+      };
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
+      
+      return helpers.createStructuredDirective(
+        'run',
+        'runCode',
+        values,
+        raw,
+        meta,
+        location(),
+        'code'
+      );
+    }
+  / DirectiveContext "@run" _ security:(SecurityOptions _)? "[" parts:RunCommandParts "]" withClause:WithClause? comment:InlineComment? {
+      // Bracket detected without language -> Command semantics (with @var interpolation)
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtRun matched bracketed command', { parts, securityOptions, withClause });
+      
+      const rawCommand = helpers.reconstructRawString(parts);
+      
+      // Extract command bases from the parts
+      let commandBases = [];
+      let rawBases = [];
+      
+      // Simple command base detection from first text segment
+      if (parts.length > 0 && parts[0].type === NodeType.Text) {
+        const cmdMatch = parts[0].content.match(/^(\S+)/);
+        if (cmdMatch) {
+          commandBases.push(helpers.createNode(NodeType.CommandBase, {
+            command: cmdMatch[1],
+            location: parts[0].location
+          }));
+          rawBases.push(cmdMatch[1]);
+        }
+      }
+      
+      const values = {
+        command: parts,
+        commandBases: commandBases
+      };
+      
+      const raw = {
+        command: rawCommand,
+        commandBases: rawBases
+      };
+      
+      const meta = {
+        isMultiLine: rawCommand.includes('\n'),
+        commandCount: commandBases.length,
+        hasScriptRunner: false,
+        ...helpers.createSecurityMeta(securityOptions),
+        ...(comment ? { comment } : {})
+      };
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
+      
+      return helpers.createStructuredDirective(
+        'run',
+        'runCommand',
+        values,
+        raw,
+        meta,
+        location(),
+        'command'
+      );
+    }
+  / DirectiveContext "@run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference withClause:WithClause? comment:InlineComment? {
+      // @ detected -> Command reference (exec)
       const securityOptions = security ? security[0] : null;
       helpers.debug('AtRun matched command reference', { commandRef, securityOptions, withClause });
       
@@ -47,7 +147,6 @@ AtRun
         meta.withClause = withClause;
       }
       
-      // This is used to run a previously defined command (created with @exec)
       return helpers.createStructuredDirective(
         'run',
         'runExec',
@@ -55,41 +154,11 @@ AtRun
         raw,
         meta,
         location(),
-        'exec'  // Source parameter
-      );
-    }
-  / DirectiveContext "@run" _ security:(SecurityOptions _)? command:CommandCore withClause:WithClause? comment:InlineComment? {
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched shell command', { command, securityOptions, withClause });
-      
-      const meta = {
-        ...command.meta,
-        isMultiLine: command.raw.command.includes('\n'),
-        ...helpers.createSecurityMeta(securityOptions),
-        ...(comment ? { comment } : {})
-      };
-      
-      const values = command.values;
-      const raw = command.raw;
-      
-      // Add with clause if present
-      if (withClause) {
-        values.withClause = withClause;
-        raw.withClause = withClause;
-        meta.withClause = withClause;
-      }
-      
-      return helpers.createStructuredDirective(
-        'run',
-        'runCommand',
-        values,
-        raw,
-        meta,
-        location(),
-        'command'  // Source parameter
+        'exec'
       );
     }
   / DirectiveContext "@run" _ security:(SecurityOptions _)? runCode:RunLanguageCodeCore withClause:WithClause? comment:InlineComment? {
+      // Language with args pattern (delegated to core)
       const securityOptions = security ? security[0] : null;
       helpers.debug('AtRun matched language code block using shared abstraction', runCode, securityOptions, withClause);
       
@@ -109,7 +178,6 @@ AtRun
         meta.withClause = withClause;
       }
       
-      // Since we're using the shared abstraction, we just need to format it for this context
       return helpers.createStructuredDirective(
         'run',
         'runCode',
@@ -117,7 +185,7 @@ AtRun
         raw,
         meta,
         runCode.location,
-        'code'  // Source parameter
+        'code'
       );
     }
 
@@ -213,3 +281,49 @@ RunCommandArgument
       // Plain value (raw argument)
       return helpers.createNode(NodeType.Text, { content: val.trim(), location: location() });
     }
+
+// Command parts for semantic parsing of bracketed commands
+RunCommandParts
+  = parts:(RunCommandVariable / RunCommandText)* {
+      return parts;
+    }
+
+// Variable in command context - no context predicate needed
+RunCommandVariable
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / SpecialVariable  // Special vars like @., @TIME, etc.
+
+// Text segments in commands - handle nested brackets
+RunCommandText
+  = chars:RunCommandChar+ {
+      const content = chars.join('');
+      return helpers.createNode(NodeType.Text, { content, location: location() });
+    }
+
+// Characters in commands - handle nested brackets
+RunCommandChar
+  = '[' inner:RunCommandInnerContent ']' {
+      // Preserve brackets in commands
+      return '[' + inner + ']';
+    }
+  / !'@' !']' char:. { return char; }
+
+// Inner content of nested brackets
+RunCommandInnerContent
+  = chars:RunCommandInnerChar* {
+      return chars.join('');
+    }
+
+// Characters inside nested brackets
+RunCommandInnerChar  
+  = '[' inner:RunCommandInnerContent ']' {
+      // Handle deeply nested brackets
+      return '[' + inner + ']';
+    }
+  / !']' char:. { return char; }
