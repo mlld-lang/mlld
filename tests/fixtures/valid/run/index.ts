@@ -1,6 +1,7 @@
 // Generated index for run fixtures
 // This file is auto-generated. Do not edit manually.
 
+export { default as runArrayExpansion } from './run-array-expansion.generated-fixture.json';
 export { default as runBashEnvVars } from './run-bash-env-vars.generated-fixture.json';
 export { default as runBashMultiline } from './run-bash-multiline.generated-fixture.json';
 export { default as runBashParameters } from './run-bash-parameters.generated-fixture.json';

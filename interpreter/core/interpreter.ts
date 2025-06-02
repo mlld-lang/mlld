@@ -321,6 +321,24 @@ export async function interpolate(
       } else if (typeof value === 'object' && value.type === 'Null') {
         // Handle null nodes from the grammar
         stringValue = 'null';
+      } else if (Array.isArray(value)) {
+        // Special handling for arrays in shell command context
+        if (context === InterpolationContext.ShellCommand) {
+          // For shell commands, expand arrays into space-separated arguments
+          // Each element is escaped individually
+          const strategy = EscapingStrategyFactory.getStrategy(context);
+          const escapedElements = value.map(elem => {
+            const elemStr = typeof elem === 'string' ? elem : String(elem);
+            return strategy.escape(elemStr);
+          });
+          stringValue = escapedElements.join(' ');
+          // Don't escape again since we already escaped each element
+          parts.push(stringValue);
+          continue;
+        } else {
+          // For other contexts, use JSON representation
+          stringValue = JSON.stringify(value);
+        }
       } else if (typeof value === 'object') {
         // For path objects, try to extract the resolved path first
         if (value.resolvedPath && typeof value.resolvedPath === 'string') {
