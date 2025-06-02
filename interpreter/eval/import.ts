@@ -32,9 +32,15 @@ async function importFromPath(
     
     // Read the file or fetch the URL
     // For URL imports, use the special import flag to trigger approval
-    const content = isURL
-      ? await env.fetchURL(resolvedPath, true) // true = forImport
-      : await env.readFile(resolvedPath);
+    let content: string;
+    try {
+      content = isURL
+        ? await env.fetchURL(resolvedPath, true) // true = forImport
+        : await env.readFile(resolvedPath);
+    } catch (error) {
+      throw new Error(`Failed to read imported file '${resolvedPath}': ${error instanceof Error ? error.message : String(error)}`);
+    }
+    
     
     // Handle section extraction if specified
     let processedContent = content;
@@ -45,6 +51,22 @@ async function importFromPath(
     
     // Parse the imported content
     const parseResult = await parse(processedContent);
+    
+    // Check if parsing succeeded
+    if (!parseResult.success) {
+      const parseError = parseResult.error;
+      if (parseError && 'location' in parseError) {
+        // Include location information if available
+        throw new Error(
+          `Syntax error in imported file '${resolvedPath}' at line ${parseError.location?.start?.line || '?'}: ${parseError.message || 'Unknown parse error'}`
+        );
+      } else {
+        throw new Error(
+          `Failed to parse imported file '${resolvedPath}': ${parseError?.message || 'Unknown parse error'}`
+        );
+      }
+    }
+    
     const ast = parseResult.ast;
     
     // Create a child environment for the imported file
@@ -56,7 +78,14 @@ async function importFromPath(
     childEnv.setCurrentFilePath(resolvedPath);
     
     // Evaluate the imported file
-    const result = await evaluate(ast, childEnv);
+    let result: EvalResult;
+    try {
+      result = await evaluate(ast, childEnv);
+    } catch (error) {
+      throw new Error(
+        `Error evaluating imported file '${resolvedPath}': ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
     
     // Get variables from child environment
     const childVars = childEnv.getCurrentVariables();
@@ -135,6 +164,12 @@ async function importFromPath(
     }
     
     return { value: undefined, env };
+  } catch (error) {
+    // Re-throw with context about which import failed
+    if (error instanceof Error && !error.message.includes(resolvedPath)) {
+      throw new Error(`Import of '${resolvedPath}' failed: ${error.message}`);
+    }
+    throw error;
   } finally {
     // Always mark import as complete
     if (isURL) {
