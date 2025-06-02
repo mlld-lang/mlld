@@ -84,7 +84,7 @@ AtText
       );
     }
   // Bracketed path (with optional section) - semantic parsing
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "[" parts:TextPathParts _ section:(" # " s:SectionName { return s; })? "]" rename:AsNewTitle? {
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "[" parts:TextPathParts _ section:("#" _ s:SectionName { return s; })? "]" rename:AsNewTitle? {
       helpers.debug('AtText matched bracketed path', { id, parts, section, rename });
       
       const rawPath = helpers.reconstructRawString(parts);
@@ -613,41 +613,6 @@ AtText
         {
           identifier: id,
           path: path.raw.path || path.raw.url
-        },
-        meta,
-        location(),
-        sourceType
-      );
-    }
-  // Path content with single brackets - interpolates @var (no @add needed!)
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ pathContent:BracketContent {
-      const subtype = 'textAssignment';
-      const sourceType = 'path';
-      
-      // Check if the path contains variables
-      const hasVariables = pathContent.some(part => 
-        part && part.type === NodeType.VariableReference
-      );
-      
-      // Create meta object
-      const meta = { 
-        sourceType: sourceType,
-        hasVariables: hasVariables
-      };
-      
-      // Reconstruct raw path from parts
-      const rawPath = helpers.reconstructRawString(pathContent);
-      
-      return helpers.createStructuredDirective(
-        'text',
-        subtype,
-          {
-            identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-            content: pathContent
-          },
-        {
-          identifier: id,
-          content: `[${rawPath}]`
         },
         meta,
         location(),

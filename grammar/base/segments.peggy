@@ -69,7 +69,11 @@ PathTextSegment "Path text segment"
 
 PathChar
   = EscapeSequence
-  / ![\]/[\]@${}] char:. { return char; }
+  / &{ 
+      // Check if we're at a section marker
+      const rest = input.substring(peg$currPos);
+      return !rest.match(/^\s*#\s*/);
+    } ![\]/[\]@${}] char:. { return char; }
 
 // Section text segment - for section names after #, with escape support
 SectionTextSegment "Section text segment"

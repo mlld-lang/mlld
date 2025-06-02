@@ -248,8 +248,31 @@ RunCommandVariable
     }
   / SpecialVariable  // Special vars like @., @TIME, etc.
 
-// Text segments in commands - everything that's not a variable
+// Text segments in commands - handle nested brackets
 RunCommandText
-  = chars:$((!']' !'@' .)+) {
-      return helpers.createNode(NodeType.Text, { content: chars, location: location() });
+  = chars:RunCommandChar+ {
+      const content = chars.join('');
+      return helpers.createNode(NodeType.Text, { content, location: location() });
     }
+
+// Characters in commands - handle nested brackets
+RunCommandChar
+  = '[' inner:RunCommandInnerContent ']' {
+      // Preserve brackets in commands
+      return '[' + inner + ']';
+    }
+  / !'@' !']' char:. { return char; }
+
+// Inner content of nested brackets
+RunCommandInnerContent
+  = chars:RunCommandInnerChar* {
+      return chars.join('');
+    }
+
+// Characters inside nested brackets
+RunCommandInnerChar  
+  = '[' inner:RunCommandInnerContent ']' {
+      // Handle deeply nested brackets
+      return '[' + inner + ']';
+    }
+  / !']' char:. { return char; }
