@@ -17,6 +17,7 @@ export { DataEvaluationError } from './DataEvaluationError';
 export { VariableRedefinitionError } from './VariableRedefinitionError';
 export { MlldCommandExecutionError } from './MlldCommandExecutionError';
 export type { CommandExecutionDetails } from './MlldCommandExecutionError';
+export { MlldConditionError } from './MlldConditionError';
 
 // Export error message collections
 export * from './messages/index'; 

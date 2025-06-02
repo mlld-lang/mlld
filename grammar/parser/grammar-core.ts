@@ -24,6 +24,7 @@ export const DirectiveKind = {
     path: 'path',
     import: 'import',
     output: 'output',
+    when: 'when',
 };
 export const helpers = {
     debug(msg, ...args) {

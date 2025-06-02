@@ -17,3 +17,4 @@ export * from './reserved';
 export * from './run';
 export * from './security';
 export * from './text';
+export * from './when';
