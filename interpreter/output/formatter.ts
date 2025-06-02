@@ -41,19 +41,50 @@ export async function formatOutput(nodes: MlldNode[], options: FormatOptions): P
 function formatMarkdown(nodes: MlldNode[], options: FormatOptions): string {
   const parts: string[] = [];
   
+  // Track consecutive single newlines
+  let consecutiveNewlines = 0;
+  let pendingContent = '';
+  
   for (const node of nodes) {
     if (node.type === 'Text') {
-      parts.push(node.content);
+      // Check if this is just a single newline
+      if (node.content === '\n') {
+        consecutiveNewlines++;
+        pendingContent += '\n';
+      } else {
+        // If we had consecutive newlines before real content, collapse them
+        if (consecutiveNewlines > 1) {
+          // Keep at most one newline before content
+          parts.push('\n');
+        } else if (pendingContent) {
+          // Add any pending newlines
+          parts.push(pendingContent);
+        }
+        
+        // Reset tracking
+        consecutiveNewlines = 0;
+        pendingContent = '';
+        
+        // Add the actual content
+        parts.push(node.content);
+      }
     }
-    // Directives should have already been evaluated and replaced with their output
-    // We only output Text nodes in the final result
   }
   
-  const result = parts.join('');
+  // Handle any trailing newlines
+  if (pendingContent) {
+    parts.push(pendingContent);
+  }
+  
+  let result = parts.join('');
   
   // Clean up excessive blank lines (more than 2 consecutive newlines)
-  // This happens when directives are removed but their surrounding newlines remain
-  return result.replace(/\n{3,}/g, '\n\n');
+  result = result.replace(/\n{3,}/g, '\n\n');
+  
+  // Ensure the output ends with exactly one newline
+  result = result.replace(/\n*$/, '\n');
+  
+  return result;
 }
 
 /**
