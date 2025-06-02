@@ -287,6 +287,186 @@ CommandContent
 
 This system enables context-aware parsing without runtime state tracking, maintaining clean separation between syntactic and semantic concerns.
 
+### 5. **Semantic Design Philosophy**
+The grammar follows a semantic-first approach where directives determine their content parsing rules, not the delimiters.
+
+**Core Principle**: Same syntax can have different semantics based on context. The directive chooses its semantic parser.
+
+```peggy
+// ❌ WRONG: Universal bracket parser trying to guess context
+BracketContent = "[" content:UniversalContent "]"
+
+// ✅ RIGHT: Directive chooses semantic parser
+AtRun
+  = "@run" _ lang:Language _ code:CodeContent    // Language → Code semantics
+  / "@run" _ command:CommandContent              // No language → Command semantics
+```
+
+**Why This Matters**: Peggy is a top-down parser that commits to branches. Once it takes a fork, it follows that semantic path. This aligns perfectly with how we think about Mlld directives.
+
+## Directive Parse Trees
+
+**CRITICAL**: Before making ANY grammar changes, you MUST update the relevant parse tree documentation below. The tree must accurately reflect the parsing decisions and semantic choices. This is not optional.
+
+### @run Directive
+
+```
+@run ...
+├─ [Language] detected?
+│  ├─ YES: "@run python ..."
+│  │  └─ [CodeContent]
+│  │     └─ "[" → CodeLiteral → "]"
+│  │        └─ Everything is literal text
+│  │           ├─ No @ variable processing
+│  │           ├─ Preserve all [brackets]
+│  │           └─ Preserve all quotes
+│  │
+│  └─ NO: "@run ..."
+│     └─ [CommandContent]
+│        └─ "[" → CommandParts → "]"
+│           ├─ @var → Variable interpolation
+│           ├─ "..." → DoubleQuotedCommand
+│           │  └─ @var interpolation inside
+│           ├─ '...' → SingleQuotedCommand
+│           │  └─ All literal (no @var)
+│           └─ text → Command text
+```
+
+### @text Directive
+
+```
+@text name = ...
+├─ "[[" detected?
+│  ├─ YES: Template
+│  │  └─ [[TemplateContent]]
+│  │     └─ {{var}} interpolation only
+│  │
+├─ "[" detected?
+│  ├─ YES: Could be path or section
+│  │  ├─ Contains " # "?
+│  │  │  ├─ YES: [SectionExtraction]
+│  │  │  │  └─ [path # section]
+│  │  │  └─ NO: [PathContent]
+│  │  │     └─ [/path/to/@var/file]
+│  │
+├─ "@run" detected?
+│  ├─ YES: RunReference
+│  │  └─ @run directive (see tree above)
+│  │
+└─ '"' or "'" detected?
+   └─ QuotedLiteral
+      └─ "simple string" (no interpolation)
+```
+
+### @data Directive
+
+```
+@data obj = ...
+├─ "{" detected?
+│  ├─ YES: ObjectLiteral
+│  │  └─ { key: DataValue, ... }
+│  │     └─ DataValue can be:
+│  │        ├─ Primitive: "string", 123, true
+│  │        ├─ @run [...] → Embedded directive
+│  │        └─ Nested object/array
+│  │
+├─ "[" detected?
+│  ├─ YES: ArrayLiteral
+│  │  └─ [DataValue, DataValue, ...]
+│  │     └─ Same DataValue options as above
+│  │
+├─ "@run" detected?
+│  ├─ YES: DirectiveValue
+│  │  └─ Execute and use result
+│  │
+└─ Other: PrimitiveValue
+   └─ String, number, boolean, null
+```
+
+### @exec Directive
+
+```
+@exec name(params) = ...
+├─ "@run" detected?
+│  ├─ YES: RunReference
+│  │  └─ @run directive (see tree above)
+│  │
+├─ [Language] detected?
+│  ├─ YES: Code execution
+│  │  └─ Same as @run language branch
+│  │
+└─ "[" detected?
+   └─ CommandExecution
+      └─ Same as @run command branch
+```
+
+### @path Directive
+
+```
+@path var = ...
+├─ "[" detected?
+│  ├─ YES: BracketPath
+│  │  └─ [@var/path/segments]
+│  │
+├─ '"' detected?
+│  ├─ YES: QuotedPath
+│  │  └─ "path with spaces"
+│  │
+└─ No delimiter?
+   └─ UnquotedPath
+      └─ @var/path/segments
+```
+
+### @import Directive
+
+```
+@import ...
+├─ "{" detected?
+│  ├─ YES: SelectiveImport
+│  │  └─ { var1, var2 } from "path"
+│  │
+├─ "@" detected?
+│  ├─ YES: SpecialImport
+│  │  ├─ @input → stdin/input
+│  │  └─ @module/path → Registry module
+│  │
+└─ "[" or '"' detected?
+   └─ PathImport
+      └─ Import all from path
+```
+
+### @add Directive
+
+```
+@add ...
+├─ "[[" detected?
+│  ├─ YES: TemplateContent
+│  │  └─ [[text with {{vars}}]]
+│  │
+├─ "[" detected?
+│  ├─ YES: PathOrSection
+│  │  └─ Same logic as @text
+│  │
+├─ "@" detected?
+│  ├─ YES: VariableReference
+│  │  └─ @varname to output
+│  │
+└─ '"' detected?
+   └─ LiteralContent
+      └─ "text to add"
+```
+
+## Parse Tree Maintenance
+
+When modifying the grammar:
+
+1. **FIRST**: Update the parse tree for affected directives
+2. **SECOND**: Ensure the tree accurately reflects all branches
+3. **THIRD**: Implement changes that match the tree
+4. **FOURTH**: Verify tests match the tree structure
+
+The parse trees are the source of truth for grammar behavior. Any mismatch between trees and implementation is a bug.
+
 ## Pattern Usage Guide
 
 ### Variable References
