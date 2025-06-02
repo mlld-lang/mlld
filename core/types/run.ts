@@ -5,6 +5,34 @@ import { DirectiveNode, TypedDirectiveNode } from './base';
 import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
 
 /**
+ * With clause for pipeline and dependency management
+ */
+export interface WithClause {
+  pipeline?: PipelineCommand[];
+  needs?: DependencyMap;
+}
+
+/**
+ * A pipeline command reference
+ */
+export interface PipelineCommand {
+  identifier: VariableNodeArray;
+  args: VariableNodeArray[];
+  fields?: any[]; // Field access array
+  rawIdentifier: string;
+  rawArgs: string[];
+}
+
+/**
+ * Dependency map by language
+ */
+export interface DependencyMap {
+  [language: string]: {
+    [packageName: string]: string; // version constraint
+  };
+}
+
+/**
  * Run directive raw values
  */
 export interface RunRaw {
@@ -13,6 +41,7 @@ export interface RunRaw {
   args?: string[];
   code?: string;
   identifier?: string;
+  withClause?: WithClause;
 }
 
 /**
@@ -23,6 +52,7 @@ export interface RunMeta {
   argumentCount?: number;
   language?: string;
   hasVariables?: boolean;
+  withClause?: WithClause;
 }
 
 /**
@@ -48,6 +78,7 @@ export interface RunValues {
   args?: VariableNodeArray;
   code?: ContentNodeArray;
   identifier?: TextNodeArray;
+  withClause?: WithClause;
 }
 
 /**

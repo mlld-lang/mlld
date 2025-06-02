@@ -3,6 +3,7 @@
  */
 import { DirectiveNode, TypedDirectiveNode } from './base';
 import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
+import { WithClause } from './run';
 
 /**
  * Exec directive raw values
@@ -14,6 +15,7 @@ export interface ExecRaw {
   command?: string;
   lang?: string;
   code?: string;
+  withClause?: WithClause;
 }
 
 /**
@@ -29,6 +31,7 @@ export interface ExecMeta {
     type?: string;
     [key: string]: unknown;
   };
+  withClause?: WithClause;
 }
 
 /**
@@ -55,6 +58,7 @@ export interface ExecValues {
   command?: ContentNodeArray;
   lang?: TextNodeArray;
   code?: ContentNodeArray;
+  withClause?: WithClause;
 }
 
 /**

@@ -20,65 +20,102 @@ It can be used in three main forms:
 
 // Primary @run directive 
 AtRun
-  = DirectiveContext "@run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference comment:InlineComment? {
+  = DirectiveContext "@run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference withClause:WithClause? comment:InlineComment? {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched command reference', { commandRef, securityOptions });
+      helpers.debug('AtRun matched command reference', { commandRef, securityOptions, withClause });
+      
+      const values = {
+        identifier: commandRef.identifier,
+        args: commandRef.args || []
+      };
+      
+      const raw = {
+        identifier: commandRef.rawIdentifier,
+        args: commandRef.rawArgs || []
+      };
+      
+      const meta = {
+        argumentCount: commandRef.args ? commandRef.args.length : 0,
+        ...helpers.createSecurityMeta(securityOptions),
+        ...(comment ? { comment } : {})
+      };
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
       
       // This is used to run a previously defined command (created with @exec)
       return helpers.createStructuredDirective(
         'run',
         'runExec',
-        {
-          identifier: commandRef.identifier,
-          args: commandRef.args || []
-        },
-        {
-          identifier: commandRef.rawIdentifier,
-          args: commandRef.rawArgs || []
-        },
-        {
-          argumentCount: commandRef.args ? commandRef.args.length : 0,
-          ...helpers.createSecurityMeta(securityOptions),
-          ...(comment ? { comment } : {})
-        },
+        values,
+        raw,
+        meta,
         location(),
         'exec'  // Source parameter
       );
     }
-  / DirectiveContext "@run" _ security:(SecurityOptions _)? command:CommandCore comment:InlineComment? {
+  / DirectiveContext "@run" _ security:(SecurityOptions _)? command:CommandCore withClause:WithClause? comment:InlineComment? {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched shell command', { command, securityOptions });
+      helpers.debug('AtRun matched shell command', { command, securityOptions, withClause });
+      
+      const meta = {
+        ...command.meta,
+        isMultiLine: command.raw.command.includes('\n'),
+        ...helpers.createSecurityMeta(securityOptions),
+        ...(comment ? { comment } : {})
+      };
+      
+      const values = command.values;
+      const raw = command.raw;
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
       
       return helpers.createStructuredDirective(
         'run',
         'runCommand',
-        command.values,
-        command.raw,
-        {
-          ...command.meta,
-          isMultiLine: command.raw.command.includes('\n'),
-          ...helpers.createSecurityMeta(securityOptions),
-          ...(comment ? { comment } : {})
-        },
+        values,
+        raw,
+        meta,
         location(),
         'command'  // Source parameter
       );
     }
-  / DirectiveContext "@run" _ security:(SecurityOptions _)? runCode:RunLanguageCodeCore comment:InlineComment? {
+  / DirectiveContext "@run" _ security:(SecurityOptions _)? runCode:RunLanguageCodeCore withClause:WithClause? comment:InlineComment? {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched language code block using shared abstraction', runCode, securityOptions);
+      helpers.debug('AtRun matched language code block using shared abstraction', runCode, securityOptions, withClause);
+      
+      const meta = {
+        ...runCode.meta,
+        ...helpers.createSecurityMeta(securityOptions),
+        ...(comment ? { comment } : {})
+      };
+      
+      const values = runCode.values;
+      const raw = runCode.raw;
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
       
       // Since we're using the shared abstraction, we just need to format it for this context
       return helpers.createStructuredDirective(
         'run',
         'runCode',
-        runCode.values,
-        runCode.raw,
-        {
-          ...runCode.meta,
-          ...helpers.createSecurityMeta(securityOptions),
-          ...(comment ? { comment } : {})
-        },
+        values,
+        raw,
+        meta,
         runCode.location,
         'code'  // Source parameter
       );

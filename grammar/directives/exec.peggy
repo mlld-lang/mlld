@@ -20,7 +20,7 @@ by the @run directive. It can be used in these forms:
 
 // Primary @exec directive - unified approach with RHS delegation
 AtExec
-  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:ExecRHS trust:(_ t:TrustOption { return t; })? {
+  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:ExecRHS withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('AtExec matched with unified RHS delegation', { id, params, content, trust });
       
       // Create identifier node
@@ -82,6 +82,13 @@ AtExec
         metaObj.metadata = { type: meta };
       }
       
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        metaObj.withClause = withClause;
+      }
+      
       return helpers.createStructuredDirective(
         'exec',
         subtype,
@@ -92,7 +99,7 @@ AtExec
         source
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ "@" commandRef:CommandReference trust:(_ t:TrustOption { return t; })? {
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ "@" commandRef:CommandReference withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('AtExec matched command reference', { id, params, commandRef, trust });
       
       // Create identifier node
@@ -130,6 +137,13 @@ AtExec
         values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
         raw.metadata = meta;
         metaObj.metadata = { type: meta };
+      }
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        metaObj.withClause = withClause;
       }
       
       return helpers.createStructuredDirective(
