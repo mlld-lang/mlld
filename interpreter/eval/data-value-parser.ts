@@ -71,6 +71,11 @@ export function parseDataValue(node: ASTDataNode): DataValue {
     return node as VariableReferenceNode; // Return the variable reference node directly
   }
   
+  // Handle foreach command expressions
+  if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'foreach-command') {
+    return node as any; // Return the foreach command node directly
+  }
+  
   // Handle bare Text nodes (common in simple data values)
   if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'Text') {
     return (node as TextNode).content; // Extract the text content directly
@@ -201,6 +206,11 @@ export function needsEvaluation(value: DataValue): boolean {
   }
   
   if (isTemplateValue(value)) {
+    return true;
+  }
+  
+  // Handle foreach command expressions
+  if ((value as any)?.type === 'foreach-command') {
     return true;
   }
   

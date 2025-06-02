@@ -147,7 +147,8 @@ AtData
 
 // Any data value (object, array, primitive, directive, template, variable, literal path)
 DataValue
-  = DirectiveValue
+  = ForeachCommandExpression
+  / DirectiveValue
   / TemplateValue  
   / VariableReferenceValue
   / object:DataObjectLiteral {
@@ -505,6 +506,52 @@ LiteralPathText
         content: chars, 
         location: location() 
       });
+    }
+
+// -------------------------------------------------------------
+// FOREACH COMMAND EXPRESSIONS
+// -------------------------------------------------------------
+
+// Foreach command expression for iterating over arrays with parameterized commands
+ForeachCommandExpression
+  = "foreach" _ cmd:ForeachCommandRef _ "(" _ arrays:ForeachArrayArgumentList _ ")" {
+      helpers.debug('ForeachCommandExpression matched', { cmd, arrays });
+      
+      return {
+        type: "foreach-command",
+        value: {
+          type: 'foreach-command',
+          command: cmd,
+          arrays: arrays
+        },
+        rawText: text()
+      };
+    }
+
+// Command reference for foreach expressions
+ForeachCommandRef
+  = "@" identifier:BaseIdentifier fields:AnyFieldAccess* {
+      return {
+        type: 'commandRef',
+        identifier: identifier,
+        fields: fields || []
+      };
+    }
+
+// List of array arguments separated by commas
+ForeachArrayArgumentList
+  = first:ForeachVariableRef rest:(_ "," _ arr:ForeachVariableRef { return arr; })* {
+      return [first].concat(rest || []);
+    }
+
+// Variable reference for array arguments
+ForeachVariableRef
+  = "@" identifier:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(identifier);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
     }
 
 // -------------------------------------------------------------

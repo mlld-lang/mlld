@@ -52,6 +52,13 @@ export async function evaluateDataValue(
     throw new Error('Unexpected template value in lazy evaluation');
   }
   
+  // Handle foreach command expressions
+  if (value && typeof value === 'object' && value.type === 'foreach-command') {
+    // Import the evaluator from data-value-evaluator
+    const { evaluateDataValue: evaluateFull } = await import('./data-value-evaluator');
+    return await evaluateFull(value, env);
+  }
+  
   // Handle arrays
   if (Array.isArray(value)) {
     const evaluatedArray = [];
@@ -102,6 +109,11 @@ export function hasUnevaluatedDirectives(value: DataValue): boolean {
   }
   
   if (value?.type === 'Directive') {
+    return true;
+  }
+  
+  // Check for foreach command expressions
+  if (value && typeof value === 'object' && value.type === 'foreach-command') {
     return true;
   }
   
