@@ -252,7 +252,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           } else if (url === 'https://gist.githubusercontent.com/example/123456/raw/http.mld') {
             return {
               ok: true,
-              text: async () => '@data http = { "get": "function", "post": "function", "put": "function" }'
+              text: async () => '@data http = { "get": "@get", "post": "@post", "put": "@put", "delete": "@delete", "auth": { "get": "@auth_get", "post": "@auth_post" } }'
             } as any;
           }
           throw new Error(`Unexpected URL in test: ${url}`);
