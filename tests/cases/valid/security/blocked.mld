@@ -1,1 +1,1 @@
-@run [echo "Blocked loaded"]
+@run [(echo "Blocked loaded")]

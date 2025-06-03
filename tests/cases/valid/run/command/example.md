@@ -1,1 +1,1 @@
-@run [echo "Hello from command"]
+@run [(echo "Hello from command")]

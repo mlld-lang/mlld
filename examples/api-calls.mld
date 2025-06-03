@@ -4,10 +4,10 @@ This example shows how to create reusable HTTP request commands using @exec and 
 
 ## Define the API call commands
 
-@exec get(url) = @run [curl -s -X GET @url]
-@exec post(url, data) = @run [curl -s -X POST @url -H "Content-Type: application/json" -d '@data']
-@exec put(url, data) = @run [curl -s -X PUT @url -H "Content-Type: application/json" -d '@data']
-@exec delete(url) = @run [curl -s -X DELETE @url]
+@exec get(url) = @run [(curl -s -X GET @url)]
+@exec post(url, data) = @run [(curl -s -X POST @url -H "Content-Type: application/json" -d '@data')]
+@exec put(url, data) = @run [(curl -s -X PUT @url -H "Content-Type: application/json" -d '@data')]
+@exec delete(url) = @run [(curl -s -X DELETE @url)]
 
 ## Create a call object with all methods
 
@@ -39,17 +39,17 @@ This example shows how to create reusable HTTP request commands using @exec and 
   users: {
     list: @get(@api.baseUrl + "/users"),
     create: @post(@api.baseUrl + "/users"),
-    get: @exec(id) = @run [curl -s @api.baseUrl/users/@id],
-    update: @exec(id, data) = @run [curl -s -X PUT @api.baseUrl/users/@id -d '@data'],
-    delete: @exec(id) = @run [curl -s -X DELETE @api.baseUrl/users/@id]
+    get: @exec(id) = @run [(curl -s @api.baseUrl/users/@id)],
+    update: @exec(id, data) = @run [(curl -s -X PUT @api.baseUrl/users/@id -d '@data')],
+    delete: @exec(id) = @run [(curl -s -X DELETE @api.baseUrl/users/@id)]
   }
 }
 
 ## This could be in a module: @mlld/api
 
 @text module = [[
-@exec get(url, headers) = @run [curl -s -X GET @url {{headers ? "-H '" + headers + "'" : ""}}]
-@exec post(url, data, headers) = @run [curl -s -X POST @url -H "Content-Type: application/json" {{headers ? "-H '" + headers + "'" : ""}} -d '@data']
+@exec get(url, headers) = @run [(curl -s -X GET @url {{headers ? "-H '" + headers + "'" : ""}})]
+@exec post(url, data, headers) = @run [(curl -s -X POST @url -H "Content-Type: application/json" {{headers ? "-H '" + headers + "'" : ""}} -d '@data')]
 
 @data call = {
   get: @get,

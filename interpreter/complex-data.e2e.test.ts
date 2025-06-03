@@ -13,8 +13,8 @@ describe('Complex Data Assignment', () => {
     
     const mlldContent = `
 @data results = {
-  echo: @run [echo "hello world"],
-  date: @run [date]
+  echo: @run [(echo "hello world")],
+  date: @run [(date)]
 }
 `;
     
@@ -135,7 +135,7 @@ describe('Complex Data Assignment', () => {
 @data config = {
   app: {
     name: "MyApp",
-    version: @run [echo "1.0.0"]
+    version: @run [(echo "1.0.0")]
   },
   messages: {
     welcome: [[Welcome to MyApp!]]
@@ -165,7 +165,7 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-@data tests = [@run [echo "test1"], @run [echo "test2"], @run [echo "test3"]]
+@data tests = [@run [(echo "test1")], @run [(echo "test2")], @run [(echo "test3")]]
 `;
     
     const parseResult = await parse(mlldContent);
@@ -190,9 +190,9 @@ describe('Complex Data Assignment', () => {
     
     const mlldContent = `
 @data results = {
-  success: @run [echo "ok"],
-  failure: @run [nonexistent-command],
-  another: @run [echo "still works"]
+  success: @run [(echo "ok")],
+  failure: @run [(nonexistent-command)],
+  another: @run [(echo "still works")]
 }
 `;
     

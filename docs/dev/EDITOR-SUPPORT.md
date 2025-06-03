@@ -134,10 +134,10 @@ cat > test-syntax.mld << 'EOF'
 @text greeting = "Hello, world!"
 @data config = { name: "test", count: 42 }
 @path docs = [@~/Documents]
-@run [echo "test"]
+@run [(echo "test")]
 @add [[Welcome {{greeting}}!]]
 @import all from [config.mld]
-@exec cmd(param) = @run [echo @param]
+@exec cmd(param) = @run [(echo @param)]
 @url api = [https://api.example.com]
 EOF
 

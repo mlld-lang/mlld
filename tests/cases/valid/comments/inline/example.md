@@ -7,9 +7,9 @@ This tests that inline comments at the end of directives are properly handled.
 
 @import { x, y } from "./utils.mld" << Import some utilities
 
-@exec sayHello(name) = @run [echo "Hello, {{name}}!"] >> Parameterized command
+@exec sayHello(name) = @run [(echo "Hello, {{name}}!")] >> Parameterized command
 
-@run [echo "@greeting"] << Output the greeting
+@run [(echo "@greeting")] << Output the greeting
 
 @path docs = "./documentation" >> Path to docs folder
 

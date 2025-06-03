@@ -1,10 +1,10 @@
-@text joke_1 = @run [oneshot "Tell me a joke"]
+@text joke_1 = @run [(oneshot "Tell me a joke")]
 
-@text joke_2 = @run [oneshot "Tell me a joke"]
+@text joke_2 = @run [(oneshot "Tell me a joke")]
 
-@text joke_3 = @run [oneshot "Tell me a joke"]
+@text joke_3 = @run [(oneshot "Tell me a joke")]
 
-@text joke_4 = @run [oneshot "Tell me a joke"]
+@text joke_4 = @run [(oneshot "Tell me a joke")]
 
 @text evaluation = [[
     Which joke is the funniest?
@@ -14,4 +14,4 @@
     {{joke_4}}
 ]]
 
-@run [oneshot "@evaluation"]
+@run [(oneshot "@evaluation")]

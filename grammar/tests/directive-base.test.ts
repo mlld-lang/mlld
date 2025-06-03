@@ -13,8 +13,8 @@ describe('Directive Base Structure', () => {
     '@text myvar = "some text"',
     '@data myvar = { "key": "value" }',
     '@path myvar = [/path/to/file]',
-    '@run [echo "hello world"]',
-    '@exec mycommand (param) = @run [echo "hello"]'
+    '@run [(echo "hello world")]',
+    '@exec mycommand (param) = @run [(echo "hello")]'
   ];
 
   for (const input of directiveExamples) {

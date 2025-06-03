@@ -362,7 +362,7 @@ Add to `grammar/tests/`:
 // grammar/tests/with-clause.test.ts
 describe('With Clause Grammar', () => {
   test('parses pipeline only', () => {
-    const input = '@run [echo "test"] with { pipeline: [@transform(@input)] }';
+    const input = '@run [(echo "test")] with { pipeline: [@transform(@input)] }';
     const ast = parseDocument(input);
     
     expect(ast).toMatchObject({
@@ -382,7 +382,7 @@ describe('With Clause Grammar', () => {
   });
   
   test('parses needs only', () => {
-    const input = '@run [node script.js] with { needs: { "node": { "lodash": "^4.0.0" } } }';
+    const input = '@run [(node script.js)] with { needs: { "node": { "lodash": "^4.0.0" } } }';
     const ast = parseDocument(input);
     
     expect(ast.values.withClause.needs).toEqual({
@@ -391,7 +391,7 @@ describe('With Clause Grammar', () => {
   });
   
   test('parses combined pipeline and needs', () => {
-    const input = `@run [curl api.com] with {
+    const input = `@run [(curl api.com)] with {
       pipeline: [@validate(@input), @parse(@input)],
       needs: { "node": { "jsonschema": ">=1.0.0" } }
     }`;
@@ -416,10 +416,10 @@ Add test cases to `tests/cases/valid/run/`:
 
 ```markdown
 <!-- tests/cases/valid/run/with-pipeline/example.md -->
-@exec validate_json(data) = @run [echo "@data"]
-@exec extract_field(data, field) = @run [echo "extracted"]
+@exec validate_json(data) = @run [(echo "@data")]
+@exec extract_field(data, field) = @run [(echo "extracted")]
 
-@text result = @run [echo '{"users": ["alice", "bob"]}'] with {
+@text result = @run [(echo '{"users": ["alice", "bob")]}'] with {
   pipeline: [
     @validate_json(@input),
     @extract_field(@input, "users")
@@ -510,7 +510,7 @@ export class MlldPipelineError extends MlldWithClauseError {
 ```typescript
 // Pipeline transformers work with foreach results
 @data files = ["a.json", "b.json"]
-@exec process_file(file) = @run [cat @file] with {
+@exec process_file(file) = @run [(cat @file)] with {
   pipeline: [@validate_json(@input), @extract_data(@input)]
 }
 @data results = foreach @process_file(@files)
@@ -520,10 +520,10 @@ export class MlldPipelineError extends MlldWithClauseError {
 
 ```typescript
 // Conditional pipeline execution
-@text response = @run [curl api.com] with {
+@text response = @run [(curl api.com)] with {
   pipeline: [@validate_response(@input)]
 }
-@when @response => @text data = @run [echo "@response"] with {
+@when @response => @text data = @run [(echo "@response")] with {
   pipeline: [@parse_json(@input)]
 }
 ```

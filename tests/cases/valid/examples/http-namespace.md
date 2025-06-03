@@ -2,10 +2,10 @@
 # Demonstrates complex data objects with exec command references
 # Commands are stored as lazy references and only executed when called
 
-@exec get(url) = @run [curl -s "@url"]
-@exec post(url, data) = @run [curl -s -X POST -H "Content-Type: application/json" -d '@data' "@url"]
-@exec auth_get(url, token) = @run [curl -s -H "Authorization: Bearer @token" "@url"]
-@exec auth_post(url, token, data) = @run [curl -s -X POST -H "Authorization: Bearer @token" -H "Content-Type: application/json" -d '@data' "@url"]
+@exec get(url) = @run [(curl -s "@url")]
+@exec post(url, data) = @run [(curl -s -X POST -H "Content-Type: application/json" -d '@data' "@url")]
+@exec auth_get(url, token) = @run [(curl -s -H "Authorization: Bearer @token" "@url")]
+@exec auth_post(url, token, data) = @run [(curl -s -X POST -H "Authorization: Bearer @token" -H "Content-Type: application/json" -d '@data' "@url")]
 
 # Create HTTP namespace with lazy command references
 # Critical: @get, @post, etc. are stored as references, not executed immediately

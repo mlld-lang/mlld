@@ -15,19 +15,19 @@ There are two primary forms:
 **1. Defining Basic Commands (Shell Commands):**
 
 ```mlld
-@exec commandName(param1, param2) = @run [command template with {{param1}} and {{param2}}]
+@exec commandName(param1, param2) = @run [(command template with {{param1}} and {{param2}})]
 
 // Or for multiline commands:
-@exec multiCmd(arg) = @run [[
+@exec multiCmd(arg) = @run [([
   echo "Starting script with {{arg}}"
   ./run_script.sh {{arg}}
-]]
+)]]
 ```
 
 - **`commandName`**: The identifier (no `$`) used to invoke the command later with `@run $commandName(...)`.
 - **`(param1, param2)`**: An optional list of parameter names, acting as placeholders within the command template.
 - **`=`**: Separator.
-- **`@run [...]` or `@run [[...]]`**: The right-hand side **must** be a `BasicCommand` `@run` directive. This defines the shell command template to be executed.
+- **`@run [(...)]` or `@run [([...)]]`**: The right-hand side **must** be a `BasicCommand` `@run` directive. This defines the shell command template to be executed.
 
 **2. Defining Language Commands (JS, Python, Bash):**
 
@@ -53,7 +53,7 @@ print(f"Processing {input_file}")
 
 ## Command Template Body (for Basic Commands)
 
-When defining a Basic Command template (`@run [...]` or `@run [[...]]`):
+When defining a Basic Command template (`@run [(...)]` or `@run [([...)]]`):
 
 - **Shell Command**: It should be a valid shell command string.
 - **Parameter Placeholders**: It can contain `{{param1}}`, `{{param2}}`, etc., corresponding to the parameters defined in the parentheses `(...)`. These will be replaced by the arguments provided when the command is invoked via `@run $commandName(...)`.

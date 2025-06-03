@@ -19,7 +19,7 @@ Apply the same operation to each element in an array:
 
 ```meld
 @data topics = ["security", "performance", "scalability"]
-@exec analyze(topic) = @run [claude --message "Analyze @topic aspects of the code"]
+@exec analyze(topic) = @run [(claude --message "Analyze @topic aspects of the code")]
 @data analyses = foreach @analyze(@topics)
 ```
 
@@ -32,7 +32,7 @@ When given multiple arrays, `foreach` computes the cartesian product, testing al
 ```meld
 @data models = ["claude", "gpt-4"]
 @data temperatures = [0.7, 0.9]
-@exec test(model, temp) = @run [@model --temperature @temp "Explain quantum computing"]
+@exec test(model, temp) = @run [(@model --temperature @temp "Explain quantum computing")]
 @data results = foreach @test(@models, @temperatures)
 ```
 
@@ -66,7 +66,7 @@ Permissions: {{user.role}} level access
 The number of arrays must match the number of parameters in the command/template:
 
 ```meld
-@exec process(a, b) = @run [echo "@a and @b"]
+@exec process(a, b) = @run [(echo "@a and @b")]
 
 # Valid:
 @data x = [1, 2]
@@ -89,7 +89,7 @@ Process multiple questions with the same LLM:
   "Explain neural networks",
   "What are transformers?"
 ]
-@exec ask(q) = @run [claude --message "@q"]
+@exec ask(q) = @run [(claude --message "@q")]
 @data answers = foreach @ask(@questions)
 
 # Generate Q&A document
@@ -104,7 +104,7 @@ Compare responses across different AI models:
 @data models = ["claude-3", "gpt-4", "gemini-pro"]
 @data prompts = ["Write a haiku about programming", "Explain recursion"]
 
-@exec query(model, prompt) = @run [@model "@prompt"]
+@exec query(model, prompt) = @run [(@model "@prompt")]
 @data responses = foreach @query(@models, @prompts)
 
 # Creates 6 responses (3 models × 2 prompts)
@@ -115,8 +115,8 @@ Compare responses across different AI models:
 Process multiple files with the same operation:
 
 ```meld
-@data js_files = @run [find ./src -name "*.js" -type f]
-@exec analyze_file(file) = @run [eslint @file --format json]
+@data js_files = @run [(find ./src -name "*.js" -type f)]
+@exec analyze_file(file) = @run [(eslint @file --format json)]
 @data lint_results = foreach @analyze_file(@js_files)
 ```
 
@@ -147,9 +147,9 @@ Work with complex combinations of parameters:
 @data departments = ["engineering", "sales", "support"]
 @data quarters = ["Q1", "Q2", "Q3", "Q4"]
 
-@exec get_revenue(dept, quarter) = @run [
+@exec get_revenue(dept, quarter) = @run [(
   curl -s "https://api.company.com/revenue/@dept/@quarter" | jq .total
-]
+)]
 @data revenues = foreach @get_revenue(@departments, @quarters)
 
 # Generates 12 API calls (3 departments × 4 quarters)
@@ -203,8 +203,8 @@ Command failed with exit code 1
 
 ```meld
 @data files = ["config.json", "data.csv", "readme.txt"]
-@exec process_if_json(file) = @run [
-  if [[ "@file" == *.json ]]; then jq . "@file"; fi
+@exec process_if_json(file) = @run [(
+  if [[ "@file" == *.json )]]; then jq . "@file"; fi
 ]
 @data json_data = foreach @process_if_json(@files)
 
@@ -215,7 +215,7 @@ Command failed with exit code 1
 
 ```meld
 @data files = ["data1.json", "data2.json", "data3.json"]
-@exec process_file(file) = @run [cat @file] with {
+@exec process_file(file) = @run [(cat @file)] with {
   pipeline: [@validate_json(@input), @extract_metrics(@input)]
 }
 @data results = foreach @process_file(@files)

@@ -1,6 +1,6 @@
-@exec getDate = @run [echo "2024-01-15"]
-@exec getUser = @run [echo "admin"]
-@exec getStatus = @run [echo "active"]
+@exec getDate = @run [(echo "2024-01-15")]
+@exec getUser = @run [(echo "admin")]
+@exec getStatus = @run [(echo "active")]
 
 @data systemInfo = {
   date: @run @getDate,

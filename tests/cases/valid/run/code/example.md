@@ -1,1 +1,1 @@
-@run javascript [console.log("Hello from code")]
+@run [(javascript console.log("Hello from code"))]

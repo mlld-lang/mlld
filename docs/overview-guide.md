@@ -61,7 +61,7 @@ This is crucial - most directives just set up state. Only `@add` and `@run` actu
 @data config = { "debug": true }
 
 @add [[This WILL appear in output]]
-@run [echo "This command output WILL appear"]
+@run [(echo "This command output WILL appear")]
 ```
 
 ## Modular Prompt Engineering
@@ -92,8 +92,8 @@ Import and combine modules to build sophisticated prompts:
 @import { architect, reviewer } from "prompts/roles.mld"
 @import { analyze_code } from "prompts/tasks.mld"
 
-@text codebase = @run [find src -name "*.py" -exec cat {} \;]
-@text recent_changes = @run [git diff main..HEAD]
+@text codebase = @run [(find src -name "*.py" -exec cat {} \;)]
+@text recent_changes = @run [(git diff main..HEAD)]
 
 @text full_prompt = [[
 {{architect}}
@@ -111,7 +111,7 @@ Recent changes:
 {{analyze_code}}
 ]]
 
-@run [claude --message @full_prompt]
+@run [(claude --message @full_prompt)]
 ```
 
 ## Flow Control Through External Tools
@@ -121,16 +121,16 @@ Meld doesn't have built-in conditionals or loops - instead, it leverages the ful
 ### Using Shell Scripts
 
 ```meld
-@text files = @run [find . -name "*.test.js" | head -5]
-@text test_results = @run [npm test 2>&1]
+@text files = @run [(find . -name "*.test.js" | head -5)]
+@text test_results = @run [(npm test 2>&1)]
 
-@text status = @run [bash -c '
+@text status = @run [(bash -c '
   if echo "@test_results" | grep -q "FAILED"; then
     echo "❌ Tests failing"
   else
     echo "✅ All tests passing"
   fi
-']
+')]
 
 ## Test Report
 {{status}}
@@ -163,11 +163,11 @@ print(f"Top performer: {top_user["name"]} ({top_user["score"]})")
 ### Using JavaScript for Complex Logic
 
 ```meld
-@text markdown_content = @run [cat README.md]
+@text markdown_content = @run [(cat README.md)]
 
-@text toc = @run [node -e '
+@text toc = @run [(node -e '
 const content = `@markdown_content`;
-const headers = content.match(/^#{1,3} .+$/gm) || [];
+const headers = content.match(/^#{1,3} .+$/gm) || [)];
 const toc = headers.map(h => {
   const level = h.match(/^#+/)[0].length;
   const text = h.replace(/^#+\s+/, "");
@@ -186,16 +186,16 @@ console.log(toc);
 ### Sequential Prompt Chaining
 
 ```meld
-@text code = @run [cat src/main.py]
+@text code = @run [(cat src/main.py)]
 
 >> First, get a code review
-@text review = @run [claude --message "Review this Python code for issues:\n\n@code"]
+@text review = @run [(claude --message "Review this Python code for issues:\n\n@code")]
 
 >> Then, get specific fixes
-@text fixes = @run [claude --message "Based on this review:\n@review\n\nProvide specific code fixes."]
+@text fixes = @run [(claude --message "Based on this review:\n@review\n\nProvide specific code fixes.")]
 
 >> Finally, get a summary
-@text summary = @run [claude --message "Summarize these fixes in 3 bullet points:\n@fixes"]
+@text summary = @run [(claude --message "Summarize these fixes in 3 bullet points:\n@fixes")]
 
 ## Code Review Summary
 @add @summary
@@ -210,17 +210,17 @@ console.log(toc);
 ### Parallel Analysis
 
 ```meld
-@text content = @run [cat proposal.md]
+@text content = @run [(cat proposal.md)]
 
 >> Get multiple perspectives simultaneously
-@text tech_review = @run [claude --system "You are a technical architect" \
-  --message "Review this proposal:\n@content"]
+@text tech_review = @run [(claude --system "You are a technical architect" \
+  --message "Review this proposal:\n@content")]
 
-@text business_review = @run [claude --system "You are a business analyst" \
-  --message "Review this proposal:\n@content"]
+@text business_review = @run [(claude --system "You are a business analyst" \
+  --message "Review this proposal:\n@content")]
 
-@text security_review = @run [claude --system "You are a security expert" \
-  --message "Review this proposal:\n@content"]
+@text security_review = @run [(claude --system "You are a security expert" \
+  --message "Review this proposal:\n@content")]
 
 ## Proposal Reviews
 
@@ -291,7 +291,7 @@ This XML format:
 
 ```meld
 # Product Documentation
-@text version = @run [cat VERSION]
+@text version = @run [(cat VERSION)]
 Version: @add @version
 
 ## Features
@@ -328,7 +328,7 @@ Import modules from the public registry using `@user/module` syntax:
 @import { coding_standards } from @company/standards
 @import { pr_template } from @templates/github
 
-@text current_pr = @run [gh pr view --json body -q .body]
+@text current_pr = @run [(gh pr view --json body -q .body)]
 
 @text review_prompt = [[
 {{senior_reviewer}}
@@ -441,12 +441,12 @@ Still support direct URL imports when needed:
 ### Dynamic README Generation
 
 ```meld
-@text version = @run [npm version --json | jq -r .version]
-@text contributors = @run [git shortlog -sn | head -10]
-@text last_commit = @run [git log -1 --pretty=format:"%h - %s (%cr)"]
-@text test_badge = @run [
+@text version = @run [(npm version --json | jq -r .version)]
+@text contributors = @run [(git shortlog -sn | head -10)]
+@text last_commit = @run [(git log -1 --pretty=format:"%h - %s (%cr)")]
+@text test_badge = @run [(
   if npm test >/dev/null 2>&1; then 
-    echo "![Tests](https://img.shields.io/badge/tests-passing-green)"
+    echo "![Tests)](https://img.shields.io/badge/tests-passing-green)"
   else 
     echo "![Tests](https://img.shields.io/badge/tests-failing-red)"
   fi
@@ -467,12 +467,12 @@ Last commit: {{last_commit}}
 ### Automated PR Description
 
 ```meld
-@text branch = @run [git branch --show-current]
-@text changes = @run [git diff main..HEAD --stat]
-@text commits = @run [git log main..HEAD --oneline]
+@text branch = @run [(git branch --show-current)]
+@text changes = @run [(git diff main..HEAD --stat)]
+@text commits = @run [(git log main..HEAD --oneline)]
 
 >> Analyze the changes
-@text analysis = @run [claude --message "Analyze these code changes and write a brief summary:\n\n@changes\n\nCommits:\n@commits"]
+@text analysis = @run [(claude --message "Analyze these code changes and write a brief summary:\n\n@changes\n\nCommits:\n@commits")]
 
 ## Pull Request: {{branch}}
 
@@ -496,12 +496,12 @@ Last commit: {{last_commit}}
 @text question = "What are the key considerations for migrating from REST to GraphQL?"
 
 >> Get responses from multiple models
-@text claude_response = @run [claude --message @question]
-@text gpt_response = @run [openai --message @question]
-@text local_response = @run [ollama run llama2 @question]
+@text claude_response = @run [(claude --message @question)]
+@text gpt_response = @run [(openai --message @question)]
+@text local_response = @run [(ollama run llama2 @question)]
 
 >> Synthesize the responses
-@text synthesis = @run [claude --message "
+@text synthesis = @run [(claude --message "
 Synthesize these three responses into a unified answer:
 
 Response 1: @claude_response
@@ -509,7 +509,7 @@ Response 2: @gpt_response
 Response 3: @local_response
 
 Create a consensus view that incorporates the best insights from each.
-"]
+")]
 
 ## Migration Guide: REST to GraphQL
 
@@ -546,11 +546,11 @@ Create a consensus view that incorporates the best insights from each.
 1. Install Meld: `npm install -g mlld`
 2. Create a file `hello.mld`:
    ```meld
-   @text name = @run [whoami]
+   @text name = @run [(whoami)]
    # Hello, {{name}}!
    
    Welcome to Meld. The current date is:
-   @run [date]
+   @run [(date)]
    ```
 3. Run it: `mlld hello.mld`
 4. See the output in `hello.o.md`

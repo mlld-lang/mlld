@@ -8,4 +8,4 @@ Current timestamp:
 @text logEntry = [[Log entry at {{TIME}}: System check completed]]
 @add @logEntry
 
-@run [echo "Script executed at @TIME"]
+@run [(echo "Script executed at @TIME")]
