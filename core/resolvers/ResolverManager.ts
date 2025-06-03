@@ -358,7 +358,7 @@ export class ResolverManager {
     }
 
     // Fallback: Check if any resolver can handle it directly
-    // This is mainly for DNS resolver handling @user/module pattern
+    // This allows resolvers to handle patterns like @user/module
     for (const [name, resolver] of this.resolvers) {
       if (resolver.canResolve(ref)) {
         return { resolver };
