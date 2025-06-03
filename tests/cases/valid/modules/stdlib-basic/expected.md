@@ -2,4 +2,8 @@
 
 This tests importing from the mlld standard library.
 
-[object Object]
+{
+  "get": "function",
+  "post": "function",
+  "put": "function"
+}

@@ -83,9 +83,9 @@ This should fail because:
 
 This example shows the correct way to create a parameterized command using `@exec`.
 
-@exec codecat(dir) = @run [find @dir -type f -name "*.js" -exec cat {} \;]
+@exec greet(name, times) = @run [echo "Hello @name!" && echo "Welcome @name!" && echo "Greetings @name!"]
 
-@run @codecat("./src")
+@run @greet("Alice", "3")
 ```
 
 **Expected Output:**
@@ -94,7 +94,9 @@ This example shows the correct way to create a parameterized command using `@exe
 
 This example shows the correct way to create a parameterized command using `@exec`.
 
-[Output of find command that lists and concatenates all .js files in ./src]
+Hello Alice!
+Welcome Alice!
+Greetings Alice!
 ```
 
 ## Warnings

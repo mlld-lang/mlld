@@ -215,8 +215,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // TODO: This fixture may be incorrectly named or incomplete
         const env = (fileSystem as any).environment || {};
         env.result = { type: 'text', value: 'Command output' };
-      } else if (fixture.name.includes('run-bash')) {
-        // Enable bash mocking for bash tests
+      } else if (fixture.name.includes('run-bash') || fixture.name.includes('bracket-nesting')) {
+        // Enable bash mocking for bash tests and bracket nesting tests that use bash
         process.env.MOCK_BASH = 'true';
       } else if (fixture.name === 'reserved-time-variable') {
         // Mock time for the TIME reserved variable test
@@ -228,6 +228,32 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // This test expects a 'variable' to exist with value 'value'
         // But the fixture doesn't define it - skip for now
         // TODO: File issue for incomplete fixture
+      } else if (fixture.name === 'modules-stdlib-basic') {
+        // Mock fetch for module resolution
+        global.fetch = async (url: string) => {
+          if (url === 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules/mlld/registry.json') {
+            return {
+              ok: true,
+              json: async () => ({
+                author: 'mlld',
+                modules: {
+                  http: {
+                    source: {
+                      url: 'https://gist.githubusercontent.com/example/123456/raw/http.mld'
+                    },
+                    description: 'HTTP utilities'
+                  }
+                }
+              })
+            } as any;
+          } else if (url === 'https://gist.githubusercontent.com/example/123456/raw/http.mld') {
+            return {
+              ok: true,
+              text: async () => '@data http = { "get": "function", "post": "function", "put": "function" }'
+            } as any;
+          }
+          throw new Error(`Unexpected URL in test: ${url}`);
+        };
       } else if (fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed') {
         // Mock fetch for URL tests
         global.fetch = async (url: string) => {
@@ -270,8 +296,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           basePath = process.cwd(); // Use current working directory which has package.json
         }
         
-        // Enable URL support for URL tests
-        const urlConfig = (fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url') ? {
+        // Enable URL support for URL tests and module resolution
+        const urlConfig = (fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url' || fixture.name === 'modules-stdlib-basic') ? {
           enabled: true,
           allowedProtocols: ['https'],
           allowedDomains: [],
@@ -472,7 +498,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         }
         
         // Clean up other environment variables
-        if (fixture.name.includes('run-bash')) {
+        if (fixture.name.includes('run-bash') || fixture.name.includes('bracket-nesting')) {
           delete process.env.MOCK_BASH;
         }
         if (fixture.name === 'reserved-time-variable' || fixture.name === 'reserved-time-variable-lowercase') {

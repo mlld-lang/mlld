@@ -2,6 +2,6 @@
 
 This example shows the correct way to create a parameterized command using `@exec`.
 
-@exec codecat(dir) = @run [find @dir -type f -name "*.js" -exec cat {} \;]
+@exec greet(name, times) = @run [echo "Hello @name!" && echo "Welcome @name!" && echo "Greetings @name!"]
 
-@run @codecat("./src")
+@run @greet("Alice", "3")
