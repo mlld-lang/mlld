@@ -73,7 +73,7 @@ describe('Run directive', () => {
   
   describe('runCode subtype', () => {
     test('Basic code execution', async () => {
-      const content = '@run [(javascript \nconsole.log("Hello, world!");\n)]';
+      const content = '@run javascript [(\nconsole.log("Hello, world!");\n)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -98,7 +98,7 @@ describe('Run directive', () => {
     });
     
     test('Code with arguments', async () => {
-      const content = '@run python (data, format) [\nimport json\ndata_obj = json.loads(data)\nprint(json.dumps(data_obj, indent=4 if format == "pretty" else None))\n]';
+      const content = '@run python (data, format) [(\nimport json\ndata_obj = json.loads(data)\nprint(json.dumps(data_obj, indent=4 if format == "pretty" else None))\n)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -122,7 +122,7 @@ describe('Run directive', () => {
     });
     
     test('Code containing variable syntax as text', async () => {
-      const content = '@run [(javascript \nconst greeting = "{{greeting}}";\nconsole.log(greeting);\n)]';
+      const content = '@run javascript [(\nconst greeting = "{{greeting}}";\nconsole.log(greeting);\n)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);

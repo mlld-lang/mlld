@@ -1,6 +1,6 @@
 /**
  * Registry security module
- * Provides "DNS for Gists" functionality with security advisory checking
+ * Provides module registry functionality with security advisory checking
  */
 
 export { RegistryResolver } from './RegistryResolver';

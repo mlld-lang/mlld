@@ -312,21 +312,21 @@ AtRun
 
 ```
 @run ...
+├─ Language keyword detected (js, python, bash, etc.)?
+│  ├─ YES: "@run language [(code)]"
+│  │  └─ Code execution mode
+│  │     └─ Language specified outside brackets
+│  │        └─ [(code content)]
+│  │           ├─ No @ variable processing in code
+│  │           ├─ Preserve all [brackets]
+│  │           └─ Preserve all quotes
+│  │
 ├─ "[(" detected?
-│  ├─ YES: "@run [(...)]"
-│  │  └─ Unified command/code content
-│  │     └─ Parse content to determine type:
-│  │        ├─ Language keyword at start (js, python, bash, etc.)?
-│  │        │  ├─ YES: Code execution
-│  │        │  │  └─ Language + remaining content as code
-│  │        │  │     ├─ No @ variable processing in code
-│  │        │  │     ├─ Preserve all [brackets]
-│  │        │  │     └─ Preserve all quotes
-│  │        │  │
-│  │        │  └─ NO: Command execution
-│  │        │     └─ CommandParts with @var interpolation
-│  │        │        ├─ @var → Variable reference
-│  │        │        └─ text → Command text segments
+│  ├─ YES: "@run [(command)]"
+│  │  └─ Command execution mode
+│  │     └─ CommandParts with @var interpolation
+│  │        ├─ @var → Variable reference
+│  │        └─ text → Command text segments
 │  │
 ├─ "@" detected?
 │  ├─ YES: "@run @command"
@@ -391,10 +391,10 @@ AtRun
 
 ```
 @exec name(params) = @run ...
-└─ Must use @run with [(...)]:
-   ├─ @exec cmd(p) = @run [(echo @p)]    - Command
-   ├─ @exec fn(x) = @run [(js return x)] - Code
-   └─ @exec alias() = @run @other        - Reference
+└─ Must use @run:
+   ├─ @exec cmd(p) = @run [(echo @p)]      - Command
+   ├─ @exec fn(x) = @run js [(return x)]   - Code (language outside brackets)
+   └─ @exec alias() = @run @other          - Reference
 ```
 
 ### @path Directive

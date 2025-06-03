@@ -101,7 +101,7 @@ Supported languages: `node`, `python`
   }
 }
 
-@exec analyze(data) = @run [(python analyze.py)] with {
+@exec analyze(data) = @run python [(analyze.py)] with {
   needs: {
     "python": {
       "pandas": ">=1.3.0",

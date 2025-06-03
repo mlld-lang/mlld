@@ -124,7 +124,7 @@ Meld doesn't have built-in conditionals or loops - instead, it leverages the ful
 @text files = @run [(find . -name "*.test.js" | head -5)]
 @text test_results = @run [(npm test 2>&1)]
 
-@text status = @run [(bash -c '
+@text status = @run bash [(-c '
   if echo "@test_results" | grep -q "FAILED"; then
     echo "❌ Tests failing"
   else

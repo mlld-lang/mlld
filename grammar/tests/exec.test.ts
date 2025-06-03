@@ -110,7 +110,7 @@ describe('Exec directive', () => {
   
   describe('execCode subtype', () => {
     test('Basic code definition', async () => {
-      const content = '@exec greet = @run [(javascript \n  console.log("Hello, world!");\n)]';
+      const content = '@exec greet = @run javascript [(\n  console.log("Hello, world!");\n)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -137,7 +137,7 @@ describe('Exec directive', () => {
     });
     
     test('Code definition with parameters (with space)', async () => {
-      const content = '@exec formatJson (data, style) = @run [(python \n  import json\n  data_obj = json.loads(data)\n  print(json.dumps(data_obj, indent=4 if style == "pretty" else None))\n)]';
+      const content = '@exec formatJson (data, style) = @run python [(\n  import json\n  data_obj = json.loads(data)\n  print(json.dumps(data_obj, indent=4 if style == "pretty" else None))\n)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -164,7 +164,7 @@ describe('Exec directive', () => {
     });
     
     test('Code definition with parameters (without space)', async () => {
-      const content = '@exec formatJson(data, style) = @run [(python \n  import json\n  data_obj = json.loads(data)\n  print(json.dumps(data_obj, indent=4 if style == "pretty" else None))\n)]';
+      const content = '@exec formatJson(data, style) = @run python [(\n  import json\n  data_obj = json.loads(data)\n  print(json.dumps(data_obj, indent=4 if style == "pretty" else None))\n)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -189,7 +189,7 @@ describe('Exec directive', () => {
     });
     
     test('Code definition containing variable syntax as text', async () => {
-      const content = '@exec processTemplate = @run [(javascript \n  const template = "{{template}}";\n  console.log(`Processing template: ${template}`);\n)]';
+      const content = '@exec processTemplate = @run javascript [(\n  const template = "{{template}}";\n  console.log(`Processing template: ${template}`);\n)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -216,7 +216,7 @@ describe('Exec directive', () => {
     });
     
     test('Code definition with metadata', async () => {
-      const content = '@exec processData.meta = @run [(python \n  import json\n  print(json.dumps(data))\n)]';
+      const content = '@exec processData.meta = @run python [(\n  import json\n  print(json.dumps(data))\n)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);

@@ -12,13 +12,14 @@ The `@exec` directive creates reusable commands that can be invoked with `@run`.
 ```mlld
 @exec commandName = @run [(shell command)]
 @exec commandName(param1, param2) = @run [(command with @param1 and @param2)]
-@exec functionName(param) = @run [(javascript code using param)]
+@exec functionName(param) = @run language [(code using param)]
 ```
 
 Where:
 - `commandName` is the name of the command (must be a valid identifier)
 - `param1`, `param2`, etc. are parameter names
 - Parameters are referenced as `@param` inside the command
+- For code execution, language is specified before the brackets
 
 ## Basic Commands
 
@@ -48,11 +49,11 @@ Define commands that accept parameters:
 
 Define JavaScript code blocks:
 ```mlld
-@exec sum(a, b) = @run [(js 
+@exec sum(a, b) = @run js [(
   console.log(Number(@a) + Number(@b));
 )]
 
-@exec format(name) = @run [(js
+@exec format(name) = @run js [(
   const words = "@name".split(' ');
   const titled = words.map(word => {
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
@@ -101,7 +102,7 @@ Complex operations:
   tr '[:lower:]' '[:upper:]' | 
   sort | 
   uniq > @output
-]
+)]
 
 @run @analyze("data.txt")
 @run @process("input.txt", "output.txt")

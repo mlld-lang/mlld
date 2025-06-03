@@ -139,10 +139,6 @@ describe('ResolverManager', () => {
       expect(result.matchedPrefix).toBe('@mock/');
     });
     
-    it('should fall back to DNS for @user/module pattern', async () => {
-      // DNS resolver will throw since we haven't implemented actual DNS lookup
-      await expect(manager.resolve('@alice/utils')).rejects.toThrow('DNS lookup not yet implemented');
-    });
     
     it('should throw error for unresolvable references', async () => {
       await expect(manager.resolve('unknown/path')).rejects.toThrow('No resolver found');

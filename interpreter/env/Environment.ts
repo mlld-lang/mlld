@@ -423,7 +423,7 @@ export class Environment {
   
   /**
    * Resolve a module reference using the ResolverManager
-   * This handles @prefix/ patterns and falls back to DNS for @user/module
+   * This handles @prefix/ patterns and registry lookups for @user/module
    */
   async resolveModule(reference: string): Promise<string> {
     const resolverManager = this.getResolverManager();

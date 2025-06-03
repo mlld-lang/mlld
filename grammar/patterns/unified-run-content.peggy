@@ -15,8 +15,64 @@ This pattern detects the content type and applies appropriate parsing rules.
 // UNIFIED CONTENT PATTERN - Single entry point for [(...)]
 // -------------------------------------------------------------
 
+// UNIFIED CODE BRACKETS - Parses [(code)] for language-specific code
+// Used by: AtRun directive when language is specified
+// Purpose: Parse code content without language detection
+UnifiedCodeBrackets "Code brackets [(...))]"
+  = "[(" _ content:$(UnifiedCodeContent) _ ")]" {
+      helpers.debug('UnifiedCodeBrackets matched', { content });
+      return {
+        content: content.trim(),
+        isMultiLine: content.includes('\n')
+      };
+    }
+
+// UNIFIED COMMAND BRACKETS - Parses [(command)] for shell commands
+// Used by: AtRun directive when no language is specified
+// Purpose: Parse command content with variable interpolation
+UnifiedCommandBrackets "Command brackets [(...))]"
+  = "[(" _ parts:UnifiedCommandParts _ ")]" {
+      helpers.debug('UnifiedCommandBrackets matched', { parts });
+      
+      const rawCommand = helpers.reconstructRawString(parts);
+      
+      // Extract command bases
+      let commandBases = [];
+      let rawBases = [];
+      
+      // Simple command base detection from first text segment
+      if (parts.length > 0 && parts[0].type === NodeType.Text) {
+        const cmdMatch = parts[0].content.match(/^(\S+)/);
+        if (cmdMatch) {
+          commandBases.push(helpers.createNode(NodeType.CommandBase, {
+            command: cmdMatch[1],
+            location: parts[0].location
+          }));
+          rawBases.push(cmdMatch[1]);
+        }
+      }
+      
+      return {
+        type: 'command',
+        subtype: 'runCommand',
+        values: {
+          command: parts,
+          commandBases: commandBases
+        },
+        raw: {
+          command: rawCommand,
+          commandBases: rawBases
+        },
+        meta: {
+          isMultiLine: rawCommand.includes('\n'),
+          commandCount: commandBases.length,
+          hasScriptRunner: false // TODO: Detect script runners
+        }
+      };
+    }
+
 // UNIFIED RUN CONTENT - Detects and parses command vs code
-// Used by: AtRun directive (directives/run.peggy)
+// Used by: Legacy compatibility (will be deprecated)
 // Purpose: Unified parsing of [(...))] syntax with type detection
 UnifiedRunContent "Unified run content [(...))]"
   = "[(" _ content:UnifiedRunContentInner _ ")]" {
