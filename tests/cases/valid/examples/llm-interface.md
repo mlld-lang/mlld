@@ -2,10 +2,10 @@
 
 ## Option 1: Namespace Object Pattern (Recommended)
 
-@exec llm_basic(prompt, system) = @run [llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}}]
-@exec llm_media(prompt, system, media) = @run [llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} -a @media]
-@exec llm_tools(prompt, system, tools) = @run [llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools]
-@exec llm_full(prompt, parameters) = @run [llm "@prompt" @parameters]
+@exec llm_basic(prompt, system) = @run [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}})]
+@exec llm_media(prompt, system, media) = @run [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} -a @media)]
+@exec llm_tools(prompt, system, tools) = @run [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools)]
+@exec llm_full(prompt, parameters) = @run [(llm "@prompt" @parameters)]
 
 @data llm = {
   # Default function behavior
@@ -17,9 +17,9 @@
   full: @llm_full,
   
   # Convenience presets
-  assistant: @exec(prompt) = @run [llm "@prompt" -s "You are a helpful assistant"],
-  coder: @exec(prompt) = @run [llm "@prompt" -s "You are an expert programmer"],
-  reviewer: @exec(prompt) = @run [llm "@prompt" -s "You are a thorough code reviewer"]
+  assistant: @exec(prompt) = @run [(llm "@prompt" -s "You are a helpful assistant")],
+  coder: @exec(prompt) = @run [(llm "@prompt" -s "You are an expert programmer")],
+  reviewer: @exec(prompt) = @run [(llm "@prompt" -s "You are a thorough code reviewer")]
 }
 
 ## Usage examples:
@@ -52,14 +52,14 @@
   tools: @exec(tools) = @data llm = {...@llm, _tools: @tools},
   
   # Execute with current config
-  run: @exec(prompt) = @run [llm "@prompt" -s "@llm._system" {{llm._media ? "-a " + llm._media : ""}} {{llm._tools ? "--tool " + llm._tools : ""}}]
+  run: @exec(prompt) = @run [(llm "@prompt" -s "@llm._system" {{llm._media ? "-a " + llm._media : ""}} {{llm._tools ? "--tool " + llm._tools : ""}})]
 }
 
 ## Option 3: Factory Functions
 
 @exec createLLM(config) = @data {
-  prompt: @exec(text) = @run [llm "@text" -s "@config.system" {{config.media ? "-a " + config.media : ""}}],
-  withTools: @exec(text, tools) = @run [llm "@text" -s "@config.system" --tool @tools]
+  prompt: @exec(text) = @run [(llm "@text" -s "@config.system" {{config.media ? "-a " + config.media : ""}})],
+  withTools: @exec(text, tools) = @run [(llm "@text" -s "@config.system" --tool @tools)]
 }
 
 @data codingLLM = @createLLM({system: "You are an expert programmer"})
@@ -67,9 +67,9 @@
 
 ## For a module (@mlld/llm), Option 1 is cleanest:
 
-@exec _llm(prompt, system) = @run [llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}}]
-@exec _llm_media(prompt, system, media) = @run [llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} -a @media]
-@exec _llm_tools(prompt, system, tools) = @run [llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools]
+@exec _llm(prompt, system) = @run [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}})]
+@exec _llm_media(prompt, system, media) = @run [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} -a @media)]
+@exec _llm_tools(prompt, system, tools) = @run [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools)]
 
 @data llm = {
   # Call directly: @run @llm("prompt")

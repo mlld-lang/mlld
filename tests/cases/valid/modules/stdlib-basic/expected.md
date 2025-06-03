@@ -3,7 +3,12 @@
 This tests importing from the mlld standard library.
 
 {
-  "get": "function",
-  "post": "function",
-  "put": "function"
+  "get": "@get",
+  "post": "@post",
+  "put": "@put",
+  "delete": "@delete",
+  "auth": {
+    "get": "@auth_get",
+    "post": "@auth_post"
+  }
 }

@@ -1,6 +1,6 @@
 # Module System Architecture
 
-This document explains the module system used in the Mlld project, including how we handle ES modules (ESM) and CommonJS (CJS) compatibility.
+This document explains the module system used in the Mlld project, including how we handle ES modules (ESM) and CommonJS (CJS) compatibility, as well as the Mlld module export pattern.
 
 ## Overview
 
@@ -126,3 +126,174 @@ The project was migrated from CommonJS to ESM. Key changes:
 - Renamed CLI wrapper from `.js` to `.cjs`
 - Updated build scripts to use ESM imports
 - Removed unnecessary CommonJS compatibility layers
+
+## Mlld Module Export Pattern
+
+### Overview
+
+Mlld modules use a standardized export pattern to control what functionality is exposed to importers. This pattern provides clarity, flexibility, and proper encapsulation.
+
+### The `@data module` Pattern
+
+Every Mlld module should define a `@data module` variable that explicitly declares its exports:
+
+```mlld
+---
+author: username
+description: Module description
+version: 1.0.0
+---
+
+# Internal implementation
+@text _helper(x) = [[internal: {{x}}]]
+
+# Public functions
+@exec doSomething(param) = @run [echo "@param"]
+@text formatText(text) = [[Formatted: {{text}}]]
+
+# Explicit module export
+@data module = {
+  doSomething: @doSomething,
+  formatText: @formatText
+  # Note: _helper is not exported
+}
+```
+
+### Auto-Generated Exports
+
+If a module doesn't define `@data module`, the system automatically generates one containing all top-level variables:
+
+```mlld
+# Module without explicit export
+@text foo = "bar"
+@exec baz(x) = @run [echo "@x"]
+
+# System generates:
+# module = {
+#   foo: @foo,
+#   baz: @baz
+# }
+```
+
+### Export Pattern Behaviors
+
+#### Named Export Object Pattern
+
+When a module defines a named data object (not called `module`), it creates a hybrid export:
+
+```mlld
+@exec get(url) = @run [curl "@url"]
+@exec post(url, data) = @run [curl -X POST "@url"]
+
+@data http = {
+  get: @get,
+  post: @post
+}
+```
+
+**Auto-generated export includes:**
+```javascript
+{
+  // Individual functions
+  get: @get,
+  post: @post,
+  
+  // The named object
+  http: {
+    get: @get,
+    post: @post
+  },
+  
+  // Metadata
+  __meta__: { ... }
+}
+```
+
+This allows importers to choose their preferred style:
+- `@import { http } from @user/http-client` → `http.get()`
+- `@import { get } from @user/http-client` → `get()`
+- `@import { * as client } from @user/http-client` → `client.http.get()` or `client.get()`
+
+### Module Structure
+
+When imported, modules have this structure:
+
+```javascript
+{
+  // Exported functions/variables
+  functionName: ...,
+  variableName: ...,
+  
+  // Nested exports (if defined)
+  subModule: {
+    function: ...
+  },
+  
+  // Metadata from frontmatter
+  __meta__: {
+    author: "username",
+    description: "...",
+    version: "1.0.0",
+    // ... other frontmatter fields
+  }
+}
+```
+
+### Import Behavior
+
+1. **With explicit `@data module`**: Only the variables/functions included in the module object are accessible
+2. **Without `@data module`**: All top-level variables are accessible (auto-generated flat structure)
+3. **Frontmatter metadata**: Always accessible via `__meta__` property
+
+### Best Practices
+
+1. **Always define `@data module`** for explicit control over exports
+2. **Use underscore prefix** for internal helpers (e.g., `@text _internal`)
+3. **Organize nested exports** for logical grouping (e.g., `auth.login`, `auth.logout`)
+4. **Include frontmatter** with author, description, and version
+5. **Document exports** with comments explaining usage
+
+### Implementation Details
+
+The module import system:
+1. Fetches and parses the module content
+2. Looks for a variable named exactly `module` with type `data`
+3. If found, uses that as the export object
+4. If not found, collects all top-level variables into a flat object
+5. Adds `__meta__` property with frontmatter data
+6. Makes the resulting object available to importers
+
+#### Processing Logic
+
+The `processModuleExports` function in `interpreter/eval/import.ts`:
+
+1. **Check for explicit module export:**
+   ```typescript
+   const moduleVar = childVars.get('module');
+   if (moduleVar && moduleVar.type === 'data') {
+     // Use this as the definitive export
+   }
+   ```
+
+2. **Auto-generate if no explicit module:**
+   ```typescript
+   const moduleObject: Record<string, any> = {};
+   for (const [name, variable] of childVars) {
+     if (name !== 'module') {
+       moduleObject[name] = variable.value;
+     }
+   }
+   ```
+
+3. **Add metadata:**
+   ```typescript
+   if (frontmatter) {
+     moduleObject.__meta__ = frontmatter;
+   }
+   ```
+
+This design enables:
+- **Explicit control** with `@data module`
+- **Flexible patterns** with named export objects
+- **Zero configuration** with auto-generation
+- **Always available metadata** via `__meta__`

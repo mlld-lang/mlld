@@ -9,6 +9,48 @@ import { VariableRedefinitionError } from '@core/errors';
 type ContentNodeArray = ContentNode[];
 
 /**
+ * Process module exports - either use explicit @data module or auto-generate
+ */
+function processModuleExports(
+  childVars: Map<string, MlldVariable>,
+  parseResult: any
+): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null } {
+  // Extract frontmatter if present
+  const frontmatter = parseResult.frontmatter || null;
+  
+  // Look for explicit module export
+  const moduleVar = childVars.get('module');
+  
+  if (moduleVar && moduleVar.type === 'data') {
+    // Use explicit module export
+    // Handle DataObject type that might have type/properties structure
+    let moduleValue = moduleVar.value;
+    if (moduleValue && typeof moduleValue === 'object' && 
+        moduleValue.type === 'object' && moduleValue.properties) {
+      moduleValue = moduleValue.properties;
+    }
+    return {
+      moduleObject: moduleValue,
+      frontmatter
+    };
+  }
+  
+  // Auto-generate module export with all top-level variables
+  const moduleObject: Record<string, any> = {};
+  for (const [name, variable] of childVars) {
+    // Skip the 'module' variable itself if it exists but isn't data type
+    if (name !== 'module') {
+      moduleObject[name] = variable.value;
+    }
+  }
+  
+  return {
+    moduleObject,
+    frontmatter
+  };
+}
+
+/**
  * Import from a resolved path (extracted to handle both normal paths and URL strings)
  */
 async function importFromPath(
@@ -90,24 +132,40 @@ async function importFromPath(
     // Get variables from child environment
     const childVars = childEnv.getCurrentVariables();
     
+    // Process module exports (explicit or auto-generated)
+    const { moduleObject, frontmatter } = processModuleExports(childVars, parseResult);
+    
+    // Add __meta__ property with frontmatter if available
+    if (frontmatter) {
+      moduleObject.__meta__ = frontmatter;
+    }
+    
     // Handle variable merging based on import type
     if (directive.subtype === 'importAll') {
-      // Import all variables from child to parent
-      for (const [name, variable] of childVars) {
-        // Mark variable as imported
-        const importedVariable = {
-          ...variable,
+      // For module imports, treat the module object as the source
+      // Import all properties from the module object
+      for (const [name, value] of Object.entries(moduleObject)) {
+        // Skip __meta__ from being a direct import
+        if (name === '__meta__') continue;
+        
+        // Create variable for each module export
+        const importedVariable: MlldVariable = {
+          type: 'data',
+          identifier: name,
+          value: value,
+          nodeId: '',
+          location: { line: 0, column: 0 },
           metadata: {
-            ...variable.metadata,
             isImported: true,
-            importPath: resolvedPath
+            importPath: resolvedPath,
+            definedAt: { line: 0, column: 0, filePath: resolvedPath }
           }
         };
         env.setVariable(name, importedVariable);
       }
       
     } else if (directive.subtype === 'importNamespace') {
-      // Import all variables under a namespace alias
+      // Import entire module under a namespace alias
       const imports = directive.values?.imports || [];
       const importNode = imports[0]; // Should be single wildcard with alias
       const alias = importNode?.alias;
@@ -116,49 +174,56 @@ async function importFromPath(
         throw new Error('Namespace import missing alias');
       }
       
-      // Create namespace object containing all variables
-      const namespaceObject: Record<string, any> = {};
-      for (const [name, variable] of childVars) {
-        namespaceObject[name] = variable.value;
-      }
-      
-      // Create namespace variable
-      const namespaceVariable = {
-        type: 'data' as const,
-        value: namespaceObject,
+      // Create namespace variable with the module object
+      const namespaceVariable: MlldVariable = {
+        type: 'data',
+        identifier: alias,
+        value: moduleObject,
         nodeId: '',
         location: { line: 0, column: 0 },
         metadata: {
           isImported: true,
           importPath: resolvedPath,
-          isNamespace: true
+          isNamespace: true,
+          definedAt: { line: 0, column: 0, filePath: resolvedPath }
         }
       };
       
       env.setVariable(alias, namespaceVariable);
       
     } else if (directive.subtype === 'importSelected') {
-      // Get selected variables from AST
+      // Import selected variables from the module object
       const imports = directive.values?.imports || [];
       for (const importNode of imports) {
         const varName = importNode.identifier;
-        const variable = childVars.get(varName);
-        if (variable) {
+        
+        // Check if the variable exists in the module object
+        if (varName in moduleObject) {
+          const value = moduleObject[varName];
           // Use alias if provided, otherwise use original name
           const targetName = importNode.alias || varName;
-          // Mark variable as imported
-          const importedVariable = {
-            ...variable,
+          
+          // Create imported variable
+          const importedVariable: MlldVariable = {
+            type: 'data',
+            identifier: targetName,
+            value: value,
+            nodeId: '',
+            location: { line: 0, column: 0 },
             metadata: {
-              ...variable.metadata,
               isImported: true,
-              importPath: resolvedPath
+              importPath: resolvedPath,
+              definedAt: { line: 0, column: 0, filePath: resolvedPath }
             }
           };
           env.setVariable(targetName, importedVariable);
         } else {
-          // Variable not found in imported file
-          throw new Error(`Variable '${varName}' not found in imported file: ${resolvedPath}`);
+          // Variable not found in module exports
+          const availableExports = Object.keys(moduleObject).filter(k => k !== '__meta__');
+          throw new Error(
+            `Variable '${varName}' not found in module exports from ${resolvedPath}. ` +
+            `Available exports: ${availableExports.join(', ')}`
+          );
         }
       }
     }

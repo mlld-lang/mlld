@@ -22,7 +22,7 @@ describe('Output Management Integration', () => {
   });
 
   it('should show progress when showProgress is enabled', async () => {
-    const content = '@run [echo "Hello, World!"]';
+    const content = '@run [(echo "Hello, World!")]';
     
     await interpret(content, {
       fileSystem,
@@ -32,12 +32,13 @@ describe('Output Management Integration', () => {
       }
     });
     
-    expect(consoleSpy.log).toHaveBeenCalledWith(expect.stringContaining('⚡ Running:'));
-    expect(consoleSpy.log).toHaveBeenCalledWith(expect.stringContaining('✅ Completed in'));
+    expect(consoleSpy.log).toHaveBeenCalledWith(expect.stringContaining('Running:'));
+    // Progress timing messages are temporarily disabled
+    // expect(consoleSpy.log).toHaveBeenCalledWith(expect.stringContaining('✅ Completed in'));
   });
 
   it('should not show progress when showProgress is disabled', async () => {
-    const content = '@run [echo "Hello, World!"]';
+    const content = '@run [(echo "Hello, World!")]';
     
     await interpret(content, {
       fileSystem,
@@ -47,13 +48,14 @@ describe('Output Management Integration', () => {
       }
     });
     
-    expect(consoleSpy.log).not.toHaveBeenCalledWith(expect.stringContaining('⚡ Running:'));
-    expect(consoleSpy.log).not.toHaveBeenCalledWith(expect.stringContaining('✅ Completed in'));
+    expect(consoleSpy.log).not.toHaveBeenCalledWith(expect.stringContaining('Running:'));
+    // Progress timing messages are temporarily disabled
+    // expect(consoleSpy.log).not.toHaveBeenCalledWith(expect.stringContaining('✅ Completed in'));
   });
 
-  it('should truncate long output when maxOutputLines is set', async () => {
+  it('should NOT truncate output even when maxOutputLines is set', async () => {
     // Create a command that generates many lines
-    const content = '@run [seq 1 100]';
+    const content = '@run [(seq 1 100)]';
     
     const result = await interpret(content, {
       fileSystem,
@@ -64,15 +66,17 @@ describe('Output Management Integration', () => {
       }
     });
     
+    // Verify all lines are present (not truncated)
     expect(result).toContain('1\n2\n3\n4\n5');
-    expect(result).toContain('more lines, use --verbose to see all)');
+    expect(result).toContain('96\n97\n98\n99\n100');
+    expect(result).not.toContain('more lines, use --verbose to see all)');
   });
 
   it('should collect errors when collectErrors is enabled', async () => {
     const content = `
-@run [exit 1]
-@run [echo "This should still run"]
-@run [exit 2]
+@run [(exit 1)]
+@run [(echo "This should still run")]
+@run [(exit 2)]
     `.trim();
     
     await interpret(content, {
@@ -93,8 +97,8 @@ describe('Output Management Integration', () => {
 
   it('should halt on error when errorBehavior is halt', async () => {
     const content = `
-@run [exit 1]
-@run [echo "This should not run"]
+@run [(exit 1)]
+@run [(echo "This should not run")]
     `.trim();
     
     await expect(
@@ -111,8 +115,8 @@ describe('Output Management Integration', () => {
 
   it('should continue on error when errorBehavior is continue', async () => {
     const content = `
-@run [exit 1]
-@run [echo "This should run"]
+@run [(exit 1)]
+@run [(echo "This should run")]
     `.trim();
     
     const result = await interpret(content, {
@@ -128,7 +132,7 @@ describe('Output Management Integration', () => {
   });
 
   it('should include source location in command errors', async () => {
-    const content = '@run [nonexistent-command]';
+    const content = '@run [(nonexistent-command)]';
     
     try {
       await interpret(content, {

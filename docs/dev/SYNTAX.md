@@ -14,10 +14,10 @@ Variables have a VariableType of `text`, `data`, `path`, and `command`.
 ```
 `@run` subtypes are `runCommand`, `runDefined`, `runCode`, `runCodeParams`:
 ```
-@run [echo "hello world"] <-- runCommand
-@run [echo {{variable}}] <-- runCommand (but using variables)
+@run [(echo "hello world")] <-- runCommand
+@run [(echo {{variable}})] <-- runCommand (but using variables)
 @run $mycommand ({{param}}, {{variable}}) <-- runDefined
-@run python [ print("Hello world" ] <-- runCode
+@run [(python  print("Hello world" )] <-- runCode
 @run python ({{variable}}) [ print(variable} ] <-- runCodeParams
 ```
 `@import` subtypes are `importAll`, `importStandard`, `importNamed`:
@@ -93,23 +93,23 @@ Used to bring external content or template strings into your script.
 
 Used to execute shell commands, predefined commands, or code blocks.
 
-*   **`@run [command arg1 arg2]`**: Runs a shell command.
+*   **`@run [(command arg1 arg2)]`**: Runs a shell command.
     ```mlld
-    @run [ls -l]
+    @run [(ls -l)]
     ```
-*   **`@run [command {{variable}}]`**: Runs a shell command, interpolating variables.
+*   **`@run [(command {{variable}})]`**: Runs a shell command, interpolating variables.
     ```mlld
     @path target_dir = "."
-    @run [ls {{target_dir}}]
+    @run [(ls {{target_dir}})]
     ```
 *   **`@run $definedCommand(param1, {{var2}})`**: Runs a command previously defined with `@exec`.
     ```mlld
-    @exec greet(name) = @run [echo "Hello, {{name}}!"]
+    @exec greet(name) = @run [(echo "Hello, {{name}}!")]
     @run $greet(MlldUser)
     ```
 *   **`@run language [ code block ]`**: Executes a block of code in the specified language (e.g., `python`, `bash`).
     ```mlld
-    @run python [ print("Hello from Python!") ]
+    @run [(python  print("Hello from Python!") )]
     ```
 *   **`@run language ({{var1}}, param2) [ code block using var1, param2 ]`**: Executes a code block, passing variables/parameters into the code's scope.
     ```mlld
@@ -124,7 +124,7 @@ Imports variables and defined commands from other Mlld files.
 ```mlld
 # utils.mld
 @text util_message = "Shared utility message"
-@exec util_command(arg) = @run [echo "Util: {{arg}}"]
+@exec util_command(arg) = @run [(echo "Util: {{arg}}")]
 
 # main.mld
 @import [./utils.mld]
@@ -137,7 +137,7 @@ Imports variables and defined commands from other Mlld files.
 Creates reusable, parameterized commands.
 
 ```mlld
-@exec list_files(dir, pattern) = @run [find {{dir}} -name "{{pattern}}"]
+@exec list_files(dir, pattern) = @run [(find {{dir}} -name "{{pattern}}")]
 
 @run $list_files(".", "*.md") 
 ```

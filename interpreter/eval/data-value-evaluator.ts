@@ -293,7 +293,7 @@ async function evaluateForeachCommand(
   }
   
   if (!isCommandVariable(cmdVariable) && cmdVariable.type !== 'textTemplate') {
-    throw new Error(`Variable ${command.identifier} is not a command or text template. Got type: ${cmdVariable.type}`);
+    throw new Error(`Variable '${command.identifier}' cannot be used with foreach. Expected an @exec command or @text template with parameters, but got type: ${cmdVariable.type}`);
   }
   
   // 2. Evaluate all array arguments
@@ -318,9 +318,13 @@ async function evaluateForeachCommand(
   }
   
   // 4. Check parameter count matches array count
-  const paramCount = cmdVariable.value.paramNames?.length || cmdVariable.value.params?.length || 0;
+  // For text templates, params are directly on the variable, not on .value
+  const paramCount = cmdVariable.type === 'textTemplate' 
+    ? (cmdVariable.params?.length || 0)
+    : (cmdVariable.value.paramNames?.length || cmdVariable.value.params?.length || 0);
   if (evaluatedArrays.length !== paramCount) {
-    throw new Error(`Command ${command.identifier} expects ${paramCount} parameters, got ${evaluatedArrays.length} arrays`);
+    const paramType = cmdVariable.type === 'textTemplate' ? 'Text template' : 'Command';
+    throw new Error(`${paramType} '${command.identifier}' expects ${paramCount} parameter${paramCount !== 1 ? 's' : ''}, but foreach is passing ${evaluatedArrays.length} array${evaluatedArrays.length !== 1 ? 's' : ''}`);
   }
   
   // 5. Generate cartesian product
@@ -334,7 +338,10 @@ async function evaluateForeachCommand(
     try {
       // Create argument map for parameter substitution
       const argMap: Record<string, any> = {};
-      const params = cmdVariable.value.paramNames || cmdVariable.value.params || [];
+      // For text templates, params are directly on the variable, not on .value
+      const params = cmdVariable.type === 'textTemplate'
+        ? (cmdVariable.params || [])
+        : (cmdVariable.value.paramNames || cmdVariable.value.params || []);
       params.forEach((param: string, index: number) => {
         argMap[param] = tuple[index];
       });
@@ -344,7 +351,10 @@ async function evaluateForeachCommand(
       results.push(result);
     } catch (error) {
       // Include iteration context in error message
-      const params = cmdVariable.value.paramNames || cmdVariable.value.params || [];
+      // For text templates, params are directly on the variable, not on .value
+      const params = cmdVariable.type === 'textTemplate'
+        ? (cmdVariable.params || [])
+        : (cmdVariable.value.paramNames || cmdVariable.value.params || []);
       const iterationContext = params.map((param: string, index: number) => 
         `${param}: ${JSON.stringify(tuple[index])}`
       ).join(', ');
@@ -395,6 +405,14 @@ async function invokeParameterizedCommand(
     }
   }
   
+  // Handle text templates differently - they don't have a .value property
+  if (cmdVariable.type === 'textTemplate') {
+    // Execute text template with bound parameters
+    const text = await interpolate(cmdVariable.content, childEnv);
+    return text;
+  }
+  
+  // For exec commands, use the .value property
   const commandDef = cmdVariable.value;
   
   if (commandDef.type === 'command') {
@@ -405,10 +423,6 @@ async function invokeParameterizedCommand(
     // Execute code template with bound parameters
     const code = await interpolate(commandDef.codeTemplate, childEnv);
     return await env.executeCode(code, commandDef.language);
-  } else if (commandDef.type === 'textTemplate') {
-    // Execute text template with bound parameters
-    const text = await interpolate(commandDef.content, childEnv);
-    return text;
   } else {
     throw new Error(`Unsupported command type: ${commandDef.type}`);
   }
@@ -435,13 +449,17 @@ export async function validateForeachExpression(
   }
   
   if (!isCommandVariable(cmdVariable) && cmdVariable.type !== 'textTemplate') {
-    throw new Error(`Variable ${command.identifier} is not a command or text template. Got type: ${cmdVariable.type}`);
+    throw new Error(`Variable '${command.identifier}' cannot be used with foreach. Expected an @exec command or @text template with parameters, but got type: ${cmdVariable.type}`);
   }
   
   // 2. Validate array count matches parameter count
-  const paramCount = cmdVariable.value.paramNames?.length || cmdVariable.value.params?.length || 0;
+  // For text templates, params are directly on the variable, not on .value
+  const paramCount = cmdVariable.type === 'textTemplate' 
+    ? (cmdVariable.params?.length || 0)
+    : (cmdVariable.value.paramNames?.length || cmdVariable.value.params?.length || 0);
   if (arrays.length !== paramCount) {
-    throw new Error(`Command ${command.identifier} expects ${paramCount} parameters, got ${arrays.length} arrays`);
+    const paramType = cmdVariable.type === 'textTemplate' ? 'Text template' : 'Command';
+    throw new Error(`${paramType} '${command.identifier}' expects ${paramCount} parameter${paramCount !== 1 ? 's' : ''}, but foreach is passing ${arrays.length} array${arrays.length !== 1 ? 's' : ''}`);
   }
   
   // Note: We don't evaluate the arrays here as they might contain variables

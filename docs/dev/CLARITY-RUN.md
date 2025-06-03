@@ -7,8 +7,8 @@
 The `@run` directive in Mlld has three distinct syntaxes which serve different purposes:
 
 1. **BasicCommand**: 
-   - Simple syntax: `@run [command with {{variable}} interpolation]`
-   - Multiline syntax: `@run [[...multiline command with {{variable}} and $path interpolation...]]`
+   - Simple syntax: `@run [(command with {{variable}} interpolation)]`
+   - Multiline syntax: `@run [([...multiline command with {{variable}} and $path interpolation...)]]`
    - Executes shell commands (single or multiline)
    - Supports variable interpolation with {{text/data variables}} and $path variables
    - For multiline format, first newline after `[[` is ignored for formatting purposes

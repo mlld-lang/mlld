@@ -134,7 +134,7 @@ User: @import { tool } from "mlld://registry/utils/scanner"
 #### 3.2 Command Execution Flow
 
 ```
-User: @run [command]
+User: @run [(command)]
            ↓
     Environment.executeCommand()
            ↓

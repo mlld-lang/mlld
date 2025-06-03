@@ -27,8 +27,8 @@ Your module might look like:
 ```meld
 @text description = "Utilities for JSON processing"
 
-@exec format_json(data) = @run [jq . <<< "@data"]
-@exec minify_json(data) = @run [jq -c . <<< "@data"]
+@exec format_json(data) = @run [(jq . <<< "@data")]
+@exec minify_json(data) = @run [(jq -c . <<< "@data")]
 
 @text example_usage = [[
 # Format JSON

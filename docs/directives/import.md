@@ -91,7 +91,7 @@ Using imported variables:
 @import ["$PROJECTPATH/utils.mld"]
 
 @text message = `Hello, {{importedName}}!`
-@run [$importedCommand({{param}})]
+@run [($importedCommand({{param}}))]
 ```
 
 ## Error Handling

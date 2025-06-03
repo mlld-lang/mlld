@@ -15,6 +15,6 @@
 }
 
 # command creation examples
-@exec codecat(dir) = @run [find @dir -type f -name "*.mld" | head -5]
+@exec codecat(dir) = @run [(find @dir -type f -name "*.mld" | head -5)]
 
-@exec ask(context, role, task) = @run [oneshot --context @context --instructions @task --system @role]
+@exec ask(context, role, task) = @run [(oneshot --context @context --instructions @task --system @role)]

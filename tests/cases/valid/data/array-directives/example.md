@@ -1,8 +1,8 @@
 @data testResults = {
   suites: [
-    @run [echo "unit: passed"],
-    @run [echo "integration: passed"],
-    @run [echo "e2e: passed"]
+    @run [(echo "unit: passed")],
+    @run [(echo "integration: passed")],
+    @run [(echo "e2e: passed")]
   ],
   count: 3
 }

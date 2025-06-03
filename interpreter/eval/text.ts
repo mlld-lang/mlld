@@ -164,7 +164,7 @@ export async function evaluateText(
     }
     
   } else if (directive.source === 'run') {
-    // Check if this is a run source (e.g., @text result = @run [echo "hello"] or @text result = @run @cmd(args))
+    // Check if this is a run source (e.g., @text result = @run [(echo "hello")] or @text result = @run @cmd(args))
     const contentNodes = directive.values?.content;
     if (!contentNodes || !Array.isArray(contentNodes)) {
       throw new Error('Text directive missing content');

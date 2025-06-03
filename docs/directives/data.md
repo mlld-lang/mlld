@@ -138,7 +138,7 @@ Using variables in data:
 
 Using command output as data:
 ```mlld
-@data gitInfo = @run [git log -1 --format="%H,%an,%ae,%s"]
+@data gitInfo = @run [(git log -1 --format="%H,%an,%ae,%s")]
 ```
 
 ## Error Handling

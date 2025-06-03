@@ -46,13 +46,13 @@ Object keys: {{object_var}}
 ]]
 
 # Test exec with complex parameters
-@exec process_data(arr, obj) = @run [echo "Array: @arr, Object: @obj" | wc -l]
+@exec process_data(arr, obj) = @run [(echo "Array: @arr, Object: @obj" | wc -l)]
 
 # Test add with various sources
 @add @operations_test
 
 ## Command with Variables
-@run [echo "String: @string_var, Number: @number_var"]
+@run [(echo "String: @string_var, Number: @number_var")]
 
 # Test command execution
 @text command_result = @run @process_data(@array_var, @object_var)

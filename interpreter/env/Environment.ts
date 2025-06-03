@@ -793,7 +793,9 @@ export class Environment {
             return outputs.join('\n');
           }
           
-          const result = child_process.execSync(`bash -c ${JSON.stringify(code)}`, {
+          // For multiline bash scripts, use stdin to avoid shell escaping issues
+          const result = child_process.execSync('bash', {
+            input: code,
             encoding: 'utf8',
             env: { ...process.env, ...envVars },
             cwd: this.basePath,

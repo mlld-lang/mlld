@@ -2,7 +2,7 @@
 
 @text name = "Recursive Test"
 @text version = "1.0.0"
-@text current_date = @run [date +%Y-%m-%d]
+@text current_date = @run [(date +%Y-%m-%d)]
 
 # Template that references another template
 @text header_template = [[

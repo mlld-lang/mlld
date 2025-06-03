@@ -1,1 +1,1 @@
-@run [echo "Unverified loaded"]
+@run [(echo "Unverified loaded")]

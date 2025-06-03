@@ -17,9 +17,9 @@ This tests security options on various directives.
 @text dynamicMsg = @run (live) trust verify [echo "Dynamic message"]
 
 ## @exec with trust
-@exec trust always safeCmd() = @run [echo "Safe command"]
-@exec trust verify checkCmd(file) = @run [cat @file]
-@exec trust never dangerousCmd() = @run [rm -rf /]
+@exec trust always safeCmd() = @run [(echo "Safe command")]
+@exec trust verify checkCmd(file) = @run [(cat @file)]
+@exec trust never dangerousCmd() = @run [(rm -rf /)]
 
 ## URL imports with security
 @import (7d) trust verify { content } from "https://api.example.com/data.mld"
