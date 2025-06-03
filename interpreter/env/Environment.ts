@@ -423,7 +423,7 @@ export class Environment {
   
   /**
    * Resolve a module reference using the ResolverManager
-   * This handles @prefix/ patterns and falls back to DNS for @user/module
+   * This handles @prefix/ patterns and registry lookups for @user/module
    */
   async resolveModule(reference: string): Promise<string> {
     const resolverManager = this.getResolverManager();
@@ -758,9 +758,9 @@ export class Environment {
         try {
           // Mock bash execution in test environment if needed
           if (process.env.MOCK_BASH === 'true') {
-            // Enhanced mock that handles the multiline test case
+            // Enhanced mock for specific test cases
             if (code.includes('names=("Alice" "Bob" "Charlie")')) {
-              // Special handling for the multiline test case
+              // Handle the multiline bash test specifically
               return 'Welcome, Alice!\nWelcome, Bob!\nWelcome, Charlie!\n5 + 3 = 8';
             }
             

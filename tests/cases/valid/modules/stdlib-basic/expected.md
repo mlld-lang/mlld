@@ -2,4 +2,13 @@
 
 This tests importing from the mlld standard library.
 
-[object Object]
+{
+  "get": "@get",
+  "post": "@post",
+  "put": "@put",
+  "delete": "@delete",
+  "auth": {
+    "get": "@auth_get",
+    "post": "@auth_post"
+  }
+}

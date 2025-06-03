@@ -4,8 +4,6 @@
 
 ### Python with arrays
 1
-2
-3
 
 ### JavaScript with objects and arrays  
 1

@@ -16,7 +16,7 @@ export interface Registry {
 
 /**
  * Resolves mlld://registry/ URLs to their underlying gist URLs
- * Acts as "DNS for Gists" - providing human-friendly names
+ * Provides human-friendly names for modules in the registry
  */
 export class RegistryResolver {
   private static readonly REGISTRY_URL = 

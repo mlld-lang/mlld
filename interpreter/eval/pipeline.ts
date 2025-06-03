@@ -149,14 +149,14 @@ async function executeCommandVariable(
   args: any[],
   env: Environment
 ): Promise<string> {
-  // Handle both wrapped command variables and direct command definitions
+  // Handle both wrapped command variables and direct command/code definitions
   let execDef: any;
   
   if (commandVar && commandVar.type === 'command' && commandVar.value) {
     // This is a wrapped command variable
     execDef = commandVar.value;
-  } else if (commandVar && commandVar.type === 'command' && commandVar.commandTemplate) {
-    // This is a direct command definition
+  } else if (commandVar && (commandVar.type === 'command' || commandVar.type === 'code') && (commandVar.commandTemplate || commandVar.codeTemplate)) {
+    // This is a direct command or code definition
     execDef = commandVar;
   } else {
     throw new Error(`Cannot execute non-command variable in pipeline: ${JSON.stringify(commandVar)}`);
@@ -194,7 +194,19 @@ async function executeCommandVariable(
     const { InterpolationContext } = await import('../core/interpolation-context');
     
     const code = await interpolate(execDef.codeTemplate, execEnv, InterpolationContext.Default);
-    const result = await env.executeCode(code, execDef.language || 'javascript');
+    
+    // Build parameters object from bound variables
+    const params: Record<string, any> = {};
+    if (execDef.paramNames) {
+      for (const paramName of execDef.paramNames) {
+        const paramVar = execEnv.getVariable(paramName);
+        if (paramVar) {
+          params[paramName] = paramVar.value;
+        }
+      }
+    }
+    
+    const result = await env.executeCode(code, execDef.language || 'javascript', params);
     return result;
   }
   

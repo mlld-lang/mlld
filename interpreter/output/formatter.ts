@@ -52,12 +52,8 @@ function formatMarkdown(nodes: MlldNode[], options: FormatOptions): string {
         consecutiveNewlines++;
         pendingContent += '\n';
       } else {
-        // If we had consecutive newlines before real content, collapse them
-        if (consecutiveNewlines > 1) {
-          // Keep at most one newline before content
-          parts.push('\n');
-        } else if (pendingContent) {
-          // Add any pending newlines
+        // If we had pending newlines, add them
+        if (pendingContent) {
           parts.push(pendingContent);
         }
         
