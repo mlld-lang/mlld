@@ -195,20 +195,30 @@ AtRun
 
 // Run directive reference in RHS contexts (nested in other directives)
 RunDirectiveRef
-  = RunCodeBlockContext runCode:RunLanguageCodeCore {
-      helpers.debug('RunDirectiveRef matched code in RHS using shared abstraction', runCode);
+  = lang:RunCodeLanguage _ "[" content:$(CodeLiteralContent) "]" {
+      helpers.debug('RunDirectiveRef matched language code in RHS', { lang, content });
       
-      // Use the shared abstraction but add RHS-specific metadata
+      // Handle language + code pattern
       return helpers.createStructuredDirective(
         'run',
         'runCode',
-        runCode.values,
-        runCode.raw,
+        {
+          lang: [helpers.createNode(NodeType.Text, { content: lang, location: location() })],
+          args: [],
+          code: [helpers.createNode(NodeType.Text, { content, location: location() })]
+        },
+        {
+          lang: lang,
+          args: [],
+          code: content
+        },
         { 
-          ...runCode.meta,
+          isMultiLine: content.includes('\n'),
+          language: lang,
+          hasVariables: false,
           isRHSRef: true
         },
-        runCode.location
+        location()
       );
     }
   / command:CommandCore {

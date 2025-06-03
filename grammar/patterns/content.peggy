@@ -71,7 +71,7 @@ BracketContent "Content with @var interpolation"
 
 // SEMANTIC: Command bracket content - knows it's parsing a shell command
 SemanticCommandBracketContent "Semantic command content with @var interpolation"
-  = '[' parts:(SpecialVariable / Variable / QuotedCommandString / CommandTextContent)* ']' {
+  = '[' parts:(SpecialVariable / CommandContextVariable / QuotedCommandString / CommandTextContent)* ']' {
       // Return only the content within brackets, not the brackets themselves
       return parts;
     }
@@ -79,6 +79,16 @@ SemanticCommandBracketContent "Semantic command content with @var interpolation"
 // Regular command bracket content for backward compatibility
 CommandBracketContent "Command content with @var interpolation"
   = SemanticCommandBracketContent
+
+// Variable reference in command context - no context check required
+CommandContextVariable "Variable in command context"
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
 
 // Quoted strings in commands - preserve quotes for shell semantics
 QuotedCommandString "Quoted string in command"
