@@ -38,6 +38,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'path-assignment-special': 'path/assignment',
       'path-assignment-variable': 'path/assignment',
       'run-file-content-escaping': 'run/file-content-escaping',
+      'modules-explicit-export': 'modules/explicit-export',
+      'modules-auto-export': 'modules/auto-export',
+      'modules-metadata': 'modules/metadata',
     };
     
     // Check if we have a mapping for this fixture

@@ -224,20 +224,134 @@ Created: January 15, 2024
 
 ### Creating Modules
 
-Create a module by writing standard Mlld code:
+Create a module by writing standard Mlld code with an explicit module export:
 
 **alice-utils.mlld:**
 ```mlld
+---
+author: alice
+description: Utility functions for text formatting and dates
+version: 1.0.0
+---
+
 @text formatDate(dateStr) = [[{{dateStr | format("YYYY-MM-DD")}}]]
 
 @text capitalize(text) = [[{{text | title}}]]
 
 @text greeting(name) = [[Hello, {{capitalize(@name)}}!]]
 
-@data config = {
-  "version": "1.0.0",
-  "author": "alice"
+# Explicit module export - defines what's available to importers
+@data module = {
+  formatDate: @formatDate,
+  capitalize: @capitalize,
+  greeting: @greeting
 }
+```
+
+#### Module Export Patterns
+
+Mlld supports multiple export patterns to fit different module design needs:
+
+##### 1. Explicit Module Export (`@data module`)
+
+The `@data module = { ... }` pattern gives you complete control over exports:
+
+```mlld
+@exec internal_helper(x) = @run [echo "Internal: @x"]
+@exec get(url) = @run [curl -s "@url"]
+@exec post(url, data) = @run [curl -X POST -d '@data' "@url"]
+
+@data module = {
+  get: @get,
+  post: @post
+  # Note: internal_helper is not exported
+}
+```
+
+**Import options:**
+- `@import { get, post } from @user/api` - Direct function access
+- `@import { * as api } from @user/api` - Namespace import: `api.get()`, `api.post()`
+
+##### 2. Named Export Object Pattern
+
+Create a named object alongside individual exports for maximum flexibility:
+
+```mlld
+@exec get(url) = @run [curl -s "@url"]
+@exec post(url, data) = @run [curl -X POST -d '@data' "@url"]
+@exec delete(url) = @run [curl -X DELETE "@url"]
+
+# Named export object
+@data http = {
+  get: @get,
+  post: @post,
+  delete: @delete
+}
+# This creates both individual exports AND the http object
+```
+
+**Import options:**
+- `@import { http } from @user/http-client` - Use as `http.get()`, `http.post()`
+- `@import { get, post } from @user/http-client` - Use functions directly
+- `@import { * as client } from @user/http-client` - Access both: `client.http.get()` or `client.get()`
+
+This pattern is ideal when you want to provide both:
+- A convenient grouped interface (`http.get()`)
+- Individual function exports for tree-shaking and direct use
+
+##### 3. Nested Organization
+
+Create logical groupings within your module:
+
+```mlld
+@exec auth_login(user, pass) = @run [...]
+@exec auth_logout(token) = @run [...]
+@exec auth_refresh(token) = @run [...]
+
+@exec api_get(endpoint) = @run [...]
+@exec api_post(endpoint, data) = @run [...]
+
+@data module = {
+  auth: {
+    login: @auth_login,
+    logout: @auth_logout,
+    refresh: @auth_refresh
+  },
+  api: {
+    get: @api_get,
+    post: @api_post
+  }
+}
+```
+
+**Usage:** `client.auth.login(user, pass)`, `client.api.get('/users')`
+
+#### Automatic Module Generation
+
+If no `@data module` is defined, mlld automatically creates one with all top-level variables:
+
+```mlld
+# Without explicit module export:
+@text hello = "world"
+@exec greet(name) = @run [echo "Hello @name"]
+
+# Automatically generates:
+# module = {
+#   hello: @hello,
+#   greet: @greet
+# }
+```
+
+#### Module Metadata
+
+Module frontmatter is always available via the `__meta__` property:
+
+```mlld
+@import { utils } from "@alice/utils"
+
+# Access metadata
+@add [[Author: {{utils.__meta__.author}}]]
+@add [[Version: {{utils.__meta__.version}}]]
 ```
 
 ### Publishing Modules
@@ -260,19 +374,26 @@ _mlld.alice.public.mlld.ai  TXT  "gist=abc123def456;version=1.0.0;description=Ut
 
 #### Code Structure
 ```mlld
-# Module header comment
-# @author alice
-# @version 1.0.0
-# @description Utility functions for common tasks
+---
+author: alice
+version: 1.0.0
+description: Utility functions for common tasks
+license: MIT
+---
 
-# Export functions with clear names
-@text formatDate(input) = [[...]]
+# Internal helpers (not exported)
+@text _validateFormat(format) = [[...]]
+
+# Public functions
+@text formatDate(input, format) = [[...]]
 @text validateEmail(email) = [[...]]
+@text parseJSON(jsonStr) = [[...]]
 
-# Export configuration
-@data moduleInfo = {
-  "version": "1.0.0",
-  "exports": ["formatDate", "validateEmail"]
+# Module export - defines the public API
+@data module = {
+  formatDate: @formatDate,
+  validateEmail: @validateEmail,
+  parseJSON: @parseJSON
 }
 ```
 

@@ -121,8 +121,18 @@ export async function evaluateAdd(
       // For primitives, just convert to string
       content = String(value);
     } else if (value !== null && value !== undefined) {
-      // For objects/arrays, use JSON
-      content = JSON.stringify(value, null, 2);
+      // For objects/arrays, use JSON with custom replacer for VariableReference nodes
+      content = JSON.stringify(value, (key, val) => {
+        // Convert VariableReference nodes to their string representation
+        if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
+          return `@${val.identifier}`;
+        }
+        // Convert nested DataObject types to plain objects
+        if (val && typeof val === 'object' && val.type === 'object' && val.properties) {
+          return val.properties;
+        }
+        return val;
+      }, 2);
     } else {
       // Handle null/undefined
       content = '';
