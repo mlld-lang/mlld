@@ -27,6 +27,7 @@ grammar/generated/*
 
 # Test fixtures (generated from test cases)
 tests/fixtures/**/*.generated-fixture.json
+tests/fixtures/**/index.ts
 
 # Logs
 logs/
