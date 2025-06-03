@@ -1,4 +1,4 @@
-import type { MlldNode, DirectiveNode, TextNode, CommentNode, MlldDocument, MlldVariable, FrontmatterNode } from '@core/types';
+import type { MlldNode, DirectiveNode, TextNode, CommentNode, MlldDocument, MlldVariable, FrontmatterNode, CommandVariable } from '@core/types';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
@@ -13,6 +13,9 @@ import { parseFrontmatter } from '../utils/frontmatter-parser';
 export interface EvalResult {
   value: any;
   env: Environment;
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
 }
 
 /**
@@ -23,6 +26,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
   // Handle array of nodes (from parser)
   if (Array.isArray(node)) {
     let lastValue: any = undefined;
+    let lastResult: EvalResult | null = null;
     
     // First, check if the first node is frontmatter and process it
     if (node.length > 0 && node[0].type === 'Frontmatter') {
@@ -35,6 +39,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
         const n = node[i];
         const result = await evaluate(n, env);
         lastValue = result.value;
+        lastResult = result;
         
         // Add text nodes to output if they're top-level and not inline comments
         if (n.type === 'Text') {
@@ -50,6 +55,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       for (const n of node) {
         const result = await evaluate(n, env);
         lastValue = result.value;
+        lastResult = result;
         
         // Add text nodes to output if they're top-level and not inline comments
         if (n.type === 'Text') {
@@ -61,6 +67,12 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
         }
       }
     }
+    
+    // Return the last result with all its properties (including stdout, stderr, exitCode)
+    if (lastResult && (lastResult.stdout !== undefined || lastResult.stderr !== undefined || lastResult.exitCode !== undefined)) {
+      return lastResult;
+    }
+    
     return { value: lastValue, env };
   }
   
@@ -122,7 +134,8 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       // they have valueType: 'varInterpolation'
       if (varRef.location?.start?.offset === 0 && 
           varRef.location?.end?.offset === 0 &&
-          varRef.valueType !== 'varInterpolation') {
+          varRef.valueType !== 'varInterpolation' &&
+          varRef.valueType !== 'commandRef') {
         // Skip orphaned parameter references from grammar bug
         return { value: '', env };
       }
@@ -134,6 +147,66 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
           return { value: `{{${varRef.identifier}}}`, env };
         }
         throw new Error(`Variable not found: ${varRef.identifier}`);
+      }
+      
+      // Handle command references (e.g., @is_true() in conditions)
+      if (varRef.valueType === 'commandRef' && isCommandVariable(variable)) {
+        // Execute the command
+        const cmdVar = variable as CommandVariable;
+        const args = varRef.args || [];
+        
+        // Check the structure - new vs old command variable format
+        const definition = cmdVar.definition || cmdVar.value;
+        
+        if (!definition) {
+          throw new Error(`Command variable ${varRef.identifier} has no definition`);
+        }
+        
+        if (definition.type === 'command') {
+          // Execute command with interpolated template
+          const commandTemplate = (definition as any).commandTemplate || (definition as any).command;
+          if (!commandTemplate) {
+            throw new Error(`Command ${varRef.identifier} has no command template`);
+          }
+          
+          // Interpolate the command template
+          const command = await interpolate(commandTemplate, env);
+          
+          if (args.length > 0) {
+            // TODO: Implement proper argument interpolation
+            // For now, just use the command as-is
+          }
+          
+          const stdout = await env.executeCommand(command);
+          return {
+            value: stdout,
+            env,
+            stdout: stdout,
+            stderr: '',
+            exitCode: 0  // executeCommand only returns on success
+          };
+        } else if (definition.type === 'code') {
+          // Execute code with interpolated template
+          const codeTemplate = (definition as any).codeTemplate || (definition as any).code;
+          if (!codeTemplate) {
+            throw new Error(`Code command ${varRef.identifier} has no code template`);
+          }
+          
+          // Interpolate the code template
+          const code = await interpolate(codeTemplate, env);
+          
+          const result = await env.executeCode(
+            code,
+            (definition as any).language || 'javascript'
+          );
+          return {
+            value: result.stdout || '',
+            env,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            exitCode: result.exitCode
+          };
+        }
       }
       
       // Handle complex data variables with lazy evaluation

@@ -13,7 +13,7 @@ import { evaluate } from '../core/interpreter';
 export async function evaluateWhen(
   node: WhenNode,
   env: Environment
-): Promise<string> {
+): Promise<EvalResult> {
   if (isWhenSimpleNode(node)) {
     return evaluateWhenSimple(node, env);
   } else if (isWhenBlockNode(node)) {
@@ -22,7 +22,7 @@ export async function evaluateWhen(
   
   throw new MlldConditionError(
     `Unknown when node subtype: ${(node as any).subtype}`,
-    'unknown',
+    undefined,
     node.location
   );
 }
@@ -33,17 +33,16 @@ export async function evaluateWhen(
 async function evaluateWhenSimple(
   node: WhenSimpleNode,
   env: Environment
-): Promise<string> {
+): Promise<EvalResult> {
   const conditionResult = await evaluateCondition(node.values.condition, env);
   
   if (conditionResult) {
     // Execute the action if condition is true
-    const actionResult = await evaluate(node.values.action, env);
-    return actionResult.value || '';
+    return await evaluate(node.values.action, env);
   }
   
   // Return empty string if condition is false
-  return '';
+  return { value: '', env };
 }
 
 /**
@@ -52,7 +51,7 @@ async function evaluateWhenSimple(
 async function evaluateWhenBlock(
   node: WhenBlockNode,
   env: Environment
-): Promise<string> {
+): Promise<EvalResult> {
   const modifier = node.meta.modifier;
   const conditions = node.values.conditions;
   
@@ -88,7 +87,7 @@ async function evaluateWhenBlock(
       default:
         throw new MlldConditionError(
           `Invalid when modifier: ${modifier}`,
-          modifier,
+          modifier as 'first' | 'all' | 'any',
           node.location
         );
     }
@@ -104,20 +103,19 @@ async function evaluateFirstMatch(
   conditions: WhenConditionPair[],
   env: Environment,
   variableName?: string
-): Promise<string> {
+): Promise<EvalResult> {
   for (const pair of conditions) {
     const conditionResult = await evaluateCondition(pair.condition, env, variableName);
     
     if (conditionResult) {
       if (pair.action) {
-        const result = await evaluate(pair.action, env);
-        return result.value || '';
+        return await evaluate(pair.action, env);
       }
-      return '';
+      return { value: '', env };
     }
   }
   
-  return '';
+  return { value: '', env };
 }
 
 /**
@@ -127,7 +125,7 @@ async function evaluateAllMatches(
   conditions: WhenConditionPair[],
   env: Environment,
   variableName?: string
-): Promise<string> {
+): Promise<EvalResult> {
   const results: string[] = [];
   
   for (const pair of conditions) {
@@ -141,7 +139,7 @@ async function evaluateAllMatches(
     }
   }
   
-  return results.join('');
+  return { value: results.join(''), env };
 }
 
 /**
@@ -152,7 +150,7 @@ async function evaluateAnyMatch(
   env: Environment,
   variableName?: string,
   blockAction?: BaseMlldNode[]
-): Promise<string> {
+): Promise<EvalResult> {
   // First check if any condition is true
   let anyMatch = false;
   
@@ -183,11 +181,10 @@ async function evaluateAnyMatch(
   
   // Execute block action if any condition matched
   if (anyMatch && blockAction) {
-    const result = await evaluate(blockAction, env);
-    return result.value || '';
+    return await evaluate(blockAction, env);
   }
   
-  return '';
+  return { value: '', env };
 }
 
 /**
@@ -215,6 +212,17 @@ async function evaluateCondition(
   
   // Evaluate the condition
   const result = await evaluate(condition, env);
+  
+  // For command execution results, check stdout or exit code
+  if (result.stdout !== undefined) {
+    // This is a command execution result
+    // First check exit code - 0 is true, non-zero is false
+    if (result.exitCode !== undefined && result.exitCode !== 0) {
+      return false;
+    }
+    // Then check stdout - trim whitespace
+    return isTruthy(result.stdout.trim());
+  }
   
   // Convert result to boolean
   return isTruthy(result.value);

@@ -6,7 +6,7 @@ This document provides a detailed, phase-by-phase implementation plan for adding
 
 ## Implementation Status
 
-**Last Updated**: 2025-06-02
+**Last Updated**: 2025-06-03
 
 ### Completed
 - ✅ Phase 1.1: Type Definitions (core/types/primitives.ts, core/types/when.ts)
@@ -14,9 +14,16 @@ This document provides a detailed, phase-by-phase implementation plan for adding
 - ✅ Phase 1.3: Main Grammar Update (grammar/mlld.peggy)
 - ✅ Phase 1.4: Grammar Core Update (grammar/deps/grammar-core.ts)
 - ✅ Initial test fixture created and passing
+- ✅ Phase 2: Interpreter implementation
+  - ✅ interpreter/eval/when.ts - Complete evaluator with all modifiers
+  - ✅ core/errors/MlldConditionError.ts - Error handling
+  - ✅ interpreter/eval/directive.ts - Router integration
+  - ✅ interpreter/core/interpreter.ts - Command execution support
+  - ✅ All fixture tests passing (when-simple, when-block-all, when-block-any, when-block-first, when-variable-binding)
 
-### In Progress
-- 🔄 Phase 2: Interpreter implementation
+### Todo
+- Phase 3: Documentation
+- Phase 4: Unit test updates (when.test.ts needs updating to match new interface)
 
 ### Important Implementation Notes
 

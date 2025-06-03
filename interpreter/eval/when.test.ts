@@ -45,7 +45,7 @@ describe('evaluateWhen', () => {
       };
       
       const result = await evaluateWhen(node, env);
-      expect(result).toBe('Action executed!');
+      expect(result.value).toBe('Action executed!');
     });
     
     it('should return empty string when condition is false', async () => {
@@ -78,7 +78,7 @@ describe('evaluateWhen', () => {
       };
       
       const result = await evaluateWhen(node, env);
-      expect(result).toBe('');
+      expect(result.value).toBe('');
     });
   });
   
@@ -114,7 +114,7 @@ describe('evaluateWhen', () => {
       };
       
       const result = await evaluateWhen(node, env);
-      expect(result).toBe('Second action');
+      expect(result.value).toBe('Second action');
     });
   });
   
@@ -150,7 +150,7 @@ describe('evaluateWhen', () => {
       };
       
       const result = await evaluateWhen(node, env);
-      expect(result).toBe('First action\nThird action');
+      expect(result.value).toBe('First action\nThird action');
     });
   });
   
@@ -184,7 +184,7 @@ describe('evaluateWhen', () => {
       };
       
       const result = await evaluateWhen(node, env);
-      expect(result).toBe('Any condition matched!');
+      expect(result.value).toBe('Any condition matched!');
     });
     
     it('should return empty string if no conditions match', async () => {
@@ -216,7 +216,7 @@ describe('evaluateWhen', () => {
       };
       
       const result = await evaluateWhen(node, env);
-      expect(result).toBe('');
+      expect(result.value).toBe('');
     });
   });
   
@@ -234,7 +234,7 @@ describe('evaluateWhen', () => {
       };
       
       const result = await evaluateWhen(node, env);
-      expect(result).toBe('');
+      expect(result.value).toBe('');
     });
     
     it('should treat "false" string as false', async () => {
@@ -250,7 +250,7 @@ describe('evaluateWhen', () => {
       };
       
       const result = await evaluateWhen(node, env);
-      expect(result).toBe('');
+      expect(result.value).toBe('');
     });
     
     it('should treat "0" string as false', async () => {
@@ -266,7 +266,7 @@ describe('evaluateWhen', () => {
       };
       
       const result = await evaluateWhen(node, env);
-      expect(result).toBe('');
+      expect(result.value).toBe('');
     });
     
     it('should treat non-empty strings as true', async () => {
@@ -282,7 +282,7 @@ describe('evaluateWhen', () => {
       };
       
       const result = await evaluateWhen(node, env);
-      expect(result).toBe('Should execute');
+      expect(result.value).toBe('Should execute');
     });
   });
 });

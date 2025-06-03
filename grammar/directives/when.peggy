@@ -172,7 +172,7 @@ WhenActionBlock
 // Single directive as action - simplified inline directives
 WhenActionDirective
   = "@add" _ content:StringLiteral {
-      return helpers.createNode(NodeType.Directive, {
+      return [helpers.createNode(NodeType.Directive, {
         kind: 'add',
         subtype: 'addTemplate',
         values: { 
@@ -184,10 +184,10 @@ WhenActionDirective
         raw: { content: content },
         meta: {},
         location: location()
-      });
+      })];
     }
   / "@text" _ id:BaseIdentifier _ "=" _ value:StringLiteral {
-      return helpers.createNode(NodeType.Directive, {
+      return [helpers.createNode(NodeType.Directive, {
         kind: 'text',
         subtype: 'textAssignment',
         values: { 
@@ -203,11 +203,11 @@ WhenActionDirective
         },
         meta: {},
         location: location()
-      });
+      })];
     }
   / "@run" _ "[" command:WhenCommandText "]" {
       // Use simple command parsing for actions
-      return helpers.createNode(NodeType.Directive, {
+      return [helpers.createNode(NodeType.Directive, {
         kind: 'run',
         subtype: 'runCommand',
         values: { 
@@ -219,7 +219,7 @@ WhenActionDirective
         raw: { command: command },
         meta: {},
         location: location()
-      });
+      })];
     }
 
 // Simple command text without interpolation for now
