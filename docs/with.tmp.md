@@ -1,6 +1,6 @@
 # With Clauses
 
-> **Note**: With clauses are a planned feature that is currently being implemented. This documentation describes the intended functionality.
+> **Implementation Status**: With clauses have been implemented on the `feature/with-clause` branch but are not yet available in the main release. This documentation describes the functionality as implemented on that branch. To use with clauses, you need to switch to the `feature/with-clause` branch.
 
 With clauses provide powerful execution modifiers for `@run` and `@exec` commands, enabling transformation pipelines and dependency validation. They make your commands more composable, reliable, and maintainable.
 
@@ -252,4 +252,10 @@ Create standard processing pipelines you can reuse:
 
 ## Status
 
-With clauses are currently being implemented. Features may be subject to change during development.
+With clauses are fully implemented on the `feature/with-clause` branch. To access this functionality:
+
+1. Switch to the feature branch: `git checkout feature/with-clause`
+2. Rebuild the grammar: `npm run build:grammar`
+3. Run tests to verify: `npm test tests/cases/valid/with/`
+
+The feature is pending merge into the main branch.

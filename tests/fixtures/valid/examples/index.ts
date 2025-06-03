@@ -4,7 +4,7 @@
 export { default as apiCalls } from './api-calls.generated-fixture.json';
 export { default as chain } from './chain.generated-fixture.json';
 export { default as codeReview } from './code-review.generated-fixture.json';
-export { default as committe } from './committe.generated-fixture.json';
+export { default as committee } from './committee.generated-fixture.json';
 export { default as complexTest-1NestedImports } from './complex-test-1-nested-imports.generated-fixture.json';
 export { default as complexTest-2DynamicPaths } from './complex-test-2-dynamic-paths.generated-fixture.json';
 export { default as complexTest-3DataTransformation } from './complex-test-3-data-transformation.generated-fixture.json';

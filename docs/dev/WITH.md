@@ -1,6 +1,6 @@
 # With Clauses Development Guide
 
-> **Status**: Planned feature - implementation in progress
+> **Status**: Fully implemented on `feature/with-clause` branch, pending merge to main
 
 This guide covers the technical implementation details for the `with` clause feature in mlld, which provides execution modifiers for `@run` and `@exec` commands.
 
