@@ -36,7 +36,7 @@ This will remain a codefence.
 
 @add [$docs/example.md]
 
-@run [echo "Current time: $(date)"]
+@run [(echo "Current time: $(date)")]
 ```
 
 This example:

@@ -87,7 +87,7 @@ Basic path variables:
 Using path variables in commands:
 ```mlld
 @path src = "$PROJECTPATH/src"
-@run [ls -la $src]
+@run [(ls -la $src)]
 ```
 
 Embedding files with path variables:

@@ -52,7 +52,7 @@ describe('Text Directive Tests', () => {
     });
     
     it('should parse a text assignment with run', async () => {
-      const result = (await parse('@text output = @run [echo "Hello"]')).ast[0] as TextAssignmentDirectiveNode;
+      const result = (await parse('@text output = @run [(echo "Hello")]')).ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');

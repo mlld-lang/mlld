@@ -17,12 +17,12 @@ This example demonstrates how to use URLs in Meld directives.
 ## Complex data with URL-fetching directives
 @data projectInfo = {
   "readme": [https://raw.githubusercontent.com/example/repo/main/README.md],
-  "version": @run [curl -s https://api.example.com/version],
+  "version": @run [(curl -s https://api.example.com/version)],
   "apiBase": @apiEndpoint
 }
 
 ## Using the API endpoint
-@run [curl -s @apiEndpoint/users]
+@run [(curl -s @apiEndpoint/users)]
 
 Note: To enable URL support, you have two options:
 

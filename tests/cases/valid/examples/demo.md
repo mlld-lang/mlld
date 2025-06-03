@@ -76,13 +76,13 @@ Path variables for file system references:
 
 ## Command Execution
 
-@run [echo "This is output from a shell command"]
+@run [(echo "This is output from a shell command")]
 
-@exec greet = @run [echo "Hello from an exec command"]
+@exec greet = @run [(echo "Hello from an exec command")]
 @run @greet
 
 @text user = "Alice"
-@exec greet_user(name) = @run [echo "Hello, @name!"]
+@exec greet_user(name) = @run [(echo "Hello, @name!")]
 The output of this command will be included in the output:
 @run @greet_user(@user)
 
@@ -132,8 +132,8 @@ Still in outer fence
   { name: "Item 3", value: 300 }
 ]
 
-@exec calculateTotal = @run javascript [[
-  const values = [100, 200, 300];
+@exec calculateTotal = @run [(javascript [
+  const values = [100, 200, 300)];
   return values.reduce((a, b) => a + b, 0);
 ]]
 

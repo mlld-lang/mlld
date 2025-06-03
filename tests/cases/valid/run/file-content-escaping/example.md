@@ -5,4 +5,4 @@ This tests passing file content to external commands.
 @text test_file = [test-file.md]
 
 >> File content should be properly escaped when passed to commands
-@run [echo "@test_file"]
+@run [(echo "@test_file")]

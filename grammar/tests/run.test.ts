@@ -6,7 +6,7 @@ import { VariableValueType } from '@core/types/variables';
 describe('Run directive', () => {
   describe('runCommand subtype', () => {
     test('Basic shell command', async () => {
-      const content = '@run [ls -la]';
+      const content = '@run [(ls -la)]';
       const parseResult = await parse(content);
       
       // The tests now pass with a single directive node in the AST
@@ -28,7 +28,7 @@ describe('Run directive', () => {
     });
     
     test('Multi-line shell command', async () => {
-      const content = '@run [\nfind . -name "*.js" | \nxargs grep "TODO"\n]';
+      const content = '@run [(\nfind . -name "*.js" | \nxargs grep "TODO"\n)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -49,7 +49,7 @@ describe('Run directive', () => {
     });
     
     test('Command with variable interpolation', async () => {
-      const content = '@run [ls -la @directory]';
+      const content = '@run [(ls -la @directory)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -73,7 +73,7 @@ describe('Run directive', () => {
   
   describe('runCode subtype', () => {
     test('Basic code execution', async () => {
-      const content = '@run javascript [\nconsole.log("Hello, world!");\n]';
+      const content = '@run [(javascript \nconsole.log("Hello, world!");\n)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -122,7 +122,7 @@ describe('Run directive', () => {
     });
     
     test('Code containing variable syntax as text', async () => {
-      const content = '@run javascript [\nconst greeting = "{{greeting}}";\nconsole.log(greeting);\n]';
+      const content = '@run [(javascript \nconst greeting = "{{greeting}}";\nconsole.log(greeting);\n)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);

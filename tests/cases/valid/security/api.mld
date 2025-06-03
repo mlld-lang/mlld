@@ -1,2 +1,2 @@
 @text status = "System is running"
-@run [echo "API loaded"]
+@run [(echo "API loaded")]

@@ -9,42 +9,41 @@ The `@run` directive executes shell commands or code blocks and includes their o
 
 ## Syntax
 
-### Shell Commands
+### Unified Syntax
 ```mlld
-@run [command_text]
-@run [command_text] under header_text
-@run [$command(@textvar1, @textvar2)]
-```
-
-### Code Execution
-```mlld
-@run language [code_block]
-@run language(param1, param2) [code_block]
+@run [(command_text)]
+@run [(language code_block)]
+@run @command(@param1, @param2)
 ```
 
 Where:
-- `command_text` is the shell command to execute
-- `header_text` is optional text to use as a header for the command output
-- `$command` refers to a command defined with `@exec`
-- `language` is the programming language: `javascript`/`js`/`node`, `python`/`py`, or `bash`/`sh`/`shell`
-- `code_block` is the code to execute (can be multiline with `[[...]]`)
-- `param1, param2` are optional parameters passed to the code
+- Commands are executed in the shell: `@run [(echo "Hello")]`
+- Code execution requires a language keyword: `@run [(js console.log("Hello"))]`
+- Command references use `@`: `@run @myCommand(arg1, arg2)`
+
+Key points:
+- `command_text` is any shell command with variable interpolation support
+- `language` must be one of: `javascript`/`js`, `python`/`py`, or `bash`/`sh`
+- `code_block` is the code to execute after the language keyword
+- The `[(...)]` syntax unifies command and code execution
+- Variables in commands use `@var` syntax
+- Command references defined with `@exec` use `@command` syntax
 
 ## Command Specification
 
 The command can be:
-- A literal command: `@run [ls -la]`
-- A command with variables: `@run [echo "Hello, {{name}}"]`
-- A command with path variables: `@run [cat $docs/guide.md]`
-- A defined command: `@run [$listFiles($path)]`
+- A literal command: `@run [(ls -la)]`
+- A command with variables: `@run [(echo "Hello, @name")]`
+- A command with path variables: `@run [(cat @docs/guide.md)]`
+- A defined command: `@run @listFiles(@path)`
 
 ## Variables in Commands
 
 You can use different types of variables in commands:
-- Text variables: `{{textvar}}`
-- Path variables: `$path`
-- Special path variables: `$HOMEPATH`, `$~`, `$PROJECTPATH`, `$.`
-- Command references: `$command(@param1, @param2)`
+- All variables use `@` syntax: `@textvar`, `@path`
+- Special variables: `@HOMEPATH`, `@PROJECTPATH`, `@.`
+- Field access: `@object.field`, `@array.0`
+- Command references: `@command(@param1, @param2)`
 
 ## Output Handling
 
@@ -52,17 +51,7 @@ By default, the command's standard output (stdout) is captured and included in y
 
 - Standard error (stderr) is also captured and can be included
 - In transformation mode, the stdout (and sometimes stderr) replaces the directive node
-- The output can be assigned to a variable: `@text result = @run [command]`
-
-## Adding Headers
-
-You can add a header to command output using the `under` keyword:
-
-```mlld
-@run [date] under Current Date
-```
-
-This will add a header "Current Date" above the command output.
+- The output can be assigned to a variable: `@text result = @run [(command)]`
 
 ## Error Handling
 
@@ -81,8 +70,8 @@ The `@run` directive can execute code in different languages:
 - The code runs in a sandboxed environment
 
 ```mlld
-@run javascript [console.log("Hello from JS")]
-@run js(x, y) [console.log(Number(x) + Number(y))]
+@run [(js console.log("Hello from JS"))]
+@run [(js console.log("Hello, world!"))]
 ```
 
 ### Python
@@ -91,8 +80,8 @@ The `@run` directive can execute code in different languages:
 - Requires `python3` to be available
 
 ```mlld
-@run python [print("Hello from Python")]
-@run py(name) [print(f"Hello, {name}!")]
+@run [(python print("Hello from Python"))]
+@run [(py print("Hello from Python!"))]
 ```
 
 ### Bash/Shell
@@ -101,56 +90,45 @@ The `@run` directive can execute code in different languages:
 - Environment variables from the parent process are available
 
 ```mlld
-@run bash [echo "Hello from Bash"]
-@run sh(user, count) [
-  echo "Welcome, $user!"
-  echo "You are visitor number $count"
-]
+@run [(bash echo "Hello from Bash")]
+@run [(sh echo "Hello from Shell")]
 ```
 
 ## Examples
 
 Basic command execution:
 ```mlld
-@run [echo "Hello, World!"]
+@run [(echo "Hello, World!")]
 ```
 
 Using variables in commands:
 ```mlld
 @text name = "Alice"
-@run [echo "Hello, {{name}}!"]
+@run [(echo "Hello, @name!")]
 ```
 
 Using path variables:
 ```mlld
-@path src = "$PROJECTPATH/src"
-@run [ls -la $src]
+@path src = [@PROJECTPATH/src]
+@run [(ls -la @src)]
 ```
 
 Using command output in variables:
 ```mlld
-@text date = @run [date +"%Y-%m-%d"]
-@data files = @run [ls -la | jq -R -s -c 'split("\n")[:-1]']
-```
-
-Adding headers to output:
-```mlld
-@run [git status] under Repository Status
+@text date = @run [(date +"%Y-%m-%d")]
+@data files = @run [(ls -la | jq -R -s -c 'split("\n")[:-1]')]
 ```
 
 Using defined commands:
 ```mlld
-@exec listFiles(dir) = @run [ls -la @dir]
-@run [$listFiles($PROJECTPATH)]
+@exec listFiles(dir) = @run [(ls -la @dir)]
+@run @listFiles(@PROJECTPATH)
 ```
 
 Using code execution with `@exec`:
 ```mlld
-@exec greet(name, lang) = @run bash [
-  echo "Hello, $name!"
-  echo "Your preferred language is $lang"
-]
-@run @greet("Developer", "Mlld")
+@exec greet(name) = @run [(bash echo "Hello, @name!")]
+@run @greet("Developer")
 ```
 
 ## Environment & Working Directory
